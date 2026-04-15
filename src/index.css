@@ -1,0 +1,62 @@
+/* src/index.css */
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    /* Am comentat background-ul gri deschis pentru a permite slate-950 din App.tsx să funcționeze */
+    /* background: #F9FAFB; */ 
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+      'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+  }
+  body { 
+    @apply antialiased text-slate-900;
+    -webkit-font-smoothing: antialiased; 
+    -moz-osx-font-smoothing: grayscale; 
+  }
+}
+
+@layer components {
+  /* Clasele tale personalizate re-scrise pentru a fi sigure cu Tailwind @apply */
+  .card { 
+    @apply bg-white rounded-2xl shadow p-4; 
+  }
+  .card-hover { 
+    @apply transition-transform duration-200 hover:scale-[1.01]; 
+  }
+  .badge-green { 
+    @apply inline-block text-sm px-2 py-1 rounded bg-green-100 text-green-700 font-medium; 
+  }
+  .badge-blue { 
+    @apply inline-block text-sm px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium; 
+  }
+  .badge-gray { 
+    @apply inline-block text-sm px-2 py-1 rounded bg-gray-100 text-gray-700 font-medium; 
+  }
+  .badge-red { 
+    @apply inline-block text-sm px-2 py-1 rounded bg-red-100 text-red-700 font-medium; 
+  }
+}
+
+/* Animatii */
+@keyframes fadeIn { 
+  from { opacity: 0; transform: translateY(4px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+
+.animate-fadeIn { 
+  animation: fadeIn .35s ease-out both; 
+}
+
+/* Custom Scrollbar pentru lista de ligi */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full;
+}

@@ -1,0 +1,14 @@
+/* src/styles/app.css */
+:root { color-scheme: light dark; --card: #f7f8fa; --muted:#6b7280; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: system-ui, Roboto, Helvetica, Arial, sans-serif; background:#f6f7fb; color:#111; }
+.page { max-width:1100px; margin:24px auto; padding:0 16px; }
+h1 { font-size:28px; margin:0 0 16px; }
+.controls { background:#fff; border-radius:12px; padding:16px; box-shadow:0 2px 14px rgba(0,0,0,.06); margin-bottom:18px; }
+.controls .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.controls label { font-size:12px; color:var(--muted); margin-left:8px; }
+.controls input { padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; min-width:80px; }
+.controls button { padding:8px 12px; border-radius:10px; border:0; background:#2563eb; color:#fff; cursor:pointer; }
+.controls button[disabled] { opacity:.6; cursor:wait; }
+.list { display:flex; flex-direction:column; gap:12px; }
+.error { color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; padding:10px 12px; border-radius:10px; }
