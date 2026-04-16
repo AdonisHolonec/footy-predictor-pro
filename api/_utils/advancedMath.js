@@ -17,6 +17,10 @@ export const calculateSyntheticXG = (statistics) => {
       case 'Shots insidebox': shotsInsideBox = safeVal; break;
       case 'Shots outsidebox': shotsOutsideBox = safeVal; break;
       case 'Corner Kicks': corners = safeVal; break;
+      case 'Penalty Kicks': penalties = safeVal; break;
+      case 'Penalties': penalties = safeVal; break;
+      case 'Penalty Kicks - Scored': penalties = safeVal; break;
+      case 'Penalties Scored': penalties = safeVal; break;
     }
   });
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 // --- TIPURI DATE (Restaurate și Extinse) ---
 type Usage = { date: string; count: number; limit: number };
-type League = { id: number; name: string; country: string; matches: number };
+type League = { id: number; name: string; country: string; matches: number; logo?: string };
 type Odds = { home: number; draw: number; away: number };
 type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
 type Probs = {
@@ -109,12 +109,12 @@ function XGPerformanceBar({ xg }: { xg: any }) {
 }
 
 function LuckBadge({ goals, xg }: { goals?: number, xg?: number }) {
-  if (goals === undefined || xg === undefined || xg === 0) return null;
+  if (goals === undefined || xg === undefined) return null;
+  if (!isFinite(goals) || !isFinite(xg)) return null;
   const diff = goals - xg;
-  if (Math.abs(diff) < 0.3) return null;
   return (
-    <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${diff > 0.3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'}`}>
-      {diff > 0.3 ? '⚠️ Lucky Form' : '💎 Value Trend'}
+    <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${diff > 0 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'}`}>
+      {diff > 0 ? '⚠️ Lucky Form' : '💎 Value Trend'}
     </div>
   );
 }
@@ -302,6 +302,7 @@ export default function App() {
                         }} className={`w-full flex justify-between items-center gap-3 p-3.5 sm:p-3 rounded-xl border transition-all text-left touch-manipulation ${selectedSet.has(lg.id) ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'}`}>
                         <div className="text-left flex items-center gap-2 min-w-0">
                           {ELITE_LEAGUES.includes(Number(lg.id)) && <span className="text-[12px] shrink-0">👑</span>}
+                          {lg.logo && <img src={lg.logo} className="w-5 h-5 object-contain rounded" alt="" />}
                           <div>
                             <div className={`text-[13px] sm:text-sm font-bold tracking-tight leading-tight ${ELITE_LEAGUES.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
                             <div className="text-[9px] opacity-50 uppercase tracking-tighter mt-0.5">{lg.country}</div>
@@ -361,7 +362,10 @@ export default function App() {
 
 // --- CARDUL MECIULUI ACTUALIZAT (DESIGN COMPLET RESTAURAT) ---
 function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
-  const [xgData, setXgData] = useState<any>(null);
+  const [xgData, setXgData] = useState<any>(() => {
+    if (!row.luckStats) return null;
+    return { homeXG: row.luckStats.hXG, awayXG: row.luckStats.aXG };
+  });
   useEffect(() => {
     fetch(`/api/get-xg?fixtureId=${row.id}`).then(res => res.json()).then(data => { if(!data.error) setXgData(data); });
   }, [row.id]);
@@ -372,6 +376,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
   const isLive = ["1H", "2H", "HT", "ET", "P", "LIVE"].includes(row.status);
   const confPct = pct(row.recommended?.confidence);
   const confColor = confPct >= 75 ? '#10b981' : confPct >= 60 ? '#f59e0b' : '#ef4444';
+  const showFire = row.recommended?.confidence >= 70;
 
   return (
     <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
@@ -395,11 +400,14 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right">
-            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">Top Pick</div>
+            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">{showFire ? '🔥 ' : ''}Top Pick</div>
             <div className="text-xs sm:text-sm font-black text-emerald-400">{row.recommended.pick}</div>
           </div>
           <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black text-white shadow-md">{confPct}%</div>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black text-white shadow-md">
+              {showFire ? '🔥 ' : ''}
+              {confPct}%
+            </div>
           </div>
         </div>
       </div>
@@ -434,8 +442,8 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       
       {row.luckStats && (
         <div className="flex flex-wrap justify-between mt-2 px-1 gap-2">
-          <LuckBadge goals={row.luckStats.hG} xg={row.luckStats.hXG} />
-          <LuckBadge goals={row.luckStats.aG} xg={row.luckStats.aXG} />
+          <LuckBadge goals={row.luckStats.hG} xg={xgData?.homeXG ?? row.luckStats.hXG} />
+          <LuckBadge goals={row.luckStats.aG} xg={xgData?.awayXG ?? row.luckStats.aXG} />
         </div>
       )}
 
@@ -448,9 +456,16 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
         <div className="flex justify-between text-[7px] sm:text-[8px] font-black text-slate-400 uppercase px-1 gap-2">
            <span className={`${row.valueBet?.type === '1' ? 'text-yellow-400' : ''}`}>{pct(row.probs.p1)}% · {row.odds?.home || '-'}</span>
-           <span className="opacity-50">{row.odds?.draw || '-'}</span>
+           <span className="opacity-50">{pct(row.probs.pX)}% · {row.odds?.draw || '-'}</span>
            <span className={`${row.valueBet?.type === '2' ? 'text-yellow-400' : ''}`}>{row.odds?.away || '-'} · {pct(row.probs.p2)}%</span>
         </div>
+      </div>
+
+      {/* Cartonașe estimare sintetică (predicții) */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.oneXtwo}</span>
+        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.gg}</span>
+        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.over25}</span>
       </div>
 
       {/* 6. SUBSOL - SCOR ESTIMAT POISSON */}
@@ -468,10 +483,12 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
 
-  const [xgData, setXgData] = useState<any>(null);
+  const [xgData, setXgData] = useState<any>(() => {
+    if (!match.luckStats) return null;
+    return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
+  });
   useEffect(() => {
     let cancelled = false;
-    setXgData(null);
     fetch(`/api/get-xg?fixtureId=${match.id}`)
       .then(res => res.json())
       .then(data => { if (!cancelled && !data?.error) setXgData(data); })
@@ -493,17 +510,17 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
-      <div className="bg-slate-950 border border-white/10 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-950 border border-white/10 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg lg:max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl relative" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="sticky top-3 ml-auto mr-3 mt-3 z-10 w-11 h-11 sm:w-10 sm:h-10 bg-slate-900/90 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-300 transition-colors border border-white/10 backdrop-blur touch-manipulation shadow-lg">✕</button>
         
         <div className="px-5 pb-6 pt-2 sm:p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
           <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-6 italic opacity-80">⚽ Analiză Avansată Poisson & xG</div>
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-5 sm:gap-0 px-1 sm:px-2">
-            <div className="w-full sm:w-1/3 flex flex-col items-center gap-3">
-              <img src={match.logos?.home} className="w-16 h-16 object-contain drop-shadow-2xl" alt="" />
+          <div className="flex flex-row flex-wrap lg:flex-nowrap justify-between items-center gap-4 lg:gap-8 px-1 sm:px-2">
+            <div className="w-auto lg:w-1/4 flex flex-col items-center gap-3">
+              <img src={match.logos?.home} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.home}</div>
             </div>
-            <div className="w-full sm:w-1/3">
+            <div className="flex-1 min-w-[160px] lg:w-2/4">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
               <div className="text-4xl font-black text-white tracking-tighter mb-2">{match.predictions.correctScore}</div>
               <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
@@ -512,105 +529,107 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
                 <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
               </div>
             </div>
-            <div className="w-full sm:w-1/3 flex flex-col items-center gap-3">
-              <img src={match.logos?.away} className="w-16 h-16 object-contain drop-shadow-2xl" alt="" />
+            <div className="w-auto lg:w-1/4 flex flex-col items-center gap-3">
+              <img src={match.logos?.away} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.away}</div>
             </div>
           </div>
         </div>
 
         <div className="p-5 sm:p-8 space-y-6 sm:space-y-8">
-          {/* xG + Luck Factor */}
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
+            {/* xG + Luck Factor */}
             <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60 tracking-widest">xG & Luck Factor</div>
               <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
-                <div className="flex justify-between mt-2 px-1 gap-2">
-                  <LuckBadge goals={match.luckStats.hG} xg={match.luckStats.hXG} />
-                  <LuckBadge goals={match.luckStats.aG} xg={match.luckStats.aXG} />
+                <div className="flex flex-wrap justify-center lg:justify-between mt-2 px-1 gap-2">
+                  <LuckBadge goals={match.luckStats.hG} xg={xgData?.homeXG ?? match.luckStats.hXG} />
+                  <LuckBadge goals={match.luckStats.aG} xg={xgData?.awayXG ?? match.luckStats.aXG} />
                 </div>
               )}
               {!match.luckStats && <div className="text-[10px] text-slate-500 opacity-70">Luck Factor: indisponibil</div>}
             </div>
-          </div>
 
-          {/* Cote reale + Value Bet */}
-          <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
-            <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Cote Reale & Value Bet</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                <div className="text-[10px] text-slate-500 uppercase font-black">1 (Gazde)</div>
-                <div className="text-2xl font-black mt-1" style={{ color: homeColor }}>{match.odds?.home ?? "-"}</div>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                <div className="text-[10px] text-slate-500 uppercase font-black">X (Egal)</div>
-                <div className="text-2xl font-black mt-1">{match.odds?.draw ?? "-"}</div>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                <div className="text-[10px] text-slate-500 uppercase font-black">2 (Oaspeți)</div>
-                <div className="text-2xl font-black mt-1" style={{ color: awayColor }}>{match.odds?.away ?? "-"}</div>
-              </div>
-            </div>
-
-            {match.valueBet?.detected && (
-              <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
-                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:justify-between text-[12px] font-black">
-                  <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
-                  <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
-                  <span className="text-yellow-200">Stake: {match.valueBet.kelly ?? 0}%</span>
+            {/* Cote reale + Value Bet */}
+            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
+              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Cote Reale & Value Bet</div>
+              <div className="grid grid-cols-3 gap-2 lg:gap-3 text-center">
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">1 (Gazde)</div>
+                  <div className="text-xl lg:text-2xl font-black mt-1" style={{ color: homeColor }}>{match.odds?.home ?? "-"}</div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">X (Egal)</div>
+                  <div className="text-xl lg:text-2xl font-black mt-1">{match.odds?.draw ?? "-"}</div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">2 (Oaspeți)</div>
+                  <div className="text-xl lg:text-2xl font-black mt-1" style={{ color: awayColor }}>{match.odds?.away ?? "-"}</div>
                 </div>
               </div>
-            )}
-            {!match.valueBet?.detected && (
-              <div className="mt-4 text-[10px] text-slate-500 opacity-70 font-black uppercase tracking-widest">
-                Value Bet: nu detectat
-              </div>
-            )}
-          </div>
 
-          {match.lambdas && (
-            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60">Momentum Ofensiv Ajustat (λ)</div>
-              <div className="flex justify-between items-center gap-4">
-                <div className="text-right w-1/2 text-2xl font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
-                <div className="text-slate-600 font-black text-xs opacity-50">VS</div>
-                <div className="text-left w-1/2 text-2xl font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Predicții (piețe) */}
-          <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
-            <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Piețe & Scor</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                <div className="text-[10px] text-slate-500 uppercase font-black">1X2</div>
-                <div className="text-sm font-black mt-1">{match.predictions.oneXtwo}</div>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                <div className="text-[10px] text-slate-500 uppercase font-black">GG</div>
-                <div className="text-sm font-black mt-1">{match.predictions.gg}</div>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                <div className="text-[10px] text-slate-500 uppercase font-black">Over 2.5</div>
-                <div className="text-sm font-black mt-1">{match.predictions.over25}</div>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
-                <div className="text-sm font-black mt-1">{match.predictions.correctScore}</div>
-              </div>
-              {match.predictions.cards && (
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center sm:col-span-2">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">Cards</div>
-                  <div className="text-sm font-black mt-1">{match.predictions.cards}</div>
+              {match.valueBet?.detected && (
+                <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                  <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
+                  <div className="mt-2 flex flex-col gap-1 lg:flex-row lg:justify-between text-[12px] font-black">
+                    <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
+                    <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
+                    <span className="text-yellow-200">Stake: {match.valueBet.kelly ?? 0}%</span>
+                  </div>
+                </div>
+              )}
+              {!match.valueBet?.detected && (
+                <div className="mt-4 text-[10px] text-slate-500 opacity-70 font-black uppercase tracking-widest">
+                  Value Bet: nu detectat
                 </div>
               )}
             </div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
+            {match.lambdas && (
+              <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
+                <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60">Momentum Ofensiv Ajustat (λ)</div>
+                <div className="flex justify-between items-center gap-4">
+                  <div className="text-right w-1/2 text-2xl font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
+                  <div className="text-slate-600 font-black text-xs opacity-50">VS</div>
+                  <div className="text-left w-1/2 text-2xl font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Predicții (piețe) */}
+            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
+              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Piețe & Scor</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">1X2</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.oneXtwo}</div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">GG</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.gg}</div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">Over 2.5</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.over25}</div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.correctScore}</div>
+                </div>
+                {match.predictions.cards && (
+                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
+                    <div className="text-[10px] text-slate-500 uppercase font-black">Cards</div>
+                    <div className="text-sm font-black mt-1">{match.predictions.cards}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-10">
             <div className="space-y-4">
               <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2 tracking-widest opacity-60">Rezultat Final</div>
               <ProbBar label="Victorie Gazde" val={match.probs.p1} color={homeColor} />

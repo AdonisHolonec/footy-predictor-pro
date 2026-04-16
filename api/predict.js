@@ -12,8 +12,7 @@ import {
 } from './_utils/math.js';
 import { 
   calculateEV, 
-  calculateKellyQuarter as calculateKelly,
-  adjustLambdaByEfficiency 
+  calculateKellyQuarter as calculateKelly
 } from './_utils/advancedMath.js';
 
 function isGoodNum(val) {
@@ -75,20 +74,18 @@ export default async function handler(req, res) {
             const hStats = extractAdvancedGoalsAverages(tsH.data);
             const aStats = extractAdvancedGoalsAverages(tsA.data);
             if (hStats && aStats) {
-              // --- INTEGRARE RAFINARE FORMA ---
-              const refinedHomeAtk = adjustLambdaByEfficiency(hStats.avgGoalsScored, hStats.avgXG || hStats.avgGoalsScored);
-              const refinedAwayAtk = adjustLambdaByEfficiency(aStats.avgGoalsScored, aStats.avgXG || aStats.avgGoalsScored);
-              
               const hMulti = extractFormMultiplier(tsH.data?.response?.form);
               const aMulti = extractFormMultiplier(tsA.data?.response?.form);
               
-              const l = advancedLambdas({ ...hStats, avgGoalsScored: refinedHomeAtk }, { ...aStats, avgGoalsScored: refinedAwayAtk }, hMulti, aMulti);
+              // λ-urile se bazează pe gf/ga extrase din statistics (nu pe avgXG/avgGoalsScored).
+              const l = advancedLambdas(hStats, aStats, hMulti, aMulti);
               
               if (l && isGoodNum(l.lambdaHome) && isGoodNum(l.lambdaAway)) {
                 method = "advanced-teamstats";
                 lambdaHome = l.lambdaHome;
                 lambdaAway = l.lambdaAway;
-                luckStats = { hG: hStats.avgGoalsScored, hXG: hStats.avgXG, aG: aStats.avgGoalsScored, aXG: aStats.avgXG };
+                // Pentru UI: hG/aG sunt medii de goluri; hXG/aXG se vor afișa în funcție de xG-ul fixture-ului (din /api/get-xg).
+                luckStats = { hG: hStats.gfHome, hXG: hStats.gfHome, aG: aStats.gfAway, aXG: aStats.gfAway };
               }
             }
           }

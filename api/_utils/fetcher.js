@@ -10,6 +10,22 @@ const BASE = process.env.UPSTREAM_BASE_URL || "https://api-football-v1.p.rapidap
 const KEY = process.env.X_RAPIDAPI_KEY;
 const HOST = process.env.X_RAPIDAPI_HOST || "api-football-v1.p.rapidapi.com";
 
+function getTodayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function secondsUntilUtcMidnight() {
+  const now = new Date();
+  const end = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    0, 0, 0
+  ));
+  const seconds = Math.floor((end.getTime() - now.getTime()) / 1000);
+  return Math.max(60, seconds);
+}
+
 export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
   const u = new URL(BASE + endpoint);
   Object.entries(paramsObj || {}).forEach(([k, v]) => u.searchParams.set(k, String(v)));
@@ -38,8 +54,10 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
     if (hLimit && hRemain) {
         const limit = Number(hLimit);
         const count = limit - Number(hRemain);
-        await kv.set('footy_api_usage', { count, limit });
-        console.log(`[Usage Salvat] Consumat: ${count} din ${limit}`);
+        const today = getTodayISO();
+        const key = `footy_api_usage:${today}`;
+        await kv.set(key, { count, limit, updatedAt: new Date().toISOString() }, { ex: secondsUntilUtcMidnight() });
+        console.log(`[Usage Salvat] (${today}) Consumat: ${count} din ${limit}`);
     }
 
     const json = await res.json();
@@ -59,7 +77,8 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
 // Funcție pe care o vom chema liniștiți să ne dea ultimul consum știut
 export async function getApiUsage() {
     try {
-        const usage = await kv.get('footy_api_usage');
+        const today = getTodayISO();
+        const usage = await kv.get(`footy_api_usage:${today}`);
         return usage || { count: 0, limit: 100 };
     } catch {
         return { count: 0, limit: 100 };
