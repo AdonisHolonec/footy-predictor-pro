@@ -227,18 +227,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="mx-auto max-w-[1600px] px-4 py-8 lg:px-6">
         {/* HEADER */}
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white grid place-items-center font-black text-2xl shadow-xl shadow-emerald-500/20">FP</div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex flex-col items-end w-full max-w-[200px]">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
+            <div className="flex flex-col items-end w-full max-w-[200px] lg:min-w-[220px]">
               <div className="text-[10px] text-slate-400 uppercase font-black mb-1">
                 API Calls: <span className={usagePct > 80 ? "text-red-400" : "text-emerald-400"}>{usageCount} / {usageLimit}</span>
               </div>
@@ -246,20 +246,20 @@ export default function App() {
                 <div style={{ width: `${usagePct}%` }} className={`h-full ${usagePct > 80 ? "bg-red-500" : "bg-emerald-500"}`} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50" />
-              <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
-              <button onClick={predict} className="bg-emerald-600 rounded-xl px-6 py-2 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
+            <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50" />
+              <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
+              <button onClick={predict} className="bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
             </div>
           </div>
         </div>
 
         {status && <div className="mb-6 p-3 bg-slate-900/40 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-mono">{"> "} {status}</div>}
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 xl:gap-10">
           {/* LIGI */}
-          <div className="lg:col-span-4 space-y-4">
-            <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all">
+          <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+            <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all lg:sticky lg:top-6">
               <div className="flex justify-between items-center gap-3 cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
                 <div className="flex items-center gap-3">
                   <h2 className="font-bold text-lg sm:text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
@@ -272,7 +272,7 @@ export default function App() {
               </div>
               {isLeaguesOpen && (
                 <div className="mt-5 transition-all">
-                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <div className="flex flex-col sm:flex-row lg:flex-row gap-2 mb-4">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -293,7 +293,7 @@ export default function App() {
                     </button>
                   </div>
                   <input type="text" placeholder="Caută campionatul..." value={searchLeague} onChange={e => setSearchLeague(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors touch-manipulation"/>
-                  <div className="space-y-2 overflow-y-auto max-h-[45vh] sm:max-h-[60vh] pr-1 sm:pr-2 custom-scrollbar">
+                  <div className="space-y-2 overflow-y-auto max-h-[45vh] sm:max-h-[60vh] lg:max-h-[70vh] pr-1 sm:pr-2 custom-scrollbar">
                     {leaguesSorted.map(lg => (
                       <button key={lg.id} onClick={() => {
                           const s = new Set(selectedLeagueIds);
@@ -317,15 +317,15 @@ export default function App() {
           </div>
 
           {/* MECIURI */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 xl:col-span-9">
             {preds.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6 bg-slate-900/40 p-3 rounded-2xl border border-white/5">
-                <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 border-b sm:border-b-0 sm:border-r border-white/5 sm:pr-4 custom-scrollbar snap-x snap-mandatory">
+              <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 sm:gap-4 mb-6 bg-slate-900/40 p-3 lg:p-4 rounded-2xl border border-white/5">
+                <div className="flex gap-2 overflow-x-auto xl:overflow-visible pb-2 xl:pb-0 border-b xl:border-b-0 xl:border-r border-white/5 xl:pr-4 custom-scrollbar snap-x snap-mandatory">
                   <button onClick={() => setFilterMode("ALL")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}>Toate ({preds.length})</button>
                   <button onClick={() => setFilterMode("VALUE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "VALUE" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50" : "text-slate-400 hover:bg-slate-800"}`}>💎 Value Bets</button>
                   <button onClick={() => setFilterMode("SAFE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "SAFE" ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50" : "text-slate-400 hover:bg-slate-800"}`}>🔥 +70% Siguranță</button>
                 </div>
-                <div className="flex gap-2 overflow-x-auto items-center custom-scrollbar snap-x snap-mandatory">
+                <div className="flex gap-2 overflow-x-auto xl:overflow-visible items-center custom-scrollbar snap-x snap-mandatory">
                   <span className="text-[9px] text-slate-500 uppercase font-black px-1 shrink-0">Ordonează:</span>
                   <button onClick={() => setSortBy("TIME")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "TIME" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>⏰ Ora</button>
                   <button onClick={() => setSortBy("CONFIDENCE")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "CONFIDENCE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>📈 Siguranță</button>
@@ -336,7 +336,7 @@ export default function App() {
             {!preds.length ? (
               <div className="h-[400px] border-2 border-dashed border-white/5 rounded-[2rem] grid place-items-center text-slate-600 text-center"><p className="italic font-medium">Selectează ligile dorite, apoi apasă Predict.</p></div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
                 {displayedMatches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} onClick={() => setSelectedMatch(m)} />)}
               </div>
             )}
