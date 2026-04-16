@@ -119,7 +119,7 @@ export default async function handler(req, res) {
             const hOdd = parseFloat(market1X2.values.find(v => v.value === "Home")?.odd);
             const dOdd = parseFloat(market1X2.values.find(v => v.value === "Draw")?.odd);
             const aOdd = parseFloat(market1X2.values.find(v => v.value === "Away")?.odd);
-            odds = { home: hOdd, draw: dOdd, away: aOdd };
+            odds = { home: hOdd, draw: dOdd, away: aOdd, bookmaker: bookie?.name || undefined };
             if ((p.p1 * hOdd) / 100 > 1.15) { valueDetected = true; valueType = "1"; finalEv = calculateEV(p.p1/100, hOdd); finalKelly = calculateKelly(p.p1/100, hOdd); }
             else if ((p.p2 * aOdd) / 100 > 1.15) { valueDetected = true; valueType = "2"; finalEv = calculateEV(p.p2/100, aOdd); finalKelly = calculateKelly(p.p2/100, aOdd); }
           }

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 // --- TIPURI DATE (Restaurate și Extinse) ---
 type Usage = { date: string; count: number; limit: number };
 type League = { id: number; name: string; country: string; matches: number; logo?: string };
-type Odds = { home: number; draw: number; away: number };
+type Odds = { home: number; draw: number; away: number; bookmaker?: string };
 type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
 type Probs = {
   p1: number; pX: number; p2: number;
@@ -82,8 +82,12 @@ const ELITE_LEAGUES = [2, 3, 39, 140, 135, 78, 61, 283];
 
 function XGPerformanceBar({ xg }: { xg: any }) {
   if (!xg) return null;
-  const hW = Math.min((xg.homeXG / 4) * 100, 100);
-  const aW = Math.min((xg.awayXG / 4) * 100, 100);
+  const homeXG = Number(xg.homeXG);
+  const awayXG = Number(xg.awayXG);
+  const safeHomeXG = Number.isFinite(homeXG) ? homeXG : 0;
+  const safeAwayXG = Number.isFinite(awayXG) ? awayXG : 0;
+  const hW = Math.min((safeHomeXG / 4) * 100, 100);
+  const aW = Math.min((safeAwayXG / 4) * 100, 100);
   return (
     <div className="mt-4 px-3 py-3 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
       <div className="flex justify-between items-center mb-2 px-1">
@@ -91,14 +95,14 @@ function XGPerformanceBar({ xg }: { xg: any }) {
       </div>
       <div className="flex items-center gap-4">
         <div className="flex-1 flex flex-col items-end">
-          <span className="text-[11px] font-mono font-bold text-emerald-400 mb-1">{xg.homeXG}</span>
+          <span className="text-[11px] font-mono font-bold text-emerald-400 mb-1">{safeHomeXG.toFixed(2)}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500 transition-all duration-1000 ease-out" style={{ width: `${hW}%` }} />
           </div>
         </div>
         <div className="text-[8px] font-black text-slate-700 italic">VS</div>
         <div className="flex-1 flex flex-col items-start">
-          <span className="text-[11px] font-mono font-bold text-blue-400 mb-1">{xg.awayXG}</span>
+          <span className="text-[11px] font-mono font-bold text-blue-400 mb-1">{safeAwayXG.toFixed(2)}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${aW}%` }} />
           </div>
@@ -404,9 +408,9 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
             <div className="text-xs sm:text-sm font-black text-emerald-400">{row.recommended.pick}</div>
           </div>
           <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black text-white shadow-md">
-              {showFire ? '🔥 ' : ''}
-              {confPct}%
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex flex-col items-center justify-center text-[7px] sm:text-[8px] font-black text-white shadow-md leading-none">
+              {showFire && <span className="text-[8px] sm:text-[9px] -mb-0.5">🔥</span>}
+              <span>{confPct}%</span>
             </div>
           </div>
         </div>
@@ -417,6 +421,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-3 sm:mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[9px] sm:text-[10px] text-yellow-400 font-black uppercase tracking-wider">
           <div className="flex items-center gap-2">
             <span>💎 Value: {row.valueBet.type}</span>
+            {row.odds?.bookmaker && <span className="text-yellow-200/80">· {row.odds.bookmaker}</span>}
           </div>
           <div className="bg-black/20 px-2 py-1 rounded-lg border border-yellow-500/10">
             EV: +{row.valueBet.ev}% | Stake: {row.valueBet.kelly}%
@@ -572,6 +577,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               {match.valueBet?.detected && (
                 <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
                   <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
+                  {match.odds?.bookmaker && <div className="mt-1 text-[10px] text-yellow-200/80 font-black">Operator: {match.odds.bookmaker}</div>}
                   <div className="mt-2 flex flex-col gap-1 lg:flex-row lg:justify-between text-[12px] font-black">
                     <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
                     <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
