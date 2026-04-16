@@ -40,6 +40,11 @@ type DayResponse = {
   usage: Usage;
 };
 
+function normalizeSelectedDates(dates: string[]): string[] {
+  const uniq = Array.from(new Set(dates.filter(Boolean)));
+  return uniq.sort().slice(0, 3);
+}
+
 // --- UTILS (Codul tău original intact) ---
 function isoToday(): string { return new Date().toISOString().split('T')[0]; }
 function inferSeason(dateISO: string): number {
@@ -203,9 +208,22 @@ function mergePredictionHistory(current: HistoryEntry[], incoming: PredictionRow
   return pruneAndValidateHistory(Array.from(next.values()));
 }
 
+function finalScoreBadgeClass(result: boolean | null) {
+  if (result === true) return "text-emerald-300 bg-emerald-500/10 border-emerald-500/20";
+  if (result === false) return "text-rose-300 bg-rose-500/10 border-rose-500/20";
+  return "text-slate-300 bg-white/5 border-white/10";
+}
+
+function finalScoreLabel(result: boolean | null) {
+  if (result === true) return "WIN";
+  if (result === false) return "LOSS";
+  return "FINAL";
+}
+
 // --- APP COMPONENT ---
 export default function App() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
+  const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.selectedDates", [isoToday()]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.selectedLeagueIds", []);
   const [day, setDay] = useState<DayResponse | null>(null);
   const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
@@ -249,14 +267,55 @@ export default function App() {
     return { wins, losses, settled, winRate };
   }, [history]);
 
-  async function fetchDay(d: string) {
+  const groupedDisplayedMatches = useMemo(() => {
+    const groups = new Map<string, PredictionRow[]>();
+    for (const match of displayedMatches) {
+      const key = match.kickoff?.slice(0, 10) || "Fără dată";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(match);
+    }
+    return Array.from(groups.entries()).map(([dateKey, matches]) => ({
+      dateKey,
+      matches
+    }));
+  }, [displayedMatches]);
+
+  async function fetchDays(dates: string[]) {
+    const effectiveDates = normalizeSelectedDates(dates.length ? dates : [date]);
     setStatus("Încarc ligile...");
     try {
-      const r = await fetch(`/api/fixtures/day?date=${d}`);
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || "Eroare API");
-      setDay(j);
-      setStatus(j.totalFixtures ? `OK: ${j.totalFixtures} meciuri.` : "Lipsă meciuri.");
+      const responses = await Promise.all(
+        effectiveDates.map(async (d) => {
+          const r = await fetch(`/api/fixtures/day?date=${d}`);
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || "Eroare API");
+          return j as DayResponse;
+        })
+      );
+
+      const leaguesMap = new Map<number, League>();
+      for (const resp of responses) {
+        for (const lg of resp.leagues || []) {
+          const existing = leaguesMap.get(lg.id);
+          if (existing) {
+            existing.matches += lg.matches;
+            if (!existing.logo && lg.logo) existing.logo = lg.logo;
+          } else {
+            leaguesMap.set(lg.id, { ...lg });
+          }
+        }
+      }
+
+      const aggregated: DayResponse = {
+        ok: true,
+        date: effectiveDates.join(", "),
+        totalFixtures: responses.reduce((sum, resp) => sum + (resp.totalFixtures || 0), 0),
+        leagues: Array.from(leaguesMap.values()),
+        usage: responses[responses.length - 1]?.usage || { date: isoToday(), count: 0, limit: 100 }
+      };
+
+      setDay(aggregated);
+      setStatus(aggregated.totalFixtures ? `OK: ${aggregated.totalFixtures} meciuri pentru ${effectiveDates.length} zi(le).` : "Lipsă meciuri.");
     } catch (e: any) { setStatus(`Eroare: ${e.message}`); }
   }
 
@@ -264,10 +323,16 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Se procesează datele (Warm)...");
     try {
-      const qs = new URLSearchParams({ date, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(date)) });
-      const r = await fetch(`/api/warm?${qs}`);
-      const j = await r.json();
-      setStatus(j.ok ? "Date pregătite cu succes." : "Eroare la procesare.");
+      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const results = [];
+      for (const currentDate of dates) {
+        const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
+        const r = await fetch(`/api/warm?${qs}`);
+        const j = await r.json();
+        results.push({ date: currentDate, ok: !!j.ok });
+      }
+      const okCount = results.filter(r => r.ok).length;
+      setStatus(okCount === results.length ? `Date pregătite cu succes pentru ${results.length} zi(le).` : `Warm finalizat parțial (${okCount}/${results.length}).`);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
 
@@ -303,18 +368,33 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
     try {
-      const qs = new URLSearchParams({ date, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(date)), limit: "50" });
-      const r = await fetch(`/api/predict?${qs}`);
-      const j = await r.json();
-      setPreds(j);
-      setHistory((prev) => mergePredictionHistory(prev, j));
-      setStatus(`Gata! ${j.length} predicții generate.`);
-      void prefetchColors(j);
+      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const batches: PredictionRow[] = [];
+      for (const currentDate of dates) {
+        const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
+        const r = await fetch(`/api/predict?${qs}`);
+        const j = await r.json();
+        if (Array.isArray(j)) batches.push(...j);
+      }
+      const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
+      setPreds(deduped);
+      setHistory((prev) => mergePredictionHistory(prev, deduped));
+      setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
+      void prefetchColors(deduped);
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
 
-  useEffect(() => { fetchDay(date); }, [date]);
+  useEffect(() => {
+    const normalized = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+    if (normalized.length === 0) return;
+    if (normalized.join("|") !== (selectedDates || []).join("|")) {
+      setSelectedDates(normalized);
+      return;
+    }
+    if (normalized[0] !== date) setDate(normalized[0]);
+    void fetchDays(normalized);
+  }, [date, selectedDates]);
   useEffect(() => { setHistory((prev) => pruneAndValidateHistory(prev)); }, [setHistory]);
   useEffect(() => {
     const snapshot = pruneAndValidateHistory(history);
@@ -396,10 +476,63 @@ export default function App() {
                 <div style={{ width: `${usagePct}%` }} className={`h-full ${usagePct > 80 ? "bg-red-500" : "bg-emerald-500"}`} />
               </div>
             </div>
-            <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50" />
-              <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
-              <button onClick={predict} className="bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
+            <div className="flex flex-col items-stretch gap-2 lg:gap-3">
+              <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDate(next);
+                    setSelectedDates((prev) => {
+                      const filtered = prev.filter((d) => d !== date);
+                      return normalizeSelectedDates([next, ...filtered]);
+                    });
+                  }}
+                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+                <button
+                  onClick={() => {
+                    setSelectedDates((prev) => {
+                      const normalized = normalizeSelectedDates(prev.length ? prev : [date]);
+                      if (normalized.length >= 3) {
+                        setStatus("Poți selecta maximum 3 zile.");
+                        return normalized;
+                      }
+                      const base = normalized[normalized.length - 1] || isoToday();
+                      const nextDate = new Date(base);
+                      nextDate.setDate(nextDate.getDate() + 1);
+                      return normalizeSelectedDates([...normalized, nextDate.toISOString().slice(0, 10)]);
+                    });
+                  }}
+                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all"
+                >
+                  + Zi
+                </button>
+                <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
+                <button onClick={predict} className="bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                {normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => {
+                      setSelectedDates((prev) => {
+                        const next = prev.filter((item) => item !== d);
+                        const normalized = normalizeSelectedDates(next.length ? next : [date]);
+                        setDate(normalized[0] || isoToday());
+                        return normalized;
+                      });
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-[10px] font-black border ${
+                      d === date ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300" : "bg-slate-900 border-white/10 text-slate-300"
+                    }`}
+                    title="Elimină ziua"
+                  >
+                    {d} {normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).length > 1 ? "✕" : ""}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -487,8 +620,27 @@ export default function App() {
             {!preds.length ? (
               <div className="h-[400px] border-2 border-dashed border-white/5 rounded-[2rem] grid place-items-center text-slate-600 text-center"><p className="italic font-medium">Selectează ligile dorite, apoi apasă Predict.</p></div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
-                {displayedMatches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} onClick={() => setSelectedMatch(m)} />)}
+              <div className="space-y-8">
+                {groupedDisplayedMatches.map((group) => (
+                  <section key={group.dateKey} className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="text-[11px] uppercase tracking-[0.25em] text-emerald-400 font-black">
+                        {group.dateKey === "Fără dată"
+                          ? group.dateKey
+                          : new Date(group.dateKey).toLocaleDateString([], {
+                              weekday: "short",
+                              day: "2-digit",
+                              month: "2-digit"
+                            })}
+                      </div>
+                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent" />
+                      <div className="text-[10px] text-slate-500 font-black">{group.matches.length} meciuri</div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+                      {group.matches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} onClick={() => setSelectedMatch(m)} />)}
+                    </div>
+                  </section>
+                ))}
               </div>
             )}
           </div>
@@ -527,6 +679,9 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
   const confPct = pct(row.recommended?.confidence);
   const confColor = confPct >= 75 ? '#10b981' : confPct >= 60 ? '#f59e0b' : '#ef4444';
   const showFire = row.recommended?.confidence >= 70;
+  const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;
+  const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
+  const kickoffDate = new Date(row.kickoff);
 
   return (
     <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
@@ -543,6 +698,8 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
              )}
           </div>
           <div className="text-[8px] sm:text-[9px] text-slate-500 flex flex-wrap items-center gap-1 font-medium tracking-tight">
+            📅 {kickoffDate.toLocaleDateString([], { day: '2-digit', month: '2-digit' })}
+            <span className="opacity-50 mx-1">|</span>
             ⏱️ {new Date(row.kickoff).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             <span className="opacity-50 mx-1">|</span> ⚖️ {row.referee || "-"}
           </div>
@@ -623,6 +780,11 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
         <div className="text-[8px] text-slate-500 uppercase font-black mb-0.5 tracking-wider opacity-60">Scor Estimat Poisson</div>
         <div className="text-xs sm:text-sm font-black text-white tracking-widest">{row.predictions?.correctScore || "-"}</div>
+        {hasFinalScore && (
+          <div className={`mt-2 text-[9px] font-black border rounded-lg px-2.5 py-1 uppercase tracking-wide ${finalScoreBadgeClass(finalPickResult)}`}>
+            {finalScoreLabel(finalPickResult)} · {row.score?.home}-{row.score?.away}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -633,6 +795,9 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   const homeColor = logoColors[match.logos?.home || ''] || hashColor(match.teams.home);
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
+  const hasFinalScore = isFinalStatus(match.status) && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
+  const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
+  const kickoffDate = new Date(match.kickoff);
 
   const [xgData, setXgData] = useState<any>(() => {
     if (!match.luckStats) return null;
@@ -675,7 +840,14 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
               <div className="text-4xl font-black text-white tracking-tighter mb-2">{match.predictions.correctScore}</div>
               <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
+              {hasFinalScore && (
+                <div className={`mt-2 text-[10px] px-3 py-1.5 rounded-full uppercase font-bold inline-block border ${finalScoreBadgeClass(finalPickResult)}`}>
+                  {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
+                </div>
+              )}
               <div className="text-[10px] text-slate-600 font-black mt-2 opacity-80">
+                📅 {kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}{" "}
+                <span className="opacity-50 mx-1">|</span>
                 ⏱️ {new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" "}
                 <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
               </div>
