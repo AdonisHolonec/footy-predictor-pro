@@ -55,6 +55,15 @@ function mapPredictionToDbRow(prediction) {
   const score = { home: scoreHome, away: scoreAway };
   const recommendedPick = prediction.recommended?.pick || null;
   const recommendedConfidence = asNum(prediction.recommended?.confidence);
+  const generatedAt = new Date().toISOString();
+  const payloadWithMeta = {
+    ...prediction,
+    historyMeta: {
+      generatedAt,
+      source: "api/predict",
+      schemaVersion: 1
+    }
+  };
 
   return {
     fixture_id: prediction.id,
@@ -77,9 +86,9 @@ function mapPredictionToDbRow(prediction) {
     score_home: scoreHome,
     score_away: scoreAway,
     validation: validationFromMatch(status, recommendedPick, score),
-    saved_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    raw_payload: prediction
+    saved_at: generatedAt,
+    updated_at: generatedAt,
+    raw_payload: payloadWithMeta
   };
 }
 

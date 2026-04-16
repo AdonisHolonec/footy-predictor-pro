@@ -237,6 +237,10 @@ export default function App() {
   const trackerStats = useMemo(() => {
     return historyStats;
   }, [historyStats]);
+  const pendingHistoryCount = useMemo(
+    () => history.filter((item) => item.validation === "pending").length,
+    [history]
+  );
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
 
   const groupedDisplayedMatches = useMemo(() => {
@@ -350,7 +354,7 @@ export default function App() {
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
-      await fetch("/api/history/sync?days=30").catch(() => null);
+      await fetch("/api/history/sync?days=30", { method: "POST" }).catch(() => null);
       await loadHistory(30);
       setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
       void prefetchColors(deduped);
@@ -477,6 +481,11 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                {pendingHistoryCount > 0 && (
+                  <div className="relative mt-2 text-center text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-amber-300/90">
+                    {pendingHistoryCount} predicții așteaptă validarea finală
+                  </div>
+                )}
                 {isHistorySyncing && <div className="relative mt-2 text-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
               </div>
           </div>

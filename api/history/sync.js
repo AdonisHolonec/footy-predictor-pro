@@ -12,9 +12,31 @@ function isoDate(value) {
   }
 }
 
+function isAuthorizedSyncRequest(req) {
+  const secret = process.env.CRON_SECRET;
+  const provided =
+    req.headers["x-cron-secret"] ||
+    req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
+    req.query.secret;
+
+  if (secret && provided === secret) return true;
+
+  const host = String(req.headers.host || "");
+  const origin = String(req.headers.origin || "");
+  const referer = String(req.headers.referer || "");
+
+  if (origin && host && origin.includes(host)) return true;
+  if (referer && host && referer.includes(host)) return true;
+  return !secret;
+}
+
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed." });
+  }
+
+  if (!isAuthorizedSyncRequest(req)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized sync request." });
   }
 
   const supabaseConfig = assertSupabaseConfigured();
