@@ -91,9 +91,10 @@ export default function App() {
   
   const [searchLeague, setSearchLeague] = useState("");
   const [filterMode, setFilterMode] = useState<"ALL" | "VALUE" | "SAFE">("ALL");
-  
-  // STAT DE MODAL - Aici stocăm meciul apăsat
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
+
+  // UX INTELLIGENT: Expandat pe ecrane mari (>1024px), colapsat pe mobile
+  const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
 
   const leaguesSorted = useMemo(() => {
     const leagues = day?.leagues ?? [];
@@ -157,6 +158,8 @@ export default function App() {
       setPreds(j);
       setStatus(`Gata! ${j.length} predicții generate.`);
       void prefetchColors(j);
+      // Închidem automat panoul de ligi pe mobil după ce am apăsat predict
+      if (window.innerWidth < 1024) setIsLeaguesOpen(false);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
 
@@ -171,6 +174,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
       <div className="mx-auto max-w-7xl px-4 py-8">
         
+        {/* HEADER */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white grid place-items-center font-black text-2xl shadow-xl shadow-emerald-500/20">
@@ -209,54 +213,82 @@ export default function App() {
         )}
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          
+          {/* PANOUL DE LIGI (ACUM ACORDEON) */}
           <div className="lg:col-span-4 space-y-4">
-            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-xl">Ligi</h2>
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full">{leaguesSorted.length} disp.</span>
+            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5 transition-all">
+              
+              {/* Header-ul pe care dai click ca să deschizi/închizi */}
+              <div 
+                className="flex justify-between items-center cursor-pointer group"
+                onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <h2 className="font-bold text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
+                  <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs">
+                    {isLeaguesOpen ? '🔽' : '▶️'}
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {/* Badge care apare cand e inchis, ca sa stii cate ligi ai bifate */}
+                  {selectedSet.size > 0 && !isLeaguesOpen && (
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-full shadow-sm shadow-emerald-900/20">
+                      {selectedSet.size} selectate
+                    </span>
+                  )}
+                  <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full">{leaguesSorted.length} disp.</span>
+                </div>
               </div>
               
-              <input 
-                type="text" 
-                placeholder="Caută campionatul..." 
-                value={searchLeague}
-                onChange={e => setSearchLeague(e.target.value)}
-                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors"
-              />
+              {/* Conținutul (Lista) - apare doar dacă isLeaguesOpen este true */}
+              {isLeaguesOpen && (
+                <div className="mt-5 transition-all">
+                  <input 
+                    type="text" 
+                    placeholder="Caută campionatul..." 
+                    value={searchLeague}
+                    onChange={e => setSearchLeague(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors"
+                  />
 
-              <div className="space-y-2 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
-                {leaguesSorted.map(lg => {
-                  const isElite = ELITE_LEAGUES.includes(Number(lg.id));
-                  const isSelected = selectedSet.has(lg.id);
-                  return (
-                    <button 
-                      key={lg.id} 
-                      onClick={() => {
-                        const s = new Set(selectedLeagueIds);
-                        s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
-                        setSelectedLeagueIds(Array.from(s));
-                      }}
-                      className={`w-full flex justify-between items-center p-3 rounded-xl border transition-all ${
-                        isSelected ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'
-                      }`}
-                    >
-                      <div className="text-left flex items-center gap-2">
-                        {isElite && <span className="text-[12px]">👑</span>}
-                        <div>
-                          <div className={`text-sm font-bold tracking-tight ${isElite && !isSelected ? 'text-yellow-100' : ''}`}>{lg.name}</div>
-                          <div className="text-[9px] opacity-50 uppercase">{lg.country}</div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${isSelected ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>
-                        {lg.matches}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                  <div className="space-y-2 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
+                    {leaguesSorted.map(lg => {
+                      const isElite = ELITE_LEAGUES.includes(Number(lg.id));
+                      const isSelected = selectedSet.has(lg.id);
+                      return (
+                        <button 
+                          key={lg.id} 
+                          onClick={() => {
+                            const s = new Set(selectedLeagueIds);
+                            s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
+                            setSelectedLeagueIds(Array.from(s));
+                          }}
+                          className={`w-full flex justify-between items-center p-3 rounded-xl border transition-all ${
+                            isSelected ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'
+                          }`}
+                        >
+                          <div className="text-left flex items-center gap-2">
+                            {isElite && <span className="text-[12px]">👑</span>}
+                            <div>
+                              <div className={`text-sm font-bold tracking-tight ${isElite && !isSelected ? 'text-yellow-100' : ''}`}>{lg.name}</div>
+                              <div className="text-[9px] opacity-50 uppercase">{lg.country}</div>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${isSelected ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>
+                            {lg.matches}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
 
+          {/* PANOUL DE MECIURI */}
           <div className="lg:col-span-8">
             {preds.length > 0 && (
               <div className="flex gap-2 mb-6 bg-slate-900/40 p-2 rounded-2xl border border-white/5 overflow-x-auto">
@@ -308,7 +340,7 @@ export default function App() {
   );
 }
 
-// --- CARDUL PRINCIPAL (acum click-uibil) ---
+// --- CARDUL PRINCIPAL ---
 function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
   const homeColor = logoColors[row.logos?.home || ''] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ''] || hashColor(row.teams.away);
@@ -385,7 +417,6 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
 
-  // Funcție pentru o bară simplă de procentaj
   const ProbBar = ({ label, val, color }: { label: string, val: number, color: string }) => (
     <div className="mb-3">
       <div className="flex justify-between text-[10px] font-black uppercase mb-1">
@@ -400,15 +431,12 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      {/* Container Modal - oprim propagarea click-ului ca să nu se închidă când dăm click înăuntru */}
       <div className="bg-slate-950 border border-white/10 rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
         
-        {/* Buton Închidere */}
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 transition-colors">
           ✕
         </button>
 
-        {/* Header Modal */}
         <div className="p-6 bg-slate-900/40 border-b border-white/5">
           <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-4">
             ⚽ Analiză Avansată Poisson
@@ -430,10 +458,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
           </div>
         </div>
 
-        {/* Corp Modal - Analiză Detaliată */}
         <div className="p-6 space-y-6">
-          
-          {/* Putere Echipe (Lambdas) - Dacă sunt disponibile */}
           {match.lambdas && (
             <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-3 text-center">Indice Forță Ofensivă (Momentum)</div>
@@ -450,7 +475,6 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
           )}
 
           <div className="grid grid-cols-2 gap-6">
-            {/* Coloana Stânga: Rezultat Final */}
             <div>
               <div className="text-[10px] text-slate-500 uppercase font-black mb-4 border-b border-white/5 pb-2">Rezultat Final (1X2)</div>
               <ProbBar label="Victorie Gazde" val={match.probs.p1} color={homeColor} />
@@ -458,7 +482,6 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               <ProbBar label="Victorie Oaspeți" val={match.probs.p2} color={awayColor} />
             </div>
 
-            {/* Coloana Dreapta: Goluri & Ambele marchează */}
             <div>
               <div className="text-[10px] text-slate-500 uppercase font-black mb-4 border-b border-white/5 pb-2">Piața de Goluri</div>
               <ProbBar label="Peste 2.5 Goluri" val={match.probs.pO25} color="#10b981" />
@@ -466,7 +489,6 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               <ProbBar label="Ambele Marchează (GG)" val={match.probs.pGG} color="#f59e0b" />
             </div>
           </div>
-          
         </div>
       </div>
     </div>
