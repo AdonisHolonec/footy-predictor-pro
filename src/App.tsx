@@ -1,16 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-// --- TIPURI DATE (Actualizate pentru a elimina erorile) ---
+// --- TIPURI DATE (Păstrate integral) ---
 type Usage = { date: string; count: number; limit: number };
 type League = { id: number; name: string; country: string; matches: number };
 type Odds = { home: number; draw: number; away: number };
 type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
-
 type Probs = {
   p1: number; pX: number; p2: number;
   pGG: number; pO25: number; pU35: number; pO15: number;
 };
-
 type PredictionRow = {
   id: number;
   leagueId: number;
@@ -21,14 +19,13 @@ type PredictionRow = {
   status: string;
   referee: string;
   lambdas?: { home: number; away: number };
-  luckStats?: { hG: number; hXG: number; aG: number; aXG: number }; // Adăugat pentru xG
+  luckStats?: { hG: number; hXG: number; aG: number; aXG: number };
   probs: Probs;
   odds?: Odds;
   valueBet?: ValueBet;
   predictions: { oneXtwo: string; gg: string; over25: string; cards: string; correctScore: string };
   recommended: { pick: string; confidence: number };
 };
-
 type DayResponse = {
   ok: boolean;
   date: string;
@@ -37,14 +34,13 @@ type DayResponse = {
   usage: Usage;
 };
 
-// --- UTILS (Codul tău original) ---
+// --- UTILS (Funcțiile tale originale de procesare imagine) ---
 function isoToday(): string { return new Date().toISOString().split('T')[0]; }
 function inferSeason(dateISO: string): number {
   const [y, m] = dateISO.split("-").map(Number);
   if (!y || !m) return new Date().getFullYear() - 1;
   return (m >= 7) ? y : (y - 1);
 }
-
 function useLocalStorageState<T>(key: string, initial: T) {
   const [v, setV] = useState<T>(() => {
     try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
@@ -52,14 +48,12 @@ function useLocalStorageState<T>(key: string, initial: T) {
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { } }, [key, v]);
   return [v, setV] as const;
 }
-
 function hashColor(seed: string): string {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   const r = (h >>> 16) & 255; const g = (h >>> 8) & 255; const b = h & 255;
   return `rgb(${Math.floor(80 + (r / 255) * 150)}, ${Math.floor(80 + (g / 255) * 150)}, ${Math.floor(80 + (b / 255) * 150)})`;
 }
-
 async function dominantColorFromImage(url: string): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image(); img.crossOrigin = "anonymous";
@@ -84,28 +78,29 @@ async function dominantColorFromImage(url: string): Promise<string | null> {
 
 const ELITE_LEAGUES = [2, 3, 39, 140, 135, 78, 61, 283];
 
-// --- COMPONENTE NOI (xG & Luck) ---
+// --- COMPONENTE UI PREMIUM (Recuperate) ---
+
 function XGPerformanceBar({ xg }: { xg: any }) {
   if (!xg) return null;
-  const homeWidth = Math.min((xg.homeXG / 4) * 100, 100);
-  const awayWidth = Math.min((xg.awayXG / 4) * 100, 100);
+  const hW = Math.min((xg.homeXG / 4) * 100, 100);
+  const aW = Math.min((xg.awayXG / 4) * 100, 100);
   return (
     <div className="mt-4 px-3 py-3 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
       <div className="flex justify-between items-center mb-1 px-1">
-        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center w-full">Expected Goals (xG Performance)</span>
+        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center w-full">Expected Goals Performance</span>
       </div>
       <div className="flex items-center gap-4">
         <div className="flex-1 flex flex-col items-end">
           <span className="text-[11px] font-black text-emerald-400 mb-1">{xg.homeXG}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${homeWidth}%` }} />
+            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${hW}%` }} />
           </div>
         </div>
-        <div className="text-[8px] font-black text-slate-700 italic mt-4">VS</div>
+        <div className="text-[8px] font-black text-slate-700 italic">VS</div>
         <div className="flex-1 flex flex-col items-start">
           <span className="text-[11px] font-black text-blue-400 mb-1">{xg.awayXG}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${awayWidth}%` }} />
+            <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${aW}%` }} />
           </div>
         </div>
       </div>
@@ -119,12 +114,12 @@ function LuckBadge({ goals, xg }: { goals?: number, xg?: number }) {
   if (Math.abs(diff) < 0.3) return null;
   return (
     <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${diff > 0.3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'}`}>
-      {diff > 0.3 ? '⚠️ Luck' : '💎 Value'}
+      {diff > 0.3 ? '⚠️ Lucky Form' : '💎 Value / Under'}
     </div>
   );
 }
 
-// --- COMPONENTA PRINCIPALĂ ---
+// --- COMPONENTA APP PRINCIPALĂ ---
 export default function App() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.selectedLeagueIds", []);
@@ -220,7 +215,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
       <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* HEADER */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white grid place-items-center font-black text-2xl shadow-xl shadow-emerald-500/20">FP</div>
@@ -249,7 +243,6 @@ export default function App() {
         {status && <div className="mb-6 p-3 bg-slate-900/40 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-mono">{"> "} {status}</div>}
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          {/* LIGI */}
           <div className="lg:col-span-4 space-y-4">
             <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5 transition-all">
               <div className="flex justify-between items-center cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
@@ -288,7 +281,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* MECIURI */}
           <div className="lg:col-span-8">
             {preds.length > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 bg-slate-900/40 p-3 rounded-2xl border border-white/5">
@@ -320,7 +312,7 @@ export default function App() {
   );
 }
 
-// --- CARDUL MECIULUI ---
+// --- CARDUL MECIULUI PREMIUM CU GAUGE ---
 function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
   const [xgData, setXgData] = useState<any>(null);
   useEffect(() => {
@@ -340,25 +332,35 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
           <span className="text-[9px] bg-white/5 text-slate-300 px-2 py-1 rounded-md uppercase font-black tracking-widest">{row.league}</span>
           <span className="text-[9px] text-slate-500">⏱️ {new Date(row.kickoff).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         </div>
-        <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-slate-800/50" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
-          <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center text-[9px] font-black text-white">{confPct}%</div>
+        
+        {/* TOP PICK GAUGE (Recuperat) */}
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">Top Pick</div>
+            <div className="text-sm font-black text-emerald-400">{row.recommended.pick}</div>
+          </div>
+          <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
+            <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-md">{confPct}%</div>
+          </div>
         </div>
       </div>
 
       {row.valueBet?.detected && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-4 flex justify-between items-center text-[10px] text-yellow-400 font-black uppercase tracking-wider">
           <span>💎 Value: {row.valueBet.type}</span>
-          <span>EV: +{row.valueBet.ev}%</span>
+          <span>EV: +{row.valueBet.ev}% | Stake: {row.valueBet.kelly}%</span>
         </div>
       )}
 
       <div className="flex items-center justify-between mb-2">
-        <div className="w-1/3 text-center"><img src={row.logos?.home} className="w-10 h-10 mx-auto mb-1"/><div className="text-[11px] font-bold truncate text-slate-200">{row.teams.home}</div></div>
+        <div className="w-1/3 text-center"><img src={row.logos?.home} className="w-10 h-10 mx-auto mb-1 drop-shadow-lg"/><div className="text-[11px] font-bold truncate text-slate-200">{row.teams.home}</div></div>
         <div className="text-slate-600 font-black italic">VS</div>
-        <div className="w-1/3 text-center"><img src={row.logos?.away} className="w-10 h-10 mx-auto mb-1"/><div className="text-[11px] font-bold truncate text-slate-200">{row.teams.away}</div></div>
+        <div className="w-1/3 text-center"><img src={row.logos?.away} className="w-10 h-10 mx-auto mb-1 drop-shadow-lg"/><div className="text-[11px] font-bold truncate text-slate-200">{row.teams.away}</div></div>
       </div>
 
+      {/* SECȚIUNEA xG (Recuperată) */}
       <XGPerformanceBar xg={xgData} />
+      
       {row.luckStats && (
         <div className="flex justify-between mt-2 px-1">
           <LuckBadge goals={row.luckStats.hG} xg={row.luckStats.hXG} />
@@ -366,23 +368,29 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       )}
 
-      <div className="space-y-1.5 mb-4 mt-4">
+      {/* BARA PROBABILITĂȚI 1X2 */}
+      <div className="space-y-1.5 mb-4 mt-5">
         <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden flex">
           <div style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }} />
           <div style={{ width: `${row.probs.pX}%` }} className="bg-slate-600" />
           <div style={{ width: `${row.probs.p2}%`, backgroundColor: awayColor }} />
         </div>
+        <div className="flex justify-between text-[8px] font-black text-slate-500 uppercase">
+           <span>{pct(row.probs.p1)}% · {row.odds?.home || '-'}</span>
+           <span>{row.odds?.draw || '-'}</span>
+           <span>{row.odds?.away || '-'} · {pct(row.probs.p2)}%</span>
+        </div>
       </div>
 
       <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
         <div className="text-[8px] text-slate-500 uppercase font-black mb-0.5">Scor Estimat Poisson</div>
-        <div className="text-sm font-black text-white">{row.predictions?.correctScore}</div>
+        <div className="text-sm font-black text-white tracking-widest">{row.predictions?.correctScore}</div>
       </div>
     </div>
   );
 }
 
-// --- MODAL DETALIAT ---
+// --- MODAL DETALIAT (Păstrat integral) ---
 function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logoColors: Record<string, string>, onClose: () => void }) {
   const homeColor = logoColors[match.logos?.home || ''] || hashColor(match.teams.home);
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
@@ -404,19 +412,19 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-slate-950 border border-white/10 rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 transition-colors">✕</button>
-        <div className="p-6 bg-slate-900/40 border-b border-white/5">
-          <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-4">⚽ Analiză Avansată Poisson</div>
-          <div className="flex justify-between items-center text-center">
-            <div className="w-1/3 flex flex-col items-center gap-3">
+        <div className="p-6 bg-slate-900/40 border-b border-white/5 text-center">
+          <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-4 italic">⚽ Analiză Avansată Poisson & xG</div>
+          <div className="flex justify-between items-center px-4">
+            <div className="w-1/3 flex flex-col items-center gap-2">
               <img src={match.logos?.home} className="w-16 h-16 object-contain drop-shadow-xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.home}</div>
             </div>
             <div className="w-1/3">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
-              <div className="text-2xl font-black text-white">{match.predictions.correctScore}</div>
-              <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded mt-2 uppercase font-bold inline-block">Pick: {match.recommended.pick}</div>
+              <div className="text-3xl font-black text-white tracking-tighter">{match.predictions.correctScore}</div>
+              <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded mt-2 uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
             </div>
-            <div className="w-1/3 flex flex-col items-center gap-3">
+            <div className="w-1/3 flex flex-col items-center gap-2">
               <img src={match.logos?.away} className="w-16 h-16 object-contain drop-shadow-xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.away}</div>
             </div>
@@ -424,24 +432,24 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
         </div>
         <div className="p-6 space-y-6">
           {match.lambdas && (
-            <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 text-center">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-3 italic">Indice Forță Ofensivă (Momentum)</div>
+            <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 text-center shadow-inner">
+              <div className="text-[10px] text-slate-500 uppercase font-black mb-3">Momentum Ofensiv Ajustat</div>
               <div className="flex justify-between items-center gap-4">
-                <div className="text-right w-1/2 text-lg font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
+                <div className="text-right w-1/2 text-xl font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
                 <div className="text-slate-600 font-black text-xs">VS</div>
-                <div className="text-left w-1/2 text-lg font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
+                <div className="text-left w-1/2 text-xl font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 border-b border-white/5 pb-2 tracking-widest">Rezultat Final</div>
+          <div className="grid grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2">Rezultat Final</div>
               <ProbBar label="Victorie Gazde" val={match.probs.p1} color={homeColor} />
               <ProbBar label="Egalitate (X)" val={match.probs.pX} color="#475569" />
               <ProbBar label="Victorie Oaspeți" val={match.probs.p2} color={awayColor} />
             </div>
-            <div>
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 border-b border-white/5 pb-2 tracking-widest">Piața Goluri</div>
+            <div className="space-y-4">
+              <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2">Piața Goluri</div>
               <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#10b981" />
               <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#3b82f6" />
               <ProbBar label="Ambele (GG)" val={match.probs.pGG} color="#f59e0b" />
