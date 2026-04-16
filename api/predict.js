@@ -53,6 +53,16 @@ export default async function handler(req, res) {
         const awayName = fx.teams?.away?.name || "Away";
         const homeIdStr = fx.teams?.home?.id ? String(fx.teams.home.id) : null;
         const awayIdStr = fx.teams?.away?.id ? String(fx.teams.away.id) : null;
+        let refereeName = "";
+        try {
+          const r = fx.fixture?.referee;
+          if (r) {
+            if (typeof r === "string") refereeName = r;
+            else refereeName = r?.name || r?.full_name || r?.last_name || "";
+          }
+        } catch {
+          refereeName = "";
+        }
 
         let method = "none";
         let lambdaHome, lambdaAway;
@@ -133,6 +143,7 @@ export default async function handler(req, res) {
           teams: { home: homeName, away: awayName },
           kickoff: fx.fixture?.date,
           status: fx.fixture?.status?.short,
+          referee: refereeName || undefined,
           probs: p, odds, luckStats,
           valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
           predictions: { oneXtwo: finalPick1X2, gg: p.pGG >= 55 ? "GG" : "NGG", over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5", correctScore: calc.bestScore },

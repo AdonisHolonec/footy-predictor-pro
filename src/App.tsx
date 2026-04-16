@@ -17,13 +17,13 @@ type PredictionRow = {
   logos?: { league?: string; home?: string; away?: string };
   kickoff: string;
   status: string;
-  referee: string;
+  referee?: string;
   lambdas?: { home: number; away: number };
   luckStats?: { hG: number; hXG: number; aG: number; aXG: number };
   probs: Probs;
   odds?: Odds;
   valueBet?: ValueBet;
-  predictions: { oneXtwo: string; gg: string; over25: string; cards: string; correctScore: string };
+  predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
   recommended: { pick: string; confidence: number };
 };
 type DayResponse = {
@@ -424,6 +424,17 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
 
+  const [xgData, setXgData] = useState<any>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setXgData(null);
+    fetch(`/api/get-xg?fixtureId=${match.id}`)
+      .then(res => res.json())
+      .then(data => { if (!cancelled && !data?.error) setXgData(data); })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+  }, [match.id]);
+
   const ProbBar = ({ label, val, color }: { label: string, val: number, color: string }) => (
     <div className="mb-3">
       <div className="flex justify-between text-[10px] font-black uppercase mb-1">
@@ -452,6 +463,10 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
               <div className="text-4xl font-black text-white tracking-tighter mb-2">{match.predictions.correctScore}</div>
               <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
+              <div className="text-[10px] text-slate-600 font-black mt-2 opacity-80">
+                ⏱️ {new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" "}
+                <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
+              </div>
             </div>
             <div className="w-1/3 flex flex-col items-center gap-3">
               <img src={match.logos?.away} className="w-16 h-16 object-contain drop-shadow-2xl" alt="" />
@@ -461,6 +476,56 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
         </div>
 
         <div className="p-8 space-y-8">
+          {/* xG + Luck Factor */}
+          <div className="space-y-4">
+            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
+              <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60 tracking-widest">xG & Luck Factor</div>
+              <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
+              {match.luckStats && (
+                <div className="flex justify-between mt-2 px-1 gap-2">
+                  <LuckBadge goals={match.luckStats.hG} xg={match.luckStats.hXG} />
+                  <LuckBadge goals={match.luckStats.aG} xg={match.luckStats.aXG} />
+                </div>
+              )}
+              {!match.luckStats && <div className="text-[10px] text-slate-500 opacity-70">Luck Factor: indisponibil</div>}
+            </div>
+          </div>
+
+          {/* Cote reale + Value Bet */}
+          <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
+            <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Cote Reale & Value Bet</div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                <div className="text-[10px] text-slate-500 uppercase font-black">1 (Gazde)</div>
+                <div className="text-2xl font-black mt-1" style={{ color: homeColor }}>{match.odds?.home ?? "-"}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                <div className="text-[10px] text-slate-500 uppercase font-black">X (Egal)</div>
+                <div className="text-2xl font-black mt-1">{match.odds?.draw ?? "-"}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                <div className="text-[10px] text-slate-500 uppercase font-black">2 (Oaspeți)</div>
+                <div className="text-2xl font-black mt-1" style={{ color: awayColor }}>{match.odds?.away ?? "-"}</div>
+              </div>
+            </div>
+
+            {match.valueBet?.detected && (
+              <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
+                <div className="mt-2 flex justify-between text-[12px] font-black">
+                  <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
+                  <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
+                  <span className="text-yellow-200">Stake: {match.valueBet.kelly ?? 0}%</span>
+                </div>
+              </div>
+            )}
+            {!match.valueBet?.detected && (
+              <div className="mt-4 text-[10px] text-slate-500 opacity-70 font-black uppercase tracking-widest">
+                Value Bet: nu detectat
+              </div>
+            )}
+          </div>
+
           {match.lambdas && (
             <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60">Momentum Ofensiv Ajustat (λ)</div>
@@ -471,6 +536,35 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
               </div>
             </div>
           )}
+
+          {/* Predicții (piețe) */}
+          <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
+            <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Piețe & Scor</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                <div className="text-[10px] text-slate-500 uppercase font-black">1X2</div>
+                <div className="text-sm font-black mt-1">{match.predictions.oneXtwo}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                <div className="text-[10px] text-slate-500 uppercase font-black">GG</div>
+                <div className="text-sm font-black mt-1">{match.predictions.gg}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                <div className="text-[10px] text-slate-500 uppercase font-black">Over 2.5</div>
+                <div className="text-sm font-black mt-1">{match.predictions.over25}</div>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
+                <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
+                <div className="text-sm font-black mt-1">{match.predictions.correctScore}</div>
+              </div>
+              {match.predictions.cards && (
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
+                  <div className="text-[10px] text-slate-500 uppercase font-black">Cards</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.cards}</div>
+                </div>
+              )}
+            </div>
+          </div>
           
           <div className="grid grid-cols-2 gap-10">
             <div className="space-y-4">
