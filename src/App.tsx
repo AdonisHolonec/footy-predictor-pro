@@ -458,26 +458,26 @@ export default function App() {
             <div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
-              <div className="mt-4 flex flex-wrap items-stretch gap-3 rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3 shadow-inner backdrop-blur">
-                <div className="min-w-[150px]">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 items-stretch gap-2 sm:gap-3 rounded-2xl border border-white/5 bg-slate-900/60 px-3 sm:px-4 py-3 shadow-inner backdrop-blur w-full max-w-[640px]">
+                <div className="min-w-0 sm:col-span-2 xl:col-span-1">
                   <div className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Top Pick Tracker</div>
                   <div className="text-[11px] text-slate-400 font-semibold mt-1">Ultimele 30 de zile</div>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 min-w-0">
                   <div className="text-lg">✅</div>
                   <div>
                     <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-black">Wins</div>
                     <div className="text-lg font-black text-emerald-300 leading-none">{trackerStats.wins}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2">
+                <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 min-w-0">
                   <div className="text-lg">❌</div>
                   <div>
                     <div className="text-[10px] uppercase tracking-widest text-rose-300/80 font-black">Losses</div>
                     <div className="text-lg font-black text-rose-300 leading-none">{trackerStats.losses}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 min-w-[170px]">
+                <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 min-w-0">
                   <div className="text-lg">🎯</div>
                   <div className="w-full">
                     <div className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Win Rate</div>
@@ -490,12 +490,12 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                {isHistorySyncing && <div className="self-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
+                {isHistorySyncing && <div className="sm:col-span-2 xl:col-span-4 self-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
               </div>
             </div>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
-            <div className="flex flex-col items-end w-full max-w-[200px] lg:min-w-[220px]">
+            <div className="flex flex-col items-start lg:items-end w-full max-w-[200px] lg:min-w-[220px]">
               <div className="text-[10px] text-slate-400 uppercase font-black mb-1">
                 API Calls: <span className={usagePct > 80 ? "text-red-400" : "text-emerald-400"}>{usageCount} / {usageLimit}</span>
               </div>
@@ -504,7 +504,7 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-col items-stretch gap-2 lg:gap-3">
-              <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
                 <input
                   type="date"
                   value={date}
@@ -516,7 +516,7 @@ export default function App() {
                       return normalizeSelectedDates([next, ...filtered]);
                     });
                   }}
-                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="col-span-2 sm:col-span-1 w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
                 <button
                   onClick={() => {
@@ -537,9 +537,9 @@ export default function App() {
                   + Zi
                 </button>
                 <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
-                <button onClick={predict} className="bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
+                <button onClick={predict} className="col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
               </div>
-              <div className="flex flex-wrap gap-2 justify-end">
+              <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
                 {normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).map((d) => (
                   <button
                     key={d}
