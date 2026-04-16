@@ -10,6 +10,7 @@ import {
   extractAdvancedGoalsAverages,
   advancedLambdas
 } from './_utils/math.js';
+import { calculateEV, calculateKelly } from './_utils/advancedMath.js';
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
@@ -95,10 +96,13 @@ export default async function handler(req, res) {
 
         const p = calc.probs;
 
-        // VALUE BETS
+        // VALUE BETS & ADVANCED MATH
         let odds = null;
         let valueDetected = false;
         let valueType = "";
+        let finalEv = 0;
+        let finalKelly = 0;
+
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
           const bookie = oddsReq.data.response[0].bookmakers[0];
@@ -109,12 +113,29 @@ export default async function handler(req, res) {
             const aOdd = parseFloat(market1X2.values.find(v => v.value === "Away")?.odd);
             odds = { home: hOdd, draw: dOdd, away: aOdd };
 
-            if ((p.p1 * hOdd) / 100 > 1.15) { valueDetected = true; valueType = "1"; }
-            else if ((p.pX * dOdd) / 100 > 1.15) { valueDetected = true; valueType = "X"; }
-            else if ((p.p2 * aOdd) / 100 > 1.15) { valueDetected = true; valueType = "2"; }
+            // Verificăm cota pentru Gazde (1)
+            if ((p.p1 * hOdd) / 100 > 1.15) { 
+              valueDetected = true; 
+              valueType = "1"; 
+              finalEv = calculateEV(p.p1, hOdd);
+              finalKelly = calculateKelly(p.p1, hOdd);
+            }
+            // Verificăm cota pentru Egal (X)
+            else if ((p.pX * dOdd) / 100 > 1.15) { 
+              valueDetected = true; 
+              valueType = "X"; 
+              finalEv = calculateEV(p.pX, dOdd);
+              finalKelly = calculateKelly(p.pX, dOdd);
+            }
+            // Verificăm cota pentru Oaspeți (2)
+            else if ((p.p2 * aOdd) / 100 > 1.15) { 
+              valueDetected = true; 
+              valueType = "2"; 
+              finalEv = calculateEV(p.p2, aOdd);
+              finalKelly = calculateKelly(p.p2, aOdd);
+            }
           }
         }
-
         // Logică 1X2 (Păstrată pentru stabilirea corectă a scorului)
         let finalPick1X2 = "X";
         if (p.p1 >= p.pX && p.p1 >= p.p2) finalPick1X2 = "1";
@@ -144,7 +165,8 @@ export default async function handler(req, res) {
           lambdas: { home: Number(lambdaHome.toFixed(2)), away: Number(lambdaAway.toFixed(2)) },
           probs: p,
           odds: odds,
-          valueBet: { detected: valueDetected, type: valueType },
+          // AICI ERA GREȘEALA: Am adăugat ev și kelly în obiectul de mai jos!
+          valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
           predictions: { 
             oneXtwo: finalPick1X2,
             gg: p.pGG >= 55 ? "GG" : "NGG",

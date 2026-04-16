@@ -1,6 +1,5 @@
 // Calculează Valoarea Așteptată (EV)
-// Returnează un procentaj (ex: 5.4 înseamnă un avantaj de +5.4% pe termen lung)
-export function calculateEV(probability: number, odds: number): number {
+export function calculateEV(probability, odds) {
   if (!probability || !odds || odds <= 1) return 0;
   
   // Transformăm probabilitatea din procente (ex: 60) în zecimale (0.6)
@@ -11,8 +10,7 @@ export function calculateEV(probability: number, odds: number): number {
 }
 
 // Calculează Criteriul Kelly (Sfertul de Kelly pentru siguranță)
-// Returnează procentul recomandat din banca totală (ex: 1.5 înseamnă pariază 1.5% din buget)
-export function calculateKelly(probability: number, odds: number, fraction: number = 0.25): number {
+export function calculateKelly(probability, odds, fraction = 0.25) {
   if (!probability || !odds || odds <= 1) return 0;
 
   const p = probability > 1 ? probability / 100 : probability;
