@@ -14,6 +14,8 @@ import {
   calculateEV, 
   calculateKellyQuarter as calculateKelly
 } from './_utils/advancedMath.js';
+import { assertSupabaseConfigured } from "./_utils/supabaseAdmin.js";
+import { upsertPredictionsHistory } from "./_utils/predictionsHistory.js";
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
@@ -152,6 +154,15 @@ export default async function handler(req, res) {
         });
       }
     }
+    const supabaseConfig = assertSupabaseConfigured();
+    if (supabaseConfig.ok) {
+      try {
+        await upsertPredictionsHistory(out);
+      } catch (persistError) {
+        console.error("[history upsert] failed:", persistError?.message || persistError);
+      }
+    }
+
     return res.status(200).json(out);
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message });

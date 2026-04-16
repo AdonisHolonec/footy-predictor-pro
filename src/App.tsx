@@ -32,6 +32,12 @@ type HistoryEntry = PredictionRow & {
   savedAt: string;
   validation: "pending" | "win" | "loss";
 };
+type HistoryStats = {
+  wins: number;
+  losses: number;
+  settled: number;
+  winRate: number;
+};
 type DayResponse = {
   ok: boolean;
   date: string;
@@ -173,41 +179,6 @@ function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
   return null;
 }
 
-function validateHistoryEntry(entry: HistoryEntry): HistoryEntry {
-  if (!isFinalStatus(entry.status)) {
-    return { ...entry, validation: "pending" };
-  }
-  const result = evaluateTopPick(entry.recommended.pick, entry.score);
-  if (result === null) return { ...entry, validation: "pending" };
-  return { ...entry, validation: result ? "win" : "loss" };
-}
-
-function pruneAndValidateHistory(entries: HistoryEntry[]): HistoryEntry[] {
-  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  return entries
-    .filter((entry) => {
-      const ts = new Date(entry.kickoff || entry.savedAt).getTime();
-      return Number.isFinite(ts) && ts >= cutoff;
-    })
-    .map(validateHistoryEntry)
-    .sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
-}
-
-function mergePredictionHistory(current: HistoryEntry[], incoming: PredictionRow[]): HistoryEntry[] {
-  const next = new Map<number, HistoryEntry>();
-  for (const item of current) next.set(item.id, item);
-  for (const row of incoming) {
-    const prev = next.get(row.id);
-    next.set(row.id, validateHistoryEntry({
-      ...(prev || {}),
-      ...row,
-      savedAt: prev?.savedAt || new Date().toISOString(),
-      validation: prev?.validation || "pending"
-    }));
-  }
-  return pruneAndValidateHistory(Array.from(next.values()));
-}
-
 function finalScoreBadgeClass(result: boolean | null) {
   if (result === true) return "text-emerald-300 bg-emerald-500/10 border-emerald-500/20";
   if (result === false) return "text-rose-300 bg-rose-500/10 border-rose-500/20";
@@ -227,7 +198,8 @@ export default function App() {
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.selectedLeagueIds", []);
   const [day, setDay] = useState<DayResponse | null>(null);
   const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
-  const [history, setHistory] = useLocalStorageState<HistoryEntry[]>("footy.history", []);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [status, setStatus] = useState<string>("");
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
@@ -263,13 +235,8 @@ export default function App() {
   }, [preds, filterMode, sortBy]);
 
   const trackerStats = useMemo(() => {
-    const normalized = pruneAndValidateHistory(history);
-    const wins = normalized.filter((item) => item.validation === "win").length;
-    const losses = normalized.filter((item) => item.validation === "loss").length;
-    const settled = wins + losses;
-    const winRate = settled ? (wins / settled) * 100 : 0;
-    return { wins, losses, settled, winRate };
-  }, [history]);
+    return historyStats;
+  }, [historyStats]);
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
 
   const groupedDisplayedMatches = useMemo(() => {
@@ -383,11 +350,38 @@ export default function App() {
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
-      setHistory((prev) => mergePredictionHistory(prev, deduped));
+      await fetch("/api/history/sync?days=30").catch(() => null);
+      await loadHistory(30);
       setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
       void prefetchColors(deduped);
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
+  }
+
+  async function loadHistory(days = 30) {
+    try {
+      const res = await fetch(`/api/history?days=${days}`);
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca istoricul.");
+      setHistory(Array.isArray(json.items) ? json.items : []);
+      setHistoryStats(json.stats || { wins: 0, losses: 0, settled: 0, winRate: 0 });
+    } catch (error: any) {
+      setHistory([]);
+      setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+      setStatus((prev) => prev || `Istoric indisponibil: ${error?.message || "eroare necunoscută"}`);
+    }
+  }
+
+  async function syncHistory(days = 30) {
+    setIsHistorySyncing(true);
+    try {
+      await fetch(`/api/history/sync?days=${days}`, { method: "POST" });
+      await loadHistory(days);
+    } catch {
+      // silent: indicator is enough
+    } finally {
+      setIsHistorySyncing(false);
+    }
   }
 
   useEffect(() => {
@@ -400,52 +394,9 @@ export default function App() {
     if (normalized[0] !== date) setDate(normalized[0]);
     void fetchDays(normalized);
   }, [date, selectedDates]);
-  useEffect(() => { setHistory((prev) => pruneAndValidateHistory(prev)); }, [setHistory]);
   useEffect(() => {
-    const snapshot = pruneAndValidateHistory(history);
-    if (!snapshot.length) return;
-
-    const pendingOrRecent = snapshot.filter((entry) => {
-      if (!entry.kickoff) return false;
-      return !isFinalStatus(entry.status) || entry.validation === "pending";
-    });
-    if (!pendingOrRecent.length) return;
-
-    const groups = new Map<string, Set<number>>();
-    for (const entry of pendingOrRecent) {
-      const key = entry.kickoff.slice(0, 10);
-      if (!groups.has(key)) groups.set(key, new Set());
-      groups.get(key)!.add(entry.leagueId);
-    }
-
-    let cancelled = false;
-    async function syncHistory() {
-      setIsHistorySyncing(true);
-      try {
-        const mergedBatches: PredictionRow[] = [];
-        for (const [historyDate, leagueIds] of groups.entries()) {
-          const qs = new URLSearchParams({
-            date: historyDate,
-            leagueIds: Array.from(leagueIds).join(","),
-            season: String(inferSeason(historyDate)),
-            limit: "50"
-          });
-          const res = await fetch(`/api/predict?${qs}`);
-          const json = await res.json();
-          if (Array.isArray(json)) mergedBatches.push(...json);
-        }
-        if (!cancelled && mergedBatches.length) {
-          setHistory((prev) => mergePredictionHistory(prev, mergedBatches));
-        }
-      } catch {
-        // silent background sync
-      } finally {
-        if (!cancelled) setIsHistorySyncing(false);
-      }
-    }
-
-    void syncHistory();
-    return () => { cancelled = true; };
+    void loadHistory(30);
+    void syncHistory(30);
   }, []);
   useEffect(() => {
     const prev = prevWinRateRef.current;
