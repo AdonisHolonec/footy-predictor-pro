@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // --- TIPURI DATE (Restaurate și Extinse) ---
 type Usage = { date: string; count: number; limit: number };
@@ -230,6 +230,10 @@ export default function App() {
   const [history, setHistory] = useLocalStorageState<HistoryEntry[]>("footy.history", []);
   const [status, setStatus] = useState<string>("");
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
+  const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
+  const [animatedWins, setAnimatedWins] = useState(0);
+  const [animatedLosses, setAnimatedLosses] = useState(0);
+  const [animatedWinRate, setAnimatedWinRate] = useState(0);
   const [logoColors, setLogoColors] = useLocalStorageState<Record<string, string>>("footy.logoColors", {});
   const [searchLeague, setSearchLeague] = useState("");
   const [filterMode, setFilterMode] = useState<"ALL" | "VALUE" | "SAFE">("ALL");
@@ -266,6 +270,7 @@ export default function App() {
     const winRate = settled ? (wins / settled) * 100 : 0;
     return { wins, losses, settled, winRate };
   }, [history]);
+  const prevWinRateRef = useRef<number>(trackerStats.winRate);
 
   const groupedDisplayedMatches = useMemo(() => {
     const groups = new Map<string, PredictionRow[]>();
@@ -442,6 +447,38 @@ export default function App() {
     void syncHistory();
     return () => { cancelled = true; };
   }, []);
+  useEffect(() => {
+    const prev = prevWinRateRef.current;
+    if (Math.abs(prev - trackerStats.winRate) > 0.01) {
+      setIsWinRatePulsing(true);
+      const tm = setTimeout(() => setIsWinRatePulsing(false), 900);
+      prevWinRateRef.current = trackerStats.winRate;
+      return () => clearTimeout(tm);
+    }
+    prevWinRateRef.current = trackerStats.winRate;
+  }, [trackerStats.winRate]);
+  useEffect(() => {
+    const durationMs = window.innerWidth < 768 ? 450 : 650;
+    const start = performance.now();
+    const fromWins = animatedWins;
+    const fromLosses = animatedLosses;
+    const fromRate = animatedWinRate;
+    const toWins = trackerStats.wins;
+    const toLosses = trackerStats.losses;
+    const toRate = trackerStats.winRate;
+
+    let raf = 0;
+    const step = (now: number) => {
+      const t = Math.min((now - start) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setAnimatedWins(Math.round(fromWins + (toWins - fromWins) * eased));
+      setAnimatedLosses(Math.round(fromLosses + (toLosses - fromLosses) * eased));
+      setAnimatedWinRate(fromRate + (toRate - fromRate) * eased);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   const selectedSet = new Set(selectedLeagueIds);
   const usageCount = day?.usage?.count || 0;
@@ -458,39 +495,37 @@ export default function App() {
             <div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 items-stretch gap-2 sm:gap-3 rounded-2xl border border-white/5 bg-slate-900/60 px-3 sm:px-4 py-3 shadow-inner backdrop-blur w-full max-w-[640px]">
-                <div className="min-w-0 sm:col-span-2 xl:col-span-1">
-                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Top Pick Tracker</div>
-                  <div className="text-[11px] text-slate-400 font-semibold mt-1">Ultimele 30 de zile</div>
+              <div className="relative mt-4 w-full max-w-[760px] rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 px-3 sm:px-4 py-3 shadow-[0_0_40px_rgba(16,185,129,0.08)] overflow-hidden">
+                <div className="absolute inset-0 opacity-20 pointer-events-none">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(34,211,238,0.22),transparent_40%),radial-gradient(circle_at_85%_20%,rgba(16,185,129,0.18),transparent_38%),linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:auto,auto,22px_22px,22px_22px]" />
                 </div>
-                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 min-w-0">
-                  <div className="text-lg">✅</div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-black">Wins</div>
-                    <div className="text-lg font-black text-emerald-300 leading-none">{trackerStats.wins}</div>
+                <div className="relative text-center mb-3">
+                  <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.2em] text-slate-300 font-black">Football Predictions - Performance Counter</div>
+                  <div className="text-[10px] text-slate-500 font-semibold mt-1">Ultimele 30 de zile</div>
+                </div>
+                <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 shadow-[0_0_20px_rgba(16,185,129,0.18)]">
+                    <div className="text-[10px] uppercase tracking-widest text-emerald-200/90 font-black">Wins ✅</div>
+                    <div className="mt-1 text-2xl font-black text-emerald-300 leading-none">{animatedWins}</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-widest text-emerald-300/70 font-black">Total Wins</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 min-w-0">
-                  <div className="text-lg">❌</div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest text-rose-300/80 font-black">Losses</div>
-                    <div className="text-lg font-black text-rose-300 leading-none">{trackerStats.losses}</div>
+                  <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 shadow-[0_0_20px_rgba(244,63,94,0.16)]">
+                    <div className="text-[10px] uppercase tracking-widest text-rose-200/90 font-black">Losses ❌</div>
+                    <div className="mt-1 text-2xl font-black text-rose-300 leading-none">{animatedLosses}</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-widest text-rose-300/70 font-black">Total Losses</div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 min-w-0">
-                  <div className="text-lg">🎯</div>
-                  <div className="w-full">
-                    <div className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Win Rate</div>
-                    <div className="text-lg font-black text-white leading-none">{trackerStats.winRate.toFixed(1)}%</div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                  <div className={`rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 shadow-[0_0_20px_rgba(34,211,238,0.18)] transition-all duration-500 ${isWinRatePulsing ? "scale-[1.02] shadow-[0_0_26px_rgba(34,211,238,0.35)]" : ""}`}>
+                    <div className="text-[10px] uppercase tracking-widest text-cyan-200/90 font-black">Success Rate 🎯</div>
+                    <div className="mt-1 text-2xl font-black text-cyan-200 leading-none">{animatedWinRate.toFixed(1)}%</div>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800/80 overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-700"
+                        className={`h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-emerald-500 transition-all duration-700 ${isWinRatePulsing ? "animate-pulse" : ""}`}
                         style={{ width: `${Math.max(0, Math.min(100, trackerStats.winRate))}%` }}
                       />
                     </div>
                   </div>
                 </div>
-                {isHistorySyncing && <div className="sm:col-span-2 xl:col-span-4 self-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
+                {isHistorySyncing && <div className="relative mt-2 text-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
               </div>
             </div>
           </div>
