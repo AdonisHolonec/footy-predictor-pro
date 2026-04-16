@@ -191,6 +191,19 @@ export default function App() {
     if (changed) setLogoColors(next);
   }
 
+  function selectEliteLeagues() {
+    const eliteIds = (day?.leagues ?? [])
+      .filter(lg => ELITE_LEAGUES.includes(Number(lg.id)))
+      .map(lg => Number(lg.id));
+    setSelectedLeagueIds(eliteIds);
+    setStatus(eliteIds.length ? `Selectate ${eliteIds.length} ligi elite.` : "Nu există ligi elite disponibile.");
+  }
+
+  function clearLeagueSelection() {
+    setSelectedLeagueIds([]);
+    setStatus("Selecția ligilor a fost resetată.");
+  }
+
   async function predict() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
@@ -246,35 +259,55 @@ export default function App() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           {/* LIGI */}
           <div className="lg:col-span-4 space-y-4">
-            <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5 transition-all">
-              <div className="flex justify-between items-center cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
+            <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all">
+              <div className="flex justify-between items-center gap-3 cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
                 <div className="flex items-center gap-3">
-                  <h2 className="font-bold text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
-                  <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs">{isLeaguesOpen ? '🔽' : '▶️'}</div>
+                  <h2 className="font-bold text-lg sm:text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
+                  <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs shrink-0">{isLeaguesOpen ? '🔽' : '▶️'}</div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {selectedSet.size > 0 && !isLeaguesOpen && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-full shadow-sm shadow-emerald-900/20">{selectedSet.size} selectate</span>}
                   <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full">{leaguesSorted.length} disp.</span>
                 </div>
               </div>
               {isLeaguesOpen && (
                 <div className="mt-5 transition-all">
-                  <input type="text" placeholder="Caută campionatul..." value={searchLeague} onChange={e => setSearchLeague(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors"/>
-                  <div className="space-y-2 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
+                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectEliteLeagues();
+                      }}
+                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-200 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors touch-manipulation"
+                    >
+                      Select all elite leagues
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearLeagueSelection();
+                      }}
+                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-300 hover:border-red-500/40 hover:text-red-400 transition-colors touch-manipulation"
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                  <input type="text" placeholder="Caută campionatul..." value={searchLeague} onChange={e => setSearchLeague(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors touch-manipulation"/>
+                  <div className="space-y-2 overflow-y-auto max-h-[45vh] sm:max-h-[60vh] pr-1 sm:pr-2 custom-scrollbar">
                     {leaguesSorted.map(lg => (
                       <button key={lg.id} onClick={() => {
                           const s = new Set(selectedLeagueIds);
                           s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
                           setSelectedLeagueIds(Array.from(s));
-                        }} className={`w-full flex justify-between items-center p-3 rounded-xl border transition-all ${selectedSet.has(lg.id) ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'}`}>
-                        <div className="text-left flex items-center gap-2">
-                          {ELITE_LEAGUES.includes(Number(lg.id)) && <span className="text-[12px]">👑</span>}
+                        }} className={`w-full flex justify-between items-center gap-3 p-3.5 sm:p-3 rounded-xl border transition-all text-left touch-manipulation ${selectedSet.has(lg.id) ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'}`}>
+                        <div className="text-left flex items-center gap-2 min-w-0">
+                          {ELITE_LEAGUES.includes(Number(lg.id)) && <span className="text-[12px] shrink-0">👑</span>}
                           <div>
-                            <div className={`text-sm font-bold tracking-tight ${ELITE_LEAGUES.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
-                            <div className="text-[9px] opacity-50 uppercase tracking-tighter">{lg.country}</div>
+                            <div className={`text-[13px] sm:text-sm font-bold tracking-tight leading-tight ${ELITE_LEAGUES.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
+                            <div className="text-[9px] opacity-50 uppercase tracking-tighter mt-0.5">{lg.country}</div>
                           </div>
                         </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${selectedSet.has(lg.id) ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>{lg.matches}</span>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${selectedSet.has(lg.id) ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>{lg.matches}</span>
                       </button>
                     ))}
                   </div>
@@ -286,17 +319,17 @@ export default function App() {
           {/* MECIURI */}
           <div className="lg:col-span-8">
             {preds.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 bg-slate-900/40 p-3 rounded-2xl border border-white/5">
-                <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 border-b sm:border-b-0 sm:border-r border-white/5 sm:pr-4 custom-scrollbar">
-                  <button onClick={() => setFilterMode("ALL")} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}>Toate ({preds.length})</button>
-                  <button onClick={() => setFilterMode("VALUE")} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${filterMode === "VALUE" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50" : "text-slate-400 hover:bg-slate-800"}`}>💎 Value Bets</button>
-                  <button onClick={() => setFilterMode("SAFE")} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${filterMode === "SAFE" ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50" : "text-slate-400 hover:bg-slate-800"}`}>🔥 +70% Siguranță</button>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6 bg-slate-900/40 p-3 rounded-2xl border border-white/5">
+                <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 border-b sm:border-b-0 sm:border-r border-white/5 sm:pr-4 custom-scrollbar snap-x snap-mandatory">
+                  <button onClick={() => setFilterMode("ALL")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}>Toate ({preds.length})</button>
+                  <button onClick={() => setFilterMode("VALUE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "VALUE" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50" : "text-slate-400 hover:bg-slate-800"}`}>💎 Value Bets</button>
+                  <button onClick={() => setFilterMode("SAFE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "SAFE" ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50" : "text-slate-400 hover:bg-slate-800"}`}>🔥 +70% Siguranță</button>
                 </div>
-                <div className="flex gap-2 overflow-x-auto items-center custom-scrollbar">
-                  <span className="text-[9px] text-slate-500 uppercase font-black px-1">Ordonează:</span>
-                  <button onClick={() => setSortBy("TIME")} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${sortBy === "TIME" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>⏰ Ora</button>
-                  <button onClick={() => setSortBy("CONFIDENCE")} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${sortBy === "CONFIDENCE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>📈 Siguranță</button>
-                  <button onClick={() => setSortBy("VALUE")} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${sortBy === "VALUE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>💰 Profit (EV)</button>
+                <div className="flex gap-2 overflow-x-auto items-center custom-scrollbar snap-x snap-mandatory">
+                  <span className="text-[9px] text-slate-500 uppercase font-black px-1 shrink-0">Ordonează:</span>
+                  <button onClick={() => setSortBy("TIME")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "TIME" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>⏰ Ora</button>
+                  <button onClick={() => setSortBy("CONFIDENCE")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "CONFIDENCE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>📈 Siguranță</button>
+                  <button onClick={() => setSortBy("VALUE")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "VALUE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>💰 Profit (EV)</button>
                 </div>
               </div>
             )}
@@ -308,6 +341,17 @@ export default function App() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+      <div className="fixed bottom-0 inset-x-0 z-40 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent lg:hidden pointer-events-none">
+        <div className="mx-auto max-w-7xl pointer-events-auto">
+          <button
+            onClick={predict}
+            className="w-full bg-emerald-600 rounded-2xl px-6 py-3.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!selectedLeagueIds.length}
+          >
+            Predict {selectedLeagueIds.length ? `(${selectedLeagueIds.length} ligi)` : ""}
+          </button>
         </div>
       </div>
       {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} onClose={() => setSelectedMatch(null)} />}
@@ -330,39 +374,39 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
   const confColor = confPct >= 75 ? '#10b981' : confPct >= 60 ? '#f59e0b' : '#ef4444';
 
   return (
-    <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[2rem] p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
+    <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
       
       {/* 1. ANTET (Ora + Arbitru + Gauge Confidență) */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start gap-3 mb-3 sm:mb-4">
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-             <span className="text-[9px] bg-white/5 text-slate-300 px-2 py-1 rounded-md uppercase font-black tracking-widest">{row.league}</span>
+          <div className="flex flex-wrap items-center gap-2">
+             <span className="text-[8px] sm:text-[9px] bg-white/5 text-slate-300 px-2 py-1 rounded-md uppercase font-black tracking-widest">{row.league}</span>
              {isLive && (
-               <span className="flex items-center gap-1 text-[9px] text-red-500 font-bold bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
+               <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-red-500 font-bold bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span> LIVE
                </span>
              )}
           </div>
-          <div className="text-[9px] text-slate-500 flex items-center gap-1 font-medium tracking-tight">
+          <div className="text-[8px] sm:text-[9px] text-slate-500 flex flex-wrap items-center gap-1 font-medium tracking-tight">
             ⏱️ {new Date(row.kickoff).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             <span className="opacity-50 mx-1">|</span> ⚖️ {row.referee || "-"}
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="text-right">
             <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">Top Pick</div>
-            <div className="text-sm font-black text-emerald-400">{row.recommended.pick}</div>
+            <div className="text-xs sm:text-sm font-black text-emerald-400">{row.recommended.pick}</div>
           </div>
-          <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
-            <div className="w-8 h-8 bg-slate-900 rounded-full flex items-center justify-center text-[9px] font-black text-white shadow-md">{confPct}%</div>
+          <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex items-center justify-center text-[8px] sm:text-[9px] font-black text-white shadow-md">{confPct}%</div>
           </div>
         </div>
       </div>
 
       {/* 2. VALUE BET BANNER */}
       {row.valueBet?.detected && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-4 flex justify-between items-center text-[10px] text-yellow-400 font-black uppercase tracking-wider">
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-3 sm:mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[9px] sm:text-[10px] text-yellow-400 font-black uppercase tracking-wider">
           <div className="flex items-center gap-2">
             <span>💎 Value: {row.valueBet.type}</span>
           </div>
@@ -373,15 +417,15 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       )}
 
       {/* 3. ECHIPE (Drop Shadow + VS) */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2">
         <div className="w-1/3 text-center flex flex-col items-center gap-2">
-          <img src={row.logos?.home} className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
-          <div className="text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.home}</div>
+          <img src={row.logos?.home} className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
+          <div className="text-[10px] sm:text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.home}</div>
         </div>
-        <div className="text-slate-600 font-black italic text-[10px] bg-slate-800/40 px-2 py-1 rounded-md border border-white/5">VS</div>
+        <div className="text-slate-600 font-black italic text-[9px] sm:text-[10px] bg-slate-800/40 px-2 py-1 rounded-md border border-white/5">VS</div>
         <div className="w-1/3 text-center flex flex-col items-center gap-2">
-          <img src={row.logos?.away} className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
-          <div className="text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.away}</div>
+          <img src={row.logos?.away} className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
+          <div className="text-[10px] sm:text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.away}</div>
         </div>
       </div>
 
@@ -389,20 +433,20 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       <XGPerformanceBar xg={xgData} />
       
       {row.luckStats && (
-        <div className="flex justify-between mt-2 px-1 gap-2">
+        <div className="flex flex-wrap justify-between mt-2 px-1 gap-2">
           <LuckBadge goals={row.luckStats.hG} xg={row.luckStats.hXG} />
           <LuckBadge goals={row.luckStats.aG} xg={row.luckStats.aXG} />
         </div>
       )}
 
       {/* 5. BARA PROBABILITĂȚI 1X2 CU CULORILE ECHIPELOR ȘI COTE REALE */}
-      <div className="space-y-1.5 mb-4 mt-5">
+      <div className="space-y-1.5 mb-3 sm:mb-4 mt-4 sm:mt-5">
         <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden flex">
           <div style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }} className="transition-all duration-1000 shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)]" />
           <div style={{ width: `${row.probs.pX}%` }} className="bg-slate-600 transition-all duration-1000" />
           <div style={{ width: `${row.probs.p2}%`, backgroundColor: awayColor }} className="transition-all duration-1000 shadow-[inset_2px_0_4px_rgba(0,0,0,0.3)]" />
         </div>
-        <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase px-1">
+        <div className="flex justify-between text-[7px] sm:text-[8px] font-black text-slate-400 uppercase px-1 gap-2">
            <span className={`${row.valueBet?.type === '1' ? 'text-yellow-400' : ''}`}>{pct(row.probs.p1)}% · {row.odds?.home || '-'}</span>
            <span className="opacity-50">{row.odds?.draw || '-'}</span>
            <span className={`${row.valueBet?.type === '2' ? 'text-yellow-400' : ''}`}>{row.odds?.away || '-'} · {pct(row.probs.p2)}%</span>
@@ -412,7 +456,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       {/* 6. SUBSOL - SCOR ESTIMAT POISSON */}
       <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
         <div className="text-[8px] text-slate-500 uppercase font-black mb-0.5 tracking-wider opacity-60">Scor Estimat Poisson</div>
-        <div className="text-sm font-black text-white tracking-widest">{row.predictions?.correctScore || "-"}</div>
+        <div className="text-xs sm:text-sm font-black text-white tracking-widest">{row.predictions?.correctScore || "-"}</div>
       </div>
     </div>
   );
@@ -448,18 +492,18 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
-      <div className="bg-slate-950 border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 transition-colors border border-white/10">✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
+      <div className="bg-slate-950 border border-white/10 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="sticky top-3 ml-auto mr-3 mt-3 z-10 w-11 h-11 sm:w-10 sm:h-10 bg-slate-900/90 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-300 transition-colors border border-white/10 backdrop-blur touch-manipulation shadow-lg">✕</button>
         
-        <div className="p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
+        <div className="px-5 pb-6 pt-2 sm:p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
           <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-6 italic opacity-80">⚽ Analiză Avansată Poisson & xG</div>
-          <div className="flex justify-between items-center px-2">
-            <div className="w-1/3 flex flex-col items-center gap-3">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-5 sm:gap-0 px-1 sm:px-2">
+            <div className="w-full sm:w-1/3 flex flex-col items-center gap-3">
               <img src={match.logos?.home} className="w-16 h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.home}</div>
             </div>
-            <div className="w-1/3">
+            <div className="w-full sm:w-1/3">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
               <div className="text-4xl font-black text-white tracking-tighter mb-2">{match.predictions.correctScore}</div>
               <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
@@ -468,14 +512,14 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
                 <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
               </div>
             </div>
-            <div className="w-1/3 flex flex-col items-center gap-3">
+            <div className="w-full sm:w-1/3 flex flex-col items-center gap-3">
               <img src={match.logos?.away} className="w-16 h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.away}</div>
             </div>
           </div>
         </div>
 
-        <div className="p-8 space-y-8">
+        <div className="p-5 sm:p-8 space-y-6 sm:space-y-8">
           {/* xG + Luck Factor */}
           <div className="space-y-4">
             <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
@@ -494,7 +538,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
           {/* Cote reale + Value Bet */}
           <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
             <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Cote Reale & Value Bet</div>
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
                 <div className="text-[10px] text-slate-500 uppercase font-black">1 (Gazde)</div>
                 <div className="text-2xl font-black mt-1" style={{ color: homeColor }}>{match.odds?.home ?? "-"}</div>
@@ -512,7 +556,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
             {match.valueBet?.detected && (
               <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
                 <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
-                <div className="mt-2 flex justify-between text-[12px] font-black">
+                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:justify-between text-[12px] font-black">
                   <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
                   <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
                   <span className="text-yellow-200">Stake: {match.valueBet.kelly ?? 0}%</span>
@@ -540,7 +584,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
           {/* Predicții (piețe) */}
           <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
             <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Piețe & Scor</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
                 <div className="text-[10px] text-slate-500 uppercase font-black">1X2</div>
                 <div className="text-sm font-black mt-1">{match.predictions.oneXtwo}</div>
@@ -558,7 +602,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
                 <div className="text-sm font-black mt-1">{match.predictions.correctScore}</div>
               </div>
               {match.predictions.cards && (
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
+                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center sm:col-span-2">
                   <div className="text-[10px] text-slate-500 uppercase font-black">Cards</div>
                   <div className="text-sm font-black mt-1">{match.predictions.cards}</div>
                 </div>
@@ -566,7 +610,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10">
             <div className="space-y-4">
               <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2 tracking-widest opacity-60">Rezultat Final</div>
               <ProbBar label="Victorie Gazde" val={match.probs.p1} color={homeColor} />
