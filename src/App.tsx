@@ -3,7 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 type Usage = { date: string; count: number; limit: number };
 type League = { id: number; name: string; country: string; matches: number };
 type Odds = { home: number; draw: number; away: number };
-type ValueBet = { detected: boolean; type: string };
+
+// ADAUGAT: ev si kelly pentru matematica avansata
+type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
 
 type Probs = {
   p1: number; pX: number; p2: number;
@@ -93,7 +95,6 @@ export default function App() {
   const [filterMode, setFilterMode] = useState<"ALL" | "VALUE" | "SAFE">("ALL");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
 
-  // UX INTELLIGENT: Expandat pe ecrane mari (>1024px), colapsat pe mobile
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
 
   const leaguesSorted = useMemo(() => {
@@ -158,7 +159,6 @@ export default function App() {
       setPreds(j);
       setStatus(`Gata! ${j.length} predicții generate.`);
       void prefetchColors(j);
-      // Închidem automat panoul de ligi pe mobil după ce am apăsat predict
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
@@ -174,7 +174,6 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
       <div className="mx-auto max-w-7xl px-4 py-8">
         
-        {/* HEADER */}
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white grid place-items-center font-black text-2xl shadow-xl shadow-emerald-500/20">
@@ -214,11 +213,9 @@ export default function App() {
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           
-          {/* PANOUL DE LIGI (ACUM ACORDEON) */}
           <div className="lg:col-span-4 space-y-4">
             <div className="bg-slate-900/40 border border-white/5 rounded-3xl p-5 transition-all">
               
-              {/* Header-ul pe care dai click ca să deschizi/închizi */}
               <div 
                 className="flex justify-between items-center cursor-pointer group"
                 onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
@@ -231,7 +228,6 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {/* Badge care apare cand e inchis, ca sa stii cate ligi ai bifate */}
                   {selectedSet.size > 0 && !isLeaguesOpen && (
                     <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-full shadow-sm shadow-emerald-900/20">
                       {selectedSet.size} selectate
@@ -241,7 +237,6 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Conținutul (Lista) - apare doar dacă isLeaguesOpen este true */}
               {isLeaguesOpen && (
                 <div className="mt-5 transition-all">
                   <input 
@@ -288,7 +283,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* PANOUL DE MECIURI */}
           <div className="lg:col-span-8">
             {preds.length > 0 && (
               <div className="flex gap-2 mb-6 bg-slate-900/40 p-2 rounded-2xl border border-white/5 overflow-x-auto">
@@ -328,7 +322,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* MODAL PENTRU DETALII MECI */}
       {selectedMatch && (
         <MatchModal 
            match={selectedMatch} 
@@ -340,7 +333,7 @@ export default function App() {
   );
 }
 
-// --- CARDUL PRINCIPAL ---
+// --- CARDUL PRINCIPAL ACTUALIZAT CU EV SI KELLY ---
 function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
   const homeColor = logoColors[row.logos?.home || ''] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ''] || hashColor(row.teams.away);
@@ -352,9 +345,19 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
       className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[2rem] p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-900/20"
     >
       
+      {/* SECTIUNEA ACTUALIZATA PENTRU VALUE BET + EV + KELLY */}
       {row.valueBet?.detected && (
-        <div className="absolute -top-3 -right-2 bg-yellow-400 text-black text-[10px] font-black px-3 py-1 rounded-full shadow-xl animate-bounce z-20">
-          💎 VALUE {row.valueBet.type}
+        <div className="absolute -top-3 -right-2 flex flex-col items-end gap-1 z-20">
+          <div className="bg-yellow-400 text-black text-[10px] font-black px-3 py-1 rounded-full shadow-xl animate-bounce border-2 border-yellow-500">
+            💎 VALUE {row.valueBet.type}
+          </div>
+          
+          {(row.valueBet.ev || row.valueBet.kelly) && (
+            <div className="bg-slate-900 border border-yellow-500/30 text-[9px] text-yellow-400 px-2 py-1 rounded-lg shadow-lg flex gap-2">
+              {row.valueBet.ev && <span>EV: <b className="text-white">+{row.valueBet.ev}%</b></span>}
+              {row.valueBet.kelly && <span>Miză: <b className="text-white">{row.valueBet.kelly}%</b></span>}
+            </div>
+          )}
         </div>
       )}
 
