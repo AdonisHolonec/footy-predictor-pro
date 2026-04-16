@@ -1,73 +1,82 @@
 import { createClient } from '@vercel/kv';
 import { calculateSyntheticXG } from './_utils/advancedMath.js';
 
-// Cream clientul manual pentru a folosi numele tale specifice de variabile (cu STORAGEE)
+// Configurăm manual clientul KV folosind numele exacte de variabile din screenshot-ul tău
 const kv = createClient({
   url: process.env.STORAGEE_KV_REST_API_URL,
   token: process.env.STORAGEE_KV_REST_API_TOKEN,
 });
 
 export default async function handler(req, res) {
+  // Setăm headere de CORS pentru a permite accesul din frontend
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+
   const { fixtureId } = req.query;
 
   if (!fixtureId) {
-    return res.status(400).json({ error: "fixtureId este obligatoriu" });
+    return res.status(400).json({ error: "fixtureId is missing" });
   }
 
   try {
-    const cacheKey = `xg_data_${fixtureId}`;
+    const cacheKey = `xg_v3_${fixtureId}`;
     
-    // 1. Încercăm să luăm din Cache
+    // 1. Încercăm cache-ul (cu un try-catch separat ca să nu oprească tot fluxul)
     try {
-      const cachedData = await kv.get(cacheKey);
-      if (cachedData) {
-        return res.status(200).json(cachedData);
+      const cached = await kv.get(cacheKey);
+      if (cached) {
+        console.log(`✅ Cache Hit pentru fixture ${fixtureId}`);
+        return res.status(200).json(cached);
       }
-    } catch (redisError) {
-      console.error("Redis Error:", redisError);
-      // Mergem mai departe chiar dacă Redis eșuează, ca să nu blocăm aplicația
+    } catch (kvError) {
+      console.error("KV Cache Error:", kvError.message);
     }
 
-    // 2. Apel către API-FOOTBALL (folosind cheia corectă din screenshot)
-    const response = await fetch(`https://api-football-v1.p.rapidapi.com/v3/fixtures/statistics?fixture=${fixtureId}`, {
+    // 2. Fetch de la API-FOOTBALL (folosind cheia APIFOOTBALL_KEY din screenshot)
+    const apiUrl = `https://api-football-v1.p.rapidapi.com/v3/fixtures/statistics?fixture=${fixtureId}`;
+    const apiRes = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'x-rapidapi-key': process.env.APIFOOTBALL_KEY, // Corectat conform screenshot
+        'x-rapidapi-key': process.env.APIFOOTBALL_KEY,
         'x-rapidapi-host': 'api-football-v1.p.rapidapi.com'
       }
     });
 
-    const data = await response.json();
+    const result = await apiRes.json();
 
-    if (!data.response || data.response.length === 0) {
-      return res.status(404).json({ error: "Nu s-au găsit statistici pentru acest meci" });
+    if (!result.response || result.response.length < 2) {
+      console.warn(`⚠️ Statistici incomplete pentru meciul ${fixtureId}`);
+      return res.status(404).json({ error: "Statistics not available yet for this match" });
     }
-    
-    const teamHomeStats = data.response[0]?.statistics;
-    const teamAwayStats = data.response[1]?.statistics;
 
-    const xGHome = calculateSyntheticXG(teamHomeStats);
-    const xGAway = calculateSyntheticXG(teamAwayStats);
+    // 3. Extragem datele și calculăm xG folosind motorul tău advancedMath
+    const homeStats = result.response[0].statistics;
+    const awayStats = result.response[1].statistics;
 
-    const result = {
+    const xGHome = calculateSyntheticXG(homeStats);
+    const xGAway = calculateSyntheticXG(awayStats);
+
+    const finalOutput = {
       fixtureId,
       homeXG: xGHome,
       awayXG: xGAway,
-      timestamp: Date.now(),
-      source: 'api'
+      updatedAt: new Date().toISOString()
     };
 
-    // 3. Salvăm în Cache (24h)
+    // 4. Salvăm în cache (doar dacă avem date valide)
     try {
-      await kv.set(cacheKey, result, { ex: 86400 });
-    } catch (cacheError) {
-      console.error("Failed to save to cache:", cacheError);
+      await kv.set(cacheKey, finalOutput, { ex: 86400 });
+    } catch (saveError) {
+      console.error("Failed to save to Redis:", saveError.message);
     }
 
-    return res.status(200).json(result);
+    return res.status(200).json(finalOutput);
 
   } catch (error) {
-    console.error("Server Error:", error);
-    return res.status(500).json({ error: "Eroare internă", details: error.message });
+    console.error("🔴 Server Error 500:", error.message);
+    return res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: error.message 
+    });
   }
 }
