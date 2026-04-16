@@ -458,12 +458,39 @@ export default function App() {
             <div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
-              <div className="mt-4 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-white/5 bg-slate-900/50 px-4 py-3 shadow-inner">
-                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Top Pick Tracker · 30 zile</div>
-                <div className="text-sm font-black text-emerald-400">✅ {trackerStats.wins}</div>
-                <div className="text-sm font-black text-rose-400">❌ {trackerStats.losses}</div>
-                <div className="text-sm font-black text-slate-100">🎯 {trackerStats.winRate.toFixed(1)}%</div>
-                {isHistorySyncing && <div className="text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
+              <div className="mt-4 flex flex-wrap items-stretch gap-3 rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3 shadow-inner backdrop-blur">
+                <div className="min-w-[150px]">
+                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Top Pick Tracker</div>
+                  <div className="text-[11px] text-slate-400 font-semibold mt-1">Ultimele 30 de zile</div>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                  <div className="text-lg">✅</div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-black">Wins</div>
+                    <div className="text-lg font-black text-emerald-300 leading-none">{trackerStats.wins}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2">
+                  <div className="text-lg">❌</div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-rose-300/80 font-black">Losses</div>
+                    <div className="text-lg font-black text-rose-300 leading-none">{trackerStats.losses}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 min-w-[170px]">
+                  <div className="text-lg">🎯</div>
+                  <div className="w-full">
+                    <div className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Win Rate</div>
+                    <div className="text-lg font-black text-white leading-none">{trackerStats.winRate.toFixed(1)}%</div>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-700"
+                        style={{ width: `${Math.max(0, Math.min(100, trackerStats.winRate))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                {isHistorySyncing && <div className="self-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
               </div>
             </div>
           </div>
@@ -776,13 +803,16 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.over25}</span>
       </div>
 
-      {/* 6. SUBSOL - SCOR ESTIMAT POISSON */}
+      {/* 6. SUBSOL - REZULTAT FINAL */}
       <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
-        <div className="text-[8px] text-slate-500 uppercase font-black mb-0.5 tracking-wider opacity-60">Scor Estimat Poisson</div>
-        <div className="text-xs sm:text-sm font-black text-white tracking-widest">{row.predictions?.correctScore || "-"}</div>
         {hasFinalScore && (
           <div className={`mt-2 text-[9px] font-black border rounded-lg px-2.5 py-1 uppercase tracking-wide ${finalScoreBadgeClass(finalPickResult)}`}>
             {finalScoreLabel(finalPickResult)} · {row.score?.home}-{row.score?.away}
+          </div>
+        )}
+        {!hasFinalScore && (
+          <div className="text-[8px] text-slate-500 uppercase font-black tracking-wider opacity-60">
+            Rezultat final indisponibil
           </div>
         )}
       </div>
@@ -831,14 +861,16 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
         
         <div className="px-5 pb-6 pt-2 sm:p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
           <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-6 italic opacity-80">⚽ Analiză Avansată Poisson & xG</div>
-          <div className="flex flex-row flex-wrap lg:flex-nowrap justify-between items-center gap-4 lg:gap-8 px-1 sm:px-2">
-            <div className="w-auto lg:w-1/4 flex flex-col items-center gap-3">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 lg:gap-8 px-1 sm:px-2">
+            <div className="justify-self-start flex flex-col items-center gap-3">
               <img src={match.logos?.home} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.home}</div>
             </div>
-            <div className="flex-1 min-w-[160px] lg:w-2/4">
+            <div className="min-w-[160px] text-center">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
-              <div className="text-4xl font-black text-white tracking-tighter mb-2">{match.predictions.correctScore}</div>
+              <div className="text-4xl font-black text-white tracking-tighter mb-2">
+                {hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "-"}
+              </div>
               <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
               {hasFinalScore && (
                 <div className={`mt-2 text-[10px] px-3 py-1.5 rounded-full uppercase font-bold inline-block border ${finalScoreBadgeClass(finalPickResult)}`}>
@@ -852,7 +884,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
                 <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
               </div>
             </div>
-            <div className="w-auto lg:w-1/4 flex flex-col items-center gap-3">
+            <div className="justify-self-end flex flex-col items-center gap-3">
               <img src={match.logos?.away} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
               <div className="text-sm font-bold leading-tight">{match.teams.away}</div>
             </div>
@@ -941,7 +973,7 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
                 </div>
                 <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
                   <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
-                  <div className="text-sm font-black mt-1">{match.predictions.correctScore}</div>
+                  <div className="text-sm font-black mt-1">{hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "-"}</div>
                 </div>
                 {match.predictions.cards && (
                   <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
