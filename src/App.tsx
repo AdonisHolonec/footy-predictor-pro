@@ -9,6 +9,7 @@ type Probs = {
   p1: number; pX: number; p2: number;
   pGG: number; pO25: number; pU35: number; pO15: number;
 };
+type MatchScore = { home: number | null; away: number | null };
 type PredictionRow = {
   id: number;
   leagueId: number;
@@ -17,6 +18,7 @@ type PredictionRow = {
   logos?: { league?: string; home?: string; away?: string };
   kickoff: string;
   status: string;
+  score?: MatchScore;
   referee?: string;
   lambdas?: { home: number; away: number };
   luckStats?: { hG: number; hXG: number; aG: number; aXG: number };
@@ -25,6 +27,10 @@ type PredictionRow = {
   valueBet?: ValueBet;
   predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
   recommended: { pick: string; confidence: number };
+};
+type HistoryEntry = PredictionRow & {
+  savedAt: string;
+  validation: "pending" | "win" | "loss";
 };
 type DayResponse = {
   ok: boolean;
@@ -135,13 +141,77 @@ function LuckBadge({ goals, xg }: { goals?: number, xg?: number }) {
   );
 }
 
+function isFinalStatus(status?: string) {
+  return ["FT", "AET", "PEN"].includes(status || "");
+}
+
+function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
+  if (!pick || !score) return null;
+  if (score.home === null || score.away === null) return null;
+  const home = score.home;
+  const away = score.away;
+  const total = home + away;
+  const normalized = pick.trim().toLowerCase();
+
+  if (normalized === "1") return home > away;
+  if (normalized === "2") return away > home;
+  if (normalized === "x") return home === away;
+  if (normalized === "gg") return home > 0 && away > 0;
+  if (normalized === "ngg") return home === 0 || away === 0;
+
+  const overMatch = normalized.match(/peste\s*(\d+(?:[.,]\d+)?)/);
+  if (overMatch) return total > Number(overMatch[1].replace(",", "."));
+
+  const underMatch = normalized.match(/sub\s*(\d+(?:[.,]\d+)?)/);
+  if (underMatch) return total < Number(underMatch[1].replace(",", "."));
+
+  return null;
+}
+
+function validateHistoryEntry(entry: HistoryEntry): HistoryEntry {
+  if (!isFinalStatus(entry.status)) {
+    return { ...entry, validation: "pending" };
+  }
+  const result = evaluateTopPick(entry.recommended.pick, entry.score);
+  if (result === null) return { ...entry, validation: "pending" };
+  return { ...entry, validation: result ? "win" : "loss" };
+}
+
+function pruneAndValidateHistory(entries: HistoryEntry[]): HistoryEntry[] {
+  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  return entries
+    .filter((entry) => {
+      const ts = new Date(entry.kickoff || entry.savedAt).getTime();
+      return Number.isFinite(ts) && ts >= cutoff;
+    })
+    .map(validateHistoryEntry)
+    .sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime());
+}
+
+function mergePredictionHistory(current: HistoryEntry[], incoming: PredictionRow[]): HistoryEntry[] {
+  const next = new Map<number, HistoryEntry>();
+  for (const item of current) next.set(item.id, item);
+  for (const row of incoming) {
+    const prev = next.get(row.id);
+    next.set(row.id, validateHistoryEntry({
+      ...(prev || {}),
+      ...row,
+      savedAt: prev?.savedAt || new Date().toISOString(),
+      validation: prev?.validation || "pending"
+    }));
+  }
+  return pruneAndValidateHistory(Array.from(next.values()));
+}
+
 // --- APP COMPONENT ---
 export default function App() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.selectedLeagueIds", []);
   const [day, setDay] = useState<DayResponse | null>(null);
   const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
+  const [history, setHistory] = useLocalStorageState<HistoryEntry[]>("footy.history", []);
   const [status, setStatus] = useState<string>("");
+  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [logoColors, setLogoColors] = useLocalStorageState<Record<string, string>>("footy.logoColors", {});
   const [searchLeague, setSearchLeague] = useState("");
   const [filterMode, setFilterMode] = useState<"ALL" | "VALUE" | "SAFE">("ALL");
@@ -169,6 +239,15 @@ export default function App() {
     });
     return list;
   }, [preds, filterMode, sortBy]);
+
+  const trackerStats = useMemo(() => {
+    const normalized = pruneAndValidateHistory(history);
+    const wins = normalized.filter((item) => item.validation === "win").length;
+    const losses = normalized.filter((item) => item.validation === "loss").length;
+    const settled = wins + losses;
+    const winRate = settled ? (wins / settled) * 100 : 0;
+    return { wins, losses, settled, winRate };
+  }, [history]);
 
   async function fetchDay(d: string) {
     setStatus("Încarc ligile...");
@@ -228,6 +307,7 @@ export default function App() {
       const r = await fetch(`/api/predict?${qs}`);
       const j = await r.json();
       setPreds(j);
+      setHistory((prev) => mergePredictionHistory(prev, j));
       setStatus(`Gata! ${j.length} predicții generate.`);
       void prefetchColors(j);
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);
@@ -235,6 +315,53 @@ export default function App() {
   }
 
   useEffect(() => { fetchDay(date); }, [date]);
+  useEffect(() => { setHistory((prev) => pruneAndValidateHistory(prev)); }, [setHistory]);
+  useEffect(() => {
+    const snapshot = pruneAndValidateHistory(history);
+    if (!snapshot.length) return;
+
+    const pendingOrRecent = snapshot.filter((entry) => {
+      if (!entry.kickoff) return false;
+      return !isFinalStatus(entry.status) || entry.validation === "pending";
+    });
+    if (!pendingOrRecent.length) return;
+
+    const groups = new Map<string, Set<number>>();
+    for (const entry of pendingOrRecent) {
+      const key = entry.kickoff.slice(0, 10);
+      if (!groups.has(key)) groups.set(key, new Set());
+      groups.get(key)!.add(entry.leagueId);
+    }
+
+    let cancelled = false;
+    async function syncHistory() {
+      setIsHistorySyncing(true);
+      try {
+        const mergedBatches: PredictionRow[] = [];
+        for (const [historyDate, leagueIds] of groups.entries()) {
+          const qs = new URLSearchParams({
+            date: historyDate,
+            leagueIds: Array.from(leagueIds).join(","),
+            season: String(inferSeason(historyDate)),
+            limit: "50"
+          });
+          const res = await fetch(`/api/predict?${qs}`);
+          const json = await res.json();
+          if (Array.isArray(json)) mergedBatches.push(...json);
+        }
+        if (!cancelled && mergedBatches.length) {
+          setHistory((prev) => mergePredictionHistory(prev, mergedBatches));
+        }
+      } catch {
+        // silent background sync
+      } finally {
+        if (!cancelled) setIsHistorySyncing(false);
+      }
+    }
+
+    void syncHistory();
+    return () => { cancelled = true; };
+  }, []);
 
   const selectedSet = new Set(selectedLeagueIds);
   const usageCount = day?.usage?.count || 0;
@@ -251,6 +378,13 @@ export default function App() {
             <div>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
+              <div className="mt-4 inline-flex flex-wrap items-center gap-3 rounded-2xl border border-white/5 bg-slate-900/50 px-4 py-3 shadow-inner">
+                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-black">Top Pick Tracker · 30 zile</div>
+                <div className="text-sm font-black text-emerald-400">✅ {trackerStats.wins}</div>
+                <div className="text-sm font-black text-rose-400">❌ {trackerStats.losses}</div>
+                <div className="text-sm font-black text-slate-100">🎯 {trackerStats.winRate.toFixed(1)}%</div>
+                {isHistorySyncing && <div className="text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
+              </div>
             </div>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">

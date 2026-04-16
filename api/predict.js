@@ -140,6 +140,10 @@ export default async function handler(req, res) {
           teams: { home: homeName, away: awayName },
           kickoff: fx.fixture?.date,
           status: fx.fixture?.status?.short,
+          score: {
+            home: typeof fx.goals?.home === "number" ? fx.goals.home : null,
+            away: typeof fx.goals?.away === "number" ? fx.goals.away : null
+          },
           referee: refereeName || undefined,
           probs: p, odds, luckStats,
           valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
