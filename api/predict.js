@@ -1,11 +1,14 @@
+// api/predict.js
 import { getWithCache } from './_utils/fetcher.js';
 import { 
+  extractGoalsAverages, 
+  lambdasFromTeamStats, 
+  syntheticLambdas, 
+  computeMatchProbs, 
+  clampLambda,
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
-  advancedLambdas,
-  computeMatchProbs,
-  clampLambda,
-  syntheticLambdas
+  advancedLambdas
 } from './_utils/math.js';
 import { 
   calculateEV, 
@@ -35,7 +38,6 @@ export default async function handler(req, res) {
 
     for (const lId of leagueIds) {
       if (out.length >= limit) break;
-
       const leagueFixtures = allFixtures.filter(f => String(f.league?.id) === String(lId));
       if (leagueFixtures.length === 0) continue;
 
@@ -46,7 +48,6 @@ export default async function handler(req, res) {
 
       for (const fx of leagueFixtures) {
         if (out.length >= limit) break;
-
         const fixtureId = fx.fixture?.id;
         const homeName = fx.teams?.home?.name || "Home";
         const awayName = fx.teams?.away?.name || "Away";
@@ -55,40 +56,29 @@ export default async function handler(req, res) {
 
         let method = "none";
         let lambdaHome, lambdaAway;
-        let luckStats = null;
+        let luckStats = null; // Pentru UI
 
         if (homeIdStr && awayIdStr) {
           const tsH = await getWithCache('/teams/statistics', { league: lId, season, team: homeIdStr }, 86400);
           const tsA = await getWithCache('/teams/statistics', { league: lId, season, team: awayIdStr }, 86400);
-          
           if (tsH.ok && tsA.ok && tsH.data && tsA.data) {
             const hStats = extractAdvancedGoalsAverages(tsH.data);
             const aStats = extractAdvancedGoalsAverages(tsA.data);
-            
             if (hStats && aStats) {
-              // --- RAFINAREA FORMEI (Regresie xG) ---
+              // --- INTEGRARE RAFINARE FORMA ---
               const refinedHomeAtk = adjustLambdaByEfficiency(hStats.avgGoalsScored, hStats.avgXG || hStats.avgGoalsScored);
               const refinedAwayAtk = adjustLambdaByEfficiency(aStats.avgGoalsScored, aStats.avgXG || aStats.avgGoalsScored);
-
+              
               const hMulti = extractFormMultiplier(tsH.data?.response?.form);
               const aMulti = extractFormMultiplier(tsA.data?.response?.form);
               
-              // Injectăm mediile rafinate în generatorul de Lambdas
-              const l = advancedLambdas(
-                { ...hStats, avgGoalsScored: refinedHomeAtk }, 
-                { ...aStats, avgGoalsScored: refinedAwayAtk }, 
-                hMulti, 
-                aMulti
-              );
+              const l = advancedLambdas({ ...hStats, avgGoalsScored: refinedHomeAtk }, { ...aStats, avgGoalsScored: refinedAwayAtk }, hMulti, aMulti);
               
               if (l && isGoodNum(l.lambdaHome) && isGoodNum(l.lambdaAway)) {
                 method = "advanced-teamstats";
                 lambdaHome = l.lambdaHome;
                 lambdaAway = l.lambdaAway;
-                luckStats = {
-                  hG: hStats.avgGoalsScored, hXG: hStats.avgXG,
-                  aG: aStats.avgGoalsScored, aXG: aStats.avgXG
-                };
+                luckStats = { hG: hStats.avgGoalsScored, hXG: hStats.avgXG, aG: aStats.avgGoalsScored, aXG: aStats.avgXG };
               }
             }
           }
@@ -113,7 +103,6 @@ export default async function handler(req, res) {
         if (!calc || !calc.probs) continue;
         const p = calc.probs;
 
-        // ODDS & VALUE
         let odds = null, valueDetected = false, valueType = "", finalEv = 0, finalKelly = 0;
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
@@ -124,23 +113,17 @@ export default async function handler(req, res) {
             const dOdd = parseFloat(market1X2.values.find(v => v.value === "Draw")?.odd);
             const aOdd = parseFloat(market1X2.values.find(v => v.value === "Away")?.odd);
             odds = { home: hOdd, draw: dOdd, away: aOdd };
-
-            if ((p.p1 * hOdd) / 100 > 1.15) {
-              valueDetected = true; valueType = "1";
-              finalEv = calculateEV(p.p1 / 100, hOdd);
-              finalKelly = calculateKelly(p.p1 / 100, hOdd);
-            } else if ((p.p2 * aOdd) / 100 > 1.15) {
-              valueDetected = true; valueType = "2";
-              finalEv = calculateEV(p.p2 / 100, aOdd);
-              finalKelly = calculateKelly(p.p2 / 100, aOdd);
-            }
+            if ((p.p1 * hOdd) / 100 > 1.15) { valueDetected = true; valueType = "1"; finalEv = calculateEV(p.p1/100, hOdd); finalKelly = calculateKelly(p.p1/100, hOdd); }
+            else if ((p.p2 * aOdd) / 100 > 1.15) { valueDetected = true; valueType = "2"; finalEv = calculateEV(p.p2/100, aOdd); finalKelly = calculateKelly(p.p2/100, aOdd); }
           }
         }
-
+        
         let finalPick1X2 = p.p1 >= p.pX && p.p1 >= p.p2 ? "1" : (p.p2 > p.p1 && p.p2 > p.pX ? "2" : "X");
-        let topPick = finalPick1X2, maxConf = Math.max(p.p1, p.pX, p.p2);
+        let topPick = finalPick1X2;
+        let maxConf = Math.max(p.p1, p.pX, p.p2);
         if (p.pU35 > maxConf) { topPick = "Sub 3.5"; maxConf = p.pU35; }
         if (p.pO25 > maxConf) { topPick = "Peste 2.5"; maxConf = p.pO25; }
+        if (p.pGG > maxConf) { topPick = "GG"; maxConf = p.pGG; }
 
         out.push({
           id: fixtureId,
@@ -150,18 +133,9 @@ export default async function handler(req, res) {
           teams: { home: homeName, away: awayName },
           kickoff: fx.fixture?.date,
           status: fx.fixture?.status?.short,
-          referee: fx.fixture?.referee || "-",
-          lambdas: { home: Number(lambdaHome.toFixed(2)), away: Number(lambdaAway.toFixed(2)) },
-          luckStats, 
-          probs: p,
-          odds,
+          probs: p, odds, luckStats,
           valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
-          predictions: { 
-            oneXtwo: finalPick1X2, 
-            gg: p.pGG >= 55 ? "GG" : "NGG", 
-            over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5", 
-            correctScore: calc.bestScore 
-          },
+          predictions: { oneXtwo: finalPick1X2, gg: p.pGG >= 55 ? "GG" : "NGG", over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5", correctScore: calc.bestScore },
           recommended: { pick: topPick, confidence: maxConf }
         });
       }

@@ -1,18 +1,18 @@
+// utils/advancedMath.js
+
 /**
  * 1. Calculul xG-ului Sintetic (Pseudo-xG)
  */
 export const calculateSyntheticXG = (statistics) => {
   if (!statistics || !Array.isArray(statistics) || statistics.length === 0) return 0;
-
   let shotsInsideBox = 0;
   let shotsOutsideBox = 0;
   let corners = 0;
-  let penalties = 0;
+  let penalties = 0; 
 
   statistics.forEach((stat) => {
     const val = (stat.value === null || stat.value === undefined) ? 0 : Number(stat.value);
     const safeVal = isNaN(val) ? 0 : val;
-
     switch (stat.type) {
       case 'Shots insidebox': shotsInsideBox = safeVal; break;
       case 'Shots outsidebox': shotsOutsideBox = safeVal; break;
@@ -25,17 +25,7 @@ export const calculateSyntheticXG = (statistics) => {
 };
 
 /**
- * 2. RAFINAREA FORMEI (Luck Factor)
- * Ajustează forța reală combinând media golurilor cu xG-ul pentru regresie către medie
- */
-export const adjustLambdaByEfficiency = (actualGoals, xG) => {
-  if (!xG || xG <= 0) return actualGoals;
-  const adjusted = (actualGoals + xG) / 2;
-  return Number(adjusted.toFixed(2));
-};
-
-/**
- * 3. Ponderarea Formei
+ * 2. Ponderarea Formei
  */
 export const calculateWeightedXG = (xGHistory) => {
   if (!xGHistory || xGHistory.length === 0) return 0;
@@ -50,7 +40,7 @@ export const calculateWeightedXG = (xGHistory) => {
 };
 
 /**
- * 4. Distribuția Poisson
+ * 3. Distribuția Poisson
  */
 const factorial = (n) => {
   if (n === 0 || n === 1) return 1;
@@ -65,7 +55,7 @@ export const getPoissonProbability = (lambda, k) => {
 };
 
 /**
- * 5. Expected Value (EV)
+ * 4. Expected Value (EV)
  */
 export const calculateEV = (probability, odds) => {
   const ev = (probability * odds) - 1;
@@ -73,7 +63,7 @@ export const calculateEV = (probability, odds) => {
 };
 
 /**
- * 6. Sfertul de Kelly Adaptiv
+ * 5. Sfertul de Kelly Adaptiv (Updated: Max 3%)
  */
 export const calculateKellyQuarter = (probability, odds, isHighConfidence = true) => {
   const q = 1 - probability;
@@ -87,11 +77,20 @@ export const calculateKellyQuarter = (probability, odds, isHighConfidence = true
 };
 
 /**
- * 7. Verificare Value Bet
+ * 6. Verificare Value Bet
  */
 export const isValueBet = (probability, odds, threshold = 1.10) => {
   const ev = probability * odds;
   const isCotaValoroasa = odds >= 1.45;
   const isProbabilitateRealista = probability >= 0.25;
   return ev >= threshold && isCotaValoroasa && isProbabilitateRealista;
+};
+
+/**
+ * 7. RAFINAREA FORMEI (Luck Factor) - NOU
+ */
+export const adjustLambdaByEfficiency = (actualGoals, xG) => {
+  if (!xG || xG <= 0) return actualGoals;
+  const adjusted = (actualGoals + xG) / 2;
+  return Number(adjusted.toFixed(2));
 };
