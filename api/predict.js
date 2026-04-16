@@ -10,7 +10,7 @@ import {
   extractAdvancedGoalsAverages,
   advancedLambdas
 } from './_utils/math.js';
-import { calculateEV, calculateKelly } from './_utils/advancedMath.js';
+import { calculateEV, calculateKellyQuarter as calculateKelly } from './_utils/advancedMath.js';
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
