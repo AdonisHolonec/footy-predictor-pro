@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-// --- TIPURI DATE ---
+// --- TIPURI DATE (Restaurate și Extinse) ---
 type Usage = { date: string; count: number; limit: number };
 type League = { id: number; name: string; country: string; matches: number };
 type Odds = { home: number; draw: number; away: number };
@@ -34,7 +34,7 @@ type DayResponse = {
   usage: Usage;
 };
 
-// --- UTILS ---
+// --- UTILS (Codul tău original intact) ---
 function isoToday(): string { return new Date().toISOString().split('T')[0]; }
 function inferSeason(dateISO: string): number {
   const [y, m] = dateISO.split("-").map(Number);
@@ -78,7 +78,7 @@ async function dominantColorFromImage(url: string): Promise<string | null> {
 
 const ELITE_LEAGUES = [2, 3, 39, 140, 135, 78, 61, 283];
 
-// --- UI COMPONENTS ---
+// --- COMPONENTE NOI (xG & Luck Factor) ---
 
 function XGPerformanceBar({ xg }: { xg: any }) {
   if (!xg) return null;
@@ -87,20 +87,20 @@ function XGPerformanceBar({ xg }: { xg: any }) {
   return (
     <div className="mt-4 px-3 py-3 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
       <div className="flex justify-between items-center mb-2 px-1">
-        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center w-full tracking-tighter opacity-70">xG Performance Intensity</span>
+        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center w-full opacity-70">xG Intensity Gauge</span>
       </div>
       <div className="flex items-center gap-4">
         <div className="flex-1 flex flex-col items-end">
           <span className="text-[11px] font-mono font-bold text-emerald-400 mb-1">{xg.homeXG}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(16,185,129,0.5)]" style={{ width: `${hW}%` }} />
+            <div className="h-full bg-emerald-500 transition-all duration-1000 ease-out" style={{ width: `${hW}%` }} />
           </div>
         </div>
         <div className="text-[8px] font-black text-slate-700 italic">VS</div>
         <div className="flex-1 flex flex-col items-start">
           <span className="text-[11px] font-mono font-bold text-blue-400 mb-1">{xg.awayXG}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(59,130,246,0.5)]" style={{ width: `${aW}%` }} />
+            <div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${aW}%` }} />
           </div>
         </div>
       </div>
@@ -113,8 +113,8 @@ function LuckBadge({ goals, xg }: { goals?: number, xg?: number }) {
   const diff = goals - xg;
   if (Math.abs(diff) < 0.3) return null;
   return (
-    <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${diff > 0.3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 shadow-[0_0_5px_rgba(249,115,22,0.2)]' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_5px_rgba(6,182,212,0.2)]'}`}>
-      {diff > 0.3 ? '⚠️ Overperforming (Lucky)' : '💎 Underperforming (Value)'}
+    <div className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${diff > 0.3 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'}`}>
+      {diff > 0.3 ? '⚠️ Lucky Form' : '💎 Value Trend'}
     </div>
   );
 }
@@ -176,20 +176,6 @@ export default function App() {
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
 
-  async function predict() {
-    if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
-    setStatus("Generez predicțiile Premium...");
-    try {
-      const qs = new URLSearchParams({ date, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(date)), limit: "50" });
-      const r = await fetch(`/api/predict?${qs}`);
-      const j = await r.json();
-      setPreds(j);
-      setStatus(`Gata! ${j.length} predicții generate.`);
-      void prefetchColors(j);
-      if (window.innerWidth < 1024) setIsLeaguesOpen(false);
-    } catch (e: any) { setStatus(`Error: ${e.message}`); }
-  }
-
   async function prefetchColors(rows: PredictionRow[]) {
     const next = { ...logoColors };
     let changed = false;
@@ -205,10 +191,26 @@ export default function App() {
     if (changed) setLogoColors(next);
   }
 
+  async function predict() {
+    if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
+    setStatus("Generez predicțiile Premium...");
+    try {
+      const qs = new URLSearchParams({ date, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(date)), limit: "50" });
+      const r = await fetch(`/api/predict?${qs}`);
+      const j = await r.json();
+      setPreds(j);
+      setStatus(`Gata! ${j.length} predicții generate.`);
+      void prefetchColors(j);
+      if (window.innerWidth < 1024) setIsLeaguesOpen(false);
+    } catch (e: any) { setStatus(`Error: ${e.message}`); }
+  }
+
   useEffect(() => { fetchDay(date); }, [date]);
 
   const selectedSet = new Set(selectedLeagueIds);
-  const usagePct = ((day?.usage?.count || 0) / (day?.usage?.limit || 100)) * 100;
+  const usageCount = day?.usage?.count || 0;
+  const usageLimit = day?.usage?.limit || 100;
+  const usagePct = (usageCount / usageLimit) * 100;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
@@ -225,7 +227,7 @@ export default function App() {
           <div className="flex flex-col items-end gap-3">
             <div className="flex flex-col items-end w-full max-w-[200px]">
               <div className="text-[10px] text-slate-400 uppercase font-black mb-1">
-                API Calls: <span className={usagePct > 80 ? "text-red-400" : "text-emerald-400"}>{day?.usage?.count || 0} / {day?.usage?.limit || 100}</span>
+                API Calls: <span className={usagePct > 80 ? "text-red-400" : "text-emerald-400"}>{usageCount} / {usageLimit}</span>
               </div>
               <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div style={{ width: `${usagePct}%` }} className={`h-full ${usagePct > 80 ? "bg-red-500" : "bg-emerald-500"}`} />
@@ -259,31 +261,29 @@ export default function App() {
                 <div className="mt-5 transition-all">
                   <input type="text" placeholder="Caută campionatul..." value={searchLeague} onChange={e => setSearchLeague(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors"/>
                   <div className="space-y-2 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
-                    {leaguesSorted.map(lg => {
-                       const isElite = ELITE_LEAGUES.includes(Number(lg.id));
-                       return (
-                        <button key={lg.id} onClick={() => {
+                    {leaguesSorted.map(lg => (
+                      <button key={lg.id} onClick={() => {
                           const s = new Set(selectedLeagueIds);
                           s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
                           setSelectedLeagueIds(Array.from(s));
                         }} className={`w-full flex justify-between items-center p-3 rounded-xl border transition-all ${selectedSet.has(lg.id) ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'}`}>
-                          <div className="text-left flex items-center gap-2">
-                            {isElite && <span className="text-[12px]">👑</span>}
-                            <div>
-                              <div className={`text-sm font-bold tracking-tight ${isElite && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
-                              <div className="text-[9px] opacity-50 uppercase tracking-tighter">{lg.country}</div>
-                            </div>
+                        <div className="text-left flex items-center gap-2">
+                          {ELITE_LEAGUES.includes(Number(lg.id)) && <span className="text-[12px]">👑</span>}
+                          <div>
+                            <div className={`text-sm font-bold tracking-tight ${ELITE_LEAGUES.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
+                            <div className="text-[9px] opacity-50 uppercase tracking-tighter">{lg.country}</div>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${selectedSet.has(lg.id) ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>{lg.matches}</span>
-                        </button>
-                      );
-                    })}
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${selectedSet.has(lg.id) ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>{lg.matches}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
+          {/* MECIURI */}
           <div className="lg:col-span-8">
             {preds.length > 0 && (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 bg-slate-900/40 p-3 rounded-2xl border border-white/5">
@@ -302,8 +302,6 @@ export default function App() {
             )}
             {!preds.length ? (
               <div className="h-[400px] border-2 border-dashed border-white/5 rounded-[2rem] grid place-items-center text-slate-600 text-center"><p className="italic font-medium">Selectează ligile dorite, apoi apasă Predict.</p></div>
-            ) : displayedMatches.length === 0 ? (
-              <div className="h-[200px] border border-white/5 bg-slate-900/20 rounded-[2rem] grid place-items-center text-slate-500">Nu s-au găsit meciuri conform filtrului ales.</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {displayedMatches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} onClick={() => setSelectedMatch(m)} />)}
@@ -317,19 +315,11 @@ export default function App() {
   );
 }
 
-// --- CARDUL MECIULUI ACTUALIZAT ---
+// --- CARDUL MECIULUI ACTUALIZAT (DESIGN COMPLET RESTAURAT) ---
 function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
   const [xgData, setXgData] = useState<any>(null);
-
   useEffect(() => {
-    const fetchXG = async () => {
-      try {
-        const res = await fetch(`/api/get-xg?fixtureId=${row.id}`);
-        const data = await res.json();
-        if (!data.error) setXgData(data);
-      } catch (e) {}
-    };
-    fetchXG();
+    fetch(`/api/get-xg?fixtureId=${row.id}`).then(res => res.json()).then(data => { if(!data.error) setXgData(data); });
   }, [row.id]);
 
   const homeColor = logoColors[row.logos?.home || ''] || hashColor(row.teams.home);
@@ -342,7 +332,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
   return (
     <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[2rem] p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
       
-      {/* 1. ANTET (Restaurat: Ora + Arbitru + Gauge) */}
+      {/* 1. ANTET (Ora + Arbitru + Gauge Confidență) */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
@@ -370,7 +360,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       </div>
 
-      {/* 2. VALUE BET BANNER (Restaurat: EV + Stake) */}
+      {/* 2. VALUE BET BANNER */}
       {row.valueBet?.detected && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-4 flex justify-between items-center text-[10px] text-yellow-400 font-black uppercase tracking-wider">
           <div className="flex items-center gap-2">
@@ -382,7 +372,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       )}
 
-      {/* 3. ECHIPE (Recuperate cu Drop Shadow) */}
+      {/* 3. ECHIPE (Drop Shadow + VS) */}
       <div className="flex items-center justify-between mb-2">
         <div className="w-1/3 text-center flex flex-col items-center gap-2">
           <img src={row.logos?.home} className="w-10 h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
@@ -395,7 +385,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       </div>
 
-      {/* 4. xG PERFORMANCE & LUCK FACTOR */}
+      {/* 4. xG PERFORMANCE & LUCK BADGES */}
       <XGPerformanceBar xg={xgData} />
       
       {row.luckStats && (
@@ -405,7 +395,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       )}
 
-      {/* 5. BARA PROBABILITĂȚI 1X2 CU CULORI ȘI COTE REALE */}
+      {/* 5. BARA PROBABILITĂȚI 1X2 CU CULORILE ECHIPELOR ȘI COTE REALE */}
       <div className="space-y-1.5 mb-4 mt-5">
         <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden flex">
           <div style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }} className="transition-all duration-1000 shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)]" />
@@ -419,8 +409,8 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
         </div>
       </div>
 
-      {/* 6. SUBSOL - SCOR ESTIMAT */}
-      <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center group-hover:bg-slate-900/80 transition-colors">
+      {/* 6. SUBSOL - SCOR ESTIMAT POISSON */}
+      <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
         <div className="text-[8px] text-slate-500 uppercase font-black mb-0.5 tracking-wider opacity-60">Scor Estimat Poisson</div>
         <div className="text-sm font-black text-white tracking-widest">{row.predictions?.correctScore || "-"}</div>
       </div>
@@ -428,7 +418,7 @@ function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColor
   );
 }
 
-// --- MODAL DETALIAT ---
+// --- MODAL DETALIAT (Cod original extins cu xG) ---
 function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logoColors: Record<string, string>, onClose: () => void }) {
   const homeColor = logoColors[match.logos?.home || ''] || hashColor(match.teams.home);
   const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
@@ -447,9 +437,9 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
-      <div className="bg-slate-950 border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 transition-colors border border-white/10 z-10">✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
+      <div className="bg-slate-950 border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-6 right-6 w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 transition-colors border border-white/10">✕</button>
         
         <div className="p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
           <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-6 italic opacity-80">⚽ Analiză Avansată Poisson & xG</div>
@@ -472,9 +462,9 @@ function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logo
 
         <div className="p-8 space-y-8">
           {match.lambdas && (
-            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner relative overflow-hidden">
+            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
               <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60">Momentum Ofensiv Ajustat (λ)</div>
-              <div className="flex justify-between items-center gap-4 relative z-10">
+              <div className="flex justify-between items-center gap-4">
                 <div className="text-right w-1/2 text-2xl font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
                 <div className="text-slate-600 font-black text-xs opacity-50">VS</div>
                 <div className="text-left w-1/2 text-2xl font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
