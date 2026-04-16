@@ -1,45 +1,58 @@
 // utils/advancedMath.js
 
 /**
- * Calculul xG-ului Sintetic (Pseudo-xG)
- * Bazat pe statisticile oficiale API-FOOTBALL
+ * 1. Calculul xG-ului Sintetic (Pseudo-xG)
  */
 export const calculateSyntheticXG = (statistics) => {
-  // Verificăm dacă avem un array valid
   if (!statistics || !Array.isArray(statistics) || statistics.length === 0) return 0;
 
   let shotsInsideBox = 0;
   let shotsOutsideBox = 0;
   let corners = 0;
-  const penalties = 0; // Se poate popula ulterior din fixtures/events
+  let penalties = 0; // Ideal de extras din events, dar menținem structura
 
   statistics.forEach((stat) => {
-    // Extragere sigură a valorii (API-ul poate trimite null sau string)
     const val = (stat.value === null || stat.value === undefined) ? 0 : Number(stat.value);
     const safeVal = isNaN(val) ? 0 : val;
 
-    // Mapare pe tipurile de date din API-FOOTBALL
     switch (stat.type) {
-      case 'Shots insidebox':
-        shotsInsideBox = safeVal;
-        break;
-      case 'Shots outsidebox':
-        shotsOutsideBox = safeVal;
-        break;
-      case 'Corner Kicks':
-        corners = safeVal;
-        break;
+      case 'Shots insidebox': shotsInsideBox = safeVal; break;
+      case 'Shots outsidebox': shotsOutsideBox = safeVal; break;
+      case 'Corner Kicks': corners = safeVal; break;
     }
   });
 
-  // Formula xG calibrată pentru precizie
   const xG = (shotsInsideBox * 0.15) + (shotsOutsideBox * 0.03) + (corners * 0.03) + (penalties * 0.76);
-  
   return Number(xG.toFixed(2));
 };
 
 /**
- * Distribuția Poisson
+ * 2. Ponderarea Formei (New)
+ * Calculează un xG ajustat dând importanță mai mare meciurilor foarte recente
+ * @param {number[]} xGHistory - Array cu ultimele 5 valori xG (de la cel mai vechi la cel mai nou)
+ */
+export const calculateWeightedXG = (xGHistory) => {
+  if (!xGHistory || xGHistory.length === 0) return 0;
+  
+  // Dacă avem puține date, facem medie simplă
+  if (xGHistory.length < 3) {
+    return xGHistory.reduce((a, b) => a + b, 0) / xGHistory.length;
+  }
+
+  // Luăm ultimele 2 meciuri pentru formă fulger
+  const recent2 = xGHistory.slice(-2);
+  const avgRecent = recent2.reduce((a, b) => a + b, 0) / 2;
+  
+  // Media generală a celor 5 meciuri
+  const avgTotal = xGHistory.reduce((a, b) => a + b, 0) / xGHistory.length;
+
+  // Formula: 60% contează ultimele 2 meciuri, 40% tot istoricul de 5
+  const weightedXG = (avgTotal * 0.4) + (avgRecent * 0.6);
+  return Number(weightedXG.toFixed(2));
+};
+
+/**
+ * 3. Distribuția Poisson
  */
 const factorial = (n) => {
   if (n === 0 || n === 1) return 1;
@@ -54,7 +67,7 @@ export const getPoissonProbability = (lambda, k) => {
 };
 
 /**
- * Expected Value (EV)
+ * 4. Expected Value (EV)
  */
 export const calculateEV = (probability, odds) => {
   const ev = (probability * odds) - 1;
@@ -62,25 +75,34 @@ export const calculateEV = (probability, odds) => {
 };
 
 /**
- * Sfertul de Kelly
+ * 5. Sfertul de Kelly Adaptiv (Updated: Max 3%)
  */
-export const calculateKellyQuarter = (probability, odds) => {
+export const calculateKellyQuarter = (probability, odds, isHighConfidence = true) => {
   const q = 1 - probability;
   const b = odds - 1;
   
-  if (b <= 0) return 0; // Evităm împărțirea la zero sau cote invalide
+  if (b <= 0) return 0;
 
   const kellyFull = ((b * probability) - q) / b;
-  
   if (kellyFull <= 0) return 0; 
+
+  // Ajustare fracție bazată pe calitatea datelor (High Confidence = xG real)
+  const fraction = isHighConfidence ? 0.25 : 0.15;
+  const recommendedStake = (kellyFull * fraction) * 100; 
   
-  const kellyQuarter = (kellyFull / 4) * 100; 
-  return Math.min(Number(kellyQuarter.toFixed(2)), 5.00); 
+  // Am strâns șurubul la 3% pentru siguranța băncii
+  return Math.min(Number(recommendedStake.toFixed(2)), 3.00); 
 };
 
 /**
- * Verificare Value Bet
+ * 6. Verificare Value Bet (Updated: Cote > 1.45)
  */
-export const isValueBet = (probability, odds, threshold = 1.15) => {
-  return (probability * odds) >= threshold;
+export const isValueBet = (probability, odds, threshold = 1.10) => {
+  const ev = probability * odds;
+  
+  // Adăugăm filtrele de siguranță profesionale
+  const isCotaValoroasa = odds >= 1.45;
+  const isProbabilitateRealista = probability >= 0.25;
+  
+  return ev >= threshold && isCotaValoroasa && isProbabilitateRealista;
 };
