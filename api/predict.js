@@ -1,16 +1,17 @@
-// api/predict.js
 import { getWithCache } from './_utils/fetcher.js';
 import { 
-  extractGoalsAverages, 
-  lambdasFromTeamStats, 
-  syntheticLambdas, 
-  computeMatchProbs, 
-  clampLambda,
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
-  advancedLambdas
+  advancedLambdas,
+  computeMatchProbs,
+  clampLambda,
+  syntheticLambdas
 } from './_utils/math.js';
-import { calculateEV, calculateKellyQuarter as calculateKelly } from './_utils/advancedMath.js';
+import { 
+  calculateEV, 
+  calculateKellyQuarter as calculateKelly,
+  adjustLambdaByEfficiency 
+} from './_utils/advancedMath.js';
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
@@ -54,21 +55,40 @@ export default async function handler(req, res) {
 
         let method = "none";
         let lambdaHome, lambdaAway;
+        let luckStats = null;
 
         if (homeIdStr && awayIdStr) {
           const tsH = await getWithCache('/teams/statistics', { league: lId, season, team: homeIdStr }, 86400);
           const tsA = await getWithCache('/teams/statistics', { league: lId, season, team: awayIdStr }, 86400);
+          
           if (tsH.ok && tsA.ok && tsH.data && tsA.data) {
             const hStats = extractAdvancedGoalsAverages(tsH.data);
             const aStats = extractAdvancedGoalsAverages(tsA.data);
+            
             if (hStats && aStats) {
+              // --- RAFINAREA FORMEI (Regresie xG) ---
+              const refinedHomeAtk = adjustLambdaByEfficiency(hStats.avgGoalsScored, hStats.avgXG || hStats.avgGoalsScored);
+              const refinedAwayAtk = adjustLambdaByEfficiency(aStats.avgGoalsScored, aStats.avgXG || aStats.avgGoalsScored);
+
               const hMulti = extractFormMultiplier(tsH.data?.response?.form);
               const aMulti = extractFormMultiplier(tsA.data?.response?.form);
-              const l = advancedLambdas(hStats, aStats, hMulti, aMulti);
+              
+              // Injectăm mediile rafinate în generatorul de Lambdas
+              const l = advancedLambdas(
+                { ...hStats, avgGoalsScored: refinedHomeAtk }, 
+                { ...aStats, avgGoalsScored: refinedAwayAtk }, 
+                hMulti, 
+                aMulti
+              );
+              
               if (l && isGoodNum(l.lambdaHome) && isGoodNum(l.lambdaAway)) {
                 method = "advanced-teamstats";
                 lambdaHome = l.lambdaHome;
                 lambdaAway = l.lambdaAway;
+                luckStats = {
+                  hG: hStats.avgGoalsScored, hXG: hStats.avgXG,
+                  aG: aStats.avgGoalsScored, aXG: aStats.avgXG
+                };
               }
             }
           }
@@ -86,23 +106,15 @@ export default async function handler(req, res) {
 
         if (!isGoodNum(lambdaHome)) {
           const s = syntheticLambdas(Number(homeIdStr), Number(awayIdStr));
-          method = "synthetic";
-          lambdaHome = s.lambdaHome;
-          lambdaAway = s.lambdaAway;
+          method = "synthetic"; lambdaHome = s.lambdaHome; lambdaAway = s.lambdaAway;
         }
 
         const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId);
         if (!calc || !calc.probs) continue;
-
         const p = calc.probs;
 
-        // VALUE BETS & ADVANCED MATH
-        let odds = null;
-        let valueDetected = false;
-        let valueType = "";
-        let finalEv = 0;
-        let finalKelly = 0;
-
+        // ODDS & VALUE
+        let odds = null, valueDetected = false, valueType = "", finalEv = 0, finalKelly = 0;
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
           const bookie = oddsReq.data.response[0].bookmakers[0];
@@ -113,72 +125,44 @@ export default async function handler(req, res) {
             const aOdd = parseFloat(market1X2.values.find(v => v.value === "Away")?.odd);
             odds = { home: hOdd, draw: dOdd, away: aOdd };
 
-            // Verificăm cota pentru Gazde (1)
-            if ((p.p1 * hOdd) / 100 > 1.15) { 
-              valueDetected = true; 
-              valueType = "1"; 
-              finalEv = calculateEV(p.p1, hOdd);
-              finalKelly = calculateKelly(p.p1, hOdd);
-            }
-            // Verificăm cota pentru Egal (X)
-            else if ((p.pX * dOdd) / 100 > 1.15) { 
-              valueDetected = true; 
-              valueType = "X"; 
-              finalEv = calculateEV(p.pX, dOdd);
-              finalKelly = calculateKelly(p.pX, dOdd);
-            }
-            // Verificăm cota pentru Oaspeți (2)
-            else if ((p.p2 * aOdd) / 100 > 1.15) { 
-              valueDetected = true; 
-              valueType = "2"; 
-              finalEv = calculateEV(p.p2, aOdd);
-              finalKelly = calculateKelly(p.p2, aOdd);
+            if ((p.p1 * hOdd) / 100 > 1.15) {
+              valueDetected = true; valueType = "1";
+              finalEv = calculateEV(p.p1 / 100, hOdd);
+              finalKelly = calculateKelly(p.p1 / 100, hOdd);
+            } else if ((p.p2 * aOdd) / 100 > 1.15) {
+              valueDetected = true; valueType = "2";
+              finalEv = calculateEV(p.p2 / 100, aOdd);
+              finalKelly = calculateKelly(p.p2 / 100, aOdd);
             }
           }
         }
-        // Logică 1X2 (Păstrată pentru stabilirea corectă a scorului)
-        let finalPick1X2 = "X";
-        if (p.p1 >= p.pX && p.p1 >= p.p2) finalPick1X2 = "1";
-        else if (p.p2 > p.p1 && p.p2 > p.pX) finalPick1X2 = "2";
 
-        // SUPER PICK: Găsim cea mai sigură predicție dintre toate!
-        let topPick = finalPick1X2;
-        let maxConf = Math.max(p.p1, p.pX, p.p2);
-
+        let finalPick1X2 = p.p1 >= p.pX && p.p1 >= p.p2 ? "1" : (p.p2 > p.p1 && p.p2 > p.pX ? "2" : "X");
+        let topPick = finalPick1X2, maxConf = Math.max(p.p1, p.pX, p.p2);
         if (p.pU35 > maxConf) { topPick = "Sub 3.5"; maxConf = p.pU35; }
         if (p.pO25 > maxConf) { topPick = "Peste 2.5"; maxConf = p.pO25; }
-        if (p.pGG > maxConf) { topPick = "GG"; maxConf = p.pGG; }
-        if (p.pO15 > maxConf && p.pO15 < 90) { topPick = "Peste 1.5"; maxConf = p.pO15; }
-
-        // Cartonașe Sintetice
-        const cardsProb = 40 + ((Number(homeIdStr || 0) + Number(awayIdStr || 0)) % 40); 
 
         out.push({
           id: fixtureId,
           leagueId: Number(lId),
-          league: fx.league?.name || "Unknown League",
+          league: fx.league?.name || "Unknown",
           logos: { league: fx.league?.logo, home: fx.teams?.home?.logo, away: fx.teams?.away?.logo },
           teams: { home: homeName, away: awayName },
           kickoff: fx.fixture?.date,
           status: fx.fixture?.status?.short,
           referee: fx.fixture?.referee || "-",
           lambdas: { home: Number(lambdaHome.toFixed(2)), away: Number(lambdaAway.toFixed(2)) },
+          luckStats, 
           probs: p,
-          odds: odds,
-          // AICI ERA GREȘEALA: Am adăugat ev și kelly în obiectul de mai jos!
+          odds,
           valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
           predictions: { 
-            oneXtwo: finalPick1X2,
-            gg: p.pGG >= 55 ? "GG" : "NGG",
-            over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5",
-            cards: cardsProb >= 60 ? "Peste 3.5" : "Sub 3.5",
+            oneXtwo: finalPick1X2, 
+            gg: p.pGG >= 55 ? "GG" : "NGG", 
+            over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5", 
             correctScore: calc.bestScore 
           },
-          recommended: { 
-            pick: topPick, 
-            confidence: maxConf 
-          },
-          _debug: { method }
+          recommended: { pick: topPick, confidence: maxConf }
         });
       }
     }

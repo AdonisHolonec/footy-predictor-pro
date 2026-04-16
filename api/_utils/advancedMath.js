@@ -1,5 +1,3 @@
-// utils/advancedMath.js
-
 /**
  * 1. Calculul xG-ului Sintetic (Pseudo-xG)
  */
@@ -9,7 +7,7 @@ export const calculateSyntheticXG = (statistics) => {
   let shotsInsideBox = 0;
   let shotsOutsideBox = 0;
   let corners = 0;
-  let penalties = 0; // Ideal de extras din events, dar menținem structura
+  let penalties = 0;
 
   statistics.forEach((stat) => {
     const val = (stat.value === null || stat.value === undefined) ? 0 : Number(stat.value);
@@ -27,32 +25,32 @@ export const calculateSyntheticXG = (statistics) => {
 };
 
 /**
- * 2. Ponderarea Formei (New)
- * Calculează un xG ajustat dând importanță mai mare meciurilor foarte recente
- * @param {number[]} xGHistory - Array cu ultimele 5 valori xG (de la cel mai vechi la cel mai nou)
+ * 2. RAFINAREA FORMEI (Luck Factor)
+ * Ajustează forța reală combinând media golurilor cu xG-ul pentru regresie către medie
+ */
+export const adjustLambdaByEfficiency = (actualGoals, xG) => {
+  if (!xG || xG <= 0) return actualGoals;
+  const adjusted = (actualGoals + xG) / 2;
+  return Number(adjusted.toFixed(2));
+};
+
+/**
+ * 3. Ponderarea Formei
  */
 export const calculateWeightedXG = (xGHistory) => {
   if (!xGHistory || xGHistory.length === 0) return 0;
-  
-  // Dacă avem puține date, facem medie simplă
   if (xGHistory.length < 3) {
     return xGHistory.reduce((a, b) => a + b, 0) / xGHistory.length;
   }
-
-  // Luăm ultimele 2 meciuri pentru formă fulger
   const recent2 = xGHistory.slice(-2);
   const avgRecent = recent2.reduce((a, b) => a + b, 0) / 2;
-  
-  // Media generală a celor 5 meciuri
   const avgTotal = xGHistory.reduce((a, b) => a + b, 0) / xGHistory.length;
-
-  // Formula: 60% contează ultimele 2 meciuri, 40% tot istoricul de 5
   const weightedXG = (avgTotal * 0.4) + (avgRecent * 0.6);
   return Number(weightedXG.toFixed(2));
 };
 
 /**
- * 3. Distribuția Poisson
+ * 4. Distribuția Poisson
  */
 const factorial = (n) => {
   if (n === 0 || n === 1) return 1;
@@ -67,7 +65,7 @@ export const getPoissonProbability = (lambda, k) => {
 };
 
 /**
- * 4. Expected Value (EV)
+ * 5. Expected Value (EV)
  */
 export const calculateEV = (probability, odds) => {
   const ev = (probability * odds) - 1;
@@ -75,34 +73,25 @@ export const calculateEV = (probability, odds) => {
 };
 
 /**
- * 5. Sfertul de Kelly Adaptiv (Updated: Max 3%)
+ * 6. Sfertul de Kelly Adaptiv
  */
 export const calculateKellyQuarter = (probability, odds, isHighConfidence = true) => {
   const q = 1 - probability;
   const b = odds - 1;
-  
   if (b <= 0) return 0;
-
   const kellyFull = ((b * probability) - q) / b;
   if (kellyFull <= 0) return 0; 
-
-  // Ajustare fracție bazată pe calitatea datelor (High Confidence = xG real)
   const fraction = isHighConfidence ? 0.25 : 0.15;
   const recommendedStake = (kellyFull * fraction) * 100; 
-  
-  // Am strâns șurubul la 3% pentru siguranța băncii
   return Math.min(Number(recommendedStake.toFixed(2)), 3.00); 
 };
 
 /**
- * 6. Verificare Value Bet (Updated: Cote > 1.45)
+ * 7. Verificare Value Bet
  */
 export const isValueBet = (probability, odds, threshold = 1.10) => {
   const ev = probability * odds;
-  
-  // Adăugăm filtrele de siguranță profesionale
   const isCotaValoroasa = odds >= 1.45;
   const isProbabilitateRealista = probability >= 0.25;
-  
   return ev >= threshold && isCotaValoroasa && isProbabilitateRealista;
 };
