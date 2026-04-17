@@ -1,7 +1,11 @@
 // api/fixtures/day.js
 import { handleClaimBootstrapAdmin } from "../../server-utils/claimBootstrapAdmin.js";
 import { getWithCache, getApiUsage, getApiUsageHistory } from '../../server-utils/fetcher.js';
-import { peekWarmPredictUsage, resolveAuthenticatedUsageContext } from "../../server-utils/userDailyWarmPredictUsage.js";
+import {
+  isWarmPredictQuotaExempt,
+  peekWarmPredictUsage,
+  resolveAuthenticatedUsageContext
+} from "../../server-utils/userDailyWarmPredictUsage.js";
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
@@ -21,6 +25,17 @@ export default async function handler(req, res) {
       if (ctx.error) return res.status(ctx.error.status).json(ctx.error.body);
       if (ctx.anonymous) {
         return res.status(401).json({ ok: false, error: "Autentificare necesara pentru contoarele zilnice." });
+      }
+      if (await isWarmPredictQuotaExempt(ctx.userId, ctx.userEmail)) {
+        return res.status(200).json({
+          ok: true,
+          warmPredictUsage: {
+            usage_day: ctx.usageDay,
+            warm_count: 0,
+            predict_count: 0,
+            quota_exempt: true
+          }
+        });
       }
       const peek = await peekWarmPredictUsage(ctx.userId, ctx.usageDay);
       return res.status(200).json({

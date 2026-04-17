@@ -9,6 +9,14 @@ export function isoToday(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+/** YYYY-MM-DD in the user's local timezone (used for daily Warm/Predict caps). */
+export function localCalendarDateKey(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function inferSeason(dateISO: string): number {
   const [y, m] = dateISO.split("-").map(Number);
   if (!y || !m) return new Date().getFullYear() - 1;

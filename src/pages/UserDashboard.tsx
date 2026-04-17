@@ -6,7 +6,7 @@ import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
 import { DayResponse, HistoryStats, League, PredictionRow } from "../types";
-import { hashColor, inferSeason, isoToday, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
+import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
 export default function UserDashboard() {
   const { user, session, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
@@ -33,21 +33,17 @@ export default function UserDashboard() {
   const [usageServerSyncPending, setUsageServerSyncPending] = useState(false);
   const [usageServerSyncFailed, setUsageServerSyncFailed] = useState(false);
   const [usageServerSyncedAt, setUsageServerSyncedAt] = useState<number | null>(null);
+  const [usageQuotaExempt, setUsageQuotaExempt] = useState(false);
   const usageFetchGen = useRef(0);
 
-  const todayKey = (() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  })();
+  const todayKey = localCalendarDateKey();
   const userPredictionIds = useMemo(() => {
     if (!user) return [];
     return userPredictionMap[user.id] || [];
   }, [user?.id, userPredictionMap]);
   const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
   const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
+  const limitApplies = !usageQuotaExempt;
 
   const markUsageConfirmedFromServer = useCallback(() => {
     setUsageServerSyncedAt(Date.now());
@@ -74,13 +70,23 @@ export default function UserDashboard() {
           return;
         }
         const json = (await res.json()) as {
-          warmPredictUsage?: { warm_count?: number; predict_count?: number };
+          warmPredictUsage?: { warm_count?: number; predict_count?: number; quota_exempt?: boolean };
         };
         const u = json?.warmPredictUsage;
         if (typeof u?.warm_count !== "number" || typeof u?.predict_count !== "number") {
           setUsageServerSyncFailed(true);
           return;
         }
+        if (u.quota_exempt) {
+          setUsageQuotaExempt(true);
+          setDailyUsageMap((prev) => ({
+            ...prev,
+            [usageKey]: { warm: 0, predict: 0 }
+          }));
+          markUsageConfirmedFromServer();
+          return;
+        }
+        setUsageQuotaExempt(false);
         setDailyUsageMap((prev) => ({
           ...prev,
           [usageKey]: { warm: u.warm_count, predict: u.predict_count }
@@ -162,6 +168,7 @@ export default function UserDashboard() {
     setUsageServerSyncedAt(null);
     setUsageServerSyncFailed(false);
     setUsageServerSyncPending(false);
+    setUsageQuotaExempt(false);
   }, [usageKey]);
 
   useEffect(() => {
@@ -314,7 +321,7 @@ export default function UserDashboard() {
   }
 
   async function warm() {
-    if (dailyUsage.warm >= 3) {
+    if (limitApplies && dailyUsage.warm >= 3) {
       setStatus(
         "Limită Warm (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
       );
@@ -370,7 +377,7 @@ export default function UserDashboard() {
         }
       }
       setStatus("Warm finalizat pentru ligile favorite.");
-      if (usageKey && !serverUsageSynced) {
+      if (usageKey && !serverUsageSynced && limitApplies) {
         setDailyUsageMap((prev) => ({
           ...prev,
           [usageKey]: {
@@ -385,7 +392,7 @@ export default function UserDashboard() {
   }
 
   async function predict() {
-    if (dailyUsage.predict >= 3) {
+    if (limitApplies && dailyUsage.predict >= 3) {
       setStatus(
         "Limită Predict (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
       );
@@ -460,7 +467,7 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Au fost generate ${batches.length} predictii.`);
-      if (usageKey && !serverUsageSynced) {
+      if (usageKey && !serverUsageSynced && limitApplies) {
         setDailyUsageMap((prev) => ({
           ...prev,
           [usageKey]: {
@@ -542,25 +549,27 @@ export default function UserDashboard() {
           />
           <button
             onClick={warm}
-            disabled={dailyUsage.warm >= 3}
+            disabled={limitApplies && dailyUsage.warm >= 3}
             className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Warm
           </button>
           <button
             onClick={predict}
-            disabled={dailyUsage.predict >= 3}
+            disabled={limitApplies && dailyUsage.predict >= 3}
             className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
           >
             Predict
           </button>
           <div className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-300">
             <span className="text-slate-200">
-              Warm {dailyUsage.warm}/3 · Predict {dailyUsage.predict}/3
+              Warm {usageQuotaExempt ? "—" : dailyUsage.warm}/3 · Predict {usageQuotaExempt ? "—" : dailyUsage.predict}/3
             </span>
             {session?.access_token && usageKey ? (
               <span className="mt-1 block text-[10px] font-normal leading-snug text-slate-500">
-                {usageServerSyncPending ? (
+                {usageQuotaExempt ? (
+                  <span className="text-slate-400">Administrator: limită zilnică dezactivată pe server.</span>
+                ) : usageServerSyncPending ? (
                   <>Se actualizează contorul de pe server…</>
                 ) : usageServerSyncFailed && !usageServerSyncedAt ? (
                   <span className="text-amber-400/90">Nu am putut încărca contorul de pe server.</span>

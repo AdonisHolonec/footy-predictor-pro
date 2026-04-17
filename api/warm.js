@@ -2,6 +2,7 @@
 import { getWithCache } from '../server-utils/fetcher.js';
 import {
   commitWarmPredictIncrement,
+  isWarmPredictQuotaExempt,
   peekWarmPredictUsage,
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
@@ -24,7 +25,12 @@ export default async function handler(req, res) {
   if (usageCtx.error) {
     return res.status(usageCtx.error.status).json(usageCtx.error.body);
   }
+  let enforceWarmPredictQuota = false;
   if (!usageCtx.anonymous && usageCtx.userId) {
+    const exempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
+    enforceWarmPredictQuota = !exempt;
+  }
+  if (enforceWarmPredictQuota) {
     const peek = await peekWarmPredictUsage(usageCtx.userId, usageCtx.usageDay);
     if (peek.warm >= 3) {
       return res.status(429).json({
@@ -90,7 +96,7 @@ export default async function handler(req, res) {
     note: "Datele au fost salvate în Vercel KV (Redis)."
   };
 
-  if (!usageCtx.anonymous && usageCtx.userId) {
+  if (enforceWarmPredictQuota) {
     const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "warm");
     if (!inc?.ok) {
       return res.status(429).json({

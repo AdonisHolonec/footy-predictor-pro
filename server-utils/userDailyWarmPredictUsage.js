@@ -1,4 +1,4 @@
-import { readBearer } from "./authAdmin.js";
+import { parseAdminEmails, readBearer } from "./authAdmin.js";
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 const USAGE_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -53,7 +53,20 @@ export async function resolveAuthenticatedUsageContext(req) {
     return { anonymous: false, error: { status: 403, body: { ok: false, error: "Cont blocat." } } };
   }
 
-  return { anonymous: false, userId: data.user.id, usageDay };
+  const userEmail = data.user?.email ? String(data.user.email).toLowerCase() : "";
+
+  return { anonymous: false, userId: data.user.id, usageDay, userEmail };
+}
+
+/** Admins (DB role or bootstrap email list) are not subject to daily warm/predict quotas. */
+export async function isWarmPredictQuotaExempt(userId, emailLower) {
+  const sb = getSupabaseAdmin();
+  if (!sb) return false;
+  const { data: profile } = await sb.from("profiles").select("role").eq("user_id", userId).maybeSingle();
+  if (profile?.role === "admin") return true;
+  const adminSet = parseAdminEmails();
+  const e = String(emailLower || "").toLowerCase();
+  return Boolean(e && adminSet.has(e));
 }
 
 export async function peekWarmPredictUsage(userId, usageDay) {

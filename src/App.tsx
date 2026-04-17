@@ -12,6 +12,7 @@ import {
   hashColor,
   inferSeason,
   isoToday,
+  localCalendarDateKey,
   normalizeSelectedDates,
   useLocalStorageState
 } from "./utils/appUtils";
@@ -59,6 +60,7 @@ export default function App() {
   } | null>(null);
   const {
     user,
+    session,
     loading: authLoading,
     error: authError,
     lastAuthEvent,
@@ -169,10 +171,28 @@ export default function App() {
     setStatus("Se procesează datele (Warm)...");
     try {
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const usageDay = localCalendarDateKey();
       const results = [];
-      for (const currentDate of dates) {
+      for (let i = 0; i < dates.length; i++) {
+        const currentDate = dates[i];
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
-        const r = await fetch(`/api/warm?${qs}`);
+        if (i === 0) qs.set("usageDay", usageDay);
+        const headers: Record<string, string> = {};
+        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        const r = await fetch(`/api/warm?${qs}`, { headers });
+        if (r.status === 429) {
+          try {
+            const err = await r.json();
+            setStatus(typeof err?.error === "string" ? err.error : "Limită zilnică Warm atinsă.");
+          } catch {
+            setStatus("Limită zilnică Warm atinsă.");
+          }
+          return;
+        }
+        if (!r.ok) {
+          setStatus(`Warm a eșuat (HTTP ${r.status}).`);
+          return;
+        }
         const j = await r.json();
         results.push({ date: currentDate, ok: !!j.ok });
       }
@@ -217,10 +237,28 @@ export default function App() {
     setStatus("Generez predicțiile Premium...");
     try {
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const usageDay = localCalendarDateKey();
       const batches: PredictionRow[] = [];
-      for (const currentDate of dates) {
+      for (let i = 0; i < dates.length; i++) {
+        const currentDate = dates[i];
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
-        const r = await fetch(`/api/predict?${qs}`);
+        if (i === 0) qs.set("usageDay", usageDay);
+        const headers: Record<string, string> = {};
+        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        const r = await fetch(`/api/predict?${qs}`, { headers });
+        if (r.status === 429) {
+          try {
+            const err = await r.json();
+            setStatus(typeof err?.error === "string" ? err.error : "Limită zilnică Predict atinsă.");
+          } catch {
+            setStatus("Limită zilnică Predict atinsă.");
+          }
+          return;
+        }
+        if (!r.ok) {
+          setStatus(`Predict a eșuat (HTTP ${r.status}).`);
+          return;
+        }
         const j = await r.json();
         if (Array.isArray(j)) batches.push(...j);
       }
