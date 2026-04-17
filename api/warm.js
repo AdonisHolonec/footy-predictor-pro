@@ -1,5 +1,10 @@
 // api/warm.js
 import { getWithCache } from '../server-utils/fetcher.js';
+import {
+  commitWarmPredictIncrement,
+  peekWarmPredictUsage,
+  resolveAuthenticatedUsageContext
+} from "../server-utils/userDailyWarmPredictUsage.js";
 
 export default async function handler(req, res) {
   // Pe Vercel, query params sunt automat în req.query
@@ -13,6 +18,21 @@ export default async function handler(req, res) {
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Missing leagueIds" });
+  }
+
+  const usageCtx = await resolveAuthenticatedUsageContext(req);
+  if (usageCtx.error) {
+    return res.status(usageCtx.error.status).json(usageCtx.error.body);
+  }
+  if (!usageCtx.anonymous && usageCtx.userId) {
+    const peek = await peekWarmPredictUsage(usageCtx.userId, usageCtx.usageDay);
+    if (peek.warm >= 3) {
+      return res.status(429).json({
+        ok: false,
+        error: "Limita zilnica Warm atinsa (maximum 3/zi).",
+        usage: { warm_count: peek.warm, predict_count: peek.predict, usage_day: usageCtx.usageDay }
+      });
+    }
   }
 
   const warmed = [];
@@ -62,11 +82,29 @@ export default async function handler(req, res) {
     warmed.push(summary);
   }
 
-  return res.status(200).json({
+  const payload = {
     ok: errors.length === 0,
     warmed,
     teamStatsPrefetched,
     errors,
     note: "Datele au fost salvate în Vercel KV (Redis)."
-  });
+  };
+
+  if (!usageCtx.anonymous && usageCtx.userId) {
+    const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "warm");
+    if (!inc?.ok) {
+      return res.status(429).json({
+        ok: false,
+        error: "Limita zilnica Warm atinsa (maximum 3/zi).",
+        usage: inc
+      });
+    }
+    payload.usage = {
+      warm_count: inc.warm_count,
+      predict_count: inc.predict_count,
+      usage_day: usageCtx.usageDay
+    };
+  }
+
+  return res.status(200).json(payload);
 }

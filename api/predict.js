@@ -22,6 +22,11 @@ import {
 } from '../server-utils/advancedMath.js';
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
+import {
+  commitWarmPredictIncrement,
+  peekWarmPredictUsage,
+  resolveAuthenticatedUsageContext
+} from "../server-utils/userDailyWarmPredictUsage.js";
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
@@ -177,6 +182,21 @@ export default async function handler(req, res) {
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Nu ai selectat nicio ligă." });
+  }
+
+  const usageCtx = await resolveAuthenticatedUsageContext(req);
+  if (usageCtx.error) {
+    return res.status(usageCtx.error.status).json(usageCtx.error.body);
+  }
+  if (!usageCtx.anonymous && usageCtx.userId) {
+    const peek = await peekWarmPredictUsage(usageCtx.userId, usageCtx.usageDay);
+    if (peek.predict >= 3) {
+      return res.status(429).json({
+        ok: false,
+        error: "Limita zilnica Predict atinsa (maximum 3/zi).",
+        usage: { warm_count: peek.warm, predict_count: peek.predict, usage_day: usageCtx.usageDay }
+      });
+    }
   }
 
   try {
@@ -487,6 +507,20 @@ export default async function handler(req, res) {
       } catch (persistError) {
         console.error("[history upsert] failed:", persistError?.message || persistError);
       }
+    }
+
+    if (!usageCtx.anonymous && usageCtx.userId) {
+      const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "predict");
+      if (!inc?.ok) {
+        return res.status(429).json({
+          ok: false,
+          error: "Limita zilnica Predict atinsa (maximum 3/zi).",
+          usage: inc
+        });
+      }
+      res.setHeader("X-Usage-Warm", String(inc.warm_count ?? ""));
+      res.setHeader("X-Usage-Predict", String(inc.predict_count ?? ""));
+      res.setHeader("X-Usage-Day", String(usageCtx.usageDay ?? ""));
     }
 
     return res.status(200).json(out);

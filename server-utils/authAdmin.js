@@ -11,7 +11,7 @@ function parseAdminEmails() {
   );
 }
 
-function readBearer(req) {
+export function readBearer(req) {
   const raw = req.headers?.authorization || "";
   const match = String(raw).match(/^Bearer\s+(.+)$/i);
   return match ? match[1] : "";

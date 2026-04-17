@@ -9,7 +9,7 @@ import { DayResponse, HistoryStats, League, PredictionRow } from "../types";
 import { hashColor, inferSeason, isoToday, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
 export default function UserDashboard() {
-  const { user, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
+  const { user, session, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useState<number[]>([]);
@@ -231,16 +231,48 @@ export default function UserDashboard() {
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
     try {
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
-      for (const currentDate of dates) {
+      let serverUsageSynced = false;
+      for (let i = 0; i < dates.length; i++) {
+        const currentDate = dates[i];
         const qs = new URLSearchParams({
           date: currentDate,
           leagueIds: selectedLeagueIds.join(","),
           season: String(inferSeason(currentDate))
         });
-        await fetch(`/api/warm?${qs.toString()}`);
+        if (i === 0) qs.set("usageDay", todayKey);
+        const headers: Record<string, string> = {};
+        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
+        if (response.status === 429) {
+          try {
+            const errBody = (await response.json()) as { error?: string; usage?: { warm_count?: number; predict_count?: number } };
+            if (usageKey && errBody?.usage && typeof errBody.usage.warm_count === "number") {
+              setDailyUsageMap((prev) => ({
+                ...prev,
+                [usageKey]: { warm: errBody.usage!.warm_count!, predict: errBody.usage!.predict_count ?? 0 }
+              }));
+            }
+            setStatus(errBody?.error || "Limita zilnica Warm atinsa.");
+          } catch {
+            setStatus("Limita zilnica Warm atinsa.");
+          }
+          return;
+        }
+        if (!response.ok) {
+          setStatus(`Warm a esuat (HTTP ${response.status}).`);
+          return;
+        }
+        const json = (await response.json()) as { usage?: { warm_count: number; predict_count: number } };
+        if (json?.usage && usageKey) {
+          setDailyUsageMap((prev) => ({
+            ...prev,
+            [usageKey]: { warm: json.usage.warm_count, predict: json.usage.predict_count }
+          }));
+          serverUsageSynced = true;
+        }
       }
       setStatus("Warm finalizat pentru ligile favorite.");
-      if (usageKey) {
+      if (usageKey && !serverUsageSynced) {
         setDailyUsageMap((prev) => ({
           ...prev,
           [usageKey]: {
@@ -263,16 +295,51 @@ export default function UserDashboard() {
     try {
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const batches: PredictionRow[] = [];
-      for (const currentDate of dates) {
+      let serverUsageSynced = false;
+      for (let i = 0; i < dates.length; i++) {
+        const currentDate = dates[i];
         const qs = new URLSearchParams({
           date: currentDate,
           leagueIds: selectedLeagueIds.join(","),
           season: String(inferSeason(currentDate)),
           limit: "50"
         });
-        const response = await fetch(`/api/predict?${qs.toString()}`);
+        if (i === 0) qs.set("usageDay", todayKey);
+        const headers: Record<string, string> = {};
+        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
+        if (response.status === 429) {
+          try {
+            const errBody = (await response.json()) as { error?: string; usage?: { warm_count?: number; predict_count?: number } };
+            if (usageKey && errBody?.usage && typeof errBody.usage.predict_count === "number") {
+              setDailyUsageMap((prev) => ({
+                ...prev,
+                [usageKey]: { warm: errBody.usage!.warm_count ?? 0, predict: errBody.usage!.predict_count! }
+              }));
+            }
+            setStatus(errBody?.error || "Limita zilnica Predict atinsa.");
+          } catch {
+            setStatus("Limita zilnica Predict atinsa.");
+          }
+          return;
+        }
+        if (!response.ok) {
+          setStatus(`Predict a esuat (HTTP ${response.status}).`);
+          return;
+        }
         const json = await response.json();
         if (Array.isArray(json)) batches.push(...json);
+        if (i === 0 && usageKey) {
+          const w = response.headers.get("X-Usage-Warm");
+          const p = response.headers.get("X-Usage-Predict");
+          if (w != null && w !== "" && p != null && p !== "") {
+            setDailyUsageMap((prev) => ({
+              ...prev,
+              [usageKey]: { warm: Number(w), predict: Number(p) }
+            }));
+            serverUsageSynced = true;
+          }
+        }
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
@@ -287,7 +354,7 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Au fost generate ${batches.length} predictii.`);
-      if (usageKey) {
+      if (usageKey && !serverUsageSynced) {
         setDailyUsageMap((prev) => ({
           ...prev,
           [usageKey]: {
