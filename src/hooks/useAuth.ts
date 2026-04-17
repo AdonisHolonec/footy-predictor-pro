@@ -21,6 +21,17 @@ type ManagedProfile = {
   isBlocked: boolean;
 };
 
+function parseBootstrapAdminEmails() {
+  const raw = String((import.meta.env.VITE_ADMIN_EMAILS as string | undefined) || "");
+  if (!raw.trim()) return new Set<string>();
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
 function sanitizeLeagueIds(values: number[]) {
   return Array.from(
     new Set(
@@ -33,6 +44,8 @@ function sanitizeLeagueIds(values: number[]) {
 
 function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | null = null): User | null {
   if (!user) return null;
+  const bootstrapAdminEmails = parseBootstrapAdminEmails();
+  const isBootstrapAdmin = bootstrapAdminEmails.has(String(user.email || "").toLowerCase());
   const fallbackFavorites = Array.isArray(user.user_metadata?.favoriteLeagues)
     ? user.user_metadata.favoriteLeagues.filter((value: unknown): value is number => typeof value === "number")
     : [];
@@ -41,7 +54,7 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
   return {
     id: user.id,
     email: user.email ?? "",
-    role: profile?.role ?? "user",
+    role: profile?.role ?? (isBootstrapAdmin ? "admin" : "user"),
     favoriteLeagues,
     isBlocked: Boolean(profile?.is_blocked),
     onboardingCompleted: Boolean(profile?.onboarding_completed),

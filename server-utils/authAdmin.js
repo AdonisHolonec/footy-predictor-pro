@@ -1,5 +1,16 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
+function parseAdminEmails() {
+  const raw = String(process.env.ADMIN_EMAILS || "");
+  if (!raw.trim()) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
 function readBearer(req) {
   const raw = req.headers?.authorization || "";
   const match = String(raw).match(/^Bearer\s+(.+)$/i);
@@ -20,13 +31,18 @@ export async function assertAdmin(req) {
   const requester = await getRequester(req);
   if (!requester.ok) return requester;
   const supabase = getSupabaseAdmin();
+  const adminEmailSet = parseAdminEmails();
+  const requesterEmail = String(requester.user?.email || "").toLowerCase();
+  const isBootstrapAdmin = requesterEmail ? adminEmailSet.has(requesterEmail) : false;
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("role, is_blocked")
     .eq("user_id", requester.user.id)
     .maybeSingle();
   if (error) return { ok: false, status: 500, error: error.message || "Unable to load requester profile." };
-  if (!profile || profile.role !== "admin") return { ok: false, status: 403, error: "Admin access required." };
-  if (profile.is_blocked) return { ok: false, status: 403, error: "Blocked administrators cannot perform this action." };
-  return { ok: true, user: requester.user };
+  if (profile?.is_blocked) return { ok: false, status: 403, error: "Blocked administrators cannot perform this action." };
+  if (profile?.role === "admin" || isBootstrapAdmin) {
+    return { ok: true, user: requester.user };
+  }
+  return { ok: false, status: 403, error: "Admin access required." };
 }

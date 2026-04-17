@@ -27,6 +27,7 @@ export default async function handler(req, res) {
   if (!adminCheck.ok) {
     return res.status(adminCheck.status || 403).json({ ok: false, error: adminCheck.error });
   }
+  const requesterId = adminCheck.user?.id;
 
   const supabase = getSupabaseAdmin();
 
@@ -57,6 +58,38 @@ export default async function handler(req, res) {
 
     if (!Object.keys(nextUpdate).length) {
       return res.status(400).json({ ok: false, error: "No valid fields to update." });
+    }
+
+    // Avoid accidental self lock-out from the admin workspace.
+    if (requesterId && userId === requesterId) {
+      if (nextUpdate.is_blocked === true) {
+        return res.status(400).json({ ok: false, error: "Nu te poti bloca pe tine insuti." });
+      }
+      if (nextUpdate.role === "user") {
+        return res.status(400).json({ ok: false, error: "Nu iti poti elimina propriul rol de admin." });
+      }
+    }
+
+    // Keep at least one active admin account.
+    if (nextUpdate.role === "user" || nextUpdate.is_blocked === true) {
+      const { data: targetProfile, error: targetProfileError } = await supabase
+        .from("profiles")
+        .select("user_id, role, is_blocked")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (targetProfileError) throw targetProfileError;
+      const targetIsActiveAdmin = targetProfile?.role === "admin" && !targetProfile?.is_blocked;
+      if (targetIsActiveAdmin) {
+        const { data: activeAdmins, error: activeAdminsError } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("role", "admin")
+          .eq("is_blocked", false);
+        if (activeAdminsError) throw activeAdminsError;
+        if ((activeAdmins || []).length <= 1) {
+          return res.status(400).json({ ok: false, error: "Trebuie sa existe cel putin un admin activ." });
+        }
+      }
     }
 
     const { data, error } = await supabase
