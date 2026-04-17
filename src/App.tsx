@@ -28,6 +28,9 @@ export default function App() {
   const [kpiLoading, setKpiLoading] = useState(false);
   const [riskAlerts, setRiskAlerts] = useState<RiskAlert[]>([]);
   const [alertsSeverity, setAlertsSeverity] = useState<"none" | "medium" | "high">("none");
+  const [alertDrawdownThreshold, setAlertDrawdownThreshold] = useLocalStorageState<number>("footy.alert.drawdown", 3);
+  const [alertDriftThreshold, setAlertDriftThreshold] = useLocalStorageState<number>("footy.alert.drift", 24);
+  const [alertLowDataThreshold, setAlertLowDataThreshold] = useLocalStorageState<number>("footy.alert.lowDataShare", 0.35);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -233,7 +236,13 @@ export default function App() {
 
   async function loadAlerts(days = 7) {
     try {
-      const res = await fetch(`/api/alerts?days=${days}`);
+      const qs = new URLSearchParams({
+        days: String(days),
+        drawdown: String(alertDrawdownThreshold),
+        drift: String(alertDriftThreshold),
+        lowDataShare: String(alertLowDataThreshold)
+      });
+      const res = await fetch(`/api/alerts?${qs.toString()}`);
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca alertele.");
       setRiskAlerts(Array.isArray(json.alerts) ? json.alerts : []);
@@ -260,6 +269,9 @@ export default function App() {
     void loadKpi(45);
     void loadAlerts(7);
   }, []);
+  useEffect(() => {
+    void loadAlerts(7);
+  }, [alertDrawdownThreshold, alertDriftThreshold, alertLowDataThreshold]);
   useEffect(() => {
     const prev = prevWinRateRef.current;
     if (Math.abs(prev - trackerStats.winRate) > 0.01) {
@@ -353,6 +365,47 @@ export default function App() {
                   {riskAlerts.length
                     ? riskAlerts.map((a) => a.message).join(" • ")
                     : "No active risk alerts"}
+                </div>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                    DD
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={20}
+                      step={0.1}
+                      value={alertDrawdownThreshold}
+                      onChange={(e) => setAlertDrawdownThreshold(Number(e.target.value) || 3)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                    />
+                  </label>
+                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                    Drift
+                    <input
+                      type="number"
+                      min={5}
+                      max={100}
+                      step={1}
+                      value={alertDriftThreshold}
+                      onChange={(e) => setAlertDriftThreshold(Number(e.target.value) || 24)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                    />
+                  </label>
+                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                    LowData
+                    <input
+                      type="number"
+                      min={0.05}
+                      max={0.95}
+                      step={0.01}
+                      value={alertLowDataThreshold}
+                      onChange={(e) => setAlertLowDataThreshold(Number(e.target.value) || 0.35)}
+                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 text-[9px] text-slate-300/80 font-black uppercase tracking-wide">
+                  Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData {(alertLowDataThreshold * 100).toFixed(0)}%
                 </div>
               </div>
           </div>
