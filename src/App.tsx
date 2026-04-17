@@ -50,7 +50,18 @@ export default function App() {
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
-  const { user, loading: authLoading, error: authError, login, signup, logout, updateFavoriteLeagues } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    error: authError,
+    lastAuthEvent,
+    login,
+    signup,
+    sendPasswordResetEmail,
+    updatePassword,
+    logout,
+    updateFavoriteLeagues
+  } = useAuth();
 
   function requireAuth(message = "Autentifica-te pentru functiile personalizate.") {
     if (user) return true;
@@ -400,6 +411,22 @@ export default function App() {
     return () => clearTimeout(saveTimer);
   }, [user?.id, selectedLeagueIds, updateFavoriteLeagues]);
 
+  useEffect(() => {
+    if (!lastAuthEvent) return;
+    if (lastAuthEvent === "PASSWORD_RECOVERY") {
+      setIsAuthOpen(true);
+      setStatus("Link-ul de reset este valid. Seteaza parola noua.");
+      return;
+    }
+    if (lastAuthEvent === "SIGNED_IN") {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      if (hashParams.get("type") === "signup") {
+        setStatus("Email confirmat cu succes. Bine ai revenit!");
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
+    }
+  }, [lastAuthEvent]);
+
   async function handleLogin(email: string, password: string) {
     setIsAuthSubmitting(true);
     try {
@@ -435,6 +462,34 @@ export default function App() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Logout esuat.";
       setStatus(message);
+    }
+  }
+
+  async function handleForgotPassword(email: string) {
+    setIsAuthSubmitting(true);
+    try {
+      await sendPasswordResetEmail(email);
+      setStatus("Email-ul pentru reset parola a fost trimis.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Nu am putut trimite link-ul de reset.";
+      setStatus(message);
+      throw error;
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleUpdatePassword(newPassword: string) {
+    setIsAuthSubmitting(true);
+    try {
+      await updatePassword(newPassword);
+      setStatus("Parola a fost actualizata cu succes.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Nu am putut actualiza parola.";
+      setStatus(message);
+      throw error;
+    } finally {
+      setIsAuthSubmitting(false);
     }
   }
 
@@ -773,6 +828,8 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         onLogin={handleLogin}
         onSignup={handleSignup}
+        onForgotPassword={handleForgotPassword}
+        onUpdatePassword={handleUpdatePassword}
         isSubmitting={isAuthSubmitting}
         authError={authError}
       />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
 import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
 
@@ -22,6 +22,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastAuthEvent, setLastAuthEvent] = useState<AuthChangeEvent | null>(null);
 
   const getSession = useCallback(async () => {
     if (!supabase) {
@@ -73,6 +74,39 @@ export function useAuth() {
     }
     setSession(data.session ?? null);
     setUser(mapSupabaseUser(data.user ?? data.session?.user ?? null));
+    return data;
+  }, []);
+
+  const sendPasswordResetEmail = useCallback(async (email: string) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
+    setError(null);
+    const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin
+    });
+    if (resetError) {
+      setError(resetError.message);
+      throw resetError;
+    }
+    return data;
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
+    setError(null);
+    const { data, error: updateError } = await supabase.auth.updateUser({ password });
+    if (updateError) {
+      setError(updateError.message);
+      throw updateError;
+    }
+    setUser(mapSupabaseUser(data.user));
     return data;
   }, []);
 
@@ -135,7 +169,8 @@ export function useAuth() {
         if (isMounted) setLoading(false);
       });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setLastAuthEvent(event);
       setSession(nextSession);
       setUser(mapSupabaseUser(nextSession?.user ?? null));
       setLoading(false);
@@ -152,8 +187,11 @@ export function useAuth() {
     session,
     loading,
     error,
+    lastAuthEvent,
     login,
     signup,
+    sendPasswordResetEmail,
+    updatePassword,
     logout,
     getSession,
     updateFavoriteLeagues
