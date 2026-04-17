@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LeaguePanel from "../components/LeaguePanel";
 import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
@@ -30,6 +30,10 @@ export default function UserDashboard() {
   const [alertsPreview, setAlertsPreview] = useState<{ safe: number; value: number }>({ safe: 0, value: 0 });
   const [userPredictionMap, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
   const [dailyUsageMap, setDailyUsageMap] = useLocalStorageState<Record<string, { warm: number; predict: number }>>("footy.user.dailyUsage", {});
+  const [usageServerSyncPending, setUsageServerSyncPending] = useState(false);
+  const [usageServerSyncFailed, setUsageServerSyncFailed] = useState(false);
+  const [usageServerSyncedAt, setUsageServerSyncedAt] = useState<number | null>(null);
+  const usageFetchGen = useRef(0);
 
   const todayKey = (() => {
     const now = new Date();
@@ -44,6 +48,55 @@ export default function UserDashboard() {
   }, [user?.id, userPredictionMap]);
   const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
   const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
+
+  const markUsageConfirmedFromServer = useCallback(() => {
+    setUsageServerSyncedAt(Date.now());
+    setUsageServerSyncFailed(false);
+  }, []);
+
+  const fetchServerDailyUsage = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!user?.id || !session?.access_token || !usageKey) return;
+      const gen = ++usageFetchGen.current;
+      setUsageServerSyncPending(true);
+      try {
+        const qs = new URLSearchParams({
+          warmPredictUsage: "1",
+          usageDay: todayKey,
+          date: todayKey
+        });
+        const res = await fetch(`/api/fixtures/day?${qs}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal
+        });
+        if (!res.ok) {
+          setUsageServerSyncFailed(true);
+          return;
+        }
+        const json = (await res.json()) as {
+          warmPredictUsage?: { warm_count?: number; predict_count?: number };
+        };
+        const u = json?.warmPredictUsage;
+        if (typeof u?.warm_count !== "number" || typeof u?.predict_count !== "number") {
+          setUsageServerSyncFailed(true);
+          return;
+        }
+        setDailyUsageMap((prev) => ({
+          ...prev,
+          [usageKey]: { warm: u.warm_count, predict: u.predict_count }
+        }));
+        markUsageConfirmedFromServer();
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        setUsageServerSyncFailed(true);
+      } finally {
+        if (gen === usageFetchGen.current) {
+          setUsageServerSyncPending(false);
+        }
+      }
+    },
+    [user?.id, session?.access_token, usageKey, todayKey, setDailyUsageMap, markUsageConfirmedFromServer]
+  );
 
   function setSelectedLeagueIdsLimited(nextIds: number[]) {
     const normalized = Array.from(new Set(nextIds.map((value) => Number(value)).filter((value) => Number.isFinite(value))));
@@ -103,6 +156,43 @@ export default function UserDashboard() {
     setNotifyValue(user?.notificationPrefs?.value ?? true);
     setNotifyEmail(user?.notificationPrefs?.email ?? false);
   }, [user?.id, user?.notificationPrefs?.safe, user?.notificationPrefs?.value, user?.notificationPrefs?.email]);
+
+  useEffect(() => {
+    usageFetchGen.current += 1;
+    setUsageServerSyncedAt(null);
+    setUsageServerSyncFailed(false);
+    setUsageServerSyncPending(false);
+  }, [usageKey]);
+
+  useEffect(() => {
+    if (!user?.id || !session?.access_token || !usageKey) return;
+    const ac = new AbortController();
+    void fetchServerDailyUsage(ac.signal);
+    return () => ac.abort();
+  }, [user?.id, session?.access_token, usageKey, todayKey, fetchServerDailyUsage]);
+
+  useEffect(() => {
+    if (!user?.id || !session?.access_token || !usageKey) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefetch = () => {
+      if (document.visibilityState !== "visible") return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void fetchServerDailyUsage();
+      }, 400);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") scheduleRefetch();
+    };
+    window.addEventListener("focus", scheduleRefetch);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener("focus", scheduleRefetch);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user?.id, session?.access_token, usageKey, fetchServerDailyUsage]);
 
   useEffect(() => {
     if (!user) return;
@@ -225,7 +315,9 @@ export default function UserDashboard() {
 
   async function warm() {
     if (dailyUsage.warm >= 3) {
-      setStatus("Limita zilnica atinsa: maximum 3 rulări Warm/zi.");
+      setStatus(
+        "Limită Warm (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
+      );
       return;
     }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
@@ -251,15 +343,20 @@ export default function UserDashboard() {
                 ...prev,
                 [usageKey]: { warm: errBody.usage!.warm_count!, predict: errBody.usage!.predict_count ?? 0 }
               }));
+              markUsageConfirmedFromServer();
             }
-            setStatus(errBody?.error || "Limita zilnica Warm atinsa.");
+            setStatus(
+              errBody?.error
+                ? `${errBody.error} Contorul a fost sincronizat cu serverul.`
+                : "Limită Warm (3/zi) confirmată de server. Contorul a fost sincronizat."
+            );
           } catch {
-            setStatus("Limita zilnica Warm atinsa.");
+            setStatus("Limită Warm (3/zi) confirmată de server. Contorul a fost sincronizat.");
           }
           return;
         }
         if (!response.ok) {
-          setStatus(`Warm a esuat (HTTP ${response.status}).`);
+          setStatus(`Warm a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`);
           return;
         }
         const json = (await response.json()) as { usage?: { warm_count: number; predict_count: number } };
@@ -268,6 +365,7 @@ export default function UserDashboard() {
             ...prev,
             [usageKey]: { warm: json.usage.warm_count, predict: json.usage.predict_count }
           }));
+          markUsageConfirmedFromServer();
           serverUsageSynced = true;
         }
       }
@@ -288,7 +386,9 @@ export default function UserDashboard() {
 
   async function predict() {
     if (dailyUsage.predict >= 3) {
-      setStatus("Limita zilnica atinsa: maximum 3 rulări Predict/zi.");
+      setStatus(
+        "Limită Predict (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
+      );
       return;
     }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
@@ -316,15 +416,20 @@ export default function UserDashboard() {
                 ...prev,
                 [usageKey]: { warm: errBody.usage!.warm_count ?? 0, predict: errBody.usage!.predict_count! }
               }));
+              markUsageConfirmedFromServer();
             }
-            setStatus(errBody?.error || "Limita zilnica Predict atinsa.");
+            setStatus(
+              errBody?.error
+                ? `${errBody.error} Contorul a fost sincronizat cu serverul.`
+                : "Limită Predict (3/zi) confirmată de server. Contorul a fost sincronizat."
+            );
           } catch {
-            setStatus("Limita zilnica Predict atinsa.");
+            setStatus("Limită Predict (3/zi) confirmată de server. Contorul a fost sincronizat.");
           }
           return;
         }
         if (!response.ok) {
-          setStatus(`Predict a esuat (HTTP ${response.status}).`);
+          setStatus(`Predict a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`);
           return;
         }
         const json = await response.json();
@@ -337,6 +442,7 @@ export default function UserDashboard() {
               ...prev,
               [usageKey]: { warm: Number(w), predict: Number(p) }
             }));
+            markUsageConfirmedFromServer();
             serverUsageSynced = true;
           }
         }
@@ -448,9 +554,28 @@ export default function UserDashboard() {
           >
             Predict
           </button>
-          <span className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-300">
-            Warm {dailyUsage.warm}/3 · Predict {dailyUsage.predict}/3
-          </span>
+          <div className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-300">
+            <span className="text-slate-200">
+              Warm {dailyUsage.warm}/3 · Predict {dailyUsage.predict}/3
+            </span>
+            {session?.access_token && usageKey ? (
+              <span className="mt-1 block text-[10px] font-normal leading-snug text-slate-500">
+                {usageServerSyncPending ? (
+                  <>Se actualizează contorul de pe server…</>
+                ) : usageServerSyncFailed && !usageServerSyncedAt ? (
+                  <span className="text-amber-400/90">Nu am putut încărca contorul de pe server.</span>
+                ) : usageServerSyncedAt ? (
+                  <>
+                    Sincronizat cu serverul (
+                    {new Date(usageServerSyncedAt).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}).
+                    {usageServerSyncFailed ? (
+                      <span className="text-amber-400/80"> Ultima reîmprospătare automată a eșuat.</span>
+                    ) : null}
+                  </>
+                ) : null}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {status && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-900/50 px-3 py-2 text-xs text-emerald-300">{status}</div>}

@@ -1,17 +1,36 @@
 // api/fixtures/day.js
 import { handleClaimBootstrapAdmin } from "../../server-utils/claimBootstrapAdmin.js";
 import { getWithCache, getApiUsage, getApiUsageHistory } from '../../server-utils/fetcher.js';
+import { peekWarmPredictUsage, resolveAuthenticatedUsageContext } from "../../server-utils/userDailyWarmPredictUsage.js";
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const usageOnly = String(req.query.usageOnly || "") === "1";
   const usageDays = Math.max(1, Math.min(Number(req.query.usageDays) || 7, 60));
   const syncBootstrapAdmin = String(req.query.syncBootstrapAdmin || "") === "1";
+  const warmPredictUsage = String(req.query.warmPredictUsage || "") === "1";
 
   try {
     if (syncBootstrapAdmin) {
       const result = await handleClaimBootstrapAdmin(req);
       return res.status(result.status).json(result.body);
+    }
+
+    if (warmPredictUsage) {
+      const ctx = await resolveAuthenticatedUsageContext(req);
+      if (ctx.error) return res.status(ctx.error.status).json(ctx.error.body);
+      if (ctx.anonymous) {
+        return res.status(401).json({ ok: false, error: "Autentificare necesara pentru contoarele zilnice." });
+      }
+      const peek = await peekWarmPredictUsage(ctx.userId, ctx.usageDay);
+      return res.status(200).json({
+        ok: true,
+        warmPredictUsage: {
+          usage_day: ctx.usageDay,
+          warm_count: peek.warm,
+          predict_count: peek.predict
+        }
+      });
     }
 
     if (usageOnly) {
