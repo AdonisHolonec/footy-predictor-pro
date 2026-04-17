@@ -90,3 +90,12 @@ export type XGData = {
   homeXG: number;
   awayXG: number;
 };
+
+export type BacktestKpi = {
+  date: string;
+  settled: number;
+  hitRate: number;
+  roi: number;
+  drawdown: number;
+  pnlUnits: number;
+};

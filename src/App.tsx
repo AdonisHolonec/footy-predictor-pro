@@ -3,7 +3,7 @@ import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
-import { DayResponse, HistoryEntry, HistoryStats, League, PredictionRow } from "./types";
+import { BacktestKpi, DayResponse, HistoryEntry, HistoryStats, League, PredictionRow } from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
 import {
   dominantColorFromImage,
@@ -24,6 +24,8 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [status, setStatus] = useState<string>("");
+  const [kpi, setKpi] = useState<BacktestKpi | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -211,6 +213,20 @@ export default function App() {
     }
   }
 
+  async function loadKpi(days = 45) {
+    setKpiLoading(true);
+    try {
+      const res = await fetch(`/api/backtest/kpi?days=${days}`);
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca KPI.");
+      setKpi(json.latest || null);
+    } catch {
+      setKpi(null);
+    } finally {
+      setKpiLoading(false);
+    }
+  }
+
   useEffect(() => {
     const normalized = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
     if (normalized.length === 0) return;
@@ -224,6 +240,7 @@ export default function App() {
   useEffect(() => {
     void loadHistory(30);
     void syncHistory(30);
+    void loadKpi(45);
   }, []);
   useEffect(() => {
     const prev = prevWinRateRef.current;
@@ -280,6 +297,32 @@ export default function App() {
                 isHistorySyncing={isHistorySyncing}
                 pendingHistoryCount={pendingHistoryCount}
               />
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-[760px]">
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI ROI</div>
+                  <div className={`text-sm font-black ${((kpi?.roi || 0) >= 0) ? "text-emerald-300" : "text-rose-300"}`}>
+                    {kpiLoading ? "..." : `${(kpi?.roi || 0).toFixed(2)}%`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Hit Rate</div>
+                  <div className="text-sm font-black text-cyan-200">
+                    {kpiLoading ? "..." : `${(kpi?.hitRate || 0).toFixed(2)}%`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Drawdown</div>
+                  <div className="text-sm font-black text-amber-200">
+                    {kpiLoading ? "..." : `${(kpi?.drawdown || 0).toFixed(2)}u`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Settled</div>
+                  <div className="text-sm font-black text-slate-200">
+                    {kpiLoading ? "..." : `${kpi?.settled || 0}`}
+                  </div>
+                </div>
+              </div>
           </div>
           <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
             <div className="flex flex-col items-start lg:items-end w-full max-w-[200px] lg:min-w-[220px]">
