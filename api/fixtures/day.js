@@ -1,12 +1,19 @@
 // api/fixtures/day.js
+import { handleClaimBootstrapAdmin } from "../../server-utils/claimBootstrapAdmin.js";
 import { getWithCache, getApiUsage, getApiUsageHistory } from '../../server-utils/fetcher.js';
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const usageOnly = String(req.query.usageOnly || "") === "1";
   const usageDays = Math.max(1, Math.min(Number(req.query.usageDays) || 7, 60));
+  const syncBootstrapAdmin = String(req.query.syncBootstrapAdmin || "") === "1";
 
   try {
+    if (syncBootstrapAdmin) {
+      const result = await handleClaimBootstrapAdmin(req);
+      return res.status(result.status).json(result.body);
+    }
+
     if (usageOnly) {
       const today = await getApiUsage();
       const yesterday = await getApiUsage(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));

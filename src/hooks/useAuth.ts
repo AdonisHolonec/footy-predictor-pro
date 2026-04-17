@@ -86,6 +86,35 @@ export function useAuth() {
     return (data as ProfileRow | null) ?? null;
   }, []);
 
+  /** Syncs profiles.role to admin in DB when email is in VITE_ADMIN_EMAILS (server checks ADMIN_EMAILS). */
+  const promoteBootstrapAdminInDb = useCallback(
+    async (authUser: SupabaseAuthUser, profile: ProfileRow | null, accessToken: string): Promise<ProfileRow | null> => {
+      const emails = parseBootstrapAdminEmails();
+      if (!emails.has(String(authUser.email || "").toLowerCase())) return profile;
+      if (!profile || profile.role === "admin") return profile;
+      if (profile.role !== "user") return profile;
+      try {
+        const response = await fetch("/api/fixtures/day?syncBootstrapAdmin=1", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const json = (await response.json()) as {
+          ok?: boolean;
+          promoted?: boolean;
+          reason?: string;
+        };
+        if (!json?.ok) return profile;
+        if (json.promoted || json.reason === "already_admin" || json.reason === "unexpected_role") {
+          return await loadProfile(authUser.id);
+        }
+      } catch {
+        // silent: UI still works via env bootstrap if sync fails
+      }
+      return profile;
+    },
+    [loadProfile]
+  );
+
   const getSession = useCallback(async () => {
     if (!supabase) {
       setSession(null);
@@ -94,11 +123,19 @@ export function useAuth() {
     }
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
-    const nextProfile = data.session?.user ? await loadProfile(data.session.user.id) : null;
-    setSession(data.session);
-    setUser(mapSupabaseUser(data.session?.user ?? null, nextProfile));
-    return data.session;
-  }, [loadProfile]);
+    const sess = data.session;
+    let nextProfile: ProfileRow | null = null;
+    if (sess?.user) {
+      nextProfile = await loadProfile(sess.user.id);
+      const token = sess.access_token;
+      if (token) {
+        nextProfile = await promoteBootstrapAdminInDb(sess.user, nextProfile, token);
+      }
+    }
+    setSession(sess);
+    setUser(mapSupabaseUser(sess?.user ?? null, nextProfile));
+    return sess;
+  }, [loadProfile, promoteBootstrapAdminInDb]);
 
   const login = useCallback(async (email: string, password: string) => {
     if (!supabase) {
@@ -112,11 +149,15 @@ export function useAuth() {
       setError(loginError.message);
       throw loginError;
     }
-    const nextProfile = data.user ? await loadProfile(data.user.id) : null;
+    let nextProfile = data.user ? await loadProfile(data.user.id) : null;
+    const token = data.session?.access_token;
+    if (data.user && token) {
+      nextProfile = await promoteBootstrapAdminInDb(data.user, nextProfile, token);
+    }
     setSession(data.session);
     setUser(mapSupabaseUser(data.user, nextProfile));
     return data;
-  }, [loadProfile]);
+  }, [loadProfile, promoteBootstrapAdminInDb]);
 
   const signup = useCallback(async (email: string, password: string) => {
     if (!supabase) {
@@ -147,11 +188,16 @@ export function useAuth() {
         { onConflict: "user_id" }
       );
     }
-    const nextProfile = data.user ? await loadProfile(data.user.id) : null;
+    const authUser = data.user ?? data.session?.user ?? null;
+    let nextProfile = authUser ? await loadProfile(authUser.id) : null;
+    const token = data.session?.access_token;
+    if (authUser && token) {
+      nextProfile = await promoteBootstrapAdminInDb(authUser, nextProfile, token);
+    }
     setSession(data.session ?? null);
-    setUser(mapSupabaseUser(data.user ?? data.session?.user ?? null, nextProfile));
+    setUser(mapSupabaseUser(authUser, nextProfile));
     return data;
-  }, [loadProfile]);
+  }, [loadProfile, promoteBootstrapAdminInDb]);
 
   const sendPasswordResetEmail = useCallback(async (email: string) => {
     if (!supabase) {
@@ -348,21 +394,29 @@ export function useAuth() {
         setLoading(false);
         return;
       }
-      void loadProfile(nextSession.user.id)
-        .then((profile) => setUser(mapSupabaseUser(nextSession.user, profile)))
-        .catch((profileError: unknown) => {
+      void (async () => {
+        try {
+          let profile = await loadProfile(nextSession.user.id);
+          const token = nextSession.access_token;
+          if (token) {
+            profile = await promoteBootstrapAdminInDb(nextSession.user, profile, token);
+          }
+          setUser(mapSupabaseUser(nextSession.user, profile));
+        } catch (profileError: unknown) {
           const message = profileError instanceof Error ? profileError.message : "Unable to load profile";
           setError(message);
           setUser(mapSupabaseUser(nextSession.user, null));
-        })
-        .finally(() => setLoading(false));
+        } finally {
+          setLoading(false);
+        }
+      })();
     });
 
     return () => {
       isMounted = false;
       data.subscription.unsubscribe();
     };
-  }, [getSession, loadProfile]);
+  }, [getSession, loadProfile, promoteBootstrapAdminInDb]);
 
   return {
     user,
