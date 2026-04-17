@@ -52,6 +52,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
   const awayColor = logoColors[match.logos?.away || ""] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
   const hasFinalScore = isFinalStatus(match.status) && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
+  const hasLiveScore = !hasFinalScore && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
   const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
   const kickoffDate = new Date(match.kickoff);
 
@@ -106,6 +107,11 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
               {hasFinalScore && (
                 <div className={`mt-2 text-[10px] px-3 py-1.5 rounded-full uppercase font-bold inline-block border ${finalScoreBadgeClass(finalPickResult)}`}>
                   {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
+                </div>
+              )}
+              {hasLiveScore && (
+                <div className="mt-2 text-[10px] px-3 py-1.5 rounded-full uppercase font-bold inline-flex items-center gap-1 border border-red-500/30 bg-red-500/10 text-red-300">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" /> Live score · {match.score?.home}-{match.score?.away}
                 </div>
               )}
               <div className="text-[10px] text-slate-600 font-black mt-2 opacity-80">
