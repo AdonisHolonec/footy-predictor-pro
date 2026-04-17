@@ -7,6 +7,14 @@
     {
       "path": "/api/backtest/snapshot",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cache/prewarm",
+      "schedule": "1 21 * * *"
+    },
+    {
+      "path": "/api/cache/prewarm",
+      "schedule": "1 22 * * *"
     }
   ]
 }

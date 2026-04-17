@@ -41,6 +41,9 @@ export default function LeaguePanel({
       </div>
       {isLeaguesOpen && (
         <div className="mt-5 transition-all">
+          <p className="mb-3 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-slate-300">
+            Campionate disponibile: Romania, Anglia, Germania, Spania, Italia, Franta.
+          </p>
           <div className="flex flex-col sm:flex-row lg:flex-row gap-2 mb-4">
             <button
               onClick={(e) => {

@@ -14,6 +14,12 @@ function getTodayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getDateISOWithOffset(daysOffset = 0) {
+  const now = new Date();
+  const shifted = new Date(now.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
+}
+
 function secondsUntilUtcMidnight() {
   const now = new Date();
   const end = new Date(Date.UTC(
@@ -50,14 +56,29 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
     
     console.log(`[RapidAPI Headers] Endpoint: ${endpoint} | Limit: ${hLimit} | Remain: ${hRemain}`);
 
-    // Dacă am găsit headerele, calculăm consumul și-l ascundem în baza de date!
+    // RapidAPI headers sunt de obicei cumulative (plan), asa ca pentru "daily usage"
+    // memoram primul "remaining" din zi si calculam delta fata de el.
     if (hLimit && hRemain) {
         const limit = Number(hLimit);
-        const count = limit - Number(hRemain);
-        const today = getTodayISO();
-        const key = `footy_api_usage:${today}`;
-        await kv.set(key, { count, limit, updatedAt: new Date().toISOString() }, { ex: secondsUntilUtcMidnight() });
-        console.log(`[Usage Salvat] (${today}) Consumat: ${count} din ${limit}`);
+        const remainingNow = Number(hRemain);
+        if (Number.isFinite(limit) && Number.isFinite(remainingNow)) {
+          const today = getTodayISO();
+          const key = `footy_api_usage:${today}`;
+          const existing = await kv.get(key);
+          const baselineRemaining = Number(existing?.baselineRemaining);
+          const resolvedBaseline = Number.isFinite(baselineRemaining) ? baselineRemaining : remainingNow;
+          const count = Math.max(0, resolvedBaseline - remainingNow);
+          const usagePayload = {
+            count,
+            limit,
+            baselineRemaining: resolvedBaseline,
+            currentRemaining: remainingNow,
+            updatedAt: new Date().toISOString()
+          };
+          await kv.set(key, usagePayload, { ex: secondsUntilUtcMidnight() });
+          await kv.set(`footy_api_usage_history:${today}`, usagePayload);
+          console.log(`[Usage Salvat] (${today}) Daily: ${count} | Remaining: ${remainingNow}/${limit}`);
+        }
     }
 
     const json = await res.json();
@@ -75,12 +96,30 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
 }
 
 // Funcție pe care o vom chema liniștiți să ne dea ultimul consum știut
-export async function getApiUsage() {
+export async function getApiUsage(dateISO = getTodayISO()) {
     try {
-        const today = getTodayISO();
-        const usage = await kv.get(`footy_api_usage:${today}`);
-        return usage || { count: 0, limit: 100 };
+        const usage =
+          (await kv.get(`footy_api_usage_history:${dateISO}`)) ||
+          (await kv.get(`footy_api_usage:${dateISO}`));
+        if (!usage) return { date: dateISO, count: 0, limit: 100, updatedAt: null };
+        return {
+          date: dateISO,
+          count: Number(usage.count) || 0,
+          limit: Number(usage.limit) || 100,
+          updatedAt: usage.updatedAt || null
+        };
     } catch {
-        return { count: 0, limit: 100 };
+        return { date: dateISO, count: 0, limit: 100, updatedAt: null };
     }
+}
+
+export async function getApiUsageHistory(days = 7) {
+  const safeDays = Math.max(1, Math.min(Number(days) || 7, 60));
+  const rows = [];
+  for (let i = 0; i < safeDays; i++) {
+    const dateISO = getDateISOWithOffset(-i);
+    const usage = await getApiUsage(dateISO);
+    rows.push(usage);
+  }
+  return rows;
 }

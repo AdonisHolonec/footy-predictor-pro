@@ -31,7 +31,13 @@ export default function UserDashboard() {
   const [userPredictionMap, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
   const [dailyUsageMap, setDailyUsageMap] = useLocalStorageState<Record<string, { warm: number; predict: number }>>("footy.user.dailyUsage", {});
 
-  const todayKey = isoToday();
+  const todayKey = (() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  })();
   const userPredictionIds = useMemo(() => {
     if (!user) return [];
     return userPredictionMap[user.id] || [];
@@ -49,15 +55,16 @@ export default function UserDashboard() {
   }
 
   const leaguesSorted = useMemo(() => {
+    const allowedLeagueSet = new Set(ELITE_LEAGUES.map((id) => Number(id)));
     const leagues = (day?.leagues ?? [])
+      .filter((league) => allowedLeagueSet.has(Number(league.id)))
       .filter((league) => league.name.toLowerCase().includes(searchLeague.toLowerCase()) || league.country.toLowerCase().includes(searchLeague.toLowerCase()));
     const favoriteSet = new Set((user?.favoriteLeagues || []).map((id) => Number(id)));
     const favorites = leagues.filter((league) => favoriteSet.has(Number(league.id)));
-    const elite = leagues.filter((league) => ELITE_LEAGUES.includes(Number(league.id)) && !favoriteSet.has(Number(league.id)));
-    const rest = leagues
-      .filter((league) => !favoriteSet.has(Number(league.id)) && !ELITE_LEAGUES.includes(Number(league.id)))
+    const elite = leagues
+      .filter((league) => ELITE_LEAGUES.includes(Number(league.id)) && !favoriteSet.has(Number(league.id)))
       .sort((a, b) => b.matches - a.matches);
-    return [...favorites, ...elite, ...rest];
+    return [...favorites, ...elite];
   }, [day, searchLeague, user?.favoriteLeagues]);
 
   useEffect(() => {
