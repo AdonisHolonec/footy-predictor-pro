@@ -51,6 +51,12 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [isAdminWorking, setIsAdminWorking] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageSnapshot, setUsageSnapshot] = useState<{
+    today: { date?: string; count: number; limit: number; updatedAt?: string | null };
+    yesterday: { date?: string; count: number; limit: number; updatedAt?: string | null };
+    history: Array<{ date?: string; count: number; limit: number; updatedAt?: string | null }>;
+  } | null>(null);
   const {
     user,
     loading: authLoading,
@@ -531,6 +537,25 @@ export default function App() {
     }
   }
 
+  async function loadUsageSnapshot() {
+    setUsageLoading(true);
+    try {
+      const response = await fetch("/api/fixtures/day?usageOnly=1&usageDays=7");
+      const json = await response.json();
+      if (!json?.ok) throw new Error(json?.error || "Nu am putut incarca usage.");
+      setUsageSnapshot({
+        today: json.usage || { count: 0, limit: 100, updatedAt: null },
+        yesterday: json.yesterday || { count: 0, limit: 100, updatedAt: null },
+        history: Array.isArray(json.history) ? json.history : []
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Nu am putut incarca usage.";
+      setStatus(message);
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
       <div className="mx-auto max-w-[1600px] px-4 py-8 lg:px-6">
@@ -772,6 +797,29 @@ export default function App() {
               >
                 Refresh
               </button>
+            </div>
+            <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-300">API Usage Snapshot</p>
+                <button
+                  onClick={() => void loadUsageSnapshot()}
+                  disabled={usageLoading}
+                  className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-cyan-200 disabled:opacity-50"
+                >
+                  {usageLoading ? "Loading..." : "Load usage"}
+                </button>
+              </div>
+              {usageSnapshot && (
+                <div className="mt-2 text-[11px] text-slate-300">
+                  <p>
+                    Today: <span className="font-bold text-emerald-300">{usageSnapshot.today.count}/{usageSnapshot.today.limit}</span> | Yesterday:{" "}
+                    <span className="font-bold text-cyan-300">{usageSnapshot.yesterday.count}/{usageSnapshot.yesterday.limit}</span>
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Last 7 days: {usageSnapshot.history.map((row) => `${row.date ?? "-"}=${row.count}`).join(" · ") || "-"}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10">
               <table className="min-w-full text-left text-[11px]">

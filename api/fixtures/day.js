@@ -1,10 +1,24 @@
 // api/fixtures/day.js
-import { getWithCache, getApiUsage } from '../_utils/fetcher.js';
+import { getWithCache, getApiUsage, getApiUsageHistory } from '../_utils/fetcher.js';
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
+  const usageOnly = String(req.query.usageOnly || "") === "1";
+  const usageDays = Math.max(1, Math.min(Number(req.query.usageDays) || 7, 60));
 
   try {
+    if (usageOnly) {
+      const today = await getApiUsage();
+      const yesterday = await getApiUsage(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+      const history = await getApiUsageHistory(usageDays);
+      return res.status(200).json({
+        ok: true,
+        usage: today,
+        yesterday,
+        history
+      });
+    }
+
     // 1. Aducem meciurile (dacă nu sunt în cache, fetcher.js se duce la API și FURA HEADERELE)
     const fixturesReq = await getWithCache('/fixtures', { date }, 21600);
     const allFixtures = fixturesReq.data?.response || fixturesReq.data || [];
