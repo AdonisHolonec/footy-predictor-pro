@@ -3,8 +3,10 @@ import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
+import Auth from "./components/Auth";
 import { BacktestKpi, DayResponse, HistoryEntry, HistoryStats, League, PredictionRow, RiskAlert } from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
+import { useAuth } from "./hooks/useAuth";
 import {
   dominantColorFromImage,
   hashColor,
@@ -46,6 +48,16 @@ export default function App() {
   const [sortBy, setSortBy] = useState<SortBy>("TIME");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const { user, loading: authLoading, error: authError, login, signup, logout, updateFavoriteLeagues } = useAuth();
+
+  function requireAuth(message = "Autentifica-te pentru functiile personalizate.") {
+    if (user) return true;
+    setStatus(message);
+    setIsAuthOpen(true);
+    return false;
+  }
 
   const leaguesSorted = useMemo(() => {
     const leagues = day?.leagues ?? [];
@@ -130,6 +142,7 @@ export default function App() {
   }
 
   async function warm() {
+    if (!requireAuth()) return;
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Se procesează datele (Warm)...");
     try {
@@ -162,6 +175,7 @@ export default function App() {
   }
 
   function selectEliteLeagues() {
+    if (!requireAuth()) return;
     const eliteIds = (day?.leagues ?? [])
       .filter(lg => ELITE_LEAGUES.includes(Number(lg.id)))
       .map(lg => Number(lg.id));
@@ -170,11 +184,13 @@ export default function App() {
   }
 
   function clearLeagueSelection() {
+    if (!requireAuth()) return;
     setSelectedLeagueIds([]);
     setStatus("Selecția ligilor a fost resetată.");
   }
 
   async function predict() {
+    if (!requireAuth()) return;
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
     try {
@@ -335,6 +351,7 @@ export default function App() {
   }
 
   async function applyAlertThresholds() {
+    if (!requireAuth()) return;
     const normalized = normalizeThresholds(draftDrawdownThreshold, draftDriftThreshold, draftLowDataThreshold);
     setAlertDrawdownThreshold(normalized.drawdown);
     setAlertDriftThreshold(normalized.drift);
@@ -344,6 +361,7 @@ export default function App() {
   }
 
   async function resetAlertThresholds() {
+    if (!requireAuth()) return;
     const defaults = { drawdown: 3, drift: 24, lowDataShare: 0.35 };
     setDraftDrawdownThreshold(defaults.drawdown);
     setDraftDriftThreshold(defaults.drift);
@@ -360,6 +378,65 @@ export default function App() {
     const timer = setTimeout(() => setThresholdsSaved("idle"), 1400);
     return () => clearTimeout(timer);
   }, [thresholdsSaved]);
+
+  useEffect(() => {
+    if (!user) return;
+    const savedFavorites = Array.isArray(user.favoriteLeagues) ? user.favoriteLeagues : [];
+    if (!savedFavorites.length) return;
+    const current = Array.from(new Set(selectedLeagueIds));
+    const target = Array.from(new Set(savedFavorites));
+    if (current.join(",") !== target.join(",")) {
+      setSelectedLeagueIds(target);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    const saveTimer = setTimeout(() => {
+      void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
+        setStatus("Nu am putut salva preferintele utilizatorului.");
+      });
+    }, 450);
+    return () => clearTimeout(saveTimer);
+  }, [user?.id, selectedLeagueIds, updateFavoriteLeagues]);
+
+  async function handleLogin(email: string, password: string) {
+    setIsAuthSubmitting(true);
+    try {
+      await login(email, password);
+      setStatus("Autentificat cu succes.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Autentificarea a esuat.";
+      setStatus(message);
+      throw error;
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleSignup(email: string, password: string) {
+    setIsAuthSubmitting(true);
+    try {
+      await signup(email, password);
+      setStatus("Cont creat. Verifica email-ul pentru confirmare daca este necesar.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Inregistrarea a esuat.";
+      setStatus(message);
+      throw error;
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+      setStatus("Deconectat.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Logout esuat.";
+      setStatus(message);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
@@ -490,6 +567,30 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-col items-stretch gap-2 lg:gap-3">
+              <div className="flex justify-end">
+                {authLoading ? (
+                  <div className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-400">
+                    Checking session...
+                  </div>
+                ) : user ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                    <span className="max-w-[180px] truncate text-xs font-bold text-emerald-200">{user.email}</span>
+                    <button
+                      onClick={() => void handleLogout()}
+                      className="rounded-md border border-white/10 bg-slate-900/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-800"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsAuthOpen(true)}
+                    className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/25"
+                  >
+                    Login / Signup
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
                 <input
                   type="date"
@@ -522,8 +623,20 @@ export default function App() {
                 >
                   + Zi
                 </button>
-                <button onClick={warm} className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all">Warm</button>
-                <button onClick={predict} className="col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Predict</button>
+                <button
+                  onClick={warm}
+                  disabled={!user}
+                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Warm
+                </button>
+                <button
+                  onClick={predict}
+                  disabled={!user}
+                  className="col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Predict
+                </button>
               </div>
               <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
                 {normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).map((d) => (
@@ -555,19 +668,34 @@ export default function App() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 xl:gap-10">
           {/* LIGI */}
           <div className="lg:col-span-4 xl:col-span-3 space-y-4">
-            <LeaguePanel
-              leaguesSorted={leaguesSorted}
-              selectedSet={selectedSet}
-              selectedLeagueIds={selectedLeagueIds}
-              isLeaguesOpen={isLeaguesOpen}
-              searchLeague={searchLeague}
-              eliteLeagues={ELITE_LEAGUES}
-              setIsLeaguesOpen={setIsLeaguesOpen}
-              setSearchLeague={setSearchLeague}
-              setSelectedLeagueIds={setSelectedLeagueIds}
-              selectEliteLeagues={selectEliteLeagues}
-              clearLeagueSelection={clearLeagueSelection}
-            />
+            {user ? (
+              <LeaguePanel
+                leaguesSorted={leaguesSorted}
+                selectedSet={selectedSet}
+                selectedLeagueIds={selectedLeagueIds}
+                isLeaguesOpen={isLeaguesOpen}
+                searchLeague={searchLeague}
+                eliteLeagues={ELITE_LEAGUES}
+                setIsLeaguesOpen={setIsLeaguesOpen}
+                setSearchLeague={setSearchLeague}
+                setSelectedLeagueIds={setSelectedLeagueIds}
+                selectEliteLeagues={selectEliteLeagues}
+                clearLeagueSelection={clearLeagueSelection}
+              />
+            ) : (
+              <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/40 p-5">
+                <h3 className="text-sm font-black uppercase tracking-wide text-emerald-300">Personalizare blocata</h3>
+                <p className="mt-2 text-xs text-slate-300">
+                  Selectia ligilor, predictiile premium si setarile personale sunt disponibile doar dupa autentificare.
+                </p>
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-emerald-500"
+                >
+                  Login / Signup
+                </button>
+              </div>
+            )}
           </div>
 
           {/* MECIURI */}
@@ -587,7 +715,19 @@ export default function App() {
                 </div>
               </div>
             )}
-            {!preds.length ? (
+            {!user ? (
+              <div className="h-[400px] border-2 border-dashed border-white/10 rounded-[2rem] grid place-items-center text-center px-6">
+                <div>
+                  <p className="text-slate-300 font-semibold">Autentifica-te pentru a vedea predictiile personalizate.</p>
+                  <button
+                    onClick={() => setIsAuthOpen(true)}
+                    className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500"
+                  >
+                    Deschide autentificarea
+                  </button>
+                </div>
+              </div>
+            ) : !preds.length ? (
               <div className="h-[400px] border-2 border-dashed border-white/5 rounded-[2rem] grid place-items-center text-slate-600 text-center"><p className="italic font-medium">Selectează ligile dorite, apoi apasă Predict.</p></div>
             ) : (
               <div className="space-y-8">
@@ -621,13 +761,21 @@ export default function App() {
           <button
             onClick={predict}
             className="w-full bg-emerald-600 rounded-2xl px-6 py-3.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!selectedLeagueIds.length}
+            disabled={!user || !selectedLeagueIds.length}
           >
             Predict {selectedLeagueIds.length ? `(${selectedLeagueIds.length} ligi)` : ""}
           </button>
         </div>
       </div>
       {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} hashColor={hashColor} onClose={() => setSelectedMatch(null)} />}
+      <Auth
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLogin={handleLogin}
+        onSignup={handleSignup}
+        isSubmitting={isAuthSubmitting}
+        authError={authError}
+      />
     </div>
   );
 }

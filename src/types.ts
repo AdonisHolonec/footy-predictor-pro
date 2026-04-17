@@ -106,3 +106,9 @@ export type RiskAlert = {
   message: string;
   value: number;
 };
+
+export type User = {
+  id: string;
+  email: string;
+  favoriteLeagues: number[];
+};
