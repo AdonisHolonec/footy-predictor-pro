@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
-import { supabase } from "../utils/supabaseClient";
+import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
 
 function mapSupabaseUser(user: SupabaseAuthUser | null): User | null {
   if (!user) return null;
@@ -24,6 +24,11 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
 
   const getSession = useCallback(async () => {
+    if (!supabase) {
+      setSession(null);
+      setUser(null);
+      throw new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+    }
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
     setSession(data.session);
@@ -32,6 +37,11 @@ export function useAuth() {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
     setError(null);
     const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     if (loginError) {
@@ -44,6 +54,11 @@ export function useAuth() {
   }, []);
 
   const signup = useCallback(async (email: string, password: string) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
     setError(null);
     const { data, error: signupError } = await supabase.auth.signUp({ email, password });
     if (signupError) {
@@ -56,6 +71,11 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
     setError(null);
     const { error: logoutError } = await supabase.auth.signOut();
     if (logoutError) {
@@ -67,6 +87,11 @@ export function useAuth() {
   }, []);
 
   const updateFavoriteLeagues = useCallback(async (favoriteLeagues: number[]) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
     setError(null);
     const sanitized = Array.from(
       new Set(
@@ -88,6 +113,11 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false);
+      setError("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
     let isMounted = true;
     getSession()
       .catch((sessionError: unknown) => {
