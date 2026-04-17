@@ -1,195 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-
-// --- TIPURI DATE (Restaurate și Extinse) ---
-type Usage = { date: string; count: number; limit: number };
-type League = { id: number; name: string; country: string; matches: number; logo?: string };
-type Odds = { home: number; draw: number; away: number; bookmaker?: string };
-type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
-type Probs = {
-  p1: number; pX: number; p2: number;
-  pGG: number; pO25: number; pU35: number; pO15: number;
-};
-type MatchScore = { home: number | null; away: number | null };
-type PredictionRow = {
-  id: number;
-  leagueId: number;
-  league: string;
-  teams: { home: string; away: string };
-  logos?: { league?: string; home?: string; away?: string };
-  kickoff: string;
-  status: string;
-  score?: MatchScore;
-  referee?: string;
-  lambdas?: { home: number; away: number };
-  luckStats?: { hG: number; hXG: number; aG: number; aXG: number };
-  probs: Probs;
-  odds?: Odds;
-  valueBet?: ValueBet;
-  predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
-  recommended: { pick: string; confidence: number };
-};
-type HistoryEntry = PredictionRow & {
-  savedAt: string;
-  validation: "pending" | "win" | "loss";
-};
-type HistoryStats = {
-  wins: number;
-  losses: number;
-  settled: number;
-  winRate: number;
-};
-type DayResponse = {
-  ok: boolean;
-  date: string;
-  totalFixtures: number;
-  leagues: League[];
-  usage: Usage;
-};
-
-function normalizeSelectedDates(dates: string[]): string[] {
-  const uniq = Array.from(new Set(dates.filter(Boolean)));
-  return uniq.sort().slice(0, 3);
-}
-
-// --- UTILS (Codul tău original intact) ---
-function isoToday(): string { return new Date().toISOString().split('T')[0]; }
-function inferSeason(dateISO: string): number {
-  const [y, m] = dateISO.split("-").map(Number);
-  if (!y || !m) return new Date().getFullYear() - 1;
-  return (m >= 7) ? y : (y - 1);
-}
-function useLocalStorageState<T>(key: string, initial: T) {
-  const [v, setV] = useState<T>(() => {
-    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
-  });
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { } }, [key, v]);
-  return [v, setV] as const;
-}
-function hashColor(seed: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  const r = (h >>> 16) & 255; const g = (h >>> 8) & 255; const b = h & 255;
-  return `rgb(${Math.floor(80 + (r / 255) * 150)}, ${Math.floor(80 + (g / 255) * 150)}, ${Math.floor(80 + (b / 255) * 150)})`;
-}
-async function dominantColorFromImage(url: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const img = new Image(); img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas"); const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(null);
-        ctx.drawImage(img, 0, 0, 32, 32);
-        const data = ctx.getImageData(0, 0, 32, 32).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] < 200) continue;
-          r += data[i]; g += data[i+1]; b += data[i+2]; n++;
-        }
-        if (n < 10) return resolve(null);
-        resolve(`rgb(${Math.round(r/n)}, ${Math.round(g/n)}, ${Math.round(b/n)})`);
-      } catch { resolve(null); }
-    };
-    img.onerror = () => resolve(null); img.src = url;
-  });
-}
-
-const ELITE_LEAGUES = [2, 3, 39, 140, 135, 78, 61, 283];
-
-// --- COMPONENTE NOI (xG & Luck Factor) ---
-
-function XGPerformanceBar({ xg }: { xg: any }) {
-  if (!xg) return null;
-  const homeXG = Number(xg.homeXG);
-  const awayXG = Number(xg.awayXG);
-  const safeHomeXG = Number.isFinite(homeXG) ? homeXG : 0;
-  const safeAwayXG = Number.isFinite(awayXG) ? awayXG : 0;
-  const hW = Math.min((safeHomeXG / 4) * 100, 100);
-  const aW = Math.min((safeAwayXG / 4) * 100, 100);
-  return (
-    <div className="mt-4 px-3 py-3 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
-      <div className="flex justify-between items-center mb-2 px-1">
-        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center w-full opacity-70">xG Intensity Gauge</span>
-      </div>
-      <div className="flex items-center gap-4">
-        <div className="flex-1 flex flex-col items-end">
-          <span className="text-[11px] font-mono font-bold text-emerald-400 mb-1">{safeHomeXG.toFixed(2)}</span>
-          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all duration-1000 ease-out" style={{ width: `${hW}%` }} />
-          </div>
-        </div>
-        <div className="text-[8px] font-black text-slate-700 italic">VS</div>
-        <div className="flex-1 flex flex-col items-start">
-          <span className="text-[11px] font-mono font-bold text-blue-400 mb-1">{safeAwayXG.toFixed(2)}</span>
-          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${aW}%` }} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LuckBadge({ goals, xg }: { goals?: number, xg?: number }) {
-  if (goals === undefined || xg === undefined) return null;
-  if (!isFinite(goals) || !isFinite(xg)) return null;
-  const diff = goals - xg;
-  const isLucky = diff > 0;
-  return (
-    <div
-      className={`inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-lg border shadow-sm whitespace-nowrap ${
-        isLucky
-          ? 'bg-orange-500/15 border-orange-400/40 text-orange-300'
-          : 'bg-cyan-500/15 border-cyan-400/40 text-cyan-200'
-      }`}
-      title={`${isLucky ? 'Lucky Form' : 'Value Trend'} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)})`}
-    >
-      <span>{isLucky ? '⚠️' : '💎'}</span>
-      <span>{isLucky ? 'Lucky Form' : 'Value Trend'}</span>
-      <span className="opacity-80 font-mono text-[8px] sm:text-[9px]">
-        {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
-      </span>
-    </div>
-  );
-}
-
-function isFinalStatus(status?: string) {
-  return ["FT", "AET", "PEN"].includes(status || "");
-}
-
-function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
-  if (!pick || !score) return null;
-  if (score.home === null || score.away === null) return null;
-  const home = score.home;
-  const away = score.away;
-  const total = home + away;
-  const normalized = pick.trim().toLowerCase();
-
-  if (normalized === "1") return home > away;
-  if (normalized === "2") return away > home;
-  if (normalized === "x") return home === away;
-  if (normalized === "gg") return home > 0 && away > 0;
-  if (normalized === "ngg") return home === 0 || away === 0;
-
-  const overMatch = normalized.match(/peste\s*(\d+(?:[.,]\d+)?)/);
-  if (overMatch) return total > Number(overMatch[1].replace(",", "."));
-
-  const underMatch = normalized.match(/sub\s*(\d+(?:[.,]\d+)?)/);
-  if (underMatch) return total < Number(underMatch[1].replace(",", "."));
-
-  return null;
-}
-
-function finalScoreBadgeClass(result: boolean | null) {
-  if (result === true) return "text-emerald-300 bg-emerald-500/10 border-emerald-500/20";
-  if (result === false) return "text-rose-300 bg-rose-500/10 border-rose-500/20";
-  return "text-slate-300 bg-white/5 border-white/10";
-}
-
-function finalScoreLabel(result: boolean | null) {
-  if (result === true) return "WIN";
-  if (result === false) return "LOSS";
-  return "FINAL";
-}
+import LeaguePanel from "./components/LeaguePanel";
+import MatchCard from "./components/MatchCard";
+import MatchModal from "./components/MatchModal";
+import SuccessRateTracker from "./components/SuccessRateTracker";
+import { DayResponse, HistoryEntry, HistoryStats, League, PredictionRow } from "./types";
+import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
+import {
+  dominantColorFromImage,
+  hashColor,
+  inferSeason,
+  isoToday,
+  normalizeSelectedDates,
+  useLocalStorageState
+} from "./utils/appUtils";
 
 // --- APP COMPONENT ---
 export default function App() {
@@ -208,8 +31,8 @@ export default function App() {
   const [animatedWinRate, setAnimatedWinRate] = useState(0);
   const [logoColors, setLogoColors] = useLocalStorageState<Record<string, string>>("footy.logoColors", {});
   const [searchLeague, setSearchLeague] = useState("");
-  const [filterMode, setFilterMode] = useState<"ALL" | "VALUE" | "SAFE">("ALL");
-  const [sortBy, setSortBy] = useState<"TIME" | "CONFIDENCE" | "VALUE">("TIME");
+  const [filterMode, setFilterMode] = useState<FilterMode>("ALL");
+  const [sortBy, setSortBy] = useState<SortBy>("TIME");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
 
@@ -448,46 +271,15 @@ export default function App() {
           <div className="min-w-0">
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
               <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
-              <div className="relative mt-4 w-full max-w-[760px] rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 px-2 sm:px-4 py-3 shadow-[0_0_40px_rgba(16,185,129,0.08)] overflow-hidden">
-                <div className="absolute inset-0 opacity-20 pointer-events-none">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(34,211,238,0.22),transparent_40%),radial-gradient(circle_at_85%_20%,rgba(16,185,129,0.18),transparent_38%),linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:auto,auto,22px_22px,22px_22px]" />
-                </div>
-                <div className="relative text-center mb-2">
-                  <div className="text-[8px] sm:text-[11px] uppercase tracking-[0.1em] sm:tracking-[0.2em] text-slate-300 font-black leading-tight px-1">
-                    <span className="sm:hidden">Performance Counter</span>
-                    <span className="hidden sm:inline">Football Predictions - Performance Counter</span>
-                  </div>
-                  <div className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-1">Ultimele 30 de zile</div>
-                </div>
-                <div className="relative grid grid-cols-3 gap-1.5 sm:gap-3">
-                  <div className="min-w-0 rounded-lg sm:rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-1.5 sm:px-3 py-2 shadow-[0_0_20px_rgba(16,185,129,0.18)]">
-                    <div className="truncate text-[7px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-emerald-200/90 font-black">Wins ✅</div>
-                    <div className="mt-1 text-lg sm:text-2xl font-black text-emerald-300 leading-none">{animatedWins}</div>
-                    <div className="mt-1 truncate text-[7px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-emerald-300/70 font-black">Total</div>
-                  </div>
-                  <div className="min-w-0 rounded-lg sm:rounded-xl border border-rose-400/40 bg-rose-500/10 px-1.5 sm:px-3 py-2 shadow-[0_0_20px_rgba(244,63,94,0.16)]">
-                    <div className="truncate text-[7px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-rose-200/90 font-black">Losses ❌</div>
-                    <div className="mt-1 text-lg sm:text-2xl font-black text-rose-300 leading-none">{animatedLosses}</div>
-                    <div className="mt-1 truncate text-[7px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-rose-300/70 font-black">Total</div>
-                  </div>
-                  <div className={`min-w-0 rounded-lg sm:rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-1.5 sm:px-3 py-2 shadow-[0_0_20px_rgba(34,211,238,0.18)] transition-all duration-500 ${isWinRatePulsing ? "scale-[1.02] shadow-[0_0_26px_rgba(34,211,238,0.35)]" : ""}`}>
-                    <div className="truncate text-[7px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest text-cyan-200/90 font-black">Rate 🎯</div>
-                    <div className="mt-1 text-lg sm:text-2xl font-black text-cyan-200 leading-none">{animatedWinRate.toFixed(1)}%</div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800/80 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-emerald-500 transition-all duration-700 ${isWinRatePulsing ? "animate-pulse" : ""}`}
-                        style={{ width: `${Math.max(0, Math.min(100, trackerStats.winRate))}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                {pendingHistoryCount > 0 && (
-                  <div className="relative mt-2 text-center text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-amber-300/90">
-                    {pendingHistoryCount} predicții așteaptă validarea finală
-                  </div>
-                )}
-                {isHistorySyncing && <div className="relative mt-2 text-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
-              </div>
+              <SuccessRateTracker
+                stats={trackerStats}
+                animatedWins={animatedWins}
+                animatedLosses={animatedLosses}
+                animatedWinRate={animatedWinRate}
+                isWinRatePulsing={isWinRatePulsing}
+                isHistorySyncing={isHistorySyncing}
+                pendingHistoryCount={pendingHistoryCount}
+              />
           </div>
           <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
             <div className="flex flex-col items-start lg:items-end w-full max-w-[200px] lg:min-w-[220px]">
@@ -564,62 +356,19 @@ export default function App() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 xl:gap-10">
           {/* LIGI */}
           <div className="lg:col-span-4 xl:col-span-3 space-y-4">
-            <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all lg:sticky lg:top-6">
-              <div className="flex justify-between items-center gap-3 cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
-                <div className="flex items-center gap-3">
-                  <h2 className="font-bold text-lg sm:text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
-                  <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs shrink-0">{isLeaguesOpen ? '🔽' : '▶️'}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {selectedSet.size > 0 && !isLeaguesOpen && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-full shadow-sm shadow-emerald-900/20">{selectedSet.size} selectate</span>}
-                  <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full">{leaguesSorted.length} disp.</span>
-                </div>
-              </div>
-              {isLeaguesOpen && (
-                <div className="mt-5 transition-all">
-                  <div className="flex flex-col sm:flex-row lg:flex-row gap-2 mb-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectEliteLeagues();
-                      }}
-                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-200 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors touch-manipulation"
-                    >
-                      Select all elite leagues
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearLeagueSelection();
-                      }}
-                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-300 hover:border-red-500/40 hover:text-red-400 transition-colors touch-manipulation"
-                    >
-                      Clear selection
-                    </button>
-                  </div>
-                  <input type="text" placeholder="Caută campionatul..." value={searchLeague} onChange={e => setSearchLeague(e.target.value)} className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors touch-manipulation"/>
-                  <div className="space-y-2 overflow-y-auto max-h-[45vh] sm:max-h-[60vh] lg:max-h-[70vh] pr-1 sm:pr-2 custom-scrollbar">
-                    {leaguesSorted.map(lg => (
-                      <button key={lg.id} onClick={() => {
-                          const s = new Set(selectedLeagueIds);
-                          s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
-                          setSelectedLeagueIds(Array.from(s));
-                        }} className={`w-full flex justify-between items-center gap-3 p-3.5 sm:p-3 rounded-xl border transition-all text-left touch-manipulation ${selectedSet.has(lg.id) ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-slate-950/40 border-white/5 hover:border-white/10'}`}>
-                        <div className="text-left flex items-center gap-2 min-w-0">
-                          {ELITE_LEAGUES.includes(Number(lg.id)) && <span className="text-[12px] shrink-0">👑</span>}
-                          {lg.logo && <img src={lg.logo} className="w-5 h-5 object-contain rounded" alt="" />}
-                          <div>
-                            <div className={`text-[13px] sm:text-sm font-bold tracking-tight leading-tight ${ELITE_LEAGUES.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? 'text-yellow-100' : ''}`}>{lg.name}</div>
-                            <div className="text-[9px] opacity-50 uppercase tracking-tighter mt-0.5">{lg.country}</div>
-                          </div>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${selectedSet.has(lg.id) ? 'bg-emerald-500/20' : 'bg-white/5 text-slate-500'}`}>{lg.matches}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <LeaguePanel
+              leaguesSorted={leaguesSorted}
+              selectedSet={selectedSet}
+              selectedLeagueIds={selectedLeagueIds}
+              isLeaguesOpen={isLeaguesOpen}
+              searchLeague={searchLeague}
+              eliteLeagues={ELITE_LEAGUES}
+              setIsLeaguesOpen={setIsLeaguesOpen}
+              setSearchLeague={setSearchLeague}
+              setSelectedLeagueIds={setSelectedLeagueIds}
+              selectEliteLeagues={selectEliteLeagues}
+              clearLeagueSelection={clearLeagueSelection}
+            />
           </div>
 
           {/* MECIURI */}
@@ -659,7 +408,7 @@ export default function App() {
                       <div className="text-[10px] text-slate-500 font-black">{group.matches.length} meciuri</div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
-                      {group.matches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} onClick={() => setSelectedMatch(m)} />)}
+                      {group.matches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} hashColor={hashColor} onClick={() => setSelectedMatch(m)} />)}
                     </div>
                   </section>
                 ))}
@@ -679,323 +428,7 @@ export default function App() {
           </button>
         </div>
       </div>
-      {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} onClose={() => setSelectedMatch(null)} />}
-    </div>
-  );
-}
-
-// --- CARDUL MECIULUI ACTUALIZAT (DESIGN COMPLET RESTAURAT) ---
-function MatchCard({ row, logoColors, onClick }: { row: PredictionRow, logoColors: Record<string, string>, onClick: () => void }) {
-  const [xgData, setXgData] = useState<any>(() => {
-    if (!row.luckStats) return null;
-    return { homeXG: row.luckStats.hXG, awayXG: row.luckStats.aXG };
-  });
-  useEffect(() => {
-    fetch(`/api/get-xg?fixtureId=${row.id}`).then(res => res.json()).then(data => { if(!data.error) setXgData(data); });
-  }, [row.id]);
-
-  const homeColor = logoColors[row.logos?.home || ''] || hashColor(row.teams.home);
-  const awayColor = logoColors[row.logos?.away || ''] || hashColor(row.teams.away);
-  const pct = (n: number) => Math.round(n || 0);
-  const isLive = ["1H", "2H", "HT", "ET", "P", "LIVE"].includes(row.status);
-  const confPct = pct(row.recommended?.confidence);
-  const confColor = confPct >= 75 ? '#10b981' : confPct >= 60 ? '#f59e0b' : '#ef4444';
-  const showFire = row.recommended?.confidence >= 70;
-  const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;
-  const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
-  const kickoffDate = new Date(row.kickoff);
-
-  return (
-    <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
-      
-      {/* 1. ANTET (Ora + Arbitru + Gauge Confidență) */}
-      <div className="flex justify-between items-start gap-3 mb-3 sm:mb-4">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-             <span className="text-[8px] sm:text-[9px] bg-white/5 text-slate-300 px-2 py-1 rounded-md uppercase font-black tracking-widest">{row.league}</span>
-             {isLive && (
-               <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-red-500 font-bold bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
-                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span> LIVE
-               </span>
-             )}
-          </div>
-          <div className="text-[8px] sm:text-[9px] text-slate-500 flex flex-wrap items-center gap-1 font-medium tracking-tight">
-            📅 {kickoffDate.toLocaleDateString([], { day: '2-digit', month: '2-digit' })}
-            <span className="opacity-50 mx-1">|</span>
-            ⏱️ {new Date(row.kickoff).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-            <span className="opacity-50 mx-1">|</span> ⚖️ {row.referee || "-"}
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-right">
-            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">{showFire ? '🔥 ' : ''}Top Pick</div>
-            <div className="text-xs sm:text-sm font-black text-emerald-400">{row.recommended.pick}</div>
-          </div>
-          <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex flex-col items-center justify-center text-[7px] sm:text-[8px] font-black text-white shadow-md leading-none">
-              {showFire && <span className="text-[8px] sm:text-[9px] -mb-0.5">🔥</span>}
-              <span>{confPct}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. VALUE BET BANNER */}
-      {row.valueBet?.detected && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-3 sm:mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[9px] sm:text-[10px] text-yellow-400 font-black uppercase tracking-wider">
-          <div className="flex items-center gap-2">
-            <span>💎 Value: {row.valueBet.type}</span>
-            {row.odds?.bookmaker && <span className="text-yellow-200/80">· {row.odds.bookmaker}</span>}
-          </div>
-          <div className="bg-black/20 px-2 py-1 rounded-lg border border-yellow-500/10">
-            EV: +{row.valueBet.ev}% | Stake: {row.valueBet.kelly}%
-          </div>
-        </div>
-      )}
-
-      {/* 3. ECHIPE (Drop Shadow + VS) */}
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="w-1/3 text-center flex flex-col items-center gap-2">
-          <img src={row.logos?.home} className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
-          <div className="text-[10px] sm:text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.home}</div>
-        </div>
-        <div className="text-slate-600 font-black italic text-[9px] sm:text-[10px] bg-slate-800/40 px-2 py-1 rounded-md border border-white/5">VS</div>
-        <div className="w-1/3 text-center flex flex-col items-center gap-2">
-          <img src={row.logos?.away} className="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]" alt=""/>
-          <div className="text-[10px] sm:text-[11px] font-bold text-slate-200 line-clamp-2 leading-tight tracking-tight">{row.teams.away}</div>
-        </div>
-      </div>
-
-      {/* 4. xG PERFORMANCE & LUCK BADGES */}
-      <XGPerformanceBar xg={xgData} />
-      
-      {row.luckStats && (
-        <div className="flex flex-wrap justify-between mt-2 px-1 gap-2">
-          <LuckBadge goals={row.luckStats.hG} xg={xgData?.homeXG ?? row.luckStats.hXG} />
-          <LuckBadge goals={row.luckStats.aG} xg={xgData?.awayXG ?? row.luckStats.aXG} />
-        </div>
-      )}
-
-      {/* 5. BARA PROBABILITĂȚI 1X2 CU CULORILE ECHIPELOR ȘI COTE REALE */}
-      <div className="space-y-1.5 mb-3 sm:mb-4 mt-4 sm:mt-5">
-        <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden flex">
-          <div style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }} className="transition-all duration-1000 shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)]" />
-          <div style={{ width: `${row.probs.pX}%` }} className="bg-slate-600 transition-all duration-1000" />
-          <div style={{ width: `${row.probs.p2}%`, backgroundColor: awayColor }} className="transition-all duration-1000 shadow-[inset_2px_0_4px_rgba(0,0,0,0.3)]" />
-        </div>
-        <div className="flex justify-between text-[7px] sm:text-[8px] font-black text-slate-400 uppercase px-1 gap-2">
-           <span className={`${row.valueBet?.type === '1' ? 'text-yellow-400' : ''}`}>{pct(row.probs.p1)}% · {row.odds?.home || '-'}</span>
-           <span className="opacity-50">{pct(row.probs.pX)}% · {row.odds?.draw || '-'}</span>
-           <span className={`${row.valueBet?.type === '2' ? 'text-yellow-400' : ''}`}>{row.odds?.away || '-'} · {pct(row.probs.p2)}%</span>
-        </div>
-      </div>
-
-      {/* Cartonașe estimare sintetică (predicții) */}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.oneXtwo}</span>
-        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.gg}</span>
-        <span className="text-[8px] font-black uppercase px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-200">{row.predictions?.over25}</span>
-      </div>
-
-      {/* 6. SUBSOL - REZULTAT FINAL */}
-      <div className="mt-auto bg-slate-900/50 p-2.5 rounded-xl border border-white/5 flex flex-col items-center">
-        {hasFinalScore && (
-          <div className={`mt-2 text-[9px] font-black border rounded-lg px-2.5 py-1 uppercase tracking-wide ${finalScoreBadgeClass(finalPickResult)}`}>
-            {finalScoreLabel(finalPickResult)} · {row.score?.home}-{row.score?.away}
-          </div>
-        )}
-        {!hasFinalScore && (
-          <div className="text-[8px] text-slate-500 uppercase font-black tracking-wider opacity-60">
-            Rezultat final indisponibil
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --- MODAL DETALIAT (Cod original extins cu xG) ---
-function MatchModal({ match, logoColors, onClose }: { match: PredictionRow, logoColors: Record<string, string>, onClose: () => void }) {
-  const homeColor = logoColors[match.logos?.home || ''] || hashColor(match.teams.home);
-  const awayColor = logoColors[match.logos?.away || ''] || hashColor(match.teams.away);
-  const pct = (n: number) => Math.round(n || 0);
-  const hasFinalScore = isFinalStatus(match.status) && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
-  const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
-  const kickoffDate = new Date(match.kickoff);
-
-  const [xgData, setXgData] = useState<any>(() => {
-    if (!match.luckStats) return null;
-    return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
-  });
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/get-xg?fixtureId=${match.id}`)
-      .then(res => res.json())
-      .then(data => { if (!cancelled && !data?.error) setXgData(data); })
-      .catch(() => { /* ignore */ });
-    return () => { cancelled = true; };
-  }, [match.id]);
-
-  const ProbBar = ({ label, val, color }: { label: string, val: number, color: string }) => (
-    <div className="mb-3">
-      <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-        <span className="text-slate-400">{label}</span>
-        <span style={{ color }}>{pct(val)}%</span>
-      </div>
-      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-        <div style={{ width: `${val}%`, backgroundColor: color }} className="h-full shadow-[0_0_8px_rgba(255,255,255,0.1)]" />
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
-      <div className="bg-slate-950 border border-white/10 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg lg:max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl relative" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="sticky top-3 ml-auto mr-3 mt-3 z-10 w-11 h-11 sm:w-10 sm:h-10 bg-slate-900/90 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-300 transition-colors border border-white/10 backdrop-blur touch-manipulation shadow-lg">✕</button>
-        
-        <div className="px-5 pb-6 pt-2 sm:p-8 bg-gradient-to-b from-slate-900/80 to-slate-950 border-b border-white/5 text-center">
-          <div className="text-[10px] text-emerald-500 font-black uppercase tracking-widest mb-6 italic opacity-80">⚽ Analiză Avansată Poisson & xG</div>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 lg:gap-8 px-1 sm:px-2">
-            <div className="justify-self-start flex flex-col items-center gap-3">
-              <img src={match.logos?.home} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
-              <div className="text-sm font-bold leading-tight">{match.teams.home}</div>
-            </div>
-            <div className="min-w-[160px] text-center">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-1">{match.league}</div>
-              <div className="text-4xl font-black text-white tracking-tighter mb-2">
-                {hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "-"}
-              </div>
-              <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase font-bold inline-block border border-emerald-500/20">Pick: {match.recommended.pick}</div>
-              {hasFinalScore && (
-                <div className={`mt-2 text-[10px] px-3 py-1.5 rounded-full uppercase font-bold inline-block border ${finalScoreBadgeClass(finalPickResult)}`}>
-                  {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
-                </div>
-              )}
-              <div className="text-[10px] text-slate-600 font-black mt-2 opacity-80">
-                📅 {kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}{" "}
-                <span className="opacity-50 mx-1">|</span>
-                ⏱️ {new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" "}
-                <span className="opacity-50 mx-1">|</span> ⚖️ {match.referee || "-"}
-              </div>
-            </div>
-            <div className="justify-self-end flex flex-col items-center gap-3">
-              <img src={match.logos?.away} className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-2xl" alt="" />
-              <div className="text-sm font-bold leading-tight">{match.teams.away}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5 sm:p-8 space-y-6 sm:space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
-            {/* xG + Luck Factor */}
-            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60 tracking-widest">xG & Luck Factor</div>
-              <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
-              {match.luckStats && (
-                <div className="flex flex-wrap justify-center lg:justify-between mt-2 px-1 gap-2">
-                  <LuckBadge goals={match.luckStats.hG} xg={xgData?.homeXG ?? match.luckStats.hXG} />
-                  <LuckBadge goals={match.luckStats.aG} xg={xgData?.awayXG ?? match.luckStats.aXG} />
-                </div>
-              )}
-              {!match.luckStats && <div className="text-[10px] text-slate-500 opacity-70">Luck Factor: indisponibil</div>}
-            </div>
-
-            {/* Cote reale + Value Bet */}
-            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Cote Reale & Value Bet</div>
-              <div className="grid grid-cols-3 gap-2 lg:gap-3 text-center">
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">1 (Gazde)</div>
-                  <div className="text-xl lg:text-2xl font-black mt-1" style={{ color: homeColor }}>{match.odds?.home ?? "-"}</div>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">X (Egal)</div>
-                  <div className="text-xl lg:text-2xl font-black mt-1">{match.odds?.draw ?? "-"}</div>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-2.5 lg:p-3">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">2 (Oaspeți)</div>
-                  <div className="text-xl lg:text-2xl font-black mt-1" style={{ color: awayColor }}>{match.odds?.away ?? "-"}</div>
-                </div>
-              </div>
-
-              {match.valueBet?.detected && (
-                <div className="mt-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                  <div className="text-[10px] text-yellow-400 uppercase font-black tracking-widest">💎 Value Bet</div>
-                  {match.odds?.bookmaker && <div className="mt-1 text-[10px] text-yellow-200/80 font-black">Operator: {match.odds.bookmaker}</div>}
-                  <div className="mt-2 flex flex-col gap-1 lg:flex-row lg:justify-between text-[12px] font-black">
-                    <span className="text-yellow-200">Tip: {match.valueBet.type}</span>
-                    <span className="text-yellow-200">EV: +{match.valueBet.ev ?? 0}%</span>
-                    <span className="text-yellow-200">Stake: {match.valueBet.kelly ?? 0}%</span>
-                  </div>
-                </div>
-              )}
-              {!match.valueBet?.detected && (
-                <div className="mt-4 text-[10px] text-slate-500 opacity-70 font-black uppercase tracking-widest">
-                  Value Bet: nu detectat
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
-            {match.lambdas && (
-              <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 text-center shadow-inner">
-                <div className="text-[10px] text-slate-500 uppercase font-black mb-3 opacity-60">Momentum Ofensiv Ajustat (λ)</div>
-                <div className="flex justify-between items-center gap-4">
-                  <div className="text-right w-1/2 text-2xl font-black" style={{ color: homeColor }}>{match.lambdas.home}</div>
-                  <div className="text-slate-600 font-black text-xs opacity-50">VS</div>
-                  <div className="text-left w-1/2 text-2xl font-black" style={{ color: awayColor }}>{match.lambdas.away}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Predicții (piețe) */}
-            <div className="bg-slate-900/40 p-5 rounded-3xl border border-white/5 shadow-inner">
-              <div className="text-[10px] text-slate-500 uppercase font-black mb-4 opacity-60 tracking-widest">Piețe & Scor</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">1X2</div>
-                  <div className="text-sm font-black mt-1">{match.predictions.oneXtwo}</div>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">GG</div>
-                  <div className="text-sm font-black mt-1">{match.predictions.gg}</div>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">Over 2.5</div>
-                  <div className="text-sm font-black mt-1">{match.predictions.over25}</div>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
-                  <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
-                  <div className="text-sm font-black mt-1">{hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "-"}</div>
-                </div>
-                {match.predictions.cards && (
-                  <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
-                    <div className="text-[10px] text-slate-500 uppercase font-black">Cards</div>
-                    <div className="text-sm font-black mt-1">{match.predictions.cards}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-10">
-            <div className="space-y-4">
-              <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2 tracking-widest opacity-60">Rezultat Final</div>
-              <ProbBar label="Victorie Gazde" val={match.probs.p1} color={homeColor} />
-              <ProbBar label="Egalitate (X)" val={match.probs.pX} color="#475569" />
-              <ProbBar label="Victorie Oaspeți" val={match.probs.p2} color={awayColor} />
-            </div>
-            <div className="space-y-4">
-              <div className="text-[10px] text-slate-500 uppercase font-black border-b border-white/5 pb-2 tracking-widest opacity-60">Piața Goluri</div>
-              <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#10b981" />
-              <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#3b82f6" />
-              <ProbBar label="Ambele (GG)" val={match.probs.pGG} color="#f59e0b" />
-            </div>
-          </div>
-        </div>
-      </div>
+      {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} hashColor={hashColor} onClose={() => setSelectedMatch(null)} />}
     </div>
   );
 }
