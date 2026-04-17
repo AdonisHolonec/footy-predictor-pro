@@ -108,6 +108,24 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
         </div>
       </div>
 
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {row.modelMeta?.method && (
+          <span className="text-[8px] px-2 py-0.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 font-black uppercase tracking-wide">
+            Model: {row.modelMeta.method.includes("advanced") ? "Advanced" : row.modelMeta.method}
+          </span>
+        )}
+        {row.modelMeta?.probsModel && (
+          <span className="text-[8px] px-2 py-0.5 rounded-full border border-blue-400/30 bg-blue-500/10 text-blue-200 font-black uppercase tracking-wide">
+            Calibrated
+          </span>
+        )}
+        {Array.isArray(row.valueBet?.reasons) && row.valueBet?.reasons.length > 0 && (
+          <span className="text-[8px] px-2 py-0.5 rounded-full border border-amber-400/30 bg-amber-500/10 text-amber-200 font-black uppercase tracking-wide">
+            No-bet filtered
+          </span>
+        )}
+      </div>
+
       {row.valueBet?.detected && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-2.5 mb-3 sm:mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[9px] sm:text-[10px] text-yellow-400 font-black uppercase tracking-wider">
           <div className="flex items-center gap-2">

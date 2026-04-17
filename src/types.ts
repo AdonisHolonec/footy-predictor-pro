@@ -9,7 +9,20 @@ export type League = {
 };
 
 export type Odds = { home: number; draw: number; away: number; bookmaker?: string };
-export type ValueBet = { detected: boolean; type: string; ev?: number; kelly?: number };
+export type ValueBet = {
+  detected: boolean;
+  type: string;
+  ev?: number;
+  kelly?: number;
+  stakePlan?: string;
+  ensemble?: {
+    baseKelly: number;
+    confidenceBoost: number;
+    volatilityPenalty: number;
+    evBoost: number;
+  };
+  reasons?: string[];
+};
 
 export type Probs = {
   p1: number;
@@ -40,6 +53,15 @@ export type PredictionRow = {
   valueBet?: ValueBet;
   predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
   recommended: { pick: string; confidence: number };
+  modelMeta?: {
+    method?: string;
+    probsModel?: string;
+    dataQuality?: number;
+    leagueMultiplier?: number;
+    driftPenalty?: number;
+    cooldownCap?: number;
+    reasonCodes?: string[];
+  };
 };
 
 export type HistoryEntry = PredictionRow & {

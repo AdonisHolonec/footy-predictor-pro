@@ -100,6 +100,29 @@ async function run() {
   console.log(`ROI: ${pct(roi)}`);
   console.log(`Avg EV (proxy CLV): ${pct(avgEv)}`);
   console.log(`Max drawdown (units): ${maxDrawdown.toFixed(4)}`);
+
+  const snapshotDate = new Date().toISOString().slice(0, 10);
+  const { error: snapshotError } = await supabase
+    .from("backtest_snapshots")
+    .upsert({
+      snapshot_date: snapshotDate,
+      window_days: days,
+      settled_bets: settled,
+      wins,
+      losses,
+      hit_rate: Number(hitRate.toFixed(4)),
+      roi: Number(roi.toFixed(4)),
+      pnl_units: Number(pnlUnits.toFixed(6)),
+      total_stake_units: Number(stakeSum.toFixed(6)),
+      avg_ev: Number(avgEv.toFixed(4)),
+      max_drawdown: Number(maxDrawdown.toFixed(6))
+    }, { onConflict: "snapshot_date,window_days" });
+
+  if (snapshotError) {
+    console.warn("Snapshot upsert failed:", snapshotError.message);
+  } else {
+    console.log(`Snapshot saved: ${snapshotDate} (window=${days}d)`);
+  }
 }
 
 run().catch((err) => {

@@ -86,6 +86,8 @@ function mapPredictionToDbRow(prediction) {
     score_home: scoreHome,
     score_away: scoreAway,
     validation: validationFromMatch(status, recommendedPick, score),
+    reason_codes: Array.isArray(prediction?.auditLog?.reasonCodes) ? prediction.auditLog.reasonCodes : null,
+    top_features: Array.isArray(prediction?.auditLog?.topFeatures) ? prediction.auditLog.topFeatures : null,
     saved_at: generatedAt,
     updated_at: generatedAt,
     raw_payload: payloadWithMeta

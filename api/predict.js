@@ -20,11 +20,107 @@ import {
   blendModelWithMarket,
   evaluateNoBetZone
 } from './_utils/advancedMath.js';
-import { assertSupabaseConfigured } from "./_utils/supabaseAdmin.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "./_utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "./_utils/predictionsHistory.js";
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;
+}
+
+const LEAGUE_CONFIDENCE_MULTIPLIERS = {
+  39: 1.0,
+  140: 0.98,
+  135: 0.97,
+  78: 0.95,
+  61: 0.95,
+  2: 0.93,
+  3: 0.93,
+  283: 0.9
+};
+
+function getLeagueConfidenceMultiplier(leagueId) {
+  return LEAGUE_CONFIDENCE_MULTIPLIERS[Number(leagueId)] || 0.88;
+}
+
+function clampPct(n) {
+  return Math.max(0, Math.min(100, Number(n) || 0));
+}
+
+function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
+  let score = 0.35;
+  if (hasTeamIds) score += 0.15;
+  if (hasOdds) score += 0.2;
+  if (hasLuckStats) score += 0.2;
+  if (method === "advanced-teamstats") score += 0.1;
+  if (method === "synthetic") score -= 0.18;
+  return Math.max(0, Math.min(1, score));
+}
+
+function blendByPenalty(base, multiplier = 1) {
+  return clampPct(base * Math.max(0.7, Math.min(1.05, multiplier)));
+}
+
+function estimateRollingDrawdown(rows) {
+  let pnl = 0;
+  let peak = 0;
+  let maxDd = 0;
+  for (const row of rows) {
+    const payload = row.raw_payload || {};
+    const val = payload.valueBet || {};
+    const stake = Math.max(0, Math.min((Number(val.kelly) || 0) / 100, 0.03));
+    const odd = val.type === "1" ? Number(row.odds_home) : val.type === "X" ? Number(row.odds_draw) : Number(row.odds_away);
+    if (!stake || !isFinite(odd) || odd <= 1) continue;
+    if (row.validation === "win") pnl += stake * (odd - 1);
+    else if (row.validation === "loss") pnl -= stake;
+    peak = Math.max(peak, pnl);
+    maxDd = Math.max(maxDd, peak - pnl);
+  }
+  return maxDd;
+}
+
+async function loadRiskContext() {
+  const ctx = { avgDist: null, cooldownCap: 3 };
+  const supabaseConfig = assertSupabaseConfigured();
+  if (!supabaseConfig.ok) return ctx;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return ctx;
+
+  try {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("predictions_history")
+      .select("raw_payload, validation, odds_home, odds_draw, odds_away")
+      .gte("kickoff_at", cutoff)
+      .limit(400);
+
+    const rows = data || [];
+    const withProbs = rows
+      .map((r) => r.raw_payload?.probs)
+      .filter((p) => p && isFinite(p.p1) && isFinite(p.pX) && isFinite(p.p2));
+
+    if (withProbs.length > 0) {
+      const mean = withProbs.reduce((acc, p) => {
+        acc.p1 += Number(p.p1);
+        acc.pX += Number(p.pX);
+        acc.p2 += Number(p.p2);
+        return acc;
+      }, { p1: 0, pX: 0, p2: 0 });
+      ctx.avgDist = {
+        p1: mean.p1 / withProbs.length,
+        pX: mean.pX / withProbs.length,
+        p2: mean.p2 / withProbs.length
+      };
+    }
+
+    const settled = rows.filter((r) => r.validation === "win" || r.validation === "loss");
+    const dd = estimateRollingDrawdown(settled);
+    if (dd >= 3) ctx.cooldownCap = 1.5;
+    else if (dd >= 2) ctx.cooldownCap = 2.0;
+  } catch {
+    // silent fallback
+  }
+
+  return ctx;
 }
 
 export default async function handler(req, res) {
@@ -40,6 +136,7 @@ export default async function handler(req, res) {
 
   try {
     const out = [];
+    const riskContext = await loadRiskContext();
     const dayReq = await getWithCache('/fixtures', { date }, 21600);
     const allFixtures = dayReq.data?.response || dayReq.data || [];
 
@@ -135,6 +232,7 @@ export default async function handler(req, res) {
         let stakingCompact = "";
         let stakingBreakdown = undefined;
         let reasonCodes = [];
+        const leagueMultiplier = getLeagueConfidenceMultiplier(Number(lId));
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
           const bookie = oddsReq.data.response[0].bookmakers[0];
@@ -182,15 +280,32 @@ export default async function handler(req, res) {
               .filter((c) => c.noBet.allowBet)
               .sort((a, b) => b.score - a.score);
 
+            const dq = dataQualityScore({
+              method,
+              hasOdds: !!odds,
+              hasLuckStats: !!luckStats,
+              hasTeamIds: !!homeIdStr && !!awayIdStr
+            });
+
             if (scored.length > 0) {
               const best = scored[0];
               valueDetected = true;
               valueType = best.type;
               finalEv = best.ev;
-              finalKelly = best.ensembleStake.stakePct || best.kelly;
+              finalKelly = Math.min(best.ensembleStake.stakePct || best.kelly, riskContext.cooldownCap);
               stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
               stakingBreakdown = best.ensembleStake.components;
               reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking"];
+
+              if (method === "synthetic" || dq < 0.55) {
+                valueDetected = false;
+                valueType = "";
+                finalEv = 0;
+                finalKelly = 0;
+                stakingCompact = "";
+                stakingBreakdown = undefined;
+                reasonCodes.push("min_sample_guardrail");
+              }
             } else {
               const analyzed = candidates
                 .map((c) => {
@@ -210,12 +325,56 @@ export default async function handler(req, res) {
           }
         }
         
-        let finalPick1X2 = p.p1 >= p.pX && p.p1 >= p.p2 ? "1" : (p.p2 > p.p1 && p.p2 > p.pX ? "2" : "X");
+        let p1Adj = blendByPenalty(p.p1, leagueMultiplier);
+        let pXAdj = blendByPenalty(p.pX, leagueMultiplier);
+        let p2Adj = blendByPenalty(p.p2, leagueMultiplier);
+        const sumAdj = p1Adj + pXAdj + p2Adj;
+        if (sumAdj > 0) {
+          p1Adj = (p1Adj / sumAdj) * 100;
+          pXAdj = (pXAdj / sumAdj) * 100;
+          p2Adj = (p2Adj / sumAdj) * 100;
+        }
+
+        const driftPenalty = riskContext.avgDist
+          ? Math.abs(p1Adj - riskContext.avgDist.p1) + Math.abs(pXAdj - riskContext.avgDist.pX) + Math.abs(p2Adj - riskContext.avgDist.p2)
+          : 0;
+        if (driftPenalty > 24) {
+          finalKelly = Math.min(finalKelly, 1.5);
+          reasonCodes.push("drift_penalty");
+        }
+
+        const dataQuality = dataQualityScore({
+          method,
+          hasOdds: !!odds,
+          hasLuckStats: !!luckStats,
+          hasTeamIds: !!homeIdStr && !!awayIdStr
+        });
+        const qualityPenalty = dataQuality < 0.6 ? 0.9 : 1;
+
+        let finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : (p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X");
         let topPick = finalPick1X2;
-        let maxConf = Math.max(p.p1, p.pX, p.p2);
+        let maxConf = Math.max(p1Adj, pXAdj, p2Adj);
         if (p.pU35 > maxConf) { topPick = "Sub 3.5"; maxConf = p.pU35; }
         if (p.pO25 > maxConf) { topPick = "Peste 2.5"; maxConf = p.pO25; }
         if (p.pGG > maxConf) { topPick = "GG"; maxConf = p.pGG; }
+        maxConf = clampPct(maxConf * leagueMultiplier * qualityPenalty);
+
+        if (dataQuality < 0.55) reasonCodes.push("low_data_quality");
+        if (leagueMultiplier < 0.93) reasonCodes.push("league_multiplier_penalty");
+        reasonCodes = Array.from(new Set(reasonCodes)).slice(0, 6);
+
+        const pOut = {
+          ...p,
+          p1: clampPct(p1Adj),
+          pX: clampPct(pXAdj),
+          p2: clampPct(p2Adj)
+        };
+
+        const topFeatures = [
+          `method:${method}`,
+          `dq:${dataQuality.toFixed(2)}`,
+          `leagueMul:${leagueMultiplier.toFixed(2)}`
+        ];
 
         out.push({
           id: fixtureId,
@@ -230,7 +389,7 @@ export default async function handler(req, res) {
             away: typeof fx.goals?.away === "number" ? fx.goals.away : null
           },
           referee: refereeName || undefined,
-          probs: p, odds, luckStats,
+          probs: pOut, odds, luckStats,
           valueBet: {
             detected: valueDetected,
             type: valueType,
@@ -244,7 +403,16 @@ export default async function handler(req, res) {
           recommended: { pick: topPick, confidence: maxConf },
           modelMeta: {
             method,
-            probsModel: calc?.modelMeta?.method || "unknown"
+            probsModel: calc?.modelMeta?.method || "unknown",
+            dataQuality: Number(dataQuality.toFixed(3)),
+            leagueMultiplier: Number(leagueMultiplier.toFixed(3)),
+            driftPenalty: Number(driftPenalty.toFixed(3)),
+            cooldownCap: Number(riskContext.cooldownCap.toFixed(2)),
+            reasonCodes
+          },
+          auditLog: {
+            reasonCodes,
+            topFeatures
           }
         });
       }
