@@ -81,6 +81,35 @@ export const calculateKellyQuarter = (probability, odds, isHighConfidence = true
 };
 
 /**
+ * 5.b Ensemble Staking (EV + Confidence + Volatility)
+ */
+export const calculateEnsembleStake = ({
+  probability,
+  odds,
+  confidencePct = 50,
+  marketVolatility = 0.5
+}) => {
+  const baseKelly = calculateKellyQuarter(probability, odds, confidencePct >= 65);
+  const evPct = calculateEV(probability, odds);
+  const confidenceBoost = Math.max(0.75, Math.min(1.25, confidencePct / 70));
+  const volatilityPenalty = Math.max(0.7, Math.min(1, 1 - (marketVolatility * 0.35)));
+  const evBoost = Math.max(0.8, Math.min(1.35, 1 + (evPct / 100)));
+
+  const ensemble = baseKelly * confidenceBoost * volatilityPenalty * evBoost;
+  const capped = Math.min(Math.max(0, ensemble), 3);
+
+  return {
+    stakePct: Number(capped.toFixed(2)),
+    components: {
+      baseKelly: Number(baseKelly.toFixed(2)),
+      confidenceBoost: Number(confidenceBoost.toFixed(2)),
+      volatilityPenalty: Number(volatilityPenalty.toFixed(2)),
+      evBoost: Number(evBoost.toFixed(2))
+    }
+  };
+};
+
+/**
  * 6. Verificare Value Bet
  */
 export const isValueBet = (probability, odds, threshold = 1.10) => {
@@ -93,8 +122,95 @@ export const isValueBet = (probability, odds, threshold = 1.10) => {
 /**
  * 7. RAFINAREA FORMEI (Luck Factor) - NOU
  */
-export const adjustLambdaByEfficiency = (actualGoals, xG) => {
+export const adjustLambdaByEfficiency = (actualGoals, xG, confidence = 0.5) => {
   if (!xG || xG <= 0) return actualGoals;
-  const adjusted = (actualGoals + xG) / 2;
-  return Number(adjusted.toFixed(2));
+  const safeConfidence = Math.max(0.1, Math.min(0.9, Number(confidence) || 0.5));
+  const adjusted = (actualGoals * (1 - safeConfidence)) + (xG * safeConfidence);
+  return Number(adjusted.toFixed(3));
+};
+
+/**
+ * 8. Dynamic xG Modeling (opponent-aware)
+ */
+export const calculateDynamicXG = ({
+  teamAttack,
+  opponentDefense,
+  leagueBase = 1.35,
+  formMultiplier = 1,
+  venueBoost = 1
+}) => {
+  const atk = Math.max(0.2, Number(teamAttack) || leagueBase);
+  const def = Math.max(0.2, Number(opponentDefense) || leagueBase);
+  const fm = Math.max(0.75, Math.min(1.35, Number(formMultiplier) || 1));
+  const vb = Math.max(0.85, Math.min(1.2, Number(venueBoost) || 1));
+
+  // Proxy GLM-like intensity: exp(beta0 + beta1*log(atk) - beta2*log(def))
+  const beta0 = Math.log(Math.max(0.2, leagueBase));
+  const beta1 = 0.88;
+  const beta2 = 0.67;
+  const intensity = Math.exp(beta0 + beta1 * Math.log(atk) - beta2 * Math.log(def));
+
+  return Number((intensity * fm * vb).toFixed(3));
+};
+
+/**
+ * 9. Market calibration (remove overround + blend)
+ */
+export const removeBookmakerMargin = (homeOdd, drawOdd, awayOdd) => {
+  const h = Number(homeOdd);
+  const d = Number(drawOdd);
+  const a = Number(awayOdd);
+  if (!isFinite(h) || !isFinite(d) || !isFinite(a) || h <= 1 || d <= 1 || a <= 1) {
+    return null;
+  }
+
+  const invH = 1 / h;
+  const invD = 1 / d;
+  const invA = 1 / a;
+  const sum = invH + invD + invA;
+  if (sum <= 0) return null;
+
+  return {
+    p1: invH / sum,
+    pX: invD / sum,
+    p2: invA / sum
+  };
+};
+
+export const blendModelWithMarket = ({
+  model,
+  market,
+  modelWeight = 0.7
+}) => {
+  if (!model) return null;
+  if (!market) return model;
+  const w = Math.max(0.35, Math.min(0.9, Number(modelWeight) || 0.7));
+  const p1 = (model.p1 * w) + (market.p1 * (1 - w));
+  const pX = (model.pX * w) + (market.pX * (1 - w));
+  const p2 = (model.p2 * w) + (market.p2 * (1 - w));
+  const total = p1 + pX + p2;
+  if (!isFinite(total) || total <= 0) return model;
+  return { p1: p1 / total, pX: pX / total, p2: p2 / total };
+};
+
+/**
+ * 10. No-bet zone rules
+ */
+export const evaluateNoBetZone = ({
+  edge,
+  evPct,
+  confidencePct,
+  marketGapPct
+}) => {
+  const reasons = [];
+
+  if ((edge || 0) < 1.10) reasons.push("edge_too_small");
+  if ((evPct || 0) < 1.25) reasons.push("low_ev");
+  if ((confidencePct || 0) < 46) reasons.push("low_confidence");
+  if ((marketGapPct || 0) > 16) reasons.push("market_disagrees");
+
+  return {
+    allowBet: reasons.length === 0,
+    reasons
+  };
 };

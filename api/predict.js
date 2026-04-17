@@ -12,7 +12,13 @@ import {
 } from './_utils/math.js';
 import { 
   calculateEV, 
-  calculateKellyQuarter as calculateKelly
+  calculateKellyQuarter as calculateKelly,
+  calculateEnsembleStake,
+  adjustLambdaByEfficiency,
+  calculateDynamicXG,
+  removeBookmakerMargin,
+  blendModelWithMarket,
+  evaluateNoBetZone
 } from './_utils/advancedMath.js';
 import { assertSupabaseConfigured } from "./_utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "./_utils/predictionsHistory.js";
@@ -83,11 +89,24 @@ export default async function handler(req, res) {
               const l = advancedLambdas(hStats, aStats, hMulti, aMulti);
               
               if (l && isGoodNum(l.lambdaHome) && isGoodNum(l.lambdaAway)) {
+                const dynamicXgHome = calculateDynamicXG({
+                  teamAttack: hStats.gfHome,
+                  opponentDefense: aStats.gaAway,
+                  formMultiplier: hMulti,
+                  venueBoost: 1.06
+                });
+                const dynamicXgAway = calculateDynamicXG({
+                  teamAttack: aStats.gfAway,
+                  opponentDefense: hStats.gaHome,
+                  formMultiplier: aMulti,
+                  venueBoost: 0.96
+                });
+
                 method = "advanced-teamstats";
-                lambdaHome = l.lambdaHome;
-                lambdaAway = l.lambdaAway;
-                // Pentru UI: hG/aG sunt medii de goluri; hXG/aXG se vor afișa în funcție de xG-ul fixture-ului (din /api/get-xg).
-                luckStats = { hG: hStats.gfHome, hXG: hStats.gfHome, aG: aStats.gfAway, aXG: aStats.gfAway };
+                lambdaHome = adjustLambdaByEfficiency(l.lambdaHome, dynamicXgHome, 0.55);
+                lambdaAway = adjustLambdaByEfficiency(l.lambdaAway, dynamicXgAway, 0.55);
+                // NEW Luck Factor: combinăm mediile istorice cu xG dinamic pentru robustete.
+                luckStats = { hG: hStats.gfHome, hXG: dynamicXgHome, aG: aStats.gfAway, aXG: dynamicXgAway };
               }
             }
           }
@@ -108,11 +127,14 @@ export default async function handler(req, res) {
           method = "synthetic"; lambdaHome = s.lambdaHome; lambdaAway = s.lambdaAway;
         }
 
-        const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId);
+        const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, { correlation: 0.12, samples: 2400 });
         if (!calc || !calc.probs) continue;
         const p = calc.probs;
 
         let odds = null, valueDetected = false, valueType = "", finalEv = 0, finalKelly = 0;
+        let stakingCompact = "";
+        let stakingBreakdown = undefined;
+        let reasonCodes = [];
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
           const bookie = oddsReq.data.response[0].bookmakers[0];
@@ -122,8 +144,69 @@ export default async function handler(req, res) {
             const dOdd = parseFloat(market1X2.values.find(v => v.value === "Draw")?.odd);
             const aOdd = parseFloat(market1X2.values.find(v => v.value === "Away")?.odd);
             odds = { home: hOdd, draw: dOdd, away: aOdd, bookmaker: bookie?.name || undefined };
-            if ((p.p1 * hOdd) / 100 > 1.15) { valueDetected = true; valueType = "1"; finalEv = calculateEV(p.p1/100, hOdd); finalKelly = calculateKelly(p.p1/100, hOdd); }
-            else if ((p.p2 * aOdd) / 100 > 1.15) { valueDetected = true; valueType = "2"; finalEv = calculateEV(p.p2/100, aOdd); finalKelly = calculateKelly(p.p2/100, aOdd); }
+            const marketProbs = removeBookmakerMargin(hOdd, dOdd, aOdd);
+            const blended = blendModelWithMarket({
+              model: { p1: p.p1 / 100, pX: p.pX / 100, p2: p.p2 / 100 },
+              market: marketProbs,
+              modelWeight: method === "advanced-teamstats" ? 0.76 : 0.63
+            });
+
+            const candidates = [
+              { type: "1", prob: blended?.p1 ?? (p.p1 / 100), odd: hOdd, confidence: p.p1, marketProb: marketProbs?.p1 ?? null },
+              { type: "X", prob: blended?.pX ?? (p.pX / 100), odd: dOdd, confidence: p.pX, marketProb: marketProbs?.pX ?? null },
+              { type: "2", prob: blended?.p2 ?? (p.p2 / 100), odd: aOdd, confidence: p.p2, marketProb: marketProbs?.p2 ?? null }
+            ].filter((c) => isGoodNum(c.odd) && c.odd >= 1.3);
+
+            const scored = candidates
+              .map((c) => {
+                const ev = calculateEV(c.prob, c.odd);
+                const rawEdge = (c.prob * c.odd);
+                const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
+                const volatility = 1 - Math.abs(c.confidence - 50) / 50;
+                const ensembleStake = calculateEnsembleStake({
+                  probability: c.prob,
+                  odds: c.odd,
+                  confidencePct: c.confidence,
+                  marketVolatility: volatility
+                });
+                const kelly = calculateKelly(c.prob, c.odd, c.confidence >= 65);
+                const noBet = evaluateNoBetZone({
+                  edge: rawEdge,
+                  evPct: ev,
+                  confidencePct: c.confidence,
+                  marketGapPct
+                });
+                const score = (rawEdge - 1) * 120 + (ev * 0.35) + (ensembleStake.stakePct * 2);
+                return { ...c, ev, rawEdge, score, ensembleStake, kelly, noBet, marketGapPct };
+              })
+              .filter((c) => c.noBet.allowBet)
+              .sort((a, b) => b.score - a.score);
+
+            if (scored.length > 0) {
+              const best = scored[0];
+              valueDetected = true;
+              valueType = best.type;
+              finalEv = best.ev;
+              finalKelly = best.ensembleStake.stakePct || best.kelly;
+              stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
+              stakingBreakdown = best.ensembleStake.components;
+              reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking"];
+            } else {
+              const analyzed = candidates
+                .map((c) => {
+                  const ev = calculateEV(c.prob, c.odd);
+                  const rawEdge = c.prob * c.odd;
+                  const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
+                  return evaluateNoBetZone({
+                    edge: rawEdge,
+                    evPct: ev,
+                    confidencePct: c.confidence,
+                    marketGapPct
+                  }).reasons;
+                })
+                .flat();
+              reasonCodes = Array.from(new Set(analyzed)).slice(0, 4);
+            }
           }
         }
         
@@ -148,9 +231,21 @@ export default async function handler(req, res) {
           },
           referee: refereeName || undefined,
           probs: p, odds, luckStats,
-          valueBet: { detected: valueDetected, type: valueType, ev: finalEv, kelly: finalKelly },
+          valueBet: {
+            detected: valueDetected,
+            type: valueType,
+            ev: finalEv,
+            kelly: finalKelly,
+            stakePlan: stakingCompact,
+            ensemble: stakingBreakdown,
+            reasons: reasonCodes
+          },
           predictions: { oneXtwo: finalPick1X2, gg: p.pGG >= 55 ? "GG" : "NGG", over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5", correctScore: calc.bestScore },
-          recommended: { pick: topPick, confidence: maxConf }
+          recommended: { pick: topPick, confidence: maxConf },
+          modelMeta: {
+            method,
+            probsModel: calc?.modelMeta?.method || "unknown"
+          }
         });
       }
     }
