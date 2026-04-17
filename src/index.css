@@ -16,6 +16,18 @@
     -webkit-font-smoothing: antialiased; 
     -moz-osx-font-smoothing: grayscale; 
   }
+  button {
+    transition: transform 140ms ease, filter 140ms ease, box-shadow 180ms ease;
+    transform: translateZ(0);
+  }
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+    filter: brightness(1.06);
+  }
+  button:focus-visible {
+    outline: 2px solid rgba(16, 185, 129, 0.55);
+    outline-offset: 2px;
+  }
 }
 
 @layer components {

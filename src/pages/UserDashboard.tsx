@@ -20,6 +20,7 @@ export default function UserDashboard() {
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
@@ -309,17 +310,29 @@ export default function UserDashboard() {
         {status && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-900/50 px-3 py-2 text-xs text-emerald-300">{status}</div>}
 
         {!user?.onboardingCompleted && (
-          <section className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4">
-            <h2 className="text-sm font-black uppercase tracking-wide text-emerald-200">Onboarding preferinte</h2>
-            <p className="mt-1 text-xs text-slate-200/80">
-              Selecteaza ligile favorite din panoul de ligi, apoi confirma onboarding-ul.
-            </p>
+          <section className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-3">
             <button
-              onClick={() => void completeOnboarding()}
-              className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-emerald-500"
+              onClick={() => setIsOnboardingOpen((prev) => !prev)}
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-left"
             >
-              Finalizeaza onboarding
+              <span className="text-sm font-black uppercase tracking-wide text-emerald-200">Onboarding preferinte</span>
+              <span className="text-[11px] font-semibold text-slate-300">
+                {selectedLeagueIds.length}/2 ligi
+              </span>
             </button>
+            {isOnboardingOpen && (
+              <div className="mt-3">
+                <p className="text-xs text-slate-200/80">
+                  Selecteaza ligile favorite din panoul de ligi, apoi confirma onboarding-ul.
+                </p>
+                <button
+                  onClick={() => void completeOnboarding()}
+                  className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-emerald-500"
+                >
+                  Finalizeaza onboarding
+                </button>
+              </div>
+            )}
           </section>
         )}
 
