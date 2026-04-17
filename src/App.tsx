@@ -183,6 +183,8 @@ export default function App() {
       setPreds(deduped);
       await fetch("/api/history/sync?days=30", { method: "POST" }).catch(() => null);
       await loadHistory(30);
+      await loadKpi(45);
+      await loadAlerts(7);
       setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
       void prefetchColors(deduped);
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);

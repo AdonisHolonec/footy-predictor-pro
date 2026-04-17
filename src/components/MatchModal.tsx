@@ -199,7 +199,12 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 </div>
                 <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center">
                   <div className="text-[10px] text-slate-500 uppercase font-black">Correct Score</div>
-                  <div className="text-sm font-black mt-1">{hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "-"}</div>
+                  <div className="text-sm font-black mt-1">{match.predictions.correctScore || "-"}</div>
+                  {hasFinalScore && (
+                    <div className="mt-1 text-[10px] text-slate-400 font-black">
+                      Final: {match.score?.home}-{match.score?.away}
+                    </div>
+                  )}
                 </div>
                 {match.predictions.cards && (
                   <div className="rounded-2xl border border-white/5 bg-black/20 p-3 text-center col-span-2">
