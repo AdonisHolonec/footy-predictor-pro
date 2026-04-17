@@ -1,5 +1,5 @@
-import { assertSupabaseConfigured, getSupabaseAdmin } from "../_utils/supabaseAdmin.js";
-import { assertAdmin } from "../_utils/authAdmin.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
+import { assertAdmin } from "../../server-utils/authAdmin.js";
 
 function parseBody(req) {
   if (!req.body) return {};

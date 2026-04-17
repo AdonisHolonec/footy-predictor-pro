@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, assertSupabaseConfigured } from "../_utils/supabaseAdmin.js";
+import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {

@@ -1,5 +1,5 @@
-import { assertSupabaseConfigured } from "./_utils/supabaseAdmin.js";
-import { readPredictionsHistory } from "./_utils/predictionsHistory.js";
+import { assertSupabaseConfigured } from "../server-utils/supabaseAdmin.js";
+import { readPredictionsHistory } from "../server-utils/predictionsHistory.js";
 
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET") {

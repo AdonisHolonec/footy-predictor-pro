@@ -1,5 +1,5 @@
 // api/warm.js
-import { getWithCache } from './_utils/fetcher.js';
+import { getWithCache } from '../server-utils/fetcher.js';
 
 export default async function handler(req, res) {
   // Pe Vercel, query params sunt automat în req.query

@@ -10,12 +10,8 @@ function readSupabaseEnv() {
 
 export function getSupabaseAdmin() {
   if (cachedClient) return cachedClient;
-
   const { url, serviceRoleKey } = readSupabaseEnv();
-  if (!url || !serviceRoleKey) {
-    return null;
-  }
-
+  if (!url || !serviceRoleKey) return null;
   cachedClient = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
@@ -28,10 +24,7 @@ export function assertSupabaseConfigured() {
     const missing = [];
     if (!url) missing.push("SUPABASE_URL");
     if (!serviceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
-    return {
-      ok: false,
-      error: `Supabase is not configured. Missing env: ${missing.join(", ")}`
-    };
+    return { ok: false, error: `Supabase is not configured. Missing env: ${missing.join(", ")}` };
   }
   return { ok: true };
 }

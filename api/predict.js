@@ -1,5 +1,5 @@
 // api/predict.js
-import { getWithCache } from './_utils/fetcher.js';
+import { getWithCache } from '../server-utils/fetcher.js';
 import { 
   extractGoalsAverages, 
   lambdasFromTeamStats, 
@@ -9,7 +9,7 @@ import {
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
   advancedLambdas
-} from './_utils/math.js';
+} from '../server-utils/math.js';
 import { 
   calculateEV, 
   calculateKellyQuarter as calculateKelly,
@@ -19,9 +19,9 @@ import {
   removeBookmakerMargin,
   blendModelWithMarket,
   evaluateNoBetZone
-} from './_utils/advancedMath.js';
-import { assertSupabaseConfigured, getSupabaseAdmin } from "./_utils/supabaseAdmin.js";
-import { upsertPredictionsHistory } from "./_utils/predictionsHistory.js";
+} from '../server-utils/advancedMath.js';
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
 
 function isGoodNum(val) {
   return typeof val === 'number' && !isNaN(val) && val > 0;

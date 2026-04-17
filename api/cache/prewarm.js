@@ -1,4 +1,4 @@
-import { getWithCache, getApiUsage } from "../_utils/fetcher.js";
+import { getWithCache, getApiUsage } from "../../server-utils/fetcher.js";
 
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET;

@@ -1,6 +1,6 @@
-import { getWithCache } from "../_utils/fetcher.js";
-import { getSupabaseAdmin, assertSupabaseConfigured } from "../_utils/supabaseAdmin.js";
-import { validationFromMatch } from "../_utils/predictionsHistory.js";
+import { getWithCache } from "../../server-utils/fetcher.js";
+import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
+import { validationFromMatch } from "../../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 

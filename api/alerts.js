@@ -1,4 +1,4 @@
-import { assertSupabaseConfigured, getSupabaseAdmin } from "./_utils/supabaseAdmin.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 
 function asNum(n) {
   const x = Number(n);

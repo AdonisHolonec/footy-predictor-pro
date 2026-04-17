@@ -1,5 +1,5 @@
 // api/fixtures/day.js
-import { getWithCache, getApiUsage, getApiUsageHistory } from '../_utils/fetcher.js';
+import { getWithCache, getApiUsage, getApiUsageHistory } from '../../server-utils/fetcher.js';
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);

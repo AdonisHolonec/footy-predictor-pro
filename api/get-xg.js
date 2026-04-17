@@ -1,5 +1,5 @@
 import { createClient } from '@vercel/kv';
-import { calculateSyntheticXG } from './_utils/advancedMath.js';
+import { calculateSyntheticXG } from '../server-utils/advancedMath.js';
 
 // Configurăm manual clientul KV folosind numele exacte de variabile din screenshot-ul tău
 const kv = createClient({
