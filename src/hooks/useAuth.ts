@@ -201,16 +201,17 @@ export function useAuth() {
   }, [session?.user, loadProfile]);
 
   const refreshManagedProfiles = useCallback(async () => {
-    if (!supabase || user?.role !== "admin") return [];
-    const { data, error: listError } = await supabase
-      .from("profiles")
-      .select("user_id, role, favorite_leagues, is_blocked")
-      .order("user_id", { ascending: true });
-    if (listError) {
-      setError(listError.message);
-      throw listError;
+    if (!supabase || user?.role !== "admin" || !session?.access_token) return [];
+    const response = await fetch("/api/admin/profiles", {
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    });
+    const json = await response.json();
+    if (!json?.ok) {
+      const message = json?.error || "Unable to load admin profiles.";
+      setError(message);
+      throw new Error(message);
     }
-    const rows = (data as ProfileRow[] | null) ?? [];
+    const rows = (json.items as ProfileRow[] | null) ?? [];
     const mapped = rows.map((row) => ({
       userId: row.user_id,
       role: row.role,
@@ -219,33 +220,45 @@ export function useAuth() {
     }));
     setManagedProfiles(mapped);
     return mapped;
-  }, [user?.role]);
+  }, [user?.role, session?.access_token]);
 
   const updateProfileRole = useCallback(async (targetUserId: string, role: "user" | "admin") => {
-    if (!supabase) return;
-    const { error: roleError } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("user_id", targetUserId);
-    if (roleError) {
-      setError(roleError.message);
-      throw roleError;
+    if (!supabase || !session?.access_token) return;
+    const response = await fetch("/api/admin/profiles", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ userId: targetUserId, role })
+    });
+    const json = await response.json();
+    if (!json?.ok) {
+      const message = json?.error || "Unable to update profile role.";
+      setError(message);
+      throw new Error(message);
     }
     await refreshManagedProfiles();
-  }, [refreshManagedProfiles]);
+  }, [refreshManagedProfiles, session?.access_token]);
 
   const toggleProfileBlock = useCallback(async (targetUserId: string, isBlocked: boolean) => {
-    if (!supabase) return;
-    const { error: blockError } = await supabase
-      .from("profiles")
-      .update({ is_blocked: isBlocked })
-      .eq("user_id", targetUserId);
-    if (blockError) {
-      setError(blockError.message);
-      throw blockError;
+    if (!supabase || !session?.access_token) return;
+    const response = await fetch("/api/admin/profiles", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ userId: targetUserId, isBlocked })
+    });
+    const json = await response.json();
+    if (!json?.ok) {
+      const message = json?.error || "Unable to update profile blocked state.";
+      setError(message);
+      throw new Error(message);
     }
     await refreshManagedProfiles();
-  }, [refreshManagedProfiles]);
+  }, [refreshManagedProfiles, session?.access_token]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
