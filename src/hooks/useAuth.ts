@@ -31,7 +31,7 @@ function sanitizeLeagueIds(values: number[]) {
   );
 }
 
-function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | null): User | null {
+function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | null = null): User | null {
   if (!user) return null;
   const fallbackFavorites = Array.isArray(user.user_metadata?.favoriteLeagues)
     ? user.user_metadata.favoriteLeagues.filter((value: unknown): value is number => typeof value === "number")
