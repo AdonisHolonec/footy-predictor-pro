@@ -98,10 +98,11 @@ export function useAuth() {
       setError(loginError.message);
       throw loginError;
     }
+    const nextProfile = data.user ? await loadProfile(data.user.id) : null;
     setSession(data.session);
-    setUser(mapSupabaseUser(data.user));
+    setUser(mapSupabaseUser(data.user, nextProfile));
     return data;
-  }, []);
+  }, [loadProfile]);
 
   const signup = useCallback(async (email: string, password: string) => {
     if (!supabase) {

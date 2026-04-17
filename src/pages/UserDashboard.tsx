@@ -12,7 +12,9 @@ export default function UserDashboard() {
   const { user, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
-  const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.user.favoriteLeagueIds", []);
+  const [selectedLeagueIds, setSelectedLeagueIds] = useState<number[]>([]);
+  const [favoriteLeaguesByUser, setFavoriteLeaguesByUser] = useLocalStorageState<Record<string, number[]>>("footy.user.favoriteLeagueByUser", {});
+  const [predictionsByUser, setPredictionsByUser] = useLocalStorageState<Record<string, PredictionRow[]>>("footy.user.predictionsByUser", {});
   const [searchLeague, setSearchLeague] = useState("");
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
   const [preds, setPreds] = useState<PredictionRow[]>([]);
@@ -60,8 +62,34 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.favoriteLeagues.length) setSelectedLeagueIds(user.favoriteLeagues);
-  }, [user?.id]);
+    const localFavorites = favoriteLeaguesByUser[user.id] || [];
+    if (localFavorites.length) {
+      setSelectedLeagueIds(localFavorites);
+    } else if (user.favoriteLeagues.length) {
+      setSelectedLeagueIds(user.favoriteLeagues);
+    } else {
+      setSelectedLeagueIds([]);
+    }
+  }, [user?.id, favoriteLeaguesByUser]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const localPredictions = predictionsByUser[user.id] || [];
+    if (!localPredictions.length) {
+      setPreds([]);
+      return;
+    }
+
+    const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+    const selectedDateSet = new Set(effectiveDates);
+    const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
+    const filtered = localPredictions.filter((row) => {
+      if (!selectedLeagueSet.size) return false;
+      const kickoffDate = String(row.kickoff || "").slice(0, 10);
+      return selectedDateSet.has(kickoffDate) && selectedLeagueSet.has(Number(row.leagueId));
+    });
+    setPreds(filtered);
+  }, [user?.id, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     setNotifySafe(user?.notificationPrefs?.safe ?? true);
@@ -71,18 +99,26 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!user) return;
+    setFavoriteLeaguesByUser((prev) => ({ ...prev, [user.id]: selectedLeagueIds }));
     const timer = setTimeout(() => {
       void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
         setStatus("Nu am putut salva preferintele de ligi.");
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [selectedLeagueIds, user?.id, updateFavoriteLeagues]);
+  }, [selectedLeagueIds, user?.id, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
 
   useEffect(() => {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
     void loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (preds.length > 0) return;
+    if (!selectedLeagueIds.length) return;
+    void rehydratePredictionsFromHistory();
+  }, [user?.id, preds.length, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     void loadHistory();
@@ -147,6 +183,39 @@ export default function UserDashboard() {
     }
   }
 
+  async function rehydratePredictionsFromHistory() {
+    try {
+      const response = await fetch("/api/history?days=14&limit=1000");
+      const json = await response.json();
+      if (!json?.ok || !Array.isArray(json.items)) return;
+
+      const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const selectedDateSet = new Set(effectiveDates);
+      const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
+      const hydrated = (json.items as PredictionRow[])
+        .filter((row) => {
+          const kickoffDate = String(row.kickoff || "").slice(0, 10);
+          return selectedDateSet.has(kickoffDate) && selectedLeagueSet.has(Number(row.leagueId));
+        })
+        .slice(0, 50);
+
+      if (!hydrated.length) return;
+
+      setPreds(hydrated);
+      if (user?.id) {
+        setPredictionsByUser((prev) => ({ ...prev, [user.id]: hydrated }));
+        setUserPredictionMap((prev) => {
+          const existing = prev[user.id] || [];
+          const merged = Array.from(new Set([...existing, ...hydrated.map((item) => Number(item.id))]));
+          return { ...prev, [user.id]: merged };
+        });
+      }
+      setStatus(`Am restaurat ${hydrated.length} predictii din istoric.`);
+    } catch {
+      // silent fallback
+    }
+  }
+
   async function warm() {
     if (dailyUsage.warm >= 3) {
       setStatus("Limita zilnica atinsa: maximum 3 rulări Warm/zi.");
@@ -200,6 +269,9 @@ export default function UserDashboard() {
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
+      if (user?.id) {
+        setPredictionsByUser((prev) => ({ ...prev, [user.id]: deduped }));
+      }
       if (user?.id) {
         setUserPredictionMap((prev) => {
           const existing = prev[user.id] || [];

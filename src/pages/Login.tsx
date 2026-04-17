@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { useAuth } from "../hooks/useAuth";
 import { HistoryStats } from "../types";
 
 export default function Login() {
-  const { signup, login, sendPasswordResetEmail, updatePassword, lastAuthEvent, error } = useAuth();
+  const { user, signup, login, sendPasswordResetEmail, updatePassword, lastAuthEvent, error } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +37,11 @@ export default function Login() {
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
     }
   }, [lastAuthEvent]);
+
+  useEffect(() => {
+    if (!user) return;
+    navigate("/", { replace: true });
+  }, [user?.id, navigate]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
