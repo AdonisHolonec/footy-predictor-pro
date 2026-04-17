@@ -34,6 +34,7 @@ export default function App() {
   const [draftDrawdownThreshold, setDraftDrawdownThreshold] = useState<number>(alertDrawdownThreshold);
   const [draftDriftThreshold, setDraftDriftThreshold] = useState<number>(alertDriftThreshold);
   const [draftLowDataThreshold, setDraftLowDataThreshold] = useState<number>(alertLowDataThreshold);
+  const [thresholdsSaved, setThresholdsSaved] = useState<"idle" | "saved" | "reset">("idle");
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -339,6 +340,7 @@ export default function App() {
     setAlertDriftThreshold(normalized.drift);
     setAlertLowDataThreshold(normalized.lowDataShare);
     await loadAlerts(7, normalized);
+    setThresholdsSaved("saved");
   }
 
   async function resetAlertThresholds() {
@@ -350,7 +352,14 @@ export default function App() {
     setAlertDriftThreshold(defaults.drift);
     setAlertLowDataThreshold(defaults.lowDataShare);
     await loadAlerts(7, defaults);
+    setThresholdsSaved("reset");
   }
+
+  useEffect(() => {
+    if (thresholdsSaved === "idle") return;
+    const timer = setTimeout(() => setThresholdsSaved("idle"), 1400);
+    return () => clearTimeout(timer);
+  }, [thresholdsSaved]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
@@ -460,6 +469,11 @@ export default function App() {
                   >
                     Reset defaults
                   </button>
+                  {thresholdsSaved !== "idle" && (
+                    <span className="px-2 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide border border-emerald-400/30 bg-emerald-500/15 text-emerald-200">
+                      {thresholdsSaved === "saved" ? "Saved" : "Defaults restored"}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2 text-[9px] text-slate-300/80 font-black uppercase tracking-wide">
                   Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData {(alertLowDataThreshold * 100).toFixed(0)}%
