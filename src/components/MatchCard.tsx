@@ -56,11 +56,16 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   });
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/get-xg?fixtureId=${row.id}`)
       .then((res) => res.json())
       .then((data) => {
-        if (!data.error) setXgData(data);
-      });
+        if (!cancelled && !data?.error) setXgData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [row.id]);
 
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
@@ -73,6 +78,16 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;
   const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
   const kickoffDate = new Date(row.kickoff);
+  const noBetReasonTokens = [
+    "edge_too_small",
+    "low_ev",
+    "low_confidence",
+    "market_disagrees",
+    "min_sample_guardrail",
+    "low_data_quality"
+  ];
+  const showNoBetFilteredBadge = Array.isArray(row.valueBet?.reasons)
+    && row.valueBet.reasons.some((reason) => noBetReasonTokens.some((token) => reason.includes(token)));
 
   return (
     <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
@@ -119,7 +134,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
             Calibrated
           </span>
         )}
-        {Array.isArray(row.valueBet?.reasons) && row.valueBet?.reasons.length > 0 && (
+        {showNoBetFilteredBadge && (
           <span className="text-[8px] px-2 py-0.5 rounded-full border border-amber-400/30 bg-amber-500/10 text-amber-200 font-black uppercase tracking-wide">
             No-bet filtered
           </span>
