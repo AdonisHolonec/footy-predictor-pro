@@ -8,6 +8,10 @@ type ProfileRow = {
   role: "user" | "admin";
   favorite_leagues: number[] | null;
   is_blocked: boolean | null;
+  notify_safe?: boolean | null;
+  notify_value?: boolean | null;
+  notify_email?: boolean | null;
+  onboarding_completed?: boolean | null;
 };
 
 type ManagedProfile = {
@@ -39,7 +43,13 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
     email: user.email ?? "",
     role: profile?.role ?? "user",
     favoriteLeagues,
-    isBlocked: Boolean(profile?.is_blocked)
+    isBlocked: Boolean(profile?.is_blocked),
+    onboardingCompleted: Boolean(profile?.onboarding_completed),
+    notificationPrefs: {
+      safe: profile?.notify_safe ?? true,
+      value: profile?.notify_value ?? true,
+      email: profile?.notify_email ?? false
+    }
   };
 }
 
@@ -55,7 +65,7 @@ export function useAuth() {
     if (!supabase) return null;
     const { data, error: profileError } = await supabase
       .from("profiles")
-      .select("user_id, role, favorite_leagues, is_blocked")
+      .select("user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, onboarding_completed")
       .eq("user_id", userId)
       .maybeSingle();
     if (profileError) throw profileError;
@@ -260,6 +270,44 @@ export function useAuth() {
     await refreshManagedProfiles();
   }, [refreshManagedProfiles, session?.access_token]);
 
+  const updateNotificationPreferences = useCallback(async (prefs: Partial<{ safe: boolean; value: boolean; email: boolean }>) => {
+    if (!supabase || !session?.user?.id) return null;
+    const payload = {};
+    if (typeof prefs.safe === "boolean") payload.notify_safe = prefs.safe;
+    if (typeof prefs.value === "boolean") payload.notify_value = prefs.value;
+    if (typeof prefs.email === "boolean") payload.notify_email = prefs.email;
+    if (!Object.keys(payload).length) return user;
+
+    const { error: prefsError } = await supabase
+      .from("profiles")
+      .update(payload)
+      .eq("user_id", session.user.id);
+    if (prefsError) {
+      setError(prefsError.message);
+      throw prefsError;
+    }
+    const nextProfile = await loadProfile(session.user.id);
+    const nextUser = mapSupabaseUser(session.user, nextProfile);
+    setUser(nextUser);
+    return nextUser;
+  }, [session?.user, loadProfile, user]);
+
+  const markOnboardingComplete = useCallback(async () => {
+    if (!supabase || !session?.user?.id) return null;
+    const { error: onboardingError } = await supabase
+      .from("profiles")
+      .update({ onboarding_completed: true })
+      .eq("user_id", session.user.id);
+    if (onboardingError) {
+      setError(onboardingError.message);
+      throw onboardingError;
+    }
+    const nextProfile = await loadProfile(session.user.id);
+    const nextUser = mapSupabaseUser(session.user, nextProfile);
+    setUser(nextUser);
+    return nextUser;
+  }, [session?.user, loadProfile]);
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
@@ -317,6 +365,8 @@ export function useAuth() {
     updateFavoriteLeagues,
     refreshManagedProfiles,
     updateProfileRole,
-    toggleProfileBlock
+    toggleProfileBlock,
+    updateNotificationPreferences,
+    markOnboardingComplete
   };
 }

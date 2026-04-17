@@ -9,7 +9,7 @@ import { DayResponse, HistoryStats, League, PredictionRow } from "../types";
 import { hashColor, inferSeason, isoToday, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
 export default function UserDashboard() {
-  const { user, logout, updateFavoriteLeagues } = useAuth();
+  const { user, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.user.favoriteLeagueIds", []);
@@ -20,6 +20,10 @@ export default function UserDashboard() {
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
+  const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
+  const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
+  const [alertsPreview, setAlertsPreview] = useState<{ safe: number; value: number }>({ safe: 0, value: 0 });
 
   const leaguesSorted = useMemo(() => {
     const leagues = (day?.leagues ?? [])
@@ -36,6 +40,12 @@ export default function UserDashboard() {
   }, [user?.id]);
 
   useEffect(() => {
+    setNotifySafe(user?.notificationPrefs?.safe ?? true);
+    setNotifyValue(user?.notificationPrefs?.value ?? true);
+    setNotifyEmail(user?.notificationPrefs?.email ?? false);
+  }, [user?.id, user?.notificationPrefs?.safe, user?.notificationPrefs?.value, user?.notificationPrefs?.email]);
+
+  useEffect(() => {
     if (!user) return;
     const timer = setTimeout(() => {
       void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
@@ -49,6 +59,12 @@ export default function UserDashboard() {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
     void loadHistory();
   }, []);
+
+  useEffect(() => {
+    const safeCount = preds.filter((row) => row.recommended?.confidence >= 70).length;
+    const valueCount = preds.filter((row) => row.valueBet?.detected).length;
+    setAlertsPreview({ safe: safeCount, value: valueCount });
+  }, [preds]);
 
   async function fetchDays(dates: string[]) {
     const effectiveDates = normalizeSelectedDates(dates.length ? dates : [date]);
@@ -133,6 +149,33 @@ export default function UserDashboard() {
     }
   }
 
+  async function completeOnboarding() {
+    if (!selectedLeagueIds.length) {
+      setStatus("Selecteaza cel putin o liga favorita pentru onboarding.");
+      return;
+    }
+    try {
+      await updateFavoriteLeagues(selectedLeagueIds);
+      await markOnboardingComplete();
+      setStatus("Onboarding finalizat. Preferintele tale au fost salvate.");
+    } catch (error: any) {
+      setStatus(error?.message || "Nu am putut finaliza onboarding-ul.");
+    }
+  }
+
+  async function saveNotificationPrefs() {
+    try {
+      await updateNotificationPreferences({
+        safe: notifySafe,
+        value: notifyValue,
+        email: notifyEmail
+      });
+      setStatus("Preferintele de notificare au fost salvate.");
+    } catch (error: any) {
+      setStatus(error?.message || "Nu am putut salva preferintele de notificare.");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
@@ -176,6 +219,53 @@ export default function UserDashboard() {
         </div>
 
         {status && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-900/50 px-3 py-2 text-xs text-emerald-300">{status}</div>}
+
+        {!user?.onboardingCompleted && (
+          <section className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4">
+            <h2 className="text-sm font-black uppercase tracking-wide text-emerald-200">Onboarding preferinte</h2>
+            <p className="mt-1 text-xs text-slate-200/80">
+              Selecteaza ligile favorite din panoul de ligi, apoi confirma onboarding-ul.
+            </p>
+            <button
+              onClick={() => void completeOnboarding()}
+              className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-emerald-500"
+            >
+              Finalizeaza onboarding
+            </button>
+          </section>
+        )}
+
+        <section className="mt-4 rounded-2xl border border-cyan-400/30 bg-slate-900/60 p-4">
+          <h2 className="text-sm font-black uppercase tracking-wide text-cyan-200">Notificari personalizate</h2>
+          <p className="mt-1 text-xs text-slate-300">
+            Configureaza alertele pentru predictii Safe / Value in functie de ligile favorite.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+              <input type="checkbox" checked={notifySafe} onChange={(event) => setNotifySafe(event.target.checked)} />
+              Safe alerts
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+              <input type="checkbox" checked={notifyValue} onChange={(event) => setNotifyValue(event.target.checked)} />
+              Value alerts
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+              <input type="checkbox" checked={notifyEmail} onChange={(event) => setNotifyEmail(event.target.checked)} />
+              Email delivery (beta)
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => void saveNotificationPrefs()}
+              className="rounded-lg border border-cyan-300/40 bg-cyan-500/15 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/25"
+            >
+              Salveaza preferinte
+            </button>
+            <span className="text-[11px] text-slate-400">
+              Preview astazi: {alertsPreview.safe} Safe · {alertsPreview.value} Value
+            </span>
+          </div>
+        </section>
 
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
           <div className="lg:col-span-4 xl:col-span-3">

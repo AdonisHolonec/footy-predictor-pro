@@ -113,4 +113,10 @@ export type User = {
   role: "user" | "admin";
   favoriteLeagues: number[];
   isBlocked?: boolean;
+  onboardingCompleted?: boolean;
+  notificationPrefs?: {
+    safe: boolean;
+    value: boolean;
+    email: boolean;
+  };
 };
