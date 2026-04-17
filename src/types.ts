@@ -110,5 +110,7 @@ export type RiskAlert = {
 export type User = {
   id: string;
   email: string;
+  role: "user" | "admin";
   favoriteLeagues: number[];
+  isBlocked?: boolean;
 };

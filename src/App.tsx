@@ -50,17 +50,22 @@ export default function App() {
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [isAdminWorking, setIsAdminWorking] = useState(false);
   const {
     user,
     loading: authLoading,
     error: authError,
     lastAuthEvent,
+    managedProfiles,
     login,
     signup,
     sendPasswordResetEmail,
     updatePassword,
     logout,
-    updateFavoriteLeagues
+    updateFavoriteLeagues,
+    refreshManagedProfiles,
+    updateProfileRole,
+    toggleProfileBlock
   } = useAuth();
 
   function requireAuth(message = "Autentifica-te pentru functiile personalizate.") {
@@ -427,6 +432,13 @@ export default function App() {
     }
   }, [lastAuthEvent]);
 
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    void refreshManagedProfiles().catch(() => {
+      setStatus("Nu am putut incarca lista utilizatorilor.");
+    });
+  }, [user?.id, user?.role, refreshManagedProfiles]);
+
   async function handleLogin(email: string, password: string) {
     setIsAuthSubmitting(true);
     try {
@@ -490,6 +502,32 @@ export default function App() {
       throw error;
     } finally {
       setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleAdminRoleChange(targetUserId: string, role: "user" | "admin") {
+    setIsAdminWorking(true);
+    try {
+      await updateProfileRole(targetUserId, role);
+      setStatus(`Rol actualizat la ${role} pentru ${targetUserId.slice(0, 8)}...`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Nu am putut actualiza rolul.";
+      setStatus(message);
+    } finally {
+      setIsAdminWorking(false);
+    }
+  }
+
+  async function handleAdminToggleBlock(targetUserId: string, isBlocked: boolean) {
+    setIsAdminWorking(true);
+    try {
+      await toggleProfileBlock(targetUserId, isBlocked);
+      setStatus(`${isBlocked ? "Blocat" : "Deblocat"} utilizator ${targetUserId.slice(0, 8)}...`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Nu am putut actualiza statusul utilizatorului.";
+      setStatus(message);
+    } finally {
+      setIsAdminWorking(false);
     }
   }
 
@@ -719,6 +757,72 @@ export default function App() {
         </div>
 
         {status && <div className="mb-6 p-3 bg-slate-900/40 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-mono">{"> "} {status}</div>}
+
+        {user?.role === "admin" && (
+          <section className="mb-6 rounded-2xl border border-cyan-400/20 bg-slate-900/50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black uppercase tracking-wide text-cyan-200">Admin · User Management</h2>
+                <p className="text-xs text-slate-400">Gestioneaza roluri, blocare/deblocare si preferinte utilizatori.</p>
+              </div>
+              <button
+                onClick={() => void refreshManagedProfiles()}
+                disabled={isAdminWorking}
+                className="rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              >
+                Refresh
+              </button>
+            </div>
+            <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10">
+              <table className="min-w-full text-left text-[11px]">
+                <thead className="sticky top-0 bg-slate-900/95 text-slate-400 uppercase">
+                  <tr>
+                    <th className="px-3 py-2">User ID</th>
+                    <th className="px-3 py-2">Role</th>
+                    <th className="px-3 py-2">Blocked</th>
+                    <th className="px-3 py-2">Favorite Leagues</th>
+                    <th className="px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managedProfiles.map((profile) => (
+                    <tr key={profile.userId} className="border-t border-white/5 text-slate-200">
+                      <td className="px-3 py-2 font-mono text-[10px]">{profile.userId}</td>
+                      <td className="px-3 py-2">{profile.role}</td>
+                      <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
+                      <td className="px-3 py-2">{profile.favoriteLeagues.length ? profile.favoriteLeagues.join(", ") : "-"}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => void handleAdminRoleChange(profile.userId, profile.role === "admin" ? "user" : "admin")}
+                            disabled={isAdminWorking}
+                            className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-cyan-200 disabled:opacity-50"
+                          >
+                            Make {profile.role === "admin" ? "user" : "admin"}
+                          </button>
+                          <button
+                            onClick={() => void handleAdminToggleBlock(profile.userId, !profile.isBlocked)}
+                            disabled={isAdminWorking}
+                            className="rounded-md border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-rose-200 disabled:opacity-50"
+                          >
+                            {profile.isBlocked ? "Unblock" : "Block"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!managedProfiles.length && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-4 text-center text-slate-500">
+                        Nu exista profile disponibile.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 xl:gap-10">
           {/* LIGI */}

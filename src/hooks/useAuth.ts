@@ -3,17 +3,43 @@ import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supaba
 import type { User } from "../types";
 import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
 
-function mapSupabaseUser(user: SupabaseAuthUser | null): User | null {
+type ProfileRow = {
+  user_id: string;
+  role: "user" | "admin";
+  favorite_leagues: number[] | null;
+  is_blocked: boolean | null;
+};
+
+type ManagedProfile = {
+  userId: string;
+  role: "user" | "admin";
+  favoriteLeagues: number[];
+  isBlocked: boolean;
+};
+
+function sanitizeLeagueIds(values: number[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value))
+    )
+  );
+}
+
+function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | null): User | null {
   if (!user) return null;
-  const favoriteLeaguesRaw = user.user_metadata?.favoriteLeagues;
-  const favoriteLeagues = Array.isArray(favoriteLeaguesRaw)
-    ? favoriteLeaguesRaw.filter((value): value is number => typeof value === "number")
+  const fallbackFavorites = Array.isArray(user.user_metadata?.favoriteLeagues)
+    ? user.user_metadata.favoriteLeagues.filter((value: unknown): value is number => typeof value === "number")
     : [];
+  const favoriteLeagues = sanitizeLeagueIds(profile?.favorite_leagues ?? fallbackFavorites);
 
   return {
     id: user.id,
     email: user.email ?? "",
-    favoriteLeagues
+    role: profile?.role ?? "user",
+    favoriteLeagues,
+    isBlocked: Boolean(profile?.is_blocked)
   };
 }
 
@@ -23,6 +49,18 @@ export function useAuth() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastAuthEvent, setLastAuthEvent] = useState<AuthChangeEvent | null>(null);
+  const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([]);
+
+  const loadProfile = useCallback(async (userId: string) => {
+    if (!supabase) return null;
+    const { data, error: profileError } = await supabase
+      .from("profiles")
+      .select("user_id, role, favorite_leagues, is_blocked")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    return (data as ProfileRow | null) ?? null;
+  }, []);
 
   const getSession = useCallback(async () => {
     if (!supabase) {
@@ -32,10 +70,11 @@ export function useAuth() {
     }
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
+    const nextProfile = data.session?.user ? await loadProfile(data.session.user.id) : null;
     setSession(data.session);
-    setUser(mapSupabaseUser(data.session?.user ?? null));
+    setUser(mapSupabaseUser(data.session?.user ?? null, nextProfile));
     return data.session;
-  }, []);
+  }, [loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
     if (!supabase) {
@@ -72,10 +111,22 @@ export function useAuth() {
       setError(signupError.message);
       throw signupError;
     }
+    if (data.user) {
+      await supabase.from("profiles").upsert(
+        {
+          user_id: data.user.id,
+          role: "user",
+          favorite_leagues: [],
+          is_blocked: false
+        },
+        { onConflict: "user_id" }
+      );
+    }
+    const nextProfile = data.user ? await loadProfile(data.user.id) : null;
     setSession(data.session ?? null);
-    setUser(mapSupabaseUser(data.user ?? data.session?.user ?? null));
+    setUser(mapSupabaseUser(data.user ?? data.session?.user ?? null, nextProfile));
     return data;
-  }, []);
+  }, [loadProfile]);
 
   const sendPasswordResetEmail = useCallback(async (email: string) => {
     if (!supabase) {
@@ -133,24 +184,68 @@ export function useAuth() {
       throw missingConfigError;
     }
     setError(null);
-    const sanitized = Array.from(
-      new Set(
-        favoriteLeagues
-          .map((value) => Number(value))
-          .filter((value) => Number.isFinite(value))
-      )
-    );
-    const { data, error: updateError } = await supabase.auth.updateUser({
-      data: { favoriteLeagues: sanitized }
-    });
+    const sanitized = sanitizeLeagueIds(favoriteLeagues);
+    if (!session?.user?.id) return null;
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ favorite_leagues: sanitized })
+      .eq("user_id", session.user.id);
     if (updateError) {
       setError(updateError.message);
       throw updateError;
     }
-    const nextUser = mapSupabaseUser(data.user);
+    const nextProfile = await loadProfile(session.user.id);
+    const nextUser = mapSupabaseUser(session.user, nextProfile);
     setUser(nextUser);
     return nextUser;
-  }, []);
+  }, [session?.user, loadProfile]);
+
+  const refreshManagedProfiles = useCallback(async () => {
+    if (!supabase || user?.role !== "admin") return [];
+    const { data, error: listError } = await supabase
+      .from("profiles")
+      .select("user_id, role, favorite_leagues, is_blocked")
+      .order("user_id", { ascending: true });
+    if (listError) {
+      setError(listError.message);
+      throw listError;
+    }
+    const rows = (data as ProfileRow[] | null) ?? [];
+    const mapped = rows.map((row) => ({
+      userId: row.user_id,
+      role: row.role,
+      favoriteLeagues: sanitizeLeagueIds(row.favorite_leagues ?? []),
+      isBlocked: Boolean(row.is_blocked)
+    }));
+    setManagedProfiles(mapped);
+    return mapped;
+  }, [user?.role]);
+
+  const updateProfileRole = useCallback(async (targetUserId: string, role: "user" | "admin") => {
+    if (!supabase) return;
+    const { error: roleError } = await supabase
+      .from("profiles")
+      .update({ role })
+      .eq("user_id", targetUserId);
+    if (roleError) {
+      setError(roleError.message);
+      throw roleError;
+    }
+    await refreshManagedProfiles();
+  }, [refreshManagedProfiles]);
+
+  const toggleProfileBlock = useCallback(async (targetUserId: string, isBlocked: boolean) => {
+    if (!supabase) return;
+    const { error: blockError } = await supabase
+      .from("profiles")
+      .update({ is_blocked: isBlocked })
+      .eq("user_id", targetUserId);
+    if (blockError) {
+      setError(blockError.message);
+      throw blockError;
+    }
+    await refreshManagedProfiles();
+  }, [refreshManagedProfiles]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -172,15 +267,26 @@ export function useAuth() {
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setLastAuthEvent(event);
       setSession(nextSession);
-      setUser(mapSupabaseUser(nextSession?.user ?? null));
-      setLoading(false);
+      if (!nextSession?.user) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      void loadProfile(nextSession.user.id)
+        .then((profile) => setUser(mapSupabaseUser(nextSession.user, profile)))
+        .catch((profileError: unknown) => {
+          const message = profileError instanceof Error ? profileError.message : "Unable to load profile";
+          setError(message);
+          setUser(mapSupabaseUser(nextSession.user, null));
+        })
+        .finally(() => setLoading(false));
     });
 
     return () => {
       isMounted = false;
       data.subscription.unsubscribe();
     };
-  }, [getSession]);
+  }, [getSession, loadProfile]);
 
   return {
     user,
@@ -188,12 +294,16 @@ export function useAuth() {
     loading,
     error,
     lastAuthEvent,
+    managedProfiles,
     login,
     signup,
     sendPasswordResetEmail,
     updatePassword,
     logout,
     getSession,
-    updateFavoriteLeagues
+    updateFavoriteLeagues,
+    refreshManagedProfiles,
+    updateProfileRole,
+    toggleProfileBlock
   };
 }
