@@ -74,7 +74,6 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   const isLive = ["1H", "2H", "HT", "ET", "P", "LIVE"].includes(row.status);
   const confPct = pct(row.recommended?.confidence);
   const confColor = confPct >= 75 ? "#10b981" : confPct >= 60 ? "#f59e0b" : "#ef4444";
-  const showFire = row.recommended?.confidence >= 70;
   const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;
   const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
   const kickoffDate = new Date(row.kickoff);
@@ -86,8 +85,23 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
     "min_sample_guardrail",
     "low_data_quality"
   ];
+  const normalizedModelMethod = String(row.modelMeta?.method || "").toLowerCase();
+  const modelBadgeLabel = normalizedModelMethod.includes("advanced")
+    ? "Advanced"
+    : normalizedModelMethod.includes("standings")
+    ? "Standings"
+    : normalizedModelMethod.includes("synthetic")
+    ? "Synthetic"
+    : row.modelMeta?.method || null;
+  const hasMarketCalibration = Array.isArray(row.valueBet?.reasons)
+    && row.valueBet.reasons.includes("market_calibrated");
+  const showCalibratedBadge = hasMarketCalibration
+    && isFinite(Number(row.odds?.home))
+    && isFinite(Number(row.odds?.draw))
+    && isFinite(Number(row.odds?.away));
   const showNoBetFilteredBadge = Array.isArray(row.valueBet?.reasons)
-    && row.valueBet.reasons.some((reason) => noBetReasonTokens.some((token) => reason.includes(token)));
+    && row.valueBet.reasons.some((reason) => noBetReasonTokens.some((token) => reason.includes(token)))
+    && !row.valueBet?.detected;
 
   return (
     <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
@@ -111,12 +125,11 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right">
-            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">{showFire ? "🔥 " : ""}Top Pick</div>
+            <div className="text-[8px] text-slate-500 uppercase font-black tracking-wide">Top Pick</div>
             <div className="text-xs sm:text-sm font-black text-emerald-400">{row.recommended.pick}</div>
           </div>
           <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-slate-800/50 shadow-inner" style={{ background: `conic-gradient(${confColor} ${confPct}%, rgba(255,255,255,0.05) 0)` }}>
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-900 rounded-full flex flex-col items-center justify-center text-[7px] sm:text-[8px] font-black text-white shadow-md leading-none">
-              {showFire && <span className="text-[8px] sm:text-[9px] -mb-0.5">🔥</span>}
               <span>{confPct}%</span>
             </div>
           </div>
@@ -124,12 +137,12 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
       </div>
 
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {row.modelMeta?.method && (
+        {modelBadgeLabel && (
           <span className="text-[8px] px-2 py-0.5 rounded-full border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 font-black uppercase tracking-wide">
-            Model: {row.modelMeta.method.includes("advanced") ? "Advanced" : row.modelMeta.method}
+            Model: {modelBadgeLabel}
           </span>
         )}
-        {row.modelMeta?.probsModel && (
+        {showCalibratedBadge && (
           <span className="text-[8px] px-2 py-0.5 rounded-full border border-blue-400/30 bg-blue-500/10 text-blue-200 font-black uppercase tracking-wide">
             Calibrated
           </span>
