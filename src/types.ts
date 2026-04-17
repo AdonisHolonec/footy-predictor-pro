@@ -60,6 +60,8 @@ export type PredictionRow = {
     leagueMultiplier?: number;
     driftPenalty?: number;
     cooldownCap?: number;
+    stakeBucket?: string;
+    stakeCap?: number;
     reasonCodes?: string[];
   };
 };

@@ -38,8 +38,23 @@ const LEAGUE_CONFIDENCE_MULTIPLIERS = {
   283: 0.9
 };
 
+const LEAGUE_STAKE_CAPS = {
+  39: 3.0,
+  140: 2.8,
+  135: 2.7,
+  78: 2.5,
+  61: 2.5,
+  2: 2.2,
+  3: 2.2,
+  283: 2.0
+};
+
 function getLeagueConfidenceMultiplier(leagueId) {
   return LEAGUE_CONFIDENCE_MULTIPLIERS[Number(leagueId)] || 0.88;
+}
+
+function getLeagueStakeCap(leagueId) {
+  return LEAGUE_STAKE_CAPS[Number(leagueId)] || 1.9;
 }
 
 function clampPct(n) {
@@ -58,6 +73,36 @@ function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
 
 function blendByPenalty(base, multiplier = 1) {
   return clampPct(base * Math.max(0.7, Math.min(1.05, multiplier)));
+}
+
+function resolveConfidenceBucket(confidencePct) {
+  const c = Number(confidencePct) || 0;
+  if (c >= 78) return { label: "elite", multiplier: 1.15 };
+  if (c >= 70) return { label: "high", multiplier: 1.0 };
+  if (c >= 62) return { label: "medium", multiplier: 0.82 };
+  if (c >= 54) return { label: "guarded", multiplier: 0.58 };
+  return { label: "low", multiplier: 0.25 };
+}
+
+function applyStakePolicyV2({
+  stakePct,
+  confidencePct,
+  dataQuality,
+  leagueStakeCap,
+  cooldownCap
+}) {
+  const bucket = resolveConfidenceBucket(confidencePct);
+  const qualityMul = dataQuality >= 0.75 ? 1 : dataQuality >= 0.62 ? 0.88 : 0.7;
+  const dynamicCap = Math.min(leagueStakeCap, cooldownCap);
+  const adjusted = (Number(stakePct) || 0) * bucket.multiplier * qualityMul;
+  const capped = Math.max(0, Math.min(adjusted, dynamicCap));
+  return {
+    stakePct: Number(capped.toFixed(2)),
+    bucket: bucket.label,
+    bucketMultiplier: Number(bucket.multiplier.toFixed(2)),
+    qualityMultiplier: Number(qualityMul.toFixed(2)),
+    dynamicCap: Number(dynamicCap.toFixed(2))
+  };
 }
 
 function estimateRollingDrawdown(rows) {
@@ -233,6 +278,7 @@ export default async function handler(req, res) {
         let stakingBreakdown = undefined;
         let reasonCodes = [];
         const leagueMultiplier = getLeagueConfidenceMultiplier(Number(lId));
+        const leagueStakeCap = getLeagueStakeCap(Number(lId));
         const oddsReq = await getWithCache('/odds', { fixture: fixtureId }, 86400);
         if (oddsReq.ok && oddsReq.data?.response?.[0]?.bookmakers?.[0]) {
           const bookie = oddsReq.data.response[0].bookmakers[0];
@@ -292,7 +338,7 @@ export default async function handler(req, res) {
               valueDetected = true;
               valueType = best.type;
               finalEv = best.ev;
-              finalKelly = Math.min(best.ensembleStake.stakePct || best.kelly, riskContext.cooldownCap);
+              finalKelly = best.ensembleStake.stakePct || best.kelly;
               stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
               stakingBreakdown = best.ensembleStake.components;
               reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking"];
@@ -358,9 +404,22 @@ export default async function handler(req, res) {
         if (p.pO25 > maxConf) { topPick = "Peste 2.5"; maxConf = p.pO25; }
         if (p.pGG > maxConf) { topPick = "GG"; maxConf = p.pGG; }
         maxConf = clampPct(maxConf * leagueMultiplier * qualityPenalty);
+        const stakePolicy = applyStakePolicyV2({
+          stakePct: finalKelly,
+          confidencePct: maxConf,
+          dataQuality,
+          leagueStakeCap,
+          cooldownCap: riskContext.cooldownCap
+        });
+        finalKelly = stakePolicy.stakePct;
+        if (valueDetected) {
+          stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
+        }
+        reasonCodes.push(`stake_bucket_${stakePolicy.bucket}`);
 
         if (dataQuality < 0.55) reasonCodes.push("low_data_quality");
         if (leagueMultiplier < 0.93) reasonCodes.push("league_multiplier_penalty");
+        if (finalKelly >= stakePolicy.dynamicCap && valueDetected) reasonCodes.push("stake_capped");
         reasonCodes = Array.from(new Set(reasonCodes)).slice(0, 6);
 
         const pOut = {
@@ -373,7 +432,9 @@ export default async function handler(req, res) {
         const topFeatures = [
           `method:${method}`,
           `dq:${dataQuality.toFixed(2)}`,
-          `leagueMul:${leagueMultiplier.toFixed(2)}`
+          `leagueMul:${leagueMultiplier.toFixed(2)}`,
+          `stakeCap:${stakePolicy.dynamicCap.toFixed(2)}`,
+          `bucket:${stakePolicy.bucket}`
         ];
 
         out.push({
@@ -408,6 +469,8 @@ export default async function handler(req, res) {
             leagueMultiplier: Number(leagueMultiplier.toFixed(3)),
             driftPenalty: Number(driftPenalty.toFixed(3)),
             cooldownCap: Number(riskContext.cooldownCap.toFixed(2)),
+            stakeBucket: stakePolicy.bucket,
+            stakeCap: stakePolicy.dynamicCap,
             reasonCodes
           },
           auditLog: {
