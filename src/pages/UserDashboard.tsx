@@ -47,11 +47,14 @@ export default function UserDashboard() {
 
   const leaguesSorted = useMemo(() => {
     const leagues = (day?.leagues ?? [])
-      .filter((league) => !user?.favoriteLeagues.length || user.favoriteLeagues.includes(Number(league.id)))
       .filter((league) => league.name.toLowerCase().includes(searchLeague.toLowerCase()) || league.country.toLowerCase().includes(searchLeague.toLowerCase()));
-    const elite = leagues.filter((league) => ELITE_LEAGUES.includes(Number(league.id)));
-    const rest = leagues.filter((league) => !ELITE_LEAGUES.includes(Number(league.id))).sort((a, b) => b.matches - a.matches);
-    return [...elite, ...rest];
+    const favoriteSet = new Set((user?.favoriteLeagues || []).map((id) => Number(id)));
+    const favorites = leagues.filter((league) => favoriteSet.has(Number(league.id)));
+    const elite = leagues.filter((league) => ELITE_LEAGUES.includes(Number(league.id)) && !favoriteSet.has(Number(league.id)));
+    const rest = leagues
+      .filter((league) => !favoriteSet.has(Number(league.id)) && !ELITE_LEAGUES.includes(Number(league.id)))
+      .sort((a, b) => b.matches - a.matches);
+    return [...favorites, ...elite, ...rest];
   }, [day, searchLeague, user?.favoriteLeagues]);
 
   useEffect(() => {
