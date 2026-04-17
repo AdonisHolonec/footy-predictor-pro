@@ -99,3 +99,10 @@ export type BacktestKpi = {
   drawdown: number;
   pnlUnits: number;
 };
+
+export type RiskAlert = {
+  id: "drawdown" | "drift" | "low_data_quality" | string;
+  level: "high" | "medium" | "low";
+  message: string;
+  value: number;
+};

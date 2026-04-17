@@ -3,7 +3,7 @@ import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
-import { BacktestKpi, DayResponse, HistoryEntry, HistoryStats, League, PredictionRow } from "./types";
+import { BacktestKpi, DayResponse, HistoryEntry, HistoryStats, League, PredictionRow, RiskAlert } from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
 import {
   dominantColorFromImage,
@@ -26,6 +26,8 @@ export default function App() {
   const [status, setStatus] = useState<string>("");
   const [kpi, setKpi] = useState<BacktestKpi | null>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+  const [riskAlerts, setRiskAlerts] = useState<RiskAlert[]>([]);
+  const [alertsSeverity, setAlertsSeverity] = useState<"none" | "medium" | "high">("none");
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -227,6 +229,19 @@ export default function App() {
     }
   }
 
+  async function loadAlerts(days = 7) {
+    try {
+      const res = await fetch(`/api/alerts?days=${days}`);
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca alertele.");
+      setRiskAlerts(Array.isArray(json.alerts) ? json.alerts : []);
+      setAlertsSeverity(json.severity === "high" || json.severity === "medium" ? json.severity : "none");
+    } catch {
+      setRiskAlerts([]);
+      setAlertsSeverity("none");
+    }
+  }
+
   useEffect(() => {
     const normalized = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
     if (normalized.length === 0) return;
@@ -241,6 +256,7 @@ export default function App() {
     void loadHistory(30);
     void syncHistory(30);
     void loadKpi(45);
+    void loadAlerts(7);
   }, []);
   useEffect(() => {
     const prev = prevWinRateRef.current;
@@ -321,6 +337,20 @@ export default function App() {
                   <div className="text-sm font-black text-slate-200">
                     {kpiLoading ? "..." : `${kpi?.settled || 0}`}
                   </div>
+                </div>
+              </div>
+              <div className={`mt-2 max-w-[760px] rounded-xl border px-3 py-2 ${
+                alertsSeverity === "high"
+                  ? "border-rose-500/40 bg-rose-500/10"
+                  : alertsSeverity === "medium"
+                  ? "border-amber-400/40 bg-amber-500/10"
+                  : "border-emerald-500/30 bg-emerald-500/10"
+              }`}>
+                <div className="text-[9px] uppercase tracking-widest font-black text-slate-300">Auto Alerting</div>
+                <div className="mt-1 text-xs font-semibold text-slate-100">
+                  {riskAlerts.length
+                    ? riskAlerts.map((a) => a.message).join(" • ")
+                    : "No active risk alerts"}
                 </div>
               </div>
           </div>
