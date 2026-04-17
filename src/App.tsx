@@ -31,6 +31,9 @@ export default function App() {
   const [alertDrawdownThreshold, setAlertDrawdownThreshold] = useLocalStorageState<number>("footy.alert.drawdown", 3);
   const [alertDriftThreshold, setAlertDriftThreshold] = useLocalStorageState<number>("footy.alert.drift", 24);
   const [alertLowDataThreshold, setAlertLowDataThreshold] = useLocalStorageState<number>("footy.alert.lowDataShare", 0.35);
+  const [draftDrawdownThreshold, setDraftDrawdownThreshold] = useState<number>(alertDrawdownThreshold);
+  const [draftDriftThreshold, setDraftDriftThreshold] = useState<number>(alertDriftThreshold);
+  const [draftLowDataThreshold, setDraftLowDataThreshold] = useState<number>(alertLowDataThreshold);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -234,13 +237,19 @@ export default function App() {
     }
   }
 
-  async function loadAlerts(days = 7) {
+  async function loadAlerts(
+    days = 7,
+    overrides?: { drawdown?: number; drift?: number; lowDataShare?: number }
+  ) {
     try {
+      const drawdown = overrides?.drawdown ?? alertDrawdownThreshold;
+      const drift = overrides?.drift ?? alertDriftThreshold;
+      const lowDataShare = overrides?.lowDataShare ?? alertLowDataThreshold;
       const qs = new URLSearchParams({
         days: String(days),
-        drawdown: String(alertDrawdownThreshold),
-        drift: String(alertDriftThreshold),
-        lowDataShare: String(alertLowDataThreshold)
+        drawdown: String(drawdown),
+        drift: String(drift),
+        lowDataShare: String(lowDataShare)
       });
       const res = await fetch(`/api/alerts?${qs.toString()}`);
       const json = await res.json();
@@ -270,7 +279,9 @@ export default function App() {
     void loadAlerts(7);
   }, []);
   useEffect(() => {
-    void loadAlerts(7);
+    setDraftDrawdownThreshold(alertDrawdownThreshold);
+    setDraftDriftThreshold(alertDriftThreshold);
+    setDraftLowDataThreshold(alertLowDataThreshold);
   }, [alertDrawdownThreshold, alertDriftThreshold, alertLowDataThreshold]);
   useEffect(() => {
     const prev = prevWinRateRef.current;
@@ -309,6 +320,37 @@ export default function App() {
   const usageCount = day?.usage?.count || 0;
   const usageLimit = day?.usage?.limit || 100;
   const usagePct = (usageCount / usageLimit) * 100;
+  const hasThresholdDraftChanges =
+    Math.abs(draftDrawdownThreshold - alertDrawdownThreshold) > 0.0001
+    || Math.abs(draftDriftThreshold - alertDriftThreshold) > 0.0001
+    || Math.abs(draftLowDataThreshold - alertLowDataThreshold) > 0.0001;
+
+  function normalizeThresholds(drawdown: number, drift: number, lowDataShare: number) {
+    return {
+      drawdown: Math.max(0.5, Math.min(Number(drawdown) || 3, 20)),
+      drift: Math.max(5, Math.min(Number(drift) || 24, 100)),
+      lowDataShare: Math.max(0.05, Math.min(Number(lowDataShare) || 0.35, 0.95))
+    };
+  }
+
+  async function applyAlertThresholds() {
+    const normalized = normalizeThresholds(draftDrawdownThreshold, draftDriftThreshold, draftLowDataThreshold);
+    setAlertDrawdownThreshold(normalized.drawdown);
+    setAlertDriftThreshold(normalized.drift);
+    setAlertLowDataThreshold(normalized.lowDataShare);
+    await loadAlerts(7, normalized);
+  }
+
+  async function resetAlertThresholds() {
+    const defaults = { drawdown: 3, drift: 24, lowDataShare: 0.35 };
+    setDraftDrawdownThreshold(defaults.drawdown);
+    setDraftDriftThreshold(defaults.drift);
+    setDraftLowDataThreshold(defaults.lowDataShare);
+    setAlertDrawdownThreshold(defaults.drawdown);
+    setAlertDriftThreshold(defaults.drift);
+    setAlertLowDataThreshold(defaults.lowDataShare);
+    await loadAlerts(7, defaults);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
@@ -374,8 +416,8 @@ export default function App() {
                       min={0.5}
                       max={20}
                       step={0.1}
-                      value={alertDrawdownThreshold}
-                      onChange={(e) => setAlertDrawdownThreshold(Number(e.target.value) || 3)}
+                      value={draftDrawdownThreshold}
+                      onChange={(e) => setDraftDrawdownThreshold(Number(e.target.value))}
                       className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
                     />
                   </label>
@@ -386,8 +428,8 @@ export default function App() {
                       min={5}
                       max={100}
                       step={1}
-                      value={alertDriftThreshold}
-                      onChange={(e) => setAlertDriftThreshold(Number(e.target.value) || 24)}
+                      value={draftDriftThreshold}
+                      onChange={(e) => setDraftDriftThreshold(Number(e.target.value))}
                       className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
                     />
                   </label>
@@ -398,11 +440,26 @@ export default function App() {
                       min={0.05}
                       max={0.95}
                       step={0.01}
-                      value={alertLowDataThreshold}
-                      onChange={(e) => setAlertLowDataThreshold(Number(e.target.value) || 0.35)}
+                      value={draftLowDataThreshold}
+                      onChange={(e) => setDraftLowDataThreshold(Number(e.target.value))}
                       className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
                     />
                   </label>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => void applyAlertThresholds()}
+                    disabled={!hasThresholdDraftChanges}
+                    className="px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Apply thresholds
+                  </button>
+                  <button
+                    onClick={() => void resetAlertThresholds()}
+                    className="px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide bg-slate-800 hover:bg-slate-700 border border-white/10"
+                  >
+                    Reset defaults
+                  </button>
                 </div>
                 <div className="mt-2 text-[9px] text-slate-300/80 font-black uppercase tracking-wide">
                   Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData {(alertLowDataThreshold * 100).toFixed(0)}%
