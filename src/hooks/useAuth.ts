@@ -54,7 +54,8 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
   return {
     id: user.id,
     email: user.email ?? "",
-    role: profile?.role ?? (isBootstrapAdmin ? "admin" : "user"),
+    // Bootstrap admin must override DB role "user" (signup creates user by default).
+    role: isBootstrapAdmin ? "admin" : (profile?.role ?? "user"),
     favoriteLeagues,
     isBlocked: Boolean(profile?.is_blocked),
     onboardingCompleted: Boolean(profile?.onboarding_completed),
