@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import LeaguePanel from "../components/LeaguePanel";
 import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
+import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
-import { DayResponse, HistoryStats, League, PredictionRow } from "../types";
+import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
-function historyStatsFromRows(rows: PredictionRow[]): HistoryStats {
+function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
   const wins = rows.filter((r) => r.validation === "win").length;
   const losses = rows.filter((r) => r.validation === "loss").length;
   const settled = wins + losses;
@@ -31,7 +32,7 @@ export default function UserDashboard() {
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
-  const [history, setHistory] = useState<PredictionRow[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
@@ -54,6 +55,7 @@ export default function UserDashboard() {
   const lastSelectionHydrateUserId = useRef<string | null>(null);
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
 
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
@@ -66,6 +68,25 @@ export default function UserDashboard() {
     () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
     [history, predIdSet]
   );
+  const userPerformanceByLeague = useMemo((): PerformanceLeagueBreakdown[] => {
+    const map = new Map<number, { leagueId: number; leagueName: string; wins: number; losses: number; pending: number }>();
+    for (const h of history) {
+      const lid = Number(h.leagueId);
+      if (!Number.isFinite(lid)) continue;
+      const name = h.league || String(lid);
+      if (!map.has(lid)) map.set(lid, { leagueId: lid, leagueName: name, wins: 0, losses: 0, pending: 0 });
+      const o = map.get(lid)!;
+      if (h.validation === "win") o.wins += 1;
+      else if (h.validation === "loss") o.losses += 1;
+      else if (h.validation === "pending") o.pending += 1;
+    }
+    return Array.from(map.values())
+      .map((o) => {
+        const settled = o.wins + o.losses;
+        return { ...o, settled, winRate: settled > 0 ? (o.wins / settled) * 100 : 0 };
+      })
+      .sort((a, b) => b.settled - a.settled);
+  }, [history]);
   const prevWinRateRef = useRef(trackerStats.winRate);
   const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
   const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
@@ -81,7 +102,7 @@ export default function UserDashboard() {
       const response = await fetch("/api/history?days=30");
       const json = await response.json();
       if (!json?.ok) return;
-      const items = (Array.isArray(json.items) ? json.items : []) as PredictionRow[];
+      const items = (Array.isArray(json.items) ? json.items : []) as HistoryEntry[];
       const uid = user?.id;
       if (!uid) {
         setHistory([]);
@@ -91,7 +112,7 @@ export default function UserDashboard() {
       const fromMap = userPredictionMap[uid] || [];
       const fromPreds = (predictionsByUser[uid] || []).map((r) => Number(r.id)).filter(Number.isFinite);
       const idSet = new Set<number>([...fromMap.map((id) => Number(id)).filter(Number.isFinite), ...fromPreds]);
-      const owned = idSet.size ? items.filter((item) => idSet.has(Number(item.id))) : [];
+      const owned: HistoryEntry[] = idSet.size ? items.filter((item) => idSet.has(Number(item.id))) : [];
       setHistory(owned);
       setHistoryStats(historyStatsFromRows(owned));
     } catch {
@@ -666,6 +687,7 @@ export default function UserDashboard() {
           pendingHistoryCount={pendingHistoryCount}
           displayedPredsCount={preds.length}
           pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+          onBreakdownClick={() => setPerfCounterModalOpen(true)}
         />
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -868,6 +890,15 @@ export default function UserDashboard() {
           </div>
         </div>
       </div>
+      <PerformanceCounterModal
+        open={perfCounterModalOpen}
+        onClose={() => setPerfCounterModalOpen(false)}
+        days={30}
+        globalByLeague={userPerformanceByLeague}
+        accessToken={session?.access_token ?? null}
+        isAdmin={user?.role === "admin"}
+        leagueTableHeading="Predicțiile tale · pe ligă (ultimele 30 zile)"
+      />
       {selectedMatch && (
         <MatchModal
           match={selectedMatch}

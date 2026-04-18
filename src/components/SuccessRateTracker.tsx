@@ -12,6 +12,8 @@ type SuccessRateTrackerProps = {
   displayedPredsCount?: number;
   /** How many of those IDs are still `pending` in the same 30-day history feed. */
   pendingAmongDisplayedPreds?: number;
+  /** Opens breakdown modal (global / per-user tables). */
+  onBreakdownClick?: () => void;
 };
 
 export default function SuccessRateTracker({
@@ -23,10 +25,11 @@ export default function SuccessRateTracker({
   isHistorySyncing,
   pendingHistoryCount,
   displayedPredsCount = 0,
-  pendingAmongDisplayedPreds = 0
+  pendingAmongDisplayedPreds = 0,
+  onBreakdownClick
 }: SuccessRateTrackerProps) {
-  return (
-    <div className="relative mt-4 w-full max-w-[760px] rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 px-2 sm:px-4 py-3 shadow-[0_0_40px_rgba(16,185,129,0.08)] overflow-hidden">
+  const inner = (
+    <>
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(34,211,238,0.22),transparent_40%),radial-gradient(circle_at_85%_20%,rgba(16,185,129,0.18),transparent_38%),linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:auto,auto,22px_22px,22px_22px]" />
       </div>
@@ -77,6 +80,28 @@ export default function SuccessRateTracker({
         </div>
       )}
       {isHistorySyncing && <div className="relative mt-2 text-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}
-    </div>
+      {onBreakdownClick && (
+        <div className="relative mt-2 text-center text-[9px] font-semibold text-slate-500">
+          Apasă pentru detalii (ligă · utilizator)
+        </div>
+      )}
+    </>
   );
+
+  const shellClass =
+    "relative mt-4 w-full max-w-[760px] rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 px-2 sm:px-4 py-3 shadow-[0_0_40px_rgba(16,185,129,0.08)] overflow-hidden";
+
+  if (onBreakdownClick) {
+    return (
+      <button
+        type="button"
+        onClick={onBreakdownClick}
+        className={`${shellClass} w-full cursor-pointer touch-manipulation text-left outline-none transition-[transform,box-shadow] duration-200 hover:border-cyan-400/40 hover:shadow-[0_0_48px_rgba(16,185,129,0.12)] active:scale-[0.995] motion-reduce:active:scale-100 focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950`}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return <div className={shellClass}>{inner}</div>;
 }

@@ -1,11 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
+import PerformanceCounterModal from "./components/PerformanceCounterModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
 import Auth from "./components/Auth";
-import { BacktestKpi, DayResponse, HistoryEntry, HistoryStats, League, PredictionRow, RiskAlert } from "./types";
+import {
+  BacktestKpi,
+  DayResponse,
+  HistoryEntry,
+  HistoryStats,
+  League,
+  PerformanceLeagueBreakdown,
+  PerformanceUserBreakdown,
+  PerformanceUserLeagueBreakdown,
+  PredictionRow,
+  RiskAlert
+} from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
 import { useAuth } from "./hooks/useAuth";
 import {
@@ -59,6 +71,12 @@ export default function App() {
     yesterday: { date?: string; count: number; limit: number; updatedAt?: string | null };
     history: Array<{ date?: string; count: number; limit: number; updatedAt?: string | null }>;
   } | null>(null);
+  const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
+  const [perfAdminSnapshot, setPerfAdminSnapshot] = useState<{
+    byUser: PerformanceUserBreakdown[];
+    byUserLeague: PerformanceUserLeagueBreakdown[];
+  } | null>(null);
+  const [perfAdminLoading, setPerfAdminLoading] = useState(false);
   const {
     user,
     session,
@@ -76,6 +94,39 @@ export default function App() {
     updateProfileRole,
     toggleProfileBlock
   } = useAuth();
+
+  const loadPerfAdmin = useCallback(async () => {
+    if (!session?.access_token || user?.role !== "admin") return;
+    setPerfAdminLoading(true);
+    try {
+      const res = await fetch("/api/history?performance=1&days=30", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        byUser?: PerformanceUserBreakdown[];
+        byUserLeague?: PerformanceUserLeagueBreakdown[];
+      };
+      if (json?.ok) {
+        setPerfAdminSnapshot({
+          byUser: Array.isArray(json.byUser) ? json.byUser : [],
+          byUserLeague: Array.isArray(json.byUserLeague) ? json.byUserLeague : []
+        });
+      }
+    } catch {
+      // keep previous snapshot
+    } finally {
+      setPerfAdminLoading(false);
+    }
+  }, [session?.access_token, user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== "admin") {
+      setPerfAdminSnapshot(null);
+      return;
+    }
+    void loadPerfAdmin();
+  }, [user?.role, loadPerfAdmin]);
 
   function requireAuth(message = "Autentifica-te pentru functiile personalizate.") {
     if (user) return true;
@@ -118,6 +169,25 @@ export default function App() {
     () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
     [history, predIdSet]
   );
+  const globalPerformanceByLeague = useMemo((): PerformanceLeagueBreakdown[] => {
+    const map = new Map<number, { leagueId: number; leagueName: string; wins: number; losses: number; pending: number }>();
+    for (const h of history) {
+      const lid = Number(h.leagueId);
+      if (!Number.isFinite(lid)) continue;
+      const name = h.league || String(lid);
+      if (!map.has(lid)) map.set(lid, { leagueId: lid, leagueName: name, wins: 0, losses: 0, pending: 0 });
+      const o = map.get(lid)!;
+      if (h.validation === "win") o.wins += 1;
+      else if (h.validation === "loss") o.losses += 1;
+      else if (h.validation === "pending") o.pending += 1;
+    }
+    return Array.from(map.values())
+      .map((o) => {
+        const settled = o.wins + o.losses;
+        return { ...o, settled, winRate: settled > 0 ? (o.wins / settled) * 100 : 0 };
+      })
+      .sort((a, b) => b.settled - a.settled);
+  }, [history]);
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
 
   const groupedDisplayedMatches = useMemo(() => {
@@ -280,6 +350,7 @@ export default function App() {
       setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
       void prefetchColors(deduped);
       if (window.innerWidth < 1024) setIsLeaguesOpen(false);
+      if (user?.role === "admin") void loadPerfAdmin();
     } catch (e: any) { setStatus(`Error: ${e.message}`); }
   }
 
@@ -626,6 +697,7 @@ export default function App() {
                 pendingHistoryCount={pendingHistoryCount}
                 displayedPredsCount={preds.length}
                 pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+                onBreakdownClick={() => setPerfCounterModalOpen(true)}
               />
               <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-[760px]">
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
@@ -882,6 +954,97 @@ export default function App() {
                 </div>
               )}
             </div>
+            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-950/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-black uppercase tracking-wide text-emerald-200/90">
+                  Performance counter · ultimele 30 zile (server)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void loadPerfAdmin()}
+                  disabled={perfAdminLoading}
+                  className="touch-manipulation rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200 disabled:opacity-50"
+                >
+                  {perfAdminLoading ? "Se încarcă…" : "Reîncarcă"}
+                </button>
+              </div>
+              <div className="mt-2 grid gap-3 lg:grid-cols-2">
+                <div>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Pe utilizator</p>
+                  <div className="max-h-48 overflow-auto rounded-lg border border-white/10">
+                    <table className="min-w-full text-left text-[10px] text-slate-200">
+                      <thead className="sticky top-0 bg-slate-900/95 text-slate-500 uppercase">
+                        <tr>
+                          <th className="px-2 py-1.5">Email</th>
+                          <th className="px-2 py-1.5 text-right">W</th>
+                          <th className="px-2 py-1.5 text-right">L</th>
+                          <th className="px-2 py-1.5 text-right">Pend</th>
+                          <th className="px-2 py-1.5 text-right">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(perfAdminSnapshot?.byUser || []).map((row) => (
+                          <tr key={row.userId} className="border-t border-white/5">
+                            <td className="max-w-[160px] truncate px-2 py-1 text-[9px] text-slate-200" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                              {row.email || "—"}
+                            </td>
+                            <td className="px-2 py-1 text-right text-emerald-300">{row.wins}</td>
+                            <td className="px-2 py-1 text-right text-rose-300">{row.losses}</td>
+                            <td className="px-2 py-1 text-right text-amber-200/90">{row.pending}</td>
+                            <td className="px-2 py-1 text-right text-cyan-200">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
+                          </tr>
+                        ))}
+                        {!perfAdminSnapshot?.byUser?.length && !perfAdminLoading && (
+                          <tr>
+                            <td colSpan={5} className="px-2 py-3 text-center text-slate-500">
+                              Fără date (utilizatorii trebuie să ruleze Predict autentificat).
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Utilizator + ligă</p>
+                  <div className="max-h-48 overflow-auto rounded-lg border border-white/10">
+                    <table className="min-w-full text-left text-[10px] text-slate-200">
+                      <thead className="sticky top-0 bg-slate-900/95 text-slate-500 uppercase">
+                        <tr>
+                          <th className="px-2 py-1.5">Email</th>
+                          <th className="px-2 py-1.5">Ligă</th>
+                          <th className="px-2 py-1.5 text-right">W</th>
+                          <th className="px-2 py-1.5 text-right">L</th>
+                          <th className="px-2 py-1.5 text-right">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(perfAdminSnapshot?.byUserLeague || []).map((row) => (
+                          <tr key={`${row.userId}-${row.leagueId}-${row.leagueName}`} className="border-t border-white/5">
+                            <td className="max-w-[100px] truncate px-2 py-1 text-[8px] text-slate-200" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                              {row.email ? (row.email.length > 18 ? `${row.email.slice(0, 18)}…` : row.email) : "—"}
+                            </td>
+                            <td className="max-w-[100px] truncate px-2 py-1" title={row.leagueName}>
+                              {row.leagueName || row.leagueId}
+                            </td>
+                            <td className="px-2 py-1 text-right text-emerald-300">{row.wins}</td>
+                            <td className="px-2 py-1 text-right text-rose-300">{row.losses}</td>
+                            <td className="px-2 py-1 text-right text-cyan-200">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
+                          </tr>
+                        ))}
+                        {!perfAdminSnapshot?.byUserLeague?.length && !perfAdminLoading && (
+                          <tr>
+                            <td colSpan={5} className="px-2 py-3 text-center text-slate-500">
+                              Fără date.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10">
               <table className="min-w-full text-left text-[11px]">
                 <thead className="sticky top-0 bg-slate-900/95 text-slate-400 uppercase">
@@ -1046,6 +1209,14 @@ export default function App() {
         </div>
       </div>
       {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} hashColor={hashColor} onClose={() => setSelectedMatch(null)} />}
+      <PerformanceCounterModal
+        open={perfCounterModalOpen}
+        onClose={() => setPerfCounterModalOpen(false)}
+        days={30}
+        globalByLeague={globalPerformanceByLeague}
+        accessToken={session?.access_token ?? null}
+        isAdmin={user?.role === "admin"}
+      />
       <Auth
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}

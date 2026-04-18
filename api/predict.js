@@ -527,6 +527,23 @@ export default async function handler(req, res) {
       } catch (persistError) {
         console.error("[history upsert] failed:", persistError?.message || persistError);
       }
+      if (usageCtx.userId && out.length > 0) {
+        try {
+          const supabase = getSupabaseAdmin();
+          const linkRows = out
+            .map((p) => ({ user_id: usageCtx.userId, fixture_id: Number(p.id) }))
+            .filter((r) => Number.isFinite(r.fixture_id));
+          if (linkRows.length) {
+            const { error: linkErr } = await supabase.from("user_prediction_fixtures").upsert(linkRows, {
+              onConflict: "user_id,fixture_id",
+              ignoreDuplicates: true
+            });
+            if (linkErr) console.error("[user_prediction_fixtures]", linkErr.message || linkErr);
+          }
+        } catch (linkEx) {
+          console.error("[user_prediction_fixtures]", linkEx?.message || linkEx);
+        }
+      }
     }
 
     if (enforceWarmPredictQuota) {

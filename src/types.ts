@@ -78,6 +78,33 @@ export type HistoryStats = {
   winRate: number;
 };
 
+/** Per-league settled/pending counts (global or scoped). */
+export type PerformanceLeagueBreakdown = {
+  leagueId: number;
+  leagueName: string;
+  wins: number;
+  losses: number;
+  pending: number;
+  settled: number;
+  winRate: number;
+};
+
+export type PerformanceUserBreakdown = {
+  userId: string;
+  /** Filled by `/api/history?performance=1` (auth email). */
+  email?: string | null;
+  wins: number;
+  losses: number;
+  pending: number;
+  settled: number;
+  winRate: number;
+};
+
+export type PerformanceUserLeagueBreakdown = PerformanceLeagueBreakdown & {
+  userId: string;
+  email?: string | null;
+};
+
 export type DayResponse = {
   ok: boolean;
   date: string;
