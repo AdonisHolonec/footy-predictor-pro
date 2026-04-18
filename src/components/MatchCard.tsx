@@ -104,7 +104,10 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
     && !row.valueBet?.detected;
 
   return (
-    <div onClick={onClick} className="relative flex flex-col bg-slate-900/30 border border-white/5 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 hover:border-emerald-500/50 hover:bg-slate-800/40 cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl">
+    <div
+      onClick={onClick}
+      className="relative isolate flex h-full flex-col rounded-[1.5rem] border border-white/5 bg-slate-900/30 p-4 sm:rounded-[2rem] sm:p-5 cursor-pointer transition-[border-color,box-shadow,background-color] duration-200 ease-out hover:border-emerald-500/50 hover:bg-slate-800/40 hover:shadow-lg"
+    >
       <div className="flex justify-between items-start gap-3 mb-3 sm:mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -188,10 +191,16 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
       )}
 
       <div className="space-y-1.5 mb-3 sm:mb-4 mt-4 sm:mt-5">
-        <div className="h-1.5 w-full bg-slate-800/50 rounded-full overflow-hidden flex">
-          <div style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }} className="transition-all duration-1000 shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)]" />
-          <div style={{ width: `${row.probs.pX}%` }} className="bg-slate-600 transition-all duration-1000" />
-          <div style={{ width: `${row.probs.p2}%`, backgroundColor: awayColor }} className="transition-all duration-1000 shadow-[inset_2px_0_4px_rgba(0,0,0,0.3)]" />
+        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-800/50">
+          <div
+            style={{ width: `${row.probs.p1}%`, backgroundColor: homeColor }}
+            className="shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)] transition-[width] duration-500 ease-out"
+          />
+          <div style={{ width: `${row.probs.pX}%` }} className="bg-slate-600 transition-[width] duration-500 ease-out" />
+          <div
+            style={{ width: `${row.probs.p2}%`, backgroundColor: awayColor }}
+            className="shadow-[inset_2px_0_4px_rgba(0,0,0,0.3)] transition-[width] duration-500 ease-out"
+          />
         </div>
         <div className="flex justify-between text-[7px] sm:text-[8px] font-black text-slate-400 uppercase px-1 gap-2">
           <span className={`${row.valueBet?.type === "1" ? "text-yellow-400" : ""}`}>{pct(row.probs.p1)}% · {row.odds?.home || "-"}</span>

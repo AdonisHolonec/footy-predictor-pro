@@ -23,14 +23,14 @@ export default function XGPerformanceBar({ xg }: XGPerformanceBarProps) {
         <div className="flex-1 flex flex-col items-end">
           <span className="text-[11px] font-mono font-bold text-emerald-400 mb-1">{safeHomeXG.toFixed(2)}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all duration-1000 ease-out" style={{ width: `${hW}%` }} />
+            <div className="h-full bg-emerald-500 transition-[width] duration-500 ease-out" style={{ width: `${hW}%` }} />
           </div>
         </div>
         <div className="text-[8px] font-black text-slate-700 italic">VS</div>
         <div className="flex-1 flex flex-col items-start">
           <span className="text-[11px] font-mono font-bold text-blue-400 mb-1">{safeAwayXG.toFixed(2)}</span>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 transition-all duration-1000 ease-out" style={{ width: `${aW}%` }} />
+            <div className="h-full bg-blue-500 transition-[width] duration-500 ease-out" style={{ width: `${aW}%` }} />
           </div>
         </div>
       </div>

@@ -36,6 +36,8 @@ export default function UserDashboard() {
   const [usageServerSyncedAt, setUsageServerSyncedAt] = useState<number | null>(null);
   const [usageQuotaExempt, setUsageQuotaExempt] = useState(false);
   const usageFetchGen = useRef(0);
+  /** Avoid re-hydrating selection from profile every time favoriteLeaguesByUser echoes from saves (caused “stuck” league list). */
+  const lastSelectionHydrateUserId = useRef<string | null>(null);
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
 
@@ -130,16 +132,21 @@ export default function UserDashboard() {
   }, [day, searchLeague, user?.favoriteLeagues]);
 
   useEffect(() => {
-    if (!user) return;
-    const localFavorites = favoriteLeaguesByUser[user.id] || [];
-    if (localFavorites.length) {
+    if (!user) {
+      lastSelectionHydrateUserId.current = null;
+      return;
+    }
+    if (lastSelectionHydrateUserId.current === user.id) return;
+    lastSelectionHydrateUserId.current = user.id;
+    const localFavorites = favoriteLeaguesByUser[user.id];
+    if (Array.isArray(localFavorites) && localFavorites.length > 0) {
       setSelectedLeagueIds(localFavorites);
     } else if (user.favoriteLeagues.length) {
       setSelectedLeagueIds(user.favoriteLeagues);
     } else {
       setSelectedLeagueIds([]);
     }
-  }, [user?.id, favoriteLeaguesByUser]);
+  }, [user, favoriteLeaguesByUser]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -767,7 +774,7 @@ export default function UserDashboard() {
                 Selecteaza ligile favorite si apasa Predict.
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
                 {preds.map((match) => (
                   <MatchCard
                     key={match.id}

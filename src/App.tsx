@@ -1024,7 +1024,7 @@ export default function App() {
                       <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent" />
                       <div className="text-[10px] text-slate-500 font-black">{group.matches.length} meciuri</div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
                       {group.matches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} hashColor={hashColor} onClick={() => setSelectedMatch(m)} />)}
                     </div>
                   </section>
