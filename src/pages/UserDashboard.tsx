@@ -23,6 +23,12 @@ export default function UserDashboard() {
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [history, setHistory] = useState<PredictionRow[]>([]);
+  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
+  const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
+  const [animatedWins, setAnimatedWins] = useState(0);
+  const [animatedLosses, setAnimatedLosses] = useState(0);
+  const [animatedWinRate, setAnimatedWinRate] = useState(0);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
@@ -42,10 +48,17 @@ export default function UserDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
 
   const todayKey = localCalendarDateKey();
-  const userPredictionIds = useMemo(() => {
-    if (!user) return [];
-    return userPredictionMap[user.id] || [];
-  }, [user?.id, userPredictionMap]);
+  const trackerStats = useMemo(() => historyStats, [historyStats]);
+  const pendingHistoryCount = useMemo(
+    () => history.filter((item) => item.validation === "pending").length,
+    [history]
+  );
+  const predIdSet = useMemo(() => new Set(preds.map((p) => p.id)), [preds]);
+  const pendingAmongDisplayedPreds = useMemo(
+    () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
+    [history, predIdSet]
+  );
+  const prevWinRateRef = useRef(trackerStats.winRate);
   const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
   const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
   const limitApplies = !usageQuotaExempt;
@@ -54,6 +67,33 @@ export default function UserDashboard() {
     setUsageServerSyncedAt(Date.now());
     setUsageServerSyncFailed(false);
   }, []);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const response = await fetch("/api/history?days=30");
+      const json = await response.json();
+      if (!json?.ok) return;
+      const items = Array.isArray(json.items) ? json.items : [];
+      setHistory(items as PredictionRow[]);
+      setHistoryStats(json.stats || { wins: 0, losses: 0, settled: 0, winRate: 0 });
+    } catch {
+      // keep existing data on failure
+    }
+  }, []);
+
+  const syncHistory = useCallback(async () => {
+    setIsHistorySyncing(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      await fetch("/api/history?sync=1&days=30", { method: "POST", headers });
+      await loadHistory();
+    } catch {
+      // indicator only
+    } finally {
+      setIsHistorySyncing(false);
+    }
+  }, [session?.access_token, loadHistory]);
 
   const fetchServerDailyUsage = useCallback(
     async (signal?: AbortSignal) => {
@@ -230,7 +270,7 @@ export default function UserDashboard() {
   useEffect(() => {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
     void loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -241,7 +281,46 @@ export default function UserDashboard() {
 
   useEffect(() => {
     void loadHistory();
-  }, [user?.id, userPredictionIds.join("|")]);
+  }, [user?.id, loadHistory]);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    void syncHistory();
+  }, [session?.access_token, syncHistory]);
+
+  useEffect(() => {
+    const prev = prevWinRateRef.current;
+    if (Math.abs(prev - trackerStats.winRate) > 0.01) {
+      setIsWinRatePulsing(true);
+      const tm = setTimeout(() => setIsWinRatePulsing(false), 900);
+      prevWinRateRef.current = trackerStats.winRate;
+      return () => clearTimeout(tm);
+    }
+    prevWinRateRef.current = trackerStats.winRate;
+  }, [trackerStats.winRate]);
+
+  useEffect(() => {
+    const durationMs = window.innerWidth < 768 ? 450 : 650;
+    const start = performance.now();
+    const fromWins = animatedWins;
+    const fromLosses = animatedLosses;
+    const fromRate = animatedWinRate;
+    const toWins = trackerStats.wins;
+    const toLosses = trackerStats.losses;
+    const toRate = trackerStats.winRate;
+
+    let raf = 0;
+    const step = (now: number) => {
+      const t = Math.min((now - start) / durationMs, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setAnimatedWins(Math.round(fromWins + (toWins - fromWins) * eased));
+      setAnimatedLosses(Math.round(fromLosses + (toLosses - fromLosses) * eased));
+      setAnimatedWinRate(fromRate + (toRate - fromRate) * eased);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   useEffect(() => {
     const safeCount = preds.filter((row) => row.recommended?.confidence >= 70).length;
@@ -277,28 +356,6 @@ export default function UserDashboard() {
       });
     } catch (error: any) {
       setStatus(error?.message || "Nu am putut incarca ligile.");
-    }
-  }
-
-  async function loadHistory() {
-    try {
-      const response = await fetch("/api/history?days=30");
-      const json = await response.json();
-      if (!json?.ok) return;
-      const items = Array.isArray(json.items) ? json.items : [];
-      if (!userPredictionIds.length) {
-        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
-        return;
-      }
-      const idSet = new Set(userPredictionIds);
-      const owned = items.filter((item: PredictionRow & { validation?: string }) => idSet.has(Number(item.id)));
-      const wins = owned.filter((item: any) => item.validation === "win").length;
-      const losses = owned.filter((item: any) => item.validation === "loss").length;
-      const settled = wins + losses;
-      const winRate = settled ? (wins / settled) * 100 : 0;
-      setHistoryStats({ wins, losses, settled, winRate });
-    } catch {
-      // keep defaults
     }
   }
 
@@ -491,6 +548,9 @@ export default function UserDashboard() {
           }
         }));
       }
+      const syncHeaders: Record<string, string> = {};
+      if (session?.access_token) syncHeaders.Authorization = `Bearer ${session.access_token}`;
+      await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
       await loadHistory();
     } catch (error: any) {
       setStatus(error?.message || "Predict a esuat.");
@@ -580,13 +640,15 @@ export default function UserDashboard() {
         </header>
 
         <SuccessRateTracker
-          stats={historyStats}
-          animatedWins={historyStats.wins}
-          animatedLosses={historyStats.losses}
-          animatedWinRate={historyStats.winRate}
-          isWinRatePulsing={false}
-          isHistorySyncing={false}
-          pendingHistoryCount={0}
+          stats={trackerStats}
+          animatedWins={animatedWins}
+          animatedLosses={animatedLosses}
+          animatedWinRate={animatedWinRate}
+          isWinRatePulsing={isWinRatePulsing}
+          isHistorySyncing={isHistorySyncing}
+          pendingHistoryCount={pendingHistoryCount}
+          displayedPredsCount={preds.length}
+          pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
         />
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
