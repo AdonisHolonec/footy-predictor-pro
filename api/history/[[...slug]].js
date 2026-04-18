@@ -2,10 +2,17 @@ import { getRequester } from "../../server-utils/authAdmin.js";
 import { calendarDateKeyEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../../server-utils/fetcher.js";
-import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
-import { validationFromMatch } from "../../server-utils/predictionsHistory.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
+import { readPredictionsHistory, validationFromMatch } from "../../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
+
+function slugParts(req) {
+  const s = req.query?.slug;
+  if (s === undefined || s === null || s === "") return [];
+  if (Array.isArray(s)) return s;
+  return String(s).split("/").filter(Boolean);
+}
 
 async function isAuthorizedHistorySync(req) {
   if (isAuthorizedCronOrInternalRequest(req)) return true;
@@ -13,7 +20,33 @@ async function isAuthorizedHistorySync(req) {
   return requester.ok;
 }
 
-export default async function handler(req, res) {
+async function handleHistoryRead(req, res) {
+  if (req.method && req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Method not allowed." });
+  }
+
+  const supabaseConfig = assertSupabaseConfigured();
+  if (!supabaseConfig.ok) {
+    return res.status(500).json({ ok: false, error: supabaseConfig.error });
+  }
+
+  const days = Number(req.query.days || 30);
+  const limit = Number(req.query.limit || 500);
+
+  try {
+    const { items, stats } = await readPredictionsHistory(days, limit);
+    return res.status(200).json({
+      ok: true,
+      days: Math.max(1, Math.min(days || 30, 120)),
+      stats,
+      items
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+  }
+}
+
+async function handleHistorySync(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed." });
   }
@@ -74,11 +107,7 @@ export default async function handler(req, res) {
       const matchStatus = fx?.fixture?.status?.short || row.match_status || "";
       const scoreHome = typeof fx?.goals?.home === "number" ? fx.goals.home : null;
       const scoreAway = typeof fx?.goals?.away === "number" ? fx.goals.away : null;
-      const validation = validationFromMatch(
-        matchStatus,
-        row.recommended_pick,
-        { home: scoreHome, away: scoreAway }
-      );
+      const validation = validationFromMatch(matchStatus, row.recommended_pick, { home: scoreHome, away: scoreAway });
 
       const statusChanged = String(matchStatus || "") !== String(row.match_status || "");
       const scoreChanged = scoreHome !== row.score_home || scoreAway !== row.score_away;
@@ -96,9 +125,7 @@ export default async function handler(req, res) {
     }
 
     if (updates.length > 0) {
-      const { error: updateError } = await supabase
-        .from(HISTORY_TABLE)
-        .upsert(updates, { onConflict: "fixture_id" });
+      const { error: updateError } = await supabase.from(HISTORY_TABLE).upsert(updates, { onConflict: "fixture_id" });
       if (updateError) throw updateError;
     }
 
@@ -110,4 +137,15 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ ok: false, error: error?.message || "History sync failed." });
   }
+}
+
+export default async function handler(req, res) {
+  const parts = slugParts(req);
+  if (parts.length === 0) {
+    return handleHistoryRead(req, res);
+  }
+  if (parts.length === 1 && parts[0] === "sync") {
+    return handleHistorySync(req, res);
+  }
+  return res.status(404).json({ ok: false, error: "Not found." });
 }

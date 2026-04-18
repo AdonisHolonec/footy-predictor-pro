@@ -6,9 +6,9 @@ React + Vite frontend; API routes under `api/` (Vercel serverless). Copy `.env.e
 
 Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/cronRequestAuth.js`:
 
-- `api/history/sync.js`
+- `api/history/[[...slug]].js` (POST `/api/history/sync`; cron path unchanged)
 - `api/cache/prewarm.js`
-- `api/backtest/snapshot.js`
+- `api/backtest/[[...slug]].js` (POST `/api/backtest/snapshot`; cron path unchanged)
 - `api/notifications/dispatch.js`
 - `api/cron/warm-predict.js`
 
@@ -27,6 +27,7 @@ Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/c
 - **`CRON_WARM_PREDICT_LEAGUE_IDS`**: optional; defaults to **`PREWARM_LEAGUE_IDS`** or the built-in elite list.
 - **`CRON_WARM_PREDICT_BASE_URL`**: optional absolute origin (e.g. `https://your-app.vercel.app`); if unset, uses `https://${VERCEL_URL}` on Vercel.
 - **`maxDuration`** for this function is set to **300** seconds in `vercel.json` because Warm + Predict can exceed the default limit.
+- After a **successful** Predict, the same job calls **`POST /api/history/sync?days=N`** with **`Authorization: Bearer` + `CRON_SECRET`** ( **`N`** = `CRON_HISTORY_SYNC_DAYS` or query `syncDays`, default 30). The overall cron response is **502** if that sync step fails, so it shows up in Vercel cron logs.
 
 ## Optional: anonymous rate limits (Warm / Predict)
 

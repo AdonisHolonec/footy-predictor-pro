@@ -45,6 +45,7 @@ function summarizePredictBody(body) {
 /**
  * Vercel Cron: authorize with CRON_SECRET, then call /api/warm and /api/predict on this deployment
  * without a user JWT (anonymous path — no per-user daily quota).
+ * After a successful predict, POST /api/history/sync with the same CRON_SECRET to refresh scores / validation.
  */
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
@@ -61,6 +62,8 @@ export default async function handler(req, res) {
   );
   const leagueIds = parseLeagueIds(process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS);
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
+  const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 30), 120));
+  const cronSecret = String(process.env.CRON_SECRET || "");
 
   const base = resolvePublicBaseUrl();
   const startedAt = new Date().toISOString();
@@ -107,12 +110,36 @@ export default async function handler(req, res) {
     });
     const predictBody = await readJsonBody(predictRes);
 
-    return res.status(predictRes.ok ? 200 : 502).json({
-      ok: predictRes.ok,
-      step: predictRes.ok ? "done" : "predict",
+    let historySync = null;
+    if (predictRes.ok) {
+      const syncHeaders = {
+        Accept: "application/json",
+        "x-internal-cron": "warm-predict"
+      };
+      if (cronSecret) syncHeaders.Authorization = `Bearer ${cronSecret}`;
+      const syncRes = await fetch(`${base}/api/history/sync?days=${syncDays}`, {
+        method: "POST",
+        headers: syncHeaders
+      });
+      const syncBody = await readJsonBody(syncRes);
+      historySync = {
+        httpStatus: syncRes.status,
+        ok: syncRes.ok && syncBody?.ok !== false,
+        scanned: syncBody?.scanned,
+        updated: syncBody?.updated,
+        message: syncBody?.message,
+        error: syncBody?.error || (!cronSecret ? "CRON_SECRET unset; history sync likely rejected in production." : null)
+      };
+    }
+
+    const pipelineOk = predictRes.ok && (historySync === null || historySync.ok);
+    return res.status(pipelineOk ? 200 : 502).json({
+      ok: pipelineOk,
+      step: !predictRes.ok ? "predict" : historySync && !historySync.ok ? "history-sync" : "done",
       date: dateRaw,
       season,
       leagueIds,
+      syncDays,
       base,
       startedAt,
       finishedAt: new Date().toISOString(),
@@ -126,7 +153,8 @@ export default async function handler(req, res) {
         httpStatus: predictRes.status,
         summary: summarizePredictBody(predictBody),
         error: predictBody?.error || null
-      }
+      },
+      historySync
     });
   } catch (error) {
     return res.status(500).json({
