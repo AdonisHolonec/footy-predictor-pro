@@ -119,4 +119,6 @@ export type User = {
     value: boolean;
     email: boolean;
   };
+  /** ISO timestamp when user consented to email notifications (GDPR). */
+  emailNotificationsConsentedAt?: string | null;
 };

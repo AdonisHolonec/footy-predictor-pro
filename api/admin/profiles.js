@@ -1,5 +1,6 @@
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
 import { assertAdmin } from "../../server-utils/authAdmin.js";
+import { parseUsageDayFromQuery } from "../../server-utils/userDailyWarmPredictUsage.js";
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -33,6 +34,9 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
+      const includeWarmPredictUsage = String(req.query.includeWarmPredictUsage || "") === "1";
+      const usageDay = parseUsageDayFromQuery(req.query);
+
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, role, favorite_leagues, is_blocked, created_at, updated_at")
@@ -40,7 +44,35 @@ export default async function handler(req, res) {
         .limit(500);
 
       if (error) throw error;
-      return res.status(200).json({ ok: true, items: data || [] });
+      let items = data || [];
+
+      if (includeWarmPredictUsage) {
+        if (!usageDay) {
+          return res.status(400).json({
+            ok: false,
+            error: "usageDay (YYYY-MM-DD) is required when includeWarmPredictUsage=1."
+          });
+        }
+        const { data: usageRows, error: usageError } = await supabase
+          .from("user_daily_warm_predict_usage")
+          .select("user_id, warm_count, predict_count")
+          .eq("usage_day", usageDay);
+        if (usageError) throw usageError;
+        const byUser = new Map((usageRows || []).map((r) => [r.user_id, r]));
+        items = items.map((p) => {
+          const u = byUser.get(p.user_id);
+          return {
+            ...p,
+            warmPredictUsage: {
+              usageDay,
+              warm: u ? Number(u.warm_count) : 0,
+              predict: u ? Number(u.predict_count) : 0
+            }
+          };
+        });
+      }
+
+      return res.status(200).json({ ok: true, items });
     }
 
     const body = parseBody(req);

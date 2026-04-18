@@ -1,4 +1,6 @@
 // api/warm.js
+import { readBearer } from "../server-utils/authAdmin.js";
+import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { getWithCache } from '../server-utils/fetcher.js';
 import {
   commitWarmPredictIncrement,
@@ -19,6 +21,18 @@ export default async function handler(req, res) {
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Missing leagueIds" });
+  }
+
+  if (!readBearer(req)) {
+    const maxPerHour = Math.max(1, Math.min(Number(process.env.ANON_RATE_WARM_PER_HOUR || 24), 200));
+    const rl = await checkAnonymousRateLimit(req, { namespace: "warm", maxPerHour });
+    if (!rl.ok) {
+      return res.status(429).json({
+        ok: false,
+        error: "Prea multe cereri anonime pentru Warm. Autentifica-te sau incearca mai tarziu.",
+        retryAfterSec: rl.retryAfterSec
+      });
+    }
   }
 
   const usageCtx = await resolveAuthenticatedUsageContext(req);

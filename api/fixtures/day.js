@@ -1,6 +1,8 @@
 // api/fixtures/day.js
+import { getRequester } from "../../server-utils/authAdmin.js";
 import { handleClaimBootstrapAdmin } from "../../server-utils/claimBootstrapAdmin.js";
 import { getWithCache, getApiUsage, getApiUsageHistory } from '../../server-utils/fetcher.js';
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
 import {
   isWarmPredictQuotaExempt,
   peekWarmPredictUsage,
@@ -13,8 +15,75 @@ export default async function handler(req, res) {
   const usageDays = Math.max(1, Math.min(Number(req.query.usageDays) || 7, 60));
   const syncBootstrapAdmin = String(req.query.syncBootstrapAdmin || "") === "1";
   const warmPredictUsage = String(req.query.warmPredictUsage || "") === "1";
+  const gdprExport = String(req.query.gdprExport || "") === "1";
 
   try {
+    if (gdprExport) {
+      if (req.method !== "GET") {
+        return res.status(405).json({ ok: false, error: "Method not allowed." });
+      }
+      const requester = await getRequester(req);
+      if (!requester.ok) {
+        return res.status(requester.status).json({ ok: false, error: requester.error });
+      }
+      const config = assertSupabaseConfigured();
+      if (!config.ok) {
+        return res.status(503).json({ ok: false, error: config.error });
+      }
+      const sb = getSupabaseAdmin();
+      if (!sb) {
+        return res.status(503).json({ ok: false, error: "Supabase admin unavailable." });
+      }
+      const uid = requester.user.id;
+      const { data: profile, error: profileError } = await sb
+        .from("profiles")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (profileError) {
+        return res.status(500).json({ ok: false, error: profileError.message });
+      }
+      const authRes = await sb.auth.admin.getUserById(uid);
+      if (authRes.error || !authRes.data?.user) {
+        return res.status(500).json({
+          ok: false,
+          error: authRes.error?.message || "Unable to load auth user."
+        });
+      }
+      let notificationDispatchLog = [];
+      const logResult = await sb
+        .from("notification_dispatch_log")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (!logResult.error) {
+        notificationDispatchLog = logResult.data || [];
+      } else {
+        console.error("[gdprExport] notification_dispatch_log:", logResult.error.message);
+      }
+      const au = authRes.data.user;
+      return res.status(200).json({
+        ok: true,
+        legalNotice:
+          "Export pentru dreptul de acces și portabilitate (GDPR). Nu constituie consultanță juridică.",
+        exportGeneratedAt: new Date().toISOString(),
+        profile: profile ?? null,
+        account: {
+          id: au.id,
+          email: au.email,
+          phone: au.phone,
+          created_at: au.created_at,
+          last_sign_in_at: au.last_sign_in_at,
+          confirmed_at: au.confirmed_at,
+          user_metadata: au.user_metadata ?? {}
+        },
+        notificationDispatchLog,
+        dataScopeNote:
+          "Tabelul global predictions_history nu leagă predicții de user_id. Datele din localStorage din browser nu sunt incluse."
+      });
+    }
+
     if (syncBootstrapAdmin) {
       const result = await handleClaimBootstrapAdmin(req);
       return res.status(result.status).json(result.body);

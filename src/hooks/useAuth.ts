@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
+import { localCalendarDateKey } from "../utils/appUtils";
 import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
 
 type ProfileRow = {
@@ -11,6 +12,7 @@ type ProfileRow = {
   notify_safe?: boolean | null;
   notify_value?: boolean | null;
   notify_email?: boolean | null;
+  notify_email_consent_at?: string | null;
   onboarding_completed?: boolean | null;
 };
 
@@ -19,6 +21,7 @@ type ManagedProfile = {
   role: "user" | "admin";
   favoriteLeagues: number[];
   isBlocked: boolean;
+  warmPredictUsage?: { usageDay: string; warm: number; predict: number };
 };
 
 function parseBootstrapAdminEmails() {
@@ -63,7 +66,8 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
       safe: profile?.notify_safe ?? true,
       value: profile?.notify_value ?? true,
       email: profile?.notify_email ?? false
-    }
+    },
+    emailNotificationsConsentedAt: profile?.notify_email_consent_at ?? null
   };
 }
 
@@ -79,7 +83,9 @@ export function useAuth() {
     if (!supabase) return null;
     const { data, error: profileError } = await supabase
       .from("profiles")
-      .select("user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, onboarding_completed")
+      .select(
+        "user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, notify_email_consent_at, onboarding_completed"
+      )
       .eq("user_id", userId)
       .maybeSingle();
     if (profileError) throw profileError;
@@ -273,7 +279,12 @@ export function useAuth() {
 
   const refreshManagedProfiles = useCallback(async () => {
     if (!supabase || user?.role !== "admin" || !session?.access_token) return [];
-    const response = await fetch("/api/admin/profiles", {
+    const usageDay = localCalendarDateKey();
+    const qs = new URLSearchParams({
+      includeWarmPredictUsage: "1",
+      usageDay
+    });
+    const response = await fetch(`/api/admin/profiles?${qs}`, {
       headers: { Authorization: `Bearer ${session.access_token}` }
     });
     const json = await response.json();
@@ -282,12 +293,25 @@ export function useAuth() {
       setError(message);
       throw new Error(message);
     }
-    const rows = (json.items as ProfileRow[] | null) ?? [];
-    const mapped = rows.map((row) => ({
+    type AdminRow = ProfileRow & {
+      warmPredictUsage?: { usageDay: string; warm: number; predict: number };
+    };
+    const rows = (json.items as AdminRow[] | null) ?? [];
+    const mapped: ManagedProfile[] = rows.map((row) => ({
       userId: row.user_id,
       role: row.role,
       favoriteLeagues: sanitizeLeagueIds(row.favorite_leagues ?? []),
-      isBlocked: Boolean(row.is_blocked)
+      isBlocked: Boolean(row.is_blocked),
+      warmPredictUsage:
+        row.warmPredictUsage &&
+        typeof row.warmPredictUsage.warm === "number" &&
+        typeof row.warmPredictUsage.predict === "number"
+          ? {
+              usageDay: String(row.warmPredictUsage.usageDay || usageDay),
+              warm: row.warmPredictUsage.warm,
+              predict: row.warmPredictUsage.predict
+            }
+          : undefined
     }));
     setManagedProfiles(mapped);
     return mapped;
@@ -331,12 +355,22 @@ export function useAuth() {
     await refreshManagedProfiles();
   }, [refreshManagedProfiles, session?.access_token]);
 
-  const updateNotificationPreferences = useCallback(async (prefs: Partial<{ safe: boolean; value: boolean; email: boolean }>) => {
+  const updateNotificationPreferences = useCallback(
+    async (
+      prefs: Partial<{ safe: boolean; value: boolean; email: boolean; emailConsentAcknowledged?: boolean }>
+    ) => {
     if (!supabase || !session?.user?.id) return null;
-    const payload = {};
+    const payload: Record<string, unknown> = {};
     if (typeof prefs.safe === "boolean") payload.notify_safe = prefs.safe;
     if (typeof prefs.value === "boolean") payload.notify_value = prefs.value;
-    if (typeof prefs.email === "boolean") payload.notify_email = prefs.email;
+    if (typeof prefs.email === "boolean") {
+      payload.notify_email = prefs.email;
+      if (prefs.email === false) {
+        payload.notify_email_consent_at = null;
+      } else if (prefs.email === true && prefs.emailConsentAcknowledged === true) {
+        payload.notify_email_consent_at = new Date().toISOString();
+      }
+    }
     if (!Object.keys(payload).length) return user;
 
     const { error: prefsError } = await supabase

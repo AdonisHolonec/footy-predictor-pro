@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
+import Privacy from "./pages/Privacy";
 import UserDashboard from "./pages/UserDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import { useAuth } from "./hooks/useAuth";
@@ -35,6 +36,7 @@ export default function RootRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<AuthGate />} />
       </Routes>

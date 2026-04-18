@@ -1,4 +1,6 @@
 // api/predict.js
+import { readBearer } from "../server-utils/authAdmin.js";
+import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { getWithCache } from '../server-utils/fetcher.js';
 import { 
   extractGoalsAverages, 
@@ -183,6 +185,18 @@ export default async function handler(req, res) {
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Nu ai selectat nicio ligă." });
+  }
+
+  if (!readBearer(req)) {
+    const maxPerHour = Math.max(1, Math.min(Number(process.env.ANON_RATE_PREDICT_PER_HOUR || 16), 200));
+    const rl = await checkAnonymousRateLimit(req, { namespace: "predict", maxPerHour });
+    if (!rl.ok) {
+      return res.status(429).json({
+        ok: false,
+        error: "Prea multe cereri anonime pentru Predict. Autentifica-te sau incearca mai tarziu.",
+        retryAfterSec: rl.retryAfterSec
+      });
+    }
   }
 
   const usageCtx = await resolveAuthenticatedUsageContext(req);

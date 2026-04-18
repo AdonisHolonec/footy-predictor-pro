@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
@@ -110,6 +111,12 @@ export default function App() {
   const pendingHistoryCount = useMemo(
     () => history.filter((item) => item.validation === "pending").length,
     [history]
+  );
+  const predIdSet = useMemo(() => new Set(preds.map((p) => p.id)), [preds]);
+  /** Pending rows in history that match the currently displayed prediction list (correlates with „Toate”). */
+  const pendingAmongDisplayedPreds = useMemo(
+    () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
+    [history, predIdSet]
   );
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
 
@@ -610,6 +617,8 @@ export default function App() {
                 isWinRatePulsing={isWinRatePulsing}
                 isHistorySyncing={isHistorySyncing}
                 pendingHistoryCount={pendingHistoryCount}
+                displayedPredsCount={preds.length}
+                pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
               />
               <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-[760px]">
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
@@ -827,6 +836,13 @@ export default function App() {
               <div>
                 <h2 className="text-sm font-black uppercase tracking-wide text-cyan-200">Admin · User Management</h2>
                 <p className="text-xs text-slate-400">Gestioneaza roluri, blocare/deblocare si preferinte utilizatori.</p>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Warm/Predict pe zi (calendar local): <span className="font-mono text-slate-400">{localCalendarDateKey()}</span>
+                  {" · "}
+                  <Link to="/privacy" className="text-cyan-500/90 hover:text-cyan-300">
+                    Confidențialitate (GDPR)
+                  </Link>
+                </p>
               </div>
               <button
                 onClick={() => void refreshManagedProfiles()}
@@ -866,6 +882,7 @@ export default function App() {
                     <th className="px-3 py-2">User ID</th>
                     <th className="px-3 py-2">Role</th>
                     <th className="px-3 py-2">Blocked</th>
+                    <th className="px-3 py-2">Warm / Predict</th>
                     <th className="px-3 py-2">Favorite Leagues</th>
                     <th className="px-3 py-2">Actions</th>
                   </tr>
@@ -876,6 +893,9 @@ export default function App() {
                       <td className="px-3 py-2 font-mono text-[10px]">{profile.userId}</td>
                       <td className="px-3 py-2">{profile.role}</td>
                       <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-slate-300">
+                        {profile.warmPredictUsage ? `${profile.warmPredictUsage.warm} / ${profile.warmPredictUsage.predict}` : "—"}
+                      </td>
                       <td className="px-3 py-2">{profile.favoriteLeagues.length ? profile.favoriteLeagues.join(", ") : "-"}</td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-2">
@@ -899,7 +919,7 @@ export default function App() {
                   ))}
                   {!managedProfiles.length && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center text-slate-500">
+                      <td colSpan={6} className="px-3 py-4 text-center text-slate-500">
                         Nu exista profile disponibile.
                       </td>
                     </tr>
@@ -948,7 +968,13 @@ export default function App() {
             {preds.length > 0 && (
               <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 sm:gap-4 mb-6 bg-slate-900/40 p-3 lg:p-4 rounded-2xl border border-white/5">
                 <div className="flex gap-2 overflow-x-auto xl:overflow-visible pb-2 xl:pb-0 border-b xl:border-b-0 xl:border-r border-white/5 xl:pr-4 custom-scrollbar snap-x snap-mandatory">
-                  <button onClick={() => setFilterMode("ALL")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}>Toate ({preds.length})</button>
+                  <button
+                    onClick={() => setFilterMode("ALL")}
+                    className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}
+                  >
+                    Toate ({preds.length}
+                    {pendingAmongDisplayedPreds > 0 ? ` · ${pendingAmongDisplayedPreds} nevalidate` : ""})
+                  </button>
                   <button onClick={() => setFilterMode("VALUE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "VALUE" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50" : "text-slate-400 hover:bg-slate-800"}`}>💎 Value Bets</button>
                   <button onClick={() => setFilterMode("SAFE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "SAFE" ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50" : "text-slate-400 hover:bg-slate-800"}`}>🔥 +70% Siguranță</button>
                 </div>

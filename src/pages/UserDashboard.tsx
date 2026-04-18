@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import LeaguePanel from "../components/LeaguePanel";
 import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
@@ -35,6 +36,8 @@ export default function UserDashboard() {
   const [usageServerSyncedAt, setUsageServerSyncedAt] = useState<number | null>(null);
   const [usageQuotaExempt, setUsageQuotaExempt] = useState(false);
   const usageFetchGen = useRef(0);
+  const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const todayKey = localCalendarDateKey();
   const userPredictionIds = useMemo(() => {
@@ -162,6 +165,11 @@ export default function UserDashboard() {
     setNotifyValue(user?.notificationPrefs?.value ?? true);
     setNotifyEmail(user?.notificationPrefs?.email ?? false);
   }, [user?.id, user?.notificationPrefs?.safe, user?.notificationPrefs?.value, user?.notificationPrefs?.email]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setNotifyEmailConsent(Boolean(user.emailNotificationsConsentedAt && user.notificationPrefs?.email));
+  }, [user?.id, user?.emailNotificationsConsentedAt, user?.notificationPrefs?.email]);
 
   useEffect(() => {
     usageFetchGen.current += 1;
@@ -497,15 +505,49 @@ export default function UserDashboard() {
   }
 
   async function saveNotificationPrefs() {
+    if (notifyEmail && !notifyEmailConsent) {
+      setStatus("Pentru e-mail trebuie sa bifezi confirmarea din politica de confidentialitate.");
+      return;
+    }
     try {
       await updateNotificationPreferences({
         safe: notifySafe,
         value: notifyValue,
-        email: notifyEmail
+        email: notifyEmail,
+        emailConsentAcknowledged: notifyEmail ? true : undefined
       });
       setStatus("Preferintele de notificare au fost salvate.");
     } catch (error: any) {
       setStatus(error?.message || "Nu am putut salva preferintele de notificare.");
+    }
+  }
+
+  async function downloadPersonalDataExport() {
+    if (!session?.access_token) {
+      setStatus("Export indisponibil: nu exista sesiune activa.");
+      return;
+    }
+    setExportBusy(true);
+    try {
+      const res = await fetch(`/api/fixtures/day?gdprExport=1`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(typeof json?.error === "string" ? json.error : "Export esuat.");
+      }
+      const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `footy-date-personale-${user?.id?.slice(0, 8) ?? "user"}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("Am descarcat exportul JSON cu datele disponibile pe server.");
+    } catch (error: unknown) {
+      setStatus(error instanceof Error ? error.message : "Export esuat.");
+    } finally {
+      setExportBusy(false);
     }
   }
 
@@ -515,7 +557,12 @@ export default function UserDashboard() {
         <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-black text-white">Footy Predictor User Dashboard</h1>
-            <p className="text-xs text-slate-400">Cont: {user?.email}</p>
+            <p className="text-xs text-slate-400">
+              Cont: {user?.email} ·{" "}
+              <Link to="/privacy" className="text-cyan-400 hover:text-cyan-300">
+                Confidențialitate
+              </Link>
+            </p>
           </div>
           <button
             onClick={() => void logout()}
@@ -638,10 +685,35 @@ export default function UserDashboard() {
                   Value alerts
                 </label>
                 <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
-                  <input type="checkbox" checked={notifyEmail} onChange={(event) => setNotifyEmail(event.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={notifyEmail}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setNotifyEmail(next);
+                      if (!next) setNotifyEmailConsent(false);
+                    }}
+                  />
                   Email delivery (beta)
                 </label>
               </div>
+              {notifyEmail && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={notifyEmailConsent}
+                    onChange={(event) => setNotifyEmailConsent(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Confirm ca am citit sectiunea despre e-mail din{" "}
+                    <Link to="/privacy" className="font-bold text-cyan-400 hover:text-cyan-300">
+                      politica de confidentialitate
+                    </Link>{" "}
+                    si sunt de acord cu trimiterea de alerte la adresa contului.
+                  </span>
+                </label>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => void saveNotificationPrefs()}
@@ -652,6 +724,25 @@ export default function UserDashboard() {
               </div>
             </div>
           )}
+        </section>
+
+        <section className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 p-3">
+          <h2 className="text-sm font-black uppercase tracking-wide text-slate-200">Date personale (GDPR)</h2>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Descarca un export JSON cu profilul, datele de cont si jurnalul de notificari disponibile pe server. Vezi{" "}
+            <Link to="/privacy" className="text-cyan-400 hover:text-cyan-300">
+              politica de confidentialitate
+            </Link>{" "}
+            pentru detalii.
+          </p>
+          <button
+            type="button"
+            disabled={exportBusy}
+            onClick={() => void downloadPersonalDataExport()}
+            className="mt-2 rounded-lg border border-white/15 bg-slate-800 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+          >
+            {exportBusy ? "Se genereaza..." : "Descarca export JSON"}
+          </button>
         </section>
 
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">

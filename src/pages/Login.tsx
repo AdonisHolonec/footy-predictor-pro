@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { useAuth } from "../hooks/useAuth";
 import { HistoryStats } from "../types";
@@ -15,6 +15,7 @@ export default function Login() {
   const [message, setMessage] = useState("");
   const [localError, setLocalError] = useState("");
   const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   useEffect(() => {
     void fetch("/api/history?days=30")
@@ -49,6 +50,10 @@ export default function Login() {
     setMessage("");
     if (!email.trim()) {
       setLocalError("Email este obligatoriu.");
+      return;
+    }
+    if (mode === "signup" && !privacyAccepted) {
+      setLocalError("Trebuie sa confirmi ca ai citit politica de confidentialitate.");
       return;
     }
     try {
@@ -144,6 +149,24 @@ export default function Login() {
               </label>
             )}
 
+            {mode === "signup" && (
+              <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={privacyAccepted}
+                  onChange={(event) => setPrivacyAccepted(event.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Confirm ca am citit{" "}
+                  <Link to="/privacy" className="font-bold text-cyan-400 hover:text-cyan-300">
+                    politica de confidentialitate
+                  </Link>{" "}
+                  si sunt de acord cu prelucrarea datelor necesare contului.
+                </span>
+              </label>
+            )}
+
             {(localError || error) && (
               <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">
                 {localError || error}
@@ -173,7 +196,13 @@ export default function Login() {
           </form>
           <div className="mt-4 flex flex-wrap gap-3 text-xs font-bold">
             {(mode === "login" || mode === "signup") && (
-              <button onClick={() => setMode(mode === "login" ? "signup" : "login")} className="text-emerald-300 hover:text-emerald-200">
+              <button
+                onClick={() => {
+                  setPrivacyAccepted(false);
+                  setMode(mode === "login" ? "signup" : "login");
+                }}
+                className="text-emerald-300 hover:text-emerald-200"
+              >
                 {mode === "login" ? "Nu ai cont? Creeaza unul." : "Ai cont? Intra in aplicatie."}
               </button>
             )}
@@ -189,6 +218,12 @@ export default function Login() {
             )}
           </div>
         </div>
+
+        <p className="mx-auto mt-8 max-w-md text-center text-[11px] text-slate-500">
+          <Link to="/privacy" className="text-slate-400 underline decoration-white/20 underline-offset-2 hover:text-cyan-300">
+            Politica de confidentialitate (GDPR)
+          </Link>
+        </p>
       </div>
     </div>
   );

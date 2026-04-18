@@ -8,6 +8,10 @@ type SuccessRateTrackerProps = {
   isWinRatePulsing: boolean;
   isHistorySyncing: boolean;
   pendingHistoryCount: number;
+  /** Length of current prediction list below (for correlation copy). */
+  displayedPredsCount?: number;
+  /** How many of those IDs are still `pending` in the same 30-day history feed. */
+  pendingAmongDisplayedPreds?: number;
 };
 
 export default function SuccessRateTracker({
@@ -17,7 +21,9 @@ export default function SuccessRateTracker({
   animatedWinRate,
   isWinRatePulsing,
   isHistorySyncing,
-  pendingHistoryCount
+  pendingHistoryCount,
+  displayedPredsCount = 0,
+  pendingAmongDisplayedPreds = 0
 }: SuccessRateTrackerProps) {
   return (
     <div className="relative mt-4 w-full max-w-[760px] rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-900/90 via-slate-900/80 to-slate-950/90 px-2 sm:px-4 py-3 shadow-[0_0_40px_rgba(16,185,129,0.08)] overflow-hidden">
@@ -54,8 +60,20 @@ export default function SuccessRateTracker({
         </div>
       </div>
       {pendingHistoryCount > 0 && (
-        <div className="relative mt-2 text-center text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-amber-300/90">
-          {pendingHistoryCount} predicții așteaptă validarea finală
+        <div className="relative mt-2 space-y-1 text-center text-[9px] sm:text-[10px] font-semibold text-amber-200/95 leading-snug px-1">
+          <div className="font-black uppercase tracking-wider text-amber-300/90">
+            În istoric (30 zile): {pendingHistoryCount} meciuri fără rezultat final validat (FT / scor)
+          </div>
+          {displayedPredsCount > 0 && (
+            <div className="text-slate-400 normal-case font-medium">
+              Din lista afișată ({displayedPredsCount} predicții): {pendingAmongDisplayedPreds} apar încă nevalidate în același
+              istoric
+              {pendingHistoryCount > pendingAmongDisplayedPreds
+                ? ` · celelalte ${pendingHistoryCount - pendingAmongDisplayedPreds} sunt din alte zile/meciuri, nu din lista curentă`
+                : ""}
+              .
+            </div>
+          )}
         </div>
       )}
       {isHistorySyncing && <div className="relative mt-2 text-center text-[10px] font-black uppercase tracking-widest text-blue-400">Sync...</div>}

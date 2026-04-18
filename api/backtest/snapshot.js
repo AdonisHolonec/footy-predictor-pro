@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 
 function getSelectedOdd(row, type) {
   if (type === "1") return Number(row.odds_home);
@@ -7,20 +8,11 @@ function getSelectedOdd(row, type) {
   return null;
 }
 
-function isAuthorized(req) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const provided = req.headers["x-cron-secret"]
-    || req.headers["authorization"]?.replace(/^Bearer\s+/i, "")
-    || req.query.secret;
-  return provided === secret;
-}
-
 export default async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedCronOrInternalRequest(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
 

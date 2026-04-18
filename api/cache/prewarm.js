@@ -1,14 +1,5 @@
+import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { getWithCache, getApiUsage } from "../../server-utils/fetcher.js";
-
-function isAuthorized(req) {
-  const secret = process.env.CRON_SECRET;
-  const provided =
-    req.headers["x-cron-secret"] ||
-    req.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
-    req.query.secret;
-  if (secret && provided === secret) return true;
-  return !secret;
-}
 
 function parseLeagueIds(raw) {
   const fallback = [39, 140, 135, 78, 61, 2, 3, 283];
@@ -23,7 +14,7 @@ export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed." });
   }
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedCronOrInternalRequest(req)) {
     return res.status(401).json({ ok: false, error: "Unauthorized prewarm request." });
   }
 
