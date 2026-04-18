@@ -15,6 +15,8 @@ Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/c
 
 **Non-production**: same secret headers work; if the secret is unset, calls are allowed for local development. If the secret is set, browser same-origin (`Origin` / `Referer` matching `Host`) is also accepted.
 
+**Exception — `POST /api/history/sync`**: in production, a valid **Supabase user** JWT (`Authorization: Bearer <access_token>`) is also accepted so the browser can refresh match scores after Predict without embedding `CRON_SECRET` in the client. Cron jobs can still use `CRON_SECRET` as above.
+
 ## Optional: anonymous rate limits (Warm / Predict)
 
 Unauthenticated calls to `/api/warm` and `/api/predict` can be capped per IP per hour using **Vercel KV** (or compatible REST URL + token). Configure either:

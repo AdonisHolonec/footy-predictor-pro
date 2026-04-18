@@ -271,7 +271,9 @@ export default function App() {
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
-      await fetch("/api/history/sync?days=30", { method: "POST" }).catch(() => null);
+      const syncHeaders: Record<string, string> = {};
+      if (session?.access_token) syncHeaders.Authorization = `Bearer ${session.access_token}`;
+      await fetch("/api/history/sync?days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
       await loadHistory(30);
       await loadKpi(45);
       await loadAlerts(7);
@@ -298,7 +300,9 @@ export default function App() {
   async function syncHistory(days = 30) {
     setIsHistorySyncing(true);
     try {
-      await fetch(`/api/history/sync?days=${days}`, { method: "POST" });
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      await fetch(`/api/history/sync?days=${days}`, { method: "POST", headers });
       await loadHistory(days);
     } catch {
       // silent: indicator is enough
@@ -358,10 +362,13 @@ export default function App() {
   }, [date, selectedDates]);
   useEffect(() => {
     void loadHistory(30);
-    void syncHistory(30);
     void loadKpi(45);
     void loadAlerts(7);
   }, []);
+  useEffect(() => {
+    if (!session?.access_token) return;
+    void syncHistory(30);
+  }, [session?.access_token]);
   useEffect(() => {
     setDraftDrawdownThreshold(alertDrawdownThreshold);
     setDraftDriftThreshold(alertDriftThreshold);

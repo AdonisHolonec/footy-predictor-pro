@@ -1,3 +1,5 @@
+import { getRequester } from "../../server-utils/authAdmin.js";
+import { calendarDateKeyEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../../server-utils/fetcher.js";
 import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
@@ -5,12 +7,10 @@ import { validationFromMatch } from "../../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 
-function isoDate(value) {
-  try {
-    return new Date(value).toISOString().slice(0, 10);
-  } catch {
-    return null;
-  }
+async function isAuthorizedHistorySync(req) {
+  if (isAuthorizedCronOrInternalRequest(req)) return true;
+  const requester = await getRequester(req);
+  return requester.ok;
 }
 
 export default async function handler(req, res) {
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method not allowed." });
   }
 
-  if (!isAuthorizedCronOrInternalRequest(req)) {
+  if (!(await isAuthorizedHistorySync(req))) {
     return res.status(401).json({ ok: false, error: "Unauthorized sync request." });
   }
 
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     const groupMap = new Map();
     for (const row of candidates) {
-      const dateKey = isoDate(row.kickoff_at);
+      const dateKey = calendarDateKeyEuropeBucharest(row.kickoff_at);
       const leagueId = Number(row.league_id);
       if (!dateKey || !Number.isFinite(leagueId)) continue;
       const key = `${dateKey}:${leagueId}`;
