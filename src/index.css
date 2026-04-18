@@ -17,7 +17,9 @@
     -moz-osx-font-smoothing: grayscale; 
   }
   button {
-    transition: transform 140ms ease, filter 140ms ease, box-shadow 180ms ease;
+    transition: transform 140ms ease, filter 140ms ease, box-shadow 180ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     transform: translateZ(0);
   }
   button:active:not(:disabled) {
@@ -27,6 +29,9 @@
   button:focus-visible {
     outline: 2px solid rgba(16, 185, 129, 0.55);
     outline-offset: 2px;
+  }
+  a[href] {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -60,6 +65,18 @@
 
 .animate-fadeIn { 
   animation: fadeIn .35s ease-out both; 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled) {
+    transform: none;
+    filter: brightness(1.05);
+  }
+  .animate-fadeIn {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Custom Scrollbar pentru lista de ligi */

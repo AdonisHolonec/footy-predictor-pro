@@ -791,21 +791,21 @@ export default function App() {
                       return normalizeSelectedDates([...normalized, nextDate.toISOString().slice(0, 10)]);
                     });
                   }}
-                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all"
+                  className="touch-manipulation bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 active:bg-slate-950 transition-all"
                 >
                   + Zi
                 </button>
                 <button
                   onClick={warm}
                   disabled={!user}
-                  className="bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="touch-manipulation bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 active:bg-slate-950 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Warm
                 </button>
                 <button
                   onClick={predict}
                   disabled={!user}
-                  className="col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="touch-manipulation col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 active:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 active:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Predict
                 </button>
@@ -1038,7 +1038,7 @@ export default function App() {
         <div className="mx-auto max-w-7xl pointer-events-auto">
           <button
             onClick={predict}
-            className="w-full bg-emerald-600 rounded-2xl px-6 py-3.5 text-sm font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="touch-manipulation w-full bg-emerald-600 rounded-2xl px-6 py-3.5 text-sm font-bold hover:bg-emerald-500 active:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 active:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!user || !selectedLeagueIds.length}
           >
             Predict {selectedLeagueIds.length ? `(${selectedLeagueIds.length} ligi)` : ""}

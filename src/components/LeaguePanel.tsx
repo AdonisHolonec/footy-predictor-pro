@@ -29,7 +29,18 @@ export default function LeaguePanel({
 }: LeaguePanelProps) {
   return (
     <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all lg:sticky lg:top-6">
-      <div className="flex justify-between items-center gap-3 cursor-pointer group" onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}>
+      <div
+        className="flex justify-between items-center gap-3 cursor-pointer group touch-manipulation select-none rounded-xl px-1 py-1 -mx-1 transition-[transform,opacity,background-color] duration-150 ease-out active:scale-[0.99] active:bg-white/5 motion-reduce:active:scale-100"
+        onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsLeaguesOpen(!isLeaguesOpen);
+          }
+        }}
+      >
         <div className="flex items-center gap-3">
           <h2 className="font-bold text-lg sm:text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
           <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs shrink-0">{isLeaguesOpen ? "🔽" : "▶️"}</div>

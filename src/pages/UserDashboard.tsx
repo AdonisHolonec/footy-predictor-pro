@@ -650,7 +650,7 @@ export default function UserDashboard() {
           </div>
           <button
             onClick={() => void logout()}
-            className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-200 hover:bg-slate-800"
+            className="touch-manipulation rounded-xl border border-white/10 bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-200 hover:bg-slate-800 active:bg-slate-950"
           >
             Logout
           </button>
@@ -683,14 +683,14 @@ export default function UserDashboard() {
           <button
             onClick={warm}
             disabled={limitApplies && dailyUsage.warm >= 3}
-            className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm font-bold hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Warm
           </button>
           <button
             onClick={predict}
             disabled={limitApplies && dailyUsage.predict >= 3}
-            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black hover:bg-emerald-500 active:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Predict
           </button>

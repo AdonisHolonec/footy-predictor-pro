@@ -107,7 +107,15 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   return (
     <div
       onClick={onClick}
-      className="relative isolate flex h-full flex-col rounded-[1.5rem] border border-white/5 bg-slate-900/30 p-4 sm:rounded-[2rem] sm:p-5 cursor-pointer transition-[border-color,box-shadow,background-color] duration-200 ease-out hover:border-emerald-500/50 hover:bg-slate-800/40 hover:shadow-lg"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="relative isolate flex h-full flex-col rounded-[1.5rem] border border-white/5 bg-slate-900/30 p-4 sm:rounded-[2rem] sm:p-5 cursor-pointer touch-manipulation select-none animate-fadeIn motion-reduce:animate-none transition-[transform,box-shadow,background-color,border-color] duration-200 ease-out hover:border-emerald-500/50 hover:bg-slate-800/40 hover:shadow-lg active:scale-[0.985] active:border-emerald-500/50 active:bg-slate-800/55 active:shadow-md motion-reduce:active:scale-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500/50"
     >
       <div className="flex justify-between items-start gap-3 mb-3 sm:mb-4">
         <div className="flex flex-col gap-2">
