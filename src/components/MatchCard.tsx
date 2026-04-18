@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import { MatchScore, PredictionRow, XGData } from "../types";
+import { isFixtureInPlay } from "../utils/appUtils";
 
 type MatchCardProps = {
   row: PredictionRow;
@@ -71,7 +72,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
   const pct = (n: number) => Math.round(n || 0);
-  const isLive = ["1H", "2H", "HT", "ET", "P", "LIVE"].includes(row.status);
+  const isLive = isFixtureInPlay(row.status);
   const confPct = pct(row.recommended?.confidence);
   const confColor = confPct >= 75 ? "#10b981" : confPct >= 60 ? "#f59e0b" : "#ef4444";
   const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import { MatchScore, PredictionRow, XGData } from "../types";
+import { isFixtureInPlay } from "../utils/appUtils";
 
 type MatchModalProps = {
   match: PredictionRow;
@@ -52,7 +53,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
   const awayColor = logoColors[match.logos?.away || ""] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
   const hasFinalScore = isFinalStatus(match.status) && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
-  const hasLiveScore = !hasFinalScore && match.score?.home !== null && match.score?.away !== null && match.score?.home !== undefined && match.score?.away !== undefined;
+  const hasNumericScore =
+    match.score != null && typeof match.score.home === "number" && typeof match.score.away === "number";
+  const hasLiveScore = isFixtureInPlay(match.status) && !hasFinalScore && hasNumericScore;
   const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
   const kickoffDate = new Date(match.kickoff);
 

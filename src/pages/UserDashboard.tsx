@@ -9,6 +9,14 @@ import { useAuth } from "../hooks/useAuth";
 import { DayResponse, HistoryStats, League, PredictionRow } from "../types";
 import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
+function historyStatsFromRows(rows: PredictionRow[]): HistoryStats {
+  const wins = rows.filter((r) => r.validation === "win").length;
+  const losses = rows.filter((r) => r.validation === "loss").length;
+  const settled = wins + losses;
+  const winRate = settled ? (wins / settled) * 100 : 0;
+  return { wins, losses, settled, winRate };
+}
+
 export default function UserDashboard() {
   const { user, session, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
@@ -73,13 +81,23 @@ export default function UserDashboard() {
       const response = await fetch("/api/history?days=30");
       const json = await response.json();
       if (!json?.ok) return;
-      const items = Array.isArray(json.items) ? json.items : [];
-      setHistory(items as PredictionRow[]);
-      setHistoryStats(json.stats || { wins: 0, losses: 0, settled: 0, winRate: 0 });
+      const items = (Array.isArray(json.items) ? json.items : []) as PredictionRow[];
+      const uid = user?.id;
+      if (!uid) {
+        setHistory([]);
+        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+        return;
+      }
+      const fromMap = userPredictionMap[uid] || [];
+      const fromPreds = (predictionsByUser[uid] || []).map((r) => Number(r.id)).filter(Number.isFinite);
+      const idSet = new Set<number>([...fromMap.map((id) => Number(id)).filter(Number.isFinite), ...fromPreds]);
+      const owned = idSet.size ? items.filter((item) => idSet.has(Number(item.id))) : [];
+      setHistory(owned);
+      setHistoryStats(historyStatsFromRows(owned));
     } catch {
       // keep existing data on failure
     }
-  }, []);
+  }, [user?.id, userPredictionMap, predictionsByUser]);
 
   const syncHistory = useCallback(async () => {
     setIsHistorySyncing(true);
@@ -269,6 +287,9 @@ export default function UserDashboard() {
 
   useEffect(() => {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
+  }, []);
+
+  useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
 
@@ -278,10 +299,6 @@ export default function UserDashboard() {
     if (!selectedLeagueIds.length) return;
     void rehydratePredictionsFromHistory();
   }, [user?.id, preds.length, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
-
-  useEffect(() => {
-    void loadHistory();
-  }, [user?.id, loadHistory]);
 
   useEffect(() => {
     if (!session?.access_token) return;

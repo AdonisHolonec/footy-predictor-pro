@@ -53,6 +53,16 @@ export function hashColor(seed: string): string {
   return `rgb(${Math.floor(80 + (r / 255) * 150)}, ${Math.floor(80 + (g / 255) * 150)}, ${Math.floor(80 + (b / 255) * 150)})`;
 }
 
+/** API-Football `fixture.status.short` values where kickoff has occurred and the match is not finished. */
+const IN_PLAY_STATUSES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP"]);
+
+export function isFixtureInPlay(status?: string): boolean {
+  const s = String(status ?? "")
+    .trim()
+    .toUpperCase();
+  return IN_PLAY_STATUSES.has(s);
+}
+
 export async function dominantColorFromImage(url: string): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image();
