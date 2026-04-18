@@ -273,7 +273,7 @@ export default function App() {
       setPreds(deduped);
       const syncHeaders: Record<string, string> = {};
       if (session?.access_token) syncHeaders.Authorization = `Bearer ${session.access_token}`;
-      await fetch("/api/history/sync?days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
+      await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
       await loadHistory(30);
       await loadKpi(45);
       await loadAlerts(7);
@@ -302,7 +302,7 @@ export default function App() {
     try {
       const headers: Record<string, string> = {};
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      await fetch(`/api/history/sync?days=${days}`, { method: "POST", headers });
+      await fetch(`/api/history?sync=1&days=${days}`, { method: "POST", headers });
       await loadHistory(days);
     } catch {
       // silent: indicator is enough
@@ -314,7 +314,7 @@ export default function App() {
   async function loadKpi(days = 45) {
     setKpiLoading(true);
     try {
-      const res = await fetch(`/api/backtest/kpi?days=${days}`);
+      const res = await fetch(`/api/backtest?view=kpi&days=${days}`);
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca KPI.");
       setKpi(json.latest || null);

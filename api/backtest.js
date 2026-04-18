@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
-import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
-import { slugSegmentsFromRequest } from "../../server-utils/vercelCatchAllSlug.js";
+import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 
 async function handleKpi(req, res) {
   if (req.method !== "GET") {
@@ -186,13 +185,13 @@ async function handleSnapshot(req, res) {
   }
 }
 
+/**
+ * GET /api/backtest?view=kpi&days=45 — KPI read (replaces /api/backtest/kpi).
+ * GET or POST /api/backtest?view=snapshot&days=45 — snapshot job (replaces /api/backtest/snapshot).
+ */
 export default async function handler(req, res) {
-  const parts = slugSegmentsFromRequest(req, "/api/backtest");
-  if (parts.length === 1 && parts[0] === "kpi") {
-    return handleKpi(req, res);
-  }
-  if (parts.length === 1 && parts[0] === "snapshot") {
-    return handleSnapshot(req, res);
-  }
-  return res.status(404).json({ ok: false, error: "Not found." });
+  const view = String(req.query.view || "").toLowerCase();
+  if (view === "kpi") return handleKpi(req, res);
+  if (view === "snapshot") return handleSnapshot(req, res);
+  return res.status(400).json({ ok: false, error: "Missing or invalid view. Use view=kpi or view=snapshot." });
 }

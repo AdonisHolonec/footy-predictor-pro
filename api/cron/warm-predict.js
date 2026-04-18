@@ -45,7 +45,7 @@ function summarizePredictBody(body) {
 /**
  * Vercel Cron: authorize with CRON_SECRET, then call /api/warm and /api/predict on this deployment
  * without a user JWT (anonymous path — no per-user daily quota).
- * After a successful predict, POST /api/history/sync with the same CRON_SECRET to refresh scores / validation.
+ * After a successful predict, POST /api/history?sync=1 with the same CRON_SECRET to refresh scores / validation.
  */
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
         "x-internal-cron": "warm-predict"
       };
       if (cronSecret) syncHeaders.Authorization = `Bearer ${cronSecret}`;
-      const syncRes = await fetch(`${base}/api/history/sync?days=${syncDays}`, {
+      const syncRes = await fetch(`${base}/api/history?sync=1&days=${syncDays}`, {
         method: "POST",
         headers: syncHeaders
       });

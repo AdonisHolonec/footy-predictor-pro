@@ -6,11 +6,11 @@
   },
   "crons": [
     {
-      "path": "/api/history/sync",
+      "path": "/api/history?sync=1&days=30",
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/backtest/snapshot",
+      "path": "/api/backtest?view=snapshot&days=45",
       "schedule": "15 3 * * *"
     },
     {

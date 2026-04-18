@@ -6,9 +6,9 @@ React + Vite frontend; API routes under `api/` (Vercel serverless). Copy `.env.e
 
 Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/cronRequestAuth.js`:
 
-- `api/history/[[...slug]].js` (POST `/api/history/sync`; cron path unchanged)
+- `api/history.js` (GET `/api/history`; sync via `GET` or `POST /api/history?sync=1`)
 - `api/cache/prewarm.js`
-- `api/backtest/[[...slug]].js` (POST `/api/backtest/snapshot`; cron path unchanged)
+- `api/backtest.js` (KPI: `?view=kpi`; snapshot: `?view=snapshot`)
 - `api/notifications/dispatch.js`
 - `api/cron/warm-predict.js`
 
@@ -16,7 +16,7 @@ Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/c
 
 **Non-production**: same secret headers work; if the secret is unset, calls are allowed for local development. If the secret is set, browser same-origin (`Origin` / `Referer` matching `Host`) is also accepted.
 
-**Exception — `POST /api/history/sync`**: in production, a valid **Supabase user** JWT (`Authorization: Bearer <access_token>`) is also accepted so the browser can refresh match scores after Predict without embedding `CRON_SECRET` in the client. Cron jobs can still use `CRON_SECRET` as above.
+**Exception — history sync (`/api/history?sync=1`)**: in production, a valid **Supabase user** JWT (`Authorization: Bearer <access_token>`) is also accepted so the browser can refresh match scores after Predict without embedding `CRON_SECRET` in the client. Cron jobs can still use `CRON_SECRET` as above.
 
 ## Cron: automated Warm + Predict
 
@@ -27,7 +27,7 @@ Protected endpoints use `isAuthorizedCronOrInternalRequest` from `server-utils/c
 - **`CRON_WARM_PREDICT_LEAGUE_IDS`**: optional; defaults to **`PREWARM_LEAGUE_IDS`** or the built-in elite list.
 - **`CRON_WARM_PREDICT_BASE_URL`**: optional absolute origin (e.g. `https://your-app.vercel.app`); if unset, uses `https://${VERCEL_URL}` on Vercel.
 - **`maxDuration`** for this function is set to **300** seconds in `vercel.json` because Warm + Predict can exceed the default limit.
-- After a **successful** Predict, the same job calls **`POST /api/history/sync?days=N`** with **`Authorization: Bearer` + `CRON_SECRET`** ( **`N`** = `CRON_HISTORY_SYNC_DAYS` or query `syncDays`, default 30). The overall cron response is **502** if that sync step fails, so it shows up in Vercel cron logs.
+- After a **successful** Predict, the same job calls **`POST /api/history?sync=1&days=N`** with **`Authorization: Bearer` + `CRON_SECRET`** ( **`N`** = `CRON_HISTORY_SYNC_DAYS` or query `syncDays`, default 30). The overall cron response is **502** if that sync step fails, so it shows up in Vercel cron logs.
 
 ## Optional: anonymous rate limits (Warm / Predict)
 

@@ -1,10 +1,9 @@
-import { getRequester } from "../../server-utils/authAdmin.js";
-import { calendarDateKeyEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
-import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
-import { getWithCache } from "../../server-utils/fetcher.js";
-import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
-import { readPredictionsHistory, validationFromMatch } from "../../server-utils/predictionsHistory.js";
-import { slugSegmentsFromRequest } from "../../server-utils/vercelCatchAllSlug.js";
+import { getRequester } from "../server-utils/authAdmin.js";
+import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
+import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { getWithCache } from "../server-utils/fetcher.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { readPredictionsHistory, validationFromMatch } from "../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 
@@ -133,13 +132,14 @@ async function handleHistorySync(req, res) {
   }
 }
 
+/**
+ * GET /api/history — read predictions_history (unchanged).
+ * GET or POST /api/history?sync=1 — sync scores/validation (replaces former /api/history/sync).
+ */
 export default async function handler(req, res) {
-  const parts = slugSegmentsFromRequest(req, "/api/history");
-  if (parts.length === 0) {
-    return handleHistoryRead(req, res);
-  }
-  if (parts.length === 1 && parts[0] === "sync") {
+  const syncOn = String(req.query.sync || "") === "1" || String(req.query.sync || "").toLowerCase() === "true";
+  if (syncOn) {
     return handleHistorySync(req, res);
   }
-  return res.status(404).json({ ok: false, error: "Not found." });
+  return handleHistoryRead(req, res);
 }
