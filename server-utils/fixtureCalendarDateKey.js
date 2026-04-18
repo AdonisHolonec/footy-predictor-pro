@@ -17,3 +17,13 @@ export function calendarDateKeyEuropeBucharest(isoString) {
     return null;
   }
 }
+
+/** Current calendar date YYYY-MM-DD in Europe/Bucharest (for cron defaults). */
+export function todayCalendarEuropeBucharest() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Bucharest",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}

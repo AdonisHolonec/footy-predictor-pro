@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/cron/warm-predict.js": {
+      "maxDuration": 300
+    }
+  },
   "crons": [
     {
       "path": "/api/history/sync",
@@ -15,6 +20,10 @@
     {
       "path": "/api/cache/prewarm",
       "schedule": "1 22 * * *"
+    },
+    {
+      "path": "/api/cron/warm-predict",
+      "schedule": "2 21 * * *"
     }
   ]
 }
