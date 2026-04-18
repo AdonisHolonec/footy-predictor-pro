@@ -1,13 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
-
-function slugParts(req) {
-  const s = req.query?.slug;
-  if (s === undefined || s === null || s === "") return [];
-  if (Array.isArray(s)) return s;
-  return String(s).split("/").filter(Boolean);
-}
+import { slugSegmentsFromRequest } from "../../server-utils/vercelCatchAllSlug.js";
 
 async function handleKpi(req, res) {
   if (req.method !== "GET") {
@@ -193,7 +187,7 @@ async function handleSnapshot(req, res) {
 }
 
 export default async function handler(req, res) {
-  const parts = slugParts(req);
+  const parts = slugSegmentsFromRequest(req, "/api/backtest");
   if (parts.length === 1 && parts[0] === "kpi") {
     return handleKpi(req, res);
   }

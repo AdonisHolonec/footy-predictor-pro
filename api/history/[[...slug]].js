@@ -4,15 +4,9 @@ import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronReques
 import { getWithCache } from "../../server-utils/fetcher.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
 import { readPredictionsHistory, validationFromMatch } from "../../server-utils/predictionsHistory.js";
+import { slugSegmentsFromRequest } from "../../server-utils/vercelCatchAllSlug.js";
 
 const HISTORY_TABLE = "predictions_history";
-
-function slugParts(req) {
-  const s = req.query?.slug;
-  if (s === undefined || s === null || s === "") return [];
-  if (Array.isArray(s)) return s;
-  return String(s).split("/").filter(Boolean);
-}
 
 async function isAuthorizedHistorySync(req) {
   if (isAuthorizedCronOrInternalRequest(req)) return true;
@@ -140,7 +134,7 @@ async function handleHistorySync(req, res) {
 }
 
 export default async function handler(req, res) {
-  const parts = slugParts(req);
+  const parts = slugSegmentsFromRequest(req, "/api/history");
   if (parts.length === 0) {
     return handleHistoryRead(req, res);
   }
