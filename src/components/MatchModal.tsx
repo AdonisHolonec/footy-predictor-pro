@@ -352,45 +352,62 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
           <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
             Analitică predictivă · Poisson / xG
           </p>
-          <div className="mb-8 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex flex-1 flex-col items-center gap-3">
-              <img src={match.logos?.home} className="h-16 w-16 object-contain opacity-90 sm:h-20 sm:w-20" alt="" />
-              <div className="text-center font-display text-lg font-semibold text-signal-ink">{match.teams.home}</div>
+          <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:mb-8 sm:gap-4 lg:gap-6">
+            <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
+              <img
+                src={match.logos?.home}
+                className="h-11 w-11 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                alt=""
+              />
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
+                {match.teams.home}
+              </div>
             </div>
-            <div className="flex w-full max-w-sm flex-col items-center">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">{match.league}</div>
-              <div className="font-display text-5xl font-bold tracking-tighter text-signal-ink">
+            <div className="flex w-[min(100%,11.5rem)] shrink-0 flex-col items-center px-0.5 sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
+              <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted sm:text-[10px]">
+                {match.league}
+              </div>
+              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink sm:text-5xl">
                 {hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
-              <div className="mt-4 flex items-center gap-4">
-                <ConfidenceAura value={confPct} />
-                <div className="text-left">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/70">Pick</div>
-                  <div className="font-display text-3xl font-bold text-signal-petrol">{match.recommended.pick}</div>
+              <div className="mt-2 flex items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
+                <ConfidenceAura value={confPct} size="compact" />
+                <div className="min-w-0 text-left">
+                  <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">Pick</div>
+                  <div className="font-display text-lg font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
+                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:text-[11px]">{confPct}%</div>
                 </div>
               </div>
               {hasFinalScore && (
-                <div className={`mt-3 inline-block rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide ${finalScoreBadgeClass(finalPickResult)}`}>
+                <div
+                  className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
+                >
                   {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
                 </div>
               )}
               {hasLiveScore && (
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-300">
-                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-400 motion-reduce:animate-none" /> Live ·{" "}
+                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-red-300 sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-400 motion-reduce:animate-none" /> Live ·{" "}
                   {match.score?.home}-{match.score?.away}
                 </div>
               )}
-              <div className="mt-4 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] text-signal-inkMuted">
+              <div className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-signal-inkMuted sm:mt-3 sm:gap-x-3 sm:text-[10px]">
                 <span className="font-mono tabular-nums">{kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}</span>
                 <span>·</span>
                 <span className="font-mono tabular-nums">{new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 <span>·</span>
-                <span>{match.referee || "—"}</span>
+                <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
             </div>
-            <div className="flex flex-1 flex-col items-center gap-3">
-              <img src={match.logos?.away} className="h-16 w-16 object-contain opacity-90 sm:h-20 sm:w-20" alt="" />
-              <div className="text-center font-display text-lg font-semibold text-signal-ink">{match.teams.away}</div>
+            <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
+              <img
+                src={match.logos?.away}
+                className="h-11 w-11 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                alt=""
+              />
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
+                {match.teams.away}
+              </div>
             </div>
           </div>
 

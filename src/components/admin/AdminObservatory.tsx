@@ -395,11 +395,15 @@ export function AdminInsightColumn({ sample }: AdminInsightColumnProps) {
 
 type AdminPerformanceObservatoryProps = {
   children: React.ReactNode;
+  /** Override top margin (e.g. `mt-0` when section is first on page). */
+  className?: string;
 };
 
-export function AdminPerformanceObservatory({ children }: AdminPerformanceObservatoryProps) {
+export function AdminPerformanceObservatory({ children, className = "mt-10" }: AdminPerformanceObservatoryProps) {
   return (
-    <section className="mt-10 rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6">
+    <section
+      className={`rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6 ${className}`}
+    >
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-signal-petrolMuted">Performance observatory</h2>
         <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">settled stream</span>

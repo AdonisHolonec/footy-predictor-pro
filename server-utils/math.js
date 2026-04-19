@@ -226,6 +226,16 @@ export function extractGoalsAverages(teamStatsPayload) {
   }
 }
 
+/** API-Football poate returna `response` ca obiect sau ca array cu un singur element. */
+export function normalizeTeamStatisticsPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  const r = payload.response;
+  if (Array.isArray(r) && r.length > 0) {
+    return { ...payload, response: r[0] };
+  }
+  return payload;
+}
+
 export function extractFormMultiplier(formString) {
   if (!formString) return 1.0;
   const recent = formString.slice(-5).toUpperCase();
@@ -241,7 +251,8 @@ export function extractFormMultiplier(formString) {
 
 export function extractAdvancedGoalsAverages(teamStatsPayload) {
   try {
-    const goals = teamStatsPayload?.response?.goals;
+    const payload = normalizeTeamStatisticsPayload(teamStatsPayload);
+    const goals = payload?.response?.goals;
     if (!goals) return null;
     const gfTotal = Number(goals.for?.average?.total) || 0;
     const gaTotal = Number(goals.against?.average?.total) || 0;

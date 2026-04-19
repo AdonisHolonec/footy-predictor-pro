@@ -7,6 +7,7 @@ import {
   clampLambda,
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
+  normalizeTeamStatisticsPayload,
   strengthRatingsLambdas
 } from "../server-utils/math.js";
 import {
@@ -73,6 +74,21 @@ function clampPct(n) {
   return Math.max(0, Math.min(100, Number(n) || 0));
 }
 
+/** Extrage rândurile de clasament indiferent dacă API-ul returnează grupuri sau un singur array. */
+function standingsRowsFromApi(apiData) {
+  const league = apiData?.response?.[0]?.league;
+  if (!league?.standings) return [];
+  const st = league.standings;
+  if (!Array.isArray(st) || st.length === 0) return [];
+  const head = st[0];
+  if (Array.isArray(head)) return head.filter((r) => r?.team?.id);
+  if (head?.team?.id) return st.filter((r) => r?.team?.id);
+  if (head?.table && Array.isArray(head.table)) {
+    return st.flatMap((g) => (Array.isArray(g?.table) ? g.table : [])).filter((r) => r?.team?.id);
+  }
+  return [];
+}
+
 function normalizeFormString(form) {
   if (!form || typeof form !== "string") return null;
   const s = form.toUpperCase().replace(/[^WDL]/g, "");
@@ -87,11 +103,12 @@ function sliceFormDisplay(form, maxLen = 10) {
 function standingsTeamSnapshot(row) {
   if (!row?.team?.id) return null;
   const all = row.all || {};
-  const played = Number(all.played);
+  const played = Number(all.played ?? row.played);
   const pts = Number(row.points);
-  const rank = Number(row.rank);
-  const gf = Number(all.goals?.for) || 0;
-  const ga = Number(all.goals?.against) || 0;
+  const rankRaw = row.rank != null ? row.rank : row.position;
+  const rank = Number(rankRaw);
+  const gf = Number(all.goals?.for ?? row.goals?.for) || 0;
+  const ga = Number(all.goals?.against ?? row.goals?.against) || 0;
   const gdRaw = row.goalsDiff != null ? Number(row.goalsDiff) : gf - ga;
   return {
     teamId: row.team.id,
@@ -322,7 +339,7 @@ export default async function handler(req, res) {
       if (leagueFixtures.length === 0) continue;
 
       const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
-      const standingsRows = standingsReq.ok ? standingsReq.data?.response?.[0]?.league?.standings?.[0] || [] : [];
+      const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
       const standingsMap = new Map();
       standingsRows.forEach((r) => {
         if (r?.team?.id) standingsMap.set(String(r.team.id), r);
@@ -358,14 +375,16 @@ export default async function handler(req, res) {
         if (homeIdStr && awayIdStr) {
           const tsH = await getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400);
           const tsA = await getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400);
-          if (tsH.ok && tsH.data) formHomeStr = tsH.data?.response?.form ?? null;
-          if (tsA.ok && tsA.data) formAwayStr = tsA.data?.response?.form ?? null;
-          if (tsH.ok && tsA.ok && tsH.data && tsA.data) {
-            const hStats = extractAdvancedGoalsAverages(tsH.data);
-            const aStats = extractAdvancedGoalsAverages(tsA.data);
+          const tsHNorm = tsH.ok && tsH.data ? normalizeTeamStatisticsPayload(tsH.data) : null;
+          const tsANorm = tsA.ok && tsA.data ? normalizeTeamStatisticsPayload(tsA.data) : null;
+          if (tsHNorm) formHomeStr = tsHNorm.response?.form ?? null;
+          if (tsANorm) formAwayStr = tsANorm.response?.form ?? null;
+          if (tsH.ok && tsA.ok && tsHNorm && tsANorm) {
+            const hStats = extractAdvancedGoalsAverages(tsHNorm);
+            const aStats = extractAdvancedGoalsAverages(tsANorm);
             if (hStats && aStats) {
-              const hMulti = extractFormMultiplier(tsH.data?.response?.form);
-              const aMulti = extractFormMultiplier(tsA.data?.response?.form);
+              const hMulti = extractFormMultiplier(tsHNorm.response?.form);
+              const aMulti = extractFormMultiplier(tsANorm.response?.form);
               const sr = strengthRatingsLambdas(hStats, aStats, hMulti, aMulti, { leagueAvgGoals: 1.35 });
               if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
                 method = "strength-ratings";
