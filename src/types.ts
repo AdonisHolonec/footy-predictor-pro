@@ -32,6 +32,50 @@ export type Probs = {
   pO25: number;
   pU35: number;
   pO15: number;
+  /** Șansă dublă 1 sau X (model). */
+  pDC1X?: number;
+  /** Șansă dublă 1 sau 2. */
+  pDC12?: number;
+  /** Șansă dublă X sau 2. */
+  pDCX2?: number;
+  /** Sub 1.5 goluri (complement față de peste 1.5). */
+  pU15?: number;
+  /** Fără ambele marchează (complement GG). */
+  pNGG?: number;
+  /** Sub 2.5 goluri (complement peste 2.5). */
+  pU25?: number;
+};
+
+/** Clasament + mini-formă (API standings / teams statistics). */
+export type TeamStandingsFormSnapshot = {
+  teamId?: number;
+  rank: number | null;
+  points: number | null;
+  played: number | null;
+  /** Ultimele caractere W/D/L din API (ex. "WDLWD"). */
+  form: string | null;
+  goalsFor?: number | null;
+  goalsAgainst?: number | null;
+  goalsDiff?: number | null;
+};
+
+export type MatchTeamContext = {
+  home?: TeamStandingsFormSnapshot | null;
+  away?: TeamStandingsFormSnapshot | null;
+};
+
+/** Rând din clasament (ligă) pentru afișare în modal. */
+export type LeagueStandingEntry = {
+  rank: number | null;
+  teamId: number;
+  teamName: string;
+  logo?: string;
+  played: number | null;
+  points: number | null;
+  goalsFor: number | null;
+  goalsAgainst: number | null;
+  goalsDiff: number | null;
+  form: string | null;
 };
 
 export type MatchScore = { home: number | null; away: number | null };
@@ -41,6 +85,8 @@ export type PredictionRow = {
   leagueId: number;
   league: string;
   teams: { home: string; away: string };
+  /** ID-uri echipe (pentru evidențiere în clasament). */
+  fixtureTeamIds?: { home?: number; away?: number };
   logos?: { league?: string; home?: string; away?: string };
   kickoff: string;
   status: string;
@@ -48,6 +94,10 @@ export type PredictionRow = {
   referee?: string;
   lambdas?: { home: number; away: number };
   luckStats?: { hG: number; hXG: number; aG: number; aXG: number; intensityNote?: string };
+  /** Clasament + formă din API (nu afectează λ dacă lipsește). */
+  teamContext?: MatchTeamContext;
+  /** Clasament complet ligă (aceeași listă pe fiecare meci din ligă). */
+  leagueStandings?: LeagueStandingEntry[];
   probs: Probs;
   odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;

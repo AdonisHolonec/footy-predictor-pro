@@ -9,7 +9,7 @@ import {
   FormRibbon,
   SignalLens
 } from "./SignalLab";
-import { MatchScore, PredictionRow, XGData } from "../types";
+import { LeagueStandingEntry, MatchScore, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
 type MatchModalProps = {
@@ -61,23 +61,222 @@ function formatLambda(n: number | undefined) {
   return n.toFixed(2);
 }
 
+function TeamSnapshotCard({
+  title,
+  snap,
+  accent
+}: {
+  title: string;
+  snap?: TeamStandingsFormSnapshot | null;
+  accent: string;
+}) {
+  if (!snap) {
+    return (
+      <div className="rounded-xl border border-white/5 bg-signal-void/40 p-4 text-center">
+        <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">{title}</div>
+        <p className="mt-2 text-[11px] text-signal-inkMuted">Fără date clasament / formă</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-white/5 bg-signal-mist/20 p-4">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">{title}</div>
+      <div className="flex flex-wrap items-baseline gap-2">
+        {snap.rank != null && (
+          <span className="font-display text-2xl font-bold tabular-nums" style={{ color: accent }}>
+            #{snap.rank}
+          </span>
+        )}
+        {snap.points != null && <span className="font-mono text-sm text-signal-ink">{snap.points} pt</span>}
+        {snap.played != null && <span className="text-[10px] text-signal-inkMuted">· {snap.played} meciuri</span>}
+      </div>
+      <div className="mt-2 font-mono text-[11px] text-signal-silver">
+        GF {snap.goalsFor ?? "—"} · GA {snap.goalsAgainst ?? "—"}
+        {snap.goalsDiff != null && (
+          <span className="text-signal-inkMuted">
+            {" "}
+            · DG {snap.goalsDiff > 0 ? "+" : ""}
+            {snap.goalsDiff}
+          </span>
+        )}
+      </div>
+      {snap.form ? (
+        <div className="mt-3">
+          <div className="mb-1 text-[9px] font-semibold uppercase text-signal-inkMuted">Mini-formă</div>
+          <div className="flex flex-wrap gap-1">
+            {snap.form.split("").map((ch, i) => (
+              <span
+                key={`${ch}-${i}`}
+                className={`inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border text-[10px] font-bold ${
+                  ch === "W"
+                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
+                    : ch === "L"
+                      ? "border-rose-500/30 bg-rose-500/15 text-rose-200"
+                      : "border-white/10 bg-signal-void/60 text-signal-silver"
+                }`}
+              >
+                {ch}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LeagueStandingsTable({
+  rows,
+  highlightHomeId,
+  highlightAwayId
+}: {
+  rows: LeagueStandingEntry[];
+  highlightHomeId?: number;
+  highlightAwayId?: number;
+}) {
+  return (
+    <div className="max-h-64 overflow-auto rounded-xl border border-white/5 ring-1 ring-white/[0.04]">
+      <table className="w-full min-w-[480px] text-left text-[10px]">
+        <thead className="sticky top-0 z-[1] bg-signal-void/95 backdrop-blur-sm">
+          <tr className="font-mono uppercase tracking-wide text-signal-inkMuted">
+            <th className="px-2 py-2.5">#</th>
+            <th className="px-2 py-2.5">Echipă</th>
+            <th className="px-2 py-2.5">J</th>
+            <th className="px-2 py-2.5">Pct</th>
+            <th className="px-2 py-2.5">GF-GA</th>
+            <th className="px-2 py-2.5">Formă</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const hi = r.teamId === highlightHomeId || r.teamId === highlightAwayId;
+            return (
+              <tr
+                key={r.teamId}
+                className={`border-t border-white/[0.06] ${hi ? "bg-signal-petrol/12" : "hover:bg-white/[0.03]"}`}
+              >
+                <td className="px-2 py-1.5 font-mono tabular-nums text-signal-silver">{r.rank ?? "—"}</td>
+                <td className="px-2 py-1.5">
+                  <span className="flex items-center gap-2">
+                    {r.logo ? <img src={r.logo} alt="" className="h-5 w-5 shrink-0 object-contain opacity-90" /> : null}
+                    <span className={`font-medium ${hi ? "text-signal-petrol" : "text-signal-ink"}`}>{r.teamName}</span>
+                  </span>
+                </td>
+                <td className="px-2 py-1.5 font-mono tabular-nums text-signal-inkMuted">{r.played ?? "—"}</td>
+                <td className="px-2 py-1.5 font-mono tabular-nums text-signal-silver">{r.points ?? "—"}</td>
+                <td className="px-2 py-1.5 font-mono tabular-nums text-signal-inkMuted">
+                  {r.goalsFor ?? "—"}-{r.goalsAgainst ?? "—"}
+                </td>
+                <td className="px-2 py-1.5 font-mono text-[9px] tracking-tight text-signal-silver">{r.form || "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function MatchModal({ match, logoColors, onClose, hashColor }: MatchModalProps) {
+  const [xgData, setXgData] = useState<XGData | null>(() => {
+    if (!match.luckStats) return null;
+    return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/get-xg?fixtureId=${match.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && !data?.error) setXgData(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [match.id]);
+
   if (match.insufficientData) {
+    const table = match.leagueStandings;
+    const ctx = match.teamContext;
+    const hasRich = Boolean((table && table.length > 0) || ctx?.home || ctx?.away);
+    const homeColor = logoColors[match.logos?.home || ""] || hashColor(match.teams.home);
+    const awayColor = logoColors[match.logos?.away || ""] || hashColor(match.teams.away);
+    const hid = match.fixtureTeamIds?.home;
+    const aid = match.fixtureTeamIds?.away;
+
+    if (!hasRich) {
+      return (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/85 p-3 backdrop-blur-md sm:p-4"
+          onClick={onClose}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-signal-amber/25 bg-signal-panel/90 p-8 text-center shadow-atelierLg backdrop-blur-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
+            <p className="mt-2 text-sm leading-relaxed text-signal-inkMuted">{match.insufficientReason}</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink"
+            >
+              Închide
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/85 p-3 backdrop-blur-md sm:p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4"
         onClick={onClose}
       >
         <div
-          className="w-full max-w-md rounded-2xl border border-signal-amber/25 bg-signal-panel/90 p-8 text-center shadow-atelierLg backdrop-blur-xl"
+          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-signal-amber/25 bg-signal-panel/95 p-5 shadow-atelierLg backdrop-blur-xl sm:max-w-2xl sm:p-8"
           onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
         >
-          <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
-          <p className="mt-2 text-sm leading-relaxed text-signal-inkMuted">{match.insufficientReason}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
+              <p className="mt-1 text-[11px] text-signal-inkMuted">{match.insufficientReason}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-sm text-signal-inkMuted hover:border-signal-petrol/40 hover:text-signal-petrol"
+              aria-label="Închide"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="mt-4 text-center font-display text-base font-semibold text-signal-ink">
+            {match.teams.home} <span className="text-signal-inkMuted">vs</span> {match.teams.away}
+          </p>
+          <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-wide text-signal-petrol/70">{match.league}</p>
+
+          {(ctx?.home || ctx?.away) && (
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <TeamSnapshotCard title="Gazde" snap={ctx?.home} accent={homeColor} />
+              <TeamSnapshotCard title="Oaspeți" snap={ctx?.away} accent={awayColor} />
+            </div>
+          )}
+
+          {table && table.length > 0 ? (
+            <div className="mt-6">
+              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament ligă</h3>
+              <LeagueStandingsTable rows={table} highlightHomeId={hid} highlightAwayId={aid} />
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={onClose}
-            className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink"
+            className="mt-8 w-full rounded-xl border border-signal-line bg-signal-fog py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink"
           >
             Închide
           </button>
@@ -103,24 +302,6 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
   const edgeScore = deriveSignalEdge(match);
   const dq = deriveDataQuality(match);
 
-  const [xgData, setXgData] = useState<XGData | null>(() => {
-    if (!match.luckStats) return null;
-    return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/get-xg?fixtureId=${match.id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && !data?.error) setXgData(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [match.id]);
-
   const ProbBar = ({ label, val, color }: { label: string; val: number; color: string }) => (
     <div className="mb-4">
       <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
@@ -134,6 +315,20 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
       </div>
     </div>
   );
+
+  const pr = match.probs;
+  const clamp100 = (n: number) => Math.max(0, Math.min(100, n));
+  const ext = {
+    pDC1X: pr.pDC1X ?? clamp100(pr.p1 + pr.pX),
+    pDC12: pr.pDC12 ?? clamp100(pr.p1 + pr.p2),
+    pDCX2: pr.pDCX2 ?? clamp100(pr.pX + pr.p2),
+    pU15: pr.pU15 ?? clamp100(100 - pr.pO15),
+    pNGG: pr.pNGG ?? clamp100(100 - pr.pGG),
+    pU25: pr.pU25 ?? clamp100(100 - pr.pO25)
+  };
+  const standingsRows = match.leagueStandings;
+  const showStandingsBlock =
+    Boolean(match.teamContext?.home || match.teamContext?.away || (standingsRows && standingsRows.length > 0));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
@@ -209,6 +404,26 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
         </div>
 
         <div className="space-y-8 p-5 sm:p-10">
+          {showStandingsBlock ? (
+            <section className="rounded-2xl border border-white/5 bg-signal-void/25 p-6">
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TeamSnapshotCard title="Gazde" snap={match.teamContext?.home} accent={homeColor} />
+                <TeamSnapshotCard title="Oaspeți" snap={match.teamContext?.away} accent={awayColor} />
+              </div>
+              {standingsRows && standingsRows.length > 0 ? (
+                <div className="mt-5">
+                  <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Clasament complet · {match.league}</h4>
+                  <LeagueStandingsTable
+                    rows={standingsRows}
+                    highlightHomeId={match.fixtureTeamIds?.home}
+                    highlightAwayId={match.fixtureTeamIds?.away}
+                  />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">01 — xG & luck</h3>
@@ -328,18 +543,29 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
             </section>
           </div>
 
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
             <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5">
-              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Probabilități 1X2</h3>
+              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">1X2 (model)</h3>
               <ProbBar label="Victorie gazde" val={match.probs.p1} color={homeColor} />
               <ProbBar label="Egalitate" val={match.probs.pX} color="#94a3b8" />
               <ProbBar label="Victorie oaspeți" val={match.probs.p2} color={awayColor} />
             </div>
             <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5">
-              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Piața goluri</h3>
+              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Șansă dublă</h3>
+              <p className="mb-3 text-[10px] leading-relaxed text-signal-inkMuted">Sume din 1X2 (nu sunt calibrate separat față de piață).</p>
+              <ProbBar label="1 sau X" val={ext.pDC1X} color={homeColor} />
+              <ProbBar label="1 sau 2" val={ext.pDC12} color="#a78bfa" />
+              <ProbBar label="X sau 2" val={ext.pDCX2} color={awayColor} />
+            </div>
+            <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5 xl:col-span-1">
+              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Goluri & piețe derivate</h3>
+              <ProbBar label="Peste 1.5" val={match.probs.pO15} color="#22d3ee" />
+              <ProbBar label="Sub 1.5" val={ext.pU15} color="#64748b" />
               <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#38bdf8" />
+              <ProbBar label="Sub 2.5" val={ext.pU25} color="#0ea5e9" />
               <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#34d399" />
-              <ProbBar label="Ambele (GG)" val={match.probs.pGG} color="#fbbf24" />
+              <ProbBar label="Ambele marchează (GG)" val={match.probs.pGG} color="#fbbf24" />
+              <ProbBar label="Nu ambele (NGG)" val={ext.pNGG} color="#94a3b8" />
             </div>
           </div>
 

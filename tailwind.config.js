@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  /** Include CSS that uses @apply so JIT emits theme utilities (e.g. text-signal-ink). */
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,css}"],
   theme: {
     extend: {
       colors: {

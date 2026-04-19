@@ -33,6 +33,7 @@ import {
 } from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
 import { useAuth } from "./hooks/useAuth";
+import { useLiveFixtureScorePoll } from "./hooks/useLiveFixtureScorePoll";
 import {
   dominantColorFromImage,
   hashColor,
@@ -234,6 +235,8 @@ export default function App() {
   }, [displayedMatches]);
 
   const insightSample = useMemo(() => displayedMatches[0] ?? preds[0] ?? null, [displayedMatches, preds]);
+
+  useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
 
   async function fetchDays(dates: string[]) {
     const effectiveDates = normalizeSelectedDates(dates.length ? dates : [date]);

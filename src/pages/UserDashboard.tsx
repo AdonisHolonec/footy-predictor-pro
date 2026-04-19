@@ -7,6 +7,7 @@ import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
+import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import BrandArtboard from "../components/BrandArtboard";
 import { ModelPulseStrip, ModelPulseWave } from "../components/SignalLab";
@@ -31,6 +32,7 @@ export default function UserDashboard() {
   const [searchLeague, setSearchLeague] = useState("");
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
   const [preds, setPreds] = useState<PredictionRow[]>([]);
+  useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
   const [day, setDay] = useState<DayResponse | null>(null);
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);

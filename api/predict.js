@@ -73,6 +73,96 @@ function clampPct(n) {
   return Math.max(0, Math.min(100, Number(n) || 0));
 }
 
+function normalizeFormString(form) {
+  if (!form || typeof form !== "string") return null;
+  const s = form.toUpperCase().replace(/[^WDL]/g, "");
+  return s.length ? s : null;
+}
+
+function sliceFormDisplay(form, maxLen = 10) {
+  const s = normalizeFormString(form);
+  return s ? s.slice(-maxLen) : null;
+}
+
+function standingsTeamSnapshot(row) {
+  if (!row?.team?.id) return null;
+  const all = row.all || {};
+  const played = Number(all.played);
+  const pts = Number(row.points);
+  const rank = Number(row.rank);
+  const gf = Number(all.goals?.for) || 0;
+  const ga = Number(all.goals?.against) || 0;
+  const gdRaw = row.goalsDiff != null ? Number(row.goalsDiff) : gf - ga;
+  return {
+    teamId: row.team.id,
+    rank: Number.isFinite(rank) ? rank : null,
+    points: Number.isFinite(pts) ? pts : null,
+    played: Number.isFinite(played) ? played : null,
+    form: sliceFormDisplay(row.form, 10),
+    goalsFor: gf,
+    goalsAgainst: ga,
+    goalsDiff: Number.isFinite(gdRaw) ? gdRaw : null
+  };
+}
+
+function buildTeamContext({ homeIdStr, awayIdStr, standingsMap, formHome, formAway }) {
+  const homeRow = homeIdStr ? standingsMap.get(homeIdStr) : null;
+  const awayRow = awayIdStr ? standingsMap.get(awayIdStr) : null;
+  let home = homeRow ? standingsTeamSnapshot(homeRow) : null;
+  let away = awayRow ? standingsTeamSnapshot(awayRow) : null;
+  const fh = sliceFormDisplay(formHome, 10);
+  const fa = sliceFormDisplay(formAway, 10);
+  if (fh) home = { ...(home || { teamId: homeIdStr ? Number(homeIdStr) : undefined }), form: fh };
+  if (fa) away = { ...(away || { teamId: awayIdStr ? Number(awayIdStr) : undefined }), form: fa };
+  if (!home && !away) return undefined;
+  return { home: home || undefined, away: away || undefined };
+}
+
+function buildLeagueStandingsTable(standingsRows) {
+  if (!Array.isArray(standingsRows) || standingsRows.length === 0) return undefined;
+  const rows = standingsRows
+    .map((row) => {
+      const s = standingsTeamSnapshot(row);
+      if (!s?.teamId) return null;
+      return {
+        rank: s.rank,
+        teamId: s.teamId,
+        teamName: row.team?.name || "",
+        logo: row.team?.logo || undefined,
+        played: s.played,
+        points: s.points,
+        goalsFor: s.goalsFor,
+        goalsAgainst: s.goalsAgainst,
+        goalsDiff: s.goalsDiff,
+        form: s.form
+      };
+    })
+    .filter(Boolean);
+  rows.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+  return rows.length ? rows : undefined;
+}
+
+function extendProbsWithMarkets(p) {
+  const p1 = clampPct(p.p1);
+  const pX = clampPct(p.pX);
+  const p2 = clampPct(p.p2);
+  const pO15 = clampPct(p.pO15);
+  const pGG = clampPct(p.pGG);
+  const pO25 = clampPct(p.pO25);
+  return {
+    ...p,
+    p1,
+    pX,
+    p2,
+    pDC1X: clampPct(p1 + pX),
+    pDC12: clampPct(p1 + p2),
+    pDCX2: clampPct(pX + p2),
+    pU15: clampPct(100 - pO15),
+    pNGG: clampPct(100 - pGG),
+    pU25: clampPct(100 - pO25)
+  };
+}
+
 function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
   let score = 0.35;
   if (hasTeamIds) score += 0.15;
@@ -237,6 +327,7 @@ export default async function handler(req, res) {
       standingsRows.forEach((r) => {
         if (r?.team?.id) standingsMap.set(String(r.team.id), r);
       });
+      const leagueStandings = buildLeagueStandingsTable(standingsRows);
 
       for (const fx of leagueFixtures) {
         if (out.length >= limit) break;
@@ -261,10 +352,14 @@ export default async function handler(req, res) {
         let lambdaAway;
         let luckStats = null;
         let strengthMeta = null;
+        let formHomeStr = null;
+        let formAwayStr = null;
 
         if (homeIdStr && awayIdStr) {
           const tsH = await getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400);
           const tsA = await getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400);
+          if (tsH.ok && tsH.data) formHomeStr = tsH.data?.response?.form ?? null;
+          if (tsA.ok && tsA.data) formAwayStr = tsA.data?.response?.form ?? null;
           if (tsH.ok && tsA.ok && tsH.data && tsA.data) {
             const hStats = extractAdvancedGoalsAverages(tsH.data);
             const aStats = extractAdvancedGoalsAverages(tsA.data);
@@ -304,12 +399,23 @@ export default async function handler(req, res) {
         }
 
         if (!isGoodNum(lambdaHome)) {
+          const teamContextEarly = buildTeamContext({
+            homeIdStr,
+            awayIdStr,
+            standingsMap,
+            formHome: formHomeStr,
+            formAway: formAwayStr
+          });
           out.push({
             id: fixtureId,
             leagueId: Number(lId),
             league: fx.league?.name || "Unknown",
             logos: { league: fx.league?.logo, home: fx.teams?.home?.logo, away: fx.teams?.away?.logo },
             teams: { home: homeName, away: awayName },
+            fixtureTeamIds:
+              homeIdStr && awayIdStr
+                ? { home: Number(homeIdStr) || undefined, away: Number(awayIdStr) || undefined }
+                : undefined,
             kickoff: fx.fixture?.date,
             status: fx.fixture?.status?.short,
             score: {
@@ -319,7 +425,23 @@ export default async function handler(req, res) {
             referee: refereeName || undefined,
             insufficientData: true,
             insufficientReason: "no_team_or_standings_data",
-            probs: { p1: 0, pX: 0, p2: 0, pGG: 0, pO25: 0, pU35: 0, pO15: 0 },
+            teamContext: teamContextEarly,
+            leagueStandings,
+            probs: {
+              p1: 0,
+              pX: 0,
+              p2: 0,
+              pGG: 0,
+              pO25: 0,
+              pU35: 0,
+              pO15: 0,
+              pDC1X: 0,
+              pDC12: 0,
+              pDCX2: 0,
+              pU15: 0,
+              pNGG: 0,
+              pU25: 0
+            },
             recommended: { pick: "", confidence: 0 },
             predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
             valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: ["insufficient_data"] },
@@ -505,12 +627,19 @@ export default async function handler(req, res) {
         if (finalKelly >= stakePolicy.dynamicCap && valueDetected) reasonCodes.push("stake_capped");
         reasonCodes = Array.from(new Set(reasonCodes)).slice(0, 8);
 
-        const pOut = {
+        const pOut = extendProbsWithMarkets({
           ...p,
           p1: clampPct(p1Adj),
           pX: clampPct(pXAdj),
           p2: clampPct(p2Adj)
-        };
+        });
+        const teamContext = buildTeamContext({
+          homeIdStr,
+          awayIdStr,
+          standingsMap,
+          formHome: formHomeStr,
+          formAway: formAwayStr
+        });
 
         const topFeatures = [
           `method:${method}`,
@@ -537,6 +666,10 @@ export default async function handler(req, res) {
           league: fx.league?.name || "Unknown",
           logos: { league: fx.league?.logo, home: fx.teams?.home?.logo, away: fx.teams?.away?.logo },
           teams: { home: homeName, away: awayName },
+          fixtureTeamIds:
+            homeIdStr && awayIdStr
+              ? { home: Number(homeIdStr) || undefined, away: Number(awayIdStr) || undefined }
+              : undefined,
           kickoff: fx.fixture?.date,
           status: fx.fixture?.status?.short,
           score: {
@@ -545,6 +678,8 @@ export default async function handler(req, res) {
           },
           referee: refereeName || undefined,
           lambdas: { home: roundDisplayRate(lambdaHome), away: roundDisplayRate(lambdaAway) },
+          teamContext,
+          leagueStandings,
           probs: pOut,
           odds,
           luckStats,
