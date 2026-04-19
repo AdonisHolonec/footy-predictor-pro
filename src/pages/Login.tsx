@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import BrandArtboard from "../components/BrandArtboard";
 import SuccessRateTracker from "../components/SuccessRateTracker";
+import { ModelPulseWave } from "../components/SignalLab";
+import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useAuth } from "../hooks/useAuth";
 import { HistoryStats } from "../types";
 
@@ -89,71 +92,96 @@ export default function Login() {
   return (
     <div className="lab-page">
       <div className="lab-bg" aria-hidden />
-      <div className="relative z-10 mx-auto max-w-6xl px-4 py-10 sm:py-14">
-        <header className="mb-10 animate-fadeIn">
-          <div className="flex flex-wrap items-end justify-between gap-6 border-b border-white/[0.07] pb-8">
-            <div className="flex items-start gap-4">
-              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-signal-line bg-signal-bone/50 shadow-innerSoft backdrop-blur-sm">
-                <span className="text-2xl leading-none opacity-90" aria-hidden>
-                  ⚽
-                </span>
-              </div>
-              <div>
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-signal-petrolMuted">
-                  Observatory · access
-                </p>
-                <h1 className="lab-heading mt-1 max-w-xl text-3xl leading-tight sm:text-4xl">
-                  Football signal <span className="text-signal-petrol">gateway</span>
-                </h1>
-                <p className="mt-2 max-w-lg text-sm leading-relaxed text-signal-inkMuted">
-                  Autentificare securizata pentru dashboard utilizator si administrare. Acelasi limbaj vizual ca in
-                  aplicatie.
-                </p>
-              </div>
-            </div>
-            <div className="hidden text-right sm:block">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-signal-inkMuted">Session</p>
-              <p className="mt-1 font-mono text-xs text-signal-silver">Standby · encrypted</p>
-            </div>
-          </div>
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.035] mix-blend-screen"
+        style={{
+          backgroundImage: `url(${BRAND_IMAGES.heroForesight})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center top"
+        }}
+        aria-hidden
+      />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
+        <header className="mb-10 border-b border-white/[0.07] pb-8 animate-fadeIn">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor</p>
+          <h1 className="lab-heading mt-2 max-w-3xl text-3xl leading-[1.15] sm:text-4xl lg:text-[2.75rem]">
+            Foresight on the pitch.
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
+            Predictive intelligence for football minds — editorial analytics, soft sci-fi clarity. Autentifică-te pentru
+            observatorul personal.
+          </p>
         </header>
 
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
-          <section className="animate-fadeIn space-y-4 [animation-delay:60ms]">
-            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">
-              Performance observatory
-            </h2>
-            <SuccessRateTracker
-              stats={globalStats}
-              animatedWins={globalStats.wins}
-              animatedLosses={globalStats.losses}
-              animatedWinRate={globalStats.winRate}
-              isWinRatePulsing={false}
-              isHistorySyncing={false}
-              pendingHistoryCount={0}
-            />
-          </section>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,26rem)] lg:items-start xl:gap-14">
+          <div className="animate-fadeIn space-y-6 [animation-delay:40ms]">
+            <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <BrandArtboard
+                src={BRAND_IMAGES.heroForesight}
+                alt="Footy Predictor — atmosferă editorială și carduri predictive"
+                frameClassName="aspect-[4/3] max-h-[280px] sm:max-h-[320px]"
+              />
+              <BrandArtboard
+                src={BRAND_IMAGES.heroPlatform}
+                alt="Footy Predictor — navigare și previzualizare platformă"
+                frameClassName="aspect-[4/3] max-h-[280px] sm:max-h-[320px]"
+              />
+            </div>
+
+            <div className="rounded-2xl border border-white/[0.07] bg-signal-panel/35 px-4 py-3 backdrop-blur-md">
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">System performance · global</p>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-mint sm:text-xl">
+                    {globalStats.settled ? globalStats.winRate.toFixed(1) : "—"}%
+                  </div>
+                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Hit rate · 30d</div>
+                </div>
+                <div>
+                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-petrol sm:text-xl">{globalStats.settled || "—"}</div>
+                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Settled</div>
+                </div>
+                <div>
+                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-silver sm:text-xl">
+                    {globalStats.wins + globalStats.losses > 0 ? `${globalStats.wins}W/${globalStats.losses}L` : "—"}
+                  </div>
+                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Record</div>
+                </div>
+              </div>
+            </div>
+
+            <section>
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Performance observatory</h2>
+              <SuccessRateTracker
+                stats={globalStats}
+                animatedWins={globalStats.wins}
+                animatedLosses={globalStats.losses}
+                animatedWinRate={globalStats.winRate}
+                isWinRatePulsing={false}
+                isHistorySyncing={false}
+                pendingHistoryCount={0}
+              />
+            </section>
+          </div>
 
           <section className="lg:sticky lg:top-8">
             <div className="animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/90 to-signal-mist/95 shadow-atelierLg backdrop-blur-xl [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
-                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">
-                  Model pulse
-                </span>
+                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">Credentials</span>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">
-                  Credentials
-                </p>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Access</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && "Login"}
                   {mode === "signup" && "Create account"}
                   {mode === "forgot" && "Forgot password"}
                   {mode === "reset" && "Reset password"}
                 </h2>
-                <p className="mt-1 text-xs text-signal-inkMuted">Autentificare pentru dashboard user/admin.</p>
+                <p className="mt-1 text-xs text-signal-inkMuted">Gateway securizat către dashboard.</p>
 
                 <form onSubmit={(event) => void onSubmit(event)} className="mt-5 space-y-3">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
@@ -269,7 +297,7 @@ export default function Login() {
               </div>
             </div>
 
-            <p className="text-center text-[11px] text-signal-inkMuted lg:text-left">
+            <p className="mt-4 text-center text-[11px] text-signal-inkMuted lg:text-left">
               <Link
                 to="/privacy"
                 className="text-signal-silver underline decoration-white/15 underline-offset-2 transition hover:text-signal-petrol"

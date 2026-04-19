@@ -174,6 +174,65 @@ export function ModelPulseStrip({ status, tone = "healthy", className = "" }: Mo
   );
 }
 
+/** Wide oscilloscope-style strip — matches reference dashboards (“MODEL PULSE · waveform”). */
+export function ModelPulseWave({
+  status = "OPTIMAL CALIBRATION",
+  className = ""
+}: {
+  status?: string;
+  className?: string;
+}) {
+  const uid = useId().replace(/:/g, "");
+  const gid = `mpw-glow-${uid}`;
+  const pathId = `mpw-path-${uid}`;
+  const wavePath =
+    "M0,32 Q30,10 60,32 T120,28 T180,34 T240,22 T300,30 T360,26 T420,32 T480,28 T540,32 L540,48 L0,48 Z";
+  const linePath = "M0,30 C45,8 90,42 135,26 S225,6 270,28 S360,38 405,24 S495,14 540,30";
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-r from-signal-void/90 via-signal-fog/80 to-signal-void/90 px-4 py-3 shadow-inner backdrop-blur-md ${className}`}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(56,189,248,0.12),transparent)]" />
+      <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-signal-petrol/95">Model pulse</span>
+          <span className="hidden h-3 w-px bg-white/10 sm:block" aria-hidden />
+          <span className="font-mono text-[9px] uppercase tracking-wider text-signal-mint/95">{status}</span>
+        </div>
+        <div className="font-mono text-[9px] tabular-nums text-signal-inkMuted sm:text-right">
+          <span className="text-signal-sage">●</span> stream active
+        </div>
+      </div>
+      <div className="relative mt-2 h-11 w-full sm:h-12">
+        <svg className="h-full w-full" viewBox="0 0 540 48" preserveAspectRatio="none" aria-hidden role="presentation">
+          <defs>
+            <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.15" />
+              <stop offset="40%" stopColor="#5eead4" stopOpacity="0.55" />
+              <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.2" />
+            </linearGradient>
+            <linearGradient id={pathId} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="50%" stopColor="#5eead4" />
+              <stop offset="100%" stopColor="#22d3ee" />
+            </linearGradient>
+          </defs>
+          <path d={wavePath} fill={`url(#${gid})`} className="motion-reduce:opacity-90" />
+          <path
+            d={linePath}
+            fill="none"
+            stroke={`url(#${pathId})`}
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            className="opacity-95"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export function deriveDataQuality(row: PredictionRow): number {
   const d = row.modelMeta?.dataQuality;
   if (d != null && Number.isFinite(d)) return Math.max(0, Math.min(1, d));

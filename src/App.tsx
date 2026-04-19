@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import BrandArtboard from "./components/BrandArtboard";
 import LeaguePanel from "./components/LeaguePanel";
 import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import PerformanceCounterModal from "./components/PerformanceCounterModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
-import { ModelPulseStrip } from "./components/SignalLab";
+import { ModelPulseStrip, ModelPulseWave } from "./components/SignalLab";
+import { BRAND_IMAGES } from "./constants/brandAssets";
 import Auth from "./components/Auth";
 import {
   BacktestKpi,
@@ -699,6 +701,11 @@ export default function App() {
   return (
     <div className="lab-page relative min-h-screen font-sans">
       <div className="lab-bg" aria-hidden />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.035]"
+        style={{ backgroundImage: `url(${BRAND_IMAGES.refDashboard})` }}
+        aria-hidden
+      />
       <div className="relative z-10 mx-auto max-w-[1680px] px-4 py-8 lg:px-8">
         {/* HEADER */}
         <header className="mb-10 border-b border-white/[0.06] pb-8">
@@ -713,8 +720,16 @@ export default function App() {
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
                 Editorial analytics layer: calibrated models, xG context, and value edges — not odds hype.
               </p>
+              <ModelPulseWave status="OPTIMAL CALIBRATION" className="mt-5 max-w-3xl" />
               <div className="mt-3 flex flex-wrap gap-2">
                 <ModelPulseStrip status={modelPulse.status} tone={modelPulse.tone} />
+              </div>
+              <div className="mt-5 hidden max-w-md lg:block">
+                <BrandArtboard
+                  src={BRAND_IMAGES.refDossier}
+                  alt="Referință vizuală — prediction dossier (admin workspace)"
+                  frameClassName="max-h-[160px]"
+                />
               </div>
               <SuccessRateTracker
                 stats={trackerStats}

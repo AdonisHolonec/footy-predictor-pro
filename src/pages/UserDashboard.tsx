@@ -8,7 +8,9 @@ import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
-import { ModelPulseStrip } from "../components/SignalLab";
+import BrandArtboard from "../components/BrandArtboard";
+import { ModelPulseStrip, ModelPulseWave } from "../components/SignalLab";
+import { BRAND_IMAGES } from "../constants/brandAssets";
 import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
 function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
@@ -664,35 +666,59 @@ export default function UserDashboard() {
   return (
     <div className="lab-page relative min-h-screen font-sans">
       <div className="lab-bg" aria-hidden />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.04]"
+        style={{ backgroundImage: `url(${BRAND_IMAGES.refDashboard})` }}
+        aria-hidden
+      />
       <div className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
-        <header className="mb-8 flex flex-col gap-5 border-b border-white/[0.06] pb-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-              {localCalendarDateKey()} · S{inferSeason(date)}
-            </p>
-            <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
-              Your <span className="text-signal-petrol">observatory</span>
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-signal-inkMuted">
-              Feed curat: pick, încredere și semnal. Detaliile complete sunt în fișa meciului.
-            </p>
-            <div className="mt-4">
-              <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
+        <header className="mb-8 flex flex-col gap-6 border-b border-white/[0.06] pb-8 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/85">Footy predictor · user lab</p>
+                <p className="font-mono text-[10px] text-signal-inkMuted">
+                  {localCalendarDateKey()} · S{inferSeason(date)}
+                </p>
+                <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
+                  Your <span className="text-signal-petrol">observatory</span>
+                </h1>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-signal-inkMuted">
+                  Feed curat: pick, încredere și semnal. Detaliile complete sunt în fișa meciului.
+                </p>
+              </div>
+              <div className="hidden rounded-2xl border border-white/[0.08] bg-signal-void/40 px-4 py-3 text-right font-mono text-[10px] text-signal-inkMuted sm:block">
+                <div className="text-signal-sage">● Calibrated</div>
+                <div className="mt-1 text-signal-silver">{user?.email}</div>
+                <Link to="/privacy" className="mt-2 inline-block text-signal-petrol hover:underline">
+                  Confidențialitate
+                </Link>
+              </div>
             </div>
-            <p className="mt-3 text-xs text-signal-inkMuted">
+            <ModelPulseWave status="OPTIMAL CALIBRATION" className="max-w-3xl" />
+            <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
+            <p className="text-xs text-signal-inkMuted sm:hidden">
               {user?.email} ·{" "}
               <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
                 Confidențialitate
               </Link>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="touch-manipulation shrink-0 rounded-xl border border-white/10 bg-signal-panel/55 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-signal-petrol transition hover:bg-signal-fog"
-          >
-            Logout
-          </button>
+          <div className="flex w-full flex-col gap-4 xl:w-auto xl:max-w-[280px] xl:shrink-0">
+            <BrandArtboard
+              src={BRAND_IMAGES.refDossier}
+              alt="Referință vizuală — prediction dossier și instrumente analitice"
+              frameClassName="max-h-[200px] w-full xl:max-h-[240px]"
+              className="hidden xl:block"
+            />
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="touch-manipulation w-full rounded-xl border border-white/10 bg-signal-panel/55 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-signal-petrol transition hover:bg-signal-fog xl:w-auto"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <SuccessRateTracker

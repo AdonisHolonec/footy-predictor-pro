@@ -10,8 +10,11 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-950 text-slate-200">
-        <div className="text-sm font-black uppercase tracking-wide">Loading session...</div>
+      <div className="lab-page grid min-h-screen place-items-center">
+        <div className="lab-bg" aria-hidden />
+        <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-signal-petrol">
+          Loading session…
+        </div>
       </div>
     );
   }
@@ -19,10 +22,11 @@ function AuthGate() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.isBlocked) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-950 p-6 text-slate-100">
-        <div className="max-w-md rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-center">
-          <h1 className="text-xl font-black text-rose-200">Account blocat</h1>
-          <p className="mt-2 text-sm text-rose-100/90">
+      <div className="lab-page grid min-h-screen place-items-center p-6">
+        <div className="lab-bg" aria-hidden />
+        <div className="relative z-10 max-w-md rounded-2xl border border-signal-rose/35 bg-signal-rose/10 p-6 text-center text-signal-ink">
+          <h1 className="font-display text-xl font-semibold text-signal-rose">Account blocat</h1>
+          <p className="mt-2 text-sm text-signal-inkMuted">
             Contul tau este momentan blocat. Contacteaza un administrator pentru reactivare.
           </p>
         </div>
