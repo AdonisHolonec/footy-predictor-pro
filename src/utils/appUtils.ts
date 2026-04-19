@@ -5,8 +5,9 @@ export function normalizeSelectedDates(dates: string[]): string[] {
   return uniq.sort().slice(0, 3);
 }
 
+/** Today's date as YYYY-MM-DD in the user's local timezone (matches date inputs and daily caps). */
 export function isoToday(): string {
-  return new Date().toISOString().split("T")[0];
+  return localCalendarDateKey();
 }
 
 /** YYYY-MM-DD in the user's local timezone (used for daily Warm/Predict caps). */

@@ -428,7 +428,6 @@ export default function App() {
       setSelectedDates(normalized);
       return;
     }
-    if (normalized[0] !== date) setDate(normalized[0]);
     void fetchDays(normalized);
   }, [date, selectedDates]);
   useEffect(() => {
