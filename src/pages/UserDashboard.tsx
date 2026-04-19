@@ -362,7 +362,7 @@ export default function UserDashboard() {
   }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   useEffect(() => {
-    const safeCount = preds.filter((row) => row.recommended?.confidence >= 70).length;
+    const safeCount = preds.filter((row) => !row.insufficientData && row.recommended?.confidence >= 70).length;
     const valueCount = preds.filter((row) => row.valueBet?.detected).length;
     setAlertsPreview({ safe: safeCount, value: valueCount });
   }, [preds]);

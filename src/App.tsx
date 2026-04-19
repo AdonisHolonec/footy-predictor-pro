@@ -146,7 +146,7 @@ export default function App() {
   const displayedMatches = useMemo(() => {
     let list = [...preds];
     if (filterMode === "VALUE") list = list.filter(m => m.valueBet?.detected);
-    if (filterMode === "SAFE") list = list.filter(m => m.recommended.confidence >= 70);
+    if (filterMode === "SAFE") list = list.filter((m) => !m.insufficientData && m.recommended.confidence >= 70);
     list.sort((a, b) => {
       if (sortBy === "TIME") return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
       if (sortBy === "CONFIDENCE") return b.recommended.confidence - a.recommended.confidence;

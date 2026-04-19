@@ -67,7 +67,17 @@ export const adjustLambdaByEfficiency = (actualGoals, xG, confidence = 0.5) => {
   return Number(((actualGoals * (1 - safeConfidence)) + (xG * safeConfidence)).toFixed(3));
 };
 
-export const calculateDynamicXG = ({ teamAttack, opponentDefense, leagueBase = 1.35, formMultiplier = 1, venueBoost = 1 }) => {
+/**
+ * Single-team scoring intensity from goal-rate inputs (NOT shot-based xG).
+ * @deprecated Old name implied "xG"; use expectedIntensityFromGoalRates.
+ */
+export function expectedIntensityFromGoalRates({
+  teamAttack,
+  opponentDefense,
+  leagueBase = 1.35,
+  formMultiplier = 1,
+  venueBoost = 1
+}) {
   const atk = Math.max(0.2, Number(teamAttack) || leagueBase);
   const def = Math.max(0.2, Number(opponentDefense) || leagueBase);
   const fm = Math.max(0.75, Math.min(1.35, Number(formMultiplier) || 1));
@@ -75,7 +85,10 @@ export const calculateDynamicXG = ({ teamAttack, opponentDefense, leagueBase = 1
   const beta0 = Math.log(Math.max(0.2, leagueBase));
   const intensity = Math.exp(beta0 + 0.88 * Math.log(atk) - 0.67 * Math.log(def));
   return Number((intensity * fm * vb).toFixed(3));
-};
+}
+
+/** @deprecated Use expectedIntensityFromGoalRates */
+export const calculateDynamicXG = expectedIntensityFromGoalRates;
 
 export const removeBookmakerMargin = (homeOdd, drawOdd, awayOdd) => {
   const h = Number(homeOdd), d = Number(drawOdd), a = Number(awayOdd);

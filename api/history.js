@@ -167,7 +167,7 @@ async function handleHistorySync(req, res) {
   try {
     const { data: candidates, error: readError } = await supabase
       .from(HISTORY_TABLE)
-      .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation")
+      .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload")
       .gte("kickoff_at", cutoff)
       .or("validation.eq.pending,match_status.not.in.(FT,AET,PEN)")
       .limit(1000);
@@ -208,18 +208,26 @@ async function handleHistorySync(req, res) {
       const scoreHome = typeof fx?.goals?.home === "number" ? fx.goals.home : null;
       const scoreAway = typeof fx?.goals?.away === "number" ? fx.goals.away : null;
       const validation = validationFromMatch(matchStatus, row.recommended_pick, { home: scoreHome, away: scoreAway });
+      const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+      const vbRaw = raw.valueBet?.type ? String(raw.valueBet.type).trim().toUpperCase() : "";
+      const vbPick = ["1", "X", "2"].includes(vbRaw) ? vbRaw : null;
+      const valueBetValidation = vbPick
+        ? validationFromMatch(matchStatus, vbPick, { home: scoreHome, away: scoreAway })
+        : row.value_bet_validation ?? null;
 
       const statusChanged = String(matchStatus || "") !== String(row.match_status || "");
       const scoreChanged = scoreHome !== row.score_home || scoreAway !== row.score_away;
       const validationChanged = String(validation) !== String(row.validation || "");
+      const vbValChanged = String(valueBetValidation ?? "") !== String(row.value_bet_validation ?? "");
 
-      if (!statusChanged && !scoreChanged && !validationChanged) continue;
+      if (!statusChanged && !scoreChanged && !validationChanged && !vbValChanged) continue;
       updates.push({
         fixture_id: fixtureId,
         match_status: matchStatus,
         score_home: scoreHome,
         score_away: scoreAway,
         validation,
+        value_bet_validation: valueBetValidation,
         updated_at: new Date().toISOString()
       });
     }

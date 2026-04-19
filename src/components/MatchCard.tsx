@@ -78,6 +78,29 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
   const hasFinalScore = isFinalStatus(row.status) && row.score?.home !== null && row.score?.away !== null && row.score?.home !== undefined && row.score?.away !== undefined;
   const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
   const kickoffDate = new Date(row.kickoff);
+
+  if (row.insufficientData) {
+    return (
+      <div
+        onClick={onClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        className="relative isolate flex h-full flex-col rounded-[1.5rem] border border-amber-500/25 bg-amber-950/20 p-4 sm:rounded-[2rem] sm:p-5 cursor-pointer touch-manipulation select-none"
+      >
+        <div className="text-[9px] uppercase font-black text-amber-200/90 mb-1">Date insuficiente</div>
+        <div className="text-sm font-bold text-slate-100">
+          {row.teams?.home} vs {row.teams?.away}
+        </div>
+        <div className="text-[10px] text-slate-500 mt-2">{row.insufficientReason || "Modelul nu a putut estima λ-uri."}</div>
+      </div>
+    );
+  }
   const noBetReasonTokens = [
     "edge_too_small",
     "low_ev",
@@ -87,7 +110,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor }: Match
     "low_data_quality"
   ];
   const normalizedModelMethod = String(row.modelMeta?.method || "").toLowerCase();
-  const modelBadgeLabel = normalizedModelMethod.includes("advanced")
+  const modelBadgeLabel = normalizedModelMethod.includes("advanced") || normalizedModelMethod.includes("strength")
     ? "Advanced"
     : normalizedModelMethod.includes("standings")
     ? "Standings"

@@ -47,12 +47,23 @@ export type PredictionRow = {
   score?: MatchScore;
   referee?: string;
   lambdas?: { home: number; away: number };
-  luckStats?: { hG: number; hXG: number; aG: number; aXG: number };
+  luckStats?: { hG: number; hXG: number; aG: number; aXG: number; intensityNote?: string };
   probs: Probs;
-  odds?: Odds;
+  odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;
   predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
   recommended: { pick: string; confidence: number };
+  insufficientData?: boolean;
+  insufficientReason?: string;
+  modelVersion?: string;
+  evaluation?: {
+    recommendedTrack?: string;
+    valueBetTrack?: string;
+    modelProbs1x2Pct?: { p1: number; pX: number; p2: number };
+    recommended1x2?: string;
+    modelVersion?: string;
+    marketBlendWeight?: number;
+  };
   modelMeta?: {
     method?: string;
     probsModel?: string;
@@ -63,6 +74,9 @@ export type PredictionRow = {
     stakeBucket?: string;
     stakeCap?: number;
     reasonCodes?: string[];
+    modelVersion?: string;
+    gridMax?: number;
+    massCaptured?: number;
   };
 };
 

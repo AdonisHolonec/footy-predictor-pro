@@ -49,6 +49,23 @@ function finalScoreLabel(result: boolean | null) {
 }
 
 export default function MatchModal({ match, logoColors, onClose, hashColor }: MatchModalProps) {
+  if (match.insufficientData) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md" onClick={onClose}>
+        <div
+          className="bg-slate-950 border border-amber-500/30 rounded-2xl p-8 max-w-md w-full text-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-amber-200 font-bold mb-2">Date insuficiente pentru model</p>
+          <p className="text-sm text-slate-400 mb-6">{match.insufficientReason}</p>
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm">
+            Închide
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const homeColor = logoColors[match.logos?.home || ""] || hashColor(match.teams.home);
   const awayColor = logoColors[match.logos?.away || ""] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);

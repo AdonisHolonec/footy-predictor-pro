@@ -1,7 +1,9 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { MODEL_VERSION } from "./modelConstants.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
+const SNAPSHOTS_TABLE = "prediction_snapshots";
 
 function asNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function normalizePick(pick) { return String(pick || "").trim().toLowerCase(); }
@@ -41,7 +43,23 @@ function mapPredictionToDbRow(prediction) {
   const recommendedPick = prediction.recommended?.pick || null;
   const recommendedConfidence = asNum(prediction.recommended?.confidence);
   const generatedAt = new Date().toISOString();
-  const payloadWithMeta = { ...prediction, historyMeta: { generatedAt, source: "api/predict", schemaVersion: 1 } };
+  const modelVer = prediction.modelVersion || MODEL_VERSION;
+  const vbType = prediction.valueBet?.type ? String(prediction.valueBet.type).trim().toUpperCase() : "";
+  const valueBetPick = ["1", "X", "2"].includes(vbType) ? vbType : null;
+  const valueBetValidation = valueBetPick
+    ? isFinalStatus(status)
+      ? validationFromMatch(status, valueBetPick, score)
+      : "pending"
+    : null;
+
+  const payloadWithMeta = {
+    ...prediction,
+    historyMeta: { generatedAt, source: "api/predict", schemaVersion: 2 },
+    modelVersion: modelVer,
+    value_bet_validation: valueBetValidation,
+    evaluation: prediction.evaluation || null
+  };
+
   return {
     fixture_id: prediction.id,
     league_id: asNum(prediction.leagueId),
@@ -63,12 +81,37 @@ function mapPredictionToDbRow(prediction) {
     score_home: scoreHome,
     score_away: scoreAway,
     validation: validationFromMatch(status, recommendedPick, score),
+    value_bet_validation: valueBetValidation,
+    model_version: modelVer,
     reason_codes: Array.isArray(prediction?.auditLog?.reasonCodes) ? prediction.auditLog.reasonCodes : null,
     top_features: Array.isArray(prediction?.auditLog?.topFeatures) ? prediction.auditLog.topFeatures : null,
     saved_at: generatedAt,
     updated_at: generatedAt,
     raw_payload: payloadWithMeta
   };
+}
+
+export async function insertPredictionSnapshots(predictions) {
+  if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0 };
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { count: 0 };
+  const now = new Date().toISOString();
+  const rows = predictions.map((p) => ({
+    fixture_id: Number(p.id),
+    model_version: p.modelVersion || MODEL_VERSION,
+    generated_at: now,
+    league_id: asNum(p.leagueId),
+    kickoff_at: p.kickoff || null,
+    raw_payload: {
+      ...p,
+      snapshotAt: now
+    }
+  }));
+  const { error } = await supabase.from(SNAPSHOTS_TABLE).insert(rows);
+  if (error) {
+    console.error("[prediction_snapshots]", error.message);
+  }
+  return { count: rows.length };
 }
 
 export async function upsertPredictionsHistory(predictions) {
@@ -78,6 +121,7 @@ export async function upsertPredictionsHistory(predictions) {
   const rows = predictions.map(mapPredictionToDbRow);
   const { error } = await supabase.from(HISTORY_TABLE).upsert(rows, { onConflict: "fixture_id" });
   if (error) throw error;
+  await insertPredictionSnapshots(predictions);
   return { count: rows.length };
 }
 
@@ -94,7 +138,8 @@ export function mapDbRowToHistoryEntry(row) {
     score: { home: row.score_home, away: row.score_away },
     recommended: payload.recommended || { pick: row.recommended_pick || "", confidence: row.recommended_confidence || 0 },
     savedAt: row.saved_at,
-    validation: row.validation
+    validation: row.validation,
+    modelVersion: row.model_version ?? payload.modelVersion
   };
 }
 

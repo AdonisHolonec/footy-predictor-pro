@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test tests/math.test.js",
     "preview": "vite preview",
     "api": "npm --prefix server run api",
     "backtest": "node --env-file=.env.local scripts/backtest.js"
