@@ -83,26 +83,26 @@ export default function PerformanceCounterModal({
   const showServer = Boolean(accessToken);
   const adminEffective = isAdmin || serverIsAdmin;
 
-  const tableWrap = "overflow-x-auto rounded-xl border border-signal-line/60 bg-white/70 shadow-inner";
+  const tableWrap = "overflow-x-auto rounded-xl border border-white/5 bg-signal-void/50 shadow-inner";
   const th = "px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted";
   const td = "border-t border-signal-line/35 px-2 py-1.5 font-mono text-[11px] text-signal-petrol";
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-signal-petrolDeep/35 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/70 bg-signal-mist/98 shadow-atelierLg backdrop-blur-xl sm:rounded-2xl"
+        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/10 bg-gradient-to-b from-signal-panel/98 to-signal-mist shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="perf-counter-title"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-signal-line/70 bg-white/50 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-signal-void/40 px-4 py-3">
           <div>
-            <h2 id="perf-counter-title" className="font-display text-sm font-semibold text-signal-petrol">
+            <h2 id="perf-counter-title" className="font-display text-sm font-semibold text-signal-ink">
               Lab console · performance
             </h2>
             <p className="font-mono text-[10px] text-signal-inkMuted">Fereastră {days} zile · kickoff</p>
@@ -110,7 +110,7 @@ export default function PerformanceCounterModal({
           <button
             type="button"
             onClick={onClose}
-            className="touch-manipulation rounded-full border border-signal-line bg-white px-3 py-1.5 text-xs font-semibold text-signal-petrol hover:bg-signal-fog focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/40"
+            className="touch-manipulation rounded-full border border-white/10 bg-signal-fog px-3 py-1.5 text-xs font-semibold text-signal-petrol hover:bg-signal-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/40"
           >
             Închide
           </button>

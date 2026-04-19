@@ -96,133 +96,158 @@ export default function Auth({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl shadow-emerald-900/20">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-black text-white">
-              {mode === "login" && "Login"}
-              {mode === "signup" && "Create account"}
-              {mode === "forgot" && "Forgot password"}
-              {mode === "reset" && "Set new password"}
-            </h2>
-            <p className="mt-1 text-xs text-slate-400">
-              Acceseaza functiile personalizate Footy Predictor.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-800"
-          >
-            Close
-          </button>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-signal-void/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
+      role="presentation"
+    >
+      <div
+        className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/95 to-signal-mist shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1"
+          aria-hidden
+        >
+          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/60 to-transparent" />
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">
+            Model pulse
+          </span>
+          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/35 to-transparent" />
         </div>
 
-        <form onSubmit={(event) => void onSubmit(event)} className="space-y-3">
-          <label className="block text-xs font-bold uppercase tracking-wide text-slate-300">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={mode === "reset"}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/40"
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
-          </label>
+        <div className="p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">
+                Signal access
+              </p>
+              <h2 id="auth-modal-title" className="lab-heading mt-1 text-xl">
+                {mode === "login" && "Login"}
+                {mode === "signup" && "Create account"}
+                {mode === "forgot" && "Forgot password"}
+                {mode === "reset" && "Set new password"}
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-signal-inkMuted">
+                Acceseaza functiile personalizate Footy Predictor.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full border border-white/10 bg-signal-fog/90 px-3 py-1.5 text-xs font-semibold text-signal-inkMuted transition hover:border-signal-line hover:bg-signal-panel hover:text-signal-ink"
+            >
+              Close
+            </button>
+          </div>
 
-          {mode !== "forgot" && (
-            <label className="block text-xs font-bold uppercase tracking-wide text-slate-300">
-              Password
+          <form onSubmit={(event) => void onSubmit(event)} className="space-y-3">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
+              Email
               <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/40"
-                placeholder="******"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={mode === "reset"}
+                className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-signal-petrol/35"
+                placeholder="you@example.com"
+                autoComplete="email"
               />
             </label>
-          )}
 
-          {mode === "reset" && (
-            <label className="block text-xs font-bold uppercase tracking-wide text-slate-300">
-              Confirm password
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/40"
-                placeholder="******"
-                autoComplete="new-password"
-              />
-            </label>
-          )}
+            {mode !== "forgot" && (
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
+                Password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-signal-petrol/35"
+                  placeholder="******"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                />
+              </label>
+            )}
 
-          {(localError || authError) && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200">
-              {localError || authError}
-            </div>
-          )}
-          {localSuccess && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-              {localSuccess}
-            </div>
-          )}
+            {mode === "reset" && (
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
+                Confirm password
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-signal-petrol/35"
+                  placeholder="******"
+                  autoComplete="new-password"
+                />
+              </label>
+            )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting
-              ? "Se proceseaza..."
-              : mode === "login"
-              ? "Login"
-              : mode === "signup"
-              ? "Sign up"
-              : mode === "forgot"
-              ? "Trimite link reset"
-              : "Actualizeaza parola"}
-          </button>
-        </form>
+            {(localError || authError) && (
+              <div className="rounded-xl border border-signal-rose/35 bg-signal-rose/10 px-3 py-2 text-xs font-semibold text-signal-rose">
+                {localError || authError}
+              </div>
+            )}
+            {localSuccess && (
+              <div className="rounded-xl border border-signal-sage/35 bg-signal-sage/10 px-3 py-2 text-xs font-semibold text-signal-mint">
+                {localSuccess}
+              </div>
+            )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-          {(mode === "login" || mode === "signup") && (
             <button
-              type="button"
-              onClick={() => setMode((prev) => (prev === "login" ? "signup" : "login"))}
-              className="text-xs font-bold text-emerald-300 hover:text-emerald-200"
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-frost transition hover:bg-signal-petrolDeep disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {mode === "login"
-                ? "Nu ai cont? Creeaza unul."
-                : "Ai deja cont? Intra in aplicatie."}
+              {isSubmitting
+                ? "Se proceseaza..."
+                : mode === "login"
+                  ? "Login"
+                  : mode === "signup"
+                    ? "Sign up"
+                    : mode === "forgot"
+                      ? "Trimite link reset"
+                      : "Actualizeaza parola"}
             </button>
-          )}
-          {mode === "login" && (
-            <button
-              type="button"
-              onClick={() => setMode("forgot")}
-              className="text-xs font-bold text-cyan-300 hover:text-cyan-200"
-            >
-              Ai uitat parola?
-            </button>
-          )}
-          {(mode === "forgot" || mode === "reset") && (
-            <button
-              type="button"
-              onClick={() => {
-                setMode("login");
-                setLocalError("");
-                setLocalSuccess("");
-              }}
-              className="text-xs font-bold text-emerald-300 hover:text-emerald-200"
-            >
-              Inapoi la login
-            </button>
-          )}
+          </form>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-4">
+            {(mode === "login" || mode === "signup") && (
+              <button
+                type="button"
+                onClick={() => setMode((prev) => (prev === "login" ? "signup" : "login"))}
+                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint"
+              >
+                {mode === "login"
+                  ? "Nu ai cont? Creeaza unul."
+                  : "Ai deja cont? Intra in aplicatie."}
+              </button>
+            )}
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => setMode("forgot")}
+                className="text-xs font-semibold text-signal-amberSoft/90 transition hover:text-signal-amber"
+              >
+                Ai uitat parola?
+              </button>
+            )}
+            {(mode === "forgot" || mode === "reset") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("login");
+                  setLocalError("");
+                  setLocalSuccess("");
+                }}
+                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint"
+              >
+                Inapoi la login
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

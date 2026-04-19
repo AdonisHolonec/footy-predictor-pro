@@ -662,8 +662,8 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="atelier-page relative min-h-screen font-sans">
-      <div className="atelier-bg" aria-hidden />
+    <div className="lab-page relative min-h-screen font-sans">
+      <div className="lab-bg" aria-hidden />
       <div className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
         <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -684,7 +684,7 @@ export default function UserDashboard() {
           <button
             type="button"
             onClick={() => void logout()}
-            className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
+            className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/55 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
           >
             Logout
           </button>
@@ -713,13 +713,13 @@ export default function UserDashboard() {
               setSelectedDates(normalizeSelectedDates([next]));
               void fetchDays([next]);
             }}
-            className="rounded-xl border border-signal-line/80 bg-white/90 px-4 py-2.5 text-sm text-signal-petrol"
+            className="rounded-xl border glass-input rounded-xl px-4 py-2.5 text-sm text-signal-ink"
           />
           <button
             type="button"
             onClick={warm}
             disabled={limitApplies && dailyUsage.warm >= 3}
-            className="touch-manipulation rounded-xl border border-signal-line bg-white/90 px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-fog disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/60 px-4 py-2.5 text-sm font-semibold text-signal-ink hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
           >
             Warm
           </button>
@@ -727,11 +727,11 @@ export default function UserDashboard() {
             type="button"
             onClick={predict}
             disabled={limitApplies && dailyUsage.predict >= 3}
-            className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-white hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Predict
           </button>
-          <div className="rounded-lg border border-signal-line/70 bg-white/70 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
+          <div className="rounded-lg border border-white/5 bg-signal-panel/45 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
             <span className="text-signal-petrol">
               Warm {usageQuotaExempt ? "—" : dailyUsage.warm}/3 · Predict {usageQuotaExempt ? "—" : dailyUsage.predict}/3
             </span>
@@ -756,7 +756,7 @@ export default function UserDashboard() {
         </div>
 
         {status && (
-          <div className="mt-4 rounded-xl border border-signal-sage/30 bg-white/70 px-3 py-2 font-mono text-xs text-signal-petrolMuted shadow-inner">{status}</div>
+          <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
         )}
 
         {!user?.onboardingCompleted && (
@@ -764,7 +764,7 @@ export default function UserDashboard() {
             <button
               type="button"
               onClick={() => setIsOnboardingOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-left"
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-left"
             >
               <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Onboarding</span>
               <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">{selectedLeagueIds.length}/2 ligi</span>
@@ -775,7 +775,7 @@ export default function UserDashboard() {
                 <button
                   type="button"
                   onClick={() => void completeOnboarding()}
-                  className="mt-3 rounded-lg bg-signal-petrol px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted"
+                  className="mt-3 rounded-lg bg-signal-petrol px-3 py-2 text-xs font-semibold uppercase tracking-wide text-signal-mist hover:bg-signal-petrolMuted"
                 >
                   Finalizează onboarding
                 </button>
@@ -784,11 +784,11 @@ export default function UserDashboard() {
           </section>
         )}
 
-        <section className="mt-4 rounded-2xl border border-signal-line/70 bg-white/55 p-3 shadow-atelier backdrop-blur-sm">
+        <section className="mt-4 rounded-2xl border border-white/[0.08] bg-signal-panel/35 p-3 shadow-inner backdrop-blur-md">
           <button
             type="button"
             onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-left"
+            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-left"
           >
             <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Notificări</span>
             <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">
@@ -798,15 +798,15 @@ export default function UserDashboard() {
           {isNotificationsOpen && (
             <div className="mt-3">
               <div className="grid gap-2 sm:grid-cols-3">
-                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
+                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input type="checkbox" checked={notifySafe} onChange={(event) => setNotifySafe(event.target.checked)} />
                   Safe alerts
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
+                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input type="checkbox" checked={notifyValue} onChange={(event) => setNotifyValue(event.target.checked)} />
                   Value alerts
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
+                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input
                     type="checkbox"
                     checked={notifyEmail}
@@ -849,7 +849,7 @@ export default function UserDashboard() {
           )}
         </section>
 
-        <section className="mt-4 rounded-2xl border border-signal-line/70 bg-white/50 p-3 shadow-inner">
+        <section className="mt-4 rounded-2xl border border-white/[0.08] bg-signal-panel/30 p-3 shadow-inner backdrop-blur-sm">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Date personale (GDPR)</h2>
           <p className="mt-1 text-[11px] text-signal-inkMuted">
             Export JSON cu profil și jurnal notificări. Vezi{" "}
@@ -862,7 +862,7 @@ export default function UserDashboard() {
             type="button"
             disabled={exportBusy}
             onClick={() => void downloadPersonalDataExport()}
-            className="mt-2 rounded-lg border border-signal-line bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
+            className="mt-2 rounded-lg border border-white/10 bg-signal-fog px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
           >
             {exportBusy ? "Se genereaza..." : "Descarca export JSON"}
           </button>
@@ -886,7 +886,7 @@ export default function UserDashboard() {
           </div>
           <div className="lg:col-span-8 xl:col-span-9">
             {!preds.length ? (
-              <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/50 bg-white/40 text-center text-signal-inkMuted">
+              <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/30 bg-signal-void/35 text-center text-signal-inkMuted">
                 Selectează ligi și apasă Predict.
               </div>
             ) : (

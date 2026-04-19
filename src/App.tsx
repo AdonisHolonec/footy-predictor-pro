@@ -697,17 +697,22 @@ export default function App() {
   }, [kpiLoading, kpi?.hitRate, kpi?.roi, alertsSeverity, date]);
 
   return (
-    <div className="atelier-page relative min-h-screen font-sans">
-      <div className="atelier-bg" aria-hidden />
-      <div className="relative z-10 mx-auto max-w-[1600px] px-4 py-8 lg:px-6">
+    <div className="lab-page relative min-h-screen font-sans">
+      <div className="lab-bg" aria-hidden />
+      <div className="relative z-10 mx-auto max-w-[1680px] px-4 py-8 lg:px-8">
         {/* HEADER */}
-        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal-sage">
-                {localCalendarDateKey()} · S{inferSeason(date)}
+        <header className="mb-10 border-b border-white/[0.06] pb-8">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 max-w-3xl">
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/80">
+                {localCalendarDateKey()} · SEASON {inferSeason(date)} · PREDICTIVE INTELLIGENCE
               </p>
-              <h1 className="font-display text-3xl font-semibold tracking-tight text-signal-petrol md:text-4xl lg:text-5xl">Footy Predictor</h1>
-              <p className="mt-1 max-w-xl text-sm text-signal-inkMuted">Lab predicții · semnale, calibrare și inteligență tactică.</p>
+              <h1 className="font-display text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
+                Football signal <span className="text-signal-petrol">observatory</span>
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
+                Editorial analytics layer: calibrated models, xG context, and value edges — not odds hype.
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <ModelPulseStrip status={modelPulse.status} tone={modelPulse.tone} />
               </div>
@@ -724,25 +729,25 @@ export default function App() {
                 onBreakdownClick={() => setPerfCounterModalOpen(true)}
               />
               <div className="mt-3 grid max-w-[760px] grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
                   <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI ROI</div>
                   <div className={`font-mono text-sm font-semibold tabular-nums ${((kpi?.roi || 0) >= 0) ? "text-signal-petrolMuted" : "text-signal-rose"}`}>
                     {kpiLoading ? "..." : `${(kpi?.roi || 0).toFixed(2)}%`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
                   <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Hit Rate</div>
                   <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
                     {kpiLoading ? "..." : `${(kpi?.hitRate || 0).toFixed(2)}%`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
                   <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Drawdown</div>
                   <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">
                     {kpiLoading ? "..." : `${(kpi?.drawdown || 0).toFixed(2)}u`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
                   <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Settled</div>
                   <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
                     {kpiLoading ? "..." : `${kpi?.settled || 0}`}
@@ -772,7 +777,7 @@ export default function App() {
                       step={0.1}
                       value={draftDrawdownThreshold}
                       onChange={(e) => setDraftDrawdownThreshold(Number(e.target.value))}
-                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
                   <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
@@ -784,7 +789,7 @@ export default function App() {
                       step={1}
                       value={draftDriftThreshold}
                       onChange={(e) => setDraftDriftThreshold(Number(e.target.value))}
-                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
                   <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
@@ -796,7 +801,7 @@ export default function App() {
                       step={0.01}
                       value={draftLowDataThreshold}
                       onChange={(e) => setDraftLowDataThreshold(Number(e.target.value))}
-                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
                 </div>
@@ -810,7 +815,7 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => void resetAlertThresholds()}
-                    className="rounded-md border border-signal-line bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
+                    className="rounded-md border border-signal-line bg-signal-fog px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel"
                   >
                     Reset defaults
                   </button>
@@ -840,15 +845,15 @@ export default function App() {
             <div className="flex flex-col items-stretch gap-2 lg:gap-3">
               <div className="flex justify-end">
                 {authLoading ? (
-                  <div className="rounded-xl border border-signal-line bg-white/70 px-3 py-2 text-xs font-semibold text-signal-inkMuted shadow-inner">
+                  <div className="rounded-xl border border-signal-line/50 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-inkMuted shadow-inner">
                     Checking session...
                   </div>
                 ) : user ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-signal-sage/35 bg-signal-mintSoft/40 px-3 py-2 shadow-inner">
+                  <div className="flex items-center gap-2 rounded-xl border border-signal-sage/25 bg-signal-sage/10 px-3 py-2 shadow-inner">
                     <span className="max-w-[180px] truncate text-xs font-semibold text-signal-petrol">{user.email}</span>
                     <button
                       onClick={() => void handleLogout()}
-                      className="rounded-md border border-signal-line bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
+                      className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel"
                     >
                       Logout
                     </button>
@@ -874,7 +879,7 @@ export default function App() {
                       return normalizeSelectedDates([next, ...filtered]);
                     });
                   }}
-                  className="col-span-2 w-full rounded-xl border border-signal-line/80 bg-white/80 px-4 py-2.5 text-sm text-signal-petrol outline-none focus:ring-2 focus:ring-signal-sage/35 sm:col-span-1"
+                  className="col-span-2 w-full rounded-xl border glass-input px-4 py-2.5 text-sm text-signal-ink outline-none focus:ring-2 focus:ring-signal-sage/35 sm:col-span-1"
                 />
                 <button
                   type="button"
@@ -891,7 +896,7 @@ export default function App() {
                       return normalizeSelectedDates([...normalized, nextDate.toISOString().slice(0, 10)]);
                     });
                   }}
-                  className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2.5 text-sm font-semibold text-signal-petrol transition-all hover:bg-signal-fog active:bg-white"
+                  className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/60 px-4 py-2.5 text-sm font-semibold text-signal-ink transition-all hover:bg-signal-panel hover:text-signal-petrol active:translate-y-px"
                 >
                   + Zi
                 </button>
@@ -899,7 +904,7 @@ export default function App() {
                   type="button"
                   onClick={warm}
                   disabled={!user}
-                  className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2.5 text-sm font-semibold text-signal-petrol transition-all hover:bg-signal-fog disabled:cursor-not-allowed disabled:opacity-50"
+                  className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/60 px-4 py-2.5 text-sm font-semibold text-signal-ink transition-all hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Warm
                 </button>
@@ -907,7 +912,7 @@ export default function App() {
                   type="button"
                   onClick={predict}
                   disabled={!user}
-                  className="touch-manipulation col-span-2 w-full rounded-xl bg-signal-petrol px-6 py-2.5 text-sm font-semibold text-white shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto"
+                  className="touch-manipulation col-span-2 w-full rounded-xl bg-signal-petrol px-6 py-2.5 text-sm font-semibold text-signal-mist shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto"
                 >
                   Predict
                 </button>
@@ -926,7 +931,7 @@ export default function App() {
                       });
                     }}
                     className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold ${
-                      d === date ? "border-signal-sage/45 bg-signal-mintSoft/50 text-signal-petrol" : "border-signal-line bg-white/60 text-signal-inkMuted"
+                      d === date ? "border-signal-petrol/40 bg-signal-petrol/15 text-signal-petrol" : "border-white/10 bg-signal-panel/40 text-signal-inkMuted"
                     }`}
                     title="Elimină ziua"
                   >
@@ -937,16 +942,17 @@ export default function App() {
             </div>
           </div>
         </div>
+        </header>
 
         {status && (
-          <div className="mb-6 rounded-xl border border-signal-sage/30 bg-white/70 p-3 font-mono text-xs text-signal-petrolMuted shadow-inner">
+          <div className="mb-6 rounded-xl border border-signal-sage/25 bg-signal-panel/50 p-3 font-mono text-xs text-signal-petrol/90 shadow-inner backdrop-blur-sm">
             {"> "}
             {status}
           </div>
         )}
 
         {user?.role === "admin" && (
-          <section className="mb-6 rounded-2xl border border-signal-line/80 bg-white/55 p-4 shadow-atelier backdrop-blur-sm">
+          <section className="mb-6 rounded-2xl border border-white/[0.08] bg-signal-panel/40 p-4 shadow-atelier backdrop-blur-xl">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Admin · utilizatori</h2>
@@ -963,7 +969,7 @@ export default function App() {
                 type="button"
                 onClick={() => void refreshManagedProfiles()}
                 disabled={isAdminWorking}
-                className="rounded-lg border border-signal-line bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
+                className="rounded-lg border border-white/10 bg-signal-fog px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel disabled:opacity-50"
               >
                 Refresh
               </button>
@@ -992,7 +998,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div className="mt-4 rounded-xl border border-signal-sage/25 bg-white/50 p-3 shadow-inner">
+            <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-void/40 p-3 shadow-inner">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-signal-petrol">Performance counter · 30 zile (server)</p>
                 <button
@@ -1007,7 +1013,7 @@ export default function App() {
               <div className="mt-2 grid gap-3 lg:grid-cols-2">
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Pe utilizator</p>
-                  <div className="max-h-48 overflow-auto rounded-lg border border-signal-line/60 bg-white/60">
+                  <div className="max-h-48 overflow-auto rounded-lg border border-white/5 bg-signal-void/50">
                     <table className="min-w-full text-left font-mono text-[10px] text-signal-petrol">
                       <thead className="sticky top-0 bg-signal-fog/95 text-[9px] uppercase text-signal-inkMuted">
                         <tr>
@@ -1043,7 +1049,7 @@ export default function App() {
                 </div>
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Utilizator + ligă</p>
-                  <div className="max-h-48 overflow-auto rounded-lg border border-signal-line/60 bg-white/60">
+                  <div className="max-h-48 overflow-auto rounded-lg border border-white/5 bg-signal-void/50">
                     <table className="min-w-full text-left font-mono text-[10px] text-signal-petrol">
                       <thead className="sticky top-0 bg-signal-fog/95 text-[9px] uppercase text-signal-inkMuted">
                         <tr>
@@ -1081,7 +1087,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-signal-line/60 bg-white/50">
+            <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/5 bg-signal-void/40">
               <table className="min-w-full text-left text-[11px] text-signal-petrol">
                 <thead className="sticky top-0 bg-signal-fog/95 text-[10px] uppercase text-signal-inkMuted">
                   <tr>
@@ -1156,7 +1162,7 @@ export default function App() {
                 clearLeagueSelection={clearLeagueSelection}
               />
             ) : (
-              <div className="rounded-3xl border border-signal-line/80 bg-white/60 p-5 shadow-atelier backdrop-blur-sm">
+              <div className="rounded-3xl border border-signal-line/40 bg-signal-panel/45 p-5 shadow-atelier backdrop-blur-sm">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Personalizare blocată</h3>
                 <p className="mt-2 text-xs leading-relaxed text-signal-inkMuted">
                   Selecția ligilor și predicțiile personalizate sunt disponibile după autentificare.
@@ -1175,13 +1181,13 @@ export default function App() {
           {/* MECIURI */}
           <div className="lg:col-span-8 xl:col-span-9">
             {preds.length > 0 && (
-              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-signal-line/70 bg-white/55 p-3 shadow-inner backdrop-blur-sm sm:gap-4 lg:p-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-signal-panel/35 p-3 shadow-inner backdrop-blur-md sm:gap-4 lg:p-4 xl:flex-row xl:items-center xl:justify-between">
                 <div className="custom-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto border-b border-signal-line/50 pb-2 xl:overflow-visible xl:border-b-0 xl:border-r xl:pb-0 xl:pr-4">
                   <button
                     type="button"
                     onClick={() => setFilterMode("ALL")}
                     className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
-                      filterMode === "ALL" ? "bg-signal-petrol text-white shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                      filterMode === "ALL" ? "bg-signal-petrol text-signal-mist shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
                     }`}
                   >
                     Toate ({preds.length}
@@ -1191,7 +1197,7 @@ export default function App() {
                     type="button"
                     onClick={() => setFilterMode("VALUE")}
                     className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
-                      filterMode === "VALUE" ? "border border-signal-amber/45 bg-signal-amber/15 text-signal-amber shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                      filterMode === "VALUE" ? "border border-signal-amber/45 bg-signal-amber/15 text-signal-amber shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
                     }`}
                   >
                     Value bets
@@ -1200,7 +1206,7 @@ export default function App() {
                     type="button"
                     onClick={() => setFilterMode("SAFE")}
                     className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
-                      filterMode === "SAFE" ? "border border-signal-sage/40 bg-signal-mintSoft/50 text-signal-petrol shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                      filterMode === "SAFE" ? "border border-signal-sage/35 bg-signal-sage/15 text-signal-sage shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
                     }`}
                   >
                     +70% siguranță
@@ -1212,7 +1218,7 @@ export default function App() {
                     type="button"
                     onClick={() => setSortBy("TIME")}
                     className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                      sortBy === "TIME" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                      sortBy === "TIME" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
                     }`}
                   >
                     Ora
@@ -1221,7 +1227,7 @@ export default function App() {
                     type="button"
                     onClick={() => setSortBy("CONFIDENCE")}
                     className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                      sortBy === "CONFIDENCE" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                      sortBy === "CONFIDENCE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
                     }`}
                   >
                     Încredere
@@ -1230,7 +1236,7 @@ export default function App() {
                     type="button"
                     onClick={() => setSortBy("VALUE")}
                     className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                      sortBy === "VALUE" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                      sortBy === "VALUE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
                     }`}
                   >
                     EV
@@ -1239,7 +1245,7 @@ export default function App() {
               </div>
             )}
             {!user ? (
-              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/60 bg-white/40 px-6 text-center">
+              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/30 bg-signal-panel/20 px-6 text-center">
                 <div>
                   <p className="font-medium text-signal-petrol">Autentifică-te pentru predicții personalizate.</p>
                   <button
@@ -1252,7 +1258,7 @@ export default function App() {
                 </div>
               </div>
             ) : !preds.length ? (
-              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/40 bg-white/30 text-center text-signal-inkMuted">
+              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/25 bg-signal-void/30 text-center text-signal-inkMuted">
                 <p className="font-medium italic">Selectează ligile, apoi apasă Predict.</p>
               </div>
             ) : (
@@ -1296,7 +1302,7 @@ export default function App() {
           <button
             type="button"
             onClick={predict}
-            className="touch-manipulation w-full rounded-2xl bg-signal-petrol px-6 py-3.5 text-sm font-semibold text-white shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation w-full rounded-2xl bg-signal-petrol px-6 py-3.5 text-sm font-semibold text-signal-mist shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!user || !selectedLeagueIds.length}
           >
             Predict {selectedLeagueIds.length ? `(${selectedLeagueIds.length} ligi)` : ""}
