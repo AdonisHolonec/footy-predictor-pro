@@ -7,5 +7,7 @@ export const BRAND_IMAGES = {
   /** Full dashboard composition — user / admin mood board */
   refDashboard: "/brand/ref-dashboard.png",
   /** Prediction dossier focus — cards & analytics */
-  refDossier: "/brand/ref-dossier.png"
+  refDossier: "/brand/ref-dossier.png",
+  /** Landing / access hero (nav + floating cards) */
+  landingAccessHero: "/brand/landing-access-hero.png"
 } as const;

@@ -103,9 +103,14 @@ export default function Privacy() {
             </section>
 
             <footer className="border-t border-white/[0.08] pt-8">
-              <Link to="/login" className="font-mono text-xs font-semibold uppercase tracking-wider text-signal-petrol transition hover:text-signal-mint">
-                ← Înapoi la autentificare
-              </Link>
+              <div className="flex flex-wrap gap-4">
+                <Link to="/" className="font-mono text-xs font-semibold uppercase tracking-wider text-signal-inkMuted transition hover:text-signal-petrol">
+                  ← Acasă
+                </Link>
+                <Link to="/login" className="font-mono text-xs font-semibold uppercase tracking-wider text-signal-petrol transition hover:text-signal-mint">
+                  Autentificare
+                </Link>
+              </div>
             </footer>
           </div>
 

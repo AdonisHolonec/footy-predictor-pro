@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import BrandArtboard from "../components/BrandArtboard";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ModelPulseWave } from "../components/SignalLab";
@@ -10,6 +10,7 @@ import { HistoryStats } from "../types";
 export default function Login() {
   const { user, signup, login, sendPasswordResetEmail, updatePassword, lastAuthEvent, error } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,6 +20,12 @@ export default function Login() {
   const [localError, setLocalError] = useState("");
   const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("mode") === "signup") {
+      setMode("signup");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     void fetch("/api/history?days=30")
@@ -44,7 +51,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!user) return;
-    navigate("/", { replace: true });
+    navigate("/workspace", { replace: true });
   }, [user?.id, navigate]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -103,7 +110,13 @@ export default function Login() {
       />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
         <header className="mb-10 border-b border-white/[0.07] pb-8 animate-fadeIn">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor</p>
+          <Link
+            to="/"
+            className="inline-block font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted transition hover:text-signal-petrol"
+          >
+            ← Pagina de acces
+          </Link>
+          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor</p>
           <h1 className="lab-heading mt-2 max-w-3xl text-3xl leading-[1.15] sm:text-4xl lg:text-[2.75rem]">
             Foresight on the pitch.
           </h1>
