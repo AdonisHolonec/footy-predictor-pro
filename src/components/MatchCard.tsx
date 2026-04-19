@@ -88,6 +88,15 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
     row.score?.home !== undefined &&
     row.score?.away !== undefined;
   const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
+  const hasNumericScore =
+    row.score != null && typeof row.score.home === "number" && typeof row.score.away === "number";
+  const koMs = new Date(row.kickoff).getTime();
+  const pastKickoffPollWindow = Number.isFinite(koMs) && Date.now() >= koMs - 15 * 60 * 1000;
+  /** Scor parțial: live sau după start până la FT (inclusiv când `status` încă e NS). */
+  const showRunningScore =
+    hasNumericScore &&
+    !hasFinalScore &&
+    (isLive || (pastKickoffPollWindow && !isFinalStatus(row.status)));
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive);
 
@@ -184,9 +193,20 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">Pick</div>
           <div className="font-display text-2xl font-bold tracking-tight text-signal-ink">{row.recommended.pick}</div>
         </div>
-        {hasFinalScore && (
-          <div className="text-right font-mono text-xs tabular-nums text-signal-silver">
-            FT {row.score?.home}-{row.score?.away}
+        {(hasFinalScore || showRunningScore) && (
+          <div className="text-right font-mono text-xs tabular-nums">
+            {showRunningScore ? (
+              <span className={isLive ? "text-red-200" : "text-signal-amber/90"}>
+                <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
+                <span className="font-display text-lg font-bold tabular-nums text-signal-ink">
+                  {row.score?.home}-{row.score?.away}
+                </span>
+              </span>
+            ) : (
+              <span className="text-signal-silver">
+                FT {row.score?.home}-{row.score?.away}
+              </span>
+            )}
           </div>
         )}
       </div>

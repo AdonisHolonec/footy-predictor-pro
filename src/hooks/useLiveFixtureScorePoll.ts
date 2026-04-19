@@ -5,6 +5,31 @@ import { isFixtureInPlay } from "../utils/appUtils";
 /** Interval between live score polls when at least one fixture is in play (API + UX balance). */
 export const LIVE_SCORE_POLL_MS = 45_000;
 
+function isTerminalOrAbandonedStatus(status?: string): boolean {
+  const s = String(status ?? "")
+    .trim()
+    .toUpperCase();
+  return ["FT", "AET", "PEN", "CANC", "PST", "ABD", "AWD", "WO"].includes(s);
+}
+
+/**
+ * Include meciuri în desfășurare și meciuri „NS” încă neactualizate după start (predict vechi),
+ * ca `/api/fixtures/live-scores` să poată aduce status + goluri.
+ */
+export function shouldPollFixtureScore(p: PredictionRow): boolean {
+  if (p.insufficientData) return false;
+  if (isFixtureInPlay(p.status)) return true;
+  if (isTerminalOrAbandonedStatus(p.status)) return false;
+  const ko = new Date(p.kickoff).getTime();
+  if (!Number.isFinite(ko)) return false;
+  const now = Date.now();
+  const startWindowMs = 10 * 60 * 1000;
+  const endWindowMs = 4 * 60 * 60 * 1000;
+  if (now < ko - startWindowMs) return false;
+  if (now > ko + endWindowMs) return false;
+  return true;
+}
+
 type SetPreds = Dispatch<SetStateAction<PredictionRow[]>>;
 
 type Options = {
@@ -24,7 +49,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
   const liveIdsKey = useMemo(
     () =>
       preds
-        .filter((p) => isFixtureInPlay(p.status))
+        .filter((p) => shouldPollFixtureScore(p))
         .map((p) => p.id)
         .filter((id) => Number.isFinite(Number(id)))
         .sort((a, b) => Number(a) - Number(b))

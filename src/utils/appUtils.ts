@@ -55,7 +55,7 @@ export function hashColor(seed: string): string {
 }
 
 /** API-Football `fixture.status.short` values where kickoff has occurred and the match is not finished. */
-const IN_PLAY_STATUSES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP"]);
+const IN_PLAY_STATUSES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP", "VAR", "1ST", "2ND"]);
 
 export function isFixtureInPlay(status?: string): boolean {
   const s = String(status ?? "")

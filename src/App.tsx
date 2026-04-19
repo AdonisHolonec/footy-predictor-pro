@@ -238,6 +238,14 @@ export default function App() {
 
   useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
 
+  useEffect(() => {
+    setSelectedMatch((cur) => {
+      if (!cur) return cur;
+      const next = preds.find((p) => p.id === cur.id);
+      return next ?? cur;
+    });
+  }, [preds]);
+
   async function fetchDays(dates: string[]) {
     const effectiveDates = normalizeSelectedDates(dates.length ? dates : [date]);
     setStatus("Încarc ligile...");

@@ -295,7 +295,13 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
     match.score?.home !== undefined &&
     match.score?.away !== undefined;
   const hasNumericScore = match.score != null && typeof match.score.home === "number" && typeof match.score.away === "number";
-  const hasLiveScore = isFixtureInPlay(match.status) && !hasFinalScore && hasNumericScore;
+  const koMs = new Date(match.kickoff).getTime();
+  const pastKickoffPollWindow = Number.isFinite(koMs) && Date.now() >= koMs - 15 * 60 * 1000;
+  /** Scor în desfășurare: status „live” sau încă NS dar după fereastra de start (poll actualizează). */
+  const hasLiveScore =
+    hasNumericScore &&
+    !hasFinalScore &&
+    (isFixtureInPlay(match.status) || (pastKickoffPollWindow && !isFinalStatus(match.status)));
   const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
   const kickoffDate = new Date(match.kickoff);
   const confPct = pct(match.recommended?.confidence);
@@ -368,7 +374,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 {match.league}
               </div>
               <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink sm:text-5xl">
-                {hasFinalScore ? `${match.score?.home}-${match.score?.away}` : "—"}
+                {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
               <div className="mt-2 flex items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
                 <ConfidenceAura value={confPct} size="compact" />

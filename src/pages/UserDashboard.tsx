@@ -34,6 +34,14 @@ export default function UserDashboard() {
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
   const [preds, setPreds] = useState<PredictionRow[]>([]);
   useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
+
+  useEffect(() => {
+    setSelectedMatch((cur) => {
+      if (!cur) return cur;
+      const next = preds.find((p) => p.id === cur.id);
+      return next ?? cur;
+    });
+  }, [preds]);
   const [day, setDay] = useState<DayResponse | null>(null);
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
