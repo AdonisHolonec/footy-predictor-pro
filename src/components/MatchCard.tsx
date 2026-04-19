@@ -188,6 +188,34 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         <ConfidenceAura value={confPct} size="compact" className="self-start" />
       </div>
 
+      {(row.teamContext?.home?.rank != null ||
+        row.teamContext?.home?.form ||
+        row.teamContext?.away?.rank != null ||
+        row.teamContext?.away?.form) && (
+        <div className="mt-3 flex items-stretch justify-between gap-2 rounded-xl border border-white/[0.07] bg-signal-void/35 px-2.5 py-2">
+          <div className="min-w-0 flex-1 font-mono text-[9px] leading-snug text-signal-silver">
+            <span className="block text-[8px] font-semibold uppercase tracking-wide text-signal-inkMuted">Gazde</span>
+            <span className="text-signal-petrol">#{row.teamContext?.home?.rank ?? "—"}</span>
+            {row.teamContext?.home?.points != null ? <span className="text-signal-inkMuted"> · {row.teamContext.home.points}pt</span> : null}
+            {row.teamContext?.home?.form ? (
+              <span className="mt-0.5 block truncate tracking-tight text-signal-ink" title={row.teamContext.home.form}>
+                {row.teamContext.home.form}
+              </span>
+            ) : null}
+          </div>
+          <div className="min-w-0 flex-1 text-right font-mono text-[9px] leading-snug text-signal-silver">
+            <span className="block text-[8px] font-semibold uppercase tracking-wide text-signal-inkMuted">Oaspeți</span>
+            <span className="text-signal-petrol">#{row.teamContext?.away?.rank ?? "—"}</span>
+            {row.teamContext?.away?.points != null ? <span className="text-signal-inkMuted"> · {row.teamContext.away.points}pt</span> : null}
+            {row.teamContext?.away?.form ? (
+              <span className="mt-0.5 block truncate tracking-tight text-signal-ink" title={row.teamContext.away.form}>
+                {row.teamContext.away.form}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       <div className="relative mt-4 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-3">
         <div>
           <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">Pick</div>

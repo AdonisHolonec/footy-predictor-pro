@@ -74,19 +74,60 @@ function clampPct(n) {
   return Math.max(0, Math.min(100, Number(n) || 0));
 }
 
-/** Extrage rândurile de clasament indiferent dacă API-ul returnează grupuri sau un singur array. */
+/**
+ * Extrage toate rândurile de clasament din răspunsul API-Football (structuri multiple:
+ * standings[] de array-uri, listă plată, sau obiecte cu .table).
+ */
 function standingsRowsFromApi(apiData) {
-  const league = apiData?.response?.[0]?.league;
-  if (!league?.standings) return [];
-  const st = league.standings;
-  if (!Array.isArray(st) || st.length === 0) return [];
-  const head = st[0];
-  if (Array.isArray(head)) return head.filter((r) => r?.team?.id);
-  if (head?.team?.id) return st.filter((r) => r?.team?.id);
-  if (head?.table && Array.isArray(head.table)) {
-    return st.flatMap((g) => (Array.isArray(g?.table) ? g.table : [])).filter((r) => r?.team?.id);
+  const raw = apiData?.response;
+  if (raw == null) return [];
+  const blocks = Array.isArray(raw) ? raw : [raw];
+  const collected = [];
+  for (const block of blocks) {
+    const league = block?.league ?? block;
+    const st = league?.standings;
+    if (!Array.isArray(st) || st.length === 0) continue;
+    const head = st[0];
+    if (Array.isArray(head)) {
+      for (const inner of st) {
+        if (Array.isArray(inner)) {
+          for (const row of inner) {
+            if (row?.team?.id) collected.push(row);
+          }
+        }
+      }
+      continue;
+    }
+    if (head?.team?.id) {
+      for (const row of st) {
+        if (row?.team?.id) collected.push(row);
+      }
+      continue;
+    }
+    if (head && typeof head === "object" && Array.isArray(head.table)) {
+      for (const grp of st) {
+        const tbl = grp?.table;
+        if (Array.isArray(tbl)) {
+          for (const row of tbl) {
+            if (row?.team?.id) collected.push(row);
+          }
+        }
+      }
+    }
   }
-  return [];
+  const byTeam = new Map();
+  for (const row of collected) {
+    const id = row?.team?.id;
+    if (id != null) byTeam.set(Number(id), row);
+  }
+  return Array.from(byTeam.values());
+}
+
+function coerceFormFromTeamStats(norm) {
+  if (!norm?.response) return null;
+  const r = norm.response;
+  if (typeof r.form === "string" && r.form.trim()) return r.form;
+  return null;
 }
 
 function normalizeFormString(form) {
@@ -377,8 +418,8 @@ export default async function handler(req, res) {
           const tsA = await getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400);
           const tsHNorm = tsH.ok && tsH.data ? normalizeTeamStatisticsPayload(tsH.data) : null;
           const tsANorm = tsA.ok && tsA.data ? normalizeTeamStatisticsPayload(tsA.data) : null;
-          if (tsHNorm) formHomeStr = tsHNorm.response?.form ?? null;
-          if (tsANorm) formAwayStr = tsANorm.response?.form ?? null;
+          if (tsHNorm) formHomeStr = coerceFormFromTeamStats(tsHNorm);
+          if (tsANorm) formAwayStr = coerceFormFromTeamStats(tsANorm);
           if (tsH.ok && tsA.ok && tsHNorm && tsANorm) {
             const hStats = extractAdvancedGoalsAverages(tsHNorm);
             const aStats = extractAdvancedGoalsAverages(tsANorm);

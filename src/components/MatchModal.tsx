@@ -424,29 +424,36 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
               <EdgeCompass dataQuality={dq} valueDetected={Boolean(match.valueBet?.detected)} />
             </div>
           </div>
+
+          <section className="mx-auto mt-6 max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:p-5">
+            <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
+            {showStandingsBlock ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <TeamSnapshotCard title="Gazde" snap={match.teamContext?.home} accent={homeColor} />
+                  <TeamSnapshotCard title="Oaspeți" snap={match.teamContext?.away} accent={awayColor} />
+                </div>
+                {standingsRows && standingsRows.length > 0 ? (
+                  <div className="mt-4">
+                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Clasament complet · {match.league}</h4>
+                    <LeagueStandingsTable
+                      rows={standingsRows}
+                      highlightHomeId={match.fixtureTeamIds?.home}
+                      highlightAwayId={match.fixtureTeamIds?.away}
+                    />
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-signal-inkMuted">
+                Nu am primit date de clasament sau formă pentru acest meci (de obicei sezonul ligii sau răspunsul API la clasament/statistici).
+                <span className="mt-2 block font-mono text-[10px] text-signal-petrol/90">Încearcă din nou Predict după deploy; datele vechi din browser fără aceste câmpuri nu se completează retroactiv.</span>
+              </p>
+            )}
+          </section>
         </div>
 
         <div className="space-y-8 p-5 sm:p-10">
-          {showStandingsBlock ? (
-            <section className="rounded-2xl border border-white/5 bg-signal-void/25 p-6">
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TeamSnapshotCard title="Gazde" snap={match.teamContext?.home} accent={homeColor} />
-                <TeamSnapshotCard title="Oaspeți" snap={match.teamContext?.away} accent={awayColor} />
-              </div>
-              {standingsRows && standingsRows.length > 0 ? (
-                <div className="mt-5">
-                  <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Clasament complet · {match.league}</h4>
-                  <LeagueStandingsTable
-                    rows={standingsRows}
-                    highlightHomeId={match.fixtureTeamIds?.home}
-                    highlightAwayId={match.fixtureTeamIds?.away}
-                  />
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">01 — xG & luck</h3>
