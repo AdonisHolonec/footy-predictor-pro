@@ -27,36 +27,35 @@ export default function SuccessRateTracker({
 }: SuccessRateTrackerProps) {
   const inner = (
     <>
-      <div className="pointer-events-none absolute inset-0 opacity-30">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.22]">
         <div
-          className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.06)_1px,transparent_1px)]"
-          style={{ backgroundSize: "24px 24px" }}
+          className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.05)_1px,transparent_1px)]"
+          style={{ backgroundSize: "28px 28px" }}
         />
       </div>
-      <div className="pointer-events-none absolute -right-16 top-0 h-48 w-48 rounded-full bg-signal-petrol/10 blur-3xl" />
-      <div className="relative mb-4 flex flex-col gap-2 border-b border-white/5 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="pointer-events-none absolute -right-12 top-0 h-40 w-40 rounded-full bg-signal-petrol/8 blur-3xl" />
+      <div className="relative mb-5 flex flex-col gap-2 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-signal-petrol/80">Performance observatory</div>
-          <div className="font-display text-xl font-semibold tracking-tight text-signal-ink sm:text-2xl">Calibration stream</div>
-          <div className="mt-1 text-[10px] text-signal-inkMuted">Fereastră · ultimele 30 zile kickoff</div>
+          <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-signal-petrol/75">Performance</div>
+          <div className="font-display text-xl font-semibold tracking-tight text-signal-ink sm:text-2xl">30-day calibration</div>
         </div>
-        <div className="font-mono text-[10px] tabular-nums text-signal-silver">settled {stats.settled}</div>
+        <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
       </div>
       <div className="relative grid grid-cols-3 gap-2 sm:gap-4">
-        <div className="min-w-0 rounded-2xl border border-signal-sage/25 bg-signal-sage/5 px-2 py-3 shadow-inner sm:px-4">
-          <div className="truncate text-[7px] font-semibold uppercase tracking-wide text-signal-sage sm:text-[10px]">Wins</div>
+        <div className="min-w-0 rounded-2xl border border-signal-sage/22 bg-signal-sage/5 px-2 py-3 shadow-inner sm:px-4">
+          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-sage sm:text-[10px]">Wins</div>
           <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-sage sm:text-3xl">{animatedWins}</div>
         </div>
-        <div className="min-w-0 rounded-2xl border border-signal-rose/25 bg-signal-rose/5 px-2 py-3 shadow-inner sm:px-4">
-          <div className="truncate text-[7px] font-semibold uppercase tracking-wide text-signal-rose sm:text-[10px]">Losses</div>
+        <div className="min-w-0 rounded-2xl border border-signal-rose/22 bg-signal-rose/5 px-2 py-3 shadow-inner sm:px-4">
+          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-rose sm:text-[10px]">Losses</div>
           <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-rose sm:text-3xl">{animatedLosses}</div>
         </div>
         <div
-          className={`min-w-0 rounded-2xl border border-signal-petrol/30 bg-signal-void/50 px-2 py-3 shadow-inner transition-all duration-500 sm:px-4 ${
-            isWinRatePulsing ? "shadow-frost ring-1 ring-signal-petrol/20" : ""
+          className={`min-w-0 rounded-2xl border border-signal-petrol/28 bg-signal-void/45 px-2 py-3 shadow-inner transition-all duration-500 sm:px-4 ${
+            isWinRatePulsing ? "shadow-frost ring-1 ring-signal-petrol/18" : ""
           }`}
         >
-          <div className="truncate text-[7px] font-semibold uppercase tracking-wide text-signal-petrol/80 sm:text-[10px]">Hit rate</div>
+          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-petrol/80 sm:text-[10px]">Hit rate</div>
           <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-petrol sm:text-3xl">{animatedWinRate.toFixed(1)}%</div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-signal-mist ring-1 ring-white/5">
             <div
@@ -67,14 +66,13 @@ export default function SuccessRateTracker({
         </div>
       </div>
       {pendingHistoryCount > 0 && (
-        <div className="relative mt-4 space-y-1 rounded-xl border border-signal-amber/25 bg-signal-amber/5 px-3 py-2 text-center text-[9px] font-medium leading-snug text-signal-amber sm:text-[10px]">
-          <div className="font-semibold uppercase tracking-wide">În istoric: {pendingHistoryCount} fără FT validat</div>
+        <div className="relative mt-4 rounded-xl border border-signal-amber/22 bg-signal-amber/5 px-3 py-2 text-center text-[9px] font-medium leading-snug text-signal-amber sm:text-[10px]">
+          {pendingHistoryCount} meciuri fără rezultat FT în istoric
           {displayedPredsCount > 0 && (
-            <div className="normal-case text-signal-inkMuted">
-              Din lista curentă ({displayedPredsCount}): {pendingAmongDisplayedPreds} pending
+            <span className="block text-signal-inkMuted">
+              În lista curentă: {pendingAmongDisplayedPreds}
               {pendingHistoryCount > pendingAmongDisplayedPreds ? ` · +${pendingHistoryCount - pendingAmongDisplayedPreds} alte zile` : ""}
-              .
-            </div>
+            </span>
           )}
         </div>
       )}
@@ -82,13 +80,13 @@ export default function SuccessRateTracker({
         <div className="relative mt-2 text-center font-mono text-[10px] font-semibold uppercase tracking-widest text-signal-petrol">Sync…</div>
       )}
       {onBreakdownClick && (
-        <div className="relative mt-3 text-center font-mono text-[9px] text-signal-inkMuted">Deschide consola detaliată →</div>
+        <div className="relative mt-3 text-center font-mono text-[9px] text-signal-inkMuted">Consolă detaliată · click</div>
       )}
     </>
   );
 
   const shellClass =
-    "relative mt-4 w-full max-w-[880px] overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-signal-panel/90 via-signal-mist/95 to-signal-void/90 px-4 py-5 shadow-frost backdrop-blur-xl sm:px-8 sm:py-6";
+    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-3xl border border-white/[0.07] bg-gradient-to-br from-signal-panel/88 via-signal-mist/94 to-signal-void/90 px-4 py-5 shadow-atelier backdrop-blur-xl sm:px-8 sm:py-6";
 
   if (onBreakdownClick) {
     return (

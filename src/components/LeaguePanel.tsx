@@ -68,9 +68,7 @@ export default function LeaguePanel({
       </div>
       {isLeaguesOpen && (
         <div className="p-4 sm:p-5">
-          <p className="mb-4 rounded-xl border border-white/5 bg-signal-void/40 px-3 py-2.5 text-[11px] leading-relaxed text-signal-inkMuted">
-            Selectezi campionatele pentru semnalul modelului. Feed multi-țară (RO, EN, DE, ES, IT, FR…).
-          </p>
+          <p className="mb-4 text-[11px] leading-relaxed text-signal-inkMuted">Filtru ligi pentru feed-ul de predictii.</p>
           <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"

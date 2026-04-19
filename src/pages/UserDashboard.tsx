@@ -665,26 +665,31 @@ export default function UserDashboard() {
     <div className="lab-page relative min-h-screen font-sans">
       <div className="lab-bg" aria-hidden />
       <div className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
-        <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal-sage">
+        <header className="mb-8 flex flex-col gap-5 border-b border-white/[0.06] pb-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
               {localCalendarDateKey()} · S{inferSeason(date)}
             </p>
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-signal-petrol">User lab</h1>
-            <p className="mt-1 text-xs text-signal-inkMuted">
+            <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
+              Your <span className="text-signal-petrol">observatory</span>
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-signal-inkMuted">
+              Feed curat: pick, încredere și semnal. Detaliile complete sunt în fișa meciului.
+            </p>
+            <div className="mt-4">
+              <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
+            </div>
+            <p className="mt-3 text-xs text-signal-inkMuted">
               {user?.email} ·{" "}
-              <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
+              <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
                 Confidențialitate
               </Link>
             </p>
-            <div className="mt-3">
-              <ModelPulseStrip status="Cont personal · istoric & preferințe" tone="healthy" />
-            </div>
           </div>
           <button
             type="button"
             onClick={() => void logout()}
-            className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/55 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
+            className="touch-manipulation shrink-0 rounded-xl border border-white/10 bg-signal-panel/55 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-signal-petrol transition hover:bg-signal-fog"
           >
             Logout
           </button>
@@ -703,7 +708,7 @@ export default function UserDashboard() {
           onBreakdownClick={() => setPerfCounterModalOpen(true)}
         />
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={date}
@@ -713,7 +718,7 @@ export default function UserDashboard() {
               setSelectedDates(normalizeSelectedDates([next]));
               void fetchDays([next]);
             }}
-            className="rounded-xl border glass-input rounded-xl px-4 py-2.5 text-sm text-signal-ink"
+            className="rounded-xl border glass-input px-4 py-2.5 text-sm text-signal-ink outline-none focus:ring-2 focus:ring-signal-petrol/30"
           />
           <button
             type="button"
@@ -760,18 +765,18 @@ export default function UserDashboard() {
         )}
 
         {!user?.onboardingCompleted && (
-          <section className="mt-4 rounded-2xl border border-signal-sage/35 bg-signal-mintSoft/30 p-3 shadow-inner">
+          <section className="mt-4 rounded-2xl border border-signal-sage/30 bg-signal-mintSoft/20 p-4 shadow-inner">
             <button
               type="button"
               onClick={() => setIsOnboardingOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-left"
+              className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left"
             >
-              <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Onboarding</span>
-              <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">{selectedLeagueIds.length}/2 ligi</span>
+              <span className="text-sm font-semibold tracking-wide text-signal-ink">Onboarding</span>
+              <span className="font-mono text-[11px] text-signal-petrol">{selectedLeagueIds.length}/2 ligi</span>
             </button>
             {isOnboardingOpen && (
               <div className="mt-3">
-                <p className="text-xs text-signal-inkMuted">Selectează ligi din panou, apoi confirmă.</p>
+                <p className="text-xs text-signal-inkMuted">Alege ligi în panoul din stânga, apoi confirmă.</p>
                 <button
                   type="button"
                   onClick={() => void completeOnboarding()}
@@ -784,19 +789,19 @@ export default function UserDashboard() {
           </section>
         )}
 
-        <section className="mt-4 rounded-2xl border border-white/[0.08] bg-signal-panel/35 p-3 shadow-inner backdrop-blur-md">
+        <section className="mt-4 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-1 shadow-inner backdrop-blur-md">
           <button
             type="button"
             onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-left"
+            className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-signal-void/30"
           >
-            <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Notificări</span>
-            <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">
+            <span className="text-sm font-semibold tracking-wide text-signal-ink">Notificări</span>
+            <span className="font-mono text-[11px] text-signal-petrol">
               {alertsPreview.safe} safe · {alertsPreview.value} value
             </span>
           </button>
           {isNotificationsOpen && (
-            <div className="mt-3">
+            <div className="border-t border-white/[0.06] px-4 pb-4 pt-2">
               <div className="grid gap-2 sm:grid-cols-3">
                 <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input type="checkbox" checked={notifySafe} onChange={(event) => setNotifySafe(event.target.checked)} />
@@ -849,12 +854,12 @@ export default function UserDashboard() {
           )}
         </section>
 
-        <section className="mt-4 rounded-2xl border border-white/[0.08] bg-signal-panel/30 p-3 shadow-inner backdrop-blur-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Date personale (GDPR)</h2>
-          <p className="mt-1 text-[11px] text-signal-inkMuted">
-            Export JSON cu profil și jurnal notificări. Vezi{" "}
-            <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
-              politica de confidențialitate
+        <section className="mt-3 rounded-2xl border border-white/[0.07] bg-signal-panel/25 p-4 shadow-inner backdrop-blur-sm">
+          <h2 className="text-sm font-semibold tracking-wide text-signal-ink">Date personale (GDPR)</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-signal-inkMuted">
+            Export JSON — vezi{" "}
+            <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
+              politica
             </Link>
             .
           </p>
@@ -862,9 +867,9 @@ export default function UserDashboard() {
             type="button"
             disabled={exportBusy}
             onClick={() => void downloadPersonalDataExport()}
-            className="mt-2 rounded-lg border border-white/10 bg-signal-fog px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
+            className="mt-3 rounded-lg border border-white/10 bg-signal-fog px-3 py-2 text-[11px] font-semibold text-signal-petrol transition hover:bg-signal-panel disabled:opacity-50"
           >
-            {exportBusy ? "Se genereaza..." : "Descarca export JSON"}
+            {exportBusy ? "Se genereaza..." : "Descarcă export JSON"}
           </button>
         </section>
 

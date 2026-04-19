@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useId } from "react";
 import type { PredictionRow } from "../types";
 
 /** Edge / value intensity 0–100 for UI (EV, spread, or conviction). */
@@ -90,6 +91,8 @@ type EdgeCompassProps = {
 };
 
 export function EdgeCompass({ dataQuality, valueDetected, className = "" }: EdgeCompassProps) {
+  const gid = useId().replace(/:/g, "");
+  const compassFillId = `compassFill-${gid}`;
   const dq = Math.max(0, Math.min(1, dataQuality));
   const angle = -90 + dq * 180;
   const label = valueDetected ? "Value bias" : dq >= 0.65 ? "Balanced" : dq >= 0.4 ? "Thin data" : "Caution";
@@ -102,14 +105,14 @@ export function EdgeCompass({ dataQuality, valueDetected, className = "" }: Edge
       >
         <svg viewBox="0 0 48 48" className="h-full w-full">
           <defs>
-            <linearGradient id="compassFillLab" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id={compassFillId} x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.15" />
               <stop offset="100%" stopColor="#34d399" stopOpacity="0.12" />
             </linearGradient>
           </defs>
           <path
             d="M24 6 L40 24 L24 42 L8 24 Z"
-            fill="url(#compassFillLab)"
+            fill={`url(#${compassFillId})`}
             stroke="rgba(56,189,248,0.25)"
             strokeWidth="1"
           />
@@ -180,44 +183,120 @@ export function deriveDataQuality(row: PredictionRow): number {
 type ConfidenceAuraProps = {
   value: number;
   className?: string;
+  /** Compact ring for dense lists (match cards). */
+  size?: "default" | "compact";
 };
 
 /** Conic confidence ring — soft sci-fi halo. */
-export function ConfidenceAura({ value, className = "" }: ConfidenceAuraProps) {
+export function ConfidenceAura({ value, className = "", size = "default" }: ConfidenceAuraProps) {
+  const gradId = useId().replace(/:/g, "");
+  const auraGrad = `auraGrad-${gradId}`;
   const v = Math.max(0, Math.min(100, value));
-  const circumference = 2 * Math.PI * 20;
+  const r = size === "compact" ? 16 : 20;
+  const vb = size === "compact" ? 36 : 44;
+  const c = vb / 2;
+  const circumference = 2 * Math.PI * r;
   const dash = (v / 100) * circumference;
+  const dim = size === "compact" ? "h-[3.25rem] w-[3.25rem]" : "h-[4.5rem] w-[4.5rem]";
   return (
-    <div className={`relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center ${className}`}>
+    <div className={`relative flex ${dim} shrink-0 items-center justify-center ${className}`} title={`Confidence ${Math.round(v)}%`}>
       <div
         className="absolute inset-0 rounded-full opacity-40 blur-xl motion-reduce:opacity-20"
         style={{
           background: `conic-gradient(from -90deg, rgba(56,189,248,0.5) ${v * 3.6}deg, transparent 0deg)`
         }}
       />
-      <svg className="relative h-full w-full -rotate-90" viewBox="0 0 44 44" aria-hidden>
-        <circle cx="22" cy="22" r="20" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
+      <svg className="relative h-full w-full -rotate-90" viewBox={`0 0 ${vb} ${vb}`} aria-hidden>
+        <circle cx={c} cy={c} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={size === "compact" ? 2 : 2.5} />
         <circle
-          cx="22"
-          cy="22"
-          r="20"
+          cx={c}
+          cy={c}
+          r={r}
           fill="none"
-          stroke="url(#auraGrad)"
-          strokeWidth="2.5"
+          stroke={`url(#${auraGrad})`}
+          strokeWidth={size === "compact" ? 2 : 2.5}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}
           className="motion-reduce:transition-none transition-[stroke-dasharray] duration-700"
         />
         <defs>
-          <linearGradient id="auraGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={auraGrad} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop stopColor="#38bdf8" />
             <stop offset="1" stopColor="#34d399" />
           </linearGradient>
         </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-lg font-semibold tabular-nums leading-none text-signal-ink">{Math.round(v)}</span>
-        <span className="mt-0.5 font-mono text-[8px] uppercase tracking-widest text-signal-inkMuted">conf</span>
+        <span
+          className={`font-mono font-semibold tabular-nums leading-none text-signal-ink ${size === "compact" ? "text-sm" : "text-lg"}`}
+        >
+          {Math.round(v)}
+        </span>
+        <span className={`font-mono uppercase tracking-widest text-signal-inkMuted ${size === "compact" ? "text-[7px]" : "text-[8px]"}`}>
+          conf
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Single-row micro meters: edge · data quality · value pulse (for scan-friendly cards). */
+export function SignalScanStrip({
+  edge,
+  dataQuality,
+  valueDetected,
+  className = ""
+}: {
+  edge: number;
+  dataQuality: number;
+  valueDetected: boolean;
+  className?: string;
+}) {
+  const e = Math.max(0, Math.min(100, edge));
+  const dq = Math.max(0, Math.min(100, dataQuality * 100));
+  const vPulse = valueDetected ? 88 : Math.min(100, e * 0.65 + dq * 0.35);
+  return (
+    <div
+      className={`grid grid-cols-3 gap-2 border-t border-white/[0.06] pt-3 ${className}`}
+      aria-label="Signal scan: edge, data quality, value"
+    >
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-1">
+          <span className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">Edge</span>
+          <span className="font-mono text-[9px] tabular-nums text-signal-petrol/90">{Math.round(e)}</span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-signal-petrolDeep to-signal-petrol transition-[width] duration-500"
+            style={{ width: `${e}%` }}
+          />
+        </div>
+      </div>
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-1">
+          <span className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">Lens</span>
+          <span className="font-mono text-[9px] tabular-nums text-signal-silver">{Math.round(dq)}</span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-signal-stone/50 to-signal-sage/80 transition-[width] duration-500"
+            style={{ width: `${dq}%` }}
+          />
+        </div>
+      </div>
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-1">
+          <span className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">Value</span>
+          <span className={`font-mono text-[9px] tabular-nums ${valueDetected ? "text-signal-amber" : "text-signal-inkMuted"}`}>
+            {valueDetected ? "ON" : "—"}
+          </span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5">
+          <div
+            className={`h-full rounded-full transition-[width] duration-500 ${valueDetected ? "bg-signal-amber/90" : "bg-signal-line/40"}`}
+            style={{ width: `${vPulse}%` }}
+          />
+        </div>
       </div>
     </div>
   );

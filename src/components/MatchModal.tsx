@@ -136,7 +136,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
       <div
         className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-signal-panel/98 to-signal-mist shadow-atelierLg backdrop-blur-2xl lg:max-w-5xl"
         onClick={(e) => e.stopPropagation()}
@@ -251,6 +251,27 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                     <span>EV +{match.valueBet.ev ?? 0}%</span>
                     <span>Stake {match.valueBet.kelly ?? 0}%</span>
                   </div>
+                  {match.valueBet.stakePlan && (
+                    <p className="mt-2 font-mono text-[10px] text-signal-inkMuted">Plan · {match.valueBet.stakePlan}</p>
+                  )}
+                  {match.valueBet.ensemble && (
+                    <div className="mt-3 rounded-lg border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                      <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Ensemble</div>
+                      <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                        <span>kelly base {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
+                        <span>conf boost {String(match.valueBet.ensemble.confidenceBoost ?? "—")}</span>
+                        <span>vol penalty {String(match.valueBet.ensemble.volatilityPenalty ?? "—")}</span>
+                        <span>EV boost {String(match.valueBet.ensemble.evBoost ?? "—")}</span>
+                      </div>
+                    </div>
+                  )}
+                  {Array.isArray(match.valueBet.reasons) && match.valueBet.reasons.length > 0 && (
+                    <ul className="mt-3 list-inside list-disc space-y-1 text-[10px] text-signal-inkMuted">
+                      {match.valueBet.reasons.map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
               {!match.valueBet?.detected && (
@@ -321,6 +342,57 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
               <ProbBar label="Ambele (GG)" val={match.probs.pGG} color="#fbbf24" />
             </div>
           </div>
+
+          {match.modelMeta &&
+            (match.modelMeta.method ||
+              match.modelMeta.reasonCodes?.length ||
+              match.modelMeta.stakeBucket ||
+              match.evaluation) && (
+              <details className="group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5">
+                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span className="inline-flex items-center gap-2">
+                    Model audit
+                    <span className="text-signal-inkMuted transition group-open:rotate-90">›</span>
+                  </span>
+                </summary>
+                <div className="mt-4 space-y-3 border-t border-white/5 pt-4 text-[11px] text-signal-inkMuted">
+                  {match.modelMeta.method && (
+                    <p>
+                      <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">Method</span> · {match.modelMeta.method}
+                    </p>
+                  )}
+                  {match.modelMeta.probsModel && (
+                    <p>
+                      <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">Probs</span> · {match.modelMeta.probsModel}
+                    </p>
+                  )}
+                  {match.modelMeta.stakeBucket != null && (
+                    <p className="font-mono tabular-nums">
+                      Stake bucket · {match.modelMeta.stakeBucket}
+                      {match.modelMeta.stakeCap != null ? ` · cap ${match.modelMeta.stakeCap}` : ""}
+                    </p>
+                  )}
+                  {Array.isArray(match.modelMeta.reasonCodes) && match.modelMeta.reasonCodes.length > 0 && (
+                    <div>
+                      <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-signal-silver">Reason codes</div>
+                      <ul className="list-inside list-disc space-y-0.5 font-mono text-[10px] text-signal-silver">
+                        {match.modelMeta.reasonCodes.map((code) => (
+                          <li key={code}>{code}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {match.evaluation && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                      {match.evaluation.recommendedTrack && <div>Track · {match.evaluation.recommendedTrack}</div>}
+                      {match.evaluation.marketBlendWeight != null && (
+                        <div>Market blend · {(match.evaluation.marketBlendWeight * 100).toFixed(0)}%</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
         </div>
       </div>
     </div>
