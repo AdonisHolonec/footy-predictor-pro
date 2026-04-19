@@ -4,7 +4,7 @@ import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAu
 import { getWithCache } from "../server-utils/fetcher.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
-import { readPredictionsHistory, validationFromMatch } from "../server-utils/predictionsHistory.js";
+import { readPredictionsHistory, readPredictionsHistoryForUser, validationFromMatch } from "../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 
@@ -110,6 +110,28 @@ async function handleHistoryRead(req, res) {
 
   const days = Number(req.query.days || 30);
   const limit = Number(req.query.limit || 500);
+  const mine =
+    String(req.query.mine || "") === "1" ||
+    String(req.query.mine || "").toLowerCase() === "true";
+
+  if (mine) {
+    const requester = await getRequester(req);
+    if (!requester.ok) {
+      return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Unauthorized." });
+    }
+    try {
+      const { items, stats } = await readPredictionsHistoryForUser(requester.user.id, days, limit);
+      return res.status(200).json({
+        ok: true,
+        mine: true,
+        days: Math.max(1, Math.min(days || 30, 120)),
+        stats,
+        items
+      });
+    } catch (error) {
+      return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+    }
+  }
 
   try {
     const { items, stats } = await readPredictionsHistory(days, limit);
@@ -218,7 +240,8 @@ async function handleHistorySync(req, res) {
 }
 
 /**
- * GET /api/history — read predictions_history (unchanged).
+ * GET /api/history — read predictions_history (global; unauthenticated).
+ * GET /api/history?mine=1 — same shape, scoped to the authenticated user via user_prediction_fixtures (Bearer required).
  * GET or POST /api/history?sync=1 — sync scores/validation (replaces former /api/history/sync).
  */
 export default async function handler(req, res) {

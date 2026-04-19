@@ -100,3 +100,18 @@ export async function commitWarmPredictIncrement(userId, usageDay, kind, max = 3
   }
   return data && typeof data === "object" ? data : { ok: false };
 }
+
+/** After a successful predict quota increment, if persistence fails, restore predict_count (best-effort). */
+export async function rollbackPredictIncrement(userId, usageDay) {
+  const sb = getSupabaseAdmin();
+  if (!sb) return { ok: false, reason: "no_supabase" };
+  const { data, error } = await sb.rpc("rollback_predict_increment", {
+    p_user_id: userId,
+    p_day: usageDay
+  });
+  if (error) {
+    console.error("[usage rollback]", error.message);
+    return { ok: false, reason: error.message };
+  }
+  return data && typeof data === "object" ? data : { ok: false };
+}

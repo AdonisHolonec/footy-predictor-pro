@@ -44,7 +44,7 @@ export default function UserDashboard() {
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
   const [alertsPreview, setAlertsPreview] = useState<{ safe: number; value: number }>({ safe: 0, value: 0 });
-  const [userPredictionMap, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
+  const [, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
   const [dailyUsageMap, setDailyUsageMap] = useLocalStorageState<Record<string, { warm: number; predict: number }>>("footy.user.dailyUsage", {});
   const [usageServerSyncPending, setUsageServerSyncPending] = useState(false);
   const [usageServerSyncFailed, setUsageServerSyncFailed] = useState(false);
@@ -99,26 +99,26 @@ export default function UserDashboard() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const response = await fetch("/api/history?days=30");
-      const json = await response.json();
-      if (!json?.ok) return;
-      const items = (Array.isArray(json.items) ? json.items : []) as HistoryEntry[];
       const uid = user?.id;
       if (!uid) {
         setHistory([]);
         setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
         return;
       }
-      const fromMap = userPredictionMap[uid] || [];
-      const fromPreds = (predictionsByUser[uid] || []).map((r) => Number(r.id)).filter(Number.isFinite);
-      const idSet = new Set<number>([...fromMap.map((id) => Number(id)).filter(Number.isFinite), ...fromPreds]);
-      const owned: HistoryEntry[] = idSet.size ? items.filter((item) => idSet.has(Number(item.id))) : [];
-      setHistory(owned);
-      setHistoryStats(historyStatsFromRows(owned));
+      const token = session?.access_token;
+      if (!token) return;
+      const response = await fetch("/api/history?days=30&mine=1", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const json = await response.json();
+      if (!json?.ok) return;
+      const items = (Array.isArray(json.items) ? json.items : []) as HistoryEntry[];
+      setHistory(items);
+      setHistoryStats(historyStatsFromRows(items));
     } catch {
       // keep existing data on failure
     }
-  }, [user?.id, userPredictionMap, predictionsByUser]);
+  }, [user?.id, session?.access_token]);
 
   const syncHistory = useCallback(async () => {
     setIsHistorySyncing(true);
@@ -316,10 +316,11 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!user?.id) return;
+    if (!session?.access_token) return;
     if (preds.length > 0) return;
     if (!selectedLeagueIds.length) return;
     void rehydratePredictionsFromHistory();
-  }, [user?.id, preds.length, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
+  }, [user?.id, session?.access_token, preds.length, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -399,7 +400,10 @@ export default function UserDashboard() {
 
   async function rehydratePredictionsFromHistory() {
     try {
-      const response = await fetch("/api/history?days=14&limit=1000");
+      if (!user?.id || !session?.access_token) return;
+      const response = await fetch("/api/history?days=14&limit=1000&mine=1", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
       const json = await response.json();
       if (!json?.ok || !Array.isArray(json.items)) return;
 

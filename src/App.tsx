@@ -356,7 +356,13 @@ export default function App() {
 
   async function loadHistory(days = 30) {
     try {
-      const res = await fetch(`/api/history?days=${days}`);
+      const qs = new URLSearchParams({ days: String(days) });
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        qs.set("mine", "1");
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch(`/api/history?${qs.toString()}`, { headers });
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca istoricul.");
       setHistory(Array.isArray(json.items) ? json.items : []);

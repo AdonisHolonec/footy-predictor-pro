@@ -28,7 +28,8 @@ import {
   commitWarmPredictIncrement,
   isWarmPredictQuotaExempt,
   peekWarmPredictUsage,
-  resolveAuthenticatedUsageContext
+  resolveAuthenticatedUsageContext,
+  rollbackPredictIncrement
 } from "../server-utils/userDailyWarmPredictUsage.js";
 
 function isGoodNum(val) {
@@ -520,15 +521,34 @@ export default async function handler(req, res) {
         });
       }
     }
+    let quotaIncrementCommitted = false;
+    if (enforceWarmPredictQuota && usageCtx.userId && out.length > 0) {
+      const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "predict");
+      if (!inc?.ok) {
+        return res.status(429).json({
+          ok: false,
+          error: "Limita zilnica Predict atinsa (maximum 3/zi).",
+          usage: inc
+        });
+      }
+      quotaIncrementCommitted = true;
+      res.setHeader("X-Usage-Warm", String(inc.warm_count ?? ""));
+      res.setHeader("X-Usage-Predict", String(inc.predict_count ?? ""));
+      res.setHeader("X-Usage-Day", String(usageCtx.usageDay ?? ""));
+    }
+
     const supabaseConfig = assertSupabaseConfigured();
-    if (supabaseConfig.ok) {
+    if (!supabaseConfig.ok) {
+      if (quotaIncrementCommitted && usageCtx.userId) {
+        await rollbackPredictIncrement(usageCtx.userId, usageCtx.usageDay);
+      }
+      return res.status(200).json(out);
+    }
+
+    if (out.length > 0) {
       try {
         await upsertPredictionsHistory(out);
-      } catch (persistError) {
-        console.error("[history upsert] failed:", persistError?.message || persistError);
-      }
-      if (usageCtx.userId && out.length > 0) {
-        try {
+        if (usageCtx.userId) {
           const supabase = getSupabaseAdmin();
           const linkRows = out
             .map((p) => ({ user_id: usageCtx.userId, fixture_id: Number(p.id) }))
@@ -538,26 +558,19 @@ export default async function handler(req, res) {
               onConflict: "user_id,fixture_id",
               ignoreDuplicates: true
             });
-            if (linkErr) console.error("[user_prediction_fixtures]", linkErr.message || linkErr);
+            if (linkErr) throw linkErr;
           }
-        } catch (linkEx) {
-          console.error("[user_prediction_fixtures]", linkEx?.message || linkEx);
         }
-      }
-    }
-
-    if (enforceWarmPredictQuota) {
-      const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "predict");
-      if (!inc?.ok) {
-        return res.status(429).json({
+      } catch (persistError) {
+        console.error("[predict persist]", persistError?.message || persistError);
+        if (quotaIncrementCommitted && usageCtx.userId) {
+          await rollbackPredictIncrement(usageCtx.userId, usageCtx.usageDay);
+        }
+        return res.status(500).json({
           ok: false,
-          error: "Limita zilnica Predict atinsa (maximum 3/zi).",
-          usage: inc
+          error: persistError?.message || "Nu am putut salva predictiile."
         });
       }
-      res.setHeader("X-Usage-Warm", String(inc.warm_count ?? ""));
-      res.setHeader("X-Usage-Predict", String(inc.predict_count ?? ""));
-      res.setHeader("X-Usage-Day", String(usageCtx.usageDay ?? ""));
     }
 
     return res.status(200).json(out);

@@ -114,3 +114,24 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
   const winRate = settled ? (wins / settled) * 100 : 0;
   return { items, stats: { wins, losses, settled, winRate } };
 }
+
+/** Rows from predictions_history joined via user_prediction_fixtures (service role RPC). */
+export async function readPredictionsHistoryForUser(userId, days = 30, limit = 500) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Supabase client is not available.");
+  const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
+  const { data, error } = await supabase.rpc("predictions_history_for_user", {
+    p_user_id: userId,
+    p_days: safeDays,
+    p_limit: safeLimit
+  });
+  if (error) throw error;
+  const rows = data || [];
+  const items = rows.map(mapDbRowToHistoryEntry);
+  const wins = rows.filter((r) => r.validation === "win").length;
+  const losses = rows.filter((r) => r.validation === "loss").length;
+  const settled = wins + losses;
+  const winRate = settled ? (wins / settled) * 100 : 0;
+  return { items, stats: { wins, losses, settled, winRate } };
+}
