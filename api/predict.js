@@ -32,6 +32,13 @@ function isGoodNum(val) {
   return typeof val === "number" && !isNaN(val) && val > 0;
 }
 
+/** Avoid IEEE noise in JSON/UI for λ and goal-rate scalars. */
+function roundDisplayRate(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return x;
+  return Number(x.toFixed(3));
+}
+
 const LEAGUE_CONFIDENCE_MULTIPLIERS = {
   39: 1.0,
   140: 0.98,
@@ -271,10 +278,10 @@ export default async function handler(req, res) {
                 lambdaAway = sr.lambdaAway;
                 strengthMeta = sr.strengthMeta;
                 luckStats = {
-                  hG: hStats.gfHome,
-                  hXG: sr.lambdaHome,
-                  aG: aStats.gfAway,
-                  aXG: sr.lambdaAway,
+                  hG: roundDisplayRate(hStats.gfHome),
+                  hXG: roundDisplayRate(sr.lambdaHome),
+                  aG: roundDisplayRate(aStats.gfAway),
+                  aXG: roundDisplayRate(sr.lambdaAway),
                   intensityNote: "expected_rate_from_strength_model"
                 };
               }
@@ -537,7 +544,7 @@ export default async function handler(req, res) {
             away: typeof fx.goals?.away === "number" ? fx.goals.away : null
           },
           referee: refereeName || undefined,
-          lambdas: { home: lambdaHome, away: lambdaAway },
+          lambdas: { home: roundDisplayRate(lambdaHome), away: roundDisplayRate(lambdaAway) },
           probs: pOut,
           odds,
           luckStats,

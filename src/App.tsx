@@ -5,6 +5,7 @@ import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import PerformanceCounterModal from "./components/PerformanceCounterModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
+import { ModelPulseStrip } from "./components/SignalLab";
 import Auth from "./components/Auth";
 import {
   BacktestKpi,
@@ -684,14 +685,32 @@ export default function App() {
     }
   }
 
+  const modelPulse = useMemo(() => {
+    const cal = localCalendarDateKey();
+    const season = inferSeason(date);
+    if (kpiLoading) return { tone: "watch" as const, status: `Încărcare KPI · ${cal}` };
+    const hit = (kpi?.hitRate ?? 0).toFixed(1);
+    const roi = (kpi?.roi ?? 0).toFixed(2);
+    if (alertsSeverity === "high") return { tone: "alert" as const, status: `Risk · ROI ${roi}% · S${season} · ${cal}` };
+    if (alertsSeverity === "medium") return { tone: "watch" as const, status: `Atenție · Hit ${hit}% · ${cal}` };
+    return { tone: "healthy" as const, status: `Calibrat · Hit ${hit}% · ROI ${roi}% · ${cal}` };
+  }, [kpiLoading, kpi?.hitRate, kpi?.roi, alertsSeverity, date]);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500/30 relative">
-      <div className="mx-auto max-w-[1600px] px-4 py-8 lg:px-6">
+    <div className="atelier-page relative min-h-screen font-sans">
+      <div className="atelier-bg" aria-hidden />
+      <div className="relative z-10 mx-auto max-w-[1600px] px-4 py-8 lg:px-6">
         {/* HEADER */}
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-white">Footy Predictor 💎</h1>
-              <div className="text-sm text-slate-400 mt-1 font-medium italic">Advanced AI & xG Value Betting</div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal-sage">
+                {localCalendarDateKey()} · S{inferSeason(date)}
+              </p>
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-signal-petrol md:text-4xl lg:text-5xl">Footy Predictor</h1>
+              <p className="mt-1 max-w-xl text-sm text-signal-inkMuted">Lab predicții · semnale, calibrare și inteligență tactică.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <ModelPulseStrip status={modelPulse.status} tone={modelPulse.tone} />
+              </div>
               <SuccessRateTracker
                 stats={trackerStats}
                 animatedWins={animatedWins}
@@ -704,47 +723,47 @@ export default function App() {
                 pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
                 onBreakdownClick={() => setPerfCounterModalOpen(true)}
               />
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-[760px]">
-                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI ROI</div>
-                  <div className={`text-sm font-black ${((kpi?.roi || 0) >= 0) ? "text-emerald-300" : "text-rose-300"}`}>
+              <div className="mt-3 grid max-w-[760px] grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI ROI</div>
+                  <div className={`font-mono text-sm font-semibold tabular-nums ${((kpi?.roi || 0) >= 0) ? "text-signal-petrolMuted" : "text-signal-rose"}`}>
                     {kpiLoading ? "..." : `${(kpi?.roi || 0).toFixed(2)}%`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Hit Rate</div>
-                  <div className="text-sm font-black text-cyan-200">
+                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Hit Rate</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
                     {kpiLoading ? "..." : `${(kpi?.hitRate || 0).toFixed(2)}%`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Drawdown</div>
-                  <div className="text-sm font-black text-amber-200">
+                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Drawdown</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">
                     {kpiLoading ? "..." : `${(kpi?.drawdown || 0).toFixed(2)}u`}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                  <div className="text-[9px] uppercase font-black tracking-wider text-slate-400">KPI Settled</div>
-                  <div className="text-sm font-black text-slate-200">
+                <div className="rounded-xl border border-signal-line/80 bg-white/60 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Settled</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
                     {kpiLoading ? "..." : `${kpi?.settled || 0}`}
                   </div>
                 </div>
               </div>
               <div className={`mt-2 max-w-[760px] rounded-xl border px-3 py-2 ${
                 alertsSeverity === "high"
-                  ? "border-rose-500/40 bg-rose-500/10"
+                  ? "border-signal-rose/40 bg-signal-rose/10"
                   : alertsSeverity === "medium"
-                  ? "border-amber-400/40 bg-amber-500/10"
-                  : "border-emerald-500/30 bg-emerald-500/10"
+                  ? "border-signal-amber/45 bg-signal-amber/10"
+                  : "border-signal-sage/35 bg-signal-mintSoft/30"
               }`}>
-                <div className="text-[9px] uppercase tracking-widest font-black text-slate-300">Auto Alerting</div>
-                <div className="mt-1 text-xs font-semibold text-slate-100">
+                <div className="text-[9px] font-semibold uppercase tracking-widest text-signal-inkMuted">Auto alerting</div>
+                <div className="mt-1 text-xs font-medium text-signal-petrol">
                   {riskAlerts.length
                     ? riskAlerts.map((a) => a.message).join(" • ")
                     : "No active risk alerts"}
                 </div>
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
                     DD
                     <input
                       type="number"
@@ -753,10 +772,10 @@ export default function App() {
                       step={0.1}
                       value={draftDrawdownThreshold}
                       onChange={(e) => setDraftDrawdownThreshold(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
-                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
                     Drift
                     <input
                       type="number"
@@ -765,10 +784,10 @@ export default function App() {
                       step={1}
                       value={draftDriftThreshold}
                       onChange={(e) => setDraftDriftThreshold(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
-                  <label className="text-[10px] text-slate-300 font-black flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
                     LowData
                     <input
                       type="number"
@@ -777,7 +796,7 @@ export default function App() {
                       step={0.01}
                       value={draftLowDataThreshold}
                       onChange={(e) => setDraftLowDataThreshold(Number(e.target.value))}
-                      className="w-full bg-slate-900 border border-white/10 rounded-md px-2 py-1 text-[10px] text-slate-100"
+                      className="w-full rounded-md border border-signal-line bg-white px-2 py-1 font-mono text-[10px] text-signal-petrol"
                     />
                   </label>
                 </div>
@@ -785,48 +804,51 @@ export default function App() {
                   <button
                     onClick={() => void applyAlertThresholds()}
                     disabled={!hasThresholdDraftChanges}
-                    className="px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-md bg-signal-petrol px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Apply thresholds
                   </button>
                   <button
                     onClick={() => void resetAlertThresholds()}
-                    className="px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide bg-slate-800 hover:bg-slate-700 border border-white/10"
+                    className="rounded-md border border-signal-line bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
                   >
                     Reset defaults
                   </button>
                   {thresholdsSaved !== "idle" && (
-                    <span className="px-2 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide border border-emerald-400/30 bg-emerald-500/15 text-emerald-200">
+                    <span className="rounded-md border border-signal-sage/35 bg-signal-mintSoft/50 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol">
                       {thresholdsSaved === "saved" ? "Saved" : "Defaults restored"}
                     </span>
                   )}
                 </div>
-                <div className="mt-2 text-[9px] text-slate-300/80 font-black uppercase tracking-wide">
+                <div className="mt-2 font-mono text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">
                   Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData {(alertLowDataThreshold * 100).toFixed(0)}%
                 </div>
               </div>
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
-            <div className="flex flex-col items-start lg:items-end w-full max-w-[200px] lg:min-w-[220px]">
-              <div className="text-[10px] text-slate-400 uppercase font-black mb-1">
-                API Calls: <span className={usagePct > 80 ? "text-red-400" : "text-emerald-400"}>{usageCount} / {usageLimit}</span>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+            <div className="flex w-full max-w-[200px] flex-col items-start lg:min-w-[220px] lg:items-end">
+              <div className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+                API ·{" "}
+                <span className={usagePct > 80 ? "text-signal-rose" : "text-signal-sage"}>
+                  {usageCount} / {usageLimit}
+                </span>
               </div>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div style={{ width: `${usagePct}%` }} className={`h-full ${usagePct > 80 ? "bg-red-500" : "bg-emerald-500"}`} />
+              <div className="h-1.5 w-full overflow-hidden rounded-full border border-signal-line/60 bg-signal-fog">
+                <div style={{ width: `${usagePct}%` }} className={`h-full rounded-full ${usagePct > 80 ? "bg-signal-rose" : "bg-gradient-to-r from-signal-petrol to-signal-sage"}`} />
               </div>
             </div>
             <div className="flex flex-col items-stretch gap-2 lg:gap-3">
               <div className="flex justify-end">
                 {authLoading ? (
-                  <div className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-400">
+                  <div className="rounded-xl border border-signal-line bg-white/70 px-3 py-2 text-xs font-semibold text-signal-inkMuted shadow-inner">
                     Checking session...
                   </div>
                 ) : user ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-                    <span className="max-w-[180px] truncate text-xs font-bold text-emerald-200">{user.email}</span>
+                  <div className="flex items-center gap-2 rounded-xl border border-signal-sage/35 bg-signal-mintSoft/40 px-3 py-2 shadow-inner">
+                    <span className="max-w-[180px] truncate text-xs font-semibold text-signal-petrol">{user.email}</span>
                     <button
                       onClick={() => void handleLogout()}
-                      className="rounded-md border border-white/10 bg-slate-900/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-800"
+                      className="rounded-md border border-signal-line bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
                     >
                       Logout
                     </button>
@@ -834,13 +856,13 @@ export default function App() {
                 ) : (
                   <button
                     onClick={() => setIsAuthOpen(true)}
-                    className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/25"
+                    className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-petrol/15"
                   >
                     Login / Signup
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-3">
+              <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap lg:flex-nowrap lg:gap-3">
                 <input
                   type="date"
                   value={date}
@@ -852,9 +874,10 @@ export default function App() {
                       return normalizeSelectedDates([next, ...filtered]);
                     });
                   }}
-                  className="col-span-2 sm:col-span-1 w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="col-span-2 w-full rounded-xl border border-signal-line/80 bg-white/80 px-4 py-2.5 text-sm text-signal-petrol outline-none focus:ring-2 focus:ring-signal-sage/35 sm:col-span-1"
                 />
                 <button
+                  type="button"
                   onClick={() => {
                     setSelectedDates((prev) => {
                       const normalized = normalizeSelectedDates(prev.length ? prev : [date]);
@@ -868,29 +891,32 @@ export default function App() {
                       return normalizeSelectedDates([...normalized, nextDate.toISOString().slice(0, 10)]);
                     });
                   }}
-                  className="touch-manipulation bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 active:bg-slate-950 transition-all"
+                  className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2.5 text-sm font-semibold text-signal-petrol transition-all hover:bg-signal-fog active:bg-white"
                 >
                   + Zi
                 </button>
                 <button
+                  type="button"
                   onClick={warm}
                   disabled={!user}
-                  className="touch-manipulation bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-slate-800 active:bg-slate-950 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2.5 text-sm font-semibold text-signal-petrol transition-all hover:bg-signal-fog disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Warm
                 </button>
                 <button
+                  type="button"
                   onClick={predict}
                   disabled={!user}
-                  className="touch-manipulation col-span-2 sm:col-span-1 w-full sm:w-auto bg-emerald-600 rounded-xl px-6 py-2.5 text-sm font-bold hover:bg-emerald-500 active:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 active:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="touch-manipulation col-span-2 w-full rounded-xl bg-signal-petrol px-6 py-2.5 text-sm font-semibold text-white shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto"
                 >
                   Predict
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+              <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                 {normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).map((d) => (
                   <button
                     key={d}
+                    type="button"
                     onClick={() => {
                       setSelectedDates((prev) => {
                         const next = prev.filter((item) => item !== d);
@@ -899,8 +925,8 @@ export default function App() {
                         return normalized;
                       });
                     }}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black border ${
-                      d === date ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300" : "bg-slate-900 border-white/10 text-slate-300"
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold ${
+                      d === date ? "border-signal-sage/45 bg-signal-mintSoft/50 text-signal-petrol" : "border-signal-line bg-white/60 text-signal-inkMuted"
                     }`}
                     title="Elimină ziua"
                   >
@@ -912,73 +938,78 @@ export default function App() {
           </div>
         </div>
 
-        {status && <div className="mb-6 p-3 bg-slate-900/40 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-mono">{"> "} {status}</div>}
+        {status && (
+          <div className="mb-6 rounded-xl border border-signal-sage/30 bg-white/70 p-3 font-mono text-xs text-signal-petrolMuted shadow-inner">
+            {"> "}
+            {status}
+          </div>
+        )}
 
         {user?.role === "admin" && (
-          <section className="mb-6 rounded-2xl border border-cyan-400/20 bg-slate-900/50 p-4">
+          <section className="mb-6 rounded-2xl border border-signal-line/80 bg-white/55 p-4 shadow-atelier backdrop-blur-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-black uppercase tracking-wide text-cyan-200">Admin · User Management</h2>
-                <p className="text-xs text-slate-400">Gestioneaza roluri, blocare/deblocare si preferinte utilizatori.</p>
-                <p className="mt-1 text-[10px] text-slate-500">
-                  Warm/Predict pe zi (calendar local): <span className="font-mono text-slate-400">{localCalendarDateKey()}</span>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Admin · utilizatori</h2>
+                <p className="text-xs text-signal-inkMuted">Roluri, blocare și preferințe.</p>
+                <p className="mt-1 text-[10px] text-signal-inkMuted">
+                  Warm/Predict (calendar local): <span className="font-mono text-signal-petrol">{localCalendarDateKey()}</span>
                   {" · "}
-                  <Link to="/privacy" className="text-cyan-500/90 hover:text-cyan-300">
-                    Confidențialitate (GDPR)
+                  <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
+                    GDPR
                   </Link>
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => void refreshManagedProfiles()}
                 disabled={isAdminWorking}
-                className="rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-lg border border-signal-line bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
               >
                 Refresh
               </button>
             </div>
-            <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/40 p-3">
+            <div className="mt-3 rounded-xl border border-signal-line/60 bg-signal-fog/50 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] font-black uppercase tracking-wide text-slate-300">API Usage Snapshot</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-signal-petrol">API usage snapshot</p>
                 <button
+                  type="button"
                   onClick={() => void loadUsageSnapshot()}
                   disabled={usageLoading}
-                  className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-cyan-200 disabled:opacity-50"
+                  className="rounded-md border border-signal-sage/35 bg-signal-mintSoft/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol disabled:opacity-50"
                 >
                   {usageLoading ? "Loading..." : "Load usage"}
                 </button>
               </div>
               {usageSnapshot && (
-                <div className="mt-2 text-[11px] text-slate-300">
+                <div className="mt-2 text-[11px] text-signal-inkMuted">
                   <p>
-                    Today: <span className="font-bold text-emerald-300">{usageSnapshot.today.count}/{usageSnapshot.today.limit}</span> | Yesterday:{" "}
-                    <span className="font-bold text-cyan-300">{usageSnapshot.yesterday.count}/{usageSnapshot.yesterday.limit}</span>
+                    Today: <span className="font-mono font-semibold text-signal-petrol">{usageSnapshot.today.count}/{usageSnapshot.today.limit}</span> | Yesterday:{" "}
+                    <span className="font-mono font-semibold text-signal-petrolMuted">{usageSnapshot.yesterday.count}/{usageSnapshot.yesterday.limit}</span>
                   </p>
-                  <p className="mt-1 text-[10px] text-slate-400">
+                  <p className="mt-1 text-[10px]">
                     Last 7 days: {usageSnapshot.history.map((row) => `${row.date ?? "-"}=${row.count}`).join(" · ") || "-"}
                   </p>
                 </div>
               )}
             </div>
-            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-950/40 p-3">
+            <div className="mt-4 rounded-xl border border-signal-sage/25 bg-white/50 p-3 shadow-inner">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] font-black uppercase tracking-wide text-emerald-200/90">
-                  Performance counter · ultimele 30 zile (server)
-                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-signal-petrol">Performance counter · 30 zile (server)</p>
                 <button
                   type="button"
                   onClick={() => void loadPerfAdmin()}
                   disabled={perfAdminLoading}
-                  className="touch-manipulation rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200 disabled:opacity-50"
+                  className="touch-manipulation rounded-md border border-signal-petrol/20 bg-signal-petrol/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol disabled:opacity-50"
                 >
                   {perfAdminLoading ? "Se încarcă…" : "Reîncarcă"}
                 </button>
               </div>
               <div className="mt-2 grid gap-3 lg:grid-cols-2">
                 <div>
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Pe utilizator</p>
-                  <div className="max-h-48 overflow-auto rounded-lg border border-white/10">
-                    <table className="min-w-full text-left text-[10px] text-slate-200">
-                      <thead className="sticky top-0 bg-slate-900/95 text-slate-500 uppercase">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Pe utilizator</p>
+                  <div className="max-h-48 overflow-auto rounded-lg border border-signal-line/60 bg-white/60">
+                    <table className="min-w-full text-left font-mono text-[10px] text-signal-petrol">
+                      <thead className="sticky top-0 bg-signal-fog/95 text-[9px] uppercase text-signal-inkMuted">
                         <tr>
                           <th className="px-2 py-1.5">Email</th>
                           <th className="px-2 py-1.5 text-right">W</th>
@@ -989,19 +1020,19 @@ export default function App() {
                       </thead>
                       <tbody>
                         {(perfAdminSnapshot?.byUser || []).map((row) => (
-                          <tr key={row.userId} className="border-t border-white/5">
-                            <td className="max-w-[160px] truncate px-2 py-1 text-[9px] text-slate-200" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                          <tr key={row.userId} className="border-t border-signal-line/40">
+                            <td className="max-w-[160px] truncate px-2 py-1 text-[9px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
                               {row.email || "—"}
                             </td>
-                            <td className="px-2 py-1 text-right text-emerald-300">{row.wins}</td>
-                            <td className="px-2 py-1 text-right text-rose-300">{row.losses}</td>
-                            <td className="px-2 py-1 text-right text-amber-200/90">{row.pending}</td>
-                            <td className="px-2 py-1 text-right text-cyan-200">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
+                            <td className="px-2 py-1 text-right text-signal-petrolMuted">{row.wins}</td>
+                            <td className="px-2 py-1 text-right text-signal-rose">{row.losses}</td>
+                            <td className="px-2 py-1 text-right text-signal-amber">{row.pending}</td>
+                            <td className="px-2 py-1 text-right text-signal-sage">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
                           </tr>
                         ))}
                         {!perfAdminSnapshot?.byUser?.length && !perfAdminLoading && (
                           <tr>
-                            <td colSpan={5} className="px-2 py-3 text-center text-slate-500">
+                            <td colSpan={5} className="px-2 py-3 text-center text-signal-inkMuted">
                               Fără date (utilizatorii trebuie să ruleze Predict autentificat).
                             </td>
                           </tr>
@@ -1011,10 +1042,10 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Utilizator + ligă</p>
-                  <div className="max-h-48 overflow-auto rounded-lg border border-white/10">
-                    <table className="min-w-full text-left text-[10px] text-slate-200">
-                      <thead className="sticky top-0 bg-slate-900/95 text-slate-500 uppercase">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Utilizator + ligă</p>
+                  <div className="max-h-48 overflow-auto rounded-lg border border-signal-line/60 bg-white/60">
+                    <table className="min-w-full text-left font-mono text-[10px] text-signal-petrol">
+                      <thead className="sticky top-0 bg-signal-fog/95 text-[9px] uppercase text-signal-inkMuted">
                         <tr>
                           <th className="px-2 py-1.5">Email</th>
                           <th className="px-2 py-1.5">Ligă</th>
@@ -1025,21 +1056,21 @@ export default function App() {
                       </thead>
                       <tbody>
                         {(perfAdminSnapshot?.byUserLeague || []).map((row) => (
-                          <tr key={`${row.userId}-${row.leagueId}-${row.leagueName}`} className="border-t border-white/5">
-                            <td className="max-w-[100px] truncate px-2 py-1 text-[8px] text-slate-200" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                          <tr key={`${row.userId}-${row.leagueId}-${row.leagueName}`} className="border-t border-signal-line/40">
+                            <td className="max-w-[100px] truncate px-2 py-1 text-[8px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
                               {row.email ? (row.email.length > 18 ? `${row.email.slice(0, 18)}…` : row.email) : "—"}
                             </td>
                             <td className="max-w-[100px] truncate px-2 py-1" title={row.leagueName}>
                               {row.leagueName || row.leagueId}
                             </td>
-                            <td className="px-2 py-1 text-right text-emerald-300">{row.wins}</td>
-                            <td className="px-2 py-1 text-right text-rose-300">{row.losses}</td>
-                            <td className="px-2 py-1 text-right text-cyan-200">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
+                            <td className="px-2 py-1 text-right text-signal-petrolMuted">{row.wins}</td>
+                            <td className="px-2 py-1 text-right text-signal-rose">{row.losses}</td>
+                            <td className="px-2 py-1 text-right text-signal-sage">{row.settled > 0 ? ((row.wins / row.settled) * 100).toFixed(1) : "0.0"}%</td>
                           </tr>
                         ))}
                         {!perfAdminSnapshot?.byUserLeague?.length && !perfAdminLoading && (
                           <tr>
-                            <td colSpan={5} className="px-2 py-3 text-center text-slate-500">
+                            <td colSpan={5} className="px-2 py-3 text-center text-signal-inkMuted">
                               Fără date.
                             </td>
                           </tr>
@@ -1050,9 +1081,9 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10">
-              <table className="min-w-full text-left text-[11px]">
-                <thead className="sticky top-0 bg-slate-900/95 text-slate-400 uppercase">
+            <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-signal-line/60 bg-white/50">
+              <table className="min-w-full text-left text-[11px] text-signal-petrol">
+                <thead className="sticky top-0 bg-signal-fog/95 text-[10px] uppercase text-signal-inkMuted">
                   <tr>
                     <th className="px-3 py-2">User ID</th>
                     <th className="px-3 py-2">Role</th>
@@ -1064,27 +1095,29 @@ export default function App() {
                 </thead>
                 <tbody>
                   {managedProfiles.map((profile) => (
-                    <tr key={profile.userId} className="border-t border-white/5 text-slate-200">
+                    <tr key={profile.userId} className="border-t border-signal-line/40">
                       <td className="px-3 py-2 font-mono text-[10px]">{profile.userId}</td>
                       <td className="px-3 py-2">{profile.role}</td>
                       <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-slate-300">
+                      <td className="px-3 py-2 font-mono text-[10px] text-signal-inkMuted">
                         {profile.warmPredictUsage ? `${profile.warmPredictUsage.warm} / ${profile.warmPredictUsage.predict}` : "—"}
                       </td>
                       <td className="px-3 py-2">{profile.favoriteLeagues.length ? profile.favoriteLeagues.join(", ") : "-"}</td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-2">
                           <button
+                            type="button"
                             onClick={() => void handleAdminRoleChange(profile.userId, profile.role === "admin" ? "user" : "admin")}
                             disabled={isAdminWorking}
-                            className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-cyan-200 disabled:opacity-50"
+                            className="rounded-md border border-signal-petrol/20 bg-signal-petrol/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol disabled:opacity-50"
                           >
                             Make {profile.role === "admin" ? "user" : "admin"}
                           </button>
                           <button
+                            type="button"
                             onClick={() => void handleAdminToggleBlock(profile.userId, !profile.isBlocked)}
                             disabled={isAdminWorking}
-                            className="rounded-md border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-rose-200 disabled:opacity-50"
+                            className="rounded-md border border-signal-rose/30 bg-signal-rose/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-rose disabled:opacity-50"
                           >
                             {profile.isBlocked ? "Unblock" : "Block"}
                           </button>
@@ -1094,7 +1127,7 @@ export default function App() {
                   ))}
                   {!managedProfiles.length && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-slate-500">
+                      <td colSpan={6} className="px-3 py-4 text-center text-signal-inkMuted">
                         Nu exista profile disponibile.
                       </td>
                     </tr>
@@ -1123,14 +1156,15 @@ export default function App() {
                 clearLeagueSelection={clearLeagueSelection}
               />
             ) : (
-              <div className="rounded-[1.5rem] border border-white/10 bg-slate-900/40 p-5">
-                <h3 className="text-sm font-black uppercase tracking-wide text-emerald-300">Personalizare blocata</h3>
-                <p className="mt-2 text-xs text-slate-300">
-                  Selectia ligilor, predictiile premium si setarile personale sunt disponibile doar dupa autentificare.
+              <div className="rounded-3xl border border-signal-line/80 bg-white/60 p-5 shadow-atelier backdrop-blur-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Personalizare blocată</h3>
+                <p className="mt-2 text-xs leading-relaxed text-signal-inkMuted">
+                  Selecția ligilor și predicțiile personalizate sunt disponibile după autentificare.
                 </p>
                 <button
+                  type="button"
                   onClick={() => setIsAuthOpen(true)}
-                  className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-emerald-500"
+                  className="mt-4 w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-signal-petrolMuted"
                 >
                   Login / Signup
                 </button>
@@ -1141,46 +1175,92 @@ export default function App() {
           {/* MECIURI */}
           <div className="lg:col-span-8 xl:col-span-9">
             {preds.length > 0 && (
-              <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 sm:gap-4 mb-6 bg-slate-900/40 p-3 lg:p-4 rounded-2xl border border-white/5">
-                <div className="flex gap-2 overflow-x-auto xl:overflow-visible pb-2 xl:pb-0 border-b xl:border-b-0 xl:border-r border-white/5 xl:pr-4 custom-scrollbar snap-x snap-mandatory">
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-signal-line/70 bg-white/55 p-3 shadow-inner backdrop-blur-sm sm:gap-4 lg:p-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="custom-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto border-b border-signal-line/50 pb-2 xl:overflow-visible xl:border-b-0 xl:border-r xl:pb-0 xl:pr-4">
                   <button
+                    type="button"
                     onClick={() => setFilterMode("ALL")}
-                    className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "ALL" ? "bg-slate-700 text-white" : "text-slate-400 hover:bg-slate-800"}`}
+                    className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                      filterMode === "ALL" ? "bg-signal-petrol text-white shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
                   >
                     Toate ({preds.length}
                     {pendingAmongDisplayedPreds > 0 ? ` · ${pendingAmongDisplayedPreds} nevalidate` : ""})
                   </button>
-                  <button onClick={() => setFilterMode("VALUE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "VALUE" ? "bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50" : "text-slate-400 hover:bg-slate-800"}`}>💎 Value Bets</button>
-                  <button onClick={() => setFilterMode("SAFE")} className={`px-4 py-2.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${filterMode === "SAFE" ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50" : "text-slate-400 hover:bg-slate-800"}`}>🔥 +70% Siguranță</button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode("VALUE")}
+                    className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                      filterMode === "VALUE" ? "border border-signal-amber/45 bg-signal-amber/15 text-signal-amber shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
+                  >
+                    Value bets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode("SAFE")}
+                    className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                      filterMode === "SAFE" ? "border border-signal-sage/40 bg-signal-mintSoft/50 text-signal-petrol shadow-sm" : "bg-white/70 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
+                  >
+                    +70% siguranță
+                  </button>
                 </div>
-                <div className="flex gap-2 overflow-x-auto xl:overflow-visible items-center custom-scrollbar snap-x snap-mandatory">
-                  <span className="text-[9px] text-slate-500 uppercase font-black px-1 shrink-0">Ordonează:</span>
-                  <button onClick={() => setSortBy("TIME")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "TIME" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>⏰ Ora</button>
-                  <button onClick={() => setSortBy("CONFIDENCE")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "CONFIDENCE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>📈 Siguranță</button>
-                  <button onClick={() => setSortBy("VALUE")} className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap touch-manipulation snap-start ${sortBy === "VALUE" ? "bg-blue-500/20 text-blue-400" : "bg-slate-800/50 text-slate-400 hover:bg-slate-700"}`}>💰 Profit (EV)</button>
+                <div className="custom-scrollbar flex snap-x snap-mandatory items-center gap-2 overflow-x-auto xl:overflow-visible">
+                  <span className="shrink-0 px-1 text-[9px] font-semibold uppercase tracking-wide text-signal-inkMuted">Sortare</span>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("TIME")}
+                    className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                      sortBy === "TIME" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
+                  >
+                    Ora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("CONFIDENCE")}
+                    className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                      sortBy === "CONFIDENCE" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
+                  >
+                    Încredere
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy("VALUE")}
+                    className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                      sortBy === "VALUE" ? "bg-signal-petrol/10 text-signal-petrol" : "bg-white/60 text-signal-inkMuted hover:bg-signal-fog"
+                    }`}
+                  >
+                    EV
+                  </button>
                 </div>
               </div>
             )}
             {!user ? (
-              <div className="h-[400px] border-2 border-dashed border-white/10 rounded-[2rem] grid place-items-center text-center px-6">
+              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/60 bg-white/40 px-6 text-center">
                 <div>
-                  <p className="text-slate-300 font-semibold">Autentifica-te pentru a vedea predictiile personalizate.</p>
+                  <p className="font-medium text-signal-petrol">Autentifică-te pentru predicții personalizate.</p>
                   <button
+                    type="button"
                     onClick={() => setIsAuthOpen(true)}
-                    className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500"
+                    className="mt-4 rounded-xl bg-signal-petrol px-4 py-2 text-sm font-semibold text-white hover:bg-signal-petrolMuted"
                   >
                     Deschide autentificarea
                   </button>
                 </div>
               </div>
             ) : !preds.length ? (
-              <div className="h-[400px] border-2 border-dashed border-white/5 rounded-[2rem] grid place-items-center text-slate-600 text-center"><p className="italic font-medium">Selectează ligile dorite, apoi apasă Predict.</p></div>
+              <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/40 bg-white/30 text-center text-signal-inkMuted">
+                <p className="font-medium italic">Selectează ligile, apoi apasă Predict.</p>
+              </div>
             ) : (
               <div className="space-y-8">
                 {groupedDisplayedMatches.map((group) => (
                   <section key={group.dateKey} className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="text-[11px] uppercase tracking-[0.25em] text-emerald-400 font-black">
+                      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-signal-petrolMuted">
                         {group.dateKey === "Fără dată"
                           ? group.dateKey
                           : new Date(group.dateKey).toLocaleDateString([], {
@@ -1189,11 +1269,20 @@ export default function App() {
                               month: "2-digit"
                             })}
                       </div>
-                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/30 to-transparent" />
-                      <div className="text-[10px] text-slate-500 font-black">{group.matches.length} meciuri</div>
+                      <div className="h-px flex-1 bg-gradient-to-r from-signal-sage/35 to-transparent" />
+                      <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">{group.matches.length} meciuri</div>
                     </div>
                     <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                      {group.matches.map(m => <MatchCard key={m.id} row={m} logoColors={logoColors} hashColor={hashColor} onClick={() => setSelectedMatch(m)} />)}
+                      {group.matches.map((m, idx) => (
+                        <MatchCard
+                          key={m.id}
+                          row={m}
+                          logoColors={logoColors}
+                          hashColor={hashColor}
+                          animationDelayMs={idx * 45}
+                          onClick={() => setSelectedMatch(m)}
+                        />
+                      ))}
                     </div>
                   </section>
                 ))}
@@ -1202,11 +1291,12 @@ export default function App() {
           </div>
         </div>
       </div>
-      <div className="fixed bottom-0 inset-x-0 z-40 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent lg:hidden pointer-events-none">
-        <div className="mx-auto max-w-7xl pointer-events-auto">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-signal-mist via-signal-mist/95 to-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden">
+        <div className="pointer-events-auto mx-auto max-w-7xl">
           <button
+            type="button"
             onClick={predict}
-            className="touch-manipulation w-full bg-emerald-600 rounded-2xl px-6 py-3.5 text-sm font-bold hover:bg-emerald-500 active:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 active:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="touch-manipulation w-full rounded-2xl bg-signal-petrol px-6 py-3.5 text-sm font-semibold text-white shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!user || !selectedLeagueIds.length}
           >
             Predict {selectedLeagueIds.length ? `(${selectedLeagueIds.length} ligi)` : ""}

@@ -28,80 +28,119 @@ export default function LeaguePanel({
   clearLeagueSelection
 }: LeaguePanelProps) {
   return (
-    <div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] sm:rounded-3xl p-4 sm:p-5 transition-all lg:sticky lg:top-6">
-      <div
-        className="flex justify-between items-center gap-3 cursor-pointer group touch-manipulation select-none rounded-xl px-1 py-1 -mx-1 transition-[transform,opacity,background-color] duration-150 ease-out active:scale-[0.99] active:bg-white/5 motion-reduce:active:scale-100"
-        onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setIsLeaguesOpen(!isLeaguesOpen);
-          }
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <h2 className="font-bold text-lg sm:text-xl group-hover:text-emerald-400 transition-colors">Ligi</h2>
-          <div className="bg-white/5 rounded-full p-1.5 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors text-xs shrink-0">{isLeaguesOpen ? "🔽" : "▶️"}</div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {selectedSet.size > 0 && !isLeaguesOpen && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-full shadow-sm shadow-emerald-900/20">{selectedSet.size} selectate</span>}
-          <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full">{leaguesSorted.length} disp.</span>
+    <div className="rounded-3xl border border-white/70 bg-white/50 shadow-atelier backdrop-blur-md transition-all lg:sticky lg:top-6">
+      <div className="border-b border-signal-line/60 bg-gradient-to-r from-white/60 to-signal-fog/40 px-4 py-4 sm:px-5">
+        <div
+          className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-1 py-1 -mx-1 transition-[background-color] duration-150 ease-out hover:bg-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/40 active:bg-white/30 motion-reduce:active:scale-100"
+          onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setIsLeaguesOpen(!isLeaguesOpen);
+            }
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-signal-line/80 bg-white/70 font-mono text-xs font-semibold text-signal-petrol shadow-inner">
+              ⌗
+            </div>
+            <div>
+              <h2 className="font-display text-lg font-semibold tracking-tight text-signal-petrol sm:text-xl">Control panel</h2>
+              <p className="text-[10px] font-medium text-signal-inkMuted">Ligi · filtru campionat</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {selectedSet.size > 0 && !isLeaguesOpen && (
+              <span className="rounded-full border border-signal-sage/35 bg-signal-mintSoft/50 px-2.5 py-1 text-[10px] font-semibold text-signal-petrol">
+                {selectedSet.size} active
+              </span>
+            )}
+            <span className="rounded-full border border-signal-line bg-white/60 px-2.5 py-1 font-mono text-[10px] tabular-nums text-signal-inkMuted">
+              {leaguesSorted.length}
+            </span>
+            <span className="text-sm text-signal-stone" aria-hidden>
+              {isLeaguesOpen ? "▾" : "▸"}
+            </span>
+          </div>
         </div>
       </div>
       {isLeaguesOpen && (
-        <div className="mt-5 transition-all">
-          <p className="mb-3 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-[11px] font-semibold text-slate-300">
-            Campionate disponibile: Romania, Anglia, Germania, Spania, Italia, Franta.
+        <div className="p-4 sm:p-5">
+          <p className="mb-4 rounded-xl border border-signal-line/60 bg-signal-fog/50 px-3 py-2.5 text-[11px] leading-relaxed text-signal-inkMuted">
+            Selectezi campionatele pentru semnal. Disponibile: RO, EN, DE, ES, IT, FR și altele din feed.
           </p>
-          <div className="flex flex-col sm:flex-row lg:flex-row gap-2 mb-4">
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 selectEliteLeagues();
               }}
-              className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-200 hover:border-emerald-500/40 hover:text-emerald-400 transition-colors touch-manipulation"
+              className="rounded-xl border border-signal-petrol/20 bg-signal-petrol/5 px-4 py-3 text-xs font-semibold text-signal-petrol shadow-sm transition hover:border-signal-sage/40 hover:bg-signal-mintSoft/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/40 sm:py-2.5"
             >
-              Select all elite leagues
+              Toate ligile elite
             </button>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 clearLeagueSelection();
               }}
-              className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 text-xs font-bold text-slate-300 hover:border-red-500/40 hover:text-red-400 transition-colors touch-manipulation"
+              className="rounded-xl border border-signal-rose/25 bg-signal-rose/5 px-4 py-3 text-xs font-semibold text-signal-rose shadow-sm transition hover:bg-signal-rose/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-rose/40 sm:py-2.5"
             >
-              Clear selection
+              Golește selecția
             </button>
           </div>
+          <label className="sr-only" htmlFor="league-search">
+            Caută campionatul
+          </label>
           <input
+            id="league-search"
             type="text"
-            placeholder="Caută campionatul..."
+            placeholder="Caută după nume sau țară…"
             value={searchLeague}
             onChange={(e) => setSearchLeague(e.target.value)}
-            className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 sm:py-2.5 mb-4 text-sm outline-none focus:border-emerald-500/50 transition-colors touch-manipulation"
+            className="mb-4 w-full rounded-xl border border-signal-line/80 bg-white/70 px-4 py-3 text-sm text-signal-petrol shadow-inner outline-none transition placeholder:text-signal-stone focus:border-signal-sage/50 focus:ring-2 focus:ring-signal-sage/20 sm:py-2.5"
           />
-          <div className="space-y-2 overflow-y-auto max-h-[45vh] sm:max-h-[60vh] lg:max-h-[70vh] pr-1 sm:pr-2 custom-scrollbar">
+          <div className="custom-scrollbar max-h-[45vh] space-y-2 overflow-y-auto pr-1 sm:max-h-[60vh] lg:max-h-[70vh] sm:pr-2">
             {leaguesSorted.map((lg) => (
               <button
                 key={lg.id}
+                type="button"
                 onClick={() => {
                   const s = new Set(selectedLeagueIds);
                   s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
                   setSelectedLeagueIds(Array.from(s));
                 }}
-                className={`w-full flex justify-between items-center gap-3 p-3.5 sm:p-3 rounded-xl border transition-all text-left touch-manipulation ${selectedSet.has(lg.id) ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400" : "bg-slate-950/40 border-white/5 hover:border-white/10"}`}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition touch-manipulation sm:p-3 ${
+                  selectedSet.has(lg.id)
+                    ? "border-signal-sage/45 bg-signal-mintSoft/45 text-signal-petrol shadow-inner"
+                    : "border-signal-line/50 bg-white/40 hover:border-signal-sage/25 hover:bg-white/70"
+                }`}
               >
-                <div className="text-left flex items-center gap-2 min-w-0">
-                  {eliteLeagues.includes(Number(lg.id)) && <span className="text-[12px] shrink-0">👑</span>}
-                  {lg.logo && <img src={lg.logo} className="w-5 h-5 object-contain rounded" alt="" />}
-                  <div>
-                    <div className={`text-[13px] sm:text-sm font-bold tracking-tight leading-tight ${eliteLeagues.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? "text-yellow-100" : ""}`}>{lg.name}</div>
-                    <div className="text-[9px] opacity-50 uppercase tracking-tighter mt-0.5">{lg.country}</div>
+                <div className="flex min-w-0 items-center gap-2 text-left">
+                  {eliteLeagues.includes(Number(lg.id)) && <span className="shrink-0 text-[11px] text-signal-amber">◆</span>}
+                  {lg.logo && <img src={lg.logo} className="h-5 w-5 rounded object-contain" alt="" />}
+                  <div className="min-w-0">
+                    <div
+                      className={`truncate text-[13px] font-semibold leading-tight tracking-tight sm:text-sm ${
+                        eliteLeagues.includes(Number(lg.id)) && !selectedSet.has(lg.id) ? "text-signal-petrol" : ""
+                      }`}
+                    >
+                      {lg.name}
+                    </div>
+                    <div className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">{lg.country}</div>
                   </div>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${selectedSet.has(lg.id) ? "bg-emerald-500/20" : "bg-white/5 text-slate-500"}`}>{lg.matches}</span>
+                <span
+                  className={`shrink-0 rounded-lg px-2 py-1 font-mono text-[10px] tabular-nums ${
+                    selectedSet.has(lg.id) ? "bg-signal-petrol/10 text-signal-petrol" : "bg-signal-fog text-signal-inkMuted"
+                  }`}
+                >
+                  {lg.matches}
+                </span>
               </button>
             ))}
           </div>

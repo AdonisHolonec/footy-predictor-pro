@@ -12,16 +12,16 @@ export default function LuckBadge({ goals, xg }: LuckBadgeProps) {
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-lg border shadow-sm whitespace-nowrap ${
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[9px] font-semibold shadow-sm sm:text-[10px] ${
         isLucky
-          ? "bg-orange-500/15 border-orange-400/40 text-orange-300"
-          : "bg-cyan-500/15 border-cyan-400/40 text-cyan-200"
+          ? "border-signal-amber/40 bg-signal-amber/10 text-signal-amber"
+          : "border-signal-sage/35 bg-signal-mintSoft/50 text-signal-petrolMuted"
       }`}
-      title={`${isLucky ? "Lucky Form" : "Value Trend"} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`}
+      title={`${isLucky ? "Lucky form" : "Value trend"} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`}
     >
-      <span>{isLucky ? "⚠️" : "💎"}</span>
-      <span>{isLucky ? "Lucky Form" : "Value Trend"}</span>
-      <span className="opacity-80 font-mono text-[8px] sm:text-[9px]">
+      <span aria-hidden>{isLucky ? "△" : "◇"}</span>
+      <span>{isLucky ? "Lucky form" : "Value trend"}</span>
+      <span className="font-mono text-[8px] tabular-nums opacity-90 sm:text-[9px]">
         {diff >= 0 ? "+" : ""}
         {diff.toFixed(2)}
       </span>

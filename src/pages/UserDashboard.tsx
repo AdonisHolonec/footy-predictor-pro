@@ -8,6 +8,7 @@ import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
+import { ModelPulseStrip } from "../components/SignalLab";
 import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
 
 function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
@@ -661,21 +662,29 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
-        <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="atelier-page relative min-h-screen font-sans">
+      <div className="atelier-bg" aria-hidden />
+      <div className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
+        <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-black text-white">Footy Predictor User Dashboard</h1>
-            <p className="text-xs text-slate-400">
-              Cont: {user?.email} ·{" "}
-              <Link to="/privacy" className="text-cyan-400 hover:text-cyan-300">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-signal-sage">
+              {localCalendarDateKey()} · S{inferSeason(date)}
+            </p>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-signal-petrol">User lab</h1>
+            <p className="mt-1 text-xs text-signal-inkMuted">
+              {user?.email} ·{" "}
+              <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
                 Confidențialitate
               </Link>
             </p>
+            <div className="mt-3">
+              <ModelPulseStrip status="Cont personal · istoric & preferințe" tone="healthy" />
+            </div>
           </div>
           <button
+            type="button"
             onClick={() => void logout()}
-            className="touch-manipulation rounded-xl border border-white/10 bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-200 hover:bg-slate-800 active:bg-slate-950"
+            className="touch-manipulation rounded-xl border border-signal-line bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog"
           >
             Logout
           </button>
@@ -704,41 +713,41 @@ export default function UserDashboard() {
               setSelectedDates(normalizeSelectedDates([next]));
               void fetchDays([next]);
             }}
-            className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm"
+            className="rounded-xl border border-signal-line/80 bg-white/90 px-4 py-2.5 text-sm text-signal-petrol"
           />
           <button
+            type="button"
             onClick={warm}
             disabled={limitApplies && dailyUsage.warm >= 3}
-            className="touch-manipulation rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm font-bold hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl border border-signal-line bg-white/90 px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-fog disabled:cursor-not-allowed disabled:opacity-50"
           >
             Warm
           </button>
           <button
+            type="button"
             onClick={predict}
             disabled={limitApplies && dailyUsage.predict >= 3}
-            className="touch-manipulation rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black hover:bg-emerald-500 active:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-white hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Predict
           </button>
-          <div className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-[11px] font-semibold text-slate-300">
-            <span className="text-slate-200">
+          <div className="rounded-lg border border-signal-line/70 bg-white/70 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
+            <span className="text-signal-petrol">
               Warm {usageQuotaExempt ? "—" : dailyUsage.warm}/3 · Predict {usageQuotaExempt ? "—" : dailyUsage.predict}/3
             </span>
             {session?.access_token && usageKey ? (
-              <span className="mt-1 block text-[10px] font-normal leading-snug text-slate-500">
+              <span className="mt-1 block text-[10px] font-normal leading-snug text-signal-inkMuted">
                 {usageQuotaExempt ? (
-                  <span className="text-slate-400">Administrator: limită zilnică dezactivată pe server.</span>
+                  <span>Administrator: limită zilnică dezactivată pe server.</span>
                 ) : usageServerSyncPending ? (
                   <>Se actualizează contorul de pe server…</>
                 ) : usageServerSyncFailed && !usageServerSyncedAt ? (
-                  <span className="text-amber-400/90">Nu am putut încărca contorul de pe server.</span>
+                  <span className="text-signal-amber">Nu am putut încărca contorul de pe server.</span>
                 ) : usageServerSyncedAt ? (
                   <>
                     Sincronizat cu serverul (
                     {new Date(usageServerSyncedAt).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}).
-                    {usageServerSyncFailed ? (
-                      <span className="text-amber-400/80"> Ultima reîmprospătare automată a eșuat.</span>
-                    ) : null}
+                    {usageServerSyncFailed ? <span className="text-signal-amber"> Ultima reîmprospătare automată a eșuat.</span> : null}
                   </>
                 ) : null}
               </span>
@@ -746,57 +755,58 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        {status && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-slate-900/50 px-3 py-2 text-xs text-emerald-300">{status}</div>}
+        {status && (
+          <div className="mt-4 rounded-xl border border-signal-sage/30 bg-white/70 px-3 py-2 font-mono text-xs text-signal-petrolMuted shadow-inner">{status}</div>
+        )}
 
         {!user?.onboardingCompleted && (
-          <section className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-3">
+          <section className="mt-4 rounded-2xl border border-signal-sage/35 bg-signal-mintSoft/30 p-3 shadow-inner">
             <button
+              type="button"
               onClick={() => setIsOnboardingOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-left"
+              className="flex w-full items-center justify-between rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-left"
             >
-              <span className="text-sm font-black uppercase tracking-wide text-emerald-200">Onboarding preferinte</span>
-              <span className="text-[11px] font-semibold text-slate-300">
-                {selectedLeagueIds.length}/2 ligi
-              </span>
+              <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Onboarding</span>
+              <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">{selectedLeagueIds.length}/2 ligi</span>
             </button>
             {isOnboardingOpen && (
               <div className="mt-3">
-                <p className="text-xs text-slate-200/80">
-                  Selecteaza ligile favorite din panoul de ligi, apoi confirma onboarding-ul.
-                </p>
+                <p className="text-xs text-signal-inkMuted">Selectează ligi din panou, apoi confirmă.</p>
                 <button
+                  type="button"
                   onClick={() => void completeOnboarding()}
-                  className="mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black uppercase tracking-wide text-white hover:bg-emerald-500"
+                  className="mt-3 rounded-lg bg-signal-petrol px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted"
                 >
-                  Finalizeaza onboarding
+                  Finalizează onboarding
                 </button>
               </div>
             )}
           </section>
         )}
 
-        <section className="mt-4 rounded-2xl border border-cyan-400/30 bg-slate-900/60 p-3">
+        <section className="mt-4 rounded-2xl border border-signal-line/70 bg-white/55 p-3 shadow-atelier backdrop-blur-sm">
           <button
+            type="button"
             onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-left"
+            className="flex w-full items-center justify-between rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-left"
           >
-            <span className="text-sm font-black uppercase tracking-wide text-cyan-200">Notificari</span>
-            <span className="text-[11px] font-semibold text-slate-300">
-              {alertsPreview.safe} Safe · {alertsPreview.value} Value
+            <span className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Notificări</span>
+            <span className="font-mono text-[11px] font-semibold text-signal-inkMuted">
+              {alertsPreview.safe} safe · {alertsPreview.value} value
             </span>
           </button>
           {isNotificationsOpen && (
             <div className="mt-3">
               <div className="grid gap-2 sm:grid-cols-3">
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input type="checkbox" checked={notifySafe} onChange={(event) => setNotifySafe(event.target.checked)} />
                   Safe alerts
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input type="checkbox" checked={notifyValue} onChange={(event) => setNotifyValue(event.target.checked)} />
                   Value alerts
                 </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200">
+                <label className="flex items-center gap-2 rounded-xl border border-signal-line bg-white/80 px-3 py-2 text-xs font-semibold text-signal-petrol">
                   <input
                     type="checkbox"
                     checked={notifyEmail}
@@ -806,11 +816,11 @@ export default function UserDashboard() {
                       if (!next) setNotifyEmailConsent(false);
                     }}
                   />
-                  Email delivery (beta)
+                  Email (beta)
                 </label>
               </div>
               {notifyEmail && (
-                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] text-slate-300">
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-signal-line/80 bg-signal-fog/50 px-3 py-2 text-[11px] text-signal-inkMuted">
                   <input
                     type="checkbox"
                     checked={notifyEmailConsent}
@@ -818,40 +828,41 @@ export default function UserDashboard() {
                     className="mt-0.5"
                   />
                   <span>
-                    Confirm ca am citit sectiunea despre e-mail din{" "}
-                    <Link to="/privacy" className="font-bold text-cyan-400 hover:text-cyan-300">
-                      politica de confidentialitate
+                    Confirm că am citit secțiunea despre e-mail din{" "}
+                    <Link to="/privacy" className="font-semibold text-signal-petrolMuted underline-offset-2 hover:underline">
+                      politica de confidențialitate
                     </Link>{" "}
-                    si sunt de acord cu trimiterea de alerte la adresa contului.
+                    și sunt de acord cu alertele pe adresa contului.
                   </span>
                 </label>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button
+                  type="button"
                   onClick={() => void saveNotificationPrefs()}
-                  className="rounded-lg border border-cyan-300/40 bg-cyan-500/15 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/25"
+                  className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-petrol/15"
                 >
-                  Salveaza preferinte
+                  Salvează preferințe
                 </button>
               </div>
             </div>
           )}
         </section>
 
-        <section className="mt-4 rounded-2xl border border-white/10 bg-slate-900/50 p-3">
-          <h2 className="text-sm font-black uppercase tracking-wide text-slate-200">Date personale (GDPR)</h2>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Descarca un export JSON cu profilul, datele de cont si jurnalul de notificari disponibile pe server. Vezi{" "}
-            <Link to="/privacy" className="text-cyan-400 hover:text-cyan-300">
-              politica de confidentialitate
-            </Link>{" "}
-            pentru detalii.
+        <section className="mt-4 rounded-2xl border border-signal-line/70 bg-white/50 p-3 shadow-inner">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Date personale (GDPR)</h2>
+          <p className="mt-1 text-[11px] text-signal-inkMuted">
+            Export JSON cu profil și jurnal notificări. Vezi{" "}
+            <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
+              politica de confidențialitate
+            </Link>
+            .
           </p>
           <button
             type="button"
             disabled={exportBusy}
             onClick={() => void downloadPersonalDataExport()}
-            className="mt-2 rounded-lg border border-white/15 bg-slate-800 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            className="mt-2 rounded-lg border border-signal-line bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-fog disabled:opacity-50"
           >
             {exportBusy ? "Se genereaza..." : "Descarca export JSON"}
           </button>
@@ -875,8 +886,8 @@ export default function UserDashboard() {
           </div>
           <div className="lg:col-span-8 xl:col-span-9">
             {!preds.length ? (
-              <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-white/10 text-slate-500">
-                Selecteaza ligile favorite si apasa Predict.
+              <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/50 bg-white/40 text-center text-signal-inkMuted">
+                Selectează ligi și apasă Predict.
               </div>
             ) : (
               <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
