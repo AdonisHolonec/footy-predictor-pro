@@ -6,6 +6,16 @@ import MatchCard from "./components/MatchCard";
 import MatchModal from "./components/MatchModal";
 import PerformanceCounterModal from "./components/PerformanceCounterModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
+import {
+  AdminFilterDeck,
+  AdminIconRail,
+  AdminInsightColumn,
+  AdminObservatoryHeader,
+  AdminPerformanceObservatory,
+  AdminToolbarStrip,
+  addCalendarDayIso,
+  type KickoffScope
+} from "./components/admin/AdminObservatory";
 import { ModelPulseStrip, ModelPulseWave } from "./components/SignalLab";
 import { BRAND_IMAGES } from "./constants/brandAssets";
 import Auth from "./components/Auth";
@@ -62,6 +72,8 @@ export default function App() {
   const [logoColors, setLogoColors] = useLocalStorageState<Record<string, string>>("footy.logoColors", {});
   const [searchLeague, setSearchLeague] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("ALL");
+  const [kickoffScope, setKickoffScope] = useState<KickoffScope>("ALL");
+  const [minXgSpread, setMinXgSpread] = useState(0);
   const [sortBy, setSortBy] = useState<SortBy>("TIME");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
@@ -148,8 +160,23 @@ export default function App() {
 
   const displayedMatches = useMemo(() => {
     let list = [...preds];
-    if (filterMode === "VALUE") list = list.filter(m => m.valueBet?.detected);
+    if (filterMode === "VALUE") list = list.filter((m) => m.valueBet?.detected);
     if (filterMode === "SAFE") list = list.filter((m) => !m.insufficientData && m.recommended.confidence >= 70);
+    if (filterMode === "LOW") list = list.filter((m) => !m.insufficientData && m.recommended.confidence < 55);
+    if (kickoffScope === "TODAY") {
+      const t = isoToday();
+      list = list.filter((m) => m.kickoff?.slice(0, 10) === t);
+    } else if (kickoffScope === "TOMORROW") {
+      const t = addCalendarDayIso(isoToday(), 1);
+      list = list.filter((m) => m.kickoff?.slice(0, 10) === t);
+    }
+    if (minXgSpread > 0) {
+      list = list.filter((m) => {
+        const xs = m.luckStats;
+        if (!xs) return false;
+        return Math.abs((xs.hXG ?? 0) - (xs.aXG ?? 0)) >= minXgSpread;
+      });
+    }
     list.sort((a, b) => {
       if (sortBy === "TIME") return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
       if (sortBy === "CONFIDENCE") return b.recommended.confidence - a.recommended.confidence;
@@ -157,7 +184,7 @@ export default function App() {
       return 0;
     });
     return list;
-  }, [preds, filterMode, sortBy]);
+  }, [preds, filterMode, sortBy, kickoffScope, minXgSpread]);
 
   const trackerStats = useMemo(() => {
     return historyStats;
@@ -205,6 +232,8 @@ export default function App() {
       matches
     }));
   }, [displayedMatches]);
+
+  const insightSample = useMemo(() => displayedMatches[0] ?? preds[0] ?? null, [displayedMatches, preds]);
 
   async function fetchDays(dates: string[]) {
     const effectiveDates = normalizeSelectedDates(dates.length ? dates : [date]);
@@ -698,16 +727,50 @@ export default function App() {
     return { tone: "healthy" as const, status: `Calibrat · Hit ${hit}% · ROI ${roi}% · ${cal}` };
   }, [kpiLoading, kpi?.hitRate, kpi?.roi, alertsSeverity, date]);
 
+  /** Editorial observatory shell for any authenticated session; admin-only tables stay role-gated below. */
+  const observatoryShell = Boolean(user);
+  const editorialDateLine = useMemo(
+    () =>
+      new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).toUpperCase(),
+    []
+  );
+
   return (
     <div className="lab-page relative min-h-screen font-sans">
       <div className="lab-bg" aria-hidden />
       <div
         className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.035]"
-        style={{ backgroundImage: `url(${BRAND_IMAGES.refDashboard})` }}
+        style={{ backgroundImage: `url(${observatoryShell ? BRAND_IMAGES.adminObservatoryRef : BRAND_IMAGES.refDashboard})` }}
         aria-hidden
       />
       <div className="relative z-10 mx-auto max-w-[1680px] px-4 py-8 lg:px-8">
-        {/* HEADER */}
+        {observatoryShell ? (
+          <>
+            <AdminObservatoryHeader
+              editorialDate={editorialDateLine}
+              modelPulse={modelPulse}
+              user={user ? { email: user.email, role: user.role } : null}
+              authLoading={authLoading}
+              onOpenAuth={() => setIsAuthOpen(true)}
+              onLogout={handleLogout}
+            />
+            <AdminToolbarStrip
+              date={date}
+              setDate={setDate}
+              selectedDates={selectedDates}
+              setSelectedDates={setSelectedDates}
+              normalizeSelectedDates={normalizeSelectedDates}
+              isoToday={isoToday}
+              usageCount={usageCount}
+              usageLimit={usageLimit}
+              usagePct={usagePct}
+              user={user}
+              onWarm={warm}
+              onPredict={predict}
+              setStatus={setStatus}
+            />
+          </>
+        ) : (
         <header className="mb-10 border-b border-white/[0.06] pb-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-3xl">
@@ -958,6 +1021,7 @@ export default function App() {
           </div>
         </div>
         </header>
+        )}
 
         {status && (
           <div className="mb-6 rounded-xl border border-signal-sage/25 bg-signal-panel/50 p-3 font-mono text-xs text-signal-petrol/90 shadow-inner backdrop-blur-sm">
@@ -1159,6 +1223,303 @@ export default function App() {
           </section>
         )}
 
+        {observatoryShell ? (
+          <>
+            <div className="mb-8 flex flex-col gap-6 lg:mb-10 lg:flex-row lg:items-stretch">
+              <AdminIconRail />
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12 xl:gap-8">
+                <div className="space-y-4 lg:col-span-3">
+                  {user ? (
+                    <>
+                      <LeaguePanel
+                        leaguesSorted={leaguesSorted}
+                        selectedSet={selectedSet}
+                        selectedLeagueIds={selectedLeagueIds}
+                        isLeaguesOpen={isLeaguesOpen}
+                        searchLeague={searchLeague}
+                        eliteLeagues={ELITE_LEAGUES}
+                        setIsLeaguesOpen={setIsLeaguesOpen}
+                        setSearchLeague={setSearchLeague}
+                        setSelectedLeagueIds={setSelectedLeagueIds}
+                        selectEliteLeagues={selectEliteLeagues}
+                        clearLeagueSelection={clearLeagueSelection}
+                      />
+                      <AdminFilterDeck
+                        kickoffScope={kickoffScope}
+                        setKickoffScope={setKickoffScope}
+                        filterMode={filterMode}
+                        setFilterMode={setFilterMode}
+                        minXgSpread={minXgSpread}
+                        setMinXgSpread={setMinXgSpread}
+                      />
+                    </>
+                  ) : (
+                    <div className="rounded-3xl border border-signal-line/40 bg-signal-panel/45 p-5 shadow-atelier backdrop-blur-sm">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Personalizare blocată</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-signal-inkMuted">
+                        Selecția ligilor și predicțiile personalizate sunt disponibile după autentificare.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAuthOpen(true)}
+                        className="mt-4 w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-signal-petrolMuted"
+                      >
+                        Login / Signup
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 lg:col-span-6">
+                  <p className="mb-3 font-mono text-[9px] font-semibold uppercase tracking-[0.22em] text-signal-petrolMuted">Prediction dossier</p>
+                  {preds.length > 0 && (
+                    <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-signal-panel/35 p-3 shadow-inner backdrop-blur-md sm:gap-4 lg:p-4 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="custom-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto border-b border-signal-line/50 pb-2 xl:overflow-visible xl:border-b-0 xl:border-r xl:pb-0 xl:pr-4">
+                        <button
+                          type="button"
+                          onClick={() => setFilterMode("ALL")}
+                          className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                            filterMode === "ALL" ? "bg-signal-petrol text-signal-mist shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
+                          }`}
+                        >
+                          Toate ({preds.length}
+                          {pendingAmongDisplayedPreds > 0 ? ` · ${pendingAmongDisplayedPreds} nevalidate` : ""})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFilterMode("VALUE")}
+                          className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                            filterMode === "VALUE" ? "border border-signal-amber/45 bg-signal-amber/15 text-signal-amber shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
+                          }`}
+                        >
+                          Value bets
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFilterMode("SAFE")}
+                          className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                            filterMode === "SAFE" ? "border border-signal-sage/35 bg-signal-sage/15 text-signal-sage shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
+                          }`}
+                        >
+                          +70% siguranță
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFilterMode("LOW")}
+                          className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                            filterMode === "LOW" ? "border border-signal-rose/30 bg-signal-rose/10 text-signal-rose shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
+                          }`}
+                        >
+                          &lt;55% guarded
+                        </button>
+                      </div>
+                      <div className="custom-scrollbar flex snap-x snap-mandatory items-center gap-2 overflow-x-auto xl:overflow-visible">
+                        <span className="shrink-0 px-1 text-[9px] font-semibold uppercase tracking-wide text-signal-inkMuted">Sortare</span>
+                        <button
+                          type="button"
+                          onClick={() => setSortBy("TIME")}
+                          className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                            sortBy === "TIME" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                          }`}
+                        >
+                          Ora
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortBy("CONFIDENCE")}
+                          className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                            sortBy === "CONFIDENCE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                          }`}
+                        >
+                          Încredere
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSortBy("VALUE")}
+                          className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
+                            sortBy === "VALUE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                          }`}
+                        >
+                          EV
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {!user ? (
+                    <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/30 bg-signal-panel/20 px-6 text-center">
+                      <div>
+                        <p className="font-medium text-signal-petrol">Autentifică-te pentru predicții personalizate.</p>
+                        <button
+                          type="button"
+                          onClick={() => setIsAuthOpen(true)}
+                          className="mt-4 rounded-xl bg-signal-petrol px-4 py-2 text-sm font-semibold text-white hover:bg-signal-petrolMuted"
+                        >
+                          Deschide autentificarea
+                        </button>
+                      </div>
+                    </div>
+                  ) : !preds.length ? (
+                    <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/25 bg-signal-void/30 text-center text-signal-inkMuted">
+                      <p className="font-medium italic">Selectează ligile, apoi apasă Predict.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {groupedDisplayedMatches.map((group) => (
+                        <section key={group.dateKey} className="space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-signal-petrolMuted">
+                              {group.dateKey === "Fără dată"
+                                ? group.dateKey
+                                : new Date(group.dateKey).toLocaleDateString([], {
+                                    weekday: "short",
+                                    day: "2-digit",
+                                    month: "2-digit"
+                                  })}
+                            </div>
+                            <div className="h-px flex-1 bg-gradient-to-r from-signal-sage/35 to-transparent" />
+                            <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">{group.matches.length} meciuri</div>
+                          </div>
+                          <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2">
+                            {group.matches.map((m, idx) => (
+                              <MatchCard
+                                key={m.id}
+                                row={m}
+                                logoColors={logoColors}
+                                hashColor={hashColor}
+                                animationDelayMs={idx * 45}
+                                onClick={() => setSelectedMatch(m)}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="lg:col-span-3">
+                  <AdminInsightColumn sample={insightSample} />
+                </div>
+              </div>
+            </div>
+            <AdminPerformanceObservatory>
+              <SuccessRateTracker
+                stats={trackerStats}
+                animatedWins={animatedWins}
+                animatedLosses={animatedLosses}
+                animatedWinRate={animatedWinRate}
+                isWinRatePulsing={isWinRatePulsing}
+                isHistorySyncing={isHistorySyncing}
+                pendingHistoryCount={pendingHistoryCount}
+                displayedPredsCount={preds.length}
+                pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+                onBreakdownClick={() => setPerfCounterModalOpen(true)}
+              />
+              <div className="mt-4 grid max-w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI ROI</div>
+                  <div className={`font-mono text-sm font-semibold tabular-nums ${((kpi?.roi || 0) >= 0) ? "text-signal-petrolMuted" : "text-signal-rose"}`}>
+                    {kpiLoading ? "..." : `${(kpi?.roi || 0).toFixed(2)}%`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Hit Rate</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
+                    {kpiLoading ? "..." : `${(kpi?.hitRate || 0).toFixed(2)}%`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Drawdown</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">
+                    {kpiLoading ? "..." : `${(kpi?.drawdown || 0).toFixed(2)}u`}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">KPI Settled</div>
+                  <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
+                    {kpiLoading ? "..." : `${kpi?.settled || 0}`}
+                  </div>
+                </div>
+              </div>
+              <details className="mt-4 rounded-xl border border-white/[0.07] bg-signal-void/25 p-3">
+                <summary className="cursor-pointer font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">
+                  Auto alerting & thresholds
+                </summary>
+                <div className={`mt-3 rounded-xl border px-3 py-2 ${
+                  alertsSeverity === "high"
+                    ? "border-signal-rose/40 bg-signal-rose/10"
+                    : alertsSeverity === "medium"
+                    ? "border-signal-amber/45 bg-signal-amber/10"
+                    : "border-signal-sage/35 bg-signal-mintSoft/30"
+                }`}>
+                  <div className="text-[9px] font-semibold uppercase tracking-widest text-signal-inkMuted">Auto alerting</div>
+                  <div className="mt-1 text-xs font-medium text-signal-petrol">
+                    {riskAlerts.length ? riskAlerts.map((a) => a.message).join(" • ") : "No active risk alerts"}
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
+                      DD
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={20}
+                        step={0.1}
+                        value={draftDrawdownThreshold}
+                        onChange={(e) => setDraftDrawdownThreshold(Number(e.target.value))}
+                        className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
+                      Drift
+                      <input
+                        type="number"
+                        min={5}
+                        max={100}
+                        step={1}
+                        value={draftDriftThreshold}
+                        onChange={(e) => setDraftDriftThreshold(Number(e.target.value))}
+                        className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2 text-[10px] font-semibold text-signal-inkMuted">
+                      LowData
+                      <input
+                        type="number"
+                        min={0.05}
+                        max={0.95}
+                        step={0.01}
+                        value={draftLowDataThreshold}
+                        onChange={(e) => setDraftLowDataThreshold(Number(e.target.value))}
+                        className="w-full rounded-md border border-signal-line bg-signal-fog px-2 py-1 font-mono text-[10px] text-signal-petrol"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => void applyAlertThresholds()}
+                      disabled={!hasThresholdDraftChanges}
+                      className="rounded-md bg-signal-petrol px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Apply thresholds
+                    </button>
+                    <button
+                      onClick={() => void resetAlertThresholds()}
+                      className="rounded-md border border-signal-line bg-signal-fog px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel"
+                    >
+                      Reset defaults
+                    </button>
+                    {thresholdsSaved !== "idle" && (
+                      <span className="rounded-md border border-signal-sage/35 bg-signal-mintSoft/50 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol">
+                        {thresholdsSaved === "saved" ? "Saved" : "Defaults restored"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 font-mono text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">
+                    Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData {(alertLowDataThreshold * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </details>
+            </AdminPerformanceObservatory>
+          </>
+        ) : (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 xl:gap-10">
           {/* LIGI */}
           <div className="lg:col-span-4 xl:col-span-3 space-y-4">
@@ -1225,6 +1586,15 @@ export default function App() {
                     }`}
                   >
                     +70% siguranță
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode("LOW")}
+                    className={`snap-start whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition-all touch-manipulation sm:py-2 ${
+                      filterMode === "LOW" ? "border border-signal-rose/30 bg-signal-rose/10 text-signal-rose shadow-sm" : "bg-signal-void/50 text-signal-inkMuted hover:bg-signal-panel/60"
+                    }`}
+                  >
+                    &lt;55% guarded
                   </button>
                 </div>
                 <div className="custom-scrollbar flex snap-x snap-mandatory items-center gap-2 overflow-x-auto xl:overflow-visible">
@@ -1311,6 +1681,7 @@ export default function App() {
             )}
           </div>
         </div>
+        )}
       </div>
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-signal-mist via-signal-mist/95 to-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden">
         <div className="pointer-events-auto mx-auto max-w-7xl">

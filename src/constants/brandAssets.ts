@@ -6,6 +6,8 @@ export const BRAND_IMAGES = {
   heroPlatform: "/brand/hero-platform.png",
   /** Full dashboard composition — user / admin mood board */
   refDashboard: "/brand/ref-dashboard.png",
+  /** Admin observatory reference (editorial glass dashboard) */
+  adminObservatoryRef: "/brand/admin-observatory-ref.png",
   /** Prediction dossier focus — cards & analytics */
   refDossier: "/brand/ref-dossier.png",
   /** Landing / access hero (nav + floating cards) */
