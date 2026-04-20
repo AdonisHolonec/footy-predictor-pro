@@ -2,6 +2,9 @@
   "functions": {
     "api/cron/warm-predict.js": {
       "maxDuration": 300
+    },
+    "api/cron/daily-ml.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -12,6 +15,10 @@
     {
       "path": "/api/backtest?view=snapshot&days=45",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/daily-ml?mode=all",
+      "schedule": "30 3 * * *"
     },
     {
       "path": "/api/cache/prewarm",

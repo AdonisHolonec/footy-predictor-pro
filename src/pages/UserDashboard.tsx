@@ -23,6 +23,14 @@ function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
   return { wins, losses, settled, winRate };
 }
 
+function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
+  return rows.some((row) => {
+    const probs = row?.probs;
+    // Older cached rows (localStorage) can miss newer model fields used by updated cards/modals.
+    return !probs?.firstHalf && !probs?.corners && !probs?.shotsOnTarget && !probs?.shotsTotal;
+  });
+}
+
 export default function UserDashboard() {
   const { user, session, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
@@ -44,6 +52,7 @@ export default function UserDashboard() {
   }, [preds]);
   const [day, setDay] = useState<DayResponse | null>(null);
   const [status, setStatus] = useState("");
+  const [rehydratedNotice, setRehydratedNotice] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -331,10 +340,11 @@ export default function UserDashboard() {
   useEffect(() => {
     if (!user?.id) return;
     if (!session?.access_token) return;
-    if (preds.length > 0) return;
     if (!selectedLeagueIds.length) return;
+    // Rehydrate even when cached predictions exist if their shape is legacy (desktop stale localStorage case).
+    if (preds.length > 0 && !hasLegacyPredictionShape(preds)) return;
     void rehydratePredictionsFromHistory();
-  }, [user?.id, session?.access_token, preds.length, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
+  }, [user?.id, session?.access_token, preds, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -445,10 +455,17 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Am restaurat ${hydrated.length} predictii din istoric.`);
+      setRehydratedNotice(`Date vechi actualizate: ${hydrated.length} predicții au fost reîncărcate.`);
     } catch {
       // silent fallback
     }
   }
+
+  useEffect(() => {
+    if (!rehydratedNotice) return;
+    const tm = setTimeout(() => setRehydratedNotice(null), 5000);
+    return () => clearTimeout(tm);
+  }, [rehydratedNotice]);
 
   async function warm() {
     if (limitApplies && dailyUsage.warm >= 3) {
@@ -825,6 +842,12 @@ export default function UserDashboard() {
 
         {status && (
           <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
+        )}
+        {rehydratedNotice && (
+          <div className="mt-3 rounded-xl border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-2 text-xs text-signal-ink shadow-inner">
+            <span className="font-semibold text-signal-petrol">Date vechi actualizate.</span>{" "}
+            <span className="text-signal-inkMuted">{rehydratedNotice}</span>
+          </div>
         )}
 
         {!user?.onboardingCompleted && (
