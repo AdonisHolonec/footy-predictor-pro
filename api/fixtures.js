@@ -21,6 +21,13 @@ import {
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import { calculateSyntheticXG } from "../server-utils/advancedMath.js";
+import {
+  USER_TIERS,
+  getPredictCountToday,
+  isFreeWindowExpired,
+  resolveEffectiveTierFromProfile,
+  tierDailyLimit
+} from "../server-utils/accessTier.js";
 
 // -------------------- Shared / default (day) handler --------------------
 
@@ -31,6 +38,7 @@ async function handleDay(req, res) {
   const syncBootstrapAdmin = String(req.query.syncBootstrapAdmin || "") === "1";
   const warmPredictUsage = String(req.query.warmPredictUsage || "") === "1";
   const gdprExport = String(req.query.gdprExport || "") === "1";
+  const tierStatusOnly = String(req.query.tierStatus || "") === "1";
 
   try {
     if (gdprExport) {
@@ -132,6 +140,53 @@ async function handleDay(req, res) {
       });
     }
 
+    if (tierStatusOnly) {
+      const requester = await getRequester(req);
+      if (!requester.ok) {
+        return res.status(requester.status).json({ ok: false, error: requester.error });
+      }
+      const config = assertSupabaseConfigured();
+      if (!config.ok) {
+        return res.status(503).json({ ok: false, error: config.error });
+      }
+      const sb = getSupabaseAdmin();
+      if (!sb) {
+        return res.status(503).json({ ok: false, error: "Supabase admin unavailable." });
+      }
+      const { data: profile, error: profileError } = await sb
+        .from("profiles")
+        .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+        .eq("user_id", requester.user.id)
+        .maybeSingle();
+      if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
+      if (!profile) return res.status(404).json({ ok: false, error: "Profile not found." });
+
+      const tierInfo = resolveEffectiveTierFromProfile(profile);
+      const freeExpired = tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
+      const usageDay = String(req.query.usageDay || date).slice(0, 10);
+      const predictCount = await getPredictCountToday(requester.user.id, usageDay);
+      const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+      if (freeExpired) {
+        return res.status(402).json({
+          ok: false,
+          error: "Free Habit Trial (10 zile) a expirat. Activeaza Premium sau Ultra."
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        tierStatus: {
+          tier: tierInfo.effectiveTier,
+          requestedTier: tierInfo.requestedTier,
+          subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
+          premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
+          ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
+          predictCountToday: predictCount,
+          predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+        }
+      });
+    }
+
     if (usageOnly) {
       const today = await getApiUsage();
       const yesterday = await getApiUsage(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
@@ -167,7 +222,44 @@ async function handleDay(req, res) {
 
     const leagues = Array.from(leaguesMap.values());
 
-    return res.status(200).json({ ok: true, date, totalFixtures: allFixtures.length, leagues, usage });
+    let tierStatus = undefined;
+    const requester = await getRequester(req);
+    if (requester.ok) {
+      const config = assertSupabaseConfigured();
+      if (config.ok) {
+        const sb = getSupabaseAdmin();
+        if (sb) {
+          const { data: profile } = await sb
+            .from("profiles")
+            .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+            .eq("user_id", requester.user.id)
+            .maybeSingle();
+          if (profile) {
+            const tierInfo = resolveEffectiveTierFromProfile(profile);
+            const freeExpired = tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
+            if (freeExpired) {
+              return res.status(402).json({
+                ok: false,
+                error: "Free Habit Trial (10 zile) a expirat. Activeaza Premium sau Ultra."
+              });
+            }
+            const predictCount = await getPredictCountToday(requester.user.id, date);
+            const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+            tierStatus = {
+              tier: tierInfo.effectiveTier,
+              requestedTier: tierInfo.requestedTier,
+              subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
+              premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
+              ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
+              predictCountToday: predictCount,
+              predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+            };
+          }
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true, date, totalFixtures: allFixtures.length, leagues, usage, tierStatus });
   } catch (error) {
     return res.status(500).json({ ok: false, error: "Eroare internă." });
   }

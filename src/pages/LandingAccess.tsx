@@ -143,11 +143,11 @@ export default function LandingAccess() {
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/85">Predictive stack</p>
               <h1 className="font-display mt-3 text-4xl font-bold leading-[1.08] tracking-tight text-signal-ink sm:text-5xl lg:text-[3.25rem]">
-                Predictive intelligence for football minds.
+                Premium football intelligence, built as a calm cinematic lab.
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-signal-inkMuted">
-                Analiză editorială, semnale calibrate și context xG — fără hype de pariuri. Intră în observator pentru
-                predicții, istoric personal și limite inteligente Warm / Predict.
+                Arhitectură de predicție cu semnal calibrat, discipline de risc și UX orientat pe claritate: standard,
+                tactical și intelligence layers pentru fiecare nivel de acces.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 {user ? (
@@ -162,7 +162,7 @@ export default function LandingAccess() {
                     to={signup}
                     className="inline-flex items-center justify-center rounded-xl border border-signal-petrol/50 bg-signal-petrol/20 px-6 py-3 font-semibold text-signal-mist shadow-[0_0_24px_rgba(56,189,248,0.25)] transition hover:bg-signal-petrol/30 hover:shadow-frost"
                   >
-                    Start free trial
+                    Start Free Habit Trial
                   </Link>
                 )}
                 <button
@@ -310,28 +310,43 @@ export default function LandingAccess() {
           </div>
 
           <section id="pricing" className="scroll-mt-28 border-t border-white/[0.06] py-16">
-            <h2 className="font-display text-2xl font-semibold text-signal-ink">Pricing · orientativ</h2>
+            <h2 className="font-display text-2xl font-semibold text-signal-ink">Access Tiers · Intelligence Plans</h2>
             <p className="mt-2 max-w-2xl text-sm text-signal-inkMuted">
-              Prototip: accesul se face prin cont. Limitele Warm / Predict pe zi sunt afișate în dashboard după autentificare.
+              Structură de acces în 3 niveluri: Free Habit Trial, Tactical Premium și Intelligence Ultra.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
               {[
-                { title: "Starter", price: "0", desc: "Autentificare + istoric personal", to: signup },
-                { title: "Observer", price: "—", desc: "Feed predictiv + ligi favorite", to: login },
-                { title: "Lab", price: "—", desc: "Workspace admin (rol invitat)", to: `${login}?from=pricing` }
+                {
+                  title: "Free Habit Trial",
+                  price: "FREE",
+                  desc: "Trial tactic de 10 zile · 5 meciuri/zi · predicții standard (1X2, O/U).",
+                  to: signup
+                },
+                {
+                  title: "Tactical Premium",
+                  price: "PREMIUM",
+                  desc: "10 meciuri/zi · piețe Cornere · Confidence categoric (High/Medium/Low) · trial 24h la cerere.",
+                  to: `${login}?from=pricing&tier=premium`
+                },
+                {
+                  title: "Intelligence Ultra",
+                  price: "ULTRA",
+                  desc: "Meciuri nelimitate · șuturi + goluri HT · Confidence exact + Edge Compass · trial 24h la cerere.",
+                  to: `${login}?from=pricing&tier=ultra`
+                }
               ].map((tier) => (
                 <div
                   key={tier.title}
                   className="rounded-2xl border border-white/[0.08] bg-signal-panel/40 p-5 shadow-inner backdrop-blur-md"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-wider text-signal-petrol">{tier.title}</p>
-                  <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price === "0" ? "Free" : tier.price}</p>
+                  <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
                   <p className="mt-2 text-sm text-signal-inkMuted">{tier.desc}</p>
                   <Link
                     to={tier.to}
                     className="mt-4 inline-block rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-4 py-2 text-xs font-semibold text-signal-petrol transition hover:bg-signal-petrol/20"
                   >
-                    Alege
+                    {tier.title === "Free Habit Trial" ? "Revendică trialul de 10 zile" : "Continuă spre activare"}
                   </Link>
                 </div>
               ))}

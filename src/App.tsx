@@ -30,7 +30,8 @@ import {
   PerformanceUserBreakdown,
   PerformanceUserLeagueBreakdown,
   PredictionRow,
-  RiskAlert
+  RiskAlert,
+  UserTier
 } from "./types";
 import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
 import { useAuth } from "./hooks/useAuth";
@@ -109,8 +110,11 @@ export default function App() {
     updateFavoriteLeagues,
     refreshManagedProfiles,
     updateProfileRole,
-    toggleProfileBlock
+    toggleProfileBlock,
+    updateProfileMonetization
   } = useAuth();
+  const [adminTierDraftByUser, setAdminTierDraftByUser] = useState<Record<string, UserTier>>({});
+  const [adminExpiryDraftByUser, setAdminExpiryDraftByUser] = useState<Record<string, string>>({});
 
   const loadPerfAdmin = useCallback(async () => {
     if (!session?.access_token || user?.role !== "admin") return;
@@ -163,8 +167,8 @@ export default function App() {
   const displayedMatches = useMemo(() => {
     let list = [...preds];
     if (filterMode === "VALUE") list = list.filter((m) => m.valueBet?.detected);
-    if (filterMode === "SAFE") list = list.filter((m) => !m.insufficientData && m.recommended.confidence >= 70);
-    if (filterMode === "LOW") list = list.filter((m) => !m.insufficientData && m.recommended.confidence < 55);
+    if (filterMode === "SAFE") list = list.filter((m) => !m.insufficientData && Number(m.recommended.confidence) >= 70);
+    if (filterMode === "LOW") list = list.filter((m) => !m.insufficientData && Number(m.recommended.confidence) < 55);
     if (kickoffScope === "TODAY") {
       const t = isoToday();
       list = list.filter((m) => m.kickoff?.slice(0, 10) === t);
@@ -181,7 +185,7 @@ export default function App() {
     }
     list.sort((a, b) => {
       if (sortBy === "TIME") return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
-      if (sortBy === "CONFIDENCE") return b.recommended.confidence - a.recommended.confidence;
+      if (sortBy === "CONFIDENCE") return Number(b.recommended.confidence) - Number(a.recommended.confidence);
       if (sortBy === "VALUE") return (b.valueBet?.ev || 0) - (a.valueBet?.ev || 0);
       return 0;
     });
@@ -709,6 +713,53 @@ export default function App() {
     }
   }
 
+  function isoToLocalDatetimeInput(value?: string | null) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (!Number.isFinite(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function localDatetimeInputToIso(value: string) {
+    if (!value) return null;
+    const d = new Date(value);
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.toISOString();
+  }
+
+  function tierToneClass(tier: UserTier) {
+    if (tier === "ultra") return "border-signal-amber/35 bg-signal-amber/10 text-signal-amber";
+    if (tier === "premium") return "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol";
+    return "border-white/10 bg-signal-void/40 text-signal-inkMuted";
+  }
+
+  function isExpiredSubscription(iso?: string | null) {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return false;
+    return t <= Date.now();
+  }
+
+  async function handleAdminMonetizationSave(userId: string, fallbackTier: UserTier, fallbackExpiry?: string | null) {
+    setIsAdminWorking(true);
+    try {
+      const tier = (adminTierDraftByUser[userId] || fallbackTier) as UserTier;
+      const expiryRaw = adminExpiryDraftByUser[userId];
+      const subscriptionExpiresAt =
+        expiryRaw !== undefined ? localDatetimeInputToIso(expiryRaw) : (fallbackExpiry ?? null);
+      await updateProfileMonetization(userId, {
+        tier,
+        subscriptionExpiresAt
+      });
+      setStatus(`Subscription updated for ${userId}.`);
+    } catch (e: any) {
+      setStatus(e?.message || "Nu am putut actualiza abonamentul.");
+    } finally {
+      setIsAdminWorking(false);
+    }
+  }
+
   async function loadUsageSnapshot() {
     setUsageLoading(true);
     try {
@@ -1184,6 +1235,8 @@ export default function App() {
                   <tr>
                     <th className="px-3 py-2">User ID</th>
                     <th className="px-3 py-2">Role</th>
+                    <th className="px-3 py-2">Tier</th>
+                    <th className="px-3 py-2">Subscription Expiry</th>
                     <th className="px-3 py-2">Blocked</th>
                     <th className="px-3 py-2">Warm / Predict</th>
                     <th className="px-3 py-2">Favorite Leagues</th>
@@ -1195,6 +1248,66 @@ export default function App() {
                     <tr key={profile.userId} className="border-t border-signal-line/40">
                       <td className="px-3 py-2 font-mono text-[10px]">{profile.userId}</td>
                       <td className="px-3 py-2">{profile.role}</td>
+                      <td className="px-3 py-2">
+                        <div className="mb-1">
+                          <span
+                            className={`inline-flex rounded-md border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${tierToneClass(
+                              (adminTierDraftByUser[profile.userId] || profile.tier || "free") as UserTier
+                            )}`}
+                          >
+                            {(adminTierDraftByUser[profile.userId] || profile.tier || "free").toUpperCase()}
+                          </span>
+                        </div>
+                        <select
+                          value={adminTierDraftByUser[profile.userId] || profile.tier || "free"}
+                          onChange={(e) =>
+                            setAdminTierDraftByUser((prev) => ({
+                              ...prev,
+                              [profile.userId]: e.target.value as UserTier
+                            }))
+                          }
+                          className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] font-semibold text-signal-petrol"
+                        >
+                          <option value="free">free</option>
+                          <option value="premium">premium</option>
+                          <option value="ultra">ultra</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="datetime-local"
+                          value={
+                            adminExpiryDraftByUser[profile.userId] !== undefined
+                              ? adminExpiryDraftByUser[profile.userId]
+                              : isoToLocalDatetimeInput(profile.subscriptionExpiresAt || null)
+                          }
+                          onChange={(e) =>
+                            setAdminExpiryDraftByUser((prev) => ({
+                              ...prev,
+                              [profile.userId]: e.target.value
+                            }))
+                          }
+                          className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] text-signal-petrol"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAdminExpiryDraftByUser((prev) => ({
+                              ...prev,
+                              [profile.userId]: ""
+                            }))
+                          }
+                          className="ml-1 rounded-md border border-white/10 bg-signal-void/40 px-1.5 py-1 text-[9px] text-signal-inkMuted"
+                          title="Clear expiry"
+                        >
+                          Clear
+                        </button>
+                        {isExpiredSubscription(profile.subscriptionExpiresAt) && (
+                          <div className="mt-1 inline-flex rounded-md border border-signal-rose/30 bg-signal-rose/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-rose">
+                            Expired
+                          </div>
+                        )}
+                      </td>
                       <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
                       <td className="px-3 py-2 font-mono text-[10px] text-signal-inkMuted">
                         {profile.warmPredictUsage ? `${profile.warmPredictUsage.warm} / ${profile.warmPredictUsage.predict}` : "—"}
@@ -1218,13 +1331,27 @@ export default function App() {
                           >
                             {profile.isBlocked ? "Unblock" : "Block"}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleAdminMonetizationSave(
+                                profile.userId,
+                                (profile.tier || "free") as UserTier,
+                                profile.subscriptionExpiresAt ?? null
+                              )
+                            }
+                            disabled={isAdminWorking}
+                            className="rounded-md border border-signal-sage/30 bg-signal-sage/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-sage disabled:opacity-50"
+                          >
+                            Save Plan
+                          </button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {!managedProfiles.length && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-signal-inkMuted">
+                      <td colSpan={8} className="px-3 py-4 text-center text-signal-inkMuted">
                         Nu exista profile disponibile.
                       </td>
                     </tr>

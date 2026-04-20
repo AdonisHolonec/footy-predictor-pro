@@ -32,7 +32,20 @@ function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
 }
 
 export default function UserDashboard() {
-  const { user, session, logout, updateFavoriteLeagues, updateNotificationPreferences, markOnboardingComplete } = useAuth();
+  const {
+    user,
+    userTier,
+    trialRemainingTime,
+    predictCountToday,
+    predictLimitToday,
+    session,
+    logout,
+    activate24hTrial,
+    refreshTierStatus,
+    updateFavoriteLeagues,
+    updateNotificationPreferences,
+    markOnboardingComplete
+  } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useState<number[]>([]);
@@ -79,6 +92,7 @@ export default function UserDashboard() {
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
+  const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
 
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
@@ -112,6 +126,15 @@ export default function UserDashboard() {
   }, [history]);
   const prevWinRateRef = useRef(trackerStats.winRate);
   const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
+  const formatRemaining = (ms: number) => {
+    if (!ms || ms <= 0) return "00:00:00";
+    const total = Math.floor(ms / 1000);
+    const h = String(Math.floor(total / 3600)).padStart(2, "0");
+    const m = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
+    const s = String(total % 60).padStart(2, "0");
+    return `${h}:${m}:${s}`;
+  };
+
   const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
   const limitApplies = !usageQuotaExempt;
 
@@ -352,6 +375,14 @@ export default function UserDashboard() {
   }, [session?.access_token, syncHistory]);
 
   useEffect(() => {
+    if (!session?.access_token) return;
+    const tm = setInterval(() => {
+      void refreshTierStatus();
+    }, 30000);
+    return () => clearInterval(tm);
+  }, [session?.access_token, refreshTierStatus]);
+
+  useEffect(() => {
     const prev = prevWinRateRef.current;
     if (Math.abs(prev - trackerStats.winRate) > 0.01) {
       setIsWinRatePulsing(true);
@@ -386,7 +417,7 @@ export default function UserDashboard() {
   }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   useEffect(() => {
-    const safeCount = preds.filter((row) => !row.insufficientData && row.recommended?.confidence >= 70).length;
+    const safeCount = preds.filter((row) => !row.insufficientData && Number(row.recommended?.confidence) >= 70).length;
     const valueCount = preds.filter((row) => row.valueBet?.detected).length;
     setAlertsPreview({ safe: safeCount, value: valueCount });
   }, [preds]);
@@ -838,7 +869,78 @@ export default function UserDashboard() {
               </span>
             ) : null}
           </div>
+          <div className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1.5 text-[11px] text-signal-ink shadow-inner">
+            <span className="font-semibold text-signal-petrol">Tier:</span> {userTier.toUpperCase()}
+            <span className="mx-1 text-signal-inkMuted">·</span>
+            <span className="font-mono tabular-nums">
+              Predict today {predictCountToday}
+              {predictLimitToday != null ? `/${predictLimitToday}` : "/∞"}
+            </span>
+          </div>
         </div>
+
+        <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial Control</h2>
+              <p className="mt-1 text-[11px] text-signal-inkMuted">
+                Activează la cerere upgrade temporar pentru Premium (cornere) sau Ultra (inteligență completă).
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={trialBusy !== null || !!user?.premium_trial_activated_at}
+                onClick={async () => {
+                  setTrialBusy("premium");
+                  try {
+                    await activate24hTrial("premium");
+                    setStatus("Trial Premium activat pentru 24h.");
+                  } catch (e: unknown) {
+                    setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
+                  } finally {
+                    setTrialBusy(null);
+                  }
+                }}
+                className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
+              >
+                {user?.premium_trial_activated_at ? "Premium trial used" : trialBusy === "premium" ? "Activating..." : "Activate Premium 24h"}
+              </button>
+              <button
+                type="button"
+                disabled={trialBusy !== null || !!user?.ultra_trial_activated_at}
+                onClick={async () => {
+                  setTrialBusy("ultra");
+                  try {
+                    await activate24hTrial("ultra");
+                    setStatus("Trial Ultra activat pentru 24h.");
+                  } catch (e: unknown) {
+                    setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
+                  } finally {
+                    setTrialBusy(null);
+                  }
+                }}
+                className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
+              >
+                {user?.ultra_trial_activated_at ? "Ultra trial used" : trialBusy === "ultra" ? "Activating..." : "Activate Ultra 24h"}
+              </button>
+            </div>
+          </div>
+          {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+              {trialRemainingTime.premiumMs > 0 && (
+                <span className="rounded-md border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1 font-mono text-signal-petrol">
+                  Trial Premium activ: {formatRemaining(trialRemainingTime.premiumMs)}
+                </span>
+              )}
+              {trialRemainingTime.ultraMs > 0 && (
+                <span className="rounded-md border border-signal-amber/25 bg-signal-amber/10 px-2 py-1 font-mono text-signal-amber">
+                  Trial Ultra activ: {formatRemaining(trialRemainingTime.ultraMs)}
+                </span>
+              )}
+            </div>
+          )}
+        </section>
 
         {status && (
           <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>

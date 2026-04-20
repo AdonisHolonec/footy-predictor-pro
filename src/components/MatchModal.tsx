@@ -536,7 +536,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
     (isFixtureInPlay(match.status) || (pastKickoffPollWindow && !isFinalStatus(match.status)));
   const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
   const kickoffDate = new Date(match.kickoff);
-  const confPct = pct(match.recommended?.confidence);
+  const hasExactConfidence =
+    match.recommended?.confidence != null && Number.isFinite(Number(match.recommended?.confidence));
+  const confPct = hasExactConfidence ? pct(match.recommended?.confidence) : 0;
+  const confidenceCategory = match.recommended?.confidenceCategory || null;
   const edgeScore = deriveSignalEdge(match);
   const dq = deriveDataQuality(match);
 
@@ -609,11 +612,22 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
               <div className="mt-2 flex items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
-                <ConfidenceAura value={confPct} size="compact" />
+                {hasExactConfidence ? (
+                  <ConfidenceAura value={confPct} size="compact" />
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-signal-void/50 px-2.5 py-2 text-center">
+                    <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-inkMuted">Confidence</div>
+                    <div className="mt-0.5 font-mono text-[11px] font-semibold text-signal-petrol">
+                      {confidenceCategory || "Locked"}
+                    </div>
+                  </div>
+                )}
                 <div className="min-w-0 text-left">
                   <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">Pick</div>
                   <div className="font-display text-lg font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
-                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:text-[11px]">{confPct}%</div>
+                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:text-[11px]">
+                    {hasExactConfidence ? `${confPct}%` : confidenceCategory || "Tier locked"}
+                  </div>
                 </div>
               </div>
               {hasFinalScore && (
@@ -650,11 +664,24 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
           </div>
 
           <div className="mx-auto max-w-2xl rounded-2xl border border-white/5 bg-signal-void/40 p-5">
-            <SignalLens confidence={confPct} edge={edgeScore} />
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
-              <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
-              <EdgeCompass dataQuality={dq} valueDetected={Boolean(match.valueBet?.detected)} />
-            </div>
+            {hasExactConfidence ? (
+              <>
+                <SignalLens confidence={confPct} edge={edgeScore} />
+                <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                  <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
+                  <EdgeCompass dataQuality={dq} valueDetected={Boolean(match.valueBet?.detected)} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-white/10 bg-signal-void/45 p-3 text-center font-mono text-[10px] text-signal-inkMuted">
+                  Semnal avansat disponibil in tier-uri superioare.
+                </div>
+                <div className="mt-4">
+                  <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
+                </div>
+              </>
+            )}
           </div>
 
           <section className="mx-auto mt-6 max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:p-5">

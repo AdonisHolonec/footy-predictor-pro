@@ -36,6 +36,22 @@ function parseBody(req) {
   return req.body;
 }
 
+function normalizeTierInput(rawTier) {
+  if (rawTier == null) return null;
+  const tier = String(rawTier).trim().toLowerCase();
+  if (!tier) return null;
+  if (tier === "free" || tier === "premium" || tier === "ultra") return tier;
+  return "__invalid__";
+}
+
+function normalizeSubscriptionExpiry(rawValue) {
+  if (rawValue === undefined) return { provided: false, invalid: false, value: null };
+  if (rawValue === null || rawValue === "") return { provided: true, invalid: false, value: null };
+  const parsed = new Date(String(rawValue));
+  if (!Number.isFinite(parsed.getTime())) return { provided: true, invalid: true, value: null };
+  return { provided: true, invalid: false, value: parsed.toISOString() };
+}
+
 async function handleProfiles(req, res) {
   if (req.method !== "GET" && req.method !== "PATCH") {
     return res.status(405).json({ ok: false, error: "Method not allowed." });
@@ -61,7 +77,7 @@ async function handleProfiles(req, res) {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("user_id, role, favorite_leagues, is_blocked, created_at, updated_at")
+        .select("user_id, role, tier, subscription_expires_at, favorite_leagues, is_blocked, created_at, updated_at")
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -101,6 +117,8 @@ async function handleProfiles(req, res) {
     const userId = String(body.userId || "").trim();
     const role = body.role;
     const isBlocked = body.isBlocked;
+    const tier = normalizeTierInput(body.tier);
+    const subscriptionExpiry = normalizeSubscriptionExpiry(body.subscriptionExpiresAt);
 
     if (!userId) {
       return res.status(400).json({ ok: false, error: "userId is required." });
@@ -109,6 +127,14 @@ async function handleProfiles(req, res) {
     const nextUpdate = {};
     if (role === "user" || role === "admin") nextUpdate.role = role;
     if (typeof isBlocked === "boolean") nextUpdate.is_blocked = isBlocked;
+    if (tier === "__invalid__") {
+      return res.status(400).json({ ok: false, error: "tier invalid. Allowed: free, premium, ultra." });
+    }
+    if (tier) nextUpdate.tier = tier;
+    if (subscriptionExpiry.invalid) {
+      return res.status(400).json({ ok: false, error: "subscriptionExpiresAt must be a valid ISO date or null." });
+    }
+    if (subscriptionExpiry.provided) nextUpdate.subscription_expires_at = subscriptionExpiry.value;
 
     if (!Object.keys(nextUpdate).length) {
       return res.status(400).json({ ok: false, error: "No valid fields to update." });
@@ -150,7 +176,7 @@ async function handleProfiles(req, res) {
       .from("profiles")
       .update(nextUpdate)
       .eq("user_id", userId)
-      .select("user_id, role, favorite_leagues, is_blocked, created_at, updated_at")
+      .select("user_id, role, tier, subscription_expires_at, favorite_leagues, is_blocked, created_at, updated_at")
       .maybeSingle();
 
     if (error) throw error;

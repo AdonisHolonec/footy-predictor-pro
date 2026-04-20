@@ -1,4 +1,5 @@
 export type Usage = { date: string; count: number; limit: number };
+export type UserTier = "free" | "premium" | "ultra";
 
 export type League = {
   id: number;
@@ -192,7 +193,7 @@ export type PredictionRow = {
       correctScore?: MarketTierInfo;
     };
   };
-  recommended: { pick: string; confidence: number };
+  recommended: { pick: string; confidence: number | null; confidenceCategory?: string | null };
   insufficientData?: boolean;
   insufficientReason?: string;
   modelVersion?: string;
@@ -313,6 +314,15 @@ export type DayResponse = {
   totalFixtures: number;
   leagues: League[];
   usage: Usage;
+  tierStatus?: {
+    tier: UserTier;
+    requestedTier?: UserTier;
+    subscriptionExpiresAt?: string | null;
+    premiumTrialRemainingMs?: number;
+    ultraTrialRemainingMs?: number;
+    predictCountToday?: number;
+    predictLimit?: number | null;
+  };
 };
 
 export type XGData = {
@@ -376,6 +386,11 @@ export type User = {
   favoriteLeagues: number[];
   isBlocked?: boolean;
   onboardingCompleted?: boolean;
+  tier: UserTier;
+  subscription_expires_at: string | null;
+  premium_trial_activated_at: string | null;
+  ultra_trial_activated_at: string | null;
+  predict_count_today: number;
   notificationPrefs?: {
     safe: boolean;
     value: boolean;

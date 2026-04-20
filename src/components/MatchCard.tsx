@@ -106,9 +106,11 @@ function modelTierBadge(row: PredictionRow): { label: string; title: string; cla
 export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0 }: MatchCardProps) {
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
-  const pct = (n: number) => Math.round(n || 0);
+  const pct = (n: number | null | undefined) => (Number.isFinite(Number(n)) ? Math.round(Number(n)) : 0);
   const isLive = isFixtureInPlay(row.status);
-  const confPct = pct(row.recommended?.confidence);
+  const hasExactConfidence = row.recommended?.confidence != null && Number.isFinite(Number(row.recommended?.confidence));
+  const confPct = hasExactConfidence ? pct(row.recommended?.confidence) : 0;
+  const confidenceCategory = row.recommended?.confidenceCategory || null;
   const edgeScore = deriveSignalEdge(row);
   const dq = deriveDataQuality(row);
   const hasFinalScore =
@@ -224,7 +226,18 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
             </div>
           </div>
         </div>
-        <ConfidenceAura value={confPct} size="compact" className="self-start" />
+        <div className="self-start">
+          {hasExactConfidence ? (
+            <ConfidenceAura value={confPct} size="compact" className="self-start" />
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-signal-void/50 px-3 py-2 text-center">
+              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">Confidence</div>
+              <div className="mt-1 font-mono text-[11px] font-semibold text-signal-petrol">
+                {confidenceCategory ? confidenceCategory : "Locked"}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {(row.teamContext?.home?.rank != null ||
@@ -259,7 +272,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         <div>
           <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">
             <span>Pick</span>
-            {confPct > 0 && confPct < 55 ? (
+            {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
                 className="rounded-sm bg-signal-amber/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-amber"
                 title="Încredere scăzută — modelul nu are direcţie clară"
@@ -288,7 +301,9 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         )}
       </div>
 
-      <SignalScanStrip edge={edgeScore} dataQuality={dq} valueDetected={Boolean(row.valueBet?.detected)} className="mt-1" />
+      {hasExactConfidence ? (
+        <SignalScanStrip edge={edgeScore} dataQuality={dq} valueDetected={Boolean(row.valueBet?.detected)} className="mt-1" />
+      ) : null}
 
       <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">Fișă analitică · tap pentru detalii</p>
     </div>

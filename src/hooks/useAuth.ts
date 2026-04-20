@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
 import { localCalendarDateKey } from "../utils/appUtils";
@@ -14,11 +14,17 @@ type ProfileRow = {
   notify_email?: boolean | null;
   notify_email_consent_at?: string | null;
   onboarding_completed?: boolean | null;
+  tier?: "free" | "premium" | "ultra" | null;
+  subscription_expires_at?: string | null;
+  premium_trial_activated_at?: string | null;
+  ultra_trial_activated_at?: string | null;
 };
 
 type ManagedProfile = {
   userId: string;
   role: "user" | "admin";
+  tier?: "free" | "premium" | "ultra";
+  subscriptionExpiresAt?: string | null;
   favoriteLeagues: number[];
   isBlocked: boolean;
   warmPredictUsage?: { usageDay: string; warm: number; predict: number };
@@ -62,6 +68,11 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
     favoriteLeagues,
     isBlocked: Boolean(profile?.is_blocked),
     onboardingCompleted: Boolean(profile?.onboarding_completed),
+    tier: profile?.tier || "free",
+    subscription_expires_at: profile?.subscription_expires_at ?? null,
+    premium_trial_activated_at: profile?.premium_trial_activated_at ?? null,
+    ultra_trial_activated_at: profile?.ultra_trial_activated_at ?? null,
+    predict_count_today: 0,
     notificationPrefs: {
       safe: profile?.notify_safe ?? true,
       value: profile?.notify_value ?? true,
@@ -78,13 +89,15 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
   const [lastAuthEvent, setLastAuthEvent] = useState<AuthChangeEvent | null>(null);
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([]);
+  const [predictCountToday, setPredictCountToday] = useState(0);
+  const [predictLimitToday, setPredictLimitToday] = useState<number | null>(null);
 
   const loadProfile = useCallback(async (userId: string) => {
     if (!supabase) return null;
     const { data, error: profileError } = await supabase
       .from("profiles")
       .select(
-        "user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, notify_email_consent_at, onboarding_completed"
+        "user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, notify_email_consent_at, onboarding_completed, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at"
       )
       .eq("user_id", userId)
       .maybeSingle();
@@ -142,6 +155,65 @@ export function useAuth() {
     setUser(mapSupabaseUser(sess?.user ?? null, nextProfile));
     return sess;
   }, [loadProfile, promoteBootstrapAdminInDb]);
+
+  const refreshTierStatus = useCallback(async () => {
+    if (!session?.access_token) return null;
+    try {
+      const response = await fetch("/api/fixtures?tierStatus=1", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok || !json?.tierStatus) return null;
+      const ts = json.tierStatus as {
+        tier?: "free" | "premium" | "ultra";
+        subscriptionExpiresAt?: string | null;
+        premiumTrialRemainingMs?: number;
+        ultraTrialRemainingMs?: number;
+        predictCountToday?: number;
+        predictLimit?: number | null;
+      };
+      setPredictCountToday(Math.max(0, Number(ts.predictCountToday) || 0));
+      setPredictLimitToday(ts.predictLimit == null ? null : Number(ts.predictLimit));
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              tier: ts.tier || prev.tier,
+              subscription_expires_at: ts.subscriptionExpiresAt ?? prev.subscription_expires_at,
+              predict_count_today: Math.max(0, Number(ts.predictCountToday) || 0)
+            }
+          : prev
+      );
+      return ts;
+    } catch {
+      return null;
+    }
+  }, [session?.access_token]);
+
+  const activate24hTrial = useCallback(
+    async (tier: "premium" | "ultra") => {
+      if (!session?.access_token) throw new Error("Autentificare necesară.");
+      const response = await fetch("/api/activate-trial", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ tier })
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || "Nu am putut activa trial-ul.");
+      }
+      if (session?.user?.id) {
+        const nextProfile = await loadProfile(session.user.id);
+        setUser(mapSupabaseUser(session.user, nextProfile));
+      }
+      await refreshTierStatus();
+      return json;
+    },
+    [session?.access_token, session?.user, loadProfile, refreshTierStatus]
+  );
 
   const login = useCallback(async (email: string, password: string) => {
     if (!supabase) {
@@ -302,6 +374,8 @@ export function useAuth() {
     const mapped: ManagedProfile[] = rows.map((row) => ({
       userId: row.user_id,
       role: row.role,
+      tier: row.tier || "free",
+      subscriptionExpiresAt: row.subscription_expires_at ?? null,
       favoriteLeagues: sanitizeLeagueIds(row.favorite_leagues ?? []),
       isBlocked: Boolean(row.is_blocked),
       warmPredictUsage:
@@ -356,6 +430,31 @@ export function useAuth() {
     }
     await refreshManagedProfiles();
   }, [refreshManagedProfiles, session?.access_token]);
+
+  const updateProfileMonetization = useCallback(
+    async (
+      targetUserId: string,
+      payload: { tier?: "free" | "premium" | "ultra"; subscriptionExpiresAt?: string | null }
+    ) => {
+      if (!supabase || !session?.access_token) return;
+      const response = await fetch("/api/admin", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ userId: targetUserId, ...payload })
+      });
+      const json = await response.json();
+      if (!json?.ok) {
+        const message = json?.error || "Unable to update subscription.";
+        setError(message);
+        throw new Error(message);
+      }
+      await refreshManagedProfiles();
+    },
+    [refreshManagedProfiles, session?.access_token]
+  );
 
   const updateNotificationPreferences = useCallback(
     async (
@@ -454,8 +553,35 @@ export function useAuth() {
     };
   }, [getSession, loadProfile, promoteBootstrapAdminInDb]);
 
+  useEffect(() => {
+    if (!session?.access_token) {
+      setPredictCountToday(0);
+      setPredictLimitToday(null);
+      return;
+    }
+    void refreshTierStatus();
+  }, [session?.access_token, refreshTierStatus]);
+
+  const trialRemainingTime = useMemo(() => {
+    const now = Date.now();
+    const rem = (iso: string | null | undefined) => {
+      if (!iso) return 0;
+      const start = new Date(iso).getTime();
+      if (!Number.isFinite(start)) return 0;
+      return Math.max(0, start + 24 * 60 * 60 * 1000 - now);
+    };
+    return {
+      premiumMs: rem(user?.premium_trial_activated_at),
+      ultraMs: rem(user?.ultra_trial_activated_at)
+    };
+  }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
+
   return {
     user,
+    userTier: user?.tier || "free",
+    trialRemainingTime,
+    predictCountToday,
+    predictLimitToday,
     session,
     loading,
     error,
@@ -471,6 +597,9 @@ export function useAuth() {
     refreshManagedProfiles,
     updateProfileRole,
     toggleProfileBlock,
+    updateProfileMonetization,
+    refreshTierStatus,
+    activate24hTrial,
     updateNotificationPreferences,
     markOnboardingComplete
   };

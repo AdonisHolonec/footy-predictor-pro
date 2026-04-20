@@ -49,12 +49,18 @@ import {
 } from "../server-utils/teamMarketRolling.js";
 import { poissonOverLine } from "../server-utils/math.js";
 import {
-  commitWarmPredictIncrement,
-  isWarmPredictQuotaExempt,
-  peekWarmPredictUsage,
-  resolveAuthenticatedUsageContext,
-  rollbackPredictIncrement
+  resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
+import {
+  USER_TIERS,
+  decrementPredictCountToday,
+  getPredictCountToday,
+  incrementPredictCountToday,
+  isFreeWindowExpired,
+  maskPredictionForTier,
+  resolveEffectiveTierFromProfile,
+  tierDailyLimit
+} from "../server-utils/accessTier.js";
 
 function isGoodNum(val) {
   return typeof val === "number" && !isNaN(val) && val > 0;
@@ -488,20 +494,63 @@ export default async function handler(req, res) {
   if (usageCtx.error) {
     return res.status(usageCtx.error.status).json(usageCtx.error.body);
   }
-  let enforceWarmPredictQuota = false;
+  let tierContext = null;
+  let incrementedTierUsage = false;
   if (!usageCtx.anonymous && usageCtx.userId) {
-    const exempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
-    enforceWarmPredictQuota = !exempt;
-  }
-  if (enforceWarmPredictQuota) {
-    const peek = await peekWarmPredictUsage(usageCtx.userId, usageCtx.usageDay);
-    if (peek.predict >= 3) {
-      return res.status(429).json({
+    const supabase = getSupabaseAdmin();
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+      .eq("user_id", usageCtx.userId)
+      .maybeSingle();
+    if (profileError) {
+      return res.status(500).json({ ok: false, error: profileError.message || "Nu am putut verifica abonamentul." });
+    }
+    if (!profile) {
+      return res.status(404).json({ ok: false, error: "Profil utilizator inexistent." });
+    }
+
+    const tierInfo = resolveEffectiveTierFromProfile(profile);
+    if (tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at)) {
+      return res.status(402).json({
         ok: false,
-        error: "Limita zilnica Predict atinsa (maximum 3/zi).",
-        usage: { warm_count: peek.warm, predict_count: peek.predict, usage_day: usageCtx.usageDay }
+        error: "Free Habit Trial (10 zile) a expirat. Activeaza trial Premium/Ultra sau un abonament."
       });
     }
+
+    const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+    const currentCount = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+    if (Number.isFinite(dailyLimit) && currentCount >= dailyLimit) {
+      return res.status(429).json({
+        ok: false,
+        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
+        tierStatus: {
+          tier: tierInfo.effectiveTier,
+          predictCountToday: currentCount,
+          predictLimit: dailyLimit
+        }
+      });
+    }
+    const nextCount = await incrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+    incrementedTierUsage = true;
+    if (Number.isFinite(dailyLimit) && nextCount > dailyLimit) {
+      await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+      incrementedTierUsage = false;
+      return res.status(429).json({
+        ok: false,
+        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
+        tierStatus: {
+          tier: tierInfo.effectiveTier,
+          predictCountToday: dailyLimit,
+          predictLimit: dailyLimit
+        }
+      });
+    }
+    tierContext = {
+      ...tierInfo,
+      predictCountToday: nextCount,
+      predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+    };
   }
 
   try {
@@ -1235,32 +1284,10 @@ export default async function handler(req, res) {
 
     const persistable = out.filter((row) => !row.insufficientData);
 
-    /**
-     * Invariant: increment RPC (atomic, predict_count < max) rulează ÎNAINTE de orice scriere în
-     * predictions_history / user_prediction_fixtures. La eșec persist, rollback_predict_increment.
-     */
-    let quotaIncrementCommitted = false;
-    if (enforceWarmPredictQuota && usageCtx.userId && persistable.length > 0) {
-      const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "predict");
-      if (!inc || inc.ok !== true) {
-        return res.status(429).json({
-          ok: false,
-          error: "Limita zilnica Predict atinsa (maximum 3/zi).",
-          usage: inc
-        });
-      }
-      quotaIncrementCommitted = true;
-      res.setHeader("X-Usage-Warm", String(inc.warm_count ?? ""));
-      res.setHeader("X-Usage-Predict", String(inc.predict_count ?? ""));
-      res.setHeader("X-Usage-Day", String(usageCtx.usageDay ?? ""));
-    }
-
     const supabaseConfig = assertSupabaseConfigured();
     if (!supabaseConfig.ok) {
-      if (quotaIncrementCommitted && usageCtx.userId) {
-        await rollbackPredictIncrement(usageCtx.userId, usageCtx.usageDay);
-      }
-      return res.status(200).json(out);
+      const masked = tierContext ? out.map((row) => maskPredictionForTier(row, tierContext.effectiveTier)) : out;
+      return res.status(200).json(masked);
     }
 
     if (persistable.length > 0) {
@@ -1281,8 +1308,8 @@ export default async function handler(req, res) {
         }
       } catch (persistError) {
         console.error("[predict persist]", persistError?.message || persistError);
-        if (quotaIncrementCommitted && usageCtx.userId) {
-          await rollbackPredictIncrement(usageCtx.userId, usageCtx.usageDay);
+        if (incrementedTierUsage && usageCtx.userId) {
+          await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
         }
         return res.status(500).json({
           ok: false,
@@ -1291,8 +1318,17 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json(out);
+    const masked = tierContext ? out.map((row) => maskPredictionForTier(row, tierContext.effectiveTier)) : out;
+    if (tierContext) {
+      res.setHeader("X-Tier", String(tierContext.effectiveTier));
+      res.setHeader("X-Predict-Count", String(tierContext.predictCountToday ?? ""));
+      res.setHeader("X-Predict-Limit", String(tierContext.predictLimit ?? ""));
+    }
+    return res.status(200).json(masked);
   } catch (error) {
+    if (incrementedTierUsage && usageCtx.userId) {
+      await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+    }
     return res.status(500).json({ ok: false, error: error.message });
   }
 }
