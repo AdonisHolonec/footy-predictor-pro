@@ -9,7 +9,7 @@ import {
   FormRibbon,
   SignalLens
 } from "./SignalLab";
-import { LeagueStandingEntry, MarketTier, MarketTierInfo, MatchScore, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
+import { LeagueStandingEntry, MarketTier, MarketTierInfo, MatchScore, PoissonMarketProbs, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
 /**
@@ -61,6 +61,144 @@ function fallbackTierFromProb(pickLabel: string, probForPick: number | null): Ma
   else if (p >= 35) tier = "lean_off";
   else tier = "strong_off";
   return { pick: pickLabel, prob: Number(p.toFixed(1)), tier };
+}
+
+/** Etichetă prietenoasă pentru un key de linie stil "o8_5" → "Over 8.5". */
+function formatLineKey(key: string): string {
+  const m = key.match(/^o(\d+)_(\d+)$/);
+  if (!m) return key;
+  return `Over ${m[1]}.${m[2]}`;
+}
+
+/**
+ * Randează un bloc Poisson (cornere / şuturi la poartă / total şuturi) cu:
+ * - header cu λ & total aşteptat
+ * - linii Over pe total, cu probabilităţi (verde la peste 60%, amber 40-60, gri sub)
+ * - linii Over pe echipă (home vs away), dacă există
+ */
+function PoissonMarketSection({
+  title,
+  subtitle,
+  accent,
+  icon,
+  data,
+  homeLabel,
+  awayLabel
+}: {
+  title: string;
+  subtitle: string;
+  accent: string;
+  icon: string;
+  data: PoissonMarketProbs;
+  homeLabel: string;
+  awayLabel: string;
+}) {
+  const totalKeys = Object.keys(data.total || {});
+  const homeKeys = Object.keys(data.home || {});
+  const awayKeys = Object.keys(data.away || {});
+  const hasTeamLines = homeKeys.length > 0 || awayKeys.length > 0;
+
+  const toneClass = (pct: number) => {
+    if (pct >= 60) return "text-signal-sage";
+    if (pct >= 40) return "text-signal-amberSoft";
+    return "text-signal-inkMuted";
+  };
+
+  return (
+    <section
+      className="rounded-2xl border p-4 shadow-inner sm:p-5"
+      style={{ borderColor: `${accent}40`, background: `linear-gradient(180deg, ${accent}0d, transparent)` }}
+    >
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/5 pb-2">
+        <div>
+          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: accent }}>
+            {icon} {title}
+          </h3>
+          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{subtitle}</p>
+        </div>
+        <div className="text-right font-mono text-[10px] tabular-nums">
+          <div className="text-signal-silver">
+            λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
+          </div>
+          <div className="text-[9px] text-signal-inkMuted">
+            total aşteptat ≈ {data.expectedTotal.toFixed(1)}
+            {data.usedFallback ? " · fallback" : ""}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* TOTAL */}
+        <div>
+          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Total (Over/Under)</div>
+          <table className="w-full font-mono text-[10px] tabular-nums">
+            <tbody>
+              {totalKeys.map((k) => {
+                const pct = data.total[k];
+                return (
+                  <tr key={k} className="border-t border-white/5">
+                    <td className="py-1 pr-2 text-signal-silver">{formatLineKey(k)}</td>
+                    <td className={`py-1 pl-2 text-right ${toneClass(pct)}`}>{pct.toFixed(0)}%</td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t border-white/5">
+                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">Cel mai probabil</td>
+                <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableTotal}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* TEAM LINES */}
+        {hasTeamLines ? (
+          <div>
+            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Per echipă (Over)</div>
+            <table className="w-full font-mono text-[10px] tabular-nums">
+              <thead className="text-left text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                <tr>
+                  <th className="py-1"></th>
+                  <th className="py-1 text-right" title={homeLabel}>
+                    {homeLabel.slice(0, 12)}
+                  </th>
+                  <th className="py-1 text-right" title={awayLabel}>
+                    {awayLabel.slice(0, 12)}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {homeKeys.map((k) => {
+                  const hp = data.home[k];
+                  const ap = data.away[k] ?? 0;
+                  return (
+                    <tr key={k} className="border-t border-white/5">
+                      <td className="py-1 pr-2 text-signal-silver">{formatLineKey(k)}</td>
+                      <td className={`py-1 pl-2 text-right ${toneClass(hp)}`}>{hp.toFixed(0)}%</td>
+                      <td className={`py-1 pl-2 text-right ${toneClass(ap)}`}>{ap.toFixed(0)}%</td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t border-white/5">
+                  <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">Modal</td>
+                  <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableHome}</td>
+                  <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableAway}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </div>
+
+      {(data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/5 pt-2 font-mono text-[9px] text-signal-inkMuted">
+          {data.sampleHome != null && <span>n gazde · {data.sampleHome}</span>}
+          {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
+          {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
+          {data.usedFallback && <span className="text-signal-amber">⚠ fallback (rolling stats incomplete)</span>}
+        </div>
+      )}
+    </section>
+  );
 }
 
 /** Mini-card pentru un pick în secţiunea „Pieţe & scor" — afişează probabilitatea + badge încredere. */
@@ -837,6 +975,53 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   </div>
                 ) : null}
               </section>
+            </div>
+          )}
+
+          {/* === CORNERE + ŞUTURI LA POARTĂ (Poisson pe rolling stats) === */}
+          {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal) && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
+                  Cornere & şuturi — pieţe derivate
+                </h3>
+                <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                  rolling averages · Poisson
+                </span>
+              </div>
+              {match.probs.corners && (
+                <PoissonMarketSection
+                  title="Cornere"
+                  subtitle="derivate din ultimele ~15 meciuri / echipă"
+                  accent="#5eead4"
+                  icon="⚑"
+                  data={match.probs.corners}
+                  homeLabel={match.teams.home}
+                  awayLabel={match.teams.away}
+                />
+              )}
+              {match.probs.shotsOnTarget && (
+                <PoissonMarketSection
+                  title="Şuturi la poartă"
+                  subtitle="pe uşa porţii (Shots on Goal din API-Football)"
+                  accent="#38bdf8"
+                  icon="◎"
+                  data={match.probs.shotsOnTarget}
+                  homeLabel={match.teams.home}
+                  awayLabel={match.teams.away}
+                />
+              )}
+              {match.probs.shotsTotal && (
+                <PoissonMarketSection
+                  title="Total şuturi"
+                  subtitle="semnal secundar (toate tentativele, on + off target)"
+                  accent="#a78bfa"
+                  icon="⌖"
+                  data={match.probs.shotsTotal}
+                  homeLabel={match.teams.home}
+                  awayLabel={match.teams.away}
+                />
+              )}
             </div>
           )}
 

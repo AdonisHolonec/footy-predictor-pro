@@ -44,6 +44,11 @@ import {
 } from "../server-utils/mlStacker.js";
 import { lookupEloPair, eloProbabilities } from "../server-utils/teamElo.js";
 import {
+  loadTeamMarketRolling,
+  deriveMarketLambdas
+} from "../server-utils/teamMarketRolling.js";
+import { poissonOverLine } from "../server-utils/math.js";
+import {
   commitWarmPredictIncrement,
   isWarmPredictQuotaExempt,
   peekWarmPredictUsage,
@@ -64,6 +69,45 @@ function roundDisplayRate(n) {
 
 function clampPct(n) {
   return Math.max(0, Math.min(100, Number(n) || 0));
+}
+
+/**
+ * Pentru o piaţă Poisson agregată (cornere total, şuturi la poartă total), construieşte
+ * blocul de probabilităţi Over X.5 în format procentaj + probabilitatea scorului cel mai probabil.
+ */
+function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = [] }) {
+  const lhT = Number(lambdaHome) || 0;
+  const laT = Number(lambdaAway) || 0;
+  const lambdaTotal = lhT + laT;
+  const total = {};
+  for (const line of lines) {
+    const key = `o${String(line).replace(".", "_")}`;
+    total[key] = Number((poissonOverLine(line, lambdaTotal) * 100).toFixed(1));
+  }
+  // scor modal Poisson (cel mai probabil număr pe echipă)
+  const pickMode = (lam) => {
+    const floor = Math.floor(lam);
+    return Math.max(floor, 0);
+  };
+  const home = {};
+  const away = {};
+  for (const line of teamLines) {
+    const key = `o${String(line).replace(".", "_")}`;
+    home[key] = Number((poissonOverLine(line, lhT) * 100).toFixed(1));
+    away[key] = Number((poissonOverLine(line, laT) * 100).toFixed(1));
+  }
+  return {
+    lambdaHome: Number(lhT.toFixed(2)),
+    lambdaAway: Number(laT.toFixed(2)),
+    lambdaTotal: Number(lambdaTotal.toFixed(2)),
+    expectedTotal: Number(lambdaTotal.toFixed(2)),
+    mostProbableTotal: Math.max(0, Math.round(lambdaTotal)),
+    mostProbableHome: pickMode(lhT),
+    mostProbableAway: pickMode(laT),
+    total,
+    home,
+    away
+  };
 }
 
 /**
@@ -477,6 +521,7 @@ export default async function handler(req, res) {
       if (leagueFixtures.length === 0) continue;
 
       const leagueParams = getLeagueParams(lId);
+      const marketRollingMap = await loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map());
 
       const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
       const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
@@ -653,6 +698,77 @@ export default async function handler(req, res) {
         const p = calc.probs;
         // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline
         const pRaw = { p1: p.p1, pX: p.pX, p2: p.p2 };
+
+        // === PIEŢE CORNERE + ŞUTURI LA POARTĂ (Poisson din rolling stats) ===
+        let cornersBlock = null;
+        let shotsOnTargetBlock = null;
+        let shotsTotalBlock = null;
+        const rollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
+        const rollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
+        if (rollingHome || rollingAway) {
+          const cornersLambdas = deriveMarketLambdas({
+            rollingHome,
+            rollingAway,
+            baseAvgTotal: leagueParams.cornersAvgTotal,
+            marketKey: "corners",
+            homeAdv: leagueParams.homeAdv,
+            awayAdv: leagueParams.awayAdv
+          });
+          cornersBlock = {
+            ...buildPoissonMarketBlock({
+              lambdaHome: cornersLambdas.lambdaHome,
+              lambdaAway: cornersLambdas.lambdaAway,
+              lines: [7.5, 8.5, 9.5, 10.5, 11.5, 12.5],
+              teamLines: [3.5, 4.5, 5.5]
+            }),
+            sampleHome: cornersLambdas.sampleHome,
+            sampleAway: cornersLambdas.sampleAway,
+            usedFallback: cornersLambdas.usedFallback,
+            leagueBaseline: leagueParams.cornersAvgTotal
+          };
+
+          const sotLambdas = deriveMarketLambdas({
+            rollingHome,
+            rollingAway,
+            baseAvgTotal: leagueParams.sotAvgTotal,
+            marketKey: "sot",
+            homeAdv: leagueParams.homeAdv,
+            awayAdv: leagueParams.awayAdv
+          });
+          shotsOnTargetBlock = {
+            ...buildPoissonMarketBlock({
+              lambdaHome: sotLambdas.lambdaHome,
+              lambdaAway: sotLambdas.lambdaAway,
+              lines: [6.5, 7.5, 8.5, 9.5, 10.5],
+              teamLines: [2.5, 3.5, 4.5]
+            }),
+            sampleHome: sotLambdas.sampleHome,
+            sampleAway: sotLambdas.sampleAway,
+            usedFallback: sotLambdas.usedFallback,
+            leagueBaseline: leagueParams.sotAvgTotal
+          };
+
+          // şuturi totale — util ca signal suplimentar (ex. 20.5 total shots)
+          const shotsLambdas = deriveMarketLambdas({
+            rollingHome,
+            rollingAway,
+            baseAvgTotal: (leagueParams.sotAvgTotal || 8.6) * 2.3, // ~23 şuturi/meci în top-5
+            marketKey: "shots_total",
+            homeAdv: leagueParams.homeAdv,
+            awayAdv: leagueParams.awayAdv
+          });
+          shotsTotalBlock = {
+            ...buildPoissonMarketBlock({
+              lambdaHome: shotsLambdas.lambdaHome,
+              lambdaAway: shotsLambdas.lambdaAway,
+              lines: [18.5, 20.5, 22.5, 24.5],
+              teamLines: []
+            }),
+            sampleHome: shotsLambdas.sampleHome,
+            sampleAway: shotsLambdas.sampleAway,
+            usedFallback: shotsLambdas.usedFallback
+          };
+        }
 
         // === PRIMA REPRIZĂ ===
         // Derivăm λ FH din λ full match + fracţiile pe bucketele de minute (0 calls noi).
@@ -948,6 +1064,9 @@ export default async function handler(req, res) {
         if (firstHalfProbs) {
           pOut.firstHalf = firstHalfProbs;
         }
+        if (cornersBlock) pOut.corners = cornersBlock;
+        if (shotsOnTargetBlock) pOut.shotsOnTarget = shotsOnTargetBlock;
+        if (shotsTotalBlock) pOut.shotsTotal = shotsTotalBlock;
         const teamContext = buildTeamContext({
           homeIdStr,
           awayIdStr,

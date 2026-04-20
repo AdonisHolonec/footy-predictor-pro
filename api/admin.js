@@ -4,6 +4,7 @@ import { parseUsageDayFromQuery } from "../server-utils/userDailyWarmPredictUsag
 import { invalidateCalibrationCache } from "../server-utils/isotonicCalibration.js";
 import { invalidateStackerCache } from "../server-utils/mlStacker.js";
 import { invalidateEloCache } from "../server-utils/teamElo.js";
+import { invalidateTeamMarketRollingCache } from "../server-utils/teamMarketRolling.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
 
 /**
@@ -180,7 +181,8 @@ async function handleMl(req, res) {
     invalidateCalibrationCache();
     invalidateStackerCache();
     invalidateEloCache();
-    return res.status(200).json({ ok: true, invalidated: ["calibration", "stacker", "elo"] });
+    invalidateTeamMarketRollingCache();
+    return res.status(200).json({ ok: true, invalidated: ["calibration", "stacker", "elo", "market-rolling"] });
   }
 
   if (sub === "calibration") {
@@ -250,8 +252,27 @@ async function handleMl(req, res) {
     return res.status(200).json({ ok: true, count: data?.length || 0, teams: data || [] });
   }
 
+  if (sub === "market-rolling") {
+    const season = Number(req.query.season) || new Date().getFullYear();
+    const q = supabase
+      .from("team_market_rolling")
+      .select("*")
+      .eq("season", season)
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    if (leagueId != null && Number.isFinite(leagueId)) q.eq("league_id", leagueId);
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ ok: false, error: error.message });
+    return res.status(200).json({
+      ok: true,
+      season,
+      count: data?.length || 0,
+      teams: data || []
+    });
+  }
+
   // default: status snapshot
-  const [calib, stacker, elo] = await Promise.all([
+  const [calib, stacker, elo, marketRolling] = await Promise.all([
     supabase
       .from("calibration_maps")
       .select("league_id", { count: "exact", head: true })
@@ -261,7 +282,8 @@ async function handleMl(req, res) {
       .select("league_id", { count: "exact", head: true })
       .eq("model_version", modelVersion)
       .eq("active", true),
-    supabase.from("team_elo").select("team_id", { count: "exact", head: true })
+    supabase.from("team_elo").select("team_id", { count: "exact", head: true }),
+    supabase.from("team_market_rolling").select("team_id", { count: "exact", head: true })
   ]);
 
   return res.status(200).json({
@@ -270,12 +292,14 @@ async function handleMl(req, res) {
     calibrationMaps: calib.count || 0,
     activeStackerWeights: stacker.count || 0,
     eloTeams: elo.count || 0,
+    marketRollingTeams: marketRolling.count || 0,
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",
       scripts: [
         "node --env-file=.env.local scripts/fitCalibration.js",
         "node --env-file=.env.local scripts/fitStacker.js",
-        "BACKFILL_SEASONS=2023,2024 LEAGUE_IDS=39,140 node --env-file=.env.local scripts/rebuildElo.js"
+        "BACKFILL_SEASONS=2023,2024 LEAGUE_IDS=39,140 node --env-file=.env.local scripts/rebuildElo.js",
+        "SEASON=2024 ROLLING_WINDOW=15 node --env-file=.env.local scripts/rebuildTeamMarketRolling.js"
       ]
     }
   });

@@ -20,31 +20,36 @@ const LEAGUE_PARAMS = {
     name: "Premier League",
     leagueAvg: 1.42, leagueAvgHome: 1.55, leagueAvgAway: 1.29,
     homeAdv: 1.08, awayAdv: 0.96, rho: -0.10, blendWeight: 0.65,
-    confidenceMultiplier: 1.00, stakeCap: 3.0
+    confidenceMultiplier: 1.00, stakeCap: 3.0,
+    cornersAvgTotal: 10.7, sotAvgTotal: 8.9
   },
   140: {
     name: "La Liga",
     leagueAvg: 1.32, leagueAvgHome: 1.44, leagueAvgAway: 1.20,
     homeAdv: 1.09, awayAdv: 0.94, rho: -0.14, blendWeight: 0.65,
-    confidenceMultiplier: 0.98, stakeCap: 2.8
+    confidenceMultiplier: 0.98, stakeCap: 2.8,
+    cornersAvgTotal: 9.8, sotAvgTotal: 8.3
   },
   135: {
     name: "Serie A",
     leagueAvg: 1.38, leagueAvgHome: 1.50, leagueAvgAway: 1.26,
     homeAdv: 1.07, awayAdv: 0.95, rho: -0.16, blendWeight: 0.63,
-    confidenceMultiplier: 0.97, stakeCap: 2.7
+    confidenceMultiplier: 0.97, stakeCap: 2.7,
+    cornersAvgTotal: 10.2, sotAvgTotal: 8.6
   },
   78: {
     name: "Bundesliga",
     leagueAvg: 1.54, leagueAvgHome: 1.67, leagueAvgAway: 1.41,
     homeAdv: 1.05, awayAdv: 0.97, rho: -0.07, blendWeight: 0.62,
-    confidenceMultiplier: 0.95, stakeCap: 2.5
+    confidenceMultiplier: 0.95, stakeCap: 2.5,
+    cornersAvgTotal: 10.5, sotAvgTotal: 9.2
   },
   61: {
     name: "Ligue 1",
     leagueAvg: 1.36, leagueAvgHome: 1.48, leagueAvgAway: 1.24,
     homeAdv: 1.08, awayAdv: 0.95, rho: -0.11, blendWeight: 0.63,
-    confidenceMultiplier: 0.95, stakeCap: 2.5
+    confidenceMultiplier: 0.95, stakeCap: 2.5,
+    cornersAvgTotal: 10.0, sotAvgTotal: 8.6
   },
 
   // ---- UEFA COMPETITIONS ----
@@ -53,19 +58,22 @@ const LEAGUE_PARAMS = {
     // sample mai mic, piaţa are info pe care modelul n-o vede (lineup leaks) → blend scăzut
     leagueAvg: 1.40, leagueAvgHome: 1.48, leagueAvgAway: 1.32,
     homeAdv: 1.04, awayAdv: 0.97, rho: -0.09, blendWeight: 0.50,
-    confidenceMultiplier: 0.93, stakeCap: 2.2
+    confidenceMultiplier: 0.93, stakeCap: 2.2,
+    cornersAvgTotal: 10.3, sotAvgTotal: 8.8
   },
   3: {
     name: "Europa League",
     leagueAvg: 1.42, leagueAvgHome: 1.52, leagueAvgAway: 1.32,
     homeAdv: 1.05, awayAdv: 0.97, rho: -0.10, blendWeight: 0.52,
-    confidenceMultiplier: 0.93, stakeCap: 2.2
+    confidenceMultiplier: 0.93, stakeCap: 2.2,
+    cornersAvgTotal: 10.5, sotAvgTotal: 8.7
   },
   848: {
     name: "Conference League",
     leagueAvg: 1.48, leagueAvgHome: 1.60, leagueAvgAway: 1.36,
     homeAdv: 1.06, awayAdv: 0.96, rho: -0.09, blendWeight: 0.55,
-    confidenceMultiplier: 0.91, stakeCap: 2.1
+    confidenceMultiplier: 0.91, stakeCap: 2.1,
+    cornersAvgTotal: 10.7, sotAvgTotal: 8.9
   },
 
   // ---- OTHER DOMESTIC ----
@@ -73,13 +81,15 @@ const LEAGUE_PARAMS = {
     name: "Eredivisie",
     leagueAvg: 1.60, leagueAvgHome: 1.75, leagueAvgAway: 1.45,
     homeAdv: 1.08, awayAdv: 0.94, rho: -0.06, blendWeight: 0.60,
-    confidenceMultiplier: 0.92, stakeCap: 2.3
+    confidenceMultiplier: 0.92, stakeCap: 2.3,
+    cornersAvgTotal: 10.8, sotAvgTotal: 9.4
   },
   283: {
     name: "SuperLiga România",
     leagueAvg: 1.32, leagueAvgHome: 1.44, leagueAvgAway: 1.20,
     homeAdv: 1.10, awayAdv: 0.93, rho: -0.11, blendWeight: 0.55,
-    confidenceMultiplier: 0.90, stakeCap: 2.0
+    confidenceMultiplier: 0.90, stakeCap: 2.0,
+    cornersAvgTotal: 9.5, sotAvgTotal: 8.0
   }
 };
 
@@ -93,7 +103,9 @@ const DEFAULT_LEAGUE_PARAMS = {
   rho: -0.11,
   blendWeight: 0.60,
   confidenceMultiplier: 0.88,
-  stakeCap: 1.9
+  stakeCap: 1.9,
+  cornersAvgTotal: 10.0,
+  sotAvgTotal: 8.6
 };
 
 /**

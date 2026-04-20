@@ -1,6 +1,157 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
 import { TOP_LEAGUE_IDS } from "../../server-utils/modelConstants.js";
+import { getWithCache } from "../../server-utils/fetcher.js";
+import {
+  extractFixtureMarketStats,
+  aggregateRollingForTeam,
+  loadTeamMarketRolling,
+  persistTeamMarketRolling
+} from "../../server-utils/teamMarketRolling.js";
+
+const MARKET_REFRESH_BUDGET_CALLS = Math.max(
+  0,
+  Math.min(Number(process.env.CRON_MARKET_REFRESH_BUDGET || 20), 60)
+);
+const MARKET_REFRESH_WINDOW_DAYS = Math.max(1, Math.min(Number(process.env.CRON_MARKET_REFRESH_WINDOW_DAYS || 3), 7));
+const MARKET_REFRESH_ROLLING_WINDOW = 15;
+const MARKET_REFRESH_STALE_HOURS = 36;
+
+/**
+ * Actualizează rolling stats pentru echipele care au jucat în ultimele MARKET_REFRESH_WINDOW_DAYS
+ * şi ale căror înregistrări sunt mai vechi de MARKET_REFRESH_STALE_HOURS (sau lipsesc).
+ *
+ * Respectă un budget strict de MARKET_REFRESH_BUDGET_CALLS apeluri /fixtures/statistics per rulare.
+ * Dacă sunt mai multe meciuri de procesat, restul rămân pentru rularea următoare.
+ */
+async function refreshMarketRolling({ leagueIds, season }) {
+  if (MARKET_REFRESH_BUDGET_CALLS === 0) {
+    return { skipped: true, reason: "budget_disabled" };
+  }
+
+  const cutoff = new Date(Date.now() - MARKET_REFRESH_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const staleThresholdMs = MARKET_REFRESH_STALE_HOURS * 60 * 60 * 1000;
+  const now = Date.now();
+  let budget = MARKET_REFRESH_BUDGET_CALLS;
+  const summary = {
+    budget: MARKET_REFRESH_BUDGET_CALLS,
+    leaguesProcessed: 0,
+    fixturesFetched: 0,
+    teamsUpdated: 0,
+    errors: []
+  };
+
+  for (const leagueId of leagueIds) {
+    if (budget <= 0) break;
+
+    // fixture-urile din fereastra vizată, terminate, per ligă
+    const daysBack = Math.max(1, MARKET_REFRESH_WINDOW_DAYS);
+    const allFixtureRows = [];
+    for (let i = 0; i < daysBack; i++) {
+      const d = new Date(cutoff.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const req = await getWithCache("/fixtures", { league: leagueId, season, date: d }, 6 * 60 * 60);
+      if (!req.ok) continue;
+      const rows = req.data?.response || [];
+      for (const fx of rows) {
+        const status = fx?.fixture?.status?.short || "";
+        if (["FT", "AET", "PEN"].includes(status)) allFixtureRows.push(fx);
+      }
+    }
+    if (allFixtureRows.length === 0) continue;
+
+    // verificăm ce team-uri au rolling stale sau lipsă
+    const rollingMap = await loadTeamMarketRolling(leagueId, season);
+    const teamsInvolved = new Set();
+    for (const fx of allFixtureRows) {
+      if (fx?.teams?.home?.id) teamsInvolved.add(Number(fx.teams.home.id));
+      if (fx?.teams?.away?.id) teamsInvolved.add(Number(fx.teams.away.id));
+    }
+    const teamsToUpdate = new Set();
+    for (const tid of teamsInvolved) {
+      const existing = rollingMap.get(tid);
+      if (!existing) {
+        teamsToUpdate.add(tid);
+        continue;
+      }
+      const age = existing.updated_at ? now - new Date(existing.updated_at).getTime() : Infinity;
+      if (age > staleThresholdMs) teamsToUpdate.add(tid);
+    }
+    if (teamsToUpdate.size === 0) continue;
+
+    // pentru fiecare echipă stale, fetch ultimele MARKET_REFRESH_ROLLING_WINDOW meciuri
+    const updatedRows = [];
+    for (const teamId of teamsToUpdate) {
+      if (budget <= 0) break;
+      // iau istoricul recent al echipei (terminat) via /fixtures?team=X&season=Y&last=N
+      const histReq = await getWithCache(
+        "/fixtures",
+        { team: teamId, season, last: MARKET_REFRESH_ROLLING_WINDOW },
+        6 * 60 * 60
+      );
+      if (!histReq.ok) {
+        summary.errors.push({ where: "fixtures_by_team", teamId, error: histReq.error });
+        continue;
+      }
+      const teamFixtures = (histReq.data?.response || []).filter((fx) =>
+        ["FT", "AET", "PEN"].includes(fx?.fixture?.status?.short || "")
+      );
+      if (teamFixtures.length === 0) continue;
+
+      // fetch statistics pentru fiecare fixture (cache agresiv TTL 30 zile — imuabile)
+      const enriched = [];
+      for (const fx of teamFixtures) {
+        if (budget <= 0) break;
+        const fixtureId = Number(fx?.fixture?.id);
+        if (!fixtureId) continue;
+        const statReq = await getWithCache(
+          "/fixtures/statistics",
+          { fixture: fixtureId },
+          30 * 24 * 60 * 60
+        );
+        if (!statReq.fromCache) budget -= 1;
+        summary.fixturesFetched += 1;
+        if (!statReq.ok) continue;
+        const stats = extractFixtureMarketStats(statReq.data);
+        const mapByTeam = new Map();
+        for (const s of stats) if (s.teamId) mapByTeam.set(s.teamId, s);
+        const teamStats = mapByTeam.get(teamId);
+        const isHome = Number(fx?.teams?.home?.id) === teamId;
+        const opponentId = isHome ? Number(fx?.teams?.away?.id) : Number(fx?.teams?.home?.id);
+        const oppStats = mapByTeam.get(opponentId);
+        if (!teamStats || !oppStats) continue;
+        enriched.push({
+          fixtureId,
+          date: fx?.fixture?.date,
+          isHome,
+          teamStats,
+          opponentStats: oppStats
+        });
+      }
+      if (enriched.length === 0) continue;
+      const agg = aggregateRollingForTeam(enriched);
+      if (agg.matches_sampled === 0) continue;
+      updatedRows.push({
+        team_id: teamId,
+        league_id: Number(leagueId),
+        season: Number(season),
+        ...agg
+      });
+    }
+
+    if (updatedRows.length > 0) {
+      const persistResult = await persistTeamMarketRolling(updatedRows);
+      if (!persistResult.ok) {
+        summary.errors.push({ where: "persist", leagueId, error: persistResult.error });
+      } else {
+        summary.teamsUpdated += persistResult.count;
+      }
+    }
+    summary.leaguesProcessed += 1;
+  }
+
+  summary.budgetRemaining = budget;
+  return summary;
+}
 
 function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
@@ -132,6 +283,14 @@ export default async function handler(req, res) {
       };
     }
 
+    // refresh incremental rolling stats (buget strict de apeluri noi la /fixtures/statistics)
+    let marketRefresh = null;
+    try {
+      marketRefresh = await refreshMarketRolling({ leagueIds, season });
+    } catch (err) {
+      marketRefresh = { error: err?.message || "market_refresh_failed" };
+    }
+
     const pipelineOk = predictRes.ok && (historySync === null || historySync.ok);
     return res.status(pipelineOk ? 200 : 502).json({
       ok: pipelineOk,
@@ -154,7 +313,8 @@ export default async function handler(req, res) {
         summary: summarizePredictBody(predictBody),
         error: predictBody?.error || null
       },
-      historySync
+      historySync,
+      marketRefresh
     });
   } catch (error) {
     return res.status(500).json({

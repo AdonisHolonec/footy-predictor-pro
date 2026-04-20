@@ -44,6 +44,28 @@ export type ValueBet = {
   reasons?: string[];
 };
 
+/**
+ * Probabilităţi Poisson pe piaţă cu linii Over/Under (ex: cornere, şuturi).
+ * Cheile din `total`/`home`/`away` folosesc format "oX_Y" pentru linia X.Y (ex: "o8_5" = Over 8.5).
+ */
+export type PoissonMarketProbs = {
+  lambdaHome: number;
+  lambdaAway: number;
+  lambdaTotal: number;
+  expectedTotal: number;
+  mostProbableTotal: number;
+  mostProbableHome: number;
+  mostProbableAway: number;
+  /** Over X.5 total (ex. { o8_5: 62.3, o9_5: 48.1 } cu procentaje). */
+  total: Record<string, number>;
+  home: Record<string, number>;
+  away: Record<string, number>;
+  sampleHome?: number;
+  sampleAway?: number;
+  usedFallback?: boolean;
+  leagueBaseline?: number;
+};
+
 /** Probabilităţi prima repriză (min 0-45), derivate din acelaşi model cu λ scalate. */
 export type FirstHalfProbs = {
   p1: number;
@@ -82,6 +104,12 @@ export type Probs = {
   pU25?: number;
   /** Bloc pentru prima repriză (populat când /teams/statistics expune bucketele de minute). */
   firstHalf?: FirstHalfProbs;
+  /** Cornere (derivate din rolling stats team_market_rolling). */
+  corners?: PoissonMarketProbs;
+  /** Şuturi la poartă. */
+  shotsOnTarget?: PoissonMarketProbs;
+  /** Total şuturi (on + off target). */
+  shotsTotal?: PoissonMarketProbs;
 };
 
 /** Clasament + mini-formă (API standings / teams statistics). */

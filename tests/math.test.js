@@ -8,8 +8,15 @@ import {
   extractFormMultiplier,
   extractFirstHalfFractions,
   deriveFirstHalfLambdas,
-  FIRST_HALF_GOALS_BASELINE
+  FIRST_HALF_GOALS_BASELINE,
+  poissonCDF,
+  poissonOverLine
 } from "../server-utils/math.js";
+import {
+  extractFixtureMarketStats,
+  aggregateRollingForTeam,
+  deriveMarketLambdas
+} from "../server-utils/teamMarketRolling.js";
 import { shinImpliedProbs, removeBookmakerMargin } from "../server-utils/advancedMath.js";
 import { expectedCalibrationError } from "../server-utils/probabilityMetrics.js";
 import {
@@ -288,6 +295,173 @@ test("FH probs: pO05 FH < pO05 full match pentru acelaşi meci", () => {
   assert.ok(fh.probs.pO05 < full.probs.pO05, `FH pO05=${fh.probs.pO05} vs full pO05=${full.probs.pO05}`);
   // pX la pauză > pX la final (egalurile low-score sunt mai frecvente în FH)
   assert.ok(fh.probs.pX > full.probs.pX, `FH pX=${fh.probs.pX} vs full pX=${full.probs.pX}`);
+});
+
+// =============================================================================
+// Poisson CDF + Over/Under lines (cornere / şuturi)
+// =============================================================================
+
+test("poissonCDF sums Poisson probabilities monotone non-decreasing", () => {
+  const lam = 3.5;
+  let prev = -1;
+  for (let n = 0; n <= 10; n++) {
+    const c = poissonCDF(n, lam);
+    assert.ok(c >= prev, `CDF nu e monoton la n=${n}`);
+    assert.ok(c <= 1 + 1e-9);
+    prev = c;
+  }
+  // P(X ≤ ∞) trebuie să se apropie de 1
+  assert.ok(poissonCDF(40, lam) > 0.999);
+});
+
+test("poissonOverLine aproape Over 9.5 cornere pentru λ=10 e ~50%", () => {
+  // Pentru λ=10, Poisson e ~simetric ≈ median 10, Over 9.5 ≈ P(X ≥ 10) ≈ 0.54
+  const p = poissonOverLine(9.5, 10);
+  assert.ok(p > 0.50 && p < 0.60, `poissonOverLine(9.5, 10) = ${p}`);
+  // Over 15.5 pentru λ=10 trebuie să fie rar (< 5%)
+  assert.ok(poissonOverLine(15.5, 10) < 0.06);
+  // Over 5.5 pentru λ=10 trebuie să fie foarte probabil (> 90%)
+  assert.ok(poissonOverLine(5.5, 10) > 0.90);
+});
+
+test("poissonOverLine cu λ=0 întoarce 0", () => {
+  assert.equal(poissonOverLine(0.5, 0), 0);
+});
+
+// =============================================================================
+// teamMarketRolling — extract + aggregate + derive λ
+// =============================================================================
+
+test("extractFixtureMarketStats citeşte corner + SoT + shots din payload /fixtures/statistics", () => {
+  const payload = {
+    response: [
+      {
+        team: { id: 42 },
+        statistics: [
+          { type: "Shots on Goal", value: 5 },
+          { type: "Total Shots", value: 14 },
+          { type: "Corner Kicks", value: 6 }
+        ]
+      },
+      {
+        team: { id: 99 },
+        statistics: [
+          { type: "Shots on Goal", value: 3 },
+          { type: "Total Shots", value: 10 },
+          { type: "Corner Kicks", value: 4 }
+        ]
+      }
+    ]
+  };
+  const out = extractFixtureMarketStats(payload);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], { teamId: 42, corners: 6, sot: 5, shotsTotal: 14 });
+  assert.deepEqual(out[1], { teamId: 99, corners: 4, sot: 3, shotsTotal: 10 });
+});
+
+test("extractFixtureMarketStats întoarce array gol pentru payload invalid", () => {
+  assert.deepEqual(extractFixtureMarketStats(null), []);
+  assert.deepEqual(extractFixtureMarketStats({}), []);
+  assert.deepEqual(extractFixtureMarketStats({ response: [] }), []);
+});
+
+test("extractFixtureMarketStats parsează value string cu procent", () => {
+  const payload = {
+    response: [
+      {
+        team: { id: 1 },
+        statistics: [
+          { type: "Ball Possession", value: "45%" },
+          { type: "Corner Kicks", value: 7 }
+        ]
+      }
+    ]
+  };
+  const out = extractFixtureMarketStats(payload);
+  assert.equal(out[0].corners, 7);
+});
+
+test("aggregateRollingForTeam produce medii corecte pe cornere şi SoT", () => {
+  const matches = [
+    { fixtureId: 1, date: "2024-01-01T15:00:00Z", isHome: true,
+      teamStats: { corners: 6, sot: 5, shotsTotal: 14 },
+      opponentStats: { corners: 4, sot: 3, shotsTotal: 10 } },
+    { fixtureId: 2, date: "2024-01-08T15:00:00Z", isHome: false,
+      teamStats: { corners: 4, sot: 3, shotsTotal: 11 },
+      opponentStats: { corners: 7, sot: 4, shotsTotal: 13 } },
+    { fixtureId: 3, date: "2024-01-15T15:00:00Z", isHome: true,
+      teamStats: { corners: 8, sot: 4, shotsTotal: 17 },
+      opponentStats: { corners: 3, sot: 2, shotsTotal: 8 } }
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.matches_sampled, 3);
+  // agregările sunt rotunjite la 3 zecimale → tolerance 0.005
+  const approxEq = (a, b) => Math.abs(a - b) < 0.005;
+  assert.ok(approxEq(agg.corners_for_avg, (6 + 4 + 8) / 3), `for=${agg.corners_for_avg}`);
+  assert.ok(approxEq(agg.corners_against_avg, (4 + 7 + 3) / 3), `against=${agg.corners_against_avg}`);
+  assert.ok(approxEq(agg.corners_for_home_avg, (6 + 8) / 2), `home=${agg.corners_for_home_avg}`);
+  assert.ok(approxEq(agg.corners_for_away_avg, 4), `away=${agg.corners_for_away_avg}`);
+  assert.ok(approxEq(agg.sot_for_avg, (5 + 3 + 4) / 3), `sot=${agg.sot_for_avg}`);
+  assert.equal(agg.last_fixture_id, 3);
+});
+
+test("aggregateRollingForTeam tratează lista goală", () => {
+  const r = aggregateRollingForTeam([]);
+  assert.equal(r.matches_sampled, 0);
+  assert.equal(r.corners_for_avg, null);
+});
+
+test("deriveMarketLambdas: echipa cu atac superior produce λ home mai mare", () => {
+  const rollingHome = { corners_for_avg: 7, corners_against_avg: 4, matches_sampled: 15 };
+  const rollingAway = { corners_for_avg: 3, corners_against_avg: 6, matches_sampled: 15 };
+  const r = deriveMarketLambdas({
+    rollingHome,
+    rollingAway,
+    baseAvgTotal: 10,
+    marketKey: "corners",
+    homeAdv: 1.05,
+    awayAdv: 0.97
+  });
+  assert.ok(r.lambdaHome > r.lambdaAway, `λH=${r.lambdaHome}, λA=${r.lambdaAway}`);
+  assert.ok(r.lambdaHome + r.lambdaAway > 0);
+  assert.equal(r.usedFallback, false);
+});
+
+test("deriveMarketLambdas fallback când lipseşte rolling", () => {
+  const r = deriveMarketLambdas({
+    rollingHome: null,
+    rollingAway: null,
+    baseAvgTotal: 10,
+    marketKey: "corners"
+  });
+  // fallback → ambele λ ≈ baseSide (5), cu mici ajustări home/away
+  assert.ok(r.lambdaHome > 4 && r.lambdaHome < 6);
+  assert.ok(r.lambdaAway > 4 && r.lambdaAway < 6);
+  assert.equal(r.usedFallback, true);
+});
+
+test("deriveMarketLambdas respectă marketKey (sot vs corners folosesc câmpuri diferite)", () => {
+  const rolling = {
+    corners_for_avg: 8,
+    corners_against_avg: 3,
+    sot_for_avg: 5,
+    sot_against_avg: 2,
+    matches_sampled: 10
+  };
+  const cornersR = deriveMarketLambdas({
+    rollingHome: rolling,
+    rollingAway: rolling,
+    baseAvgTotal: 10,
+    marketKey: "corners"
+  });
+  const sotR = deriveMarketLambdas({
+    rollingHome: rolling,
+    rollingAway: rolling,
+    baseAvgTotal: 8,
+    marketKey: "sot"
+  });
+  // Valorile sunt diferite pentru că citesc din câmpuri diferite
+  assert.ok(cornersR.lambdaHome !== sotR.lambdaHome);
 });
 
 test("getLeagueConfidenceMultiplier şi getLeagueStakeCap întorc valori plauzibile", () => {

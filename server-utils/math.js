@@ -29,6 +29,35 @@ export function poissonP(k, lambda) {
 }
 
 /**
+ * P(X ≤ n) pentru o variabilă Poisson(λ). Calculat stabil recursiv (fără factorial direct pe n mare).
+ * `n` trebuie să fie întreg ≥ 0.
+ */
+export function poissonCDF(n, lambda) {
+  const lam = Math.max(0, Number(lambda) || 0);
+  if (lam === 0) return 1;
+  const nn = Math.max(0, Math.floor(n));
+  let term = Math.exp(-lam); // P(X=0)
+  let sum = term;
+  for (let k = 1; k <= nn; k++) {
+    term *= lam / k;
+    sum += term;
+  }
+  return Math.min(1, sum);
+}
+
+/**
+ * P(X > linia .5) pentru o piaţă Over/Under stil 8.5 / 9.5 / 10.5 cornere.
+ * `line` poate fi orice zecimal .5 sau întreg; rezultatul e P(X ≥ ceil(line+ε)).
+ * Ex: line=8.5 → P(X ≥ 9) = 1 - P(X ≤ 8).
+ */
+export function poissonOverLine(line, lambda) {
+  const l = Number(line);
+  if (!Number.isFinite(l) || l < 0) return 0;
+  const threshold = Math.floor(l); // ex 8.5 → 8, Over 8.5 înseamnă ≥9
+  return 1 - poissonCDF(threshold, lambda);
+}
+
+/**
  * Bivariate Poisson (Karlis-Ntzoufras) pentru corelaţia goalurilor prin shared component.
  * Folosit în afara zonei low-score; acolo aplicăm şi corecţia Dixon-Coles τ.
  */
