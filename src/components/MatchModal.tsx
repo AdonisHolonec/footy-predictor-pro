@@ -540,6 +540,8 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
     match.recommended?.confidence != null && Number.isFinite(Number(match.recommended?.confidence));
   const confPct = hasExactConfidence ? pct(match.recommended?.confidence) : 0;
   const confidenceCategory = match.recommended?.confidenceCategory || null;
+  const isPremiumLike = !hasExactConfidence && Boolean(confidenceCategory);
+  const isFreeLike = !hasExactConfidence && !confidenceCategory;
   const edgeScore = deriveSignalEdge(match);
   const dq = deriveDataQuality(match);
 
@@ -675,7 +677,21 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
             ) : (
               <>
                 <div className="rounded-xl border border-white/10 bg-signal-void/45 p-3 text-center font-mono text-[10px] text-signal-inkMuted">
-                  Semnal avansat disponibil in tier-uri superioare.
+                  {isPremiumLike
+                    ? "Signal Lens Advanced și Edge Compass sunt disponibile în Ultra."
+                    : "Semnal avansat disponibil în tier-uri superioare."}
+                </div>
+                <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                  {(isFreeLike ? ["Confidence %", "Signal Lens", "Edge Compass"] : ["Confidence %", "Edge Compass"]).map(
+                    (label) => (
+                      <span
+                        key={label}
+                        className="inline-flex items-center rounded-md border border-white/10 bg-signal-void/45 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-signal-inkMuted"
+                      >
+                        🔒 {label}
+                      </span>
+                    )
+                  )}
                 </div>
                 <div className="mt-4">
                   <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
@@ -1004,6 +1020,16 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
               </section>
             </div>
           )}
+          {!match.probs.firstHalf && !hasExactConfidence && (
+            <section className="rounded-2xl border border-white/10 bg-signal-void/25 p-4 sm:p-5">
+              <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-inkMuted">Prima repriză · blocat</h3>
+              <p className="mt-2 text-[11px] text-signal-inkMuted">
+                {isPremiumLike
+                  ? "Predicțiile HT Goals sunt disponibile în Ultra."
+                  : "Predicțiile HT Goals sunt disponibile din tier-urile superioare."}
+              </p>
+            </section>
+          )}
 
           {/* === CORNERE + ŞUTURI LA POARTĂ (Poisson pe rolling stats) === */}
           {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal) && (
@@ -1050,6 +1076,26 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 />
               )}
             </div>
+          )}
+          {!match.probs.corners && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence && (
+            <section className="rounded-2xl border border-white/10 bg-signal-void/25 p-4 sm:p-5">
+              <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-inkMuted">Piețe derivate · blocate</h3>
+              <p className="mt-2 text-[11px] text-signal-inkMuted">
+                {isFreeLike
+                  ? "Cornere, Shots și Edge Compass se deblochează în Premium/Ultra."
+                  : "Shots și Edge Compass se deblochează în Ultra."}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(isFreeLike ? ["Corners", "Shots", "Edge"] : ["Shots", "Edge"]).map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex items-center rounded-md border border-white/10 bg-signal-void/45 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-signal-inkMuted"
+                  >
+                    🔒 {label}
+                  </span>
+                ))}
+              </div>
+            </section>
           )}
 
           {match.modelMeta &&

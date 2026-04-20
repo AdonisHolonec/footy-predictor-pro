@@ -319,20 +319,26 @@ export default function LandingAccess() {
                 {
                   title: "Free Habit Trial",
                   price: "FREE",
-                  desc: "Trial tactic de 10 zile · 5 meciuri/zi · predicții standard (1X2, O/U).",
-                  to: signup
+                  metrics: ["05 meciuri / zi", "10 zile active", "Predicții standard"],
+                  desc: "Flux esențial 1X2 + Over/Under 2.5 pentru rutină zilnică.",
+                  to: signup,
+                  cta: "Start Free Habit Trial"
                 },
                 {
                   title: "Tactical Premium",
                   price: "PREMIUM",
-                  desc: "10 meciuri/zi · piețe Cornere · Confidence categoric (High/Medium/Low) · trial 24h la cerere.",
-                  to: `${login}?from=pricing&tier=premium`
+                  metrics: ["10 meciuri / zi", "Cornere incluse", "Trial 24h la cerere"],
+                  desc: "Layer tactic cu Confidence Category + Signal Lens Basic.",
+                  to: `${login}?from=pricing&tier=premium`,
+                  cta: "Disponibil curând"
                 },
                 {
                   title: "Intelligence Ultra",
                   price: "ULTRA",
-                  desc: "Meciuri nelimitate · șuturi + goluri HT · Confidence exact + Edge Compass · trial 24h la cerere.",
-                  to: `${login}?from=pricing&tier=ultra`
+                  metrics: ["Nelimitat", "Șuturi + gol HT", "Edge Compass exclusiv"],
+                  desc: "Confidence exact, Signal Lens Advanced și acces complet la intelligence stack.",
+                  to: `${login}?from=pricing&tier=ultra`,
+                  cta: "Disponibil curând"
                 }
               ].map((tier) => (
                 <div
@@ -342,11 +348,16 @@ export default function LandingAccess() {
                   <p className="font-mono text-[10px] uppercase tracking-wider text-signal-petrol">{tier.title}</p>
                   <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
                   <p className="mt-2 text-sm text-signal-inkMuted">{tier.desc}</p>
+                  <div className="mt-3 space-y-1 font-mono text-[10px] uppercase tracking-wider text-signal-silver">
+                    {tier.metrics.map((metric) => (
+                      <p key={metric}>{metric}</p>
+                    ))}
+                  </div>
                   <Link
                     to={tier.to}
                     className="mt-4 inline-block rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-4 py-2 text-xs font-semibold text-signal-petrol transition hover:bg-signal-petrol/20"
                   >
-                    {tier.title === "Free Habit Trial" ? "Revendică trialul de 10 zile" : "Continuă spre activare"}
+                    {tier.cta}
                   </Link>
                 </div>
               ))}

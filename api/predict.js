@@ -53,10 +53,10 @@ import {
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import {
+  decrementPredictCountBy,
   USER_TIERS,
-  decrementPredictCountToday,
   getPredictCountToday,
-  incrementPredictCountToday,
+  incrementPredictCountBy,
   isFreeWindowExpired,
   maskPredictionForTier,
   resolveEffectiveTierFromProfile,
@@ -474,6 +474,7 @@ export default async function handler(req, res) {
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
   const season = req.query.season || new Date().getFullYear();
   const limit = Math.min(Number(req.query.limit || 50), 50);
+  let effectiveLimit = limit;
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Nu ai selectat nicio ligă." });
@@ -496,7 +497,7 @@ export default async function handler(req, res) {
     return res.status(usageCtx.error.status).json(usageCtx.error.body);
   }
   let tierContext = null;
-  let incrementedTierUsage = false;
+  let reservedTierUsage = 0;
   if (!usageCtx.anonymous && usageCtx.userId) {
     const quotaExempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
     const supabase = getSupabaseAdmin();
@@ -539,7 +540,22 @@ export default async function handler(req, res) {
     const effectiveTierForQuota = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
     const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTierForQuota);
     const currentCount = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay);
-    if (Number.isFinite(dailyLimit) && currentCount >= dailyLimit) {
+    const remainingDaily = Number.isFinite(dailyLimit) ? Math.max(0, dailyLimit - currentCount) : Number.POSITIVE_INFINITY;
+    if (Number.isFinite(dailyLimit) && remainingDaily <= 0) {
+      return res.status(429).json({
+        ok: false,
+        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
+        tierStatus: {
+          tier: effectiveTierForQuota,
+          predictCountToday: currentCount,
+          predictLimit: dailyLimit
+        }
+      });
+    }
+    if (Number.isFinite(remainingDaily)) {
+      effectiveLimit = Math.max(0, Math.min(effectiveLimit, remainingDaily));
+    }
+    if (effectiveLimit <= 0) {
       return res.status(429).json({
         ok: false,
         error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
@@ -552,11 +568,13 @@ export default async function handler(req, res) {
     }
     const nextCount = quotaExempt
       ? currentCount
-      : await incrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
-    incrementedTierUsage = !quotaExempt;
+      : await incrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, effectiveLimit);
+    reservedTierUsage = quotaExempt ? 0 : effectiveLimit;
     if (Number.isFinite(dailyLimit) && nextCount > dailyLimit) {
-      await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
-      incrementedTierUsage = false;
+      if (reservedTierUsage > 0) {
+        await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
+      }
+      reservedTierUsage = 0;
       return res.status(429).json({
         ok: false,
         error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
@@ -571,7 +589,7 @@ export default async function handler(req, res) {
       ...tierInfo,
       effectiveTier: effectiveTierForQuota,
       quotaExempt,
-      predictCountToday: nextCount,
+      predictCountToday: quotaExempt ? currentCount : Math.min(nextCount, Number.isFinite(dailyLimit) ? dailyLimit : nextCount),
       predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit
     };
   }
@@ -588,7 +606,7 @@ export default async function handler(req, res) {
     const allFixtures = dayReq.data?.response || dayReq.data || [];
 
     for (const lId of leagueIds) {
-      if (out.length >= limit) break;
+      if (out.length >= effectiveLimit) break;
       const leagueFixtures = allFixtures.filter((f) => String(f.league?.id) === String(lId));
       if (leagueFixtures.length === 0) continue;
 
@@ -604,7 +622,7 @@ export default async function handler(req, res) {
       const leagueStandings = buildLeagueStandingsTable(standingsRows);
 
       for (const fx of leagueFixtures) {
-        if (out.length >= limit) break;
+        if (out.length >= effectiveLimit) break;
         const fixtureId = fx.fixture?.id;
         const homeName = fx.teams?.home?.name || "Home";
         const awayName = fx.teams?.away?.name || "Away";
@@ -1331,14 +1349,27 @@ export default async function handler(req, res) {
         }
       } catch (persistError) {
         console.error("[predict persist]", persistError?.message || persistError);
-        if (incrementedTierUsage && usageCtx.userId) {
-          await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+        if (reservedTierUsage > 0 && usageCtx.userId) {
+          await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
         }
         return res.status(500).json({
           ok: false,
           error: persistError?.message || "Nu am putut salva predictiile."
         });
       }
+    }
+
+    if (reservedTierUsage > 0 && usageCtx.userId) {
+      const unusedReservations = Math.max(0, reservedTierUsage - out.length);
+      if (unusedReservations > 0) {
+        await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, unusedReservations);
+      }
+      tierContext = tierContext
+        ? {
+            ...tierContext,
+            predictCountToday: Math.max(0, Number(tierContext.predictCountToday || 0) - unusedReservations)
+          }
+        : tierContext;
     }
 
     const masked =
@@ -1352,8 +1383,8 @@ export default async function handler(req, res) {
     }
     return res.status(200).json(masked);
   } catch (error) {
-    if (incrementedTierUsage && usageCtx.userId) {
-      await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+    if (reservedTierUsage > 0 && usageCtx.userId) {
+      await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
     }
     return res.status(500).json({ ok: false, error: error.message });
   }

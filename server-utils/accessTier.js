@@ -106,10 +106,31 @@ export async function incrementPredictCountToday(userId, usageDay) {
   return Math.max(0, Number(next) || 0);
 }
 
+export async function incrementPredictCountBy(userId, usageDay, amount) {
+  const delta = Math.max(0, Math.floor(Number(amount) || 0));
+  if (delta <= 0) return getPredictCountToday(userId, usageDay);
+  const key = keyForPredictCount(userId, usageDay);
+  const next = await kv.incrby(key, delta);
+  await kv.expire(key, 48 * 60 * 60);
+  return Math.max(0, Number(next) || 0);
+}
+
 export async function decrementPredictCountToday(userId, usageDay) {
   const key = keyForPredictCount(userId, usageDay);
   try {
     const next = await kv.decr(key);
+    return Math.max(0, Number(next) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+export async function decrementPredictCountBy(userId, usageDay, amount) {
+  const delta = Math.max(0, Math.floor(Number(amount) || 0));
+  if (delta <= 0) return getPredictCountToday(userId, usageDay);
+  const key = keyForPredictCount(userId, usageDay);
+  try {
+    const next = await kv.decrby(key, delta);
     return Math.max(0, Number(next) || 0);
   } catch {
     return 0;

@@ -594,10 +594,22 @@ export function useAuth() {
     };
   }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
 
+  const trialExpiresAt = useMemo(() => {
+    const premiumStart = user?.premium_trial_activated_at ? new Date(user.premium_trial_activated_at).getTime() : NaN;
+    const ultraStart = user?.ultra_trial_activated_at ? new Date(user.ultra_trial_activated_at).getTime() : NaN;
+    const premiumExpiry = Number.isFinite(premiumStart) ? premiumStart + 24 * 60 * 60 * 1000 : NaN;
+    const ultraExpiry = Number.isFinite(ultraStart) ? ultraStart + 24 * 60 * 60 * 1000 : NaN;
+    const now = Date.now();
+    const active = [premiumExpiry, ultraExpiry].filter((ts) => Number.isFinite(ts) && ts > now);
+    if (!active.length) return null;
+    return new Date(Math.max(...active)).toISOString();
+  }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
+
   return {
     user,
     userTier: user?.tier || "free",
     trialRemainingTime,
+    trialExpiresAt,
     predictCountToday,
     predictLimitToday,
     tierQuotaExempt,

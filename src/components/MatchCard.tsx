@@ -111,6 +111,8 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
   const hasExactConfidence = row.recommended?.confidence != null && Number.isFinite(Number(row.recommended?.confidence));
   const confPct = hasExactConfidence ? pct(row.recommended?.confidence) : 0;
   const confidenceCategory = row.recommended?.confidenceCategory || null;
+  const isPremiumLike = !hasExactConfidence && Boolean(confidenceCategory);
+  const isFreeLike = !hasExactConfidence && !confidenceCategory;
   const edgeScore = deriveSignalEdge(row);
   const dq = deriveDataQuality(row);
   const hasFinalScore =
@@ -304,6 +306,20 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       {hasExactConfidence ? (
         <SignalScanStrip edge={edgeScore} dataQuality={dq} valueDetected={Boolean(row.valueBet?.detected)} className="mt-1" />
       ) : null}
+
+      {(isPremiumLike || isFreeLike) && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {(isFreeLike ? ["Corners", "Shots", "HT", "Edge"] : ["Shots", "HT", "Edge"]).map((label) => (
+            <span
+              key={label}
+              className="inline-flex items-center rounded-md border border-white/10 bg-signal-void/45 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wide text-signal-inkMuted"
+              title="Deblochează în tier superior"
+            >
+              🔒 {label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">Fișă analitică · tap pentru detalii</p>
     </div>
