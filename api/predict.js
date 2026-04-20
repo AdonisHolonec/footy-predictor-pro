@@ -19,6 +19,7 @@ import {
 } from "../server-utils/advancedMath.js";
 import { consensusMatchWinnerOdds, impliedProbsFromConsensus } from "../server-utils/marketOdds.js";
 import { MODEL_VERSION, getModelMarketBlendWeight } from "../server-utils/modelConstants.js";
+import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
 import {
@@ -785,10 +786,14 @@ export default async function handler(req, res) {
 
     const persistable = out.filter((row) => !row.insufficientData);
 
+    /**
+     * Invariant: increment RPC (atomic, predict_count < max) rulează ÎNAINTE de orice scriere în
+     * predictions_history / user_prediction_fixtures. La eșec persist, rollback_predict_increment.
+     */
     let quotaIncrementCommitted = false;
     if (enforceWarmPredictQuota && usageCtx.userId && persistable.length > 0) {
       const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "predict");
-      if (!inc?.ok) {
+      if (!inc || inc.ok !== true) {
         return res.status(429).json({
           ok: false,
           error: "Limita zilnica Predict atinsa (maximum 3/zi).",

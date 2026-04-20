@@ -419,7 +419,9 @@ export default function UserDashboard() {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       const json = await response.json();
-      if (!json?.ok || !Array.isArray(json.items)) return;
+      if (!response.ok || !json?.ok || !Array.isArray(json.items)) return;
+      /** Doar răspuns user-scoped (join user_prediction_fixtures); refuză istoric global dacă lipsește flag. */
+      if (json.mine !== true) return;
 
       const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const selectedDateSet = new Set(effectiveDates);

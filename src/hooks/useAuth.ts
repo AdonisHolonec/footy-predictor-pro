@@ -234,9 +234,11 @@ export function useAuth() {
       setError(updateError.message);
       throw updateError;
     }
-    setUser(mapSupabaseUser(data.user));
+    const authUser = data.user;
+    const nextProfile = authUser?.id ? await loadProfile(authUser.id) : null;
+    setUser(mapSupabaseUser(authUser, nextProfile));
     return data;
-  }, []);
+  }, [loadProfile]);
 
   const logout = useCallback(async () => {
     if (!supabase) {
