@@ -10,18 +10,38 @@
  */
 import { updateEloPair, persistEloMap, DEFAULT_ELO } from "../server-utils/teamElo.js";
 
-const BASE = process.env.UPSTREAM_BASE_URL || "https://api-football-v1.p.rapidapi.com/v3";
-const KEY = process.env.X_RAPIDAPI_KEY;
-const HOST = process.env.X_RAPIDAPI_HOST || "api-football-v1.p.rapidapi.com";
+// Dual-provider detect: APISPORTS_KEY (direct) prioritar faţă de X_RAPIDAPI_KEY (legacy).
+function resolveUpstream() {
+  const explicit = process.env.UPSTREAM_BASE_URL;
+  const apiSportsKey = process.env.APISPORTS_KEY;
+  const rapidKey = process.env.X_RAPIDAPI_KEY;
+  if (apiSportsKey) {
+    return {
+      provider: "apisports",
+      baseUrl: explicit || "https://v3.football.api-sports.io",
+      headers: { "x-apisports-key": apiSportsKey }
+    };
+  }
+  if (rapidKey) {
+    return {
+      provider: "rapidapi",
+      baseUrl: explicit || "https://api-football-v1.p.rapidapi.com/v3",
+      headers: {
+        "X-RapidAPI-Key": rapidKey,
+        "X-RapidAPI-Host": process.env.X_RAPIDAPI_HOST || "api-football-v1.p.rapidapi.com"
+      }
+    };
+  }
+  return null;
+}
+const UPSTREAM = resolveUpstream();
 
 async function fetchFixturesForLeagueSeason(leagueId, season) {
-  const u = new URL(BASE + "/fixtures");
+  const u = new URL(UPSTREAM.baseUrl + "/fixtures");
   u.searchParams.set("league", String(leagueId));
   u.searchParams.set("season", String(season));
   u.searchParams.set("status", "FT-AET-PEN");
-  const res = await fetch(u.toString(), {
-    headers: { "X-RapidAPI-Key": KEY, "X-RapidAPI-Host": HOST }
-  });
+  const res = await fetch(u.toString(), { headers: UPSTREAM.headers });
   const json = await res.json();
   return json?.response || [];
 }
@@ -75,10 +95,11 @@ async function rebuildForLeague(leagueId, seasons) {
 }
 
 async function run() {
-  if (!KEY) {
-    console.error("Missing X_RAPIDAPI_KEY");
+  if (!UPSTREAM) {
+    console.error("Missing API key. Set APISPORTS_KEY (direct api-sports.io) or X_RAPIDAPI_KEY.");
     process.exit(1);
   }
+  console.log(`Provider: ${UPSTREAM.provider} (${UPSTREAM.baseUrl})`);
   const leagueIds = String(process.env.LEAGUE_IDS || "39,140,135,78,61")
     .split(",")
     .map((s) => Number(s.trim()))

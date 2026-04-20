@@ -11,7 +11,6 @@
 //   /api/fixtures?view=xg&fixtureId=123  → synthetic xG per fixture
 //
 // Păstrează neschimbate toate comportamentele fostelor fișiere.
-import { createClient } from "@vercel/kv";
 import { getRequester } from "../server-utils/authAdmin.js";
 import { handleClaimBootstrapAdmin } from "../server-utils/claimBootstrapAdmin.js";
 import { getWithCache, getApiUsage, getApiUsageHistory } from "../server-utils/fetcher.js";
@@ -226,74 +225,45 @@ async function handleLive(req, res) {
 
 // -------------------- xG handler --------------------
 
-const kv = createClient({
-  url: process.env.STORAGEE_KV_REST_API_URL,
-  token: process.env.STORAGEE_KV_REST_API_TOKEN
-});
-
 async function handleXg(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
   const { fixtureId } = req.query;
-
   if (!fixtureId) {
     return res.status(400).json({ error: "fixtureId is missing" });
   }
 
   try {
-    const cacheKey = `xg_v3_${fixtureId}`;
-
-    try {
-      const cached = await kv.get(cacheKey);
-      if (cached) {
-        return res.status(200).json(cached);
-      }
-    } catch (kvError) {
-      console.error("KV Cache Error:", kvError.message);
+    // `getWithCache` foloseşte Vercel KV + auto-detectează providerul (apisports direct sau RapidAPI)
+    // şi partajează cache-ul cu restul pipeline-ului (nu mai avem cache separat pe xG).
+    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
+    if (!statsReq.ok) {
+      return res.status(502).json({
+        error: "Upstream fixtures/statistics error",
+        message: typeof statsReq.error === "string" ? statsReq.error : JSON.stringify(statsReq.error)
+      });
     }
-
-    const apiUrl = `https://api-football-v1.p.rapidapi.com/v3/fixtures/statistics?fixture=${fixtureId}`;
-    const apiRes = await fetch(apiUrl, {
-      method: "GET",
-      headers: {
-        "x-rapidapi-key": process.env.APIFOOTBALL_KEY,
-        "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
-      }
-    });
-
-    const result = await apiRes.json();
-
-    if (!result.response || result.response.length < 2) {
+    const result = statsReq.data;
+    if (!result?.response || result.response.length < 2) {
       return res.status(404).json({ error: "Statistics not available yet for this match" });
     }
 
     const homeStats = result.response[0].statistics;
     const awayStats = result.response[1].statistics;
-
     const xGHome = calculateSyntheticXG(homeStats);
     const xGAway = calculateSyntheticXG(awayStats);
 
-    const finalOutput = {
+    return res.status(200).json({
       fixtureId,
       homeXG: xGHome,
       awayXG: xGAway,
+      fromCache: Boolean(statsReq.fromCache),
       updatedAt: new Date().toISOString()
-    };
-
-    try {
-      await kv.set(cacheKey, finalOutput, { ex: 86400 });
-    } catch (saveError) {
-      console.error("Failed to save to Redis:", saveError.message);
-    }
-
-    return res.status(200).json(finalOutput);
-  } catch (error) {
-    console.error("🔴 Server Error 500:", error.message);
-    return res.status(500).json({
-      error: "Internal Server Error",
-      message: error.message
     });
+  } catch (error) {
+    console.error("🔴 xG handler error:", error.message);
+    return res.status(500).json({ error: "Internal Server Error", message: error.message });
   }
 }
 
