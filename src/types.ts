@@ -8,19 +8,39 @@ export type League = {
   logo?: string;
 };
 
-export type Odds = { home: number; draw: number; away: number; bookmaker?: string };
+export type Odds = {
+  home: number;
+  draw: number;
+  away: number;
+  bookmaker?: string;
+  bookmakersUsed?: number;
+  /** Metodă eliminare marjă: "shin" (long-shot bias corectat) sau "proportional" (fallback). */
+  marginMethod?: "shin" | "proportional";
+  /** Factor Shin z ∈ [0, ~0.1] = fracţia estimată de insider trading. */
+  shinZ?: number;
+};
+
+export type EnsembleStakeBreakdown = {
+  baseKelly: number;
+  adjustment?: number;
+  confScore?: number;
+  evScore?: number;
+  dqScore?: number;
+  gapPenalty?: number;
+  volPenalty?: number;
+  /** Legacy (v2 ensemble). */
+  confidenceBoost?: number;
+  volatilityPenalty?: number;
+  evBoost?: number;
+};
+
 export type ValueBet = {
   detected: boolean;
   type: string;
   ev?: number;
   kelly?: number;
   stakePlan?: string;
-  ensemble?: {
-    baseKelly: number;
-    confidenceBoost: number;
-    volatilityPenalty: number;
-    evBoost: number;
-  };
+  ensemble?: EnsembleStakeBreakdown;
   reasons?: string[];
 };
 
@@ -110,9 +130,17 @@ export type PredictionRow = {
     recommendedTrack?: string;
     valueBetTrack?: string;
     modelProbs1x2Pct?: { p1: number; pX: number; p2: number };
+    /** Raw probabilităţi Poisson/DC înainte de calibrare şi stacker. */
+    rawPoissonProbs1x2Pct?: { p1: number; pX: number; p2: number };
+    /** Probabilităţi după isotonic calibration (dacă aplicată). */
+    calibratedProbs1x2Pct?: { p1: number; pX: number; p2: number };
+    /** Output stacker ML (dacă aplicat). */
+    stackerProbs1x2Pct?: { p1: number; pX: number; p2: number };
     recommended1x2?: string;
     modelVersion?: string;
     marketBlendWeight?: number;
+    stackerApplied?: boolean;
+    calibrationApplied?: boolean;
   };
   modelMeta?: {
     method?: string;
@@ -127,6 +155,34 @@ export type PredictionRow = {
     modelVersion?: string;
     gridMax?: number;
     massCaptured?: number;
+    /** Parametri specifici ligii (DC rho, home advantage, etc.). */
+    leagueParams?: {
+      leagueAvg?: number;
+      homeAdv?: number;
+      awayAdv?: number;
+      rho?: number;
+      blendWeight?: number;
+    };
+    strengthMeta?: {
+      atkH?: number;
+      defH?: number;
+      atkA?: number;
+      defA?: number;
+      homePlayed?: number | null;
+      awayPlayed?: number | null;
+      shrinkageK?: number;
+    };
+    calibrationApplied?: boolean;
+    stackerApplied?: boolean;
+    stackerSampleSize?: number | null;
+    calibrationSampleSize?: number | null;
+    elo?: {
+      home: number;
+      away: number;
+      spread: number;
+      thin?: boolean;
+    };
+    eloSpread?: number;
   };
 };
 
@@ -189,6 +245,39 @@ export type BacktestKpi = {
   roi: number;
   drawdown: number;
   pnlUnits: number;
+};
+
+/** Bucket de calibrare: câtă încredere a raportat modelul (avgConfidence) vs accuracy empirică. */
+export type CalibrationBucket = {
+  bucket: string;
+  n: number;
+  avgConfidence: number;
+  accuracy1x2: number;
+};
+
+/** `/api/backtest?view=metrics` răspuns. */
+export type ModelMetricsResponse = {
+  ok: boolean;
+  days: number;
+  nRows: number;
+  nProb: number;
+  brier1x2: number | null;
+  logLoss1x2: number | null;
+  ece1x2: number | null;
+  byMethod: Array<{ key: string; n: number; brier: number; logLoss: number }>;
+  byLeague: Array<{ key: string; n: number; brier: number; logLoss: number }>;
+  byDataQuality: Array<{ key: string; n: number; brier: number; logLoss: number }>;
+  byModelVersion: Array<{ key: string; n: number; brier: number; logLoss: number }>;
+  calibration1x2: CalibrationBucket[];
+};
+
+export type MlAdminStatus = {
+  ok: boolean;
+  modelVersion?: string;
+  calibrationMaps?: number;
+  activeStackerWeights?: number;
+  eloTeams?: number;
+  helpers?: { invalidate?: string; scripts?: string[] };
 };
 
 export type RiskAlert = {

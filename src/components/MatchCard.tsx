@@ -73,6 +73,36 @@ function statusChip(
   return { label: "OPEN", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
 }
 
+/**
+ * Mic badge ce arată nivelul modelului aplicat:
+ * - "ML": a fost folosit stacker-ul (multinomial LR)
+ * - "CAL": probabilităţi post-calibrare isotonică
+ * - "DC" (fallback): doar Poisson + Dixon-Coles (fără învățare pe istoric)
+ */
+function modelTierBadge(row: PredictionRow): { label: string; title: string; className: string } | null {
+  const meta = row.modelMeta;
+  if (!meta) return null;
+  if (meta.stackerApplied) {
+    return {
+      label: "ML",
+      title: `Stacker ML activ${meta.stackerSampleSize ? ` · n=${meta.stackerSampleSize}` : ""}`,
+      className: "border-signal-mint/45 bg-signal-mintSoft text-signal-mint"
+    };
+  }
+  if (meta.calibrationApplied) {
+    return {
+      label: "CAL",
+      title: `Isotonic calibration aplicată${meta.calibrationSampleSize ? ` · n=${meta.calibrationSampleSize}` : ""}`,
+      className: "border-signal-petrol/45 bg-signal-petrol/10 text-signal-petrol"
+    };
+  }
+  return {
+    label: "DC",
+    title: "Poisson + Dixon-Coles (fără calibrare pe istoric încă)",
+    className: "border-white/10 bg-signal-void/45 text-signal-silver"
+  };
+}
+
 export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0 }: MatchCardProps) {
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
@@ -99,6 +129,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
     (isLive || (pastKickoffPollWindow && !isFinalStatus(row.status)));
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive);
+  const tier = modelTierBadge(row);
 
   if (row.insufficientData) {
     return (
@@ -153,6 +184,14 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
             {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400 motion-reduce:animate-none" />}
             {chip.label}
           </span>
+          {tier ? (
+            <span
+              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide ${tier.className}`}
+              title={tier.title}
+            >
+              {tier.label}
+            </span>
+          ) : null}
         </div>
         <div className="shrink-0 font-mono text-[10px] tabular-nums text-signal-inkMuted">
           {kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}

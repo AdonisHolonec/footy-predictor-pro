@@ -35,7 +35,7 @@ function DropLink({ to, children }: { to: string; children: React.ReactNode }) {
 export default function LandingAccess() {
   const { user, loading } = useAuth();
   const ringGradId = useId().replace(/:/g, "");
-  const previewRef = useRef<HTMLElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   const scrollPreview = useCallback(() => {
     previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);

@@ -1,5 +1,14 @@
 import { HistoryStats } from "../types";
 
+export type ModelHealthSummary = {
+  /** Brier 1X2 (0..1, lower=better). */
+  brier: number | null;
+  /** Log-loss 1X2 (lower=better). */
+  logLoss: number | null;
+  /** Expected Calibration Error în puncte procentuale (lower=better). */
+  ece: number | null;
+};
+
 type SuccessRateTrackerProps = {
   stats: HistoryStats;
   animatedWins: number;
@@ -11,7 +20,22 @@ type SuccessRateTrackerProps = {
   displayedPredsCount?: number;
   pendingAmongDisplayedPreds?: number;
   onBreakdownClick?: () => void;
+  /** Sănătatea modelului pe ultimele N zile (opţional — apare doar dacă admin/debug). */
+  modelHealth?: ModelHealthSummary | null;
 };
+
+function healthToneClass(value: number | null, good: number, warn: number, higherIsBetter = false) {
+  if (value == null || !Number.isFinite(value)) return "text-signal-inkMuted";
+  const v = value;
+  if (higherIsBetter) {
+    if (v >= good) return "text-signal-sage";
+    if (v >= warn) return "text-signal-amber";
+    return "text-signal-rose";
+  }
+  if (v <= good) return "text-signal-sage";
+  if (v <= warn) return "text-signal-amber";
+  return "text-signal-rose";
+}
 
 export default function SuccessRateTracker({
   stats,
@@ -23,7 +47,8 @@ export default function SuccessRateTracker({
   pendingHistoryCount,
   displayedPredsCount = 0,
   pendingAmongDisplayedPreds = 0,
-  onBreakdownClick
+  onBreakdownClick,
+  modelHealth = null
 }: SuccessRateTrackerProps) {
   const inner = (
     <>
@@ -65,6 +90,28 @@ export default function SuccessRateTracker({
           </div>
         </div>
       </div>
+      {modelHealth && (modelHealth.brier != null || modelHealth.logLoss != null || modelHealth.ece != null) && (
+        <div className="relative mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-signal-void/40 px-2 py-2 font-mono text-[9px] text-signal-inkMuted sm:text-[10px]">
+          <div className="flex flex-col items-center">
+            <span className="text-[8px] uppercase tracking-wider">Brier 1X2</span>
+            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.brier, 0.185, 0.205)}`}>
+              {modelHealth.brier != null ? modelHealth.brier.toFixed(3) : "—"}
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[8px] uppercase tracking-wider">LogLoss</span>
+            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.logLoss, 0.98, 1.05)}`}>
+              {modelHealth.logLoss != null ? modelHealth.logLoss.toFixed(3) : "—"}
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[8px] uppercase tracking-wider">ECE</span>
+            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.ece, 3, 6)}`}>
+              {modelHealth.ece != null ? `${modelHealth.ece.toFixed(1)}%` : "—"}
+            </span>
+          </div>
+        </div>
+      )}
       {pendingHistoryCount > 0 && (
         <div className="relative mt-4 rounded-xl border border-signal-amber/22 bg-signal-amber/5 px-3 py-2 text-center text-[9px] font-medium leading-snug text-signal-amber sm:text-[10px]">
           {pendingHistoryCount} meciuri fără rezultat FT în istoric

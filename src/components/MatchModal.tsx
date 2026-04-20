@@ -502,11 +502,36 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   {match.valueBet.ensemble && (
                     <div className="mt-3 rounded-lg border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
                       <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Ensemble</div>
-                      <div className="mt-1 grid gap-1 sm:grid-cols-2">
-                        <span>kelly base {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
-                        <span>conf boost {String(match.valueBet.ensemble.confidenceBoost ?? "—")}</span>
-                        <span>vol penalty {String(match.valueBet.ensemble.volatilityPenalty ?? "—")}</span>
-                        <span>EV boost {String(match.valueBet.ensemble.evBoost ?? "—")}</span>
+                      <div className="mt-1 grid gap-1 tabular-nums sm:grid-cols-2">
+                        <span>kelly base · {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
+                        {match.valueBet.ensemble.adjustment != null ? (
+                          <span>adj ×{match.valueBet.ensemble.adjustment.toFixed(3)}</span>
+                        ) : null}
+                        {match.valueBet.ensemble.confScore != null && (
+                          <span>conf {match.valueBet.ensemble.confScore >= 0 ? "+" : ""}{match.valueBet.ensemble.confScore.toFixed(3)}</span>
+                        )}
+                        {match.valueBet.ensemble.evScore != null && (
+                          <span>ev {match.valueBet.ensemble.evScore >= 0 ? "+" : ""}{match.valueBet.ensemble.evScore.toFixed(3)}</span>
+                        )}
+                        {match.valueBet.ensemble.dqScore != null && (
+                          <span>dq {match.valueBet.ensemble.dqScore >= 0 ? "+" : ""}{match.valueBet.ensemble.dqScore.toFixed(3)}</span>
+                        )}
+                        {match.valueBet.ensemble.gapPenalty != null && (
+                          <span>gap {match.valueBet.ensemble.gapPenalty.toFixed(3)}</span>
+                        )}
+                        {match.valueBet.ensemble.volPenalty != null && (
+                          <span>vol {match.valueBet.ensemble.volPenalty.toFixed(3)}</span>
+                        )}
+                        {/* Legacy fields (backward compat pentru istoric) */}
+                        {match.valueBet.ensemble.confidenceBoost != null && (
+                          <span>conf boost ×{String(match.valueBet.ensemble.confidenceBoost)}</span>
+                        )}
+                        {match.valueBet.ensemble.volatilityPenalty != null && (
+                          <span>vol penalty ×{String(match.valueBet.ensemble.volatilityPenalty)}</span>
+                        )}
+                        {match.valueBet.ensemble.evBoost != null && (
+                          <span>EV boost ×{String(match.valueBet.ensemble.evBoost)}</span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -611,7 +636,141 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                     <span className="text-signal-inkMuted transition group-open:rotate-90">›</span>
                   </span>
                 </summary>
-                <div className="mt-4 space-y-3 border-t border-white/5 pt-4 text-[11px] text-signal-inkMuted">
+                <div className="mt-4 space-y-4 border-t border-white/5 pt-4 text-[11px] text-signal-inkMuted">
+                  {/* === Pipeline summary: indicator clar pentru ce strat e activ === */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">Pipeline:</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-signal-void/50 px-2 py-0.5 font-mono text-[9px] text-signal-silver">
+                      Poisson+DC
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[9px] ${match.modelMeta.calibrationApplied ? "border-signal-petrol/45 bg-signal-petrol/10 text-signal-petrol" : "border-white/8 bg-signal-void/40 text-signal-inkMuted/60"}`}>
+                      Isotonic {match.modelMeta.calibrationApplied ? "✓" : "—"}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[9px] ${match.modelMeta.stackerApplied ? "border-signal-mint/45 bg-signal-mintSoft text-signal-mint" : "border-white/8 bg-signal-void/40 text-signal-inkMuted/60"}`}>
+                      ML stacker {match.modelMeta.stackerApplied ? "✓" : "—"}
+                    </span>
+                    {match.modelMeta.elo ? (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-signal-amber/35 bg-signal-amber/8 px-2 py-0.5 font-mono text-[9px] text-signal-amberSoft">
+                        Elo Δ {match.modelMeta.elo.spread > 0 ? "+" : ""}{Math.round(match.modelMeta.elo.spread)}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* === Probabilităţile la fiecare strat (doar dacă avem raw) === */}
+                  {match.evaluation?.rawPoissonProbs1x2Pct && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3">
+                      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">Probabilities pipeline</div>
+                      <table className="w-full text-[10px]">
+                        <thead>
+                          <tr className="text-left font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                            <th className="py-1">Stage</th>
+                            <th className="py-1 text-right">1</th>
+                            <th className="py-1 text-right">X</th>
+                            <th className="py-1 text-right">2</th>
+                          </tr>
+                        </thead>
+                        <tbody className="font-mono text-signal-silver tabular-nums">
+                          <tr className="border-t border-white/5">
+                            <td className="py-1">Raw Poisson</td>
+                            <td className="py-1 text-right">{match.evaluation.rawPoissonProbs1x2Pct.p1.toFixed(1)}%</td>
+                            <td className="py-1 text-right">{match.evaluation.rawPoissonProbs1x2Pct.pX.toFixed(1)}%</td>
+                            <td className="py-1 text-right">{match.evaluation.rawPoissonProbs1x2Pct.p2.toFixed(1)}%</td>
+                          </tr>
+                          {match.evaluation.calibratedProbs1x2Pct && (
+                            <tr className="border-t border-white/5 text-signal-petrol">
+                              <td className="py-1">+ Isotonic</td>
+                              <td className="py-1 text-right">{match.evaluation.calibratedProbs1x2Pct.p1.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.calibratedProbs1x2Pct.pX.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.calibratedProbs1x2Pct.p2.toFixed(1)}%</td>
+                            </tr>
+                          )}
+                          {match.evaluation.stackerProbs1x2Pct && (
+                            <tr className="border-t border-white/5 text-signal-mint">
+                              <td className="py-1">+ ML stacker</td>
+                              <td className="py-1 text-right">{match.evaluation.stackerProbs1x2Pct.p1.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.stackerProbs1x2Pct.pX.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.stackerProbs1x2Pct.p2.toFixed(1)}%</td>
+                            </tr>
+                          )}
+                          {match.evaluation.modelProbs1x2Pct && (
+                            <tr className="border-t border-white/5 font-semibold text-signal-ink">
+                              <td className="py-1">Final (displayed)</td>
+                              <td className="py-1 text-right">{match.evaluation.modelProbs1x2Pct.p1.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.modelProbs1x2Pct.pX.toFixed(1)}%</td>
+                              <td className="py-1 text-right">{match.evaluation.modelProbs1x2Pct.p2.toFixed(1)}%</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* === League params (DC / home adv / blend) === */}
+                  {match.modelMeta.leagueParams && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">League parameters</div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
+                        {match.modelMeta.leagueParams.leagueAvg != null && (
+                          <span>λ̄ lig {match.modelMeta.leagueParams.leagueAvg.toFixed(2)}</span>
+                        )}
+                        {match.modelMeta.leagueParams.homeAdv != null && (
+                          <span>home {match.modelMeta.leagueParams.homeAdv.toFixed(2)}×</span>
+                        )}
+                        {match.modelMeta.leagueParams.awayAdv != null && (
+                          <span>away {match.modelMeta.leagueParams.awayAdv.toFixed(2)}×</span>
+                        )}
+                        {match.modelMeta.leagueParams.rho != null && (
+                          <span>DC ρ {match.modelMeta.leagueParams.rho.toFixed(3)}</span>
+                        )}
+                        {match.modelMeta.leagueParams.blendWeight != null && (
+                          <span>blend {Math.round(match.modelMeta.leagueParams.blendWeight * 100)}%</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* === Shin info (market) === */}
+                  {match.odds?.marginMethod && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">Market debiasing</div>
+                      <div className="flex flex-wrap gap-x-3 tabular-nums">
+                        <span>method · {match.odds.marginMethod}</span>
+                        {match.odds.shinZ != null && <span>z · {match.odds.shinZ.toFixed(4)}</span>}
+                        {match.odds.bookmakersUsed != null && <span>bookies · {match.odds.bookmakersUsed}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* === Strength ratings (atk/def shrinkage) === */}
+                  {match.modelMeta.strengthMeta && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">Strength ratings (post-shrinkage)</div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
+                        {match.modelMeta.strengthMeta.atkH != null && <span>atk H {match.modelMeta.strengthMeta.atkH.toFixed(2)}</span>}
+                        {match.modelMeta.strengthMeta.defH != null && <span>def H {match.modelMeta.strengthMeta.defH.toFixed(2)}</span>}
+                        {match.modelMeta.strengthMeta.atkA != null && <span>atk A {match.modelMeta.strengthMeta.atkA.toFixed(2)}</span>}
+                        {match.modelMeta.strengthMeta.defA != null && <span>def A {match.modelMeta.strengthMeta.defA.toFixed(2)}</span>}
+                        {match.modelMeta.strengthMeta.homePlayed != null && <span>n H {match.modelMeta.strengthMeta.homePlayed}</span>}
+                        {match.modelMeta.strengthMeta.awayPlayed != null && <span>n A {match.modelMeta.strengthMeta.awayPlayed}</span>}
+                        {match.modelMeta.strengthMeta.shrinkageK != null && <span>k {match.modelMeta.strengthMeta.shrinkageK}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* === Elo details === */}
+                  {match.modelMeta.elo && (
+                    <div className={`rounded-lg border p-3 font-mono text-[10px] tabular-nums ${match.modelMeta.elo.thin ? "border-signal-amber/25 bg-signal-amber/8 text-signal-amberSoft" : "border-signal-line/30 bg-signal-void/30 text-signal-silver"}`}>
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">
+                        Elo {match.modelMeta.elo.thin ? "· thin sample" : ""}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3">
+                        <span>H {Math.round(match.modelMeta.elo.home)}</span>
+                        <span>A {Math.round(match.modelMeta.elo.away)}</span>
+                        <span>Δ {match.modelMeta.elo.spread > 0 ? "+" : ""}{Math.round(match.modelMeta.elo.spread)}</span>
+                      </div>
+                    </div>
+                  )}
+
                   {match.modelMeta.method && (
                     <p>
                       <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">Method</span> · {match.modelMeta.method}
@@ -644,6 +803,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                       {match.evaluation.marketBlendWeight != null && (
                         <div>Market blend · {(match.evaluation.marketBlendWeight * 100).toFixed(0)}%</div>
                       )}
+                      <div className="mt-1 text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                        v {match.evaluation.modelVersion || match.modelVersion || "?"}
+                      </div>
                     </div>
                   )}
                 </div>

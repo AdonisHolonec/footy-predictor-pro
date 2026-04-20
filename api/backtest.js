@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { assertAdmin } from "../server-utils/authAdmin.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   actual1x2FromScore,
@@ -8,6 +9,12 @@ import {
   expectedCalibrationError,
   logLoss1x2
 } from "../server-utils/probabilityMetrics.js";
+
+async function isAuthorizedForMetrics(req) {
+  if (isAuthorizedCronOrInternalRequest(req)) return true;
+  const admin = await assertAdmin(req);
+  return admin.ok;
+}
 
 async function handleKpi(req, res) {
   if (req.method !== "GET") {
@@ -201,7 +208,7 @@ async function handleMetrics(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
-  if (!isAuthorizedCronOrInternalRequest(req)) {
+  if (!(await isAuthorizedForMetrics(req))) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
   }
 

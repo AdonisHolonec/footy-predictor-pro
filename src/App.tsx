@@ -10,6 +10,7 @@ import {
   AdminFilterDeck,
   AdminIconRail,
   AdminInsightColumn,
+  AdminModelMetricsPanel,
   AdminObservatoryHeader,
   AdminPerformanceObservatory,
   AdminToolbarStrip,
@@ -1357,6 +1358,11 @@ export default function App() {
                 </div>
               </details>
             </AdminPerformanceObservatory>
+            {user?.role === "admin" && session?.access_token ? (
+              <div className="mt-6">
+                <AdminModelMetricsPanel accessToken={session.access_token} days={45} />
+              </div>
+            ) : null}
             <div className="mb-8 flex flex-col gap-6 lg:mb-10 lg:flex-row lg:items-stretch">
               <AdminIconRail />
               <div className="grid min-w-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-12 xl:gap-8">

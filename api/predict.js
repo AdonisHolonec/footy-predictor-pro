@@ -24,6 +24,18 @@ import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDat
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
 import {
+  loadCalibrationMaps,
+  pickCalibrationMapForLeague,
+  applyCalibratedTriple
+} from "../server-utils/isotonicCalibration.js";
+import {
+  loadStackerWeights,
+  pickStackerWeightsForLeague,
+  extractStackerFeatures,
+  applyStacker
+} from "../server-utils/mlStacker.js";
+import { lookupEloPair, eloProbabilities } from "../server-utils/teamElo.js";
+import {
   commitWarmPredictIncrement,
   isWarmPredictQuotaExempt,
   peekWarmPredictUsage,
@@ -373,6 +385,11 @@ export default async function handler(req, res) {
   try {
     const out = [];
     const riskContext = await loadRiskContext();
+    // single-flight: încărcăm calibrarea + stacker o singură dată per request
+    const [calibrationMaps, stackerWeightsMap] = await Promise.all([
+      loadCalibrationMaps(MODEL_VERSION).catch(() => ({})),
+      loadStackerWeights(MODEL_VERSION).catch(() => new Map())
+    ]);
     const dayReq = await getWithCache("/fixtures", { date }, 21600);
     const allFixtures = dayReq.data?.response || dayReq.data || [];
 
@@ -546,6 +563,40 @@ export default async function handler(req, res) {
         });
         if (!calc || !calc.probs) continue;
         const p = calc.probs;
+        // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline
+        const pRaw = { p1: p.p1, pX: p.pX, p2: p.p2 };
+
+        // === ISOTONIC CALIBRATION (per-league) ===
+        const leagueCalibMaps = pickCalibrationMapForLeague(calibrationMaps, lId);
+        const calTriple = leagueCalibMaps
+          ? applyCalibratedTriple(
+              { p1: pRaw.p1 / 100, pX: pRaw.pX / 100, p2: pRaw.p2 / 100 },
+              leagueCalibMaps
+            )
+          : { p1: pRaw.p1 / 100, pX: pRaw.pX / 100, p2: pRaw.p2 / 100, calibrationApplied: false };
+        const calibrationApplied = Boolean(calTriple.calibrationApplied);
+
+        // === ELO DERIVATIVE (independent probability source) ===
+        let eloInfo = null;
+        if (homeIdStr && awayIdStr) {
+          try {
+            const pair = await lookupEloPair(lId, Number(homeIdStr), Number(awayIdStr));
+            if (pair) {
+              const eloProbs = eloProbabilities(pair.eloHome, pair.eloAway, {
+                homeAdvElo: 60 + (leagueParams.homeAdv - 1) * 200
+              });
+              eloInfo = {
+                eloHome: Number(pair.eloHome.toFixed(1)),
+                eloAway: Number(pair.eloAway.toFixed(1)),
+                eloSpread: Number(((pair.eloHome) - pair.eloAway).toFixed(1)),
+                thin: pair.thin,
+                probs: eloProbs
+              };
+            }
+          } catch {
+            eloInfo = null;
+          }
+        }
 
         let odds = null;
         let valueDetected = false;
@@ -561,10 +612,11 @@ export default async function handler(req, res) {
 
         const oddsReq = await getWithCache("/odds", { fixture: fixtureId }, 86400);
         const consensus = oddsReq.ok ? consensusMatchWinnerOdds(oddsReq.data) : null;
+        let marketProbs = null;
         if (consensus) {
           // Shin's method în loc de eliminarea proporţională a marjei — corectează long-shot bias.
           const shin = shinImpliedProbs(consensus.home, consensus.draw, consensus.away);
-          const marketProbs = shin ? { p1: shin.p1, pX: shin.pX, p2: shin.p2 } : null;
+          marketProbs = shin ? { p1: shin.p1, pX: shin.pX, p2: shin.p2 } : null;
           odds = {
             home: consensus.home,
             draw: consensus.draw,
@@ -659,9 +711,44 @@ export default async function handler(req, res) {
           }
         }
 
-        let p1Adj = blendByPenalty(p.p1, leagueMultiplier);
-        let pXAdj = blendByPenalty(p.pX, leagueMultiplier);
-        let p2Adj = blendByPenalty(p.p2, leagueMultiplier);
+        // === STACKER (ML) or calibrated+market blend ===
+        // Construim features şi aplicăm stacker dacă avem greutăţi active pentru liga aceasta.
+        const stackerEntry = pickStackerWeightsForLeague(stackerWeightsMap, lId);
+        const dataQualityEarly = dataQualityScore({
+          method,
+          hasOdds: !!odds,
+          hasLuckStats: !!luckStats,
+          hasTeamIds: !!homeIdStr && !!awayIdStr
+        });
+        let pFinal = null;
+        let stackerApplied = false;
+        if (stackerEntry?.weights) {
+          const feats = extractStackerFeatures({
+            poissonProbs: { p1: pRaw.p1 / 100, pX: pRaw.pX / 100, p2: pRaw.p2 / 100 },
+            marketProbs,
+            eloSpread: eloInfo?.eloSpread || 0,
+            dataQuality: dataQualityEarly,
+            homeAdv: leagueParams.homeAdv,
+            rho: leagueParams.rho
+          });
+          const stacked = applyStacker(feats, stackerEntry.weights);
+          if (stacked) {
+            pFinal = stacked;
+            stackerApplied = true;
+          }
+        }
+        if (!pFinal) {
+          // Fallback: model calibrat + blend liniar cu piaţa + drift penalty.
+          const modelFrac = { p1: calTriple.p1, pX: calTriple.pX, p2: calTriple.p2 };
+          const blended = marketProbs
+            ? blendModelWithMarket({ model: modelFrac, market: marketProbs, modelWeight: blendW })
+            : modelFrac;
+          pFinal = blended || modelFrac;
+        }
+
+        let p1Adj = blendByPenalty(pFinal.p1 * 100, leagueMultiplier);
+        let pXAdj = blendByPenalty(pFinal.pX * 100, leagueMultiplier);
+        let p2Adj = blendByPenalty(pFinal.p2 * 100, leagueMultiplier);
         const sumAdj = p1Adj + pXAdj + p2Adj;
         if (sumAdj > 0) {
           p1Adj = (p1Adj / sumAdj) * 100;
@@ -738,20 +825,38 @@ export default async function handler(req, res) {
         const topFeatures = [
           `method:${method}`,
           `dq:${dataQuality.toFixed(2)}`,
-          `blend:${blendW.toFixed(2)}`,
+          stackerApplied ? "stacker:on" : calibrationApplied ? "cal:on" : `blend:${blendW.toFixed(2)}`,
           `leagueMul:${leagueMultiplier.toFixed(2)}`,
           `stakeCap:${stakePolicy.dynamicCap.toFixed(2)}`,
           `bucket:${stakePolicy.bucket}`,
-          strengthMeta ? `atkDef:${strengthMeta.atkH?.toFixed(2)}` : "standings"
+          strengthMeta ? `atkDef:${strengthMeta.atkH?.toFixed(2)}` : "standings",
+          eloInfo ? `elo:${eloInfo.eloSpread.toFixed(0)}` : "elo:none"
         ];
 
         const evaluation = {
-          recommendedTrack: "model_1x2_and_side_markets",
-          valueBetTrack: valueDetected ? "blended_1x2_vs_median_odds" : "none",
+          recommendedTrack: stackerApplied
+            ? "ml_stacker_1x2"
+            : calibrationApplied
+              ? "calibrated_1x2_and_side_markets"
+              : "model_1x2_and_side_markets",
+          valueBetTrack: valueDetected
+            ? stackerApplied
+              ? "stacker_1x2_vs_median_odds"
+              : "blended_1x2_vs_median_odds"
+            : "none",
           modelProbs1x2Pct: { p1: p1Adj, pX: pXAdj, p2: p2Adj },
+          rawPoissonProbs1x2Pct: { p1: pRaw.p1, pX: pRaw.pX, p2: pRaw.p2 },
+          calibratedProbs1x2Pct: calibrationApplied
+            ? { p1: calTriple.p1 * 100, pX: calTriple.pX * 100, p2: calTriple.p2 * 100 }
+            : undefined,
+          stackerProbs1x2Pct: stackerApplied
+            ? { p1: pFinal.p1 * 100, pX: pFinal.pX * 100, p2: pFinal.p2 * 100 }
+            : undefined,
           recommended1x2: finalPick1X2,
           modelVersion: MODEL_VERSION,
-          marketBlendWeight: blendW
+          marketBlendWeight: blendW,
+          stackerApplied,
+          calibrationApplied
         };
 
         out.push({
@@ -813,7 +918,26 @@ export default async function handler(req, res) {
               rho: leagueParams.rho,
               blendWeight: Number(blendW.toFixed(3))
             },
-            strengthMeta: strengthMeta || undefined
+            strengthMeta: strengthMeta || undefined,
+            calibrationApplied,
+            stackerApplied,
+            stackerSampleSize: stackerEntry?.sampleSize || null,
+            calibrationSampleSize: leagueCalibMaps
+              ? Math.max(
+                  leagueCalibMaps["1"]?.sampleSize || 0,
+                  leagueCalibMaps["X"]?.sampleSize || 0,
+                  leagueCalibMaps["2"]?.sampleSize || 0
+                )
+              : null,
+            elo: eloInfo
+              ? {
+                  home: eloInfo.eloHome,
+                  away: eloInfo.eloAway,
+                  spread: eloInfo.eloSpread,
+                  thin: eloInfo.thin
+                }
+              : undefined,
+            eloSpread: eloInfo?.eloSpread ?? undefined
           },
           auditLog: {
             reasonCodes,
