@@ -1,5 +1,6 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
+import { TOP_LEAGUE_IDS } from "../../server-utils/modelConstants.js";
 
 function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
@@ -8,12 +9,11 @@ function inferSeason(dateISO) {
 }
 
 function parseLeagueIds(raw) {
-  const fallback = [39, 140, 135, 78, 61, 2, 3, 283];
   const src = String(raw || "")
     .split(",")
     .map((v) => Number(String(v).trim()))
     .filter((v) => Number.isFinite(v));
-  return src.length ? Array.from(new Set(src)) : fallback;
+  return src.length ? Array.from(new Set(src)) : TOP_LEAGUE_IDS.slice();
 }
 
 function resolvePublicBaseUrl() {

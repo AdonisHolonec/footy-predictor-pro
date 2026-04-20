@@ -7,6 +7,8 @@ import {
   clampLambda,
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
+  extractFirstHalfFractions,
+  deriveFirstHalfLambdas,
   normalizeTeamStatisticsPayload,
   strengthRatingsLambdas
 } from "../server-utils/math.js";
@@ -19,7 +21,13 @@ import {
   shinImpliedProbs
 } from "../server-utils/advancedMath.js";
 import { consensusMatchWinnerOdds } from "../server-utils/marketOdds.js";
-import { MODEL_VERSION, getModelMarketBlendWeight, getLeagueParams } from "../server-utils/modelConstants.js";
+import {
+  MODEL_VERSION,
+  getModelMarketBlendWeight,
+  getLeagueParams,
+  getLeagueConfidenceMultiplier,
+  getLeagueStakeCap
+} from "../server-utils/modelConstants.js";
 import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
@@ -52,36 +60,6 @@ function roundDisplayRate(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return x;
   return Number(x.toFixed(3));
-}
-
-const LEAGUE_CONFIDENCE_MULTIPLIERS = {
-  39: 1.0,
-  140: 0.98,
-  135: 0.97,
-  78: 0.95,
-  61: 0.95,
-  2: 0.93,
-  3: 0.93,
-  283: 0.9
-};
-
-const LEAGUE_STAKE_CAPS = {
-  39: 3.0,
-  140: 2.8,
-  135: 2.7,
-  78: 2.5,
-  61: 2.5,
-  2: 2.2,
-  3: 2.2,
-  283: 2.0
-};
-
-function getLeagueConfidenceMultiplier(leagueId) {
-  return LEAGUE_CONFIDENCE_MULTIPLIERS[Number(leagueId)] || 0.88;
-}
-
-function getLeagueStakeCap(leagueId) {
-  return LEAGUE_STAKE_CAPS[Number(leagueId)] || 1.9;
 }
 
 function clampPct(n) {
@@ -533,14 +511,24 @@ export default async function handler(req, res) {
         let strengthMeta = null;
         let formHomeStr = null;
         let formAwayStr = null;
+        // Fracţiile de goluri (FH vs SH) sunt extrase din acelaşi payload /teams/statistics
+        // şi folosite ulterior pentru predicţii prima repriză fără call suplimentar.
+        let fhFractionsHome = null;
+        let fhFractionsAway = null;
 
         if (homeIdStr && awayIdStr) {
           const tsH = await getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400);
           const tsA = await getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400);
           const tsHNorm = tsH.ok && tsH.data ? normalizeTeamStatisticsPayload(tsH.data) : null;
           const tsANorm = tsA.ok && tsA.data ? normalizeTeamStatisticsPayload(tsA.data) : null;
-          if (tsHNorm) formHomeStr = coerceFormFromTeamStats(tsHNorm);
-          if (tsANorm) formAwayStr = coerceFormFromTeamStats(tsANorm);
+          if (tsHNorm) {
+            formHomeStr = coerceFormFromTeamStats(tsHNorm);
+            fhFractionsHome = extractFirstHalfFractions(tsHNorm);
+          }
+          if (tsANorm) {
+            formAwayStr = coerceFormFromTeamStats(tsANorm);
+            fhFractionsAway = extractFirstHalfFractions(tsANorm);
+          }
           if (tsH.ok && tsA.ok && tsHNorm && tsANorm) {
             const hStats = extractAdvancedGoalsAverages(tsHNorm);
             const aStats = extractAdvancedGoalsAverages(tsANorm);
@@ -665,6 +653,48 @@ export default async function handler(req, res) {
         const p = calc.probs;
         // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline
         const pRaw = { p1: p.p1, pX: p.pX, p2: p.p2 };
+
+        // === PRIMA REPRIZĂ ===
+        // Derivăm λ FH din λ full match + fracţiile pe bucketele de minute (0 calls noi).
+        // computeMatchProbs cu acele λ dă direct 1X2/GG/O0.5/O1.5/O2.5 pentru prima repriză.
+        // Pentru FH aplicăm un ρ mai slab: low-scoring deja favorizează 0-0, overkill să mai adăugăm corecţie.
+        let firstHalfProbs = null;
+        let firstHalfMeta = null;
+        if (fhFractionsHome || fhFractionsAway) {
+          const fh = deriveFirstHalfLambdas({
+            lambdaHomeFull: lambdaHome,
+            lambdaAwayFull: lambdaAway,
+            fhFractionsHome,
+            fhFractionsAway
+          });
+          if (fh && isGoodNum(fh.lambdaHomeFH) && isGoodNum(fh.lambdaAwayFH)) {
+            const fhCalc = computeMatchProbs(fh.lambdaHomeFH, fh.lambdaAwayFH, fixtureId, {
+              correlation: 0.08,
+              rho: leagueParams.rho * 0.6
+            });
+            if (fhCalc?.probs) {
+              const fp = fhCalc.probs;
+              firstHalfProbs = {
+                p1: clampPct(fp.p1),
+                pX: clampPct(fp.pX),
+                p2: clampPct(fp.p2),
+                pGG: clampPct(fp.pGG),
+                pO05: clampPct(fp.pO05),
+                pO15: clampPct(fp.pO15),
+                pO25: clampPct(fp.pO25),
+                bestScore: fhCalc.bestScore,
+                bestScoreProb: clampPct(fhCalc.bestScoreProb || 0)
+              };
+              firstHalfMeta = {
+                lambdaHome: roundDisplayRate(fh.lambdaHomeFH),
+                lambdaAway: roundDisplayRate(fh.lambdaAwayFH),
+                scaleHome: fh.meta.scaleHome,
+                scaleAway: fh.meta.scaleAway,
+                baselineUsed: fh.meta.baselineUsed
+              };
+            }
+          }
+        }
 
         // === ISOTONIC CALIBRATION (per-league) ===
         const leagueCalibMaps = pickCalibrationMapForLeague(calibrationMaps, lId);
@@ -915,6 +945,9 @@ export default async function handler(req, res) {
           pX: clampPct(pXAdj),
           p2: clampPct(p2Adj)
         });
+        if (firstHalfProbs) {
+          pOut.firstHalf = firstHalfProbs;
+        }
         const teamContext = buildTeamContext({
           homeIdStr,
           awayIdStr,
@@ -1068,7 +1101,8 @@ export default async function handler(req, res) {
                   thin: eloInfo.thin
                 }
               : undefined,
-            eloSpread: eloInfo?.eloSpread ?? undefined
+            eloSpread: eloInfo?.eloSpread ?? undefined,
+            firstHalf: firstHalfMeta || undefined
           },
           auditLog: {
             reasonCodes,

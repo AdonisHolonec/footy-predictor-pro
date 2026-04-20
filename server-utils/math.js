@@ -94,6 +94,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
     let pGG = 0;
     let pU35 = 0;
     let pO15 = 0;
+    let pO05 = 0;
     let mass = 0;
     let maxProb1 = -1;
     let maxProbX = -1;
@@ -129,6 +130,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
         if (i + j > 2.5) pO25 += prob;
         if (i + j <= 3.5) pU35 += prob;
         if (i + j > 1.5) pO15 += prob;
+        if (i + j > 0.5) pO05 += prob;
         if (i > 0 && j > 0) pGG += prob;
       }
     }
@@ -140,6 +142,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
       pGG,
       pU35,
       pO15,
+      pO05,
       mass,
       bestScore1,
       bestScoreX,
@@ -168,6 +171,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
     acc.pGG *= k;
     acc.pU35 *= k;
     acc.pO15 *= k;
+    acc.pO05 *= k;
     acc.mass = 1;
   }
 
@@ -194,7 +198,8 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
       pGG: clamp(acc.pGG * 100, 0, 100),
       pO25: clamp(acc.pO25 * 100, 0, 100),
       pU35: clamp(acc.pU35 * 100, 0, 100),
-      pO15: clamp(acc.pO15 * 100, 0, 100)
+      pO15: clamp(acc.pO15 * 100, 0, 100),
+      pO05: clamp(acc.pO05 * 100, 0, 100)
     },
     bestScore: finalBestScore,
     bestScoreProb: clamp((finalBestScoreProb || 0) * 100, 0, 100),
@@ -419,4 +424,117 @@ export function extractAdvancedGoalsAverages(teamStatsPayload) {
 export function advancedLambdas(homeStats, awayStats, homeFormMulti, awayFormMulti) {
   const s = strengthRatingsLambdas(homeStats, awayStats, homeFormMulti, awayFormMulti);
   return { lambdaHome: s.lambdaHome, lambdaAway: s.lambdaAway };
+}
+
+/**
+ * Baseline: aproximativ 46% din golurile unui meci cad în prima repriză
+ * (statistic pe ligile europene top-5 ultimii 3 sezoane). Folosit când lipseşte
+ * distribuţia pe minute în payload-ul /teams/statistics.
+ */
+export const FIRST_HALF_GOALS_BASELINE = 0.46;
+
+/**
+ * Extrage fracţia de goluri (pentru / împotriva) care cad în prima repriză (min 0-45).
+ * `/teams/statistics` returnează `goals.{for,against}.minute.{"0-15","16-30","31-45",...}`
+ * cu sub-obiect `{total, percentage}`. Însumăm totalurile FH vs. SH şi returnăm fracţia.
+ *
+ * Include şi bucketele de prelungiri ("91-105", "106-120") în bucla SH dacă există.
+ *
+ * @returns {{fhFractionFor: number, fhFractionAgainst: number, sample: {fh: number, sh: number}} | null}
+ */
+export function extractFirstHalfFractions(teamStatsPayload) {
+  try {
+    const payload = normalizeTeamStatisticsPayload(teamStatsPayload);
+    const goals = payload?.response?.goals;
+    if (!goals) return null;
+
+    const FH_KEYS = ["0-15", "16-30", "31-45"];
+    const SH_KEYS = ["46-60", "61-75", "76-90", "91-105", "106-120"];
+
+    const sumSide = (side) => {
+      const m = goals[side]?.minute || {};
+      let fh = 0;
+      let sh = 0;
+      for (const k of FH_KEYS) fh += Number(m[k]?.total) || 0;
+      for (const k of SH_KEYS) sh += Number(m[k]?.total) || 0;
+      const total = fh + sh;
+      if (total <= 0) return null;
+      return { fh: fh / total, sh: sh / total, count: total };
+    };
+
+    const forSide = sumSide("for");
+    const againstSide = sumSide("against");
+    if (!forSide && !againstSide) return null;
+
+    // fallback pe side-ul care lipseşte: folosim baseline-ul
+    const fhFractionFor = forSide ? forSide.fh : FIRST_HALF_GOALS_BASELINE;
+    const fhFractionAgainst = againstSide ? againstSide.fh : FIRST_HALF_GOALS_BASELINE;
+
+    return {
+      fhFractionFor,
+      fhFractionAgainst,
+      sample: {
+        fh: (forSide?.count || 0) + (againstSide?.count || 0),
+        sh: 0 // informativ; putem omite
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derivă λ pentru prima repriză pornind de la λ-urile full match şi fracţiile FH extrase.
+ *
+ * Pentru fiecare echipă, λ_FH ≈ λ_full × mixScale, unde:
+ *   mixScale = (fhFraction_for_self + fhFraction_against_opponent) / 2
+ *
+ * De ce media: echipa care marchează FH des (hot starter) + apărare slabă a adversarului FH →
+ * scor FH probabil mare. Dacă oricare lipseşte, ajustăm cu FIRST_HALF_GOALS_BASELINE.
+ *
+ * Clampat în [0.08, 2.5] — FH goluri mai rare decât full, dar nu sub pragul numeric de stabilitate Poisson.
+ */
+export function deriveFirstHalfLambdas({
+  lambdaHomeFull,
+  lambdaAwayFull,
+  fhFractionsHome,
+  fhFractionsAway
+}) {
+  const baseline = FIRST_HALF_GOALS_BASELINE;
+  const fhForH = fhFractionsHome?.fhFractionFor ?? baseline;
+  const fhAgainstA = fhFractionsAway?.fhFractionAgainst ?? baseline;
+  const fhForA = fhFractionsAway?.fhFractionFor ?? baseline;
+  const fhAgainstH = fhFractionsHome?.fhFractionAgainst ?? baseline;
+
+  const scaleHome = (fhForH + fhAgainstA) / 2;
+  const scaleAway = (fhForA + fhAgainstH) / 2;
+
+  const lambdaHomeFH = clamp(
+    (Number(lambdaHomeFull) || 0) * scaleHome,
+    0.08,
+    2.5
+  );
+  const lambdaAwayFH = clamp(
+    (Number(lambdaAwayFull) || 0) * scaleAway,
+    0.08,
+    2.5
+  );
+
+  return {
+    lambdaHomeFH,
+    lambdaAwayFH,
+    meta: {
+      scaleHome: Number(scaleHome.toFixed(4)),
+      scaleAway: Number(scaleAway.toFixed(4)),
+      fhFractionForHome: Number(fhForH.toFixed(4)),
+      fhFractionAgainstHome: Number(fhAgainstH.toFixed(4)),
+      fhFractionForAway: Number(fhForA.toFixed(4)),
+      fhFractionAgainstAway: Number(fhAgainstA.toFixed(4)),
+      baselineUsed:
+        fhFractionsHome === null ||
+        fhFractionsAway === null ||
+        (fhForH === baseline && fhAgainstH === baseline) ||
+        (fhForA === baseline && fhAgainstA === baseline)
+    }
+  };
 }

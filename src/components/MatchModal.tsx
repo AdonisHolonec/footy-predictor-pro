@@ -780,6 +780,66 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
             </div>
           </div>
 
+          {/* === PRIMA REPRIZĂ — derivată din distribuţia goluri pe minute (/teams/statistics) === */}
+          {match.probs.firstHalf && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <section className="rounded-2xl border border-signal-amber/20 bg-signal-amber/5 p-4 sm:p-5 lg:col-span-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                  <div>
+                    <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-amber/90">
+                      Prima repriză · prognoză
+                    </h3>
+                    <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                      derivată din distribuţia goluri pe minute (fără call API suplimentar)
+                    </p>
+                  </div>
+                  {match.modelMeta?.firstHalf && (
+                    <div className="text-right font-mono text-[10px] text-signal-silver tabular-nums">
+                      <div>
+                        λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
+                        {match.modelMeta.firstHalf.lambdaAway.toFixed(2)}
+                      </div>
+                      <div className="text-[9px] text-signal-inkMuted">
+                        scale · {(match.modelMeta.firstHalf.scaleHome * 100).toFixed(0)}% /{" "}
+                        {(match.modelMeta.firstHalf.scaleAway * 100).toFixed(0)}%
+                        {match.modelMeta.firstHalf.baselineUsed ? " · baseline" : ""}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="grid gap-5 lg:grid-cols-2">
+                  {/* Coloana stângă: 1X2 FH */}
+                  <div>
+                    <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                      Rezultat la pauză (1X2 FH)
+                    </div>
+                    <ProbBar label="Gazde conduc la pauză" val={match.probs.firstHalf.p1} color={homeColor} />
+                    <ProbBar label="Egalitate la pauză" val={match.probs.firstHalf.pX} color="#94a3b8" />
+                    <ProbBar label="Oaspeţi conduc la pauză" val={match.probs.firstHalf.p2} color={awayColor} />
+                  </div>
+                  {/* Coloana dreaptă: goluri FH */}
+                  <div>
+                    <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                      Goluri în prima repriză
+                    </div>
+                    <ProbBar label="Peste 0.5 goluri FH" val={match.probs.firstHalf.pO05} color="#22d3ee" />
+                    <ProbBar label="Peste 1.5 goluri FH" val={match.probs.firstHalf.pO15} color="#38bdf8" />
+                    <ProbBar label="Peste 2.5 goluri FH" val={match.probs.firstHalf.pO25} color="#0ea5e9" />
+                    <ProbBar label="Ambele marchează FH" val={match.probs.firstHalf.pGG} color="#fbbf24" />
+                  </div>
+                </div>
+                {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
+                  <div className="mt-4 rounded-lg border border-white/5 bg-signal-void/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                    <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Scor pauză cel mai probabil</span>
+                    <span className="ml-2 text-signal-amberSoft tabular-nums">
+                      {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
+                    </span>
+                  </div>
+                ) : null}
+              </section>
+            </div>
+          )}
+
           {match.modelMeta &&
             (match.modelMeta.method ||
               match.modelMeta.reasonCodes?.length ||

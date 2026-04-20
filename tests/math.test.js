@@ -5,11 +5,20 @@ import {
   strengthRatingsLambdas,
   syntheticLambdas,
   applyBayesianShrinkage,
-  extractFormMultiplier
+  extractFormMultiplier,
+  extractFirstHalfFractions,
+  deriveFirstHalfLambdas,
+  FIRST_HALF_GOALS_BASELINE
 } from "../server-utils/math.js";
 import { shinImpliedProbs, removeBookmakerMargin } from "../server-utils/advancedMath.js";
 import { expectedCalibrationError } from "../server-utils/probabilityMetrics.js";
-import { getLeagueParams, getModelMarketBlendWeight } from "../server-utils/modelConstants.js";
+import {
+  getLeagueParams,
+  getModelMarketBlendWeight,
+  getLeagueConfidenceMultiplier,
+  getLeagueStakeCap,
+  TOP_LEAGUE_IDS
+} from "../server-utils/modelConstants.js";
 import { fitIsotonicPav, applyIsotonicMap, applyCalibratedTriple } from "../server-utils/isotonicCalibration.js";
 import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
@@ -150,6 +159,149 @@ test("getModelMarketBlendWeight respects method heuristic", () => {
   const baseEpl = getLeagueParams(39).blendWeight;
   assert.ok(getModelMarketBlendWeight("strength-ratings", 39) >= baseEpl);
   assert.ok(getModelMarketBlendWeight("standings", 39) <= baseEpl);
+});
+
+test("TOP_LEAGUE_IDS conţine exact cele 10 ligi canonice, inclusiv UEFA", () => {
+  assert.equal(TOP_LEAGUE_IDS.length, 10);
+  const expected = [39, 140, 135, 78, 61, 2, 3, 848, 88, 283];
+  for (const id of expected) {
+    assert.ok(TOP_LEAGUE_IDS.includes(id), `Lipseşte liga ${id}`);
+  }
+  // UEFA comps sunt obligatorii
+  assert.ok(TOP_LEAGUE_IDS.includes(2), "UCL lipseşte");
+  assert.ok(TOP_LEAGUE_IDS.includes(3), "UEL lipseşte");
+  assert.ok(TOP_LEAGUE_IDS.includes(848), "UECL lipseşte");
+});
+
+// =============================================================================
+// Prima repriză (first-half predictions)
+// =============================================================================
+
+test("computeMatchProbs exposes pO05 (at least one goal total)", () => {
+  const r = computeMatchProbs(1.5, 0.9, 0, {});
+  assert.ok(r.probs.pO05 > 0 && r.probs.pO05 <= 100);
+  // pO05 trebuie să fie > pO15 (peste 0.5 ⊇ peste 1.5)
+  assert.ok(r.probs.pO05 > r.probs.pO15, `pO05=${r.probs.pO05} trebuie > pO15=${r.probs.pO15}`);
+  // pO05 > pGG (pentru 0 < λ mic, ambele marchează e eveniment mai rar)
+  assert.ok(r.probs.pO05 >= r.probs.pGG);
+});
+
+test("extractFirstHalfFractions extracts ~0.5 ratio from balanced minute buckets", () => {
+  const payload = {
+    response: {
+      goals: {
+        for: {
+          minute: {
+            "0-15": { total: 2 },
+            "16-30": { total: 3 },
+            "31-45": { total: 3 },
+            "46-60": { total: 3 },
+            "61-75": { total: 3 },
+            "76-90": { total: 2 }
+          }
+        },
+        against: {
+          minute: {
+            "0-15": { total: 1 },
+            "16-30": { total: 2 },
+            "31-45": { total: 2 },
+            "46-60": { total: 2 },
+            "61-75": { total: 3 },
+            "76-90": { total: 2 }
+          }
+        }
+      }
+    }
+  };
+  const result = extractFirstHalfFractions(payload);
+  assert.ok(result, "ar trebui să producă fracţii");
+  // for: 8/16 = 0.5
+  assert.ok(Math.abs(result.fhFractionFor - 0.5) < 1e-9, `fhFractionFor=${result.fhFractionFor}`);
+  // against: 5/12 ≈ 0.4167
+  assert.ok(Math.abs(result.fhFractionAgainst - 5 / 12) < 1e-9, `fhFractionAgainst=${result.fhFractionAgainst}`);
+});
+
+test("extractFirstHalfFractions returns null when minute buckets missing", () => {
+  assert.equal(extractFirstHalfFractions({ response: { goals: { for: {}, against: {} } } }), null);
+  assert.equal(extractFirstHalfFractions(null), null);
+  assert.equal(extractFirstHalfFractions({}), null);
+});
+
+test("extractFirstHalfFractions handles extra-time buckets without crashing", () => {
+  const payload = {
+    response: {
+      goals: {
+        for: {
+          minute: {
+            "0-15": { total: 3 },
+            "46-60": { total: 2 },
+            "91-105": { total: 1 },
+            "106-120": { total: 0 }
+          }
+        }
+      }
+    }
+  };
+  const r = extractFirstHalfFractions(payload);
+  assert.ok(r);
+  // FH=3, SH=2+1+0=3 → fraction = 3/6 = 0.5
+  assert.ok(Math.abs(r.fhFractionFor - 0.5) < 1e-9);
+});
+
+test("deriveFirstHalfLambdas scales lambdas below full-match values", () => {
+  const fhFractionsHome = { fhFractionFor: 0.5, fhFractionAgainst: 0.42 };
+  const fhFractionsAway = { fhFractionFor: 0.45, fhFractionAgainst: 0.48 };
+  const result = deriveFirstHalfLambdas({
+    lambdaHomeFull: 1.8,
+    lambdaAwayFull: 1.2,
+    fhFractionsHome,
+    fhFractionsAway
+  });
+  assert.ok(result.lambdaHomeFH > 0 && result.lambdaHomeFH < 1.8, `λ_H_FH=${result.lambdaHomeFH}`);
+  assert.ok(result.lambdaAwayFH > 0 && result.lambdaAwayFH < 1.2, `λ_A_FH=${result.lambdaAwayFH}`);
+  // scale_home = (0.5 + 0.48) / 2 = 0.49 → 1.8 * 0.49 = 0.882
+  assert.ok(Math.abs(result.lambdaHomeFH - 1.8 * 0.49) < 1e-9);
+});
+
+test("deriveFirstHalfLambdas falls back to baseline when fractions are null", () => {
+  const result = deriveFirstHalfLambdas({
+    lambdaHomeFull: 2.0,
+    lambdaAwayFull: 1.0,
+    fhFractionsHome: null,
+    fhFractionsAway: null
+  });
+  assert.ok(Math.abs(result.lambdaHomeFH - 2.0 * FIRST_HALF_GOALS_BASELINE) < 1e-9);
+  assert.ok(Math.abs(result.lambdaAwayFH - 1.0 * FIRST_HALF_GOALS_BASELINE) < 1e-9);
+  assert.equal(result.meta.baselineUsed, true);
+});
+
+test("FH probs: pO05 FH < pO05 full match pentru acelaşi meci", () => {
+  const full = computeMatchProbs(1.5, 1.2, 0, {});
+  const fhLam = deriveFirstHalfLambdas({
+    lambdaHomeFull: 1.5,
+    lambdaAwayFull: 1.2,
+    fhFractionsHome: { fhFractionFor: 0.46, fhFractionAgainst: 0.46 },
+    fhFractionsAway: { fhFractionFor: 0.46, fhFractionAgainst: 0.46 }
+  });
+  const fh = computeMatchProbs(fhLam.lambdaHomeFH, fhLam.lambdaAwayFH, 0, {});
+  // FH are λ mai mici → probabilitate mai mică pentru cel puţin un gol
+  assert.ok(fh.probs.pO05 < full.probs.pO05, `FH pO05=${fh.probs.pO05} vs full pO05=${full.probs.pO05}`);
+  // pX la pauză > pX la final (egalurile low-score sunt mai frecvente în FH)
+  assert.ok(fh.probs.pX > full.probs.pX, `FH pX=${fh.probs.pX} vs full pX=${full.probs.pX}`);
+});
+
+test("getLeagueConfidenceMultiplier şi getLeagueStakeCap întorc valori plauzibile", () => {
+  // EPL trebuie să aibă cel mai înalt multiplier (1.00) şi cel mai mare stake cap
+  assert.equal(getLeagueConfidenceMultiplier(39), 1.0);
+  assert.equal(getLeagueStakeCap(39), 3.0);
+
+  // UCL are multiplier mai scăzut (sample mic)
+  assert.ok(getLeagueConfidenceMultiplier(2) < 1.0);
+  assert.ok(getLeagueStakeCap(2) <= getLeagueStakeCap(39));
+
+  // Liga necunoscută → default fallback (0.88, 1.9)
+  assert.equal(getLeagueConfidenceMultiplier(99999), 0.88);
+  assert.equal(getLeagueStakeCap(99999), 1.9);
 });
 
 test("expectedCalibrationError weights by bucket size", () => {

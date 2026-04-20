@@ -44,6 +44,20 @@ export type ValueBet = {
   reasons?: string[];
 };
 
+/** Probabilităţi prima repriză (min 0-45), derivate din acelaşi model cu λ scalate. */
+export type FirstHalfProbs = {
+  p1: number;
+  pX: number;
+  p2: number;
+  pGG: number;
+  /** Peste 0.5 goluri FH (probabilitate macă un gol să cadă în prima repriză). */
+  pO05: number;
+  pO15: number;
+  pO25: number;
+  bestScore: string;
+  bestScoreProb: number;
+};
+
 export type Probs = {
   p1: number;
   pX: number;
@@ -52,6 +66,8 @@ export type Probs = {
   pO25: number;
   pU35: number;
   pO15: number;
+  /** Peste 0.5 goluri total (expus pentru pieţe derivate). */
+  pO05?: number;
   /** Șansă dublă 1 sau X (model). */
   pDC1X?: number;
   /** Șansă dublă 1 sau 2. */
@@ -64,6 +80,8 @@ export type Probs = {
   pNGG?: number;
   /** Sub 2.5 goluri (complement peste 2.5). */
   pU25?: number;
+  /** Bloc pentru prima repriză (populat când /teams/statistics expune bucketele de minute). */
+  firstHalf?: FirstHalfProbs;
 };
 
 /** Clasament + mini-formă (API standings / teams statistics). */
@@ -211,6 +229,14 @@ export type PredictionRow = {
       thin?: boolean;
     };
     eloSpread?: number;
+    /** Metadate pentru secţiunea "Prima repriză" (λ FH + scale factors per echipă). */
+    firstHalf?: {
+      lambdaHome: number;
+      lambdaAway: number;
+      scaleHome: number;
+      scaleAway: number;
+      baselineUsed?: boolean;
+    };
   };
 };
 
