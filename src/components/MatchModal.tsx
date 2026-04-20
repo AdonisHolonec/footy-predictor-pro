@@ -185,7 +185,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/get-xg?fixtureId=${match.id}`)
+    fetch(`/api/fixtures?view=xg&fixtureId=${match.id}`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && !data?.error) setXgData(data);

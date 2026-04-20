@@ -14,7 +14,7 @@ function isTerminalOrAbandonedStatus(status?: string): boolean {
 
 /**
  * Include meciuri în desfășurare și meciuri „NS” încă neactualizate după start (predict vechi),
- * ca `/api/fixtures/live-scores` să poată aduce status + goluri.
+ * ca `/api/fixtures?view=live` să poată aduce status + goluri.
  */
 export function shouldPollFixtureScore(p: PredictionRow): boolean {
   if (p.insufficientData) return false;
@@ -40,7 +40,7 @@ type Options = {
 };
 
 /**
- * Periodically merges `status` + `score` from `/api/fixtures/live-scores` for rows currently in play.
+ * Periodically merges `status` + `score` from `/api/fixtures?view=live` for rows currently in play.
  * Does not re-run the full model — only fixture state from the upstream API.
  */
 export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPreds, options?: Options) {
@@ -65,7 +65,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
     const fetchAndMerge = async () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
-        const res = await fetch(`/api/fixtures/live-scores?ids=${encodeURIComponent(liveIdsKey)}`);
+        const res = await fetch(`/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}`);
         const json = (await res.json()) as {
           ok?: boolean;
           fixtures?: Array<{ id: number; status: string; score: { home: number | null; away: number | null } }>;

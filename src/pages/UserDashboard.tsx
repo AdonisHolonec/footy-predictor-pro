@@ -159,7 +159,7 @@ export default function UserDashboard() {
           usageDay: todayKey,
           date: todayKey
         });
-        const res = await fetch(`/api/fixtures/day?${qs}`, {
+        const res = await fetch(`/api/fixtures?${qs}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
           signal
         });
@@ -386,7 +386,7 @@ export default function UserDashboard() {
     try {
       const responses = await Promise.all(
         effectiveDates.map(async (currentDate) => {
-          const response = await fetch(`/api/fixtures/day?date=${currentDate}`);
+          const response = await fetch(`/api/fixtures?date=${currentDate}`);
           const json = await response.json();
           if (!json.ok) throw new Error(json.error || "Eroare API");
           return json as DayResponse;
@@ -654,7 +654,7 @@ export default function UserDashboard() {
     }
     setExportBusy(true);
     try {
-      const res = await fetch(`/api/fixtures/day?gdprExport=1`, {
+      const res = await fetch(`/api/fixtures?gdprExport=1`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       const json = await res.json();

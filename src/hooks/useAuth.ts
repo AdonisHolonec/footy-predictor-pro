@@ -100,7 +100,7 @@ export function useAuth() {
       if (!profile || profile.role === "admin") return profile;
       if (profile.role !== "user") return profile;
       try {
-        const response = await fetch("/api/fixtures/day?syncBootstrapAdmin=1", {
+        const response = await fetch("/api/fixtures?syncBootstrapAdmin=1", {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -286,7 +286,7 @@ export function useAuth() {
       includeWarmPredictUsage: "1",
       usageDay
     });
-    const response = await fetch(`/api/admin/profiles?${qs}`, {
+    const response = await fetch(`/api/admin?${qs}`, {
       headers: { Authorization: `Bearer ${session.access_token}` }
     });
     const json = await response.json();
@@ -321,7 +321,7 @@ export function useAuth() {
 
   const updateProfileRole = useCallback(async (targetUserId: string, role: "user" | "admin") => {
     if (!supabase || !session?.access_token) return;
-    const response = await fetch("/api/admin/profiles", {
+    const response = await fetch("/api/admin", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -340,7 +340,7 @@ export function useAuth() {
 
   const toggleProfileBlock = useCallback(async (targetUserId: string, isBlocked: boolean) => {
     if (!supabase || !session?.access_token) return;
-    const response = await fetch("/api/admin/profiles", {
+    const response = await fetch("/api/admin", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",

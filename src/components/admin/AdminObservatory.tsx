@@ -452,7 +452,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
         fetch(`/api/backtest?view=metrics&days=${days}`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         }).then((r) => r.json()),
-        fetch(`/api/admin/ml`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json())
+        fetch(`/api/admin?view=ml`, { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json())
       ]);
       if (m?.ok) setMetrics(m as ModelMetricsResponse);
       else setErr((m?.error as string) || "Nu am putut încărca metricile.");
@@ -472,7 +472,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     if (!accessToken) return;
     setRefreshing(true);
     try {
-      await fetch(`/api/admin/ml?action=invalidate-cache`, {
+      await fetch(`/api/admin?view=ml&action=invalidate-cache`, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}` }
       });

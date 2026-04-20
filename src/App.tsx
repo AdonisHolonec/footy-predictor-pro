@@ -253,7 +253,7 @@ export default function App() {
     try {
       const responses = await Promise.all(
         effectiveDates.map(async (d) => {
-          const r = await fetch(`/api/fixtures/day?date=${d}`);
+          const r = await fetch(`/api/fixtures?date=${d}`);
           const j = await r.json();
           if (!j.ok) throw new Error(j.error || "Eroare API");
           return j as DayResponse;
@@ -712,7 +712,7 @@ export default function App() {
   async function loadUsageSnapshot() {
     setUsageLoading(true);
     try {
-      const response = await fetch("/api/fixtures/day?usageOnly=1&usageDays=7");
+      const response = await fetch("/api/fixtures?usageOnly=1&usageDays=7");
       const json = await response.json();
       if (!json?.ok) throw new Error(json?.error || "Nu am putut incarca usage.");
       setUsageSnapshot({
