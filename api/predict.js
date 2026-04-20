@@ -106,6 +106,89 @@ function marketTier(pYesPct) {
 }
 
 /**
+ * Probabilităţi a priori (baseline global) pentru fiecare piaţă. Folosite la scorul lift-adjusted
+ * al top pick-ului: un pick la exact baseline NU e informativ (pierde în faţa altei pieţe cu edge real).
+ * Valorile sunt medii realiste pe fotbal european top-5 + competiţii UEFA.
+ */
+const MARKET_BASELINES = {
+  "1": 45,
+  X: 25,
+  "2": 30,
+  "Peste 1.5": 75,
+  "Sub 1.5": 25,
+  "Peste 2.5": 53,
+  "Sub 2.5": 47,
+  "Peste 3.5": 30,
+  "Sub 3.5": 70,
+  GG: 52,
+  NGG: 48
+};
+
+/**
+ * Alege cel mai bun pick recomandabil dintr-un pool complet de pieţe.
+ *
+ * Scor = probabilitate × (1 + lift/60), cu `lift = probabilitate - baseline`.
+ * Exemplu: Peste 1.5 @83% (baseline 75%) → lift +8 → score = 83 × 1.133 ≈ 94.
+ *          GG @65% (baseline 52%) → lift +13 → score = 65 × 1.217 ≈ 79.
+ *          Sub 3.5 @58% (baseline 70%) → lift -12 → score = 58 × 0.80 ≈ 46.4.
+ *
+ * Această formulă premiază pick-urile unde modelul vede clar peste baseline-ul generic al pieţei,
+ * dar refuză piețele banal-sigure (ex. Peste 1.5 la exact 75%).
+ *
+ * Minim acceptabil: probabilitate ≥ 50% (nu recomandăm niciodată un pick la coin-flip).
+ */
+function selectTopPick(probs, p1Pct, pXPct, p2Pct) {
+  const pO15 = Number(probs.pO15) || 0;
+  const pU15 = Math.max(0, 100 - pO15);
+  const pO25 = Number(probs.pO25) || 0;
+  const pU25 = Math.max(0, 100 - pO25);
+  const pU35 = Number(probs.pU35) || 0;
+  const pO35 = Math.max(0, 100 - pU35);
+  const pGG = Number(probs.pGG) || 0;
+  const pNGG = Math.max(0, 100 - pGG);
+
+  const candidates = [
+    { pick: "1", prob: p1Pct },
+    { pick: "X", prob: pXPct },
+    { pick: "2", prob: p2Pct },
+    { pick: "Peste 1.5", prob: pO15 },
+    { pick: "Sub 1.5", prob: pU15 },
+    { pick: "Peste 2.5", prob: pO25 },
+    { pick: "Sub 2.5", prob: pU25 },
+    { pick: "Peste 3.5", prob: pO35 },
+    { pick: "Sub 3.5", prob: pU35 },
+    { pick: "GG", prob: pGG },
+    { pick: "NGG", prob: pNGG }
+  ];
+
+  const scored = candidates
+    .filter((c) => c.prob >= 50)
+    .map((c) => {
+      const baseline = MARKET_BASELINES[c.pick] || 50;
+      const lift = c.prob - baseline;
+      const score = c.prob * (1 + lift / 60);
+      return { ...c, baseline, lift: Number(lift.toFixed(1)), score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) {
+    // fallback: argmax al 1X2 (niciun pick > 50% — pick nesigur)
+    const winner =
+      p1Pct >= pXPct && p1Pct >= p2Pct ? "1" : p2Pct > p1Pct && p2Pct > pXPct ? "2" : "X";
+    const prob = winner === "1" ? p1Pct : winner === "2" ? p2Pct : pXPct;
+    return { pick: winner, prob, lift: 0, alternates: [] };
+  }
+
+  const best = scored[0];
+  return {
+    pick: best.pick,
+    prob: best.prob,
+    lift: best.lift,
+    alternates: scored.slice(1, 4).map((c) => ({ pick: c.pick, prob: c.prob, lift: c.lift }))
+  };
+}
+
+/**
  * Extrage toate rândurile de clasament din răspunsul API-Football (structuri multiple:
  * standings[] de array-uri, listă plată, sau obiecte cu .table).
  */
@@ -792,20 +875,21 @@ export default async function handler(req, res) {
         const qualityPenalty = dataQuality < 0.6 ? 0.9 : 1;
 
         const finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X";
-        let topPick = finalPick1X2;
-        let maxConf = Math.max(p1Adj, pXAdj, p2Adj);
-        if (p.pU35 > maxConf) {
-          topPick = "Sub 3.5";
-          maxConf = p.pU35;
-        }
-        if (p.pO25 > maxConf) {
-          topPick = "Peste 2.5";
-          maxConf = p.pO25;
-        }
-        if (p.pGG > maxConf) {
-          topPick = "GG";
-          maxConf = p.pGG;
-        }
+        // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
+        // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
+        const topSelection = selectTopPick(
+          {
+            pO15: p.pO15,
+            pO25: p.pO25,
+            pU35: p.pU35,
+            pGG: p.pGG
+          },
+          p1Adj,
+          pXAdj,
+          p2Adj
+        );
+        let topPick = topSelection.pick;
+        let maxConf = topSelection.prob;
         maxConf = clampPct(maxConf * leagueMultiplier * qualityPenalty);
         const stakePolicy = applyStakePolicyV2({
           stakePct: finalKelly,
@@ -956,6 +1040,8 @@ export default async function handler(req, res) {
             modelVersion: MODEL_VERSION,
             gridMax: calc?.modelMeta?.gridMax,
             massCaptured: calc?.modelMeta?.massCaptured,
+            topPickLift: topSelection.lift,
+            topPickAlternates: topSelection.alternates,
             leagueParams: {
               leagueAvg: leagueParams.leagueAvg,
               homeAdv: leagueParams.homeAdv,

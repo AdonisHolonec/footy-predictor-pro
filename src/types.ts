@@ -196,6 +196,10 @@ export type PredictionRow = {
       awayPlayed?: number | null;
       shrinkageK?: number;
     };
+    /** Cât de mult probabilitatea pick-ului recomandat depăşeşte baseline-ul pieţei (pp). */
+    topPickLift?: number;
+    /** Alternative considerate (sortate după scorul lift-adjusted, excluzând pick-ul ales). */
+    topPickAlternates?: Array<{ pick: string; prob: number; lift: number }>;
     calibrationApplied?: boolean;
     stackerApplied?: boolean;
     stackerSampleSize?: number | null;

@@ -861,6 +861,53 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                     </div>
                   )}
 
+                  {/* === Top pick rationale (lift vs baseline + alternative) === */}
+                  {(match.modelMeta.topPickLift != null ||
+                    (match.modelMeta.topPickAlternates && match.modelMeta.topPickAlternates.length > 0)) && (
+                    <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
+                      <div className="mb-1 flex items-center justify-between text-[9px] uppercase tracking-wider">
+                        <span className="text-signal-petrol/80">De ce acest pick?</span>
+                        {match.modelMeta.topPickLift != null && (
+                          <span
+                            className={
+                              match.modelMeta.topPickLift >= 10
+                                ? "text-signal-sage"
+                                : match.modelMeta.topPickLift >= 3
+                                  ? "text-signal-petrol"
+                                  : "text-signal-amber"
+                            }
+                            title="Cât de mult probabilitatea pick-ului depăşeşte baseline-ul tipic al pieţei. ≥10pp = edge puternic, 3-10pp = moderat, <3pp = pick banal-sigur."
+                          >
+                            lift {match.modelMeta.topPickLift >= 0 ? "+" : ""}
+                            {match.modelMeta.topPickLift.toFixed(1)}pp
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-signal-inkMuted">
+                        Pick-ul e ales după scor <span className="text-signal-silver">prob × (1 + lift/60)</span> —
+                        premiază pieţele unde modelul vede clar peste medie, nu doar cea mai mare probabilitate brută.
+                      </p>
+                      {match.modelMeta.topPickAlternates && match.modelMeta.topPickAlternates.length > 0 && (
+                        <div className="mt-2 border-t border-white/5 pt-2">
+                          <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                            Alternative considerate
+                          </div>
+                          <ul className="space-y-0.5 tabular-nums">
+                            {match.modelMeta.topPickAlternates.map((alt) => (
+                              <li key={alt.pick} className="flex items-center justify-between gap-2 text-[10px]">
+                                <span className="text-signal-silver">{alt.pick}</span>
+                                <span className="text-signal-inkMuted">
+                                  {alt.prob.toFixed(1)}% · lift {alt.lift >= 0 ? "+" : ""}
+                                  {alt.lift.toFixed(1)}pp
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* === League params (DC / home adv / blend) === */}
                   {match.modelMeta.leagueParams && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">

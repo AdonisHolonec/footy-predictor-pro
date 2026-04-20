@@ -30,6 +30,21 @@ test("computeMatchProbs exposes bestScoreProb alongside bestScore", () => {
   assert.ok(r.bestScoreProb >= 5 && r.bestScoreProb <= 30, `bestScoreProb=${r.bestScoreProb}`);
 });
 
+test("lift-adjusted pick scoring: GG wins over trivially-safe Peste 1.5", () => {
+  // Simulăm funcţia de scoring in-place (aceeaşi formulă ca în selectTopPick din api/predict.js)
+  const BASELINES = { "Peste 1.5": 75, GG: 52, "Sub 3.5": 70, "1": 45 };
+  const score = (pick, prob) => prob * (1 + (prob - BASELINES[pick]) / 60);
+
+  // Caz 1: Peste 1.5 @83% (real edge) bate GG @65%
+  assert.ok(score("Peste 1.5", 83) > score("GG", 65), "Peste 1.5 @83% trebuie să bată GG @65%");
+
+  // Caz 2: Peste 1.5 exact la baseline (75%) pierde în faţa GG @65% (edge real)
+  assert.ok(score("Peste 1.5", 75) < score("GG", 65), "Peste 1.5 @baseline pierde în faţa GG informativ");
+
+  // Caz 3: Sub 3.5 sub baseline (58% vs baseline 70%) pierde în faţa GG @65%
+  assert.ok(score("Sub 3.5", 58) < score("GG", 65), "Sub 3.5 sub baseline pierde în faţa GG");
+});
+
 test("1X2 probabilities sum to ~100% across lambda range", () => {
   const cases = [
     [0.5, 0.5], [1.2, 1.0], [1.8, 1.4], [2.5, 2.1], [3.5, 3.5], [4.2, 0.6]
