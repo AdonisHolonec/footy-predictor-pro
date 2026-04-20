@@ -322,6 +322,7 @@ export type DayResponse = {
     ultraTrialRemainingMs?: number;
     predictCountToday?: number;
     predictLimit?: number | null;
+    quotaExempt?: boolean;
   };
 };
 

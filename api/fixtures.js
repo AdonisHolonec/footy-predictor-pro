@@ -153,19 +153,35 @@ async function handleDay(req, res) {
       if (!sb) {
         return res.status(503).json({ ok: false, error: "Supabase admin unavailable." });
       }
-      const { data: profile, error: profileError } = await sb
+      let profile = null;
+      let { data: profData, error: profileError } = await sb
         .from("profiles")
         .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
         .eq("user_id", requester.user.id)
         .maybeSingle();
-      if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
+      if (profileError) {
+        const msg = String(profileError.message || "").toLowerCase();
+        const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+        if (!missingTierCols) return res.status(500).json({ ok: false, error: profileError.message });
+        const { data: legacyData, error: legacyError } = await sb
+          .from("profiles")
+          .select("created_at")
+          .eq("user_id", requester.user.id)
+          .maybeSingle();
+        if (legacyError) return res.status(500).json({ ok: false, error: legacyError.message });
+        profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+      } else {
+        profile = profData;
+      }
       if (!profile) return res.status(404).json({ ok: false, error: "Profile not found." });
 
+      const quotaExempt = await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase());
       const tierInfo = resolveEffectiveTierFromProfile(profile);
-      const freeExpired = tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
+      const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
+      const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
       const usageDay = String(req.query.usageDay || date).slice(0, 10);
       const predictCount = await getPredictCountToday(requester.user.id, usageDay);
-      const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+      const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTier);
       if (freeExpired) {
         return res.status(402).json({
           ok: false,
@@ -176,13 +192,14 @@ async function handleDay(req, res) {
       return res.status(200).json({
         ok: true,
         tierStatus: {
-          tier: tierInfo.effectiveTier,
+          tier: effectiveTier,
           requestedTier: tierInfo.requestedTier,
           subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
           premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
           ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
           predictCountToday: predictCount,
-          predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+          predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit,
+          quotaExempt
         }
       });
     }
@@ -229,14 +246,30 @@ async function handleDay(req, res) {
       if (config.ok) {
         const sb = getSupabaseAdmin();
         if (sb) {
-          const { data: profile } = await sb
+          let profile = null;
+          let { data: profData, error: profileError } = await sb
             .from("profiles")
             .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
             .eq("user_id", requester.user.id)
             .maybeSingle();
+          if (profileError) {
+            const msg = String(profileError.message || "").toLowerCase();
+            const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+            if (!missingTierCols) throw profileError;
+            const { data: legacyData } = await sb
+              .from("profiles")
+              .select("created_at")
+              .eq("user_id", requester.user.id)
+              .maybeSingle();
+            profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+          } else {
+            profile = profData;
+          }
           if (profile) {
+            const quotaExempt = await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase());
             const tierInfo = resolveEffectiveTierFromProfile(profile);
-            const freeExpired = tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
+            const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
+            const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
             if (freeExpired) {
               return res.status(402).json({
                 ok: false,
@@ -244,15 +277,16 @@ async function handleDay(req, res) {
               });
             }
             const predictCount = await getPredictCountToday(requester.user.id, date);
-            const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+            const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTier);
             tierStatus = {
-              tier: tierInfo.effectiveTier,
+              tier: effectiveTier,
               requestedTier: tierInfo.requestedTier,
               subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
               premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
               ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
               predictCountToday: predictCount,
-              predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+              predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit,
+              quotaExempt
             };
           }
         }

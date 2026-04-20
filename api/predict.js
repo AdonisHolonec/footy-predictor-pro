@@ -49,6 +49,7 @@ import {
 } from "../server-utils/teamMarketRolling.js";
 import { poissonOverLine } from "../server-utils/math.js";
 import {
+  isWarmPredictQuotaExempt,
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import {
@@ -497,42 +498,62 @@ export default async function handler(req, res) {
   let tierContext = null;
   let incrementedTierUsage = false;
   if (!usageCtx.anonymous && usageCtx.userId) {
+    const quotaExempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
     const supabase = getSupabaseAdmin();
-    const { data: profile, error: profileError } = await supabase
+    let profile = null;
+    let { data: profData, error: profileError } = await supabase
       .from("profiles")
       .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
       .eq("user_id", usageCtx.userId)
       .maybeSingle();
     if (profileError) {
-      return res.status(500).json({ ok: false, error: profileError.message || "Nu am putut verifica abonamentul." });
+      const msg = String(profileError.message || "").toLowerCase();
+      const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+      if (!missingTierCols) {
+        return res.status(500).json({ ok: false, error: profileError.message || "Nu am putut verifica abonamentul." });
+      }
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("profiles")
+        .select("created_at")
+        .eq("user_id", usageCtx.userId)
+        .maybeSingle();
+      if (legacyError) {
+        return res.status(500).json({ ok: false, error: legacyError.message || "Nu am putut verifica profilul." });
+      }
+      profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+    } else {
+      profile = profData;
     }
     if (!profile) {
       return res.status(404).json({ ok: false, error: "Profil utilizator inexistent." });
     }
 
     const tierInfo = resolveEffectiveTierFromProfile(profile);
-    if (tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at)) {
+    if (!quotaExempt && tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at)) {
       return res.status(402).json({
         ok: false,
         error: "Free Habit Trial (10 zile) a expirat. Activeaza trial Premium/Ultra sau un abonament."
       });
     }
 
-    const dailyLimit = tierDailyLimit(tierInfo.effectiveTier);
+    const effectiveTierForQuota = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
+    const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTierForQuota);
     const currentCount = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay);
     if (Number.isFinite(dailyLimit) && currentCount >= dailyLimit) {
       return res.status(429).json({
         ok: false,
         error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
         tierStatus: {
-          tier: tierInfo.effectiveTier,
+          tier: effectiveTierForQuota,
           predictCountToday: currentCount,
           predictLimit: dailyLimit
         }
       });
     }
-    const nextCount = await incrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
-    incrementedTierUsage = true;
+    const nextCount = quotaExempt
+      ? currentCount
+      : await incrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
+    incrementedTierUsage = !quotaExempt;
     if (Number.isFinite(dailyLimit) && nextCount > dailyLimit) {
       await decrementPredictCountToday(usageCtx.userId, usageCtx.usageDay);
       incrementedTierUsage = false;
@@ -540,7 +561,7 @@ export default async function handler(req, res) {
         ok: false,
         error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
         tierStatus: {
-          tier: tierInfo.effectiveTier,
+          tier: effectiveTierForQuota,
           predictCountToday: dailyLimit,
           predictLimit: dailyLimit
         }
@@ -548,8 +569,10 @@ export default async function handler(req, res) {
     }
     tierContext = {
       ...tierInfo,
+      effectiveTier: effectiveTierForQuota,
+      quotaExempt,
       predictCountToday: nextCount,
-      predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
+      predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit
     };
   }
 
@@ -1318,7 +1341,10 @@ export default async function handler(req, res) {
       }
     }
 
-    const masked = tierContext ? out.map((row) => maskPredictionForTier(row, tierContext.effectiveTier)) : out;
+    const masked =
+      tierContext && !tierContext.quotaExempt
+        ? out.map((row) => maskPredictionForTier(row, tierContext.effectiveTier))
+        : out;
     if (tierContext) {
       res.setHeader("X-Tier", String(tierContext.effectiveTier));
       res.setHeader("X-Predict-Count", String(tierContext.predictCountToday ?? ""));

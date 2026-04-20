@@ -91,6 +91,7 @@ export function useAuth() {
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([]);
   const [predictCountToday, setPredictCountToday] = useState(0);
   const [predictLimitToday, setPredictLimitToday] = useState<number | null>(null);
+  const [tierQuotaExempt, setTierQuotaExempt] = useState(false);
 
   const loadProfile = useCallback(async (userId: string) => {
     if (!supabase) return null;
@@ -101,7 +102,21 @@ export function useAuth() {
       )
       .eq("user_id", userId)
       .maybeSingle();
-    if (profileError) throw profileError;
+    if (profileError) {
+      const msg = String(profileError.message || "").toLowerCase();
+      const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+      if (!missingTierCols) throw profileError;
+      // Backward-compat: DB migration for tier columns not applied yet.
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("profiles")
+        .select(
+          "user_id, role, favorite_leagues, is_blocked, notify_safe, notify_value, notify_email, notify_email_consent_at, onboarding_completed"
+        )
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (legacyError) throw legacyError;
+      return (legacyData as ProfileRow | null) ?? null;
+    }
     return (data as ProfileRow | null) ?? null;
   }, []);
 
@@ -171,9 +186,11 @@ export function useAuth() {
         ultraTrialRemainingMs?: number;
         predictCountToday?: number;
         predictLimit?: number | null;
+        quotaExempt?: boolean;
       };
       setPredictCountToday(Math.max(0, Number(ts.predictCountToday) || 0));
       setPredictLimitToday(ts.predictLimit == null ? null : Number(ts.predictLimit));
+      setTierQuotaExempt(Boolean(ts.quotaExempt));
       setUser((prev) =>
         prev
           ? {
@@ -557,6 +574,7 @@ export function useAuth() {
     if (!session?.access_token) {
       setPredictCountToday(0);
       setPredictLimitToday(null);
+      setTierQuotaExempt(false);
       return;
     }
     void refreshTierStatus();
@@ -582,6 +600,7 @@ export function useAuth() {
     trialRemainingTime,
     predictCountToday,
     predictLimitToday,
+    tierQuotaExempt,
     session,
     loading,
     error,

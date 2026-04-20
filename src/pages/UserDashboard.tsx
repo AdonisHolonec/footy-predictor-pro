@@ -38,6 +38,7 @@ export default function UserDashboard() {
     trialRemainingTime,
     predictCountToday,
     predictLimitToday,
+    tierQuotaExempt,
     session,
     logout,
     activate24hTrial,
@@ -877,70 +878,77 @@ export default function UserDashboard() {
               {predictLimitToday != null ? `/${predictLimitToday}` : "/∞"}
             </span>
           </div>
-        </div>
-
-        <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial Control</h2>
-              <p className="mt-1 text-[11px] text-signal-inkMuted">
-                Activează la cerere upgrade temporar pentru Premium (cornere) sau Ultra (inteligență completă).
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={trialBusy !== null || !!user?.premium_trial_activated_at}
-                onClick={async () => {
-                  setTrialBusy("premium");
-                  try {
-                    await activate24hTrial("premium");
-                    setStatus("Trial Premium activat pentru 24h.");
-                  } catch (e: unknown) {
-                    setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
-                  } finally {
-                    setTrialBusy(null);
-                  }
-                }}
-                className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
-              >
-                {user?.premium_trial_activated_at ? "Premium trial used" : trialBusy === "premium" ? "Activating..." : "Activate Premium 24h"}
-              </button>
-              <button
-                type="button"
-                disabled={trialBusy !== null || !!user?.ultra_trial_activated_at}
-                onClick={async () => {
-                  setTrialBusy("ultra");
-                  try {
-                    await activate24hTrial("ultra");
-                    setStatus("Trial Ultra activat pentru 24h.");
-                  } catch (e: unknown) {
-                    setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
-                  } finally {
-                    setTrialBusy(null);
-                  }
-                }}
-                className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
-              >
-                {user?.ultra_trial_activated_at ? "Ultra trial used" : trialBusy === "ultra" ? "Activating..." : "Activate Ultra 24h"}
-              </button>
-            </div>
-          </div>
-          {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-              {trialRemainingTime.premiumMs > 0 && (
-                <span className="rounded-md border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1 font-mono text-signal-petrol">
-                  Trial Premium activ: {formatRemaining(trialRemainingTime.premiumMs)}
-                </span>
-              )}
-              {trialRemainingTime.ultraMs > 0 && (
-                <span className="rounded-md border border-signal-amber/25 bg-signal-amber/10 px-2 py-1 font-mono text-signal-amber">
-                  Trial Ultra activ: {formatRemaining(trialRemainingTime.ultraMs)}
-                </span>
-              )}
+          {tierQuotaExempt && (
+            <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">
+              Admin · Unlimited
             </div>
           )}
-        </section>
+        </div>
+
+        {!tierQuotaExempt && (
+          <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial Control</h2>
+                <p className="mt-1 text-[11px] text-signal-inkMuted">
+                  Activează la cerere upgrade temporar pentru Premium (cornere) sau Ultra (inteligență completă).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={trialBusy !== null || !!user?.premium_trial_activated_at}
+                  onClick={async () => {
+                    setTrialBusy("premium");
+                    try {
+                      await activate24hTrial("premium");
+                      setStatus("Trial Premium activat pentru 24h.");
+                    } catch (e: unknown) {
+                      setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
+                    } finally {
+                      setTrialBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
+                >
+                  {user?.premium_trial_activated_at ? "Premium trial used" : trialBusy === "premium" ? "Activating..." : "Activate Premium 24h"}
+                </button>
+                <button
+                  type="button"
+                  disabled={trialBusy !== null || !!user?.ultra_trial_activated_at}
+                  onClick={async () => {
+                    setTrialBusy("ultra");
+                    try {
+                      await activate24hTrial("ultra");
+                      setStatus("Trial Ultra activat pentru 24h.");
+                    } catch (e: unknown) {
+                      setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
+                    } finally {
+                      setTrialBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
+                >
+                  {user?.ultra_trial_activated_at ? "Ultra trial used" : trialBusy === "ultra" ? "Activating..." : "Activate Ultra 24h"}
+                </button>
+              </div>
+            </div>
+            {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                {trialRemainingTime.premiumMs > 0 && (
+                  <span className="rounded-md border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1 font-mono text-signal-petrol">
+                    Trial Premium activ: {formatRemaining(trialRemainingTime.premiumMs)}
+                  </span>
+                )}
+                {trialRemainingTime.ultraMs > 0 && (
+                  <span className="rounded-md border border-signal-amber/25 bg-signal-amber/10 px-2 py-1 font-mono text-signal-amber">
+                    Trial Ultra activ: {formatRemaining(trialRemainingTime.ultraMs)}
+                  </span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {status && (
           <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
