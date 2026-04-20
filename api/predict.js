@@ -89,6 +89,23 @@ function clampPct(n) {
 }
 
 /**
+ * Clasificare încredere pentru o piaţă binară (YES/NO) sau pentru pick-ul top al unei pieţe multi-way.
+ *   strong        → ≥ 65% (semnal clar)
+ *   lean          → 55%..65% (direcţie moderată)
+ *   toss          → 45%..55% (practic 50/50 — UI trebuie să marcheze explicit)
+ *   lean_off      → 35%..45% (cealaltă parte e mai probabilă, dar nesigur)
+ *   strong_off    → ≤ 35%
+ */
+function marketTier(pYesPct) {
+  const p = Number(pYesPct) || 0;
+  if (p >= 65) return "strong";
+  if (p >= 55) return "lean";
+  if (p >= 45) return "toss";
+  if (p >= 35) return "lean_off";
+  return "strong_off";
+}
+
+/**
  * Extrage toate rândurile de clasament din răspunsul API-Football (structuri multiple:
  * standings[] de array-uri, listă plată, sau obiecte cu .table).
  */
@@ -893,9 +910,37 @@ export default async function handler(req, res) {
           },
           predictions: {
             oneXtwo: finalPick1X2,
-            gg: p.pGG >= 55 ? "GG" : "NGG",
-            over25: p.pO25 >= 55 ? "Peste 2.5" : "Sub 2.5",
-            correctScore: calc.bestScore
+            // prag corect 50 pentru pieţe binare (anterior 55 era greşit:
+            // pGG=52% afişa "NGG" deşi GG era mai probabil)
+            gg: p.pGG >= 50 ? "GG" : "NGG",
+            over25: p.pO25 >= 50 ? "Peste 2.5" : "Sub 2.5",
+            correctScore: calc.bestScore,
+            marketTiers: {
+              oneXtwo: {
+                pick: finalPick1X2,
+                prob: Number(
+                  finalPick1X2 === "1" ? p1Adj : finalPick1X2 === "2" ? p2Adj : pXAdj
+                ).toFixed(1) * 1,
+                tier: marketTier(
+                  finalPick1X2 === "1" ? p1Adj : finalPick1X2 === "2" ? p2Adj : pXAdj
+                )
+              },
+              gg: {
+                pick: p.pGG >= 50 ? "GG" : "NGG",
+                prob: Number(p.pGG >= 50 ? p.pGG : 100 - p.pGG).toFixed(1) * 1,
+                tier: marketTier(Math.max(p.pGG, 100 - p.pGG))
+              },
+              over25: {
+                pick: p.pO25 >= 50 ? "Peste 2.5" : "Sub 2.5",
+                prob: Number(p.pO25 >= 50 ? p.pO25 : 100 - p.pO25).toFixed(1) * 1,
+                tier: marketTier(Math.max(p.pO25, 100 - p.pO25))
+              },
+              correctScore: {
+                pick: calc.bestScore,
+                prob: Number(calc.bestScoreProb || 0).toFixed(1) * 1,
+                tier: marketTier(Math.min(95, (calc.bestScoreProb || 0) * 3))
+              }
+            }
           },
           recommended: { pick: topPick, confidence: maxConf },
           modelMeta: {

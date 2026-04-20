@@ -9,8 +9,102 @@ import {
   FormRibbon,
   SignalLens
 } from "./SignalLab";
-import { LeagueStandingEntry, MatchScore, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
+import { LeagueStandingEntry, MarketTier, MarketTierInfo, MatchScore, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
+
+/**
+ * Stil vizual pentru un pick în funcţie de nivelul de încredere.
+ * `toss` înseamnă practic 50/50 — UI trebuie să clarifice asta explicit.
+ */
+function tierToneClass(tier: MarketTier | undefined): string {
+  switch (tier) {
+    case "strong":
+      return "border-signal-sage/35 bg-signal-sage/8 text-signal-sage";
+    case "lean":
+      return "border-signal-petrol/35 bg-signal-petrol/8 text-signal-petrol";
+    case "toss":
+      return "border-signal-amber/30 bg-signal-amber/8 text-signal-amberSoft";
+    case "lean_off":
+      return "border-signal-rose/25 bg-signal-rose/5 text-signal-rose/90";
+    case "strong_off":
+      return "border-signal-rose/40 bg-signal-rose/10 text-signal-rose";
+    default:
+      return "border-white/10 bg-signal-void/40 text-signal-silver";
+  }
+}
+
+function tierBadgeLabel(tier: MarketTier | undefined): string {
+  switch (tier) {
+    case "strong":
+      return "Clar";
+    case "lean":
+      return "Moderat";
+    case "toss":
+      return "Nesigur";
+    case "lean_off":
+      return "Contra";
+    case "strong_off":
+      return "Opus clar";
+    default:
+      return "";
+  }
+}
+
+/** Derive a fallback MarketTierInfo din probabilităţile brute (pentru istoricul vechi fără `marketTiers`). */
+function fallbackTierFromProb(pickLabel: string, probForPick: number | null): MarketTierInfo | undefined {
+  if (probForPick == null || !Number.isFinite(probForPick)) return undefined;
+  const p = Math.max(0, Math.min(100, probForPick));
+  let tier: MarketTier;
+  if (p >= 65) tier = "strong";
+  else if (p >= 55) tier = "lean";
+  else if (p >= 45) tier = "toss";
+  else if (p >= 35) tier = "lean_off";
+  else tier = "strong_off";
+  return { pick: pickLabel, prob: Number(p.toFixed(1)), tier };
+}
+
+/** Mini-card pentru un pick în secţiunea „Pieţe & scor" — afişează probabilitatea + badge încredere. */
+function MarketPickCard({
+  label,
+  info
+}: {
+  label: string;
+  info: MarketTierInfo | undefined;
+}) {
+  const tone = tierToneClass(info?.tier);
+  const badge = tierBadgeLabel(info?.tier);
+  const isToss = info?.tier === "toss";
+  return (
+    <div className={`rounded-xl border p-3 text-center ${tone}`}>
+      <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+        <span>{label}</span>
+        {badge ? (
+          <span
+            className={`rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider ${
+              isToss ? "bg-signal-amber/20 text-signal-amber" : ""
+            }`}
+            title={
+              info?.tier === "toss"
+                ? "Probabilităţile sunt practic 50/50 — modelul nu are direcţie clară"
+                : undefined
+            }
+          >
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-1 flex items-baseline justify-center gap-1.5">
+        <span className="font-mono text-sm font-semibold">{info?.pick ?? "—"}</span>
+        {info?.prob != null && Number.isFinite(info.prob) ? (
+          <span className="font-mono text-[10px] tabular-nums opacity-80">
+            {isToss ? "≈ " : ""}
+            {info.prob.toFixed(0)}%
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 type MatchModalProps = {
   match: PredictionRow;
@@ -567,34 +661,95 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
             )}
 
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">1X2</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.oneXtwo}</div>
-                </div>
-                <div className="rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">GG</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.gg}</div>
-                </div>
-                <div className="rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">Over 2.5</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.over25}</div>
-                </div>
-                <div className="rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">Correct score</div>
-                  <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.correctScore || "—"}</div>
-                  {hasFinalScore && (
-                    <div className="mt-1 font-mono text-[10px] text-signal-inkMuted">Final · {match.score?.home}-{match.score?.away}</div>
-                  )}
-                </div>
-                {match.predictions.cards && (
-                  <div className="col-span-2 rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                    <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">Cartonașe</div>
-                    <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.cards}</div>
-                  </div>
-                )}
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
+                <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                  probabilitate · încredere
+                </span>
               </div>
+              {(() => {
+                const tiers = match.predictions.marketTiers;
+                const p1 = match.probs.p1;
+                const pX = match.probs.pX;
+                const p2 = match.probs.p2;
+                const oneXtwoPick = match.predictions.oneXtwo;
+                // Fallback pentru istoricul vechi fără marketTiers: derivăm tier din probabilităţile brute.
+                const oneXtwoInfo =
+                  tiers?.oneXtwo ||
+                  fallbackTierFromProb(
+                    oneXtwoPick,
+                    oneXtwoPick === "1" ? p1 : oneXtwoPick === "2" ? p2 : pX
+                  );
+                const ggInfo =
+                  tiers?.gg ||
+                  fallbackTierFromProb(
+                    match.predictions.gg,
+                    match.predictions.gg === "GG" ? match.probs.pGG : 100 - match.probs.pGG
+                  );
+                const over25Info =
+                  tiers?.over25 ||
+                  fallbackTierFromProb(
+                    match.predictions.over25,
+                    match.predictions.over25 === "Peste 2.5" ? match.probs.pO25 : 100 - match.probs.pO25
+                  );
+                const correctScoreInfo = tiers?.correctScore || {
+                  pick: match.predictions.correctScore || "—",
+                  prob: 0,
+                  tier: "lean_off" as MarketTier
+                };
+
+                // Detect când mai multe pieţe sunt "toss" — afişăm un hint general.
+                const tossCount = [oneXtwoInfo, ggInfo, over25Info].filter(
+                  (i) => i?.tier === "toss"
+                ).length;
+
+                return (
+                  <>
+                    {tossCount > 0 && (
+                      <div className="mb-3 rounded-lg border border-signal-amber/25 bg-signal-amber/5 px-3 py-2 text-[10px] leading-snug text-signal-amberSoft">
+                        <span className="font-semibold">Atenţie:</span> {tossCount}{" "}
+                        {tossCount === 1 ? "piaţă e" : "pieţe sunt"} practic 50/50 — modelul nu are direcţie clară.
+                        Etichetele sunt orientative, nu sunt pariuri recomandate.
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <MarketPickCard label="1X2" info={oneXtwoInfo} />
+                      <MarketPickCard label="GG / NGG" info={ggInfo} />
+                      <MarketPickCard label="Over / Under 2.5" info={over25Info} />
+                      <div className={`rounded-xl border p-3 text-center ${tierToneClass(correctScoreInfo.tier)}`}>
+                        <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+                          <span>Correct score</span>
+                          <span
+                            className="rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider"
+                            title="Probabilitate tipică pentru un scor exact: ~10-20%. Este scorul cel mai probabil, NU scorul sigur."
+                          >
+                            cel mai probabil
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-baseline justify-center gap-1.5">
+                          <span className="font-mono text-sm font-semibold">{correctScoreInfo.pick || "—"}</span>
+                          {correctScoreInfo.prob > 0 ? (
+                            <span className="font-mono text-[10px] tabular-nums opacity-80">
+                              {correctScoreInfo.prob.toFixed(0)}%
+                            </span>
+                          ) : null}
+                        </div>
+                        {hasFinalScore && (
+                          <div className="mt-1 font-mono text-[10px] text-signal-inkMuted">
+                            Final · {match.score?.home}-{match.score?.away}
+                          </div>
+                        )}
+                      </div>
+                      {match.predictions.cards && (
+                        <div className="col-span-2 rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
+                          <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">Cartonașe</div>
+                          <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.cards}</div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </section>
           </div>
 
@@ -618,6 +773,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
               <ProbBar label="Sub 1.5" val={ext.pU15} color="#64748b" />
               <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#38bdf8" />
               <ProbBar label="Sub 2.5" val={ext.pU25} color="#0ea5e9" />
+              <ProbBar label="Peste 3.5" val={clamp100(100 - match.probs.pU35)} color="#14b8a6" />
               <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#34d399" />
               <ProbBar label="Ambele marchează (GG)" val={match.probs.pGG} color="#fbbf24" />
               <ProbBar label="Nu ambele (NGG)" val={ext.pNGG} color="#94a3b8" />

@@ -257,7 +257,17 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
 
       <div className="relative mt-4 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-3">
         <div>
-          <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">Pick</div>
+          <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">
+            <span>Pick</span>
+            {confPct > 0 && confPct < 55 ? (
+              <span
+                className="rounded-sm bg-signal-amber/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-amber"
+                title="Încredere scăzută — modelul nu are direcţie clară"
+              >
+                Nesigur
+              </span>
+            ) : null}
+          </div>
           <div className="font-display text-2xl font-bold tracking-tight text-signal-ink">{row.recommended.pick}</div>
         </div>
         {(hasFinalScore || showRunningScore) && (

@@ -100,6 +100,17 @@ export type LeagueStandingEntry = {
 
 export type MatchScore = { home: number | null; away: number | null };
 
+/** Nivel de încredere semantic pentru o piaţă, folosit în UI pentru culoare/badge. */
+export type MarketTier = "strong" | "lean" | "toss" | "lean_off" | "strong_off";
+
+export type MarketTierInfo = {
+  /** Eticheta afişată (ex. "GG", "Sub 2.5", "1", "2-1"). */
+  pick: string;
+  /** Probabilitatea asociată lui `pick` (în %). */
+  prob: number;
+  tier: MarketTier;
+};
+
 export type PredictionRow = {
   id: number;
   leagueId: number;
@@ -121,7 +132,20 @@ export type PredictionRow = {
   probs: Probs;
   odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;
-  predictions: { oneXtwo: string; gg: string; over25: string; cards?: string; correctScore: string };
+  predictions: {
+    oneXtwo: string;
+    gg: string;
+    over25: string;
+    cards?: string;
+    correctScore: string;
+    /** Tiered confidence per piaţă, pentru ca UI-ul să marcheze "Nesigur" când probabilitatea e ≈50%. */
+    marketTiers?: {
+      oneXtwo?: MarketTierInfo;
+      gg?: MarketTierInfo;
+      over25?: MarketTierInfo;
+      correctScore?: MarketTierInfo;
+    };
+  };
   recommended: { pick: string; confidence: number };
   insufficientData?: boolean;
   insufficientReason?: string;

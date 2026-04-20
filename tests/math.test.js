@@ -22,6 +22,14 @@ test("computeMatchProbs is deterministic for identical inputs", () => {
   assert.equal(a.probs.p2, b.probs.p2);
 });
 
+test("computeMatchProbs exposes bestScoreProb alongside bestScore", () => {
+  const r = computeMatchProbs(1.5, 0.9, 0, {});
+  assert.ok(typeof r.bestScore === "string");
+  assert.ok(Number.isFinite(r.bestScoreProb));
+  // Probabilitatea scorului cel mai probabil trebuie să fie ≥ 8% şi ≤ 30% pentru aceste λ
+  assert.ok(r.bestScoreProb >= 5 && r.bestScoreProb <= 30, `bestScoreProb=${r.bestScoreProb}`);
+});
+
 test("1X2 probabilities sum to ~100% across lambda range", () => {
   const cases = [
     [0.5, 0.5], [1.2, 1.0], [1.8, 1.4], [2.5, 2.1], [3.5, 3.5], [4.2, 0.6]

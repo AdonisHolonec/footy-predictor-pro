@@ -177,8 +177,14 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
   const p2Pct = norm > 0 ? (acc.p2 / norm) * 100 : 0;
 
   let finalBestScore = acc.bestScore1;
-  if (acc.pX >= acc.p1 && acc.pX >= acc.p2) finalBestScore = acc.bestScoreX;
-  else if (acc.p2 > acc.p1 && acc.p2 > acc.pX) finalBestScore = acc.bestScore2;
+  let finalBestScoreProb = acc.maxProb1;
+  if (acc.pX >= acc.p1 && acc.pX >= acc.p2) {
+    finalBestScore = acc.bestScoreX;
+    finalBestScoreProb = acc.maxProbX;
+  } else if (acc.p2 > acc.p1 && acc.p2 > acc.pX) {
+    finalBestScore = acc.bestScore2;
+    finalBestScoreProb = acc.maxProb2;
+  }
 
   return {
     probs: {
@@ -191,6 +197,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
       pO15: clamp(acc.pO15 * 100, 0, 100)
     },
     bestScore: finalBestScore,
+    bestScoreProb: clamp((finalBestScoreProb || 0) * 100, 0, 100),
     pU35: clamp(acc.pU35 * 100, 0, 100),
     modelMeta: {
       method: "bivariate-poisson-dc-analytic",
