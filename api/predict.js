@@ -15,10 +15,11 @@ import {
   calculateKellyQuarter as calculateKelly,
   calculateEnsembleStake,
   blendModelWithMarket,
-  evaluateNoBetZone
+  evaluateNoBetZone,
+  shinImpliedProbs
 } from "../server-utils/advancedMath.js";
-import { consensusMatchWinnerOdds, impliedProbsFromConsensus } from "../server-utils/marketOdds.js";
-import { MODEL_VERSION, getModelMarketBlendWeight } from "../server-utils/modelConstants.js";
+import { consensusMatchWinnerOdds } from "../server-utils/marketOdds.js";
+import { MODEL_VERSION, getModelMarketBlendWeight, getLeagueParams } from "../server-utils/modelConstants.js";
 import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
@@ -327,7 +328,7 @@ async function loadRiskContext() {
 }
 
 export default async function handler(req, res) {
-  const date = req.query.date || new Date().toISOString().slice(0, 10);
+  const date = req.query.date || todayCalendarEuropeBucharest();
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
   const season = req.query.season || new Date().getFullYear();
@@ -380,6 +381,8 @@ export default async function handler(req, res) {
       const leagueFixtures = allFixtures.filter((f) => String(f.league?.id) === String(lId));
       if (leagueFixtures.length === 0) continue;
 
+      const leagueParams = getLeagueParams(lId);
+
       const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
       const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
       const standingsMap = new Map();
@@ -427,7 +430,16 @@ export default async function handler(req, res) {
             if (hStats && aStats) {
               const hMulti = extractFormMultiplier(tsHNorm.response?.form);
               const aMulti = extractFormMultiplier(tsANorm.response?.form);
-              const sr = strengthRatingsLambdas(hStats, aStats, hMulti, aMulti, { leagueAvgGoals: 1.35 });
+              const sr = strengthRatingsLambdas(hStats, aStats, hMulti, aMulti, {
+                leagueAvgGoals: leagueParams.leagueAvg,
+                leagueAvgHome: leagueParams.leagueAvgHome,
+                leagueAvgAway: leagueParams.leagueAvgAway,
+                homeAdv: leagueParams.homeAdv,
+                awayAdv: leagueParams.awayAdv,
+                homePlayed: hStats.playedHome || hStats.played,
+                awayPlayed: aStats.playedAway || aStats.played,
+                shrinkageK: 6
+              });
               if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
                 method = "strength-ratings";
                 lambdaHome = sr.lambdaHome;
@@ -450,12 +462,22 @@ export default async function handler(req, res) {
           const rowA = standingsMap.get(awayIdStr);
           if (rowH && rowA) {
             method = "standings";
-            lambdaHome = clampLambda(
-              ((rowH.all?.goals?.for / (rowH.all?.played || 1)) + (rowA.all?.goals?.against / (rowA.all?.played || 1))) / 2
-            );
-            lambdaAway = clampLambda(
-              ((rowA.all?.goals?.for / (rowA.all?.played || 1)) + (rowH.all?.goals?.against / (rowH.all?.played || 1))) / 2
-            );
+            const phH = Math.max(1, Number(rowH.all?.played) || 1);
+            const phA = Math.max(1, Number(rowA.all?.played) || 1);
+            const gfH = Number(rowH.all?.goals?.for) / phH;
+            const gaH = Number(rowH.all?.goals?.against) / phH;
+            const gfA = Number(rowA.all?.goals?.for) / phA;
+            const gaA = Number(rowA.all?.goals?.against) / phA;
+
+            // Shrinkage slab către leagueAvg (standings e semnal mai grosier, k mai mic = 4).
+            const SK = 4;
+            const atkHs = (phH * gfH + SK * leagueParams.leagueAvg) / (phH + SK);
+            const defHs = (phH * gaH + SK * leagueParams.leagueAvg) / (phH + SK);
+            const atkAs = (phA * gfA + SK * leagueParams.leagueAvg) / (phA + SK);
+            const defAs = (phA * gaA + SK * leagueParams.leagueAvg) / (phA + SK);
+
+            lambdaHome = clampLambda((atkHs + defAs) / 2 * leagueParams.homeAdv);
+            lambdaAway = clampLambda((atkAs + defHs) / 2 * leagueParams.awayAdv);
           }
         }
 
@@ -518,7 +540,10 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, { correlation: 0.12 });
+        const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
+          correlation: 0.12,
+          rho: leagueParams.rho
+        });
         if (!calc || !calc.probs) continue;
         const p = calc.probs;
 
@@ -532,18 +557,22 @@ export default async function handler(req, res) {
         let reasonCodes = [];
         const leagueMultiplier = getLeagueConfidenceMultiplier(Number(lId));
         const leagueStakeCap = getLeagueStakeCap(Number(lId));
-        const blendW = getModelMarketBlendWeight(method);
+        const blendW = getModelMarketBlendWeight(method, Number(lId));
 
         const oddsReq = await getWithCache("/odds", { fixture: fixtureId }, 86400);
         const consensus = oddsReq.ok ? consensusMatchWinnerOdds(oddsReq.data) : null;
         if (consensus) {
-          const marketProbs = impliedProbsFromConsensus(consensus);
+          // Shin's method în loc de eliminarea proporţională a marjei — corectează long-shot bias.
+          const shin = shinImpliedProbs(consensus.home, consensus.draw, consensus.away);
+          const marketProbs = shin ? { p1: shin.p1, pX: shin.pX, p2: shin.p2 } : null;
           odds = {
             home: consensus.home,
             draw: consensus.draw,
             away: consensus.away,
             bookmaker: `median(${consensus.bookmakersUsed})`,
-            bookmakersUsed: consensus.bookmakersUsed
+            bookmakersUsed: consensus.bookmakersUsed,
+            marginMethod: shin ? "shin" : "proportional",
+            shinZ: shin && Number.isFinite(shin.z) ? Number(shin.z.toFixed(4)) : undefined
           };
           const blended = blendModelWithMarket({
             model: { p1: p.p1 / 100, pX: p.pX / 100, p2: p.p2 / 100 },
@@ -557,6 +586,13 @@ export default async function handler(req, res) {
             { type: "2", prob: blended?.p2 ?? p.p2 / 100, odd: consensus.away, confidence: p.p2, marketProb: marketProbs?.p2 ?? null }
           ].filter((c) => isGoodNum(c.odd) && c.odd >= 1.3);
 
+          const dqEarly = dataQualityScore({
+            method,
+            hasOdds: !!odds,
+            hasLuckStats: !!luckStats,
+            hasTeamIds: !!homeIdStr && !!awayIdStr
+          });
+
           const scored = candidates
             .map((c) => {
               const ev = calculateEV(c.prob, c.odd);
@@ -567,7 +603,9 @@ export default async function handler(req, res) {
                 probability: c.prob,
                 odds: c.odd,
                 confidencePct: c.confidence,
-                marketVolatility: volatility
+                marketVolatility: volatility,
+                marketGapPct,
+                dataQuality: dqEarly
               });
               const kelly = calculateKelly(c.prob, c.odd, c.confidence >= 65);
               const noBet = evaluateNoBetZone({
@@ -582,12 +620,7 @@ export default async function handler(req, res) {
             .filter((c) => c.noBet.allowBet)
             .sort((a, b) => b.score - a.score);
 
-          const dq = dataQualityScore({
-            method,
-            hasOdds: !!odds,
-            hasLuckStats: !!luckStats,
-            hasTeamIds: !!homeIdStr && !!awayIdStr
-          });
+          const dq = dqEarly;
 
           if (scored.length > 0) {
             const best = scored[0];
@@ -772,7 +805,15 @@ export default async function handler(req, res) {
             reasonCodes,
             modelVersion: MODEL_VERSION,
             gridMax: calc?.modelMeta?.gridMax,
-            massCaptured: calc?.modelMeta?.massCaptured
+            massCaptured: calc?.modelMeta?.massCaptured,
+            leagueParams: {
+              leagueAvg: leagueParams.leagueAvg,
+              homeAdv: leagueParams.homeAdv,
+              awayAdv: leagueParams.awayAdv,
+              rho: leagueParams.rho,
+              blendWeight: Number(blendW.toFixed(3))
+            },
+            strengthMeta: strengthMeta || undefined
           },
           auditLog: {
             reasonCodes,

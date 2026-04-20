@@ -5,6 +5,7 @@ import {
   actual1x2FromScore,
   brier1x2,
   bucketConfidence,
+  expectedCalibrationError,
   logLoss1x2
 } from "../server-utils/probabilityMetrics.js";
 
@@ -316,6 +317,7 @@ async function handleMetrics(req, res) {
       nProb,
       brier1x2: nProb ? Number((sumBrier / nProb).toFixed(5)) : null,
       logLoss1x2: nProb ? Number((sumLogLoss / nProb).toFixed(5)) : null,
+      ece1x2: expectedCalibrationError(calibration),
       byMethod: serialize(byMethod),
       byLeague: serialize(byLeague),
       byDataQuality: serialize(byDq),

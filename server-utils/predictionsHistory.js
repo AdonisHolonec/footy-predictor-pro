@@ -114,15 +114,33 @@ export async function insertPredictionSnapshots(predictions) {
   return { count: rows.length };
 }
 
+/**
+ * Integritate predicţii: ignorăm fixture-urile al căror kickoff a trecut deja sau sunt
+ * în statut live/final. Asta protejează `predictions_history.raw_payload` de a fi rescris
+ * cu features post-hoc (ar introduce time-leakage în backtest).
+ */
+function isPreKickoff(prediction) {
+  const status = String(prediction?.status || "").toUpperCase();
+  if (status && !["NS", "TBD", "PST", "CANC", "SUSP", "AWD"].includes(status)) return false;
+  const ko = prediction?.kickoff ? new Date(prediction.kickoff).getTime() : NaN;
+  if (!Number.isFinite(ko)) return true; // fără kickoff cunoscut, permitem salvarea
+  return ko > Date.now();
+}
+
 export async function upsertPredictionsHistory(predictions) {
-  if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0 };
+  if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0, skipped: 0 };
   const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase client is not available.");
-  const rows = predictions.map(mapPredictionToDbRow);
+
+  const eligible = predictions.filter(isPreKickoff);
+  const skipped = predictions.length - eligible.length;
+  if (eligible.length === 0) return { count: 0, skipped };
+
+  const rows = eligible.map(mapPredictionToDbRow);
   const { error } = await supabase.from(HISTORY_TABLE).upsert(rows, { onConflict: "fixture_id" });
   if (error) throw error;
-  await insertPredictionSnapshots(predictions);
-  return { count: rows.length };
+  await insertPredictionSnapshots(eligible);
+  return { count: rows.length, skipped };
 }
 
 export function mapDbRowToHistoryEntry(row) {

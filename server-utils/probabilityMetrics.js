@@ -31,3 +31,26 @@ export function bucketConfidence(conf) {
   if (c >= 35) return "35-49";
   return "0-34";
 }
+
+/**
+ * Expected Calibration Error: media ponderată a |avgConfidence − accuracy| per bucket.
+ * Calibrare ideală => ECE ≈ 0. Orice > 5% indică bias sistemic de încredere.
+ *
+ * @param {Array<{n:number, avgConfidence:number, accuracy1x2:number}>} calibrationBuckets
+ * @returns {number|null}
+ */
+export function expectedCalibrationError(calibrationBuckets) {
+  if (!Array.isArray(calibrationBuckets) || calibrationBuckets.length === 0) return null;
+  let totalN = 0;
+  let weighted = 0;
+  for (const b of calibrationBuckets) {
+    const n = Number(b?.n) || 0;
+    if (n <= 0) continue;
+    const avgConf = Number(b?.avgConfidence) || 0;
+    const acc = Number(b?.accuracy1x2) || 0;
+    weighted += n * Math.abs(avgConf - acc);
+    totalN += n;
+  }
+  if (totalN === 0) return null;
+  return Number((weighted / totalN).toFixed(3));
+}

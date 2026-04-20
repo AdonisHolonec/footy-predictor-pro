@@ -14,7 +14,8 @@ export const calculateSyntheticXG = (statistics) => {
       case "Penalties Scored": penalties = safeVal; break;
     }
   });
-  const xG = (shotsInsideBox * 0.15) + (shotsOutsideBox * 0.03) + (corners * 0.03) + (penalties * 0.76);
+  // ponderi revizuite: corner real ≈ 0.015 xG/execuţie (era 0.03 — 2× supraestimare)
+  const xG = (shotsInsideBox * 0.14) + (shotsOutsideBox * 0.035) + (corners * 0.015) + (penalties * 0.76);
   return Number(xG.toFixed(2));
 };
 
@@ -37,21 +38,46 @@ export const calculateKellyQuarter = (probability, odds, isHighConfidence = true
   return Math.min(Number(((kellyFull * fraction) * 100).toFixed(2)), 3.00);
 };
 
-export const calculateEnsembleStake = ({ probability, odds, confidencePct = 50, marketVolatility = 0.5 }) => {
+/**
+ * Stake ensemble cu o SINGURĂ ajustare netă faţă de Kelly-quarter (evită compounding-ul
+ * multi-factorial care deforma Kelly optim). Scalarul final e clampat în [0.7, 1.15]:
+ * - data quality slabă -> down
+ * - market gap mare (modelul diverge mult de piaţă) -> down
+ * - EV / confidence puternice -> up (limitat)
+ */
+export const calculateEnsembleStake = ({
+  probability,
+  odds,
+  confidencePct = 50,
+  marketVolatility = 0.5,
+  marketGapPct = 0,
+  dataQuality = 0.75
+}) => {
   const baseKelly = calculateKellyQuarter(probability, odds, confidencePct >= 65);
   const evPct = calculateEV(probability, odds);
-  const confidenceBoost = Math.max(0.75, Math.min(1.25, confidencePct / 70));
-  const volatilityPenalty = Math.max(0.7, Math.min(1, 1 - (marketVolatility * 0.35)));
-  const evBoost = Math.max(0.8, Math.min(1.35, 1 + (evPct / 100)));
-  const ensemble = baseKelly * confidenceBoost * volatilityPenalty * evBoost;
+
+  // scor normalizat: positiv = bullish, negativ = bearish
+  const confScore = (Math.min(Math.max(Number(confidencePct) || 0, 30), 90) - 55) / 100;    // [-0.25, 0.35]
+  const evScore = Math.min(Math.max(Number(evPct) || 0, -5), 20) / 200;                      // [-0.025, 0.1]
+  const dqScore = (Math.min(Math.max(Number(dataQuality) || 0.5, 0.3), 1) - 0.6) / 2;        // [-0.15, 0.2]
+  const gapPenalty = -Math.min(Math.max(Number(marketGapPct) || 0, 0), 20) / 100;            // [-0.2, 0]
+  const volPenalty = -Math.min(Math.max(Number(marketVolatility) || 0, 0), 1) * 0.1;         // [-0.1, 0]
+
+  const adjustment = 1 + confScore + evScore + dqScore + gapPenalty + volPenalty;
+  const clamped = Math.max(0.7, Math.min(1.15, adjustment));
+  const ensemble = baseKelly * clamped;
   const capped = Math.min(Math.max(0, ensemble), 3);
+
   return {
     stakePct: Number(capped.toFixed(2)),
     components: {
       baseKelly: Number(baseKelly.toFixed(2)),
-      confidenceBoost: Number(confidenceBoost.toFixed(2)),
-      volatilityPenalty: Number(volatilityPenalty.toFixed(2)),
-      evBoost: Number(evBoost.toFixed(2))
+      adjustment: Number(clamped.toFixed(3)),
+      confScore: Number(confScore.toFixed(3)),
+      evScore: Number(evScore.toFixed(3)),
+      dqScore: Number(dqScore.toFixed(3)),
+      gapPenalty: Number(gapPenalty.toFixed(3)),
+      volPenalty: Number(volPenalty.toFixed(3))
     }
   };
 };
@@ -90,6 +116,10 @@ export function expectedIntensityFromGoalRates({
 /** @deprecated Use expectedIntensityFromGoalRates */
 export const calculateDynamicXG = expectedIntensityFromGoalRates;
 
+/**
+ * Margin removal PROPORTIONAL (fallback / comparaţie). Amplifică long-shot bias.
+ * Preferă {@link shinImpliedProbs} când ai 3-way clar.
+ */
 export const removeBookmakerMargin = (homeOdd, drawOdd, awayOdd) => {
   const h = Number(homeOdd), d = Number(drawOdd), a = Number(awayOdd);
   if (!Number.isFinite(h) || !Number.isFinite(d) || !Number.isFinite(a) || h <= 1 || d <= 1 || a <= 1) return null;
@@ -97,6 +127,80 @@ export const removeBookmakerMargin = (homeOdd, drawOdd, awayOdd) => {
   const sum = invH + invD + invA; if (sum <= 0) return null;
   return { p1: invH / sum, pX: invD / sum, p2: invA / sum };
 };
+
+/**
+ * Shin (1993) method for de-biasing 3-way bookmaker odds. Rezolvă ecuația pentru z ∈ [0, 0.1]
+ * (proporţia de "insider traders") prin bisecţie, apoi extrage probabilitățile reale.
+ * Empiric reduce log-loss-ul cu ~1-2% faţă de metoda proporţională pentru 1X2.
+ *
+ * @returns {{p1:number, pX:number, p2:number, z:number} | null}
+ */
+export function shinImpliedProbs(homeOdd, drawOdd, awayOdd) {
+  const h = Number(homeOdd), d = Number(drawOdd), a = Number(awayOdd);
+  if (!Number.isFinite(h) || !Number.isFinite(d) || !Number.isFinite(a) || h <= 1 || d <= 1 || a <= 1) return null;
+  const inv = [1 / h, 1 / d, 1 / a];
+  const s = inv[0] + inv[1] + inv[2];
+  if (s <= 1.0) {
+    // Pieţele fără overround — fallback proporţional.
+    return { p1: inv[0] / s, pX: inv[1] / s, p2: inv[2] / s, z: 0 };
+  }
+
+  // Shin (1993): Σ p_i = 1 cu p_i = [sqrt(z² + 4(1-z)q_i²/s) - z] / [2(1-z)].
+  // Înmulțind cu 2(1-z) şi reducând: Σ sqrt(z² + 4(1-z)q_i²/s) = 2 + z.
+  // Rezolvăm f(z) = Σ sqrt(...) - (2 + z) = 0 prin bisecţie pe z ∈ [0, 0.3].
+  const f = (z) => {
+    const oneMinus = 1 - z;
+    let sum = 0;
+    for (let i = 0; i < 3; i++) {
+      sum += Math.sqrt(z * z + (4 * oneMinus * inv[i] * inv[i]) / s);
+    }
+    return sum - (2 + z);
+  };
+
+  let lo = 0;
+  let hi = 0.3;
+  let fLo = f(lo);
+  let fHi = f(hi);
+  if (!Number.isFinite(fLo) || !Number.isFinite(fHi)) {
+    return removeBookmakerMargin(h, d, a);
+  }
+  // dacă semnele nu se schimbă, fallback proporţional
+  if (fLo * fHi > 0) {
+    return removeBookmakerMargin(h, d, a);
+  }
+  for (let iter = 0; iter < 60; iter++) {
+    const mid = (lo + hi) / 2;
+    const fMid = f(mid);
+    if (!Number.isFinite(fMid)) break;
+    if (Math.abs(fMid) < 1e-10) {
+      lo = mid;
+      hi = mid;
+      break;
+    }
+    if (fLo * fMid < 0) {
+      hi = mid;
+      fHi = fMid;
+    } else {
+      lo = mid;
+      fLo = fMid;
+    }
+  }
+  const z = (lo + hi) / 2;
+
+  const pOf = (i) =>
+    (Math.sqrt(z * z + (4 * (1 - z) * inv[i] * inv[i]) / s) - z) / (2 * (1 - z));
+  const p1 = pOf(0);
+  const pX = pOf(1);
+  const p2 = pOf(2);
+  const total = p1 + pX + p2;
+  if (!Number.isFinite(total) || total <= 0) return removeBookmakerMargin(h, d, a);
+  return {
+    p1: p1 / total,
+    pX: pX / total,
+    p2: p2 / total,
+    z
+  };
+}
 
 export const blendModelWithMarket = ({ model, market, modelWeight = 0.7 }) => {
   if (!model) return null;
