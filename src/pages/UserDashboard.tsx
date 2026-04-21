@@ -27,6 +27,11 @@ function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
   return rows.some((row) => {
     const probs = row?.probs;
     // Older cached rows (localStorage) can miss newer model fields used by updated cards/modals.
+    const hasExactConfidence = row?.recommended?.confidence != null && Number.isFinite(Number(row?.recommended?.confidence));
+    if (hasExactConfidence) {
+      // Ultra/admin rows should include advanced markets; missing one indicates stale desktop cache.
+      return !probs?.firstHalf || !probs?.corners || !probs?.shotsOnTarget;
+    }
     return !probs?.firstHalf && !probs?.corners && !probs?.shotsOnTarget && !probs?.shotsTotal;
   });
 }
@@ -292,6 +297,13 @@ export default function UserDashboard() {
     const localPredictions = predictionsByUser[user.id] || [];
     if (!localPredictions.length) {
       setPreds([]);
+      return;
+    }
+    if (hasLegacyPredictionShape(localPredictions)) {
+      // Force fresh server rehydrate for stale desktop cache.
+      setPreds([]);
+      setPredictionsByUser((prev) => ({ ...prev, [user.id]: [] }));
+      setRehydratedNotice("Cache local vechi detectat pe desktop. Reîncarc predictiile cu piețele noi.");
       return;
     }
 
@@ -601,7 +613,7 @@ export default function UserDashboard() {
           date: currentDate,
           leagueIds: selectedLeagueIds.join(","),
           season: String(inferSeason(currentDate)),
-          limit: "50"
+          limit: "15"
         });
         qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};

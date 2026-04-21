@@ -499,7 +499,8 @@ export default async function handler(req, res) {
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
   const season = req.query.season || new Date().getFullYear();
-  const limit = Math.min(Number(req.query.limit || 50), 50);
+  // Keep per-request compute bounded to avoid serverless timeouts on heavy market enrichment.
+  const limit = Math.min(Number(req.query.limit || 15), 15);
   let effectiveLimit = limit;
 
   if (leagueIds.length === 0) {
@@ -667,6 +668,7 @@ export default async function handler(req, res) {
         } catch {
           refereeName = "";
         }
+        try {
 
         let method = "none";
         let lambdaHome;
@@ -1441,6 +1443,56 @@ export default async function handler(req, res) {
           modelVersion: MODEL_VERSION,
           evaluation
         });
+        } catch (fixtureError) {
+          console.error("[predict fixture]", fixtureId, fixtureError?.message || fixtureError);
+          out.push({
+            id: fixtureId,
+            leagueId: Number(lId),
+            league: fx.league?.name || "Unknown",
+            logos: { league: fx.league?.logo, home: fx.teams?.home?.logo, away: fx.teams?.away?.logo },
+            teams: { home: homeName, away: awayName },
+            fixtureTeamIds:
+              homeIdStr && awayIdStr
+                ? { home: Number(homeIdStr) || undefined, away: Number(awayIdStr) || undefined }
+                : undefined,
+            kickoff: fx.fixture?.date,
+            status: fx.fixture?.status?.short,
+            score: {
+              home: typeof fx.goals?.home === "number" ? fx.goals.home : null,
+              away: typeof fx.goals?.away === "number" ? fx.goals.away : null
+            },
+            referee: refereeName || undefined,
+            insufficientData: true,
+            insufficientReason: "fixture_processing_error",
+            probs: {
+              p1: 0,
+              pX: 0,
+              p2: 0,
+              pGG: 0,
+              pO25: 0,
+              pU35: 0,
+              pO15: 0,
+              pDC1X: 0,
+              pDC12: 0,
+              pDCX2: 0,
+              pU15: 0,
+              pNGG: 0,
+              pU25: 0
+            },
+            recommended: { pick: "", confidence: 0 },
+            predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
+            valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: ["fixture_processing_error"] },
+            modelMeta: {
+              method: "fixture_processing_error",
+              dataQuality: 0,
+              modelVersion: MODEL_VERSION,
+              reasonCodes: ["fixture_processing_error"]
+            },
+            modelVersion: MODEL_VERSION,
+            evaluation: { track: "none" }
+          });
+          continue;
+        }
       }
     }
 
