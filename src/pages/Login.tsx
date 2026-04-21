@@ -100,14 +100,20 @@ export default function Login() {
     <div className="lab-page">
       <div className="lab-bg" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.035] mix-blend-screen"
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.12]"
+        style={{ backgroundImage: `url(${BRAND_IMAGES.landingAccessHero})` }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.05] mix-blend-screen"
         style={{
           backgroundImage: `url(${BRAND_IMAGES.heroForesight})`,
-          backgroundSize: "cover",
+          backgroundSize: "120% auto",
           backgroundPosition: "center top"
         }}
         aria-hidden
       />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-signal-mist/40 via-transparent to-signal-void/85" aria-hidden />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
         <header className="mb-10 border-b border-white/[0.07] pb-8 animate-fadeIn">
           <Link
@@ -116,13 +122,13 @@ export default function Login() {
           >
             ← Pagina de acces
           </Link>
-          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor</p>
+          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor · intelligence lab</p>
           <h1 className="lab-heading mt-2 max-w-3xl text-3xl leading-[1.15] sm:text-4xl lg:text-[2.75rem]">
-            Foresight on the pitch.
+            Access control for your football intelligence workspace.
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
-            Predictive intelligence for football minds — editorial analytics, soft sci-fi clarity. Autentifică-te pentru
-            observatorul personal.
+            Login într-un mediu premium, cinematic și calm. Odată autentificat, intri în observatorul de predicții,
+            piețe avansate și monitorizare de performanță.
           </p>
         </header>
 
@@ -144,7 +150,7 @@ export default function Login() {
             </div>
 
             <div className="rounded-2xl border border-white/[0.07] bg-signal-panel/35 px-4 py-3 backdrop-blur-md">
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">System performance · global</p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Global model performance · last 30d</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="font-mono text-lg font-semibold tabular-nums text-signal-mint sm:text-xl">
@@ -165,8 +171,24 @@ export default function Login() {
               </div>
             </div>
 
+            <section className="rounded-2xl border border-white/[0.07] bg-signal-panel/35 p-4 backdrop-blur-md">
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Servicii disponibile în platformă</h2>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  "Predicții 1X2 + O/U calibrate",
+                  "Piețe Corners / Shots / HT Goals",
+                  "Signal Lens + Edge Compass",
+                  "Performance Counter pe user/ligă"
+                ].map((service) => (
+                  <div key={service} className="rounded-xl border border-white/10 bg-signal-void/35 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                    {service}
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section>
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Performance observatory</h2>
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Observatory pulse</h2>
               <SuccessRateTracker
                 stats={globalStats}
                 animatedWins={globalStats.wins}
@@ -187,14 +209,16 @@ export default function Login() {
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Access</p>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Secure gateway</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && "Login"}
                   {mode === "signup" && "Create account"}
                   {mode === "forgot" && "Forgot password"}
                   {mode === "reset" && "Reset password"}
                 </h2>
-                <p className="mt-1 text-xs text-signal-inkMuted">Gateway securizat către dashboard.</p>
+                <p className="mt-1 text-xs text-signal-inkMuted">
+                  Continuă către workspace-ul tău Footy Predictor Intelligence Lab.
+                </p>
 
                 <form onSubmit={(event) => void onSubmit(event)} className="mt-5 space-y-3">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
