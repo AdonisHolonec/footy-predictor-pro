@@ -115,7 +115,7 @@ export default function Login() {
     <div className="lab-page">
       <div className="lab-bg" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.12] transition-transform duration-300"
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.18] saturate-125 transition-transform duration-300"
         style={{
           backgroundImage: `url(${BRAND_IMAGES.landingAccessHero})`,
           transform: `translate3d(${parallax.x * 10}px, ${parallax.y * 10}px, 0)`
@@ -133,9 +133,11 @@ export default function Login() {
         aria-hidden
       />
       <div className="login-ultra-noise pointer-events-none absolute inset-0 z-[1]" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-signal-mist/40 via-transparent to-signal-void/85" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_16%_14%,rgba(56,189,248,0.34),transparent_42%),radial-gradient(circle_at_87%_10%,rgba(251,191,36,0.28),transparent_40%),radial-gradient(circle_at_52%_100%,rgba(244,63,94,0.24),transparent_36%)]" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-signal-mist/30 via-signal-void/20 to-signal-void/88" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 z-[1] opacity-30 [background-size:24px_24px] [background-image:linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)]" aria-hidden />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
-        <header className="mb-10 border-b border-white/[0.07] pb-8 animate-fadeIn">
+        <header className="mb-10 border-b border-white/[0.1] pb-8 animate-fadeIn">
           <Link
             to="/"
             className="inline-block font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted transition hover:text-signal-petrol"
@@ -143,8 +145,8 @@ export default function Login() {
             ← Pagina de acces
           </Link>
           <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor · intelligence lab</p>
-          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.12] bg-signal-panel/45 p-4 backdrop-blur-md sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:backdrop-blur-0">
-            <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-[5rem]">
+          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.15] bg-signal-panel/55 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-md sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
+            <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-[5rem]">
               <span className="relative inline-block">
                 <span
                   className="absolute inset-0 z-0 text-transparent opacity-75 blur-[1px]"
@@ -169,7 +171,7 @@ export default function Login() {
           <div className="animate-fadeIn space-y-6 [animation-delay:40ms]">
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
-            <div className="rounded-2xl border border-signal-sage/30 bg-signal-panel/55 px-4 py-4 shadow-inner backdrop-blur-md">
+            <div className="rounded-2xl border border-signal-sage/40 bg-signal-panel/70 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-md">
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Global model performance · last 30d</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
@@ -191,7 +193,7 @@ export default function Login() {
               </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.12] bg-signal-panel/55 p-4 backdrop-blur-md">
+            <section className="rounded-2xl border border-white/[0.16] bg-signal-panel/70 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-md">
               <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Servicii disponibile în platformă</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 {[
@@ -222,7 +224,7 @@ export default function Login() {
           </div>
 
           <section className="lg:sticky lg:top-8">
-            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/90 to-signal-mist/95 shadow-atelierLg backdrop-blur-xl [animation-delay:90ms]">
+            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.14] bg-gradient-to-b from-signal-panel/95 via-signal-mist/95 to-signal-panel/90 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-xl [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
                 <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">Credentials</span>
@@ -309,7 +311,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-frost transition hover:bg-signal-petrolDeep disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-xl border border-signal-petrol/70 bg-gradient-to-r from-signal-petrol/80 via-signal-petrol to-signal-sage/70 px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-[0_0_24px_rgba(56,189,248,0.5)] transition hover:-translate-y-0.5 hover:from-signal-petrol hover:to-signal-sage hover:shadow-[0_0_34px_rgba(56,189,248,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting
                       ? "Se proceseaza..."
