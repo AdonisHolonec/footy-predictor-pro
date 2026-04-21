@@ -365,6 +365,22 @@ async function handleXg(req, res) {
   }
 
   try {
+    const parseNumericStat = (statistics, candidates) => {
+      if (!Array.isArray(statistics)) return null;
+      for (const cand of candidates) {
+        const row = statistics.find((s) => String(s?.type || "").toLowerCase() === cand.toLowerCase());
+        if (!row) continue;
+        const raw = row.value;
+        if (raw == null) return null;
+        if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+        if (typeof raw === "string") {
+          const parsed = Number(raw.replace(/[^\d.-]/g, ""));
+          if (Number.isFinite(parsed)) return parsed;
+        }
+      }
+      return null;
+    };
+
     // `getWithCache` foloseşte Vercel KV + auto-detectează providerul (apisports direct sau RapidAPI)
     // şi partajează cache-ul cu restul pipeline-ului (nu mai avem cache separat pe xG).
     const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
@@ -383,11 +399,34 @@ async function handleXg(req, res) {
     const awayStats = result.response[1].statistics;
     const xGHome = calculateSyntheticXG(homeStats);
     const xGAway = calculateSyntheticXG(awayStats);
+    const cornersHome = parseNumericStat(homeStats, ["Corner Kicks"]);
+    const cornersAway = parseNumericStat(awayStats, ["Corner Kicks"]);
+    const shotsOnTargetHome = parseNumericStat(homeStats, ["Shots on Goal", "Shots on Target"]);
+    const shotsOnTargetAway = parseNumericStat(awayStats, ["Shots on Goal", "Shots on Target"]);
+    const shotsTotalHome = parseNumericStat(homeStats, ["Total Shots"]);
+    const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
+
+    let firstHalfGoals = null;
+    const fxReq = await getWithCache("/fixtures", { ids: fixtureId }, 86400);
+    if (fxReq.ok) {
+      const fx = fxReq.data?.response?.[0];
+      const htHome = fx?.score?.halftime?.home;
+      const htAway = fx?.score?.halftime?.away;
+      if (typeof htHome === "number" && typeof htAway === "number") {
+        firstHalfGoals = htHome + htAway;
+      }
+    }
 
     return res.status(200).json({
       fixtureId,
       homeXG: xGHome,
       awayXG: xGAway,
+      marketResults: {
+        cornersTotal: cornersHome != null && cornersAway != null ? cornersHome + cornersAway : null,
+        shotsOnTargetTotal: shotsOnTargetHome != null && shotsOnTargetAway != null ? shotsOnTargetHome + shotsOnTargetAway : null,
+        shotsTotal: shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
+        firstHalfGoals
+      },
       fromCache: Boolean(statsReq.fromCache),
       updatedAt: new Date().toISOString()
     });

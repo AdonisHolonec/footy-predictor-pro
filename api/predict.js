@@ -20,7 +20,10 @@ import {
   evaluateNoBetZone,
   shinImpliedProbs
 } from "../server-utils/advancedMath.js";
-import { consensusMatchWinnerOdds } from "../server-utils/marketOdds.js";
+import {
+  consensusMatchWinnerOdds,
+  consensusOverUnderOddsAtLine
+} from "../server-utils/marketOdds.js";
 import {
   MODEL_VERSION,
   getModelMarketBlendWeight,
@@ -371,6 +374,29 @@ function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
   if (hasLuckStats) score += 0.2;
   if (method === "strength-ratings" || method === "standings") score += 0.1;
   return Math.max(0, Math.min(1, score));
+}
+
+function parseLineThreshold(key) {
+  const m = String(key || "").match(/^o(\d+)_(\d+)$/);
+  if (!m) return null;
+  const n = Number(`${m[1]}.${m[2]}`);
+  return Number.isFinite(n) ? n : null;
+}
+
+function deriveBestOverUnderPick(totalLines = {}) {
+  const entries = Object.entries(totalLines || {}).filter(([, v]) => Number.isFinite(Number(v)));
+  if (!entries.length) return null;
+  let best = null;
+  for (const [k, val] of entries) {
+    const line = parseLineThreshold(k);
+    if (line == null) continue;
+    const pOver = Math.max(0, Math.min(100, Number(val)));
+    const over = { pick: `Over ${line.toFixed(1)}`, line, probability: pOver };
+    const under = { pick: `Under ${line.toFixed(1)}`, line, probability: 100 - pOver };
+    const chosen = over.probability >= under.probability ? over : under;
+    if (!best || chosen.probability > best.probability) best = chosen;
+  }
+  return best;
 }
 
 function blendByPenalty(base, multiplier = 1) {
@@ -950,6 +976,7 @@ export default async function handler(req, res) {
         const blendW = getModelMarketBlendWeight(method, Number(lId));
 
         const oddsReq = await getWithCache("/odds", { fixture: fixtureId }, 86400);
+        let marketOdds = undefined;
         const consensus = oddsReq.ok ? consensusMatchWinnerOdds(oddsReq.data) : null;
         let marketProbs = null;
         if (consensus) {
@@ -1048,6 +1075,91 @@ export default async function handler(req, res) {
               .flat();
             reasonCodes = Array.from(new Set(analyzed)).slice(0, 4);
           }
+        }
+
+        if (oddsReq.ok && oddsReq.data) {
+          const cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
+          const shotsOnTargetPick = shotsOnTargetBlock ? deriveBestOverUnderPick(shotsOnTargetBlock.total) : null;
+          const shotsTotalPick = shotsTotalBlock ? deriveBestOverUnderPick(shotsTotalBlock.total) : null;
+          const firstHalfPick = firstHalfProbs
+            ? (Number(firstHalfProbs.pO15) || 0) >= 50
+              ? { pick: "Over 1.5 FH", line: 1.5 }
+              : { pick: "Under 1.5 FH", line: 1.5 }
+            : null;
+
+          const selectOddByPick = (quote, pick) => {
+            if (!quote || !pick) return null;
+            const isOver = String(pick).toLowerCase().includes("over");
+            return isOver ? quote.over : quote.under;
+          };
+
+          const cornersQuote = cornersPick
+            ? consensusOverUnderOddsAtLine(
+                oddsReq.data,
+                ["Corners Over Under", "Corners Over/Under", "Total Corners"],
+                cornersPick.line
+              )
+            : null;
+          const shotsOnTargetQuote = shotsOnTargetPick
+            ? consensusOverUnderOddsAtLine(
+                oddsReq.data,
+                ["Shots On Target - Over/Under", "Shots on Target Over/Under", "Shots on Goal Over/Under"],
+                shotsOnTargetPick.line
+              )
+            : null;
+          const shotsTotalQuote = shotsTotalPick
+            ? consensusOverUnderOddsAtLine(
+                oddsReq.data,
+                ["Total Shots Over/Under", "Shots Over/Under", "Total Shots"],
+                shotsTotalPick.line
+              )
+            : null;
+          const firstHalfQuote = firstHalfPick
+            ? consensusOverUnderOddsAtLine(
+                oddsReq.data,
+                ["First Half Goals", "1st Half Goals Over/Under", "Goals Over/Under First Half"],
+                firstHalfPick.line
+              )
+            : null;
+
+          marketOdds = {
+            corners: cornersPick
+              ? {
+                  pick: cornersPick.pick,
+                  line: cornersPick.line,
+                  odd: selectOddByPick(cornersQuote, cornersPick.pick),
+                  bookmaker: cornersQuote ? `median(${cornersQuote.bookmakersUsed})` : null,
+                  bookmakersUsed: cornersQuote?.bookmakersUsed || 0
+                }
+              : undefined,
+            shotsOnTarget: shotsOnTargetPick
+              ? {
+                  pick: shotsOnTargetPick.pick,
+                  line: shotsOnTargetPick.line,
+                  odd: selectOddByPick(shotsOnTargetQuote, shotsOnTargetPick.pick),
+                  bookmaker: shotsOnTargetQuote ? `median(${shotsOnTargetQuote.bookmakersUsed})` : null,
+                  bookmakersUsed: shotsOnTargetQuote?.bookmakersUsed || 0
+                }
+              : undefined,
+            shotsTotal: shotsTotalPick
+              ? {
+                  pick: shotsTotalPick.pick,
+                  line: shotsTotalPick.line,
+                  odd: selectOddByPick(shotsTotalQuote, shotsTotalPick.pick),
+                  bookmaker: shotsTotalQuote ? `median(${shotsTotalQuote.bookmakersUsed})` : null,
+                  bookmakersUsed: shotsTotalQuote?.bookmakersUsed || 0
+                }
+              : undefined,
+            firstHalfGoals: firstHalfPick
+              ? {
+                  pick: firstHalfPick.pick,
+                  line: firstHalfPick.line,
+                  odd: selectOddByPick(firstHalfQuote, firstHalfPick.pick),
+                  bookmaker: firstHalfQuote ? `median(${firstHalfQuote.bookmakersUsed})` : null,
+                  bookmakersUsed: firstHalfQuote?.bookmakersUsed || 0
+                }
+              : undefined
+          };
         }
 
         // === STACKER (ML) or calibrated+market blend ===
@@ -1237,6 +1349,7 @@ export default async function handler(req, res) {
             ensemble: stakingBreakdown,
             reasons: reasonCodes
           },
+          marketOdds,
           predictions: {
             oneXtwo: finalPick1X2,
             // prag corect 50 pentru pieţe binare (anterior 55 era greşit:

@@ -147,6 +147,14 @@ export type LeagueStandingEntry = {
 
 export type MatchScore = { home: number | null; away: number | null };
 
+export type MarketOddQuote = {
+  pick: string;
+  line?: number | null;
+  odd: number | null;
+  bookmaker?: string | null;
+  bookmakersUsed?: number;
+};
+
 /** Nivel de încredere semantic pentru o piaţă, folosit în UI pentru culoare/badge. */
 export type MarketTier = "strong" | "lean" | "toss" | "lean_off" | "strong_off";
 
@@ -179,6 +187,12 @@ export type PredictionRow = {
   probs: Probs;
   odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;
+  marketOdds?: {
+    corners?: MarketOddQuote;
+    shotsOnTarget?: MarketOddQuote;
+    shotsTotal?: MarketOddQuote;
+    firstHalfGoals?: MarketOddQuote;
+  };
   predictions: {
     oneXtwo: string;
     gg: string;
@@ -329,6 +343,12 @@ export type DayResponse = {
 export type XGData = {
   homeXG: number;
   awayXG: number;
+  marketResults?: {
+    cornersTotal?: number | null;
+    shotsOnTargetTotal?: number | null;
+    shotsTotal?: number | null;
+    firstHalfGoals?: number | null;
+  };
 };
 
 export type BacktestKpi = {

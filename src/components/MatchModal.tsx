@@ -70,6 +70,51 @@ function formatLineKey(key: string): string {
   return `Over ${m[1]}.${m[2]}`;
 }
 
+function parseLineThreshold(key: string): number | null {
+  const m = key.match(/^o(\d+)_(\d+)$/);
+  if (!m) return null;
+  return Number(`${m[1]}.${m[2]}`);
+}
+
+function deriveBestOverUnderPick(
+  totalLines?: Record<string, number>
+): { pick: string; probability: number; line: number } | null {
+  if (!totalLines) return null;
+  const entries = Object.entries(totalLines).filter(([, v]) => Number.isFinite(Number(v)));
+  if (!entries.length) return null;
+  let best: { pick: string; probability: number; line: number } | null = null;
+  for (const [key, rawProb] of entries) {
+    const line = parseLineThreshold(key);
+    if (line == null) continue;
+    const pOver = Math.max(0, Math.min(100, Number(rawProb)));
+    const overCandidate = { pick: `Over ${line.toFixed(1)}`, probability: pOver, line };
+    const underCandidate = { pick: `Under ${line.toFixed(1)}`, probability: 100 - pOver, line };
+    const chosen = overCandidate.probability >= underCandidate.probability ? overCandidate : underCandidate;
+    if (!best || chosen.probability > best.probability) best = chosen;
+  }
+  return best;
+}
+
+function marketResultBadge(
+  predicted: string,
+  probability: number,
+  verdict: boolean | null,
+  odd?: number | null,
+  source?: string | null
+) {
+  const base = "inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide";
+  const oddText = Number.isFinite(Number(odd)) ? ` · ${Number(odd).toFixed(2)}` : " · N/A";
+  const srcText = source ? ` · ${source}` : "";
+  const pred = `${predicted} · ${Math.round(probability)}%${oddText}${srcText}`;
+  if (verdict === true) {
+    return <span className={`${base} border-signal-sage/35 bg-signal-sage/10 text-signal-mint`}>{pred} · WIN</span>;
+  }
+  if (verdict === false) {
+    return <span className={`${base} border-signal-rose/35 bg-signal-rose/10 text-signal-rose`}>{pred} · LOSE</span>;
+  }
+  return <span className={`${base} border-white/10 bg-signal-void/45 text-signal-silver`}>{pred} · OPEN</span>;
+}
+
 /**
  * Randează un bloc Poisson (cornere / şuturi la poartă / total şuturi) cu:
  * - header cu λ & total aşteptat
@@ -83,7 +128,10 @@ function PoissonMarketSection({
   icon,
   data,
   homeLabel,
-  awayLabel
+  awayLabel,
+  actualTotal,
+  quotedOdd,
+  quoteSource
 }: {
   title: string;
   subtitle: string;
@@ -92,11 +140,21 @@ function PoissonMarketSection({
   data: PoissonMarketProbs;
   homeLabel: string;
   awayLabel: string;
+  actualTotal?: number | null;
+  quotedOdd?: number | null;
+  quoteSource?: string | null;
 }) {
   const totalKeys = Object.keys(data.total || {});
   const homeKeys = Object.keys(data.home || {});
   const awayKeys = Object.keys(data.away || {});
   const hasTeamLines = homeKeys.length > 0 || awayKeys.length > 0;
+  const bestPick = deriveBestOverUnderPick(data.total);
+  const settled =
+    bestPick && actualTotal != null
+      ? bestPick.pick.startsWith("Over")
+        ? actualTotal > bestPick.line
+        : actualTotal < bestPick.line
+      : null;
 
   const toneClass = (pct: number) => {
     if (pct >= 60) return "text-signal-sage";
@@ -195,6 +253,14 @@ function PoissonMarketSection({
           {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
           {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
           {data.usedFallback && <span className="text-signal-amber">⚠ fallback (rolling stats incomplete)</span>}
+        </div>
+      )}
+      {bestPick && (
+        <div className="mt-3 border-t border-white/5 pt-2">
+          {marketResultBadge(bestPick.pick, bestPick.probability, settled, quotedOdd, quoteSource)}
+          {actualTotal != null && (
+            <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">Final total: {actualTotal}</span>
+          )}
         </div>
       )}
     </section>
@@ -572,6 +638,21 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
   const standingsRows = match.leagueStandings;
   const showStandingsBlock =
     Boolean(match.teamContext?.home || match.teamContext?.away || (standingsRows && standingsRows.length > 0));
+  const firstHalfPick = match.probs.firstHalf
+    ? (() => {
+        const pOver = match.probs.firstHalf.pO15;
+        if (!Number.isFinite(pOver)) return null;
+        return pOver >= 50
+          ? { pick: "Over 1.5 FH", probability: pOver, line: 1.5 }
+          : { pick: "Under 1.5 FH", probability: 100 - pOver, line: 1.5 };
+      })()
+    : null;
+  const firstHalfVerdict =
+    firstHalfPick && xgData?.marketResults?.firstHalfGoals != null
+      ? firstHalfPick.pick.startsWith("Over")
+        ? xgData.marketResults.firstHalfGoals > firstHalfPick.line
+        : xgData.marketResults.firstHalfGoals < firstHalfPick.line
+      : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
@@ -1017,6 +1098,22 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                     </span>
                   </div>
                 ) : null}
+                {firstHalfPick && (
+                  <div className="mt-3 border-t border-white/5 pt-2">
+                    {marketResultBadge(
+                      firstHalfPick.pick,
+                      firstHalfPick.probability,
+                      firstHalfVerdict,
+                      match.marketOdds?.firstHalfGoals?.odd,
+                      match.marketOdds?.firstHalfGoals?.bookmaker
+                    )}
+                    {xgData?.marketResults?.firstHalfGoals != null && (
+                      <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
+                        Goluri HT: {xgData.marketResults.firstHalfGoals}
+                      </span>
+                    )}
+                  </div>
+                )}
               </section>
             </div>
           )}
@@ -1051,6 +1148,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   data={match.probs.corners}
                   homeLabel={match.teams.home}
                   awayLabel={match.teams.away}
+                  actualTotal={xgData?.marketResults?.cornersTotal ?? null}
+                  quotedOdd={match.marketOdds?.corners?.odd ?? null}
+                  quoteSource={match.marketOdds?.corners?.bookmaker ?? null}
                 />
               )}
               {match.probs.shotsOnTarget && (
@@ -1062,6 +1162,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   data={match.probs.shotsOnTarget}
                   homeLabel={match.teams.home}
                   awayLabel={match.teams.away}
+                  actualTotal={xgData?.marketResults?.shotsOnTargetTotal ?? null}
+                  quotedOdd={match.marketOdds?.shotsOnTarget?.odd ?? null}
+                  quoteSource={match.marketOdds?.shotsOnTarget?.bookmaker ?? null}
                 />
               )}
               {match.probs.shotsTotal && (
@@ -1073,6 +1176,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   data={match.probs.shotsTotal}
                   homeLabel={match.teams.home}
                   awayLabel={match.teams.away}
+                  actualTotal={xgData?.marketResults?.shotsTotal ?? null}
+                  quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
+                  quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
                 />
               )}
             </div>

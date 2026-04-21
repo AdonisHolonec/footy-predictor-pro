@@ -31,6 +31,14 @@ function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
   });
 }
 
+function isFinalStatus(status?: string) {
+  return ["FT", "AET", "PEN"].includes(String(status || "").toUpperCase());
+}
+
+function hasDerivateMarkets(row: PredictionRow) {
+  return Boolean(row.probs?.corners || row.probs?.shotsOnTarget || row.probs?.shotsTotal || row.probs?.firstHalf);
+}
+
 export default function UserDashboard() {
   const {
     user,
@@ -94,6 +102,7 @@ export default function UserDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
+  const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
 
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
@@ -106,6 +115,10 @@ export default function UserDashboard() {
     () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
     [history, predIdSet]
   );
+  const visiblePreds = useMemo(() => {
+    if (!showSettledMarketsOnly) return preds;
+    return preds.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
+  }, [preds, showSettledMarketsOnly]);
   const userPerformanceByLeague = useMemo((): PerformanceLeagueBreakdown[] => {
     const map = new Map<number, { leagueId: number; leagueName: string; wins: number; losses: number; pending: number }>();
     for (const h of history) {
@@ -743,7 +756,7 @@ export default function UserDashboard() {
             isWinRatePulsing={isWinRatePulsing}
             isHistorySyncing={isHistorySyncing}
             pendingHistoryCount={pendingHistoryCount}
-            displayedPredsCount={preds.length}
+            displayedPredsCount={visiblePreds.length}
             pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
             onBreakdownClick={() => setPerfCounterModalOpen(true)}
           />
@@ -883,6 +896,18 @@ export default function UserDashboard() {
               Admin · Unlimited
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setShowSettledMarketsOnly((prev) => !prev)}
+            className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold shadow-inner transition ${
+              showSettledMarketsOnly
+                ? "border-signal-sage/35 bg-signal-sage/10 text-signal-mint"
+                : "border-white/10 bg-signal-panel/45 text-signal-inkMuted hover:text-signal-ink"
+            }`}
+            title="Afișează doar meciurile finalizate unde piețele derivate pot primi badge WIN/LOSE"
+          >
+            {showSettledMarketsOnly ? "Settled markets: ON" : "Settled markets: OFF"}
+          </button>
         </div>
 
         {!tierQuotaExempt && (
@@ -1086,13 +1111,13 @@ export default function UserDashboard() {
             />
           </div>
           <div className="lg:col-span-8 xl:col-span-9">
-            {!preds.length ? (
+            {!visiblePreds.length ? (
               <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/30 bg-signal-void/35 text-center text-signal-inkMuted">
-                Selectează ligi și apasă Predict.
+                {showSettledMarketsOnly ? "Nu există încă meciuri finalizate cu piețe derivate în selecția curentă." : "Selectează ligi și apasă Predict."}
               </div>
             ) : (
               <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                {preds.map((match) => (
+                {visiblePreds.map((match) => (
                   <MatchCard
                     key={match.id}
                     row={match}

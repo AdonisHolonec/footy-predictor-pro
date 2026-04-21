@@ -42,6 +42,27 @@ function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
   return null;
 }
 
+function parseLineThreshold(key: string): number | null {
+  const m = key.match(/^o(\d+)_(\d+)$/);
+  if (!m) return null;
+  return Number(`${m[1]}.${m[2]}`);
+}
+
+function deriveBestOverUnderPick(totalLines?: Record<string, number>): { pick: string; probability: number } | null {
+  if (!totalLines) return null;
+  let best: { pick: string; probability: number } | null = null;
+  for (const [key, raw] of Object.entries(totalLines)) {
+    const line = parseLineThreshold(key);
+    const pOver = Number(raw);
+    if (line == null || !Number.isFinite(pOver)) continue;
+    const over = { pick: `Over ${line.toFixed(1)}`, probability: pOver };
+    const under = { pick: `Under ${line.toFixed(1)}`, probability: 100 - pOver };
+    const current = over.probability >= under.probability ? over : under;
+    if (!best || current.probability > best.probability) best = current;
+  }
+  return best;
+}
+
 function statusChip(
   row: PredictionRow,
   confPct: number,
@@ -134,6 +155,14 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive);
   const tier = modelTierBadge(row);
+  const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
+  const shotsPick = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+  const firstHalfPick =
+    row.probs?.firstHalf && Number.isFinite(row.probs.firstHalf.pO15)
+      ? row.probs.firstHalf.pO15 >= 50
+        ? { pick: "Over 1.5 FH", probability: row.probs.firstHalf.pO15 }
+        : { pick: "Under 1.5 FH", probability: 100 - row.probs.firstHalf.pO15 }
+      : null;
 
   if (row.insufficientData) {
     return (
@@ -317,6 +346,43 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
             >
               🔒 {label}
             </span>
+          ))}
+        </div>
+      )}
+
+      {hasExactConfidence && (cornersPick || shotsPick || firstHalfPick) && (
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {[
+            {
+              label: "Corners",
+              data: cornersPick,
+              odd: row.marketOdds?.corners?.odd,
+              source: row.marketOdds?.corners?.bookmaker
+            },
+            {
+              label: "Shots",
+              data: shotsPick,
+              odd: row.marketOdds?.shotsOnTarget?.odd,
+              source: row.marketOdds?.shotsOnTarget?.bookmaker
+            },
+            {
+              label: "HT",
+              data: firstHalfPick,
+              odd: row.marketOdds?.firstHalfGoals?.odd,
+              source: row.marketOdds?.firstHalfGoals?.bookmaker
+            }
+          ].map((item) => (
+            <div key={item.label} className="rounded-md border border-white/10 bg-signal-void/45 px-1.5 py-1 text-center">
+              <div className="font-mono text-[8px] uppercase tracking-wide text-signal-inkMuted">{item.label}</div>
+              <div className="mt-0.5 font-mono text-[9px] text-signal-silver">{item.data?.pick ?? "—"}</div>
+              <div className="font-mono text-[8px] tabular-nums text-signal-petrol">
+                {item.data ? `${Math.round(item.data.probability)}%` : "—"}
+              </div>
+              <div className="font-mono text-[8px] tabular-nums text-signal-amberSoft">
+                odd {Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : "N/A"}
+              </div>
+              <div className="font-mono text-[7px] text-signal-inkMuted">{item.source || "source:N/A"}</div>
+            </div>
           ))}
         </div>
       )}
