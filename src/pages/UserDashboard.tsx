@@ -628,7 +628,18 @@ export default function UserDashboard() {
           return;
         }
         if (!response.ok) {
-          setStatus(`Predict a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`);
+          let backendMessage = "";
+          try {
+            const errJson = await response.json();
+            if (typeof errJson?.error === "string") backendMessage = errJson.error;
+          } catch {
+            backendMessage = "";
+          }
+          setStatus(
+            backendMessage
+              ? `Predict a eșuat (HTTP ${response.status}) · ${backendMessage}`
+              : `Predict a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`
+          );
           return;
         }
         const json = await response.json();

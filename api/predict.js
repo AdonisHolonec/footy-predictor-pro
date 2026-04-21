@@ -1078,6 +1078,7 @@ export default async function handler(req, res) {
         }
 
         if (oddsReq.ok && oddsReq.data) {
+          try {
           const cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
           const shotsOnTargetPick = shotsOnTargetBlock ? deriveBestOverUnderPick(shotsOnTargetBlock.total) : null;
           const shotsTotalPick = shotsTotalBlock ? deriveBestOverUnderPick(shotsTotalBlock.total) : null;
@@ -1160,6 +1161,10 @@ export default async function handler(req, res) {
                 }
               : undefined
           };
+          } catch {
+            // Defensive: market-specific odds extraction must never fail the whole predict pipeline.
+            marketOdds = undefined;
+          }
         }
 
         // === STACKER (ML) or calibrated+market blend ===
