@@ -20,6 +20,7 @@ export default function Login() {
   const [localError, setLocalError] = useState("");
   const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [parallax, setParallax] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (searchParams.get("mode") === "signup") {
@@ -53,6 +54,20 @@ export default function Login() {
     if (!user) return;
     navigate("/workspace", { replace: true });
   }, [user?.id, navigate]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (mq.matches) return;
+    const onMove = (event: MouseEvent) => {
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const nx = (event.clientX - cx) / Math.max(cx, 1);
+      const ny = (event.clientY - cy) / Math.max(cy, 1);
+      setParallax({ x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) });
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,19 +115,24 @@ export default function Login() {
     <div className="lab-page">
       <div className="lab-bg" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.12]"
-        style={{ backgroundImage: `url(${BRAND_IMAGES.landingAccessHero})` }}
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.05] mix-blend-screen"
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.12] transition-transform duration-300"
         style={{
-          backgroundImage: `url(${BRAND_IMAGES.heroForesight})`,
-          backgroundSize: "120% auto",
-          backgroundPosition: "center top"
+          backgroundImage: `url(${BRAND_IMAGES.landingAccessHero})`,
+          transform: `translate3d(${parallax.x * 10}px, ${parallax.y * 10}px, 0)`
         }}
         aria-hidden
       />
+      <div
+        className="login-ultra-glow pointer-events-none absolute inset-0 z-[1] opacity-[0.05] mix-blend-screen transition-transform duration-300"
+        style={{
+          backgroundImage: `url(${BRAND_IMAGES.heroForesight})`,
+          backgroundSize: "120% auto",
+          backgroundPosition: "center top",
+          transform: `translate3d(${parallax.x * -14}px, ${parallax.y * -14}px, 0)`
+        }}
+        aria-hidden
+      />
+      <div className="login-ultra-noise pointer-events-none absolute inset-0 z-[1]" aria-hidden />
       <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-signal-mist/40 via-transparent to-signal-void/85" aria-hidden />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
         <header className="mb-10 border-b border-white/[0.07] pb-8 animate-fadeIn">
@@ -202,7 +222,7 @@ export default function Login() {
           </div>
 
           <section className="lg:sticky lg:top-8">
-            <div className="animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/90 to-signal-mist/95 shadow-atelierLg backdrop-blur-xl [animation-delay:90ms]">
+            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/90 to-signal-mist/95 shadow-atelierLg backdrop-blur-xl [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
                 <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">Credentials</span>
