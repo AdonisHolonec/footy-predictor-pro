@@ -144,8 +144,8 @@ export default function Login() {
           >
             ← Pagina de acces
           </Link>
-          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor · intelligence lab</p>
-          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.15] bg-signal-panel/55 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-md sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
+          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrol">Footy predictor · intelligence lab</p>
+          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.18] bg-signal-panel/68 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-[24px] sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
             <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-[5rem]">
               <span className="relative inline-block">
                 <span
@@ -160,7 +160,7 @@ export default function Login() {
                 </span>
               </span>
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-silver">
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-ink">
               Login într-un mediu premium, cinematic și calm. Intră în observatorul tău de predicții, piețe avansate și
               performanță în timp real.
             </p>
@@ -171,30 +171,30 @@ export default function Login() {
           <div className="animate-fadeIn space-y-6 [animation-delay:40ms]">
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
-            <div className="rounded-2xl border border-signal-sage/40 bg-signal-panel/70 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-md">
+            <div className="rounded-2xl border border-signal-sage/45 bg-signal-panel/80 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-[24px]">
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Global model performance · last 30d</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-mint sm:text-3xl">
                     {globalStats.settled ? globalStats.winRate.toFixed(1) : "—"}%
                   </div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Hit rate · 30d</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-ink">Hit rate · 30d</div>
                 </div>
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-petrol sm:text-3xl">{globalStats.settled || "—"}</div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Settled</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-ink">Settled</div>
                 </div>
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-sage sm:text-3xl">
                     {globalStats.wins + globalStats.losses > 0 ? `${globalStats.wins}W/${globalStats.losses}L` : "—"}
                   </div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Record</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-ink">Record</div>
                 </div>
               </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.16] bg-signal-panel/70 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-md">
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Servicii disponibile în platformă</h2>
+            <section className="rounded-2xl border border-white/[0.2] bg-signal-panel/80 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-[24px]">
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrol">Servicii disponibile în platformă</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 {[
                   "Predicții 1X2 + O/U calibrate",
@@ -210,7 +210,7 @@ export default function Login() {
             </section>
 
             <section>
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Observatory pulse</h2>
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrol">Observatory pulse</h2>
               <SuccessRateTracker
                 stats={globalStats}
                 animatedWins={globalStats.wins}
@@ -224,21 +224,21 @@ export default function Login() {
           </div>
 
           <section className="lg:sticky lg:top-8">
-            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.14] bg-gradient-to-b from-signal-panel/95 via-signal-mist/95 to-signal-panel/90 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-xl [animation-delay:90ms]">
+            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-signal-panel/100 via-signal-mist/100 to-signal-panel/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
-                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-inkMuted">Credentials</span>
+                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-silver">Credentials</span>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Secure gateway</p>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrol">Secure gateway</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && "Login"}
                   {mode === "signup" && "Create account"}
                   {mode === "forgot" && "Forgot password"}
                   {mode === "reset" && "Reset password"}
                 </h2>
-                <p className="mt-1 text-xs text-signal-inkMuted">
+                <p className="mt-1 text-xs text-signal-silver">
                   Continuă către workspace-ul tău Footy Predictor Intelligence Lab.
                 </p>
 
