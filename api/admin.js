@@ -75,11 +75,32 @@ async function handleProfiles(req, res) {
       const includeWarmPredictUsage = String(req.query.includeWarmPredictUsage || "") === "1";
       const usageDay = parseUsageDayFromQuery(req.query);
 
-      const { data, error } = await supabase
+      let data = null;
+      let error = null;
+      ({ data, error } = await supabase
         .from("profiles")
         .select("user_id, role, tier, subscription_expires_at, favorite_leagues, is_blocked, created_at, updated_at")
         .order("created_at", { ascending: false })
-        .limit(500);
+        .limit(500));
+
+      if (error) {
+        const msg = String(error.message || "").toLowerCase();
+        const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+        if (!missingTierCols) throw error;
+        // Backward-compat: migration for tier/subscription not applied yet.
+        const legacy = await supabase
+          .from("profiles")
+          .select("user_id, role, favorite_leagues, is_blocked, created_at, updated_at")
+          .order("created_at", { ascending: false })
+          .limit(500);
+        if (legacy.error) throw legacy.error;
+        data = (legacy.data || []).map((row) => ({
+          ...row,
+          tier: "free",
+          subscription_expires_at: null
+        }));
+        error = null;
+      }
 
       if (error) throw error;
       let items = data || [];

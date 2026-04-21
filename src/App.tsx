@@ -301,7 +301,7 @@ export default function App() {
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
-        if (i === 0) qs.set("usageDay", usageDay);
+        qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
         if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const r = await fetch(`/api/warm?${qs}`, { headers });
@@ -367,7 +367,7 @@ export default function App() {
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
-        if (i === 0) qs.set("usageDay", usageDay);
+        qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
         if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const r = await fetch(`/api/predict?${qs}`, { headers });

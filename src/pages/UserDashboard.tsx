@@ -517,7 +517,7 @@ export default function UserDashboard() {
           leagueIds: selectedLeagueIds.join(","),
           season: String(inferSeason(currentDate))
         });
-        if (i === 0) qs.set("usageDay", todayKey);
+        qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
         if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
@@ -590,7 +590,7 @@ export default function UserDashboard() {
           season: String(inferSeason(currentDate)),
           limit: "50"
         });
-        if (i === 0) qs.set("usageDay", todayKey);
+        qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
         if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
