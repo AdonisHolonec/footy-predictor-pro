@@ -143,24 +143,26 @@ export default function Login() {
             ← Pagina de acces
           </Link>
           <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor · intelligence lab</p>
-          <h1 className="mt-2 max-w-4xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-[5rem]">
-            <span className="relative inline-block">
-              <span
-                className="absolute inset-0 z-0 text-transparent opacity-75 blur-[1px]"
-                style={{ WebkitTextStroke: "1px rgba(94,234,212,0.55)" }}
-                aria-hidden
-              >
-                Footy Predictor
+          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.12] bg-signal-panel/45 p-4 backdrop-blur-md sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:backdrop-blur-0">
+            <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-[5rem]">
+              <span className="relative inline-block">
+                <span
+                  className="absolute inset-0 z-0 text-transparent opacity-75 blur-[1px]"
+                  style={{ WebkitTextStroke: "1px rgba(94,234,212,0.55)" }}
+                  aria-hidden
+                >
+                  Footy Predictor
+                </span>
+                <span className="relative z-10 bg-gradient-to-r from-signal-ink via-signal-petrol to-signal-mint bg-clip-text text-transparent drop-shadow-[0_0_26px_rgba(56,189,248,0.34)]">
+                  Footy Predictor
+                </span>
               </span>
-              <span className="relative z-10 bg-gradient-to-r from-signal-ink via-signal-petrol to-signal-mint bg-clip-text text-transparent drop-shadow-[0_0_26px_rgba(56,189,248,0.34)]">
-                Footy Predictor
-              </span>
-            </span>
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-silver">
-            Login într-un mediu premium, cinematic și calm. Intră în observatorul tău de predicții, piețe avansate și
-            performanță în timp real.
-          </p>
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-silver">
+              Login într-un mediu premium, cinematic și calm. Intră în observatorul tău de predicții, piețe avansate și
+              performanță în timp real.
+            </p>
+          </div>
         </header>
 
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,26rem)] lg:items-start xl:gap-14">

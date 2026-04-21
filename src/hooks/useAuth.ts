@@ -22,6 +22,7 @@ type ProfileRow = {
 
 type ManagedProfile = {
   userId: string;
+  email?: string | null;
   role: "user" | "admin";
   tier?: "free" | "premium" | "ultra";
   subscriptionExpiresAt?: string | null;
@@ -385,11 +386,13 @@ export function useAuth() {
       throw new Error(message);
     }
     type AdminRow = ProfileRow & {
+      email?: string | null;
       warmPredictUsage?: { usageDay: string; warm: number; predict: number };
     };
     const rows = (json.items as AdminRow[] | null) ?? [];
     const mapped: ManagedProfile[] = rows.map((row) => ({
       userId: row.user_id,
+      email: row.email || null,
       role: row.role,
       tier: row.tier || "free",
       subscriptionExpiresAt: row.subscription_expires_at ?? null,

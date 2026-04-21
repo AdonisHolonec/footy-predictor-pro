@@ -59,6 +59,10 @@ export default function App() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.selectedDates", [isoToday()]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useLocalStorageState<number[]>("footy.selectedLeagueIds", []);
+  const [favoriteLeaguesByUser, setFavoriteLeaguesByUser] = useLocalStorageState<Record<string, number[]>>(
+    "footy.favoriteLeagueByUser",
+    {}
+  );
   const [day, setDay] = useState<DayResponse | null>(null);
   const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -233,6 +237,7 @@ export default function App() {
       .sort((a, b) => b.settled - a.settled);
   }, [history]);
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
+  const lastSelectionHydrateUserId = useRef<string | null>(null);
 
   const groupedDisplayedMatches = useMemo(() => {
     const groups = new Map<string, PredictionRow[]>();
@@ -599,25 +604,31 @@ export default function App() {
   }, [thresholdsSaved]);
 
   useEffect(() => {
-    if (!user) return;
-    const savedFavorites = Array.isArray(user.favoriteLeagues) ? user.favoriteLeagues : [];
-    if (!savedFavorites.length) return;
-    const current = Array.from(new Set(selectedLeagueIds));
-    const target = Array.from(new Set(savedFavorites));
-    if (current.join(",") !== target.join(",")) {
-      setSelectedLeagueIds(target);
+    if (!user?.id) {
+      lastSelectionHydrateUserId.current = null;
+      return;
     }
-  }, [user?.id]);
+    if (lastSelectionHydrateUserId.current === user.id) return;
+    lastSelectionHydrateUserId.current = user.id;
+    const localFavorites = favoriteLeaguesByUser[user.id];
+    if (Array.isArray(localFavorites) && localFavorites.length > 0) {
+      setSelectedLeagueIds(Array.from(new Set(localFavorites)));
+      return;
+    }
+    const profileFavorites = Array.isArray(user.favoriteLeagues) ? Array.from(new Set(user.favoriteLeagues)) : [];
+    setSelectedLeagueIds(profileFavorites);
+  }, [user?.id, user?.favoriteLeagues, favoriteLeaguesByUser, setSelectedLeagueIds]);
 
   useEffect(() => {
     if (!user) return;
+    setFavoriteLeaguesByUser((prev) => ({ ...prev, [user.id]: selectedLeagueIds }));
     const saveTimer = setTimeout(() => {
       void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
         setStatus("Nu am putut salva preferintele utilizatorului.");
       });
     }, 450);
     return () => clearTimeout(saveTimer);
-  }, [user?.id, selectedLeagueIds, updateFavoriteLeagues]);
+  }, [user?.id, selectedLeagueIds, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
 
   useEffect(() => {
     if (!lastAuthEvent) return;
@@ -1262,6 +1273,7 @@ export default function App() {
               <table className="min-w-full text-left text-[11px] text-signal-petrol">
                 <thead className="sticky top-0 bg-signal-fog/95 text-[10px] uppercase text-signal-inkMuted">
                   <tr>
+                    <th className="px-3 py-2">Email</th>
                     <th className="px-3 py-2">User ID</th>
                     <th className="px-3 py-2">Role</th>
                     <th className="px-3 py-2">Tier</th>
@@ -1275,6 +1287,18 @@ export default function App() {
                 <tbody>
                   {managedProfiles.map((profile) => (
                     <tr key={profile.userId} className="border-t border-signal-line/40">
+                      <td className="px-3 py-2 font-mono text-[10px] text-signal-ink">
+                        {profile.email ? (
+                          profile.email
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            <span>—</span>
+                            <span className="rounded-full border border-signal-amber/40 bg-signal-amber/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-amber">
+                              email missing
+                            </span>
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 font-mono text-[10px]">{profile.userId}</td>
                       <td className="px-3 py-2">{profile.role}</td>
                       <td className="px-3 py-2">
@@ -1380,7 +1404,7 @@ export default function App() {
                   ))}
                   {!managedProfiles.length && (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 text-center text-signal-inkMuted">
+                      <td colSpan={9} className="px-3 py-4 text-center text-signal-inkMuted">
                         Nu exista profile disponibile.
                       </td>
                     </tr>

@@ -50,7 +50,11 @@ export function resolveEffectiveTierFromProfile(profile) {
   const now = Date.now();
   const requestedTier = String(profile?.tier || USER_TIERS.FREE).toLowerCase();
   const subscriptionExpiresAt = parseDate(profile?.subscription_expires_at);
-  const hasActiveSubscription = Boolean(subscriptionExpiresAt && subscriptionExpiresAt.getTime() > now);
+  const hasOpenEndedPaidTier =
+    !subscriptionExpiresAt && (requestedTier === USER_TIERS.PREMIUM || requestedTier === USER_TIERS.ULTRA);
+  const hasActiveSubscription = Boolean(
+    (subscriptionExpiresAt && subscriptionExpiresAt.getTime() > now) || hasOpenEndedPaidTier
+  );
   const premiumTrialRemainingMs = hoursRemaining(profile?.premium_trial_activated_at, 24);
   const ultraTrialRemainingMs = hoursRemaining(profile?.ultra_trial_activated_at, 24);
 

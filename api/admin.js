@@ -1,6 +1,7 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { parseUsageDayFromQuery } from "../server-utils/userDailyWarmPredictUsage.js";
+import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { invalidateCalibrationCache } from "../server-utils/isotonicCalibration.js";
 import { invalidateStackerCache } from "../server-utils/mlStacker.js";
 import { invalidateEloCache } from "../server-utils/teamElo.js";
@@ -130,6 +131,15 @@ async function handleProfiles(req, res) {
           };
         });
       }
+
+      const emailByUserId = await mapUserIdsToEmails(
+        supabase,
+        items.map((item) => item.user_id)
+      );
+      items = items.map((item) => ({
+        ...item,
+        email: emailByUserId.get(item.user_id) || null
+      }));
 
       return res.status(200).json({ ok: true, items });
     }
