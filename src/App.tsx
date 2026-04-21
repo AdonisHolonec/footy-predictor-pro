@@ -46,6 +46,14 @@ import {
   useLocalStorageState
 } from "./utils/appUtils";
 
+function hasTierMaskedPredictionShape(rows: PredictionRow[]): boolean {
+  return rows.some((row) => {
+    if (row?.insufficientData) return false;
+    const probs = row?.probs;
+    return !probs?.corners && !probs?.shotsOnTarget && !probs?.shotsTotal && !probs?.firstHalf;
+  });
+}
+
 // --- APP COMPONENT ---
 export default function App() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
@@ -633,6 +641,14 @@ export default function App() {
       setStatus("Nu am putut incarca lista utilizatorilor.");
     });
   }, [user?.id, user?.role, refreshManagedProfiles]);
+
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    if (!preds.length) return;
+    if (!hasTierMaskedPredictionShape(preds)) return;
+    setPreds([]);
+    setStatus("Cache local vechi resetat pentru admin. Rulează Predict pentru cardurile complete.");
+  }, [user?.role, preds, setPreds]);
 
   async function handleLogin(email: string, password: string) {
     setIsAuthSubmitting(true);

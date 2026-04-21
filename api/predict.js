@@ -499,12 +499,12 @@ export default async function handler(req, res) {
   let tierContext = null;
   let reservedTierUsage = 0;
   if (!usageCtx.anonymous && usageCtx.userId) {
-    const quotaExempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
+    let quotaExempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
     const supabase = getSupabaseAdmin();
     let profile = null;
     let { data: profData, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+      .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
       .eq("user_id", usageCtx.userId)
       .maybeSingle();
     if (profileError) {
@@ -521,9 +521,12 @@ export default async function handler(req, res) {
       if (legacyError) {
         return res.status(500).json({ ok: false, error: legacyError.message || "Nu am putut verifica profilul." });
       }
-      profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+      profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
     } else {
       profile = profData;
+    }
+    if (String(profile?.role || "").toLowerCase() === "admin") {
+      quotaExempt = true;
     }
     if (!profile) {
       return res.status(404).json({ ok: false, error: "Profil utilizator inexistent." });

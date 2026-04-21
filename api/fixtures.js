@@ -156,7 +156,7 @@ async function handleDay(req, res) {
       let profile = null;
       let { data: profData, error: profileError } = await sb
         .from("profiles")
-        .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+        .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
         .eq("user_id", requester.user.id)
         .maybeSingle();
       if (profileError) {
@@ -169,13 +169,15 @@ async function handleDay(req, res) {
           .eq("user_id", requester.user.id)
           .maybeSingle();
         if (legacyError) return res.status(500).json({ ok: false, error: legacyError.message });
-        profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+        profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
       } else {
         profile = profData;
       }
       if (!profile) return res.status(404).json({ ok: false, error: "Profile not found." });
 
-      const quotaExempt = await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase());
+      const quotaExempt =
+        String(profile?.role || "").toLowerCase() === "admin" ||
+        (await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase()));
       const tierInfo = resolveEffectiveTierFromProfile(profile);
       const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
       const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
@@ -249,7 +251,7 @@ async function handleDay(req, res) {
           let profile = null;
           let { data: profData, error: profileError } = await sb
             .from("profiles")
-            .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
+            .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
             .eq("user_id", requester.user.id)
             .maybeSingle();
           if (profileError) {
@@ -261,12 +263,14 @@ async function handleDay(req, res) {
               .select("created_at")
               .eq("user_id", requester.user.id)
               .maybeSingle();
-            profile = { tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
+            profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
           } else {
             profile = profData;
           }
           if (profile) {
-            const quotaExempt = await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase());
+            const quotaExempt =
+              String(profile?.role || "").toLowerCase() === "admin" ||
+              (await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase()));
             const tierInfo = resolveEffectiveTierFromProfile(profile);
             const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
             const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);

@@ -1,7 +1,10 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 export function parseAdminEmails() {
-  const raw = String(process.env.ADMIN_EMAILS || "");
+  const raw = [process.env.ADMIN_EMAILS, process.env.VITE_ADMIN_EMAILS]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+    .join(",");
   if (!raw.trim()) return new Set();
   return new Set(
     raw
