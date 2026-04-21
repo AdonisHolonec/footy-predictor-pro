@@ -143,12 +143,23 @@ export default function Login() {
             ← Pagina de acces
           </Link>
           <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-signal-petrolMuted">Footy predictor · intelligence lab</p>
-          <h1 className="lab-heading mt-2 max-w-3xl text-3xl leading-[1.15] sm:text-4xl lg:text-[2.75rem]">
-            Access control for your football intelligence workspace.
+          <h1 className="mt-2 max-w-4xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-[5rem]">
+            <span className="relative inline-block">
+              <span
+                className="absolute inset-0 z-0 text-transparent opacity-75 blur-[1px]"
+                style={{ WebkitTextStroke: "1px rgba(94,234,212,0.55)" }}
+                aria-hidden
+              >
+                Footy Predictor
+              </span>
+              <span className="relative z-10 bg-gradient-to-r from-signal-ink via-signal-petrol to-signal-mint bg-clip-text text-transparent drop-shadow-[0_0_26px_rgba(56,189,248,0.34)]">
+                Footy Predictor
+              </span>
+            </span>
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
-            Login într-un mediu premium, cinematic și calm. Odată autentificat, intri în observatorul de predicții,
-            piețe avansate și monitorizare de performanță.
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-silver">
+            Login într-un mediu premium, cinematic și calm. Intră în observatorul tău de predicții, piețe avansate și
+            performanță în timp real.
           </p>
         </header>
 
@@ -156,42 +167,29 @@ export default function Login() {
           <div className="animate-fadeIn space-y-6 [animation-delay:40ms]">
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <BrandArtboard
-                src={BRAND_IMAGES.heroForesight}
-                alt="Footy Predictor — atmosferă editorială și carduri predictive"
-                frameClassName="aspect-[4/3] max-h-[280px] sm:max-h-[320px]"
-              />
-              <BrandArtboard
-                src={BRAND_IMAGES.heroPlatform}
-                alt="Footy Predictor — navigare și previzualizare platformă"
-                frameClassName="aspect-[4/3] max-h-[280px] sm:max-h-[320px]"
-              />
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.07] bg-signal-panel/35 px-4 py-3 backdrop-blur-md">
+            <div className="rounded-2xl border border-signal-sage/30 bg-signal-panel/55 px-4 py-4 shadow-inner backdrop-blur-md">
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Global model performance · last 30d</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
-                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-mint sm:text-xl">
+                  <div className="font-mono text-2xl font-semibold tabular-nums text-signal-mint sm:text-3xl">
                     {globalStats.settled ? globalStats.winRate.toFixed(1) : "—"}%
                   </div>
-                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Hit rate · 30d</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Hit rate · 30d</div>
                 </div>
                 <div>
-                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-petrol sm:text-xl">{globalStats.settled || "—"}</div>
-                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Settled</div>
+                  <div className="font-mono text-2xl font-semibold tabular-nums text-signal-petrol sm:text-3xl">{globalStats.settled || "—"}</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Settled</div>
                 </div>
                 <div>
-                  <div className="font-mono text-lg font-semibold tabular-nums text-signal-silver sm:text-xl">
+                  <div className="font-mono text-2xl font-semibold tabular-nums text-signal-sage sm:text-3xl">
                     {globalStats.wins + globalStats.losses > 0 ? `${globalStats.wins}W/${globalStats.losses}L` : "—"}
                   </div>
-                  <div className="text-[9px] font-medium uppercase tracking-wide text-signal-inkMuted">Record</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-silver">Record</div>
                 </div>
               </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.07] bg-signal-panel/35 p-4 backdrop-blur-md">
+            <section className="rounded-2xl border border-white/[0.12] bg-signal-panel/55 p-4 backdrop-blur-md">
               <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrolMuted">Servicii disponibile în platformă</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 {[
@@ -200,7 +198,7 @@ export default function Login() {
                   "Signal Lens + Edge Compass",
                   "Performance Counter pe user/ligă"
                 ].map((service) => (
-                  <div key={service} className="rounded-xl border border-white/10 bg-signal-void/35 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                  <div key={service} className="rounded-xl border border-signal-sage/25 bg-signal-void/45 px-3 py-2 font-mono text-[10px] text-signal-ink">
                     {service}
                   </div>
                 ))}
