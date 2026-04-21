@@ -519,7 +519,7 @@ export default function UserDashboard() {
         });
         if (i === 0) qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
-        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {
@@ -592,7 +592,7 @@ export default function UserDashboard() {
         });
         if (i === 0) qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
-        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {

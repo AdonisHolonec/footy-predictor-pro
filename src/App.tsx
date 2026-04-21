@@ -303,7 +303,7 @@ export default function App() {
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
         if (i === 0) qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
-        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const r = await fetch(`/api/warm?${qs}`, { headers });
         if (r.status === 429) {
           try {
@@ -369,7 +369,7 @@ export default function App() {
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
         if (i === 0) qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
-        if (i === 0 && session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
         const r = await fetch(`/api/predict?${qs}`, { headers });
         if (r.status === 429) {
           try {
@@ -407,7 +407,8 @@ export default function App() {
       const qs = new URLSearchParams({ days: String(days) });
       const headers: Record<string, string> = {};
       if (session?.access_token) {
-        qs.set("mine", "1");
+        // Admin observatory should default to global history (all users), not only personal picks.
+        if (user?.role !== "admin") qs.set("mine", "1");
         headers.Authorization = `Bearer ${session.access_token}`;
       }
       const res = await fetch(`/api/history?${qs.toString()}`, { headers });
@@ -484,6 +485,18 @@ export default function App() {
     }
     void fetchDays(normalized);
   }, [date, selectedDates]);
+  useEffect(() => {
+    const tm = setInterval(() => {
+      const today = localCalendarDateKey();
+      if (today === date) return;
+      setDate(today);
+      setSelectedDates((prev) => {
+        const rest = (prev || []).filter((d) => d !== date);
+        return normalizeSelectedDates([today, ...rest]);
+      });
+    }, 60_000);
+    return () => clearInterval(tm);
+  }, [date, setDate, setSelectedDates]);
   useEffect(() => {
     void loadHistory(30);
     void loadKpi(45);
