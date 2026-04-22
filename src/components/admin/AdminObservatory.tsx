@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import type { FilterMode } from "../../constants/appConstants";
+import { BRAND_IMAGES } from "../../constants/brandAssets";
 import type { ModelMetricsResponse, MlAdminStatus, PredictionRow } from "../../types";
 import {
   EdgeCompass,
@@ -67,12 +68,14 @@ export function AdminBrandLockup({ editorialDate }: { editorialDate: string }) {
     <div className="min-w-0">
       <div className="flex items-center gap-3">
         <div
-          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-signal-petrol/40 bg-signal-petrol/10 shadow-[0_0_28px_rgba(94,234,212,0.25)]"
+          className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-cyan-300/65 shadow-[0_0_42px_rgba(34,211,238,0.5)]"
           aria-hidden
         >
-          <svg viewBox="0 0 40 48" className="h-8 w-7 text-[#5eead4]" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 6h14c6 0 10 4 10 10 0 5-3 8.5-8 9.5L30 42H18l4-14H12V6z" />
-          </svg>
+          <img
+            src={BRAND_IMAGES.logoPrimary}
+            alt="Footy Predictor"
+            className="h-14 w-14 rounded-xl object-contain p-0.5 brightness-110 saturate-150 animate-[pulse_4s_ease-in-out_infinite] motion-reduce:animate-none"
+          />
         </div>
         <div>
           <div className="font-display text-lg font-bold uppercase tracking-[0.14em] text-signal-ink md:text-xl">

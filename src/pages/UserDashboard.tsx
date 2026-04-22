@@ -979,6 +979,7 @@ export default function UserDashboard() {
                     row={match}
                     logoColors={{}}
                     hashColor={hashColor}
+                    canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
                     onClick={() => setSelectedMatch(match)}
                   />
                 ))}
@@ -1001,6 +1002,7 @@ export default function UserDashboard() {
           match={selectedMatch}
           logoColors={{}}
           hashColor={hashColor}
+          canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
           onClose={() => setSelectedMatch(null)}
         />
       )}

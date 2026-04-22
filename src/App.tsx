@@ -1750,6 +1750,7 @@ export default function App() {
                                 logoColors={logoColors}
                                 hashColor={hashColor}
                                 animationDelayMs={idx * 45}
+                                canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
                                 onClick={() => setSelectedMatch(m)}
                               />
                             ))}
@@ -1917,6 +1918,7 @@ export default function App() {
                           logoColors={logoColors}
                           hashColor={hashColor}
                           animationDelayMs={idx * 45}
+                          canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
                           onClick={() => setSelectedMatch(m)}
                         />
                       ))}
@@ -1941,7 +1943,15 @@ export default function App() {
           </button>
         </div>
       </div>
-      {selectedMatch && <MatchModal match={selectedMatch} logoColors={logoColors} hashColor={hashColor} onClose={() => setSelectedMatch(null)} />}
+      {selectedMatch && (
+        <MatchModal
+          match={selectedMatch}
+          logoColors={logoColors}
+          hashColor={hashColor}
+          canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
+          onClose={() => setSelectedMatch(null)}
+        />
+      )}
       <PerformanceCounterModal
         open={perfCounterModalOpen}
         onClose={() => setPerfCounterModalOpen(false)}

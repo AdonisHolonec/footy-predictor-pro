@@ -14,6 +14,7 @@ type MatchCardProps = {
   onClick: () => void;
   hashColor: (seed: string) => string;
   animationDelayMs?: number;
+  canShowSpecialBet?: boolean;
 };
 
 function isFinalStatus(status?: string) {
@@ -157,7 +158,7 @@ function modelTierBadge(row: PredictionRow): { label: string; title: string; cla
   };
 }
 
-export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0 }: MatchCardProps) {
+export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0, canShowSpecialBet = false }: MatchCardProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
@@ -313,7 +314,21 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       </div>
 
-      <div className="relative mt-4 grid grid-cols-[1fr_auto] items-center gap-3">
+      <div className="relative mt-4 sm:hidden">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/[0.07] bg-signal-void/30 px-2.5 py-2">
+          <div className="min-w-0 text-center">
+            <img src={row.logos?.home} className="mx-auto h-8 w-8 object-contain opacity-90" alt="" />
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink">{row.teams.home}</div>
+          </div>
+          <div className="font-mono text-[10px] text-signal-stone/90">vs</div>
+          <div className="min-w-0 text-center">
+            <img src={row.logos?.away} className="mx-auto h-8 w-8 object-contain opacity-90" alt="" />
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink">{row.teams.away}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative mt-4 hidden grid-cols-[1fr_auto] items-center gap-3 sm:grid">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <img src={row.logos?.home} className="h-9 w-9 shrink-0 object-contain opacity-90" alt="" />
@@ -355,7 +370,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         row.teamContext?.home?.form ||
         row.teamContext?.away?.rank != null ||
         row.teamContext?.away?.form) && (
-        <div className="mt-3 flex items-stretch justify-between gap-2 rounded-xl border border-white/[0.07] bg-signal-void/35 px-2.5 py-2">
+        <div className="mt-3 hidden items-stretch justify-between gap-2 rounded-xl border border-white/[0.07] bg-signal-void/35 px-2.5 py-2 sm:flex">
           <div className="min-w-0 flex-1 font-mono text-[9px] leading-snug text-signal-silver">
             <span className="block text-[8px] font-semibold uppercase tracking-wide text-signal-inkMuted">Gazde</span>
             <span className="text-signal-petrol">#{row.teamContext?.home?.rank ?? "—"}</span>
@@ -379,9 +394,9 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       )}
 
-      <div className="relative mt-4 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-3">
-        <div>
-          <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">
+      <div className="relative mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-signal-petrol/75">
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
@@ -399,8 +414,11 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
                 HOT
               </span>
             ) : null}
+            <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-petrol">
+              {hasExactConfidence ? `${confPct}%` : confidenceCategory ? confidenceCategory : "LOCKED"}
+            </span>
           </div>
-          <div className={`font-display text-2xl font-bold tracking-tight text-signal-ink ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
+          <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-signal-ink sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
             {row.recommended.pick}
           </div>
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-emerald-300 animate-pulse motion-reduce:animate-none" : "text-signal-petrol"}`}>
@@ -408,7 +426,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           </div>
         </div>
         {(hasFinalScore || showRunningScore) && (
-          <div className="text-right font-mono text-xs tabular-nums">
+          <div className="self-end text-right font-mono text-xs tabular-nums">
             {showRunningScore ? (
               <span className={isLive ? "text-red-200" : "text-signal-amber/90"}>
                 <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
@@ -500,10 +518,10 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       )}
 
-      {hasExactConfidence && specialBetLegs.length >= 2 && (
-        <div className="mt-2 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
-          <div className="flex items-center justify-between gap-2">
-            <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-200">
+      {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
+        <div className="mt-2 min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">
               Special Bet · Top signals
             </div>
             {specialBetCandidates.length >= 3 ? (
@@ -516,7 +534,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
                       e.stopPropagation();
                       setSpecialLegCount(n as 2 | 3);
                     }}
-                    className={`px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase ${
+                    className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
                       specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
                     }`}
                   >
@@ -528,8 +546,8 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           </div>
           <div className="mt-0.5 space-y-0.5">
             {specialBetLegs.map((leg) => (
-              <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-2 font-mono text-[8px]">
-                <span className="truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
+              <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px]">
+                <span className="min-w-0 flex-1 truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
                 <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
               </div>
             ))}

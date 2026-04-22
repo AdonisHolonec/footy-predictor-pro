@@ -351,6 +351,7 @@ type MatchModalProps = {
   logoColors: Record<string, string>;
   onClose: () => void;
   hashColor: (seed: string) => string;
+  canShowSpecialBet?: boolean;
 };
 
 function isFinalStatus(status?: string) {
@@ -511,7 +512,7 @@ function LeagueStandingsTable({
   );
 }
 
-export default function MatchModal({ match, logoColors, onClose, hashColor }: MatchModalProps) {
+export default function MatchModal({ match, logoColors, onClose, hashColor, canShowSpecialBet = false }: MatchModalProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const [xgData, setXgData] = useState<XGData | null>(() => {
     if (!match.luckStats) return null;
@@ -744,14 +745,14 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 {match.teams.home}
               </div>
             </div>
-            <div className="flex w-[min(100%,11.5rem)] shrink-0 flex-col items-center px-0.5 sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
+            <div className="flex w-[min(100%,12.5rem)] shrink-0 flex-col items-center px-0.5 sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
               <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted sm:text-[10px]">
                 {match.league}
               </div>
               <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink sm:text-5xl">
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
-              <div className="mt-2 flex items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
+              <div className="mt-2 flex w-full items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
                 {hasExactConfidence ? (
                   <ConfidenceAura value={confPct} size="compact" />
                 ) : (
@@ -762,13 +763,18 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                     </div>
                   </div>
                 )}
-                <div className="min-w-0 text-left">
-                  <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">Pick</div>
-                  <div className="font-display text-lg font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">
+                    <span>Pick</span>
+                    <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7px] font-bold tracking-wider text-signal-petrol">
+                      {hasExactConfidence ? `${confPct}%` : confidenceCategory || "LOCKED"}
+                    </span>
+                  </div>
+                  <div className="line-clamp-2 break-words font-display text-base font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
                   <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-mint sm:text-[11px]">
                     odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
                   </div>
-                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:text-[11px]">
+                  <div className="hidden font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:block sm:text-[11px]">
                     {hasExactConfidence ? `${confPct}%` : confidenceCategory || "Tier locked"}
                   </div>
                 </div>
@@ -793,10 +799,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 <span>·</span>
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
-              {hasExactConfidence && specialBetLegs.length >= 2 && (
-                <div className="mt-3 w-full rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-200">Special Bet · Top signals</div>
+              {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
+                <div className="mt-3 w-full min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">Special Bet · Top signals</div>
                     {specialBetCandidates.length >= 3 ? (
                       <div className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/10 p-[1px]">
                         {[2, 3].map((n) => (
@@ -804,7 +810,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                             key={n}
                             type="button"
                             onClick={() => setSpecialLegCount(n as 2 | 3)}
-                            className={`px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase ${
+                            className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
                               specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
                             }`}
                           >
@@ -816,8 +822,8 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {specialBetLegs.map((leg) => (
-                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-2 font-mono text-[8px]">
-                        <span className="truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
+                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px]">
+                        <span className="min-w-0 flex-1 truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
                         <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
                       </div>
                     ))}
@@ -875,7 +881,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
             )}
           </div>
 
-          <section className="mx-auto mt-6 max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:p-5">
+          <section className="mx-auto mt-6 hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:block sm:p-5">
             <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
             {showStandingsBlock ? (
               <>
