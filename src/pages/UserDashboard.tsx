@@ -55,6 +55,7 @@ export default function UserDashboard() {
     session,
     logout,
     activate24hTrial,
+    getSession,
     refreshTierStatus,
     updateFavoriteLeagues,
     updateNotificationPreferences,
@@ -533,6 +534,8 @@ export default function UserDashboard() {
     }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
     try {
+      const freshSession = await getSession().catch(() => null);
+      const accessToken = freshSession?.access_token || session?.access_token || null;
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       let serverUsageSynced = false;
       for (let i = 0; i < dates.length; i++) {
@@ -544,7 +547,7 @@ export default function UserDashboard() {
         });
         qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
-        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
         const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {
@@ -604,6 +607,8 @@ export default function UserDashboard() {
     }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
     try {
+      const freshSession = await getSession().catch(() => null);
+      const accessToken = freshSession?.access_token || session?.access_token || null;
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const batches: PredictionRow[] = [];
       let serverUsageSynced = false;
@@ -617,7 +622,7 @@ export default function UserDashboard() {
         });
         qs.set("usageDay", todayKey);
         const headers: Record<string, string> = {};
-        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
         const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {
@@ -692,7 +697,7 @@ export default function UserDashboard() {
         }));
       }
       const syncHeaders: Record<string, string> = {};
-      if (session?.access_token) syncHeaders.Authorization = `Bearer ${session.access_token}`;
+      if (accessToken) syncHeaders.Authorization = `Bearer ${accessToken}`;
       await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
       await loadHistory();
     } catch (error: any) {
