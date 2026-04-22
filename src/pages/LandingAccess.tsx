@@ -43,7 +43,7 @@ export default function LandingAccess() {
               to={user ? workspace : login}
               className="rounded-xl border border-signal-petrol/50 bg-signal-petrol/20 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrol transition hover:bg-signal-petrol/30"
             >
-              {user ? "Open App" : "Sign In"}
+              {user ? "Deschide aplicația" : "Autentificare"}
             </Link>
           </div>
         </header>

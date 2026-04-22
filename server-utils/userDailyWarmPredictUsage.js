@@ -19,12 +19,12 @@ export async function resolveAuthenticatedUsageContext(req) {
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return { anonymous: false, error: { status: 503, body: { ok: false, error: "Usage tracking unavailable (Supabase)." } } };
+    return { anonymous: false, error: { status: 503, body: { ok: false, error: "Tracking-ul de usage nu este disponibil (Supabase)." } } };
   }
 
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) {
-    return { anonymous: false, error: { status: 401, body: { ok: false, error: "Invalid or expired token." } } };
+    return { anonymous: false, error: { status: 401, body: { ok: false, error: "Token invalid sau expirat." } } };
   }
 
   const usageDay = parseUsageDayFromQuery(req.query);
@@ -33,7 +33,7 @@ export async function resolveAuthenticatedUsageContext(req) {
       anonymous: false,
       error: {
         status: 400,
-        body: { ok: false, error: "usageDay (YYYY-MM-DD) is required when Authorization is sent." }
+        body: { ok: false, error: "usageDay (YYYY-MM-DD) este obligatoriu când se trimite Authorization." }
       }
     };
   }
@@ -46,7 +46,7 @@ export async function resolveAuthenticatedUsageContext(req) {
   if (profileError) {
     return {
       anonymous: false,
-      error: { status: 500, body: { ok: false, error: profileError.message || "Unable to load profile." } }
+      error: { status: 500, body: { ok: false, error: profileError.message || "Nu am putut încărca profilul." } }
     };
   }
   if (profile?.is_blocked) {

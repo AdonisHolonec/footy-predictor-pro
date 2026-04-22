@@ -63,11 +63,11 @@ function buildPerformancePayload(rows, requesterUserId, isAdmin) {
 
 async function handlePerformanceRead(req, res) {
   if (req.method && req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   const requester = await getRequester(req);
   if (!requester.ok) {
-    return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Unauthorized." });
+    return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
   }
   const supabaseConfig = assertSupabaseConfigured();
   if (!supabaseConfig.ok) {
@@ -99,13 +99,13 @@ async function handlePerformanceRead(req, res) {
       byUserLeague: byUserLeague.map(withEmail)
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err?.message || "Performance breakdown failed." });
+    return res.status(500).json({ ok: false, error: err?.message || "Defalcarea performanței a eșuat." });
   }
 }
 
 async function handleHistoryRead(req, res) {
   if (req.method && req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
   const supabaseConfig = assertSupabaseConfigured();
@@ -122,7 +122,7 @@ async function handleHistoryRead(req, res) {
   if (mine) {
     const requester = await getRequester(req);
     if (!requester.ok) {
-      return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Unauthorized." });
+      return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
     try {
       const { items, stats } = await readPredictionsHistoryForUser(requester.user.id, days, limit);
@@ -134,7 +134,7 @@ async function handleHistoryRead(req, res) {
         items
       });
     } catch (error) {
-      return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+      return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
     }
   }
 
@@ -154,7 +154,7 @@ async function handleHistoryRead(req, res) {
           scope: "global_admin"
         });
       } catch (error) {
-        return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+        return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
       }
     }
   }
@@ -169,17 +169,17 @@ async function handleHistoryRead(req, res) {
       scope: "aggregate_public"
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+    return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
   }
 }
 
 async function handleHistorySync(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
   if (!(await isAuthorizedHistorySync(req))) {
-    return res.status(401).json({ ok: false, error: "Unauthorized sync request." });
+    return res.status(401).json({ ok: false, error: "Cerere de sincronizare neautorizată." });
   }
 
   const supabaseConfig = assertSupabaseConfigured();
@@ -201,7 +201,7 @@ async function handleHistorySync(req, res) {
 
     if (readError) throw readError;
     if (!candidates || candidates.length === 0) {
-      return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "No pending entries." });
+      return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "Nu există înregistrări în așteptare." });
     }
 
     const groupMap = new Map();
@@ -270,7 +270,7 @@ async function handleHistorySync(req, res) {
       updated: updates.length
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "History sync failed." });
+    return res.status(500).json({ ok: false, error: error?.message || "Sincronizarea istoricului a eșuat." });
   }
 }
 

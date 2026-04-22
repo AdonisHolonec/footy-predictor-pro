@@ -184,7 +184,7 @@ export async function loadTeamMarketRolling(leagueId, season) {
 
 export async function persistTeamMarketRolling(rows) {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  if (!supabase) return { ok: false, error: "Supabase nu este configurat" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
   const payload = rows.map((r) => ({
     ...r,

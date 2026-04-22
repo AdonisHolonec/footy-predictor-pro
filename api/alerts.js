@@ -15,14 +15,14 @@ function reasonCodesFromRow(row) {
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
 
   const cfg = assertSupabaseConfigured();
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase client unavailable" });
+  if (!supabase) return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
 
   const days = Math.max(3, Math.min(Number(req.query.days || 7), 30));
   const drawdownThreshold = Math.max(0.5, Math.min(Number(req.query.drawdown || 3), 20));
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
       alerts.push({
         id: "low_data_quality",
         level: lowDataShare >= qualityThreshold * 1.35 ? "high" : "medium",
-        message: `Low data quality: ${(lowDataShare * 100).toFixed(1)}%`,
+        message: `Date insuficiente: ${(lowDataShare * 100).toFixed(1)}%`,
         value: Number((lowDataShare * 100).toFixed(2))
       });
     }
@@ -111,6 +111,6 @@ export default async function handler(req, res) {
       severity: alerts.some((a) => a.level === "high") ? "high" : alerts.length ? "medium" : "none"
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message || "Alert check failed" });
+    return res.status(500).json({ ok: false, error: error.message || "Verificarea alertelor a eșuat" });
   }
 }

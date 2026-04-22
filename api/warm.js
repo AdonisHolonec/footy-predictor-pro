@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   const wantTeamStats = req.query.teamstats === "1";
 
   if (leagueIds.length === 0) {
-    return res.status(400).json({ ok: false, error: "Missing leagueIds" });
+    return res.status(400).json({ ok: false, error: "Lipsesc leagueIds." });
   }
 
   if (!readBearer(req)) {
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     const status = Number(dayReq?.status);
     return res.status(Number.isFinite(status) && status >= 400 ? status : 502).json({
       ok: false,
-      error: typeof dayReq.error === "string" ? dayReq.error : "Upstream /fixtures unavailable.",
+      error: typeof dayReq.error === "string" ? dayReq.error : "Serviciul upstream /fixtures nu este disponibil.",
       provider: dayReq?.provider || null
     });
   }

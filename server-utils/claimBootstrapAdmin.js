@@ -18,7 +18,7 @@ function parseAdminEmailsFromEnv() {
  */
 export async function handleClaimBootstrapAdmin(req) {
   if (req.method !== "POST") {
-    return { status: 405, body: { ok: false, error: "Method not allowed." } };
+    return { status: 405, body: { ok: false, error: "Metodă nepermisă." } };
   }
 
   const requester = await getRequester(req);
@@ -33,7 +33,7 @@ export async function handleClaimBootstrapAdmin(req) {
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return { status: 500, body: { ok: false, error: "Supabase admin client unavailable." } };
+    return { status: 500, body: { ok: false, error: "Clientul Supabase admin nu este disponibil." } };
   }
 
   const userId = requester.user.id;
@@ -67,7 +67,7 @@ export async function handleClaimBootstrapAdmin(req) {
     .eq("role", "user");
 
   if (updateError) {
-    return { status: 500, body: { ok: false, error: updateError.message || "Update esuat." } };
+    return { status: 500, body: { ok: false, error: updateError.message || "Actualizarea a eșuat." } };
   }
 
   return { status: 200, body: { ok: true, promoted: true } };

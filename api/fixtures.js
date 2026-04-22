@@ -43,7 +43,7 @@ async function handleDay(req, res) {
   try {
     if (gdprExport) {
       if (req.method !== "GET") {
-        return res.status(405).json({ ok: false, error: "Method not allowed." });
+        return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
       }
       const requester = await getRequester(req);
       if (!requester.ok) {
@@ -55,7 +55,7 @@ async function handleDay(req, res) {
       }
       const sb = getSupabaseAdmin();
       if (!sb) {
-        return res.status(503).json({ ok: false, error: "Supabase admin unavailable." });
+        return res.status(503).json({ ok: false, error: "Clientul Supabase admin nu este disponibil." });
       }
       const uid = requester.user.id;
       const { data: profile, error: profileError } = await sb
@@ -70,7 +70,7 @@ async function handleDay(req, res) {
       if (authRes.error || !authRes.data?.user) {
         return res.status(500).json({
           ok: false,
-          error: authRes.error?.message || "Unable to load auth user."
+          error: authRes.error?.message || "Nu am putut încărca utilizatorul de autentificare."
         });
       }
       let notificationDispatchLog = [];
@@ -151,7 +151,7 @@ async function handleDay(req, res) {
       }
       const sb = getSupabaseAdmin();
       if (!sb) {
-        return res.status(503).json({ ok: false, error: "Supabase admin unavailable." });
+        return res.status(503).json({ ok: false, error: "Clientul Supabase admin nu este disponibil." });
       }
       let profile = null;
       let { data: profData, error: profileError } = await sb
@@ -173,7 +173,7 @@ async function handleDay(req, res) {
       } else {
         profile = profData;
       }
-      if (!profile) return res.status(404).json({ ok: false, error: "Profile not found." });
+      if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
 
       const quotaExempt =
         String(profile?.role || "").toLowerCase() === "admin" ||
@@ -321,7 +321,7 @@ function parseIds(raw) {
 
 async function handleLive(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   const ids = parseIds(req.query.ids);
   if (!ids.length) {
@@ -331,7 +331,7 @@ async function handleLive(req, res) {
   try {
     const r = await getWithCache("/fixtures", { ids: idsParam }, LIVE_SCORES_CACHE_TTL_SEC);
     if (!r.ok) {
-      return res.status(502).json({ ok: false, error: typeof r.error === "string" ? r.error : "Upstream fixtures error." });
+      return res.status(502).json({ ok: false, error: typeof r.error === "string" ? r.error : "Eroare upstream la fixtures." });
     }
     const rows = r.data?.response || [];
     const fixtures = rows.map((fx) => ({
@@ -361,7 +361,7 @@ async function handleXg(req, res) {
 
   const { fixtureId } = req.query;
   if (!fixtureId) {
-    return res.status(400).json({ error: "fixtureId is missing" });
+    return res.status(400).json({ error: "Lipsește fixtureId." });
   }
 
   try {
@@ -386,13 +386,13 @@ async function handleXg(req, res) {
     const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
     if (!statsReq.ok) {
       return res.status(502).json({
-        error: "Upstream fixtures/statistics error",
+        error: "Eroare upstream la fixtures/statistics",
         message: typeof statsReq.error === "string" ? statsReq.error : JSON.stringify(statsReq.error)
       });
     }
     const result = statsReq.data;
     if (!result?.response || result.response.length < 2) {
-      return res.status(404).json({ error: "Statistics not available yet for this match" });
+      return res.status(404).json({ error: "Statisticile nu sunt încă disponibile pentru acest meci." });
     }
 
     const homeStats = result.response[0].statistics;
@@ -431,8 +431,8 @@ async function handleXg(req, res) {
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
-    console.error("🔴 xG handler error:", error.message);
-    return res.status(500).json({ error: "Internal Server Error", message: error.message });
+    console.error("🔴 eroare handler xG:", error.message);
+    return res.status(500).json({ error: "Eroare internă de server", message: error.message });
   }
 }
 

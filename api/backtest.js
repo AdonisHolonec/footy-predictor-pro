@@ -18,17 +18,17 @@ async function isAuthorizedForMetrics(req) {
 
 async function handleKpi(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
 
   const config = assertSupabaseConfigured();
   if (!config.ok) {
-    return res.status(500).json({ ok: false, error: config.error || "Supabase not configured" });
+    return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
   }
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return res.status(500).json({ ok: false, error: "Supabase client unavailable" });
+    return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
   }
 
   const days = Math.max(7, Math.min(Number(req.query.days || 45), 365));
@@ -85,7 +85,7 @@ async function handleKpi(req, res) {
       trend
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message || "KPI read failed" });
+    return res.status(500).json({ ok: false, error: error.message || "Citirea KPI a eșuat" });
   }
 }
 
@@ -98,17 +98,17 @@ function getSelectedOdd(row, type) {
 
 async function handleSnapshot(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
   if (!isAuthorizedCronOrInternalRequest(req)) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
+    return res.status(401).json({ ok: false, error: "Neautorizat" });
   }
 
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const days = Math.max(7, Math.min(Number(req.query.days || process.env.BACKTEST_DAYS || 45), 365));
   if (!url || !key) {
-    return res.status(500).json({ ok: false, error: "Missing SUPABASE env" });
+    return res.status(500).json({ ok: false, error: "Lipsesc variabilele SUPABASE din mediu" });
   }
 
   const supabase = createClient(url, key, {
@@ -200,16 +200,16 @@ async function handleSnapshot(req, res) {
       stats: { settled, wins, losses, hitRate, roi, avgEv, maxDrawdown }
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message || "Snapshot failed" });
+    return res.status(500).json({ ok: false, error: error.message || "Snapshot-ul a eșuat" });
   }
 }
 
 async function handleMetrics(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
   if (!(await isAuthorizedForMetrics(req))) {
-    return res.status(401).json({ ok: false, error: "Unauthorized" });
+    return res.status(401).json({ ok: false, error: "Neautorizat" });
   }
 
   const config = assertSupabaseConfigured();
@@ -219,7 +219,7 @@ async function handleMetrics(req, res) {
 
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return res.status(500).json({ ok: false, error: "Supabase unavailable" });
+    return res.status(500).json({ ok: false, error: "Supabase nu este disponibil" });
   }
 
   const days = Math.max(7, Math.min(Number(req.query.days || 45), 365));
@@ -332,7 +332,7 @@ async function handleMetrics(req, res) {
       calibration1x2: calibration
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err?.message || "metrics failed" });
+    return res.status(500).json({ ok: false, error: err?.message || "Calculul metricilor a eșuat" });
   }
 }
 
@@ -346,5 +346,5 @@ export default async function handler(req, res) {
   if (view === "kpi") return handleKpi(req, res);
   if (view === "snapshot") return handleSnapshot(req, res);
   if (view === "metrics") return handleMetrics(req, res);
-  return res.status(400).json({ ok: false, error: "Missing or invalid view. Use view=kpi, snapshot, or metrics." });
+  return res.status(400).json({ ok: false, error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, snapshot sau metrics." });
 }

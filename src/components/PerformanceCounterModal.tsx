@@ -31,7 +31,7 @@ export default function PerformanceCounterModal({
   globalByLeague = [],
   accessToken,
   isAdmin = false,
-  leagueTableHeading = "Global · pe ligă"
+  leagueTableHeading = "Global · pe ligă (toți utilizatorii)"
 }: PerformanceCounterModalProps) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -103,7 +103,7 @@ export default function PerformanceCounterModal({
         <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-signal-void/40 px-4 py-3">
           <div>
             <h2 id="perf-counter-title" className="font-display text-sm font-semibold text-signal-ink">
-              Lab console · performance
+              Consolă laborator · performanță
             </h2>
             <p className="font-mono text-[10px] text-signal-inkMuted">Fereastră {days} zile · kickoff</p>
           </div>

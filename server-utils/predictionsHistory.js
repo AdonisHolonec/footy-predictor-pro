@@ -130,7 +130,7 @@ function isPreKickoff(prediction) {
 export async function upsertPredictionsHistory(predictions) {
   if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0, skipped: 0 };
   const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase client is not available.");
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
 
   const eligible = predictions.filter(isPreKickoff);
   const skipped = predictions.length - eligible.length;
@@ -149,8 +149,8 @@ export function mapDbRowToHistoryEntry(row) {
     ...payload,
     id: row.fixture_id,
     leagueId: row.league_id ?? payload.leagueId,
-    league: row.league_name ?? payload.league ?? "Unknown",
-    teams: payload.teams || { home: row.home_team || "Home", away: row.away_team || "Away" },
+    league: row.league_name ?? payload.league ?? "Necunoscut",
+    teams: payload.teams || { home: row.home_team || "Gazde", away: row.away_team || "Oaspeți" },
     kickoff: payload.kickoff || row.kickoff_at,
     status: row.match_status || payload.status || "",
     score: { home: row.score_home, away: row.score_away },
@@ -163,7 +163,7 @@ export function mapDbRowToHistoryEntry(row) {
 
 export async function readPredictionsHistory(days = 30, limit = 500) {
   const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase client is not available.");
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
@@ -183,7 +183,7 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
  */
 export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500) {
   const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase client is not available.");
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
@@ -205,7 +205,7 @@ export async function readPredictionsHistoryAggregateStats(days = 30, limit = 50
 /** Rows from predictions_history joined via user_prediction_fixtures (service role RPC). */
 export async function readPredictionsHistoryForUser(userId, days = 30, limit = 500) {
   const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("Supabase client is not available.");
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   const { data, error } = await supabase.rpc("predictions_history_for_user", {

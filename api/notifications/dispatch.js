@@ -25,7 +25,7 @@ async function sendEmail({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.NOTIFY_FROM_EMAIL;
   if (!apiKey || !fromEmail) {
-    return { ok: false, skipped: true, reason: "Missing RESEND_API_KEY or NOTIFY_FROM_EMAIL." };
+    return { ok: false, skipped: true, reason: "Lipsesc RESEND_API_KEY sau NOTIFY_FROM_EMAIL." };
   }
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -42,7 +42,7 @@ async function sendEmail({ to, subject, html }) {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Resend failed: ${text || response.status}`);
+    throw new Error(`Trimiterea prin Resend a eșuat: ${text || response.status}`);
   }
   return { ok: true };
 }
@@ -55,10 +55,10 @@ async function getUserEmail(supabase, userId) {
 
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   if (!isAuthorizedCronOrInternalRequest(req)) {
-    return res.status(401).json({ ok: false, error: "Unauthorized notifications request." });
+    return res.status(401).json({ ok: false, error: "Cerere de notificări neautorizată." });
   }
 
   const config = assertSupabaseConfigured();
@@ -170,7 +170,7 @@ export default async function handler(req, res) {
           else notificationsSkipped += valueTop.length;
         }
       } catch (dispatchError) {
-        const errorMessage = dispatchError?.message || "Dispatch failed";
+        const errorMessage = dispatchError?.message || "Trimiterea notificărilor a eșuat";
         for (const item of [...safeItems.slice(0, 6), ...valueItems.slice(0, 6)]) {
           payloads.push({
             user_id: userId,
@@ -199,6 +199,6 @@ export default async function handler(req, res) {
       windowHours: hours
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "Notification dispatch failed." });
+    return res.status(500).json({ ok: false, error: error?.message || "Expedierea notificărilor a eșuat." });
   }
 }

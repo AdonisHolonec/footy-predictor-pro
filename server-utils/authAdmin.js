@@ -22,11 +22,11 @@ export function readBearer(req) {
 
 export async function getRequester(req) {
   const token = readBearer(req);
-  if (!token) return { ok: false, status: 401, error: "Missing authorization token." };
+  if (!token) return { ok: false, status: 401, error: "Lipsește token-ul de autorizare." };
   const supabase = getSupabaseAdmin();
-  if (!supabase) return { ok: false, status: 500, error: "Supabase admin client unavailable." };
+  if (!supabase) return { ok: false, status: 500, error: "Clientul Supabase admin nu este disponibil." };
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return { ok: false, status: 401, error: "Invalid or expired token." };
+  if (error || !data?.user) return { ok: false, status: 401, error: "Token invalid sau expirat." };
   return { ok: true, user: data.user, token };
 }
 
@@ -42,10 +42,10 @@ export async function assertAdmin(req) {
     .select("role, is_blocked")
     .eq("user_id", requester.user.id)
     .maybeSingle();
-  if (error) return { ok: false, status: 500, error: error.message || "Unable to load requester profile." };
-  if (profile?.is_blocked) return { ok: false, status: 403, error: "Blocked administrators cannot perform this action." };
+  if (error) return { ok: false, status: 500, error: error.message || "Nu am putut încărca profilul solicitantului." };
+  if (profile?.is_blocked) return { ok: false, status: 403, error: "Administratorii blocați nu pot efectua această acțiune." };
   if (profile?.role === "admin" || isBootstrapAdmin) {
     return { ok: true, user: requester.user };
   }
-  return { ok: false, status: 403, error: "Admin access required." };
+  return { ok: false, status: 403, error: "Este necesar acces de administrator." };
 }

@@ -72,26 +72,26 @@ function statusChip(
 ): { label: string; className: string } {
   if (isLive) {
     return {
-      label: "LIVE",
+      label: "ÎN JOC",
       className: "border-red-400/35 bg-red-500/10 text-red-200"
     };
   }
   if (hasFinalScore) {
     if (finalPickResult === true) {
-      return { label: "WIN", className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
+      return { label: "CÂȘTIG", className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
     }
     if (finalPickResult === false) {
-      return { label: "LOSS", className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
+      return { label: "PIERDUT", className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
     }
     return { label: "FINAL", className: "border-white/10 bg-signal-void/50 text-signal-silver" };
   }
   if (row.valueBet?.detected) {
-    return { label: "VALUE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
+    return { label: "VALOARE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
   }
   if (confPct >= 70) {
-    return { label: "SAFE", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
+    return { label: "SIGUR", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
   }
-  return { label: "OPEN", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
+  return { label: "DESCHIS", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
 }
 
 /**
@@ -262,9 +262,9 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
             <ConfidenceAura value={confPct} size="compact" className="self-start" />
           ) : (
             <div className="rounded-xl border border-white/10 bg-signal-void/50 px-3 py-2 text-center">
-              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">Confidence</div>
+              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">Încredere</div>
               <div className="mt-1 font-mono text-[11px] font-semibold text-signal-petrol">
-                {confidenceCategory ? confidenceCategory : "Locked"}
+                {confidenceCategory ? confidenceCategory : "Blocat"}
               </div>
             </div>
           )}
@@ -302,7 +302,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       <div className="relative mt-4 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-3">
         <div>
           <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/75">
-            <span>Pick</span>
+            <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
                 className="rounded-sm bg-signal-amber/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-amber"
@@ -381,7 +381,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
               <div className="font-mono text-[8px] tabular-nums text-signal-amberSoft">
                 odd {Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : "N/A"}
               </div>
-              <div className="font-mono text-[7px] text-signal-inkMuted">{item.source || "source:N/A"}</div>
+              <div className="font-mono text-[7px] text-signal-inkMuted">{item.source || "sursă:N/A"}</div>
             </div>
           ))}
         </div>

@@ -94,7 +94,7 @@ const LEAGUE_PARAMS = {
 };
 
 const DEFAULT_LEAGUE_PARAMS = {
-  name: "Unknown",
+  name: "Necunoscut",
   leagueAvg: 1.38,
   leagueAvgHome: 1.50,
   leagueAvgAway: 1.26,

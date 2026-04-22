@@ -24,7 +24,7 @@ export function assertSupabaseConfigured() {
     const missing = [];
     if (!url) missing.push("SUPABASE_URL");
     if (!serviceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
-    return { ok: false, error: `Supabase is not configured. Missing env: ${missing.join(", ")}` };
+    return { ok: false, error: `Supabase nu este configurat. Lipsesc variabilele de mediu: ${missing.join(", ")}` };
   }
   return { ok: true };
 }

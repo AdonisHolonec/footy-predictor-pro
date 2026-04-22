@@ -12,10 +12,10 @@ function parseLeagueIds(raw) {
 
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   if (!isAuthorizedCronOrInternalRequest(req)) {
-    return res.status(401).json({ ok: false, error: "Unauthorized prewarm request." });
+    return res.status(401).json({ ok: false, error: "Cerere prewarm neautorizată." });
   }
 
   const date = String(req.query.date || new Date().toISOString().slice(0, 10));
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
     const fixturesReq = await getWithCache("/fixtures", { date }, 21600);
     if (!fixturesReq.ok) {
-      return res.status(500).json({ ok: false, error: fixturesReq.error || "Fixtures prewarm failed." });
+      return res.status(500).json({ ok: false, error: fixturesReq.error || "Prewarm pentru fixtures a eșuat." });
     }
     if (fixturesReq.fromCache) result.fixtures.fromCache += 1;
     else result.fixtures.fetched += 1;
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     for (const leagueId of leagueIds) {
       const standingsReq = await getWithCache("/standings", { league: leagueId, season }, 86400);
       if (!standingsReq.ok) {
-        result.errors.push({ where: "standings", leagueId, error: standingsReq.error || "standings error" });
+        result.errors.push({ where: "standings", leagueId, error: standingsReq.error || "eroare clasament" });
       } else if (standingsReq.fromCache) {
         result.standings.fromCache += 1;
       } else {
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       for (const teamId of Array.from(teamIds).slice(0, 20)) {
         const tsReq = await getWithCache("/teams/statistics", { league: leagueId, season, team: teamId }, 86400);
         if (!tsReq.ok) {
-          result.errors.push({ where: "teamstats", leagueId, teamId, error: tsReq.error || "teamstats error" });
+          result.errors.push({ where: "teamstats", leagueId, teamId, error: tsReq.error || "eroare statistici echipă" });
         } else if (tsReq.fromCache) {
           result.teamStats.fromCache += 1;
         } else {
@@ -95,7 +95,7 @@ export default async function handler(req, res) {
         if (!Number.isFinite(fixtureId)) continue;
         const oddsReq = await getWithCache("/odds", { fixture: fixtureId }, 86400);
         if (!oddsReq.ok) {
-          result.errors.push({ where: "odds", leagueId, fixtureId, error: oddsReq.error || "odds error" });
+          result.errors.push({ where: "odds", leagueId, fixtureId, error: oddsReq.error || "eroare cote" });
         } else if (oddsReq.fromCache) {
           result.odds.fromCache += 1;
         } else {
@@ -111,6 +111,6 @@ export default async function handler(req, res) {
       usage
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "Prewarm failed.", prewarm: result });
+    return res.status(500).json({ ok: false, error: error?.message || "Prewarm a eșuat.", prewarm: result });
   }
 }

@@ -119,7 +119,7 @@ export async function lookupEloPair(leagueId, homeTeamId, awayTeamId) {
 /** Batch upsert after rebuilding Elo in memory. */
 export async function persistEloMap(leagueId, teamMap) {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  if (!supabase) return { ok: false, error: "Supabase nu este configurat" };
   const rows = [];
   for (const [teamId, info] of teamMap.entries()) {
     rows.push({

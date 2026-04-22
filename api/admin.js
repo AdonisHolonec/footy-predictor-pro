@@ -55,7 +55,7 @@ function normalizeSubscriptionExpiry(rawValue) {
 
 async function handleProfiles(req, res) {
   if (req.method !== "GET" && req.method !== "PATCH") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
   const config = assertSupabaseConfigured();
@@ -110,7 +110,7 @@ async function handleProfiles(req, res) {
         if (!usageDay) {
           return res.status(400).json({
             ok: false,
-            error: "usageDay (YYYY-MM-DD) is required when includeWarmPredictUsage=1."
+            error: "usageDay (YYYY-MM-DD) este obligatoriu când includeWarmPredictUsage=1."
           });
         }
         const { data: usageRows, error: usageError } = await supabase
@@ -152,23 +152,23 @@ async function handleProfiles(req, res) {
     const subscriptionExpiry = normalizeSubscriptionExpiry(body.subscriptionExpiresAt);
 
     if (!userId) {
-      return res.status(400).json({ ok: false, error: "userId is required." });
+      return res.status(400).json({ ok: false, error: "userId este obligatoriu." });
     }
 
     const nextUpdate = {};
     if (role === "user" || role === "admin") nextUpdate.role = role;
     if (typeof isBlocked === "boolean") nextUpdate.is_blocked = isBlocked;
     if (tier === "__invalid__") {
-      return res.status(400).json({ ok: false, error: "tier invalid. Allowed: free, premium, ultra." });
+      return res.status(400).json({ ok: false, error: "tier invalid. Valori permise: free, premium, ultra." });
     }
     if (tier) nextUpdate.tier = tier;
     if (subscriptionExpiry.invalid) {
-      return res.status(400).json({ ok: false, error: "subscriptionExpiresAt must be a valid ISO date or null." });
+      return res.status(400).json({ ok: false, error: "subscriptionExpiresAt trebuie să fie o dată ISO validă sau null." });
     }
     if (subscriptionExpiry.provided) nextUpdate.subscription_expires_at = subscriptionExpiry.value;
 
     if (!Object.keys(nextUpdate).length) {
-      return res.status(400).json({ ok: false, error: "No valid fields to update." });
+      return res.status(400).json({ ok: false, error: "Nu există câmpuri valide pentru actualizare." });
     }
 
     // Avoid accidental self lock-out from the admin workspace.
@@ -212,11 +212,11 @@ async function handleProfiles(req, res) {
 
     if (error) throw error;
     if (!data) {
-      return res.status(404).json({ ok: false, error: "Profile not found." });
+      return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
     }
     return res.status(200).json({ ok: true, profile: data });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "Admin profiles request failed." });
+    return res.status(500).json({ ok: false, error: error?.message || "Cererea profilurilor admin a eșuat." });
   }
 }
 
@@ -227,7 +227,7 @@ async function handleMl(req, res) {
   const cfg = assertSupabaseConfigured();
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
   const supabase = getSupabaseAdmin();
-  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase unavailable" });
+  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase nu este disponibil" });
 
   const sub = String(req.query.sub || "").toLowerCase();
   const action = String(req.query.action || "").toLowerCase();

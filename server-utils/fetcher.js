@@ -102,7 +102,7 @@ function secondsUntilUtcMidnight() {
 export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
   const primary = resolveUpstream();
   if (!primary.key) {
-    return { ok: false, error: "API key not configured (set APISPORTS_KEY or X_RAPIDAPI_KEY)" };
+    return { ok: false, error: "Cheia API nu este configurată (setează APISPORTS_KEY sau X_RAPIDAPI_KEY)." };
   }
 
   const u = new URL(primary.baseUrl + endpoint);
@@ -172,7 +172,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
     if (!attempt.res.ok || hasErrors) {
       return {
         ok: false,
-        error: json.message || json.errors || `API Error ${attempt.res.status}`,
+        error: json.message || json.errors || `Eroare API ${attempt.res.status}`,
         status: attempt.res.status,
         provider: attempt.upstreamCfg.provider
       };

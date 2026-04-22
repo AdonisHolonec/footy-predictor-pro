@@ -3,7 +3,7 @@ import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supa
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
   const requester = await getRequester(req);
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const cfg = assertSupabaseConfigured();
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
   const supabase = getSupabaseAdmin();
-  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase unavailable." });
+  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase nu este disponibil." });
 
   let body = req.body || {};
   if (typeof req.body === "string") {
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   }
   const tier = String(body.tier || "").toLowerCase();
   if (!["premium", "ultra"].includes(tier)) {
-    return res.status(400).json({ ok: false, error: "Trial tier invalid. Use premium or ultra." });
+    return res.status(400).json({ ok: false, error: "Tier de trial invalid. Folosește premium sau ultra." });
   }
 
   const trialField = tier === "premium" ? "premium_trial_activated_at" : "ultra_trial_activated_at";
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     .eq("user_id", requester.user.id)
     .maybeSingle();
   if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
-  if (!profile) return res.status(404).json({ ok: false, error: "Profile not found." });
+  if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
   if (profile[trialField]) {
     return res.status(409).json({ ok: false, error: "Acest trial a fost deja folosit." });
   }

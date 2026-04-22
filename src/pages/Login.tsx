@@ -172,7 +172,7 @@ export default function Login() {
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
             <div className="rounded-2xl border border-signal-sage/45 bg-signal-panel/80 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-[24px]">
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Global model performance · last 30d</p>
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-petrol/80">Performanță globală model · ultimele 30 zile</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-mint sm:text-3xl">

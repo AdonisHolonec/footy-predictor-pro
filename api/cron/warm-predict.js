@@ -200,11 +200,11 @@ function summarizePredictBody(body) {
  */
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
   if (!isAuthorizedCronOrInternalRequest(req)) {
-    return res.status(401).json({ ok: false, error: "Unauthorized cron request." });
+    return res.status(401).json({ ok: false, error: "Cerere cron neautorizată." });
   }
 
   const dateRaw = String(req.query.date || process.env.CRON_WARM_PREDICT_DATE || todayCalendarEuropeBucharest()).slice(
@@ -279,7 +279,7 @@ export default async function handler(req, res) {
         scanned: syncBody?.scanned,
         updated: syncBody?.updated,
         message: syncBody?.message,
-        error: syncBody?.error || (!cronSecret ? "CRON_SECRET unset; history sync likely rejected in production." : null)
+        error: syncBody?.error || (!cronSecret ? "CRON_SECRET nu este setat; sincronizarea istoricului va fi probabil respinsă în producție." : null)
       };
     }
 
@@ -319,7 +319,7 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      error: error?.message || "Cron warm-predict failed.",
+      error: error?.message || "Cron warm-predict a eșuat.",
       date: dateRaw,
       season,
       leagueIds,

@@ -14,7 +14,7 @@ function AuthGate() {
       <div className="lab-page grid min-h-screen place-items-center">
         <div className="lab-bg" aria-hidden />
         <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-signal-petrol">
-          Loading session…
+          Se încarcă sesiunea…
         </div>
       </div>
     );

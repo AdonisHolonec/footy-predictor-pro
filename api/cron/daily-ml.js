@@ -373,15 +373,15 @@ async function runStacker(supabase, modelVersion) {
 
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed." });
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   if (!isAuthorizedCronOrInternalRequest(req)) {
-    return res.status(401).json({ ok: false, error: "Unauthorized cron request." });
+    return res.status(401).json({ ok: false, error: "Cerere cron neautorizată." });
   }
   const cfg = assertSupabaseConfigured();
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
   const supabase = getSupabaseAdmin();
-  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase unavailable." });
+  if (!supabase) return res.status(500).json({ ok: false, error: "Supabase nu este disponibil." });
 
   const startedAt = new Date().toISOString();
   const modelVersion = String(req.query.modelVersion || process.env.DAILY_ML_MODEL_VERSION || MODEL_VERSION);
@@ -423,7 +423,7 @@ export default async function handler(req, res) {
       mode,
       modelVersion,
       startedAt,
-      error: error?.message || "Daily ML cron failed."
+      error: error?.message || "Cron-ul zilnic ML a eșuat."
     });
   }
 }
