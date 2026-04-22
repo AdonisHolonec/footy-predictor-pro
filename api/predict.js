@@ -1517,18 +1517,17 @@ export default async function handler(req, res) {
               onConflict: "user_id,fixture_id",
               ignoreDuplicates: true
             });
-            if (linkErr) throw linkErr;
+            if (linkErr) {
+              console.error("[predict persist link]", linkErr?.message || linkErr);
+              // Do not fail prediction delivery if history-link persistence has transient issues.
+              res.setHeader("X-Persist-Warning", "user_prediction_fixtures_link_failed");
+            }
           }
         }
       } catch (persistError) {
         console.error("[predict persist]", persistError?.message || persistError);
-        if (reservedTierUsage > 0 && usageCtx.userId) {
-          await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
-        }
-        return res.status(500).json({
-          ok: false,
-          error: persistError?.message || "Nu am putut salva predictiile."
-        });
+        // Prediction output is still useful for the current request; keep response 200 and avoid hard-fail 500.
+        res.setHeader("X-Persist-Warning", "predictions_history_upsert_failed");
       }
     }
 
