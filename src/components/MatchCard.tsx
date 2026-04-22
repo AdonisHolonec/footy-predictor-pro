@@ -72,7 +72,7 @@ function statusChip(
 ): { label: string; className: string } {
   if (isLive) {
     return {
-      label: "ÎN JOC",
+      label: "LIVE",
       className: "border-red-400/35 bg-red-500/10 text-red-200"
     };
   }
@@ -86,12 +86,12 @@ function statusChip(
     return { label: "FINAL", className: "border-white/10 bg-signal-void/50 text-signal-silver" };
   }
   if (row.valueBet?.detected) {
-    return { label: "VALOARE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
+    return { label: "VALUE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
   }
   if (confPct >= 70) {
-    return { label: "SIGUR", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
+    return { label: "SAFE", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
   }
-  return { label: "DESCHIS", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
+  return { label: "OPEN", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
 }
 
 /**

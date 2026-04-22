@@ -350,7 +350,7 @@ function finalScoreBadgeClass(result: boolean | null) {
 
 function finalScoreLabel(result: boolean | null) {
   if (result === true) return "WIN";
-  if (result === false) return "LOSS";
+  if (result === false) return "LOSE";
   return "FINAL";
 }
 
@@ -998,7 +998,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                         </div>
                         {hasFinalScore && (
                           <div className="mt-1 font-mono text-[10px] text-signal-inkMuted">
-                            Final · {match.score?.home}-{match.score?.away}
+                            FINAL · {match.score?.home}-{match.score?.away}
                           </div>
                         )}
                       </div>
