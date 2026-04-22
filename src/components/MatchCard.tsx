@@ -42,6 +42,15 @@ function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
   return null;
 }
 
+function deriveRecommendedOdd(row: PredictionRow): number | null {
+  const pick = (row.recommended?.pick || "").trim().toLowerCase();
+  if (!pick) return null;
+  if (pick === "1") return Number.isFinite(Number(row.odds?.home)) ? Number(row.odds?.home) : null;
+  if (pick === "x") return Number.isFinite(Number(row.odds?.draw)) ? Number(row.odds?.draw) : null;
+  if (pick === "2") return Number.isFinite(Number(row.odds?.away)) ? Number(row.odds?.away) : null;
+  return null;
+}
+
 function parseLineThreshold(key: string): number | null {
   const m = key.match(/^o(\d+)_(\d+)$/);
   if (!m) return null;
@@ -155,6 +164,8 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive);
   const tier = modelTierBadge(row);
+  const recommendedOdd = deriveRecommendedOdd(row);
+  const isPickHot = hasExactConfidence && confPct >= 85;
   const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shotsPick = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
   const firstHalfPick =
@@ -163,6 +174,15 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         ? { pick: "Over 1.5 FH", probability: row.probs.firstHalf.pO15 }
         : { pick: "Under 1.5 FH", probability: 100 - row.probs.firstHalf.pO15 }
       : null;
+  const marketPulseWinnerLabel = (() => {
+    const candidates = [
+      { label: "Corners", probability: Number(cornersPick?.probability || 0) },
+      { label: "Shots", probability: Number(shotsPick?.probability || 0) },
+      { label: "HT", probability: Number(firstHalfPick?.probability || 0) }
+    ];
+    const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
+    return winner.probability >= 85 ? winner.label : null;
+  })();
 
   if (row.insufficientData) {
     return (
@@ -311,8 +331,21 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
                 Nesigur
               </span>
             ) : null}
+            {isPickHot ? (
+              <span
+                className="rounded-sm bg-emerald-400/20 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-emerald-200 animate-pulse motion-reduce:animate-none"
+                title="Semnal puternic (>85%)"
+              >
+                HOT
+              </span>
+            ) : null}
           </div>
-          <div className="font-display text-2xl font-bold tracking-tight text-signal-ink">{row.recommended.pick}</div>
+          <div className={`font-display text-2xl font-bold tracking-tight text-signal-ink ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
+            {row.recommended.pick}
+          </div>
+          <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-emerald-300 animate-pulse motion-reduce:animate-none" : "text-signal-petrol"}`}>
+            odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
+          </div>
         </div>
         {(hasFinalScore || showRunningScore) && (
           <div className="text-right font-mono text-xs tabular-nums">
@@ -357,33 +390,53 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
               label: "Corners",
               data: cornersPick,
               odd: row.marketOdds?.corners?.odd,
-              source: row.marketOdds?.corners?.bookmaker
+              source: row.marketOdds?.corners?.bookmaker,
+              accentClass:
+                "border-cyan-300/45 bg-gradient-to-b from-cyan-400/20 via-cyan-300/8 to-signal-void/45 shadow-[0_0_14px_rgba(34,211,238,0.22)]",
+              pickClass: "text-cyan-100",
+              probClass: "text-cyan-300",
+              oddClass: "text-cyan-200/90"
             },
             {
               label: "Shots",
               data: shotsPick,
               odd: row.marketOdds?.shotsOnTarget?.odd,
-              source: row.marketOdds?.shotsOnTarget?.bookmaker
+              source: row.marketOdds?.shotsOnTarget?.bookmaker,
+              accentClass:
+                "border-fuchsia-300/45 bg-gradient-to-b from-fuchsia-400/20 via-fuchsia-300/8 to-signal-void/45 shadow-[0_0_14px_rgba(232,121,249,0.22)]",
+              pickClass: "text-fuchsia-100",
+              probClass: "text-fuchsia-300",
+              oddClass: "text-fuchsia-200/90"
             },
             {
               label: "HT",
               data: firstHalfPick,
               odd: row.marketOdds?.firstHalfGoals?.odd,
-              source: row.marketOdds?.firstHalfGoals?.bookmaker
+              source: row.marketOdds?.firstHalfGoals?.bookmaker,
+              accentClass:
+                "border-amber-300/50 bg-gradient-to-b from-amber-400/25 via-amber-300/10 to-signal-void/45 shadow-[0_0_14px_rgba(251,191,36,0.24)]",
+              pickClass: "text-amber-100",
+              probClass: "text-amber-300",
+              oddClass: "text-amber-200/95"
             }
-          ].map((item) => (
-            <div key={item.label} className="rounded-md border border-white/10 bg-signal-void/45 px-1.5 py-1 text-center">
-              <div className="font-mono text-[8px] uppercase tracking-wide text-signal-inkMuted">{item.label}</div>
-              <div className="mt-0.5 font-mono text-[9px] text-signal-silver">{item.data?.pick ?? "—"}</div>
-              <div className="font-mono text-[8px] tabular-nums text-signal-petrol">
+          ].map((item) => {
+            const isHot = item.label === marketPulseWinnerLabel;
+            return (
+            <div
+              key={item.label}
+              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-white/35 animate-pulse motion-reduce:animate-none" : ""}`}
+            >
+              <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-white/85">{item.label}</div>
+              <div className={`mt-0.5 font-mono text-[9px] font-semibold ${item.pickClass}`}>{item.data?.pick ?? "—"}</div>
+              <div className={`font-mono text-[8px] font-semibold tabular-nums ${item.probClass}`}>
                 {item.data ? `${Math.round(item.data.probability)}%` : "—"}
               </div>
-              <div className="font-mono text-[8px] tabular-nums text-signal-amberSoft">
+              <div className={`font-mono text-[8px] font-semibold tabular-nums ${item.oddClass}`}>
                 odd {Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : "N/A"}
               </div>
-              <div className="font-mono text-[7px] text-signal-inkMuted">{item.source || "sursă:N/A"}</div>
+              <div className="font-mono text-[7px] text-white/65">{item.source || "sursă:N/A"}</div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
