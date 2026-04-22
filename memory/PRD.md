@@ -60,12 +60,19 @@
   - `npx tsc --noEmit` → **0 erori**
   - `npx vite build` → **build OK**, 103 module transformed (642KB JS / 78KB CSS)
 
-- **Auth e2e cu Supabase real** (rulate după primirea cheilor corecte):
+- **Auth e2e cu Supabase real**:
   - `node --env-file=.env.local --test tests/auth_flow.test.js` → **5/5 pass**
-  - Validat concret: signup cu trigger DB auto-creează profile (fix #1), login + RLS self-read, promovare user→admin via service role, forgot password API, cascade delete.
+  - Validat: signup cu trigger DB auto-creează profile (fix #1), login + RLS self-read, promovare user→admin via service role, forgot password API, cascade delete.
+
+- **UI e2e cu Playwright/testing_agent** (browser automation):
+  - Rulat pe https://code-fixer-201.preview.emergentagent.com (Vite dev server pe port 3000)
+  - **12/12 scenarii pass** — Landing, Sign In button (fix #5 ✅), Login page, invalid credentials, login user→UserDashboard, login admin→AdminDashboard, Logout, AuthGate protected routes, /privacy, fallback 404→/, signup privacy-consent, forgot password
+  - Zero bug-uri UI blocante găsite. /api/* endpoints 404 în dev env (așteptat — Vite nu rulează funcțiile Vercel), dar afectează doar stats/predicții, NU fluxul auth testat.
+  - Report: `/app/test_reports/iteration_1.json`
 
 **Bonus fix aplicat în timpul testării e2e**:
 - `.env.local` avea literal `\r\n` la finalul valorilor `VITE_SUPABASE_URL` și `SUPABASE_URL` (artefact Vercel CLI Windows) care rupea SDK-ul Supabase cu `"Unexpected end of JSON input"`. Am normalizat valorile în ambele fișiere (`/app/...` și `/tmp/...`).
+- `vite.config.js` — adăugat `server.allowedHosts` pentru a permite accesul prin ingress-ul Emergent preview (`.preview.emergentagent.com`, `.preview.emergentcf.cloud`).
 
 ## Next Action Items
 - Pentru testare e2e completă: furnizează credențialele de mai sus (cel puțin Supabase + un cont admin test + un cont user test) și rulez testing_agent pentru validare flows login → signup → password reset → admin CRUD pe profiles → user predict/warm cu cote.
