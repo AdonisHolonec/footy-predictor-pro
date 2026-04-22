@@ -55,15 +55,17 @@
 - `session.user` stale în `onAuthStateChange` async IIFE — posibil `setState on unmounted` warning, minor.
 
 ## Testare automatizată
-- **Nu am putut rula end-to-end testing** prin Emergent testing_agent pentru că aplicația necesită:
-  - Credențiale Supabase reale (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-  - Cheie API-Football (`APISPORTS_KEY` sau `X_RAPIDAPI_KEY`)
-  - Vercel KV (opțional pentru rate limiting + tier counters)
-  - `CRON_SECRET`, `ADMIN_EMAILS`, `RESEND_API_KEY` (opțional)
-- **Ce am rulat cu succes local** în `/tmp/footy-predictor-pro/`:
-  - `npm test` → 48/48 tests pass (inclusiv după fix-uri)
-  - `npx tsc --noEmit` → 0 erori
-  - `npx vite build` → 103 module transformed, build OK
+- **Unit tests** (local în `/app/footy-predictor-pro/` / `/tmp/footy-predictor-pro/`):
+  - `npm test` → **48/48 tests pass** (math, ELO, Poisson, Shin, izotonic, stacker, market rolling)
+  - `npx tsc --noEmit` → **0 erori**
+  - `npx vite build` → **build OK**, 103 module transformed (642KB JS / 78KB CSS)
+
+- **Auth e2e cu Supabase real** (rulate după primirea cheilor corecte):
+  - `node --env-file=.env.local --test tests/auth_flow.test.js` → **5/5 pass**
+  - Validat concret: signup cu trigger DB auto-creează profile (fix #1), login + RLS self-read, promovare user→admin via service role, forgot password API, cascade delete.
+
+**Bonus fix aplicat în timpul testării e2e**:
+- `.env.local` avea literal `\r\n` la finalul valorilor `VITE_SUPABASE_URL` și `SUPABASE_URL` (artefact Vercel CLI Windows) care rupea SDK-ul Supabase cu `"Unexpected end of JSON input"`. Am normalizat valorile în ambele fișiere (`/app/...` și `/tmp/...`).
 
 ## Next Action Items
 - Pentru testare e2e completă: furnizează credențialele de mai sus (cel puțin Supabase + un cont admin test + un cont user test) și rulez testing_agent pentru validare flows login → signup → password reset → admin CRUD pe profiles → user predict/warm cu cote.
