@@ -119,6 +119,7 @@ export default function App() {
     sendPasswordResetEmail,
     updatePassword,
     logout,
+    getSession,
     updateFavoriteLeagues,
     refreshManagedProfiles,
     updateProfileRole,
@@ -308,6 +309,8 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Se procesează datele (Warm)...");
     try {
+      const freshSession = await getSession().catch(() => null);
+      const accessToken = freshSession?.access_token || session?.access_token || null;
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const usageDay = localCalendarDateKey();
       const results = [];
@@ -316,7 +319,7 @@ export default function App() {
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
         qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
-        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
         const r = await fetch(`/api/warm?${qs}`, { headers });
         if (r.status === 429) {
           try {
@@ -374,6 +377,8 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
     try {
+      const freshSession = await getSession().catch(() => null);
+      const accessToken = freshSession?.access_token || session?.access_token || null;
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const usageDay = localCalendarDateKey();
       const batches: PredictionRow[] = [];
@@ -382,7 +387,7 @@ export default function App() {
         const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
         qs.set("usageDay", usageDay);
         const headers: Record<string, string> = {};
-        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
         const r = await fetch(`/api/predict?${qs}`, { headers });
         if (r.status === 429) {
           try {
@@ -403,7 +408,7 @@ export default function App() {
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
       const syncHeaders: Record<string, string> = {};
-      if (session?.access_token) syncHeaders.Authorization = `Bearer ${session.access_token}`;
+      if (accessToken) syncHeaders.Authorization = `Bearer ${accessToken}`;
       await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
       await loadHistory(30);
       await loadKpi(45);
