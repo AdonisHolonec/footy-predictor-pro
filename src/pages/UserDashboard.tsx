@@ -25,6 +25,8 @@ function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
 
 function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
   return rows.some((row) => {
+    // Rows produced by current backend always include modelVersion; do not treat masked tier rows as stale.
+    if (row?.modelVersion) return false;
     const probs = row?.probs;
     // Older cached rows (localStorage) can miss newer model fields used by updated cards/modals.
     const hasExactConfidence = row?.recommended?.confidence != null && Number.isFinite(Number(row?.recommended?.confidence));
@@ -185,10 +187,6 @@ export default function UserDashboard() {
 
   function setSelectedLeagueIdsLimited(nextIds: number[]) {
     const normalized = Array.from(new Set(nextIds.map((value) => Number(value)).filter((value) => Number.isFinite(value))));
-    if (normalized.length > 2) {
-      setStatus("Poti selecta maximum 2 ligi favorite.");
-      return;
-    }
     setSelectedLeagueIds(normalized);
   }
 
@@ -846,7 +844,7 @@ export default function UserDashboard() {
               className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left"
             >
               <span className="text-sm font-semibold tracking-wide text-signal-ink">Onboarding</span>
-              <span className="font-mono text-[11px] text-signal-petrol">{selectedLeagueIds.length}/2 ligi</span>
+              <span className="font-mono text-[11px] text-signal-petrol">{selectedLeagueIds.length} ligi</span>
             </button>
             {isOnboardingOpen && (
               <div className="mt-3">
@@ -959,7 +957,7 @@ export default function UserDashboard() {
               setIsLeaguesOpen={setIsLeaguesOpen}
               setSearchLeague={setSearchLeague}
               setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.slice(0, 2).map((league) => Number(league.id)))}
+              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
               clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
             />
           </div>
