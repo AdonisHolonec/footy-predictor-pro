@@ -49,8 +49,6 @@ export default function UserDashboard() {
     user,
     userTier,
     trialRemainingTime,
-    predictCountToday,
-    predictLimitToday,
     tierQuotaExempt,
     session,
     logout,
@@ -96,12 +94,6 @@ export default function UserDashboard() {
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
   const [alertsPreview, setAlertsPreview] = useState<{ safe: number; value: number }>({ safe: 0, value: 0 });
   const [, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
-  const [dailyUsageMap, setDailyUsageMap] = useLocalStorageState<Record<string, { warm: number; predict: number }>>("footy.user.dailyUsage", {});
-  const [usageServerSyncPending, setUsageServerSyncPending] = useState(false);
-  const [usageServerSyncFailed, setUsageServerSyncFailed] = useState(false);
-  const [usageServerSyncedAt, setUsageServerSyncedAt] = useState<number | null>(null);
-  const [usageQuotaExempt, setUsageQuotaExempt] = useState(false);
-  const usageFetchGen = useRef(0);
   /** Avoid re-hydrating selection from profile every time favoriteLeaguesByUser echoes from saves (caused “stuck” league list). */
   const lastSelectionHydrateUserId = useRef<string | null>(null);
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
@@ -145,7 +137,6 @@ export default function UserDashboard() {
       .sort((a, b) => b.settled - a.settled);
   }, [history]);
   const prevWinRateRef = useRef(trackerStats.winRate);
-  const usageKey = user?.id ? `${user.id}:${todayKey}` : "";
   const formatRemaining = (ms: number) => {
     if (!ms || ms <= 0) return "00:00:00";
     const total = Math.floor(ms / 1000);
@@ -154,14 +145,6 @@ export default function UserDashboard() {
     const s = String(total % 60).padStart(2, "0");
     return `${h}:${m}:${s}`;
   };
-
-  const dailyUsage = usageKey ? (dailyUsageMap[usageKey] || { warm: 0, predict: 0 }) : { warm: 0, predict: 0 };
-  const limitApplies = !usageQuotaExempt;
-
-  const markUsageConfirmedFromServer = useCallback(() => {
-    setUsageServerSyncedAt(Date.now());
-    setUsageServerSyncFailed(false);
-  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -199,69 +182,6 @@ export default function UserDashboard() {
       setIsHistorySyncing(false);
     }
   }, [session?.access_token, loadHistory]);
-
-  const fetchServerDailyUsage = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!user?.id || !usageKey) return;
-      const gen = ++usageFetchGen.current;
-      setUsageServerSyncPending(true);
-      try {
-        let accessToken: string | null = session?.access_token ?? null;
-        if (!accessToken) {
-          const fresh = await getSession().catch(() => null);
-          accessToken = fresh?.access_token ?? null;
-        }
-        if (!accessToken) {
-          setUsageServerSyncFailed(true);
-          return;
-        }
-        const qs = new URLSearchParams({
-          warmPredictUsage: "1",
-          usageDay: todayKey,
-          date: todayKey
-        });
-        const res = await fetch(`/api/fixtures?${qs}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal
-        });
-        if (!res.ok) {
-          setUsageServerSyncFailed(true);
-          return;
-        }
-        const json = (await res.json()) as {
-          warmPredictUsage?: { warm_count?: number; predict_count?: number; quota_exempt?: boolean };
-        };
-        const u = json?.warmPredictUsage;
-        if (typeof u?.warm_count !== "number" || typeof u?.predict_count !== "number") {
-          setUsageServerSyncFailed(true);
-          return;
-        }
-        if (u.quota_exempt) {
-          setUsageQuotaExempt(true);
-          setDailyUsageMap((prev) => ({
-            ...prev,
-            [usageKey]: { warm: 0, predict: 0 }
-          }));
-          markUsageConfirmedFromServer();
-          return;
-        }
-        setUsageQuotaExempt(false);
-        setDailyUsageMap((prev) => ({
-          ...prev,
-          [usageKey]: { warm: u.warm_count, predict: u.predict_count }
-        }));
-        markUsageConfirmedFromServer();
-      } catch (e: unknown) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        setUsageServerSyncFailed(true);
-      } finally {
-        if (gen === usageFetchGen.current) {
-          setUsageServerSyncPending(false);
-        }
-      }
-    },
-    [user?.id, session?.access_token, usageKey, todayKey, getSession, setDailyUsageMap, markUsageConfirmedFromServer]
-  );
 
   function setSelectedLeagueIdsLimited(nextIds: number[]) {
     const normalized = Array.from(new Set(nextIds.map((value) => Number(value)).filter((value) => Number.isFinite(value))));
@@ -338,44 +258,6 @@ export default function UserDashboard() {
     if (!user?.id) return;
     setNotifyEmailConsent(Boolean(user.emailNotificationsConsentedAt && user.notificationPrefs?.email));
   }, [user?.id, user?.emailNotificationsConsentedAt, user?.notificationPrefs?.email]);
-
-  useEffect(() => {
-    usageFetchGen.current += 1;
-    setUsageServerSyncedAt(null);
-    setUsageServerSyncFailed(false);
-    setUsageServerSyncPending(false);
-    setUsageQuotaExempt(false);
-  }, [usageKey]);
-
-  useEffect(() => {
-    if (!user?.id || !session?.access_token || !usageKey) return;
-    const ac = new AbortController();
-    void fetchServerDailyUsage(ac.signal);
-    return () => ac.abort();
-  }, [user?.id, session?.access_token, usageKey, todayKey, fetchServerDailyUsage]);
-
-  useEffect(() => {
-    if (!user?.id || !session?.access_token || !usageKey) return;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefetch = () => {
-      if (document.visibilityState !== "visible") return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
-        void fetchServerDailyUsage();
-      }, 400);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") scheduleRefetch();
-    };
-    window.addEventListener("focus", scheduleRefetch);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      window.removeEventListener("focus", scheduleRefetch);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [user?.id, session?.access_token, usageKey, fetchServerDailyUsage]);
 
   useEffect(() => {
     if (!user) return;
@@ -535,12 +417,6 @@ export default function UserDashboard() {
   }, [rehydratedNotice]);
 
   async function warm() {
-    if (limitApplies && dailyUsage.warm >= 3) {
-      setStatus(
-        "Limită Warm (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
-      );
-      return;
-    }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
     try {
       let accessToken: string | null = session?.access_token ?? null;
@@ -553,7 +429,6 @@ export default function UserDashboard() {
         return;
       }
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
-      let serverUsageSynced = false;
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({
@@ -567,21 +442,14 @@ export default function UserDashboard() {
         const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {
-            const errBody = (await response.json()) as { error?: string; usage?: { warm_count?: number; predict_count?: number } };
-            if (usageKey && errBody?.usage && typeof errBody.usage.warm_count === "number") {
-              setDailyUsageMap((prev) => ({
-                ...prev,
-                [usageKey]: { warm: errBody.usage!.warm_count!, predict: errBody.usage!.predict_count ?? 0 }
-              }));
-              markUsageConfirmedFromServer();
-            }
+            const errBody = (await response.json()) as { error?: string };
             setStatus(
               errBody?.error
-                ? `${errBody.error} Contorul a fost sincronizat cu serverul.`
-                : "Limită Warm (3/zi) confirmată de server. Contorul a fost sincronizat."
+                ? errBody.error
+                : "Cererea Warm a fost limitată temporar de server."
             );
           } catch {
-            setStatus("Limită Warm (3/zi) confirmată de server. Contorul a fost sincronizat.");
+            setStatus("Cererea Warm a fost limitată temporar de server.");
           }
           return;
         }
@@ -600,38 +468,15 @@ export default function UserDashboard() {
           );
           return;
         }
-        const json = (await response.json()) as { usage?: { warm_count: number; predict_count: number } };
-        if (json?.usage && usageKey) {
-          setDailyUsageMap((prev) => ({
-            ...prev,
-            [usageKey]: { warm: json.usage.warm_count, predict: json.usage.predict_count }
-          }));
-          markUsageConfirmedFromServer();
-          serverUsageSynced = true;
-        }
+        await response.json();
       }
       setStatus("Warm finalizat pentru ligile favorite.");
-      if (usageKey && !serverUsageSynced && limitApplies) {
-        setDailyUsageMap((prev) => ({
-          ...prev,
-          [usageKey]: {
-            warm: (prev[usageKey]?.warm || 0) + 1,
-            predict: prev[usageKey]?.predict || 0
-          }
-        }));
-      }
     } catch (error: any) {
       setStatus(error?.message || "Warm a esuat.");
     }
   }
 
   async function predict() {
-    if (limitApplies && dailyUsage.predict >= 3) {
-      setStatus(
-        "Limită Predict (3/zi) în acest browser. Dacă ai folosit contul în altă parte, contorul se aliniază cu serverul când revii în tab sau pui din nou focus pe fereastră."
-      );
-      return;
-    }
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
     try {
       let accessToken: string | null = session?.access_token ?? null;
@@ -645,7 +490,6 @@ export default function UserDashboard() {
       }
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const batches: PredictionRow[] = [];
-      let serverUsageSynced = false;
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({
@@ -660,21 +504,14 @@ export default function UserDashboard() {
         const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
         if (response.status === 429) {
           try {
-            const errBody = (await response.json()) as { error?: string; usage?: { warm_count?: number; predict_count?: number } };
-            if (usageKey && errBody?.usage && typeof errBody.usage.predict_count === "number") {
-              setDailyUsageMap((prev) => ({
-                ...prev,
-                [usageKey]: { warm: errBody.usage!.warm_count ?? 0, predict: errBody.usage!.predict_count! }
-              }));
-              markUsageConfirmedFromServer();
-            }
+            const errBody = (await response.json()) as { error?: string };
             setStatus(
               errBody?.error
-                ? `${errBody.error} Contorul a fost sincronizat cu serverul.`
-                : "Limită Predict (3/zi) confirmată de server. Contorul a fost sincronizat."
+                ? errBody.error
+                : "Cererea Predict a fost limitată temporar de server."
             );
           } catch {
-            setStatus("Limită Predict (3/zi) confirmată de server. Contorul a fost sincronizat.");
+            setStatus("Cererea Predict a fost limitată temporar de server.");
           }
           return;
         }
@@ -695,18 +532,6 @@ export default function UserDashboard() {
         }
         const json = await response.json();
         if (Array.isArray(json)) batches.push(...json);
-        if (i === 0 && usageKey) {
-          const w = response.headers.get("X-Usage-Warm");
-          const p = response.headers.get("X-Usage-Predict");
-          if (w != null && w !== "" && p != null && p !== "") {
-            setDailyUsageMap((prev) => ({
-              ...prev,
-              [usageKey]: { warm: Number(w), predict: Number(p) }
-            }));
-            markUsageConfirmedFromServer();
-            serverUsageSynced = true;
-          }
-        }
       }
       const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
       setPreds(deduped);
@@ -721,15 +546,6 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Au fost generate ${batches.length} predictii.`);
-      if (usageKey && !serverUsageSynced && limitApplies) {
-        setDailyUsageMap((prev) => ({
-          ...prev,
-          [usageKey]: {
-            warm: prev[usageKey]?.warm || 0,
-            predict: (prev[usageKey]?.predict || 0) + 1
-          }
-        }));
-      }
       const syncHeaders: Record<string, string> = {};
       if (accessToken) syncHeaders.Authorization = `Bearer ${accessToken}`;
       await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
@@ -798,6 +614,11 @@ export default function UserDashboard() {
     } finally {
       setExportBusy(false);
     }
+  }
+
+  async function warmAndPredict() {
+    await warm();
+    await predict();
   }
 
   return (
@@ -909,49 +730,18 @@ export default function UserDashboard() {
           />
           <button
             type="button"
-            onClick={warm}
-            disabled={limitApplies && dailyUsage.warm >= 3}
-            className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/60 px-4 py-2.5 text-sm font-semibold text-signal-ink hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Warm
-          </button>
-          <button
-            type="button"
-            onClick={predict}
-            disabled={limitApplies && dailyUsage.predict >= 3}
+            onClick={() => void warmAndPredict()}
             className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Predict
+            Warm + Predict
           </button>
           <div className="rounded-lg border border-white/5 bg-signal-panel/45 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
-            <span className="text-signal-petrol">
-              Warm {usageQuotaExempt ? "—" : dailyUsage.warm}/3 · Predict {usageQuotaExempt ? "—" : dailyUsage.predict}/3
-            </span>
-            {session?.access_token && usageKey ? (
-              <span className="mt-1 block text-[10px] font-normal leading-snug text-signal-inkMuted">
-                {usageQuotaExempt ? (
-                  <span>Administrator: limită zilnică dezactivată pe server.</span>
-                ) : usageServerSyncPending ? (
-                  <>Se actualizează contorul de pe server…</>
-                ) : usageServerSyncFailed && !usageServerSyncedAt ? (
-                  <span className="text-signal-amber">Nu am putut încărca contorul de pe server.</span>
-                ) : usageServerSyncedAt ? (
-                  <>
-                    Sincronizat cu serverul (
-                    {new Date(usageServerSyncedAt).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}).
-                    {usageServerSyncFailed ? <span className="text-signal-amber"> Ultima reîmprospătare automată a eșuat.</span> : null}
-                  </>
-                ) : null}
-              </span>
-            ) : null}
+            <span className="text-signal-petrol">Warm/Predict nelimitat pentru utilizatori autentificați.</span>
           </div>
           <div className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1.5 text-[11px] text-signal-ink shadow-inner">
             <span className="font-semibold text-signal-petrol">Tier:</span> {userTier.toUpperCase()}
             <span className="mx-1 text-signal-inkMuted">·</span>
-            <span className="font-mono tabular-nums">
-              Predict today {predictCountToday}
-              {predictLimitToday != null ? `/${predictLimitToday}` : "/∞"}
-            </span>
+            <span className="font-mono tabular-nums">Warm/Predict nelimitat</span>
           </div>
           {tierQuotaExempt && (
             <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">

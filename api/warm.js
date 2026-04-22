@@ -3,9 +3,6 @@ import { readBearer } from "../server-utils/authAdmin.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { getWithCache } from '../server-utils/fetcher.js';
 import {
-  commitWarmPredictIncrement,
-  isWarmPredictQuotaExempt,
-  peekWarmPredictUsage,
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 
@@ -39,21 +36,7 @@ export default async function handler(req, res) {
   if (usageCtx.error) {
     return res.status(usageCtx.error.status).json(usageCtx.error.body);
   }
-  let enforceWarmPredictQuota = false;
-  if (!usageCtx.anonymous && usageCtx.userId) {
-    const exempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
-    enforceWarmPredictQuota = !exempt;
-  }
-  if (enforceWarmPredictQuota) {
-    const peek = await peekWarmPredictUsage(usageCtx.userId, usageCtx.usageDay);
-    if (peek.warm >= 3) {
-      return res.status(429).json({
-        ok: false,
-        error: "Limita zilnica Warm atinsa (maximum 3/zi).",
-        usage: { warm_count: peek.warm, predict_count: peek.predict, usage_day: usageCtx.usageDay }
-      });
-    }
-  }
+  // Authenticated users (free/premium/ultra) run warm without daily quota limits.
 
   const warmed = [];
   const errors = [];
@@ -114,22 +97,6 @@ export default async function handler(req, res) {
     errors,
     note: "Datele au fost salvate în Vercel KV (Redis)."
   };
-
-  if (enforceWarmPredictQuota) {
-    const inc = await commitWarmPredictIncrement(usageCtx.userId, usageCtx.usageDay, "warm");
-    if (!inc?.ok) {
-      return res.status(429).json({
-        ok: false,
-        error: "Limita zilnica Warm atinsa (maximum 3/zi).",
-        usage: inc
-      });
-    }
-    payload.usage = {
-      warm_count: inc.warm_count,
-      predict_count: inc.predict_count,
-      usage_day: usageCtx.usageDay
-    };
-  }
 
   return res.status(200).json(payload);
 }

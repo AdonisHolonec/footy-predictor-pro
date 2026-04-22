@@ -52,18 +52,13 @@ import {
 } from "../server-utils/teamMarketRolling.js";
 import { poissonOverLine } from "../server-utils/math.js";
 import {
-  isWarmPredictQuotaExempt,
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import {
   decrementPredictCountBy,
   USER_TIERS,
-  getPredictCountToday,
-  incrementPredictCountBy,
-  isFreeWindowExpired,
   maskPredictionForTier,
-  resolveEffectiveTierFromProfile,
-  tierDailyLimit
+  resolveEffectiveTierFromProfile
 } from "../server-utils/accessTier.js";
 
 function isGoodNum(val) {
@@ -526,7 +521,6 @@ export default async function handler(req, res) {
   let tierContext = null;
   let reservedTierUsage = 0;
   if (!usageCtx.anonymous && usageCtx.userId) {
-    let quotaExempt = await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail);
     const supabase = getSupabaseAdmin();
     let profile = null;
     let { data: profData, error: profileError } = await supabase
@@ -552,75 +546,19 @@ export default async function handler(req, res) {
     } else {
       profile = profData;
     }
-    if (String(profile?.role || "").toLowerCase() === "admin") {
-      quotaExempt = true;
-    }
     if (!profile) {
       return res.status(404).json({ ok: false, error: "Profil utilizator inexistent." });
     }
 
     const tierInfo = resolveEffectiveTierFromProfile(profile);
-    if (!quotaExempt && tierInfo.effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at)) {
-      return res.status(402).json({
-        ok: false,
-        error: "Free Habit Trial (10 zile) a expirat. Activeaza trial Premium/Ultra sau un abonament."
-      });
-    }
-
-    const effectiveTierForQuota = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
-    const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTierForQuota);
-    const currentCount = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay);
-    const remainingDaily = Number.isFinite(dailyLimit) ? Math.max(0, dailyLimit - currentCount) : Number.POSITIVE_INFINITY;
-    if (Number.isFinite(dailyLimit) && remainingDaily <= 0) {
-      return res.status(429).json({
-        ok: false,
-        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
-        tierStatus: {
-          tier: effectiveTierForQuota,
-          predictCountToday: currentCount,
-          predictLimit: dailyLimit
-        }
-      });
-    }
-    if (Number.isFinite(remainingDaily)) {
-      effectiveLimit = Math.max(0, Math.min(effectiveLimit, remainingDaily));
-    }
-    if (effectiveLimit <= 0) {
-      return res.status(429).json({
-        ok: false,
-        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
-        tierStatus: {
-          tier: effectiveTierForQuota,
-          predictCountToday: currentCount,
-          predictLimit: dailyLimit
-        }
-      });
-    }
-    const nextCount = quotaExempt
-      ? currentCount
-      : await incrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, effectiveLimit);
-    reservedTierUsage = quotaExempt ? 0 : effectiveLimit;
-    if (Number.isFinite(dailyLimit) && nextCount > dailyLimit) {
-      if (reservedTierUsage > 0) {
-        await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
-      }
-      reservedTierUsage = 0;
-      return res.status(429).json({
-        ok: false,
-        error: `Limita zilnica pentru tier-ul ${tierInfo.effectiveTier} a fost atinsa.`,
-        tierStatus: {
-          tier: effectiveTierForQuota,
-          predictCountToday: dailyLimit,
-          predictLimit: dailyLimit
-        }
-      });
-    }
+    const role = String(profile?.role || "").toLowerCase();
+    const quotaExempt = role === "admin";
     tierContext = {
       ...tierInfo,
-      effectiveTier: effectiveTierForQuota,
+      effectiveTier: quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier,
       quotaExempt,
-      predictCountToday: quotaExempt ? currentCount : Math.min(nextCount, Number.isFinite(dailyLimit) ? dailyLimit : nextCount),
-      predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit
+      predictCountToday: null,
+      predictLimit: null
     };
   }
 
