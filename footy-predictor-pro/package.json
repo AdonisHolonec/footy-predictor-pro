@@ -1,0 +1,39 @@
+{
+  "name": "footy-predictor-ui",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test tests/math.test.js",
+    "preview": "vite preview",
+    "api": "npm --prefix server run api",
+    "backtest": "node --env-file=.env.local scripts/backtest.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.3",
+    "@upstash/redis": "^1.37.0",
+    "@vercel/kv": "^3.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.14.1",
+    "redis": "^5.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vercel/node": "^5.5.28",
+    "@vitejs/plugin-react": "^5.0.1",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "supabase": "^2.92.1",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.2",
+    "vite": "^5.3.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
