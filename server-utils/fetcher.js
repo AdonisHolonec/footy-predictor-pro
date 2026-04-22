@@ -54,6 +54,34 @@ export function getUpstreamProvider() {
   return resolveUpstream().provider;
 }
 
+function resolveFallbackUpstream(primaryProvider) {
+  const explicit = process.env.UPSTREAM_BASE_URL;
+  const apiSportsKey = process.env.APISPORTS_KEY;
+  const rapidKey = process.env.X_RAPIDAPI_KEY || process.env.APIFOOTBALL_KEY;
+  if (primaryProvider === "apisports" && rapidKey) {
+    return {
+      provider: "rapidapi",
+      baseUrl: explicit || "https://api-football-v1.p.rapidapi.com/v3",
+      headers: {
+        "X-RapidAPI-Key": rapidKey,
+        "X-RapidAPI-Host": process.env.X_RAPIDAPI_HOST || "api-football-v1.p.rapidapi.com"
+      },
+      key: rapidKey
+    };
+  }
+  if (primaryProvider === "rapidapi" && apiSportsKey) {
+    return {
+      provider: "apisports",
+      baseUrl: explicit || "https://v3.football.api-sports.io",
+      headers: {
+        "x-apisports-key": apiSportsKey
+      },
+      key: apiSportsKey
+    };
+  }
+  return null;
+}
+
 function getTodayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -72,12 +100,12 @@ function secondsUntilUtcMidnight() {
 }
 
 export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
-  const upstream = resolveUpstream();
-  if (!upstream.key) {
+  const primary = resolveUpstream();
+  if (!primary.key) {
     return { ok: false, error: "API key not configured (set APISPORTS_KEY or X_RAPIDAPI_KEY)" };
   }
 
-  const u = new URL(upstream.baseUrl + endpoint);
+  const u = new URL(primary.baseUrl + endpoint);
   Object.entries(paramsObj || {}).forEach(([k, v]) => u.searchParams.set(k, String(v)));
   const fullUrl = u.toString();
   const cacheKey = `req:${fullUrl}`;
@@ -86,16 +114,33 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
   if (cached) return { ok: true, fromCache: true, data: cached };
 
   try {
-    const res = await fetch(fullUrl, { headers: upstream.headers });
+    const fetchWith = async (upstreamCfg) => {
+      const res = await fetch(fullUrl, { headers: upstreamCfg.headers });
+      const json = await res.json().catch(() => ({}));
+      return { res, json, upstreamCfg };
+    };
+
+    let attempt = await fetchWith(primary);
+
+    const messageRaw = String(attempt.json?.message || "").toLowerCase();
+    const errorsRaw = String(
+      typeof attempt.json?.errors === "string" ? attempt.json.errors : JSON.stringify(attempt.json?.errors || {})
+    ).toLowerCase();
+    const notSubscribed = messageRaw.includes("not subscribed") || errorsRaw.includes("not subscribed");
+    if ((!attempt.res.ok || notSubscribed) && notSubscribed) {
+      const fallback = resolveFallbackUpstream(primary.provider);
+      if (fallback?.key) {
+        attempt = await fetchWith(fallback);
+      }
+    }
 
     // Ambii provideri întorc rate-limit headers cu acelaşi nume
     const hLimit =
-      res.headers.get("x-ratelimit-requests-limit") ||
-      res.headers.get("x-ratelimit-limit");
+      attempt.res.headers.get("x-ratelimit-requests-limit") ||
+      attempt.res.headers.get("x-ratelimit-limit");
     const hRemain =
-      res.headers.get("x-ratelimit-requests-remaining") ||
-      res.headers.get("x-ratelimit-remaining");
-
+      attempt.res.headers.get("x-ratelimit-requests-remaining") ||
+      attempt.res.headers.get("x-ratelimit-remaining");
     if (hLimit && hRemain) {
       const limit = Number(hLimit);
       const remainingNow = Number(hRemain);
@@ -112,20 +157,25 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
           baselineRemaining: resolvedBaseline,
           currentRemaining: remainingNow,
           updatedAt: new Date().toISOString(),
-          provider: upstream.provider
+          provider: attempt.upstreamCfg.provider
         };
         await kv.set(key, usagePayload, { ex: secondsUntilUtcMidnight() });
         await kv.set(`footy_api_usage_history:${today}`, usagePayload);
       }
     }
 
-    const json = await res.json();
+    const json = attempt.json;
     const hasErrors =
       json.errors &&
       ((Array.isArray(json.errors) && json.errors.length > 0) ||
         (!Array.isArray(json.errors) && Object.keys(json.errors).length > 0));
-    if (!res.ok || hasErrors) {
-      return { ok: false, error: json.message || json.errors || `API Error ${res.status}` };
+    if (!attempt.res.ok || hasErrors) {
+      return {
+        ok: false,
+        error: json.message || json.errors || `API Error ${attempt.res.status}`,
+        status: attempt.res.status,
+        provider: attempt.upstreamCfg.provider
+      };
     }
 
     await kv.set(cacheKey, json, { ex: ttlSeconds });

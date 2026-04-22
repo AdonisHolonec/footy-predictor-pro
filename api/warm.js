@@ -62,7 +62,12 @@ export default async function handler(req, res) {
   // 1. Aducem meciurile zilei (cache 6 ore = 21600 sec)
   const dayReq = await getWithCache('/fixtures', { date }, 21600);
   if (!dayReq.ok) {
-    return res.status(500).json({ ok: false, error: dayReq.error });
+    const status = Number(dayReq?.status);
+    return res.status(Number.isFinite(status) && status >= 400 ? status : 502).json({
+      ok: false,
+      error: typeof dayReq.error === "string" ? dayReq.error : "Upstream /fixtures unavailable.",
+      provider: dayReq?.provider || null
+    });
   }
 
   const allFixtures = dayReq.data.response || [];

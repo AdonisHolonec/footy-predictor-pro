@@ -202,17 +202,26 @@ export default function UserDashboard() {
 
   const fetchServerDailyUsage = useCallback(
     async (signal?: AbortSignal) => {
-      if (!user?.id || !session?.access_token || !usageKey) return;
+      if (!user?.id || !usageKey) return;
       const gen = ++usageFetchGen.current;
       setUsageServerSyncPending(true);
       try {
+        let accessToken: string | null = session?.access_token ?? null;
+        if (!accessToken) {
+          const fresh = await getSession().catch(() => null);
+          accessToken = fresh?.access_token ?? null;
+        }
+        if (!accessToken) {
+          setUsageServerSyncFailed(true);
+          return;
+        }
         const qs = new URLSearchParams({
           warmPredictUsage: "1",
           usageDay: todayKey,
           date: todayKey
         });
         const res = await fetch(`/api/fixtures?${qs}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
           signal
         });
         if (!res.ok) {
@@ -251,7 +260,7 @@ export default function UserDashboard() {
         }
       }
     },
-    [user?.id, session?.access_token, usageKey, todayKey, setDailyUsageMap, markUsageConfirmedFromServer]
+    [user?.id, session?.access_token, usageKey, todayKey, getSession, setDailyUsageMap, markUsageConfirmedFromServer]
   );
 
   function setSelectedLeagueIdsLimited(nextIds: number[]) {
@@ -577,7 +586,18 @@ export default function UserDashboard() {
           return;
         }
         if (!response.ok) {
-          setStatus(`Warm a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`);
+          let backendMessage = "";
+          try {
+            const errJson = await response.json();
+            if (typeof errJson?.error === "string") backendMessage = errJson.error;
+          } catch {
+            backendMessage = "";
+          }
+          setStatus(
+            backendMessage
+              ? `Warm a eșuat (HTTP ${response.status}) · ${backendMessage}`
+              : `Warm a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`
+          );
           return;
         }
         const json = (await response.json()) as { usage?: { warm_count: number; predict_count: number } };

@@ -338,7 +338,14 @@ export default function App() {
           return;
         }
         if (!r.ok) {
-          setStatus(`Warm a eșuat (HTTP ${r.status}).`);
+          let backendMessage = "";
+          try {
+            const errJson = await r.json();
+            if (typeof errJson?.error === "string") backendMessage = errJson.error;
+          } catch {
+            backendMessage = "";
+          }
+          setStatus(backendMessage ? `Warm a eșuat (HTTP ${r.status}) · ${backendMessage}` : `Warm a eșuat (HTTP ${r.status}).`);
           return;
         }
         const j = await r.json();
@@ -413,7 +420,14 @@ export default function App() {
           return;
         }
         if (!r.ok) {
-          setStatus(`Predict a eșuat (HTTP ${r.status}).`);
+          let backendMessage = "";
+          try {
+            const errJson = await r.json();
+            if (typeof errJson?.error === "string") backendMessage = errJson.error;
+          } catch {
+            backendMessage = "";
+          }
+          setStatus(backendMessage ? `Predict a eșuat (HTTP ${r.status}) · ${backendMessage}` : `Predict a eșuat (HTTP ${r.status}).`);
           return;
         }
         const j = await r.json();

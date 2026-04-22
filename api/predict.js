@@ -633,6 +633,14 @@ export default async function handler(req, res) {
       loadStackerWeights(MODEL_VERSION).catch(() => new Map())
     ]);
     const dayReq = await getWithCache("/fixtures", { date }, 21600);
+    if (!dayReq.ok) {
+      const status = Number(dayReq?.status);
+      return res.status(Number.isFinite(status) && status >= 400 ? status : 502).json({
+        ok: false,
+        error: typeof dayReq.error === "string" ? dayReq.error : "Upstream /fixtures unavailable.",
+        provider: dayReq?.provider || null
+      });
+    }
     const allFixtures = dayReq.data?.response || dayReq.data || [];
 
     for (const lId of leagueIds) {
@@ -826,70 +834,68 @@ export default async function handler(req, res) {
         let shotsTotalBlock = null;
         const rollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
         const rollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
-        if (rollingHome || rollingAway) {
-          const cornersLambdas = deriveMarketLambdas({
-            rollingHome,
-            rollingAway,
-            baseAvgTotal: leagueParams.cornersAvgTotal,
-            marketKey: "corners",
-            homeAdv: leagueParams.homeAdv,
-            awayAdv: leagueParams.awayAdv
-          });
-          cornersBlock = {
-            ...buildPoissonMarketBlock({
-              lambdaHome: cornersLambdas.lambdaHome,
-              lambdaAway: cornersLambdas.lambdaAway,
-              lines: [7.5, 8.5, 9.5, 10.5, 11.5, 12.5],
-              teamLines: [3.5, 4.5, 5.5]
-            }),
-            sampleHome: cornersLambdas.sampleHome,
-            sampleAway: cornersLambdas.sampleAway,
-            usedFallback: cornersLambdas.usedFallback,
-            leagueBaseline: leagueParams.cornersAvgTotal
-          };
+        const cornersLambdas = deriveMarketLambdas({
+          rollingHome,
+          rollingAway,
+          baseAvgTotal: leagueParams.cornersAvgTotal,
+          marketKey: "corners",
+          homeAdv: leagueParams.homeAdv,
+          awayAdv: leagueParams.awayAdv
+        });
+        cornersBlock = {
+          ...buildPoissonMarketBlock({
+            lambdaHome: cornersLambdas.lambdaHome,
+            lambdaAway: cornersLambdas.lambdaAway,
+            lines: [7.5, 8.5, 9.5, 10.5, 11.5, 12.5],
+            teamLines: [3.5, 4.5, 5.5]
+          }),
+          sampleHome: cornersLambdas.sampleHome,
+          sampleAway: cornersLambdas.sampleAway,
+          usedFallback: cornersLambdas.usedFallback,
+          leagueBaseline: leagueParams.cornersAvgTotal
+        };
 
-          const sotLambdas = deriveMarketLambdas({
-            rollingHome,
-            rollingAway,
-            baseAvgTotal: leagueParams.sotAvgTotal,
-            marketKey: "sot",
-            homeAdv: leagueParams.homeAdv,
-            awayAdv: leagueParams.awayAdv
-          });
-          shotsOnTargetBlock = {
-            ...buildPoissonMarketBlock({
-              lambdaHome: sotLambdas.lambdaHome,
-              lambdaAway: sotLambdas.lambdaAway,
-              lines: [6.5, 7.5, 8.5, 9.5, 10.5],
-              teamLines: [2.5, 3.5, 4.5]
-            }),
-            sampleHome: sotLambdas.sampleHome,
-            sampleAway: sotLambdas.sampleAway,
-            usedFallback: sotLambdas.usedFallback,
-            leagueBaseline: leagueParams.sotAvgTotal
-          };
+        const sotLambdas = deriveMarketLambdas({
+          rollingHome,
+          rollingAway,
+          baseAvgTotal: leagueParams.sotAvgTotal,
+          marketKey: "sot",
+          homeAdv: leagueParams.homeAdv,
+          awayAdv: leagueParams.awayAdv
+        });
+        shotsOnTargetBlock = {
+          ...buildPoissonMarketBlock({
+            lambdaHome: sotLambdas.lambdaHome,
+            lambdaAway: sotLambdas.lambdaAway,
+            lines: [6.5, 7.5, 8.5, 9.5, 10.5],
+            teamLines: [2.5, 3.5, 4.5]
+          }),
+          sampleHome: sotLambdas.sampleHome,
+          sampleAway: sotLambdas.sampleAway,
+          usedFallback: sotLambdas.usedFallback,
+          leagueBaseline: leagueParams.sotAvgTotal
+        };
 
-          // şuturi totale — util ca signal suplimentar (ex. 20.5 total shots)
-          const shotsLambdas = deriveMarketLambdas({
-            rollingHome,
-            rollingAway,
-            baseAvgTotal: (leagueParams.sotAvgTotal || 8.6) * 2.3, // ~23 şuturi/meci în top-5
-            marketKey: "shots_total",
-            homeAdv: leagueParams.homeAdv,
-            awayAdv: leagueParams.awayAdv
-          });
-          shotsTotalBlock = {
-            ...buildPoissonMarketBlock({
-              lambdaHome: shotsLambdas.lambdaHome,
-              lambdaAway: shotsLambdas.lambdaAway,
-              lines: [18.5, 20.5, 22.5, 24.5],
-              teamLines: []
-            }),
-            sampleHome: shotsLambdas.sampleHome,
-            sampleAway: shotsLambdas.sampleAway,
-            usedFallback: shotsLambdas.usedFallback
-          };
-        }
+        // şuturi totale — util ca signal suplimentar (ex. 20.5 total shots)
+        const shotsLambdas = deriveMarketLambdas({
+          rollingHome,
+          rollingAway,
+          baseAvgTotal: (leagueParams.sotAvgTotal || 8.6) * 2.3, // ~23 şuturi/meci în top-5
+          marketKey: "shots_total",
+          homeAdv: leagueParams.homeAdv,
+          awayAdv: leagueParams.awayAdv
+        });
+        shotsTotalBlock = {
+          ...buildPoissonMarketBlock({
+            lambdaHome: shotsLambdas.lambdaHome,
+            lambdaAway: shotsLambdas.lambdaAway,
+            lines: [18.5, 20.5, 22.5, 24.5],
+            teamLines: []
+          }),
+          sampleHome: shotsLambdas.sampleHome,
+          sampleAway: shotsLambdas.sampleAway,
+          usedFallback: shotsLambdas.usedFallback
+        };
 
         // === PRIMA REPRIZĂ ===
         // Derivăm λ FH din λ full match + fracţiile pe bucketele de minute (0 calls noi).
