@@ -293,6 +293,16 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!session?.access_token) return;
+    if (pendingHistoryCount <= 0) return;
+    const tm = setInterval(() => {
+      if (isHistorySyncing) return;
+      void syncHistory();
+    }, 90_000);
+    return () => clearInterval(tm);
+  }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory]);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
     const tm = setInterval(() => {
       void refreshTierStatus();
     }, 30000);

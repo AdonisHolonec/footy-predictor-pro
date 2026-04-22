@@ -557,6 +557,17 @@ export default function App() {
     if (!session?.access_token) return;
     void syncHistory(30);
   }, [session?.access_token]);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    if (pendingHistoryCount <= 0) return;
+    const tm = setInterval(() => {
+      if (isHistorySyncing) return;
+      void syncHistory(30);
+      if (user?.role === "admin") void loadPerfAdmin();
+    }, 90_000);
+    return () => clearInterval(tm);
+  }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory, user?.role, loadPerfAdmin]);
   useEffect(() => {
     setDraftDrawdownThreshold(alertDrawdownThreshold);
     setDraftDriftThreshold(alertDriftThreshold);
