@@ -188,6 +188,10 @@ export type PredictionRow = {
   odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;
   marketOdds?: {
+    goals15?: MarketOddQuote;
+    goals25?: MarketOddQuote;
+    goals35?: MarketOddQuote;
+    btts?: MarketOddQuote;
     corners?: MarketOddQuote;
     shotsOnTarget?: MarketOddQuote;
     shotsTotal?: MarketOddQuote;
@@ -207,7 +211,14 @@ export type PredictionRow = {
       correctScore?: MarketTierInfo;
     };
   };
-  recommended: { pick: string; confidence: number | null; confidenceCategory?: string | null };
+  recommended: {
+    pick: string;
+    confidence: number | null;
+    confidenceCategory?: string | null;
+    odd?: number | null;
+    oddSource?: string | null;
+    bookmakersUsed?: number;
+  };
   insufficientData?: boolean;
   insufficientReason?: string;
   modelVersion?: string;

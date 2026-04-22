@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -43,11 +44,34 @@ function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
 }
 
 function deriveRecommendedOdd(row: PredictionRow): number | null {
+  const explicit = Number(row.recommended?.odd);
+  if (Number.isFinite(explicit) && explicit > 1) return explicit;
   const pick = (row.recommended?.pick || "").trim().toLowerCase();
   if (!pick) return null;
   if (pick === "1") return Number.isFinite(Number(row.odds?.home)) ? Number(row.odds?.home) : null;
   if (pick === "x") return Number.isFinite(Number(row.odds?.draw)) ? Number(row.odds?.draw) : null;
   if (pick === "2") return Number.isFinite(Number(row.odds?.away)) ? Number(row.odds?.away) : null;
+  if (pick === "gg") return Number.isFinite(Number(row.marketOdds?.btts?.odd)) ? Number(row.marketOdds?.btts?.odd) : null;
+  if (pick === "ngg") {
+    const yesOdd = Number(row.marketOdds?.btts?.odd);
+    if (Number.isFinite(yesOdd) && yesOdd > 1) {
+      const noOdd = (yesOdd / (yesOdd - 1)) || null;
+      return Number.isFinite(Number(noOdd)) ? Number(noOdd) : null;
+    }
+    return null;
+  }
+  const ou = pick.match(/^(peste|sub)\s*(1[.,]5|2[.,]5|3[.,]5)$/);
+  if (ou) {
+    const line = ou[2].replace(",", ".");
+    const quote =
+      line === "1.5" ? row.marketOdds?.goals15 : line === "2.5" ? row.marketOdds?.goals25 : row.marketOdds?.goals35;
+    if (!quote) return null;
+    const overOdd = Number(quote.odd);
+    if (!Number.isFinite(overOdd) || overOdd <= 1) return null;
+    if (ou[1] === "peste") return overOdd;
+    const underOdd = (overOdd / (overOdd - 1)) || null;
+    return Number.isFinite(Number(underOdd)) ? Number(underOdd) : null;
+  }
   return null;
 }
 
@@ -134,6 +158,7 @@ function modelTierBadge(row: PredictionRow): { label: string; title: string; cla
 }
 
 export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0 }: MatchCardProps) {
+  const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
   const pct = (n: number | null | undefined) => (Number.isFinite(Number(n)) ? Math.round(Number(n)) : 0);
@@ -182,6 +207,41 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
     ];
     const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
     return winner.probability >= 85 ? winner.label : null;
+  })();
+  const specialBetCandidates = [
+      {
+        label: "Main",
+        pick: row.recommended.pick,
+        probability: Number(confPct || 0),
+        odd: recommendedOdd
+      },
+      {
+        label: "Corners",
+        pick: cornersPick?.pick || "",
+        probability: Number(cornersPick?.probability || 0),
+        odd: Number(row.marketOdds?.corners?.odd)
+      },
+      {
+        label: "Shots",
+        pick: shotsPick?.pick || "",
+        probability: Number(shotsPick?.probability || 0),
+        odd: Number(row.marketOdds?.shotsOnTarget?.odd)
+      },
+      {
+        label: "HT",
+        pick: firstHalfPick?.pick || "",
+        probability: Number(firstHalfPick?.probability || 0),
+        odd: Number(row.marketOdds?.firstHalfGoals?.odd)
+      }
+    ]
+    .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0)
+    .sort((a, b) => b.probability - a.probability);
+  const specialBetLegs = specialBetCandidates.slice(0, specialLegCount);
+  const specialBetCombinedOdd = (() => {
+    if (specialBetLegs.length < 2) return null;
+    const validOdds = specialBetLegs.map((l) => Number(l.odd)).filter((n) => Number.isFinite(n) && n > 1);
+    if (validOdds.length < 2) return null;
+    return validOdds.reduce((acc, v) => acc * v, 1);
   })();
 
   if (row.insufficientData) {
@@ -437,6 +497,46 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
               <div className="font-mono text-[7px] text-white/65">{item.source || "sursă:N/A"}</div>
             </div>
           )})}
+        </div>
+      )}
+
+      {hasExactConfidence && specialBetLegs.length >= 2 && (
+        <div className="mt-2 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-200">
+              Special Bet · Top signals
+            </div>
+            {specialBetCandidates.length >= 3 ? (
+              <div className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/10 p-[1px]">
+                {[2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSpecialLegCount(n as 2 | 3);
+                    }}
+                    className={`px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase ${
+                      specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
+                    }`}
+                  >
+                    {n} legs
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-0.5 space-y-0.5">
+            {specialBetLegs.map((leg) => (
+              <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-2 font-mono text-[8px]">
+                <span className="truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
+                <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-emerald-200">
+            combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
+          </div>
         </div>
       )}
 

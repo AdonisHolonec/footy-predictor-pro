@@ -22,7 +22,8 @@ import {
 } from "../server-utils/advancedMath.js";
 import {
   consensusMatchWinnerOdds,
-  consensusOverUnderOddsAtLine
+  consensusOverUnderOddsAtLine,
+  consensusBttsOdds
 } from "../server-utils/marketOdds.js";
 import {
   MODEL_VERSION,
@@ -1116,6 +1117,10 @@ export default async function handler(req, res) {
           }
         }
 
+        let goals15Quote = null;
+        let goals25Quote = null;
+        let goals35Quote = null;
+        let bttsQuote = null;
         if (oddsReq.ok && oddsReq.data) {
           try {
           const cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
@@ -1161,8 +1166,59 @@ export default async function handler(req, res) {
                 firstHalfPick.line
               )
             : null;
+          goals15Quote = consensusOverUnderOddsAtLine(
+            oddsReq.data,
+            ["Goals Over/Under", "Goals Over Under", "Total Goals"],
+            1.5
+          );
+          goals25Quote = consensusOverUnderOddsAtLine(
+            oddsReq.data,
+            ["Goals Over/Under", "Goals Over Under", "Total Goals"],
+            2.5
+          );
+          goals35Quote = consensusOverUnderOddsAtLine(
+            oddsReq.data,
+            ["Goals Over/Under", "Goals Over Under", "Total Goals"],
+            3.5
+          );
+          bttsQuote = consensusBttsOdds(oddsReq.data);
 
           marketOdds = {
+            goals15: goals15Quote
+              ? {
+                  pick: "Over 1.5",
+                  line: 1.5,
+                  odd: goals15Quote.over,
+                  bookmaker: `median(${goals15Quote.bookmakersUsed})`,
+                  bookmakersUsed: goals15Quote.bookmakersUsed || 0
+                }
+              : undefined,
+            goals25: goals25Quote
+              ? {
+                  pick: "Over 2.5",
+                  line: 2.5,
+                  odd: goals25Quote.over,
+                  bookmaker: `median(${goals25Quote.bookmakersUsed})`,
+                  bookmakersUsed: goals25Quote.bookmakersUsed || 0
+                }
+              : undefined,
+            goals35: goals35Quote
+              ? {
+                  pick: "Over 3.5",
+                  line: 3.5,
+                  odd: goals35Quote.over,
+                  bookmaker: `median(${goals35Quote.bookmakersUsed})`,
+                  bookmakersUsed: goals35Quote.bookmakersUsed || 0
+                }
+              : undefined,
+            btts: bttsQuote
+              ? {
+                  pick: "GG",
+                  odd: bttsQuote.yes,
+                  bookmaker: `median(${bttsQuote.bookmakersUsed})`,
+                  bookmakersUsed: bttsQuote.bookmakersUsed || 0
+                }
+              : undefined,
             corners: cornersPick
               ? {
                   pick: cornersPick.pick,
@@ -1286,6 +1342,52 @@ export default async function handler(req, res) {
         let topPick = topSelection.pick;
         let maxConf = topSelection.prob;
         maxConf = clampPct(maxConf * leagueMultiplier * qualityPenalty);
+        const pickLc = String(topPick || "").trim().toLowerCase();
+        const recommendedQuote = (() => {
+          if (!pickLc) return { odd: null, source: null, bookmakersUsed: 0 };
+          if (pickLc === "1") {
+            return {
+              odd: Number.isFinite(Number(odds?.home)) ? Number(odds.home) : null,
+              source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
+              bookmakersUsed: odds?.bookmakersUsed || 0
+            };
+          }
+          if (pickLc === "x") {
+            return {
+              odd: Number.isFinite(Number(odds?.draw)) ? Number(odds.draw) : null,
+              source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
+              bookmakersUsed: odds?.bookmakersUsed || 0
+            };
+          }
+          if (pickLc === "2") {
+            return {
+              odd: Number.isFinite(Number(odds?.away)) ? Number(odds.away) : null,
+              source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
+              bookmakersUsed: odds?.bookmakersUsed || 0
+            };
+          }
+          if (pickLc === "gg" || pickLc === "ngg") {
+            const odd = pickLc === "gg" ? bttsQuote?.yes : bttsQuote?.no;
+            return {
+              odd: Number.isFinite(Number(odd)) ? Number(odd) : null,
+              source: bttsQuote ? `median(${bttsQuote.bookmakersUsed || 0})` : null,
+              bookmakersUsed: bttsQuote?.bookmakersUsed || 0
+            };
+          }
+          const ou = pickLc.match(/^(peste|sub)\s*(1[.,]5|2[.,]5|3[.,]5)$/);
+          if (ou) {
+            const side = ou[1] === "peste" ? "over" : "under";
+            const lineRaw = ou[2].replace(",", ".");
+            const quote = lineRaw === "1.5" ? goals15Quote : lineRaw === "2.5" ? goals25Quote : goals35Quote;
+            const odd = quote?.[side];
+            return {
+              odd: Number.isFinite(Number(odd)) ? Number(odd) : null,
+              source: quote ? `median(${quote.bookmakersUsed || 0})` : null,
+              bookmakersUsed: quote?.bookmakersUsed || 0
+            };
+          }
+          return { odd: null, source: null, bookmakersUsed: 0 };
+        })();
         const stakePolicy = applyStakePolicyV2({
           stakePct: finalKelly,
           confidencePct: maxConf,
@@ -1428,7 +1530,13 @@ export default async function handler(req, res) {
               }
             }
           },
-          recommended: { pick: topPick, confidence: maxConf },
+          recommended: {
+            pick: topPick,
+            confidence: maxConf,
+            odd: Number.isFinite(Number(recommendedQuote.odd)) ? Number(recommendedQuote.odd) : null,
+            oddSource: recommendedQuote.source || null,
+            bookmakersUsed: recommendedQuote.bookmakersUsed || 0
+          },
           modelMeta: {
             method,
             probsModel: calc?.modelMeta?.method || "unknown",

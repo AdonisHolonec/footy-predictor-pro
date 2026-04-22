@@ -55,6 +55,38 @@ export function impliedProbsFromConsensus(consensus) {
   return removeBookmakerMargin(consensus.home, consensus.draw, consensus.away);
 }
 
+/**
+ * Median BTTS odds across bookmakers (Yes/No).
+ */
+export function consensusBttsOdds(oddsApiResponse) {
+  const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+
+  const yes = [];
+  const no = [];
+  const names = [];
+
+  for (const b of bookmakers) {
+    const market = b.bets?.find((x) => String(x?.name || "").toLowerCase().includes("both teams score"));
+    if (!market?.values || !Array.isArray(market.values)) continue;
+    const y = Number.parseFloat(String(market.values.find((v) => String(v?.value || "").toLowerCase() === "yes")?.odd ?? ""));
+    const n = Number.parseFloat(String(market.values.find((v) => String(v?.value || "").toLowerCase() === "no")?.odd ?? ""));
+    if (Number.isFinite(y) && y > 1) yes.push(y);
+    if (Number.isFinite(n) && n > 1) no.push(n);
+    if ((Number.isFinite(y) && y > 1) || (Number.isFinite(n) && n > 1)) names.push(b.name || "?");
+  }
+
+  const medYes = median(yes);
+  const medNo = median(no);
+  if (medYes == null && medNo == null) return null;
+  return {
+    yes: medYes,
+    no: medNo,
+    bookmakersUsed: Math.max(yes.length, no.length),
+    bookmakerNames: names.slice(0, 8)
+  };
+}
+
 function parseLineFromValueLabel(label) {
   const s = String(label || "");
   const m = s.match(/(\d+(?:[.,]\d+)?)/);

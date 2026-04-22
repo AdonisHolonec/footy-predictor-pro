@@ -95,6 +95,29 @@ function deriveBestOverUnderPick(
   return best;
 }
 
+function deriveRecommendedOdd(match: PredictionRow): number | null {
+  const explicit = Number(match.recommended?.odd);
+  if (Number.isFinite(explicit) && explicit > 1) return explicit;
+  const pick = String(match.recommended?.pick || "").trim().toLowerCase();
+  if (!pick) return null;
+  if (pick === "1") return Number.isFinite(Number(match.odds?.home)) ? Number(match.odds?.home) : null;
+  if (pick === "x") return Number.isFinite(Number(match.odds?.draw)) ? Number(match.odds?.draw) : null;
+  if (pick === "2") return Number.isFinite(Number(match.odds?.away)) ? Number(match.odds?.away) : null;
+  if (pick === "gg") return Number.isFinite(Number(match.marketOdds?.btts?.odd)) ? Number(match.marketOdds?.btts?.odd) : null;
+  const ou = pick.match(/^(peste|sub)\s*(1[.,]5|2[.,]5|3[.,]5)$/);
+  if (ou) {
+    const line = ou[2].replace(",", ".");
+    const quote =
+      line === "1.5" ? match.marketOdds?.goals15 : line === "2.5" ? match.marketOdds?.goals25 : match.marketOdds?.goals35;
+    const overOdd = Number(quote?.odd);
+    if (!Number.isFinite(overOdd) || overOdd <= 1) return null;
+    if (ou[1] === "peste") return overOdd;
+    const underOdd = overOdd / (overOdd - 1);
+    return Number.isFinite(underOdd) ? underOdd : null;
+  }
+  return null;
+}
+
 function marketResultBadge(
   predicted: string,
   probability: number,
@@ -489,6 +512,7 @@ function LeagueStandingsTable({
 }
 
 export default function MatchModal({ match, logoColors, onClose, hashColor }: MatchModalProps) {
+  const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const [xgData, setXgData] = useState<XGData | null>(() => {
     if (!match.luckStats) return null;
     return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
@@ -666,6 +690,26 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
         ? xgData.marketResults.firstHalfGoals > firstHalfPick.line
         : xgData.marketResults.firstHalfGoals < firstHalfPick.line
       : null;
+  const recommendedOdd = deriveRecommendedOdd(match);
+  const specialBetCandidates = (() => {
+    const cornersPick = match.probs?.corners ? deriveBestOverUnderPick(match.probs.corners.total) : null;
+    const shotsPick = match.probs?.shotsOnTarget ? deriveBestOverUnderPick(match.probs.shotsOnTarget.total) : null;
+    return [
+      { label: "Main", pick: match.recommended.pick, probability: Number(confPct || 0), odd: Number(recommendedOdd) },
+      { label: "Corners", pick: cornersPick?.pick || "", probability: Number(cornersPick?.probability || 0), odd: Number(match.marketOdds?.corners?.odd) },
+      { label: "Shots", pick: shotsPick?.pick || "", probability: Number(shotsPick?.probability || 0), odd: Number(match.marketOdds?.shotsOnTarget?.odd) },
+      { label: "HT", pick: firstHalfPick?.pick || "", probability: Number(firstHalfPick?.probability || 0), odd: Number(match.marketOdds?.firstHalfGoals?.odd) }
+    ]
+      .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0)
+      .sort((a, b) => b.probability - a.probability);
+  })();
+  const specialBetLegs = specialBetCandidates.slice(0, specialLegCount);
+  const specialBetCombinedOdd = (() => {
+    if (specialBetLegs.length < 2) return null;
+    const odds = specialBetLegs.map((x) => Number(x.odd)).filter((n) => Number.isFinite(n) && n > 1);
+    if (odds.length < 2) return null;
+    return odds.reduce((acc, n) => acc * n, 1);
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
@@ -721,6 +765,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 <div className="min-w-0 text-left">
                   <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">Pick</div>
                   <div className="font-display text-lg font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
+                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-mint sm:text-[11px]">
+                    odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
+                  </div>
                   <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:text-[11px]">
                     {hasExactConfidence ? `${confPct}%` : confidenceCategory || "Tier locked"}
                   </div>
@@ -746,6 +793,40 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                 <span>·</span>
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
+              {hasExactConfidence && specialBetLegs.length >= 2 && (
+                <div className="mt-3 w-full rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-200">Special Bet · Top signals</div>
+                    {specialBetCandidates.length >= 3 ? (
+                      <div className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/10 p-[1px]">
+                        {[2, 3].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setSpecialLegCount(n as 2 | 3)}
+                            className={`px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase ${
+                              specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
+                            }`}
+                          >
+                            {n} legs
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {specialBetLegs.map((leg) => (
+                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-2 font-mono text-[8px]">
+                        <span className="truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
+                        <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-emerald-200">
+                    combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
               <img
