@@ -156,17 +156,24 @@ export function useAuth() {
       setUser(null);
       throw new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
     }
-    // getSession() alone can return an expired access_token from local storage; validate with Auth
-    // so the JWT is refreshed when needed (avoids 401 on /api/warm and /api/predict after longer sessions).
-    const { error: validateError } = await supabase.auth.getUser();
+    // Must hydrate from storage first: getUser() before getSession() triggers "Auth session missing!"
+    // because the in-memory client has not loaded the persisted session yet.
+    const { data: initial, error: initialErr } = await supabase.auth.getSession();
+    if (initialErr) throw initialErr;
+    if (initial.session) {
+      const { error: userErr } = await supabase.auth.getUser();
+      if (userErr) {
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (refreshErr) {
+          setSession(null);
+          setUser(null);
+          throw userErr;
+        }
+      }
+    }
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
     const sess = data.session;
-    if (validateError && !sess) {
-      setSession(null);
-      setUser(null);
-      throw validateError;
-    }
     let nextProfile: ProfileRow | null = null;
     if (sess?.user) {
       nextProfile = await loadProfile(sess.user.id);

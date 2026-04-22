@@ -309,8 +309,15 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Se procesează datele (Warm)...");
     try {
-      const freshSession = await getSession().catch(() => null);
-      const accessToken = freshSession?.access_token || session?.access_token || null;
+      let accessToken: string | null = session?.access_token ?? null;
+      try {
+        const fresh = await getSession();
+        if (fresh?.access_token) accessToken = fresh.access_token;
+      } catch (authErr: unknown) {
+        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
+        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
+        return;
+      }
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const usageDay = localCalendarDateKey();
       const results = [];
@@ -377,8 +384,15 @@ export default function App() {
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
     try {
-      const freshSession = await getSession().catch(() => null);
-      const accessToken = freshSession?.access_token || session?.access_token || null;
+      let accessToken: string | null = session?.access_token ?? null;
+      try {
+        const fresh = await getSession();
+        if (fresh?.access_token) accessToken = fresh.access_token;
+      } catch (authErr: unknown) {
+        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
+        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
+        return;
+      }
       const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const usageDay = localCalendarDateKey();
       const batches: PredictionRow[] = [];
