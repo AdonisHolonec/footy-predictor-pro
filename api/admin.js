@@ -203,14 +203,49 @@ async function handleProfiles(req, res) {
       }
     }
 
-    const { data, error } = await supabase
+    let data = null;
+    let error = null;
+    ({ data, error } = await supabase
       .from("profiles")
       .update(nextUpdate)
       .eq("user_id", userId)
       .select("user_id, role, tier, subscription_expires_at, favorite_leagues, is_blocked, created_at, updated_at")
-      .maybeSingle();
+      .maybeSingle());
 
-    if (error) throw error;
+    if (error) {
+      const msg = String(error.message || "").toLowerCase();
+      const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
+      const touchesTierFields =
+        Object.prototype.hasOwnProperty.call(nextUpdate, "tier")
+        || Object.prototype.hasOwnProperty.call(nextUpdate, "subscription_expires_at");
+
+      if (!missingTierCols) throw error;
+
+      // Backward-compat: when migration is missing, allow non-tier updates to proceed.
+      if (!touchesTierFields) {
+        const legacy = await supabase
+          .from("profiles")
+          .update(nextUpdate)
+          .eq("user_id", userId)
+          .select("user_id, role, favorite_leagues, is_blocked, created_at, updated_at")
+          .maybeSingle();
+        if (legacy.error) throw legacy.error;
+        data = legacy.data
+          ? {
+              ...legacy.data,
+              tier: "free",
+              subscription_expires_at: null
+            }
+          : null;
+      } else {
+        return res.status(409).json({
+          ok: false,
+          error:
+            "Planul nu poate fi salvat deoarece lipsesc coloanele tier/subscription_expires_at din tabela profiles. Rulează migrarea 016_user_tiers_and_trials.sql."
+        });
+      }
+    }
+
     if (!data) {
       return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
     }
