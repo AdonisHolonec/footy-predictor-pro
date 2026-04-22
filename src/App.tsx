@@ -919,13 +919,15 @@ export default function App() {
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/80">
                 {localCalendarDateKey()} · SEZON {inferSeason(date)} · INTELIGENȚĂ PREDICTIVĂ
               </p>
-              <img
-                src={BRAND_IMAGES.logoPrimary}
-                alt="Footy Predictor"
-                className="mt-2 h-14 w-14 rounded-lg border border-white/10 object-contain sm:h-16 sm:w-16"
-              />
-              <h1 className="font-display text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
-                Observator de semnale <span className="text-signal-petrol">fotbal</span>
+              <h1 className="font-display mt-2 flex items-center gap-3 text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
+                <img
+                  src={BRAND_IMAGES.logoPrimary}
+                  alt="Footy Predictor"
+                  className="h-20 w-20 rounded-2xl border-2 border-cyan-300/65 object-contain p-1 brightness-110 saturate-150 shadow-[0_0_48px_rgba(34,211,238,0.55)] animate-[pulse_4.2s_ease-in-out_infinite] motion-reduce:animate-none sm:h-24 sm:w-24 lg:h-28 lg:w-28"
+                />
+                <span>
+                  Observator de semnale <span className="text-signal-petrol">fotbal</span>
+                </span>
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
                 Strat analitic editorial: modele calibrate, context xG și edge-uri de valoare - fără hype de cote.

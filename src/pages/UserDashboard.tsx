@@ -677,7 +677,7 @@ export default function UserDashboard() {
                 <img
                   src={BRAND_IMAGES.logoPrimary}
                   alt="Footy Predictor"
-                  className="mt-2 h-14 w-14 rounded-lg border border-white/10 object-contain sm:h-16 sm:w-16"
+                  className="mt-2 h-20 w-20 rounded-2xl border-2 border-cyan-300/60 object-contain p-1 brightness-110 saturate-150 shadow-[0_0_38px_rgba(34,211,238,0.46)] sm:h-24 sm:w-24"
                 />
                 <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
                   Observatorul <span className="text-signal-petrol">tău</span>

@@ -100,19 +100,30 @@ function marketResultBadge(
   probability: number,
   verdict: boolean | null,
   odd?: number | null,
-  source?: string | null
+  source?: string | null,
+  tone: "corners" | "shots" | "ht" | "neutral" = "neutral"
 ) {
   const base = "inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide";
   const oddText = Number.isFinite(Number(odd)) ? ` · ${Number(odd).toFixed(2)}` : " · N/A";
   const srcText = source ? ` · ${source}` : "";
   const pred = `${predicted} · ${Math.round(probability)}%${oddText}${srcText}`;
+  const isHot = probability >= 85;
+  const toneClass =
+    tone === "corners"
+      ? "border-cyan-300/55 bg-cyan-400/15 text-cyan-100 shadow-[0_0_16px_rgba(34,211,238,0.3)]"
+      : tone === "shots"
+        ? "border-fuchsia-300/55 bg-fuchsia-400/15 text-fuchsia-100 shadow-[0_0_16px_rgba(232,121,249,0.3)]"
+        : tone === "ht"
+          ? "border-amber-300/55 bg-amber-400/20 text-amber-100 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
+          : "border-white/10 bg-signal-void/45 text-signal-silver";
+  const pulseClass = isHot ? " animate-pulse motion-reduce:animate-none ring-1 ring-white/35" : "";
   if (verdict === true) {
-    return <span className={`${base} border-signal-sage/35 bg-signal-sage/10 text-signal-mint`}>{pred} · WIN</span>;
+    return <span className={`${base} border-signal-sage/45 bg-signal-sage/20 text-signal-mint shadow-[0_0_12px_rgba(16,185,129,0.25)]${pulseClass}`}>{pred} · WIN</span>;
   }
   if (verdict === false) {
-    return <span className={`${base} border-signal-rose/35 bg-signal-rose/10 text-signal-rose`}>{pred} · LOSE</span>;
+    return <span className={`${base} border-signal-rose/45 bg-signal-rose/20 text-signal-rose shadow-[0_0_12px_rgba(244,63,94,0.25)]${pulseClass}`}>{pred} · LOSE</span>;
   }
-  return <span className={`${base} border-white/10 bg-signal-void/45 text-signal-silver`}>{pred} · OPEN</span>;
+  return <span className={`${base} ${toneClass}${pulseClass}`}>{pred} · OPEN</span>;
 }
 
 /**
@@ -131,7 +142,8 @@ function PoissonMarketSection({
   awayLabel,
   actualTotal,
   quotedOdd,
-  quoteSource
+  quoteSource,
+  badgeTone = "neutral"
 }: {
   title: string;
   subtitle: string;
@@ -143,6 +155,7 @@ function PoissonMarketSection({
   actualTotal?: number | null;
   quotedOdd?: number | null;
   quoteSource?: string | null;
+  badgeTone?: "corners" | "shots" | "ht" | "neutral";
 }) {
   const totalKeys = Object.keys(data.total || {});
   const homeKeys = Object.keys(data.home || {});
@@ -257,7 +270,7 @@ function PoissonMarketSection({
       )}
       {bestPick && (
         <div className="mt-3 border-t border-white/5 pt-2">
-          {marketResultBadge(bestPick.pick, bestPick.probability, settled, quotedOdd, quoteSource)}
+          {marketResultBadge(bestPick.pick, bestPick.probability, settled, quotedOdd, quoteSource, badgeTone)}
           {actualTotal != null && (
             <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">Final total: {actualTotal}</span>
           )}
@@ -1105,7 +1118,8 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                       firstHalfPick.probability,
                       firstHalfVerdict,
                       match.marketOdds?.firstHalfGoals?.odd,
-                      match.marketOdds?.firstHalfGoals?.bookmaker
+                      match.marketOdds?.firstHalfGoals?.bookmaker,
+                      "ht"
                     )}
                     {xgData?.marketResults?.firstHalfGoals != null && (
                       <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
@@ -1151,6 +1165,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   actualTotal={xgData?.marketResults?.cornersTotal ?? null}
                   quotedOdd={match.marketOdds?.corners?.odd ?? null}
                   quoteSource={match.marketOdds?.corners?.bookmaker ?? null}
+                  badgeTone="corners"
                 />
               )}
               {match.probs.shotsOnTarget && (
@@ -1165,6 +1180,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   actualTotal={xgData?.marketResults?.shotsOnTargetTotal ?? null}
                   quotedOdd={match.marketOdds?.shotsOnTarget?.odd ?? null}
                   quoteSource={match.marketOdds?.shotsOnTarget?.bookmaker ?? null}
+                  badgeTone="shots"
                 />
               )}
               {match.probs.shotsTotal && (
@@ -1179,6 +1195,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor }: Ma
                   actualTotal={xgData?.marketResults?.shotsTotal ?? null}
                   quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
                   quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
+                  badgeTone="shots"
                 />
               )}
             </div>

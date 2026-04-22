@@ -31,11 +31,11 @@ export default function LandingAccess() {
       <div className="relative z-10">
         <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-signal-mist/70 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-            <Link to="/" className="flex items-center gap-2.5 text-signal-ink transition hover:text-signal-petrol">
+            <Link to="/" className="group flex items-center gap-2.5 text-signal-ink transition hover:text-signal-petrol">
               <img
                 src={BRAND_IMAGES.logoPrimary}
                 alt="Footy Predictor"
-                className="h-11 w-11 rounded-lg border border-signal-line/70 object-contain shadow-[0_0_16px_rgba(56,189,248,0.22)]"
+                className="h-14 w-14 rounded-xl border border-cyan-300/60 object-contain p-0.5 brightness-110 saturate-150 shadow-[0_0_30px_rgba(34,211,238,0.48)] transition-transform duration-300 group-hover:scale-105 animate-[pulse_3.8s_ease-in-out_infinite] motion-reduce:animate-none"
               />
               <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor · Laborator de inteligență</span>
             </Link>
