@@ -78,10 +78,10 @@ function statusChip(
   }
   if (hasFinalScore) {
     if (finalPickResult === true) {
-      return { label: "CÂȘTIG", className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
+      return { label: "WIN", className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
     }
     if (finalPickResult === false) {
-      return { label: "PIERDUT", className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
+      return { label: "LOSE", className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
     }
     return { label: "FINAL", className: "border-white/10 bg-signal-void/50 text-signal-silver" };
   }

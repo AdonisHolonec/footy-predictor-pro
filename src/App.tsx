@@ -133,6 +133,11 @@ export default function App() {
     if (!session?.access_token || user?.role !== "admin") return;
     setPerfAdminLoading(true);
     try {
+      await fetch("/api/history?sync=1&days=30", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      }).catch(() => null);
+
       const res = await fetch("/api/history?performance=1&days=30", {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
@@ -450,7 +455,7 @@ export default function App() {
 
   async function loadHistory(days = 30) {
     try {
-      const qs = new URLSearchParams({ days: String(days) });
+      const qs = new URLSearchParams({ days: String(days), limit: "2000" });
       const headers: Record<string, string> = {};
       if (session?.access_token) {
         // Admin observatory should default to global history (all users), not only personal picks.

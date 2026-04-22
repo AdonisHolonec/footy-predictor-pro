@@ -49,6 +49,12 @@ export default function PerformanceCounterModal({
     setLoading(true);
     setErr(null);
     try {
+      // Keep performance counters fresh when FT/AET/PEN results were not synced yet.
+      await fetch(`/api/history?sync=1&days=${days}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }).catch(() => null);
+
       const qs = new URLSearchParams({ performance: "1", days: String(days) });
       const res = await fetch(`/api/history?${qs}`, {
         headers: { Authorization: `Bearer ${accessToken}` }

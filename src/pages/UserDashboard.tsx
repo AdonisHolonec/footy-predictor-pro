@@ -173,14 +173,14 @@ export default function UserDashboard() {
       }
       const token = session?.access_token;
       if (!token) return;
-      const response = await fetch("/api/history?days=30&mine=1", {
+      const response = await fetch("/api/history?days=30&limit=2000&mine=1", {
         headers: { Authorization: `Bearer ${token}` }
       });
       const json = await response.json();
       if (!json?.ok) return;
       const items = (Array.isArray(json.items) ? json.items : []) as HistoryEntry[];
       setHistory(items);
-      setHistoryStats(historyStatsFromRows(items));
+      setHistoryStats(json.stats || historyStatsFromRows(items));
     } catch {
       // keep existing data on failure
     }
