@@ -1,10 +1,15 @@
-import { assertAdmin, getRequester } from "../server-utils/authAdmin.js";
+import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin.js";
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../server-utils/fetcher.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
-import { readPredictionsHistory, readPredictionsHistoryForUser, validationFromMatch } from "../server-utils/predictionsHistory.js";
+import {
+  readPredictionsHistory,
+  readPredictionsHistoryAggregateStats,
+  readPredictionsHistoryForUser,
+  validationFromMatch
+} from "../server-utils/predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 
@@ -133,13 +138,35 @@ async function handleHistoryRead(req, res) {
     }
   }
 
+  const safeDays = Math.max(1, Math.min(days || 30, 120));
+  const safeLimit = Math.max(1, Math.min(limit || 500, 2000));
+
+  if (readBearer(req)) {
+    const adminCheck = await assertAdmin(req);
+    if (adminCheck.ok) {
+      try {
+        const { items, stats } = await readPredictionsHistory(days, limit);
+        return res.status(200).json({
+          ok: true,
+          days: safeDays,
+          stats,
+          items,
+          scope: "global_admin"
+        });
+      } catch (error) {
+        return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
+      }
+    }
+  }
+
   try {
-    const { items, stats } = await readPredictionsHistory(days, limit);
+    const { stats } = await readPredictionsHistoryAggregateStats(safeDays, safeLimit);
     return res.status(200).json({
       ok: true,
-      days: Math.max(1, Math.min(days || 30, 120)),
+      days: safeDays,
       stats,
-      items
+      items: [],
+      scope: "aggregate_public"
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error?.message || "History read failed." });
@@ -248,8 +275,9 @@ async function handleHistorySync(req, res) {
 }
 
 /**
- * GET /api/history — read predictions_history (global; unauthenticated).
- * GET /api/history?mine=1 — same shape, scoped to the authenticated user via user_prediction_fixtures (Bearer required).
+ * GET /api/history — aggregate stats only (items=[]); no row payloads for anonymous/non-admin.
+ * GET /api/history + Bearer + admin — full global predictions_history (admin observatory).
+ * GET /api/history?mine=1 — scoped to the authenticated user (Bearer required).
  * GET or POST /api/history?sync=1 — sync scores/validation (replaces former /api/history/sync).
  */
 export default async function handler(req, res) {
