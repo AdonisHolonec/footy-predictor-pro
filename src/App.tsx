@@ -917,18 +917,18 @@ export default function App() {
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-3xl">
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/80">
-                {localCalendarDateKey()} · SEASON {inferSeason(date)} · PREDICTIVE INTELLIGENCE
+                {localCalendarDateKey()} · SEZON {inferSeason(date)} · INTELIGENȚĂ PREDICTIVĂ
               </p>
               <img
                 src={BRAND_IMAGES.logoPrimary}
                 alt="Footy Predictor"
-                className="mt-2 h-12 w-12 rounded-lg border border-white/10 bg-signal-panel/55 object-cover p-0.5"
+                className="mt-2 h-10 w-10 rounded-lg border border-white/10 bg-signal-panel/55 object-contain p-0.5 sm:h-12 sm:w-12"
               />
               <h1 className="font-display text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
-                Football signal <span className="text-signal-petrol">observatory</span>
+                Observator de semnale <span className="text-signal-petrol">fotbal</span>
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
-                Editorial analytics layer: calibrated models, xG context, and value edges — not odds hype.
+                Strat analitic editorial: modele calibrate, context xG și edge-uri de valoare - fără hype de cote.
               </p>
               <ModelPulseWave status="OPTIMAL CALIBRATION" className="mt-5 max-w-3xl" />
               <div className="mt-3 flex flex-wrap gap-2">

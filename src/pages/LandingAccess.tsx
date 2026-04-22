@@ -35,9 +35,9 @@ export default function LandingAccess() {
               <img
                 src={BRAND_IMAGES.logoPrimary}
                 alt="Footy Predictor"
-                className="h-9 w-9 rounded-lg border border-signal-line/70 bg-signal-void/70 object-cover"
+                className="h-9 w-9 rounded-lg border border-signal-line/70 bg-signal-void/70 object-contain p-0.5 shadow-[0_0_16px_rgba(56,189,248,0.22)]"
               />
-              <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor Intelligence Lab</span>
+              <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor · Laborator de inteligență</span>
             </Link>
             <Link
               to={user ? workspace : login}
@@ -51,7 +51,7 @@ export default function LandingAccess() {
         <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:py-16">
           <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:gap-16">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/85">Football analytics platform</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/85">Footy Predictor · Laborator de inteligență</p>
               <h1 className="font-display mt-3 text-4xl font-bold leading-[1.02] tracking-tight text-signal-ink drop-shadow-[0_0_38px_rgba(56,189,248,0.34)] sm:text-5xl lg:text-[3.55rem]">
                 Predicții fotbal cu energie de stadion și analiză de laborator.
               </h1>

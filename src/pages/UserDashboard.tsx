@@ -670,17 +670,17 @@ export default function UserDashboard() {
           <div className="min-w-0 flex-1 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/85">Footy predictor · user lab</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/85">Footy Predictor · Laborator utilizator</p>
                 <p className="font-mono text-[10px] text-signal-inkMuted">
                   {localCalendarDateKey()} · S{inferSeason(date)}
                 </p>
                 <img
                   src={BRAND_IMAGES.logoPrimary}
                   alt="Footy Predictor"
-                  className="mt-2 h-12 w-12 rounded-lg border border-white/10 bg-signal-panel/55 object-cover p-0.5"
+                  className="mt-2 h-10 w-10 rounded-lg border border-white/10 bg-signal-panel/55 object-contain p-0.5 sm:h-12 sm:w-12"
                 />
                 <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
-                  Your <span className="text-signal-petrol">observatory</span>
+                  Observatorul <span className="text-signal-petrol">tău</span>
                 </h1>
                 <p className="mt-2 max-w-xl text-sm leading-relaxed text-signal-inkMuted">
                   Feed curat: pick, încredere și semnal. Detaliile complete sunt în fișa meciului.
