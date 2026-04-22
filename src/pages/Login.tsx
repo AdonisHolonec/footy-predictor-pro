@@ -148,7 +148,7 @@ export default function Login() {
           <img
             src={BRAND_IMAGES.logoPrimary}
             alt="Footy Predictor"
-            className="mt-4 h-16 w-16 rounded-xl border border-white/[0.18] bg-signal-panel/60 object-contain p-1 shadow-[0_0_26px_rgba(56,189,248,0.22)] sm:h-20 sm:w-20"
+            className="mt-4 h-24 w-24 rounded-xl border border-white/[0.18] object-contain shadow-[0_0_26px_rgba(56,189,248,0.22)] sm:h-28 sm:w-28"
           />
           <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.18] bg-signal-panel/68 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-[24px] sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
             <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-[5rem]">

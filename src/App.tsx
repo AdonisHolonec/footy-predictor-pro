@@ -922,7 +922,7 @@ export default function App() {
               <img
                 src={BRAND_IMAGES.logoPrimary}
                 alt="Footy Predictor"
-                className="mt-2 h-10 w-10 rounded-lg border border-white/10 bg-signal-panel/55 object-contain p-0.5 sm:h-12 sm:w-12"
+                className="mt-2 h-14 w-14 rounded-lg border border-white/10 object-contain sm:h-16 sm:w-16"
               />
               <h1 className="font-display text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
                 Observator de semnale <span className="text-signal-petrol">fotbal</span>

@@ -35,7 +35,7 @@ export default function LandingAccess() {
               <img
                 src={BRAND_IMAGES.logoPrimary}
                 alt="Footy Predictor"
-                className="h-9 w-9 rounded-lg border border-signal-line/70 bg-signal-void/70 object-contain p-0.5 shadow-[0_0_16px_rgba(56,189,248,0.22)]"
+                className="h-11 w-11 rounded-lg border border-signal-line/70 object-contain shadow-[0_0_16px_rgba(56,189,248,0.22)]"
               />
               <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor · Laborator de inteligență</span>
             </Link>
