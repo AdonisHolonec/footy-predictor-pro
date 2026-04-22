@@ -369,20 +369,25 @@ export function useAuth() {
     }
     setError(null);
     const sanitized = sanitizeLeagueIds(favoriteLeagues);
-    if (!session?.user?.id) return null;
+    const activeSession = await getSession();
+    if (!activeSession?.user?.id) {
+      const noSessionError = new Error("Nu există sesiune activă pentru salvarea preferințelor.");
+      setError(noSessionError.message);
+      throw noSessionError;
+    }
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ favorite_leagues: sanitized })
-      .eq("user_id", session.user.id);
+      .eq("user_id", activeSession.user.id);
     if (updateError) {
       setError(updateError.message);
       throw updateError;
     }
-    const nextProfile = await loadProfile(session.user.id);
-    const nextUser = mapSupabaseUser(session.user, nextProfile);
+    const nextProfile = await loadProfile(activeSession.user.id);
+    const nextUser = mapSupabaseUser(activeSession.user, nextProfile);
     setUser(nextUser);
     return nextUser;
-  }, [session?.user, loadProfile]);
+  }, [getSession, loadProfile]);
 
   const refreshManagedProfiles = useCallback(async () => {
     if (!supabase || user?.role !== "admin" || !session?.access_token) return [];

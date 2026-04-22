@@ -656,8 +656,9 @@ export default function App() {
     if (!user) return;
     setFavoriteLeaguesByUser((prev) => ({ ...prev, [user.id]: selectedLeagueIds }));
     const saveTimer = setTimeout(() => {
-      void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
-        setStatus("Nu am putut salva preferintele utilizatorului.");
+      void updateFavoriteLeagues(selectedLeagueIds).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Nu am putut salva preferintele utilizatorului.";
+        setStatus(message);
       });
     }, 450);
     return () => clearTimeout(saveTimer);
