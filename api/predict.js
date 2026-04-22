@@ -48,7 +48,9 @@ import {
 import { lookupEloPair, eloProbabilities } from "../server-utils/teamElo.js";
 import {
   loadTeamMarketRolling,
-  deriveMarketLambdas
+  deriveMarketLambdas,
+  extractFixtureMarketStats,
+  aggregateRollingForTeam
 } from "../server-utils/teamMarketRolling.js";
 import { poissonOverLine } from "../server-utils/math.js";
 import {
@@ -113,6 +115,66 @@ function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = []
     home,
     away
   };
+}
+
+const LIVE_ROLLING_MIN_SAMPLE = 4;
+const LIVE_ROLLING_FIXTURES = 8;
+const LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS = 18;
+
+function hasUsableRolling(row) {
+  return Boolean(row && Number(row.matches_sampled || 0) >= LIVE_ROLLING_MIN_SAMPLE);
+}
+
+async function buildLiveRollingForTeam({
+  leagueId,
+  season,
+  teamId,
+  statsBudgetRef
+}) {
+  const histReq = await getWithCache(
+    "/fixtures",
+    { team: teamId, league: leagueId, season, last: LIVE_ROLLING_FIXTURES },
+    6 * 60 * 60
+  );
+  if (!histReq.ok) return null;
+  const fixtures = (histReq.data?.response || []).filter((fx) =>
+    ["FT", "AET", "PEN"].includes(String(fx?.fixture?.status?.short || ""))
+  );
+  if (!fixtures.length) return null;
+
+  const enriched = [];
+  for (const fx of fixtures) {
+    const fixtureId = Number(fx?.fixture?.id);
+    if (!Number.isFinite(fixtureId)) continue;
+    const statReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 30 * 24 * 60 * 60);
+    if (!statReq.fromCache) {
+      statsBudgetRef.remaining -= 1;
+      if (statsBudgetRef.remaining < 0) break;
+    }
+    if (!statReq.ok) continue;
+    const stats = extractFixtureMarketStats(statReq.data);
+    const byTeam = new Map();
+    for (const s of stats) {
+      if (s?.teamId) byTeam.set(Number(s.teamId), s);
+    }
+    const teamStats = byTeam.get(Number(teamId));
+    const homeId = Number(fx?.teams?.home?.id);
+    const awayId = Number(fx?.teams?.away?.id);
+    const isHome = homeId === Number(teamId);
+    const oppId = isHome ? awayId : homeId;
+    const oppStats = byTeam.get(oppId);
+    if (!teamStats || !oppStats) continue;
+    enriched.push({
+      fixtureId,
+      date: fx?.fixture?.date,
+      isHome,
+      teamStats,
+      opponentStats: oppStats
+    });
+  }
+  if (!enriched.length) return null;
+  const agg = aggregateRollingForTeam(enriched);
+  return agg?.matches_sampled ? agg : null;
 }
 
 /**
@@ -564,6 +626,8 @@ export default async function handler(req, res) {
 
   try {
     const out = [];
+    const liveRollingCache = new Map();
+    const statsBudgetRef = { remaining: LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS };
     const riskContext = await loadRiskContext();
     // single-flight: încărcăm calibrarea + stacker o singură dată per request
     const [calibrationMaps, stackerWeightsMap] = await Promise.all([
@@ -770,8 +834,34 @@ export default async function handler(req, res) {
         let cornersBlock = null;
         let shotsOnTargetBlock = null;
         let shotsTotalBlock = null;
-        const rollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
-        const rollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
+        let rollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
+        let rollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
+        let liveRollingApplied = false;
+
+        if ((!hasUsableRolling(rollingHome) || !hasUsableRolling(rollingAway)) && homeIdStr && awayIdStr) {
+          const teamIdsToHydrate = [];
+          if (!hasUsableRolling(rollingHome)) teamIdsToHydrate.push(Number(homeIdStr));
+          if (!hasUsableRolling(rollingAway)) teamIdsToHydrate.push(Number(awayIdStr));
+          for (const tid of teamIdsToHydrate) {
+            const cacheKey = `${lId}:${season}:${tid}`;
+            if (!liveRollingCache.has(cacheKey)) {
+              const built = await buildLiveRollingForTeam({
+                leagueId: Number(lId),
+                season: Number(season),
+                teamId: tid,
+                statsBudgetRef
+              });
+              liveRollingCache.set(cacheKey, built);
+            }
+          }
+          if (!hasUsableRolling(rollingHome)) {
+            rollingHome = liveRollingCache.get(`${lId}:${season}:${Number(homeIdStr)}`) || rollingHome;
+          }
+          if (!hasUsableRolling(rollingAway)) {
+            rollingAway = liveRollingCache.get(`${lId}:${season}:${Number(awayIdStr)}`) || rollingAway;
+          }
+          liveRollingApplied = true;
+        }
         const cornersLambdas = deriveMarketLambdas({
           rollingHome,
           rollingAway,
@@ -790,6 +880,7 @@ export default async function handler(req, res) {
           sampleHome: cornersLambdas.sampleHome,
           sampleAway: cornersLambdas.sampleAway,
           usedFallback: cornersLambdas.usedFallback,
+          liveRollingApplied,
           leagueBaseline: leagueParams.cornersAvgTotal
         };
 
@@ -811,6 +902,7 @@ export default async function handler(req, res) {
           sampleHome: sotLambdas.sampleHome,
           sampleAway: sotLambdas.sampleAway,
           usedFallback: sotLambdas.usedFallback,
+          liveRollingApplied,
           leagueBaseline: leagueParams.sotAvgTotal
         };
 
@@ -832,7 +924,8 @@ export default async function handler(req, res) {
           }),
           sampleHome: shotsLambdas.sampleHome,
           sampleAway: shotsLambdas.sampleAway,
-          usedFallback: shotsLambdas.usedFallback
+          usedFallback: shotsLambdas.usedFallback,
+          liveRollingApplied
         };
 
         // === PRIMA REPRIZĂ ===
