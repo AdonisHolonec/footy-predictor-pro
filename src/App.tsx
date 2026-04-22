@@ -919,6 +919,11 @@ export default function App() {
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/80">
                 {localCalendarDateKey()} · SEASON {inferSeason(date)} · PREDICTIVE INTELLIGENCE
               </p>
+              <img
+                src={BRAND_IMAGES.logoPrimary}
+                alt="Footy Predictor"
+                className="mt-2 h-12 w-12 rounded-lg border border-white/10 bg-signal-panel/55 object-cover p-0.5"
+              />
               <h1 className="font-display text-4xl font-bold tracking-tight text-signal-ink md:text-5xl lg:text-[3.25rem] lg:leading-[1.05]">
                 Football signal <span className="text-signal-petrol">observatory</span>
               </h1>

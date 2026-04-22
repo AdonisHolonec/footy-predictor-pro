@@ -674,6 +674,11 @@ export default function UserDashboard() {
                 <p className="font-mono text-[10px] text-signal-inkMuted">
                   {localCalendarDateKey()} · S{inferSeason(date)}
                 </p>
+                <img
+                  src={BRAND_IMAGES.logoPrimary}
+                  alt="Footy Predictor"
+                  className="mt-2 h-12 w-12 rounded-lg border border-white/10 bg-signal-panel/55 object-cover p-0.5"
+                />
                 <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
                   Your <span className="text-signal-petrol">observatory</span>
                 </h1>

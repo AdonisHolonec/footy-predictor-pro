@@ -32,11 +32,11 @@ export default function LandingAccess() {
         <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-signal-mist/70 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
             <Link to="/" className="flex items-center gap-2.5 text-signal-ink transition hover:text-signal-petrol">
-              <span className="grid h-9 w-9 place-items-center rounded-lg border border-signal-line/70 bg-signal-void/70 text-signal-petrol" aria-hidden>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="opacity-90">
-                  <path d="M3 18h18M4 17l4-5 4 3 4-6 4 8M4 18V6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
+              <img
+                src={BRAND_IMAGES.logoPrimary}
+                alt="Footy Predictor"
+                className="h-9 w-9 rounded-lg border border-signal-line/70 bg-signal-void/70 object-cover"
+              />
               <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor Intelligence Lab</span>
             </Link>
             <Link
