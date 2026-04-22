@@ -260,15 +260,16 @@ export default function UserDashboard() {
   }, [user?.id, user?.emailNotificationsConsentedAt, user?.notificationPrefs?.email]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id || !session?.access_token) return;
     setFavoriteLeaguesByUser((prev) => ({ ...prev, [user.id]: selectedLeagueIds }));
     const timer = setTimeout(() => {
-      void updateFavoriteLeagues(selectedLeagueIds).catch(() => {
-        setStatus("Nu am putut salva preferintele de ligi.");
+      void updateFavoriteLeagues(selectedLeagueIds).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Nu am putut salva preferintele de ligi.";
+        setStatus(message);
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [selectedLeagueIds, user?.id, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
+  }, [selectedLeagueIds, user?.id, session?.access_token, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
 
   useEffect(() => {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
