@@ -73,6 +73,12 @@ function buildTierDates(baseDate: string, tier?: string) {
   return normalizeSelectedDates(out);
 }
 
+function clampTierDates(baseDate: string, tier: string | undefined, dates: string[]) {
+  const allowed = new Set(buildTierDates(baseDate, tier));
+  const filtered = normalizeSelectedDates((dates || []).filter((d) => allowed.has(d)));
+  return filtered.length ? filtered : [baseDate];
+}
+
 export default function UserDashboard() {
   const {
     user,
@@ -165,6 +171,10 @@ export default function UserDashboard() {
       })
       .sort((a, b) => b.settled - a.settled);
   }, [history]);
+  const activePredictDates = useMemo(() => {
+    const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
+    return clampTierDates(seedDate, userTier, selectedDates.length ? selectedDates : [seedDate]);
+  }, [selectedDates, date, userTier]);
   const prevWinRateRef = useRef(trackerStats.winRate);
   const formatRemaining = (ms: number) => {
     if (!ms || ms <= 0) return "00:00:00";
@@ -503,8 +513,7 @@ export default function UserDashboard() {
         setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
         return;
       }
-      const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
-      const dates = buildTierDates(seedDate, userTier);
+      const dates = activePredictDates;
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({
@@ -564,8 +573,7 @@ export default function UserDashboard() {
         setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
         return;
       }
-      const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
-      const dates = buildTierDates(seedDate, userTier);
+      const dates = activePredictDates;
       const batches: PredictionRow[] = [];
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
@@ -810,6 +818,33 @@ export default function UserDashboard() {
             }}
             className="rounded-xl border glass-input px-4 py-2.5 text-sm text-signal-ink outline-none focus:ring-2 focus:ring-signal-petrol/30"
           />
+          {userTier === "premium" && (
+            <button
+              type="button"
+              onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+              className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-2 text-xs font-semibold text-signal-petrol hover:bg-signal-petrol/20"
+            >
+              +1 zi predictie
+            </button>
+          )}
+          {userTier === "ultra" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+                className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
+              >
+                +1 zi predictie
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))}
+                className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
+              >
+                +2 zile predictie
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => void warmAndPredict()}
@@ -817,6 +852,17 @@ export default function UserDashboard() {
           >
             Warm + Predict
           </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Zile active:</span>
+            {activePredictDates.map((d) => (
+              <span
+                key={d}
+                className="rounded-full border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-0.5 font-mono text-[10px] text-signal-petrol"
+              >
+                {d}
+              </span>
+            ))}
+          </div>
           <div className="rounded-lg border border-white/5 bg-signal-panel/45 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
             <span className="text-signal-petrol">Predict window: FREE azi · PREMIUM +1 zi · ULTRA +2 zile.</span>
           </div>
