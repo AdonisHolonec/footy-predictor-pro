@@ -61,9 +61,13 @@ function tierPredictWindowDays(tier?: string) {
 }
 
 function addIsoDay(dateIso: string, plusDays: number) {
-  const d = new Date(`${dateIso}T00:00:00`);
-  d.setDate(d.getDate() + plusDays);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = String(dateIso).split("-").map((v) => Number(v));
+  const utc = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  utc.setUTCDate(utc.getUTCDate() + plusDays);
+  const yy = utc.getUTCFullYear();
+  const mm = String(utc.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(utc.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function buildTierDates(baseDate: string, tier?: string) {
