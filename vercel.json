@@ -10,15 +10,15 @@
   "crons": [
     {
       "path": "/api/history?sync=1&days=30",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "35 8 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
       "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/history?sync=1&days=30",
+      "schedule": "40 5 * * *"
+    },
+    {
+      "path": "/api/history?sync=1&days=30",
+      "schedule": "30 11 * * *"
     },
     {
       "path": "/api/backtest?view=snapshot&days=45",
