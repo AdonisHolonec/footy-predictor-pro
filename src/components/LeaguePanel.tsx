@@ -47,7 +47,7 @@ export default function LeaguePanel({
               ║
             </div>
             <div>
-              <h2 className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Control rail</h2>
+              <h2 className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Selectează ligile</h2>
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-signal-petrol/70">Competiții · filtru feed</p>
             </div>
           </div>

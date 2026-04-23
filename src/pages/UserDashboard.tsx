@@ -124,6 +124,7 @@ export default function UserDashboard() {
   const [animatedWinRate, setAnimatedWinRate] = useState(0);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isGdprOpen, setIsGdprOpen] = useState(false);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -133,6 +134,8 @@ export default function UserDashboard() {
   const lastSelectionHydrateUserId = useRef<string | null>(null);
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [warmPredictBusy, setWarmPredictBusy] = useState(false);
+  const [notifSaveBusy, setNotifSaveBusy] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
@@ -659,6 +662,7 @@ export default function UserDashboard() {
       setStatus("Pentru e-mail trebuie sa bifezi confirmarea din politica de confidentialitate.");
       return;
     }
+    setNotifSaveBusy(true);
     try {
       await updateNotificationPreferences({
         safe: notifySafe,
@@ -669,6 +673,8 @@ export default function UserDashboard() {
       setStatus("Preferintele de notificare au fost salvate.");
     } catch (error: any) {
       setStatus(error?.message || "Nu am putut salva preferintele de notificare.");
+    } finally {
+      setNotifSaveBusy(false);
     }
   }
 
@@ -702,8 +708,13 @@ export default function UserDashboard() {
   }
 
   async function warmAndPredict() {
-    await warm();
-    await predict();
+    setWarmPredictBusy(true);
+    try {
+      await warm();
+      await predict();
+    } finally {
+      setWarmPredictBusy(false);
+    }
   }
 
   return (
@@ -848,9 +859,10 @@ export default function UserDashboard() {
           <button
             type="button"
             onClick={() => void warmAndPredict()}
+            disabled={warmPredictBusy}
             className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Warm + Predict
+            {warmPredictBusy ? "Warm + Predict…" : "Warm + Predict"}
           </button>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Zile active:</span>
@@ -863,13 +875,16 @@ export default function UserDashboard() {
               </span>
             ))}
           </div>
-          <div className="rounded-lg border border-white/5 bg-signal-panel/45 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
-            <span className="text-signal-petrol">Predict window: FREE azi · PREMIUM +1 zi · ULTRA +2 zile.</span>
-          </div>
-          <div className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1.5 text-[11px] text-signal-ink shadow-inner">
-            <span className="font-semibold text-signal-petrol">Tier:</span> {userTier.toUpperCase()}
-            <span className="mx-1 text-signal-inkMuted">·</span>
-            <span className="font-mono tabular-nums">{tierPredictWindowDays(userTier)} zi(le) incluse la Predict</span>
+          <div
+            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide shadow-inner ${
+              userTier === "ultra"
+                ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
+                : userTier === "premium"
+                  ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
+                  : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
+            }`}
+          >
+            {userTier.toUpperCase()}
           </div>
           {tierQuotaExempt && (
             <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">
@@ -888,7 +903,17 @@ export default function UserDashboard() {
           >
             {showSettledMarketsOnly ? "Settled markets: ON" : "Settled markets: OFF"}
           </button>
+          {(warmPredictBusy || trialBusy !== null || exportBusy || notifSaveBusy) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
+              Loading
+            </span>
+          )}
         </div>
+
+        {status && (
+          <div className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
+        )}
 
         {!tierQuotaExempt && (
           <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
@@ -955,9 +980,6 @@ export default function UserDashboard() {
           </section>
         )}
 
-        {status && (
-          <div className="mt-4 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
-        )}
         {rehydratedNotice && (
           <div className="mt-3 rounded-xl border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-2 text-xs text-signal-ink shadow-inner">
             <span className="font-semibold text-signal-petrol">Date vechi actualizate.</span>{" "}
@@ -1046,32 +1068,44 @@ export default function UserDashboard() {
                 <button
                   type="button"
                   onClick={() => void saveNotificationPrefs()}
+                  disabled={notifSaveBusy}
                   className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-petrol/15"
                 >
-                  Salvează preferințe
+                  {notifSaveBusy ? "Se salvează…" : "Salvează preferințe"}
                 </button>
               </div>
             </div>
           )}
         </section>
 
-        <section className="mt-3 rounded-2xl border border-white/[0.07] bg-signal-panel/25 p-4 shadow-inner backdrop-blur-sm">
-          <h2 className="text-sm font-semibold tracking-wide text-signal-ink">Date personale (GDPR)</h2>
-          <p className="mt-1 text-[11px] leading-relaxed text-signal-inkMuted">
-            Export JSON — vezi{" "}
-            <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
-              politica
-            </Link>
-            .
-          </p>
+        <section className="mt-3 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-1 shadow-inner backdrop-blur-md">
           <button
             type="button"
-            disabled={exportBusy}
-            onClick={() => void downloadPersonalDataExport()}
-            className="mt-3 rounded-lg border border-white/10 bg-signal-fog px-3 py-2 text-[11px] font-semibold text-signal-petrol transition hover:bg-signal-panel disabled:opacity-50"
+            onClick={() => setIsGdprOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-signal-void/30"
           >
-            {exportBusy ? "Se genereaza..." : "Descarcă export JSON"}
+            <span className="text-sm font-semibold tracking-wide text-signal-ink">Date personale (GDPR)</span>
+            <span className="font-mono text-[11px] text-signal-petrol">{exportBusy ? "se generează…" : "export"}</span>
           </button>
+          {isGdprOpen && (
+            <div className="border-t border-white/[0.06] px-4 pb-4 pt-2">
+              <p className="text-[11px] leading-relaxed text-signal-inkMuted">
+                Export JSON — vezi{" "}
+                <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
+                  politica
+                </Link>
+                .
+              </p>
+              <button
+                type="button"
+                disabled={exportBusy}
+                onClick={() => void downloadPersonalDataExport()}
+                className="mt-3 rounded-lg border border-white/10 bg-signal-fog px-3 py-2 text-[11px] font-semibold text-signal-petrol transition hover:bg-signal-panel disabled:opacity-50"
+              >
+                {exportBusy ? "Se generează..." : "Descarcă export JSON"}
+              </button>
+            </div>
+          )}
         </section>
 
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">

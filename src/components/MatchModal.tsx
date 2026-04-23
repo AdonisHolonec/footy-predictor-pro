@@ -734,7 +734,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
             Analitică predictivă · Poisson / xG
           </p>
-          <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:mb-8 sm:gap-4 lg:gap-6">
+          <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:gap-4 lg:gap-6">
             <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
               <img
                 src={match.logos?.home}
@@ -745,14 +745,14 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 {match.teams.home}
               </div>
             </div>
-            <div className="flex w-[min(100%,12.5rem)] shrink-0 flex-col items-center px-0.5 sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
-              <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted sm:text-[10px]">
+            <div className="flex w-[min(100%,13.5rem)] shrink-0 flex-col items-center px-0.5 max-[380px]:w-[min(100%,12.5rem)] sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
+              <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted max-[380px]:text-[8px] sm:text-[10px]">
                 {match.league}
               </div>
-              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink sm:text-5xl">
+              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink max-[380px]:text-2xl sm:text-5xl">
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
-              <div className="mt-2 flex w-full items-center justify-center gap-1.5 sm:mt-3 sm:gap-3">
+              <div className="mt-2 flex w-full flex-col items-center gap-1.5 sm:mt-3 sm:flex-row sm:gap-3">
                 {hasExactConfidence ? (
                   <ConfidenceAura value={confPct} size="compact" />
                 ) : (
@@ -763,14 +763,14 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                     </div>
                   </div>
                 )}
-                <div className="min-w-0 flex-1 text-left">
+                <div className="min-w-0 flex-1 text-center sm:text-left">
                   <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">
                     <span>Pick</span>
                     <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7px] font-bold tracking-wider text-signal-petrol">
                       {hasExactConfidence ? `${confPct}%` : confidenceCategory || "LOCKED"}
                     </span>
                   </div>
-                  <div className="line-clamp-2 break-words font-display text-base font-bold leading-tight text-signal-petrol sm:text-3xl">{match.recommended.pick}</div>
+                  <div className="line-clamp-2 break-words font-display text-lg font-bold leading-tight text-signal-petrol max-[380px]:text-base sm:text-3xl">{match.recommended.pick}</div>
                   <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-mint sm:text-[11px]">
                     odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
                   </div>
@@ -781,7 +781,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               </div>
               {hasFinalScore && (
                 <div
-                  className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
+                    className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide max-[380px]:text-[8px] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
                 >
                   {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
                 </div>
@@ -800,7 +800,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
               {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-                <div className="mt-3 w-full min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
+                <div className="mt-3 w-full min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-center sm:text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">Special Bet · Top signals</div>
                     {specialBetCandidates.length >= 3 ? (
@@ -822,7 +822,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {specialBetLegs.map((leg) => (
-                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px]">
+                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] max-[380px]:text-[7px] sm:text-[8px]">
                         <span className="min-w-0 flex-1 truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
                         <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
                       </div>
@@ -846,7 +846,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             </div>
           </div>
 
-          <div className="mx-auto max-w-2xl rounded-2xl border border-white/5 bg-signal-void/40 p-5">
+          <div className="mx-auto hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/40 p-5 sm:block">
             {hasExactConfidence ? (
               <>
                 <SignalLens confidence={confPct} edge={edgeScore} />
@@ -1007,22 +1007,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {match.lambdas && (
-              <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 text-center">
-                <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">03 — λ ofensiv</h3>
-                <div className="flex items-center justify-center gap-6">
-                  <div className="font-mono text-3xl font-semibold tabular-nums" style={{ color: homeColor }}>
-                    {formatLambda(match.lambdas.home)}
-                  </div>
-                  <span className="font-display text-signal-stone">vs</span>
-                  <div className="font-mono text-3xl font-semibold tabular-nums" style={{ color: awayColor }}>
-                    {formatLambda(match.lambdas.away)}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
+            <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
                 <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">

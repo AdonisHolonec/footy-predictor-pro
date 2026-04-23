@@ -315,15 +315,15 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       </div>
 
       <div className="relative mt-4 sm:hidden">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/[0.07] bg-signal-void/30 px-2.5 py-2">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/[0.07] bg-signal-void/30 px-2.5 py-2 max-[380px]:gap-1.5 max-[380px]:px-2 max-[380px]:py-1.5">
           <div className="min-w-0 text-center">
-            <img src={row.logos?.home} className="mx-auto h-8 w-8 object-contain opacity-90" alt="" />
-            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink">{row.teams.home}</div>
+            <img src={row.logos?.home} className="mx-auto h-8 w-8 object-contain opacity-90 max-[380px]:h-7 max-[380px]:w-7" alt="" />
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px]">{row.teams.home}</div>
           </div>
-          <div className="font-mono text-[10px] text-signal-stone/90">vs</div>
+          <div className="font-mono text-[10px] text-signal-stone/90 max-[380px]:text-[9px]">vs</div>
           <div className="min-w-0 text-center">
-            <img src={row.logos?.away} className="mx-auto h-8 w-8 object-contain opacity-90" alt="" />
-            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink">{row.teams.away}</div>
+            <img src={row.logos?.away} className="mx-auto h-8 w-8 object-contain opacity-90 max-[380px]:h-7 max-[380px]:w-7" alt="" />
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px]">{row.teams.away}</div>
           </div>
         </div>
       </div>
@@ -395,7 +395,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       )}
 
       <div className="relative mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-signal-petrol/75">
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
@@ -414,16 +414,25 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
                 HOT
               </span>
             ) : null}
-            <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-petrol">
-              {hasExactConfidence ? `${confPct}%` : confidenceCategory ? confidenceCategory : "LOCKED"}
-            </span>
           </div>
-          <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-signal-ink sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
+          <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-signal-ink max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
             {row.recommended.pick}
           </div>
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-emerald-300 animate-pulse motion-reduce:animate-none" : "text-signal-petrol"}`}>
             odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
           </div>
+        </div>
+        <div className="sm:hidden self-end">
+          {hasExactConfidence ? (
+            <ConfidenceAura value={confPct} size="compact" className="self-end" />
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-signal-void/50 px-3 py-2 text-center">
+              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">Încredere</div>
+              <div className="mt-1 font-mono text-[11px] font-semibold text-signal-petrol">
+                {confidenceCategory ? confidenceCategory : "Blocat"}
+              </div>
+            </div>
+          )}
         </div>
         {(hasFinalScore || showRunningScore) && (
           <div className="self-end text-right font-mono text-xs tabular-nums">
