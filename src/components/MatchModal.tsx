@@ -734,8 +734,8 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
             Analitică predictivă · Poisson / xG
           </p>
-          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:gap-4 lg:gap-6">
-            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-[6.4rem] sm:gap-2">
+          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:gap-6">
+            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-full sm:gap-2">
               <img
                 src={match.logos?.home}
                 className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
@@ -745,7 +745,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 {match.teams.home}
               </div>
             </div>
-            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-[380px]:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
+            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-[380px]:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-[23rem] sm:px-2">
               <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted max-[380px]:text-[8px] sm:text-[10px]">
                 {match.league}
               </div>
@@ -801,45 +801,8 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 <span>·</span>
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
-              {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-                <div className="mt-3 flex w-full items-center justify-center">
-                  <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-emerald-300/50 bg-gradient-to-b from-emerald-400/22 via-emerald-300/10 to-signal-void/55 px-3.5 py-2.5 text-center shadow-[0_0_22px_rgba(16,185,129,0.3)] max-[380px]:max-w-[21rem] max-[380px]:px-4">
-                  <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
-                  <div className="flex min-h-[1.55rem] flex-wrap items-center justify-between gap-1.5">
-                    <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-100 max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">Special Bet · Top signals</div>
-                    {specialBetCandidates.length >= 3 ? (
-                      <div className="inline-flex rounded-md border border-emerald-300/45 bg-emerald-500/15 p-[1px]">
-                        {[2, 3].map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => setSpecialLegCount(n as 2 | 3)}
-                            className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
-                              specialLegCount === n ? "bg-emerald-300/30 text-emerald-50" : "text-emerald-200/80"
-                            }`}
-                          >
-                            {n} legs
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="mt-2 space-y-1.5 rounded-lg border border-emerald-300/25 bg-signal-void/35 px-2.5 py-1.5 max-[380px]:px-3">
-                    {specialBetLegs.map((leg) => (
-                      <div key={`${leg.label}-${leg.pick}`} className="flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px]">
-                        <span className="min-w-0 flex-1 truncate text-left text-emerald-100">{leg.label}: {leg.pick}</span>
-                        <span className="shrink-0 rounded-sm border border-emerald-300/35 bg-emerald-400/12 px-1 py-[1px] tabular-nums text-right text-emerald-200">{Math.round(leg.probability)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 border-t border-emerald-300/20 pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-emerald-100 max-[380px]:text-[9px]">
-                    combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
-                  </div>
-                </div>
-                </div>
-              )}
             </div>
-            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-[6.4rem] sm:gap-2">
+            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-full sm:gap-2">
               <img
                 src={match.logos?.away}
                 className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
@@ -850,6 +813,43 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               </div>
             </div>
           </div>
+          {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
+            <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-emerald-300/50 bg-gradient-to-b from-emerald-400/22 via-emerald-300/10 to-signal-void/55 px-3.5 py-2.5 text-center shadow-[0_0_22px_rgba(16,185,129,0.3)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
+                <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
+                <div className="flex min-h-[1.55rem] flex-wrap items-center justify-between gap-1.5">
+                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-100 max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">Special Bet · Top signals</div>
+                  {specialBetCandidates.length >= 3 ? (
+                    <div className="inline-flex rounded-md border border-emerald-300/45 bg-emerald-500/15 p-[1px]">
+                      {[2, 3].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setSpecialLegCount(n as 2 | 3)}
+                          className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
+                            specialLegCount === n ? "bg-emerald-300/30 text-emerald-50" : "text-emerald-200/80"
+                          }`}
+                        >
+                          {n} legs
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-2 space-y-1.5 rounded-lg border border-emerald-300/25 bg-signal-void/35 px-2.5 py-1.5 max-[380px]:px-3">
+                  {specialBetLegs.map((leg) => (
+                    <div key={`${leg.label}-${leg.pick}`} className="flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px]">
+                      <span className="min-w-0 flex-1 truncate text-left text-emerald-100">{leg.label}: {leg.pick}</span>
+                      <span className="shrink-0 rounded-sm border border-emerald-300/35 bg-emerald-400/12 px-1 py-[1px] tabular-nums text-right text-emerald-200">{Math.round(leg.probability)}%</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 border-t border-emerald-300/20 pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-emerald-100 max-[380px]:text-[9px]">
+                  combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mx-auto hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/40 p-5 sm:block">
             {hasExactConfidence ? (
