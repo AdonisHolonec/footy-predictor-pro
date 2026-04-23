@@ -734,18 +734,18 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
             Analitică predictivă · Poisson / xG
           </p>
-          <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:gap-4 lg:gap-6">
-            <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
+          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:gap-4 lg:gap-6">
+            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-[6.4rem] sm:gap-2">
               <img
                 src={match.logos?.home}
-                className="h-20 w-20 shrink-0 object-contain opacity-95 sm:h-20 sm:w-20 lg:h-24 lg:w-24"
+                className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px] sm:text-sm lg:text-lg">
                 {match.teams.home}
               </div>
             </div>
-            <div className="flex w-[min(100%,13.5rem)] shrink-0 flex-col items-center px-0.5 max-[380px]:w-[min(100%,12.5rem)] sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
+            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-[380px]:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-sm sm:px-2">
               <div className="mb-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wider text-signal-inkMuted max-[380px]:text-[8px] sm:text-[10px]">
                 {match.league}
               </div>
@@ -839,13 +839,13 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 </div>
               )}
             </div>
-            <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
+            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-[6.4rem] sm:gap-2">
               <img
                 src={match.logos?.away}
-                className="h-20 w-20 shrink-0 object-contain opacity-95 sm:h-20 sm:w-20 lg:h-24 lg:w-24"
+                className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px] sm:text-sm lg:text-lg">
                 {match.teams.away}
               </div>
             </div>
