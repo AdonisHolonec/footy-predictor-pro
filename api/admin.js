@@ -25,6 +25,16 @@ export default async function handler(req, res) {
   return handleProfiles(req, res);
 }
 
+function resolvePublicBaseUrl(req) {
+  const explicit = String(process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || "").trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
+  if (!host) return "http://localhost:3000";
+  const proto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  const protocol = proto === "http" ? "http" : "https";
+  return `${protocol}://${host}`.replace(/\/+$/, "");
+}
+
 function parseBody(req) {
   if (!req.body) return {};
   if (typeof req.body === "string") {
@@ -277,6 +287,57 @@ async function handleMl(req, res) {
     return res.status(200).json({ ok: true, invalidated: ["calibration", "stacker", "elo", "market-rolling"] });
   }
 
+  if (req.method === "POST" && action === "train-now") {
+    const mode = String(req.query.mode || "all").toLowerCase();
+    const cronSecret = String(process.env.CRON_SECRET || "");
+    if (!cronSecret) {
+      return res.status(500).json({
+        ok: false,
+        error: "CRON_SECRET lipsește. Train-now folosește endpointul intern /api/cron/daily-ml."
+      });
+    }
+    try {
+      const base = resolvePublicBaseUrl(req);
+      const qs = new URLSearchParams({
+        mode,
+        modelVersion
+      });
+      const run = await fetch(`${base}/api/cron/daily-ml?${qs.toString()}`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${cronSecret}`,
+          "x-internal-admin": "ml-train-now"
+        }
+      });
+      const body = await run.json().catch(() => ({}));
+      if (!run.ok || body?.ok === false) {
+        return res.status(502).json({
+          ok: false,
+          mode,
+          modelVersion,
+          status: run.status,
+          error: body?.error || "Train-now a eșuat la /api/cron/daily-ml.",
+          train: body
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        mode,
+        modelVersion,
+        status: run.status,
+        train: body
+      });
+    } catch (error) {
+      return res.status(500).json({
+        ok: false,
+        mode,
+        modelVersion,
+        error: error?.message || "Train-now a eșuat."
+      });
+    }
+  }
+
   if (sub === "calibration") {
     const q = supabase
       .from("calibration_maps")
@@ -387,6 +448,7 @@ async function handleMl(req, res) {
     marketRollingTeams: marketRolling.count || 0,
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",
+      trainNow: "POST /api/admin?view=ml&action=train-now&mode=all|calibration|stacker",
       scripts: [
         "node --env-file=.env.local scripts/fitCalibration.js",
         "node --env-file=.env.local scripts/fitStacker.js",

@@ -445,6 +445,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [training, setTraining] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -485,6 +486,25 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     }
   }, [accessToken, load]);
 
+  const trainNow = useCallback(async () => {
+    if (!accessToken) return;
+    setTraining(true);
+    try {
+      const res = await fetch(`/api/admin?view=ml&action=train-now&mode=all`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.ok === false) {
+        setErr(typeof body?.error === "string" ? body.error : "Train-now a eșuat.");
+        return;
+      }
+      await load();
+    } finally {
+      setTraining(false);
+    }
+  }, [accessToken, load]);
+
   if (!accessToken) return null;
 
   const brier = metrics?.brier1x2 ?? null;
@@ -506,6 +526,15 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
               cal · {mlStatus.calibrationMaps ?? 0} · stk · {mlStatus.activeStackerWeights ?? 0} · elo · {mlStatus.eloTeams ?? 0}
             </div>
           )}
+          <button
+            type="button"
+            onClick={trainNow}
+            disabled={training}
+            className="touch-manipulation rounded-lg border border-signal-mint/25 bg-signal-mintSoft px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint hover:bg-signal-mintSoft/80 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Rulează acum agentul de antrenare ML (calibration + stacker) pe baza istoricului."
+          >
+            {training ? "Training…" : "Train now"}
+          </button>
           <button
             type="button"
             onClick={invalidate}
