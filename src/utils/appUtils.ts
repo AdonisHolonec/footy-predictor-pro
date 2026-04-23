@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { HistoryEntry, PredictionRow } from "../types";
 
 export function normalizeSelectedDates(dates: string[]): string[] {
   const uniq = Array.from(new Set(dates.filter(Boolean)));
@@ -95,4 +96,32 @@ export async function dominantColorFromImage(url: string): Promise<string | null
     img.onerror = () => resolve(null);
     img.src = url;
   });
+}
+
+/**
+ * After `/api/history` sync, merge server `status` + `score` into cached prediction rows
+ * so cards show final pick results without re-running Predict.
+ */
+export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEntry[]): PredictionRow[] {
+  if (!preds?.length || !history?.length) return preds;
+  const byId = new Map(history.map((h) => [String(h.id), h]));
+  let touched = false;
+  const out = preds.map((p) => {
+    const h = byId.get(String(p.id));
+    if (!h) return p;
+    const st = String(h.status ?? "").trim();
+    const nextStatus = st || p.status;
+    const nh = h.score?.home;
+    const na = h.score?.away;
+    const oh = p.score?.home;
+    const oa = p.score?.away;
+    const nhN = Number(nh);
+    const naN = Number(na);
+    const hasServerScore = Number.isFinite(nhN) && Number.isFinite(naN);
+    const nextScore = hasServerScore ? { home: nhN, away: naN } : p.score;
+    if (nextStatus === p.status && nextScore?.home === oh && nextScore?.away === oa) return p;
+    touched = true;
+    return { ...p, status: nextStatus, score: nextScore };
+  });
+  return touched ? out : preds;
 }

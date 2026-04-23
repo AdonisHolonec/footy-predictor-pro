@@ -42,6 +42,7 @@ import {
   inferSeason,
   isoToday,
   localCalendarDateKey,
+  mergePredsWithHistory,
   normalizeSelectedDates,
   useLocalStorageState
 } from "./utils/appUtils";
@@ -133,11 +134,6 @@ export default function App() {
     if (!session?.access_token || user?.role !== "admin") return;
     setPerfAdminLoading(true);
     try {
-      await fetch("/api/history?sync=1&days=30", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      }).catch(() => null);
-
       const res = await fetch("/api/history?performance=1&days=30", {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
@@ -162,10 +158,8 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== "admin") {
       setPerfAdminSnapshot(null);
-      return;
     }
-    void loadPerfAdmin();
-  }, [user?.role, loadPerfAdmin]);
+  }, [user?.role]);
 
   function requireAuth(message = "Autentifica-te pentru functiile personalizate.") {
     if (user) return true;
@@ -481,6 +475,7 @@ export default function App() {
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
       await fetch(`/api/history?sync=1&days=${days}`, { method: "POST", headers });
       await loadHistory(days);
+      if (user?.role === "admin") await loadPerfAdmin();
     } catch {
       // silent: indicator is enough
     } finally {
@@ -549,14 +544,21 @@ export default function App() {
     return () => clearInterval(tm);
   }, [date, setDate, setSelectedDates]);
   useEffect(() => {
-    void loadHistory(30);
     void loadKpi(45);
     void loadAlerts(7);
   }, []);
   useEffect(() => {
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      void loadHistory(30);
+      return;
+    }
     void syncHistory(30);
-  }, [session?.access_token]);
+  }, [session?.access_token, user?.role]);
+
+  useEffect(() => {
+    if (!history.length) return;
+    setPreds((prev) => mergePredsWithHistory(prev, history));
+  }, [history, setPreds]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -564,10 +566,18 @@ export default function App() {
     const tm = setInterval(() => {
       if (isHistorySyncing) return;
       void syncHistory(30);
-      if (user?.role === "admin") void loadPerfAdmin();
     }, 90_000);
     return () => clearInterval(tm);
-  }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory, user?.role, loadPerfAdmin]);
+  }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory, user?.role]);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") void syncHistory(30);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [session?.access_token, syncHistory]);
   useEffect(() => {
     setDraftDrawdownThreshold(alertDrawdownThreshold);
     setDraftDriftThreshold(alertDriftThreshold);

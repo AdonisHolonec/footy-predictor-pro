@@ -13,7 +13,15 @@ import BrandArtboard from "../components/BrandArtboard";
 import { AdminPerformanceObservatory } from "../components/admin/AdminObservatory";
 import { ModelPulseStrip, ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
-import { hashColor, inferSeason, isoToday, localCalendarDateKey, normalizeSelectedDates, useLocalStorageState } from "../utils/appUtils";
+import {
+  hashColor,
+  inferSeason,
+  isoToday,
+  localCalendarDateKey,
+  mergePredsWithHistory,
+  normalizeSelectedDates,
+  useLocalStorageState
+} from "../utils/appUtils";
 
 function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
   const wins = rows.filter((r) => r.validation === "win").length;
@@ -271,11 +279,31 @@ export default function UserDashboard() {
 
   useEffect(() => {
     void fetchDays(normalizeSelectedDates(selectedDates.length ? selectedDates : [date]));
-  }, []);
+  }, [date, selectedDates.join("|")]);
 
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    const tm = setInterval(() => {
+      const today = localCalendarDateKey();
+      if (today === date) return;
+      setDate(today);
+      setSelectedDates((prev) => {
+        const rest = (prev || []).filter((d) => d !== date);
+        return normalizeSelectedDates([today, ...rest]);
+      });
+    }, 60_000);
+    return () => clearInterval(tm);
+  }, [date, setDate, setSelectedDates]);
+
+  useEffect(() => {
+    if (!user?.id || !history.length) return;
+    setPredictionsByUser((prev) => {
+      const rows = prev[user.id];
+      if (!rows?.length) return prev;
+      const merged = mergePredsWithHistory(rows, history);
+      if (merged === rows) return prev;
+      return { ...prev, [user.id]: merged };
+    });
+  }, [history, user?.id, setPredictionsByUser]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -289,6 +317,15 @@ export default function UserDashboard() {
   useEffect(() => {
     if (!session?.access_token) return;
     void syncHistory();
+  }, [session?.access_token, syncHistory]);
+
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") void syncHistory();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [session?.access_token, syncHistory]);
 
   useEffect(() => {
