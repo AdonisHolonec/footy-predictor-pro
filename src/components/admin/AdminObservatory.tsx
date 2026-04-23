@@ -446,6 +446,16 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [training, setTraining] = useState(false);
+  const [trainReport, setTrainReport] = useState<{
+    finishedAt?: string;
+    mode?: string;
+    modelVersion?: string;
+    calibrationRows?: number;
+    calibrationSummary?: number;
+    stackerRows?: number;
+    stackerSamples?: number;
+    stackerTrained?: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -499,6 +509,17 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
         setErr(typeof body?.error === "string" ? body.error : "Train-now a eșuat.");
         return;
       }
+      const train = body?.train && typeof body.train === "object" ? body.train : {};
+      setTrainReport({
+        finishedAt: typeof train.finishedAt === "string" ? train.finishedAt : new Date().toISOString(),
+        mode: typeof train.mode === "string" ? train.mode : "all",
+        modelVersion: typeof train.modelVersion === "string" ? train.modelVersion : undefined,
+        calibrationRows: Number(train?.calibration?.rows || 0),
+        calibrationSummary: Array.isArray(train?.calibration?.summary) ? train.calibration.summary.length : 0,
+        stackerRows: Number(train?.stacker?.rows || 0),
+        stackerSamples: Number(train?.stacker?.samples || 0),
+        stackerTrained: Array.isArray(train?.stacker?.trained) ? train.stacker.trained.length : 0
+      });
       await load();
     } finally {
       setTraining(false);
@@ -556,6 +577,20 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       </div>
 
       {err && <div className="mb-3 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 text-[11px] text-signal-rose">{err}</div>}
+      {trainReport && (
+        <div className="mb-3 rounded-lg border border-signal-mint/35 bg-signal-mintSoft/60 px-3 py-2">
+          <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-mint">Last training run</div>
+          <div className="mt-1 grid grid-cols-1 gap-1 font-mono text-[10px] text-signal-petrol sm:grid-cols-2">
+            <div>Mode: <span className="text-signal-ink">{trainReport.mode || "all"}</span></div>
+            <div>Model: <span className="text-signal-ink">{trainReport.modelVersion || "—"}</span></div>
+            <div>Calibration: <span className="text-signal-ink">{trainReport.calibrationRows || 0} rows · {trainReport.calibrationSummary || 0} maps</span></div>
+            <div>Stacker: <span className="text-signal-ink">{trainReport.stackerRows || 0} rows · {trainReport.stackerSamples || 0} samples · {trainReport.stackerTrained || 0} weights</span></div>
+          </div>
+          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+            finished {trainReport.finishedAt ? new Date(trainReport.finishedAt).toLocaleString() : "—"}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricTile label="Brier 1X2" value={brier != null ? brier.toFixed(4) : "—"} subtitle="lower = better" toneClass={healthTone(brier, 0.185, 0.205)} />
