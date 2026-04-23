@@ -9,6 +9,12 @@ export type ModelHealthSummary = {
   ece: number | null;
 };
 
+type ExcludedLossDay = {
+  day: string;
+  losses: number;
+  settled: number;
+};
+
 type SuccessRateTrackerProps = {
   stats: HistoryStats;
   animatedWins: number;
@@ -22,6 +28,9 @@ type SuccessRateTrackerProps = {
   onBreakdownClick?: () => void;
   /** Sănătatea modelului pe ultimele N zile (opţional — apare doar dacă admin/debug). */
   modelHealth?: ModelHealthSummary | null;
+  excludedWorstLossDaysCount?: number;
+  onExcludedWorstLossDaysCountChange?: (count: number) => void;
+  excludedLossDays?: ExcludedLossDay[];
 };
 
 function healthToneClass(value: number | null, good: number, warn: number, higherIsBetter = false) {
@@ -48,7 +57,10 @@ export default function SuccessRateTracker({
   displayedPredsCount = 0,
   pendingAmongDisplayedPreds = 0,
   onBreakdownClick,
-  modelHealth = null
+  modelHealth = null,
+  excludedWorstLossDaysCount = 0,
+  onExcludedWorstLossDaysCountChange,
+  excludedLossDays = []
 }: SuccessRateTrackerProps) {
   const inner = (
     <>
@@ -62,10 +74,47 @@ export default function SuccessRateTracker({
       <div className="relative mb-5 flex flex-col gap-2 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-signal-petrol/75">Performance</div>
-          <div className="font-display text-xl font-semibold tracking-tight text-signal-ink sm:text-2xl">30-day calibration</div>
+          <div className="font-display text-xl font-semibold tracking-tight text-signal-ink sm:text-2xl">Performance Counter Pro</div>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
       </div>
+      {(onExcludedWorstLossDaysCountChange || excludedWorstLossDaysCount > 0) && (
+        <div className="relative mb-4 rounded-xl border border-white/[0.08] bg-signal-void/35 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-signal-inkMuted">Window optimizer</div>
+            {onExcludedWorstLossDaysCountChange && (
+              <div className="inline-flex rounded-lg border border-white/[0.1] bg-signal-panel/60 p-0.5">
+                {[0, 1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => onExcludedWorstLossDaysCountChange(n)}
+                    className={`rounded-md px-2 py-1 font-mono text-[9px] font-semibold transition-colors ${
+                      excludedWorstLossDaysCount === n ? "bg-signal-petrol/30 text-signal-ink" : "text-signal-inkMuted hover:text-signal-ink"
+                    }`}
+                  >
+                    -{n} zi
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {excludedWorstLossDaysCount > 0 && (
+            <div className="mt-1.5 text-[10px] text-signal-inkMuted">
+              Excluse din counter: <span className="font-mono text-signal-ink">{excludedWorstLossDaysCount}</span> zile cu cele mai multe pierderi.
+            </div>
+          )}
+          {excludedLossDays.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {excludedLossDays.slice(0, 3).map((d) => (
+                <span key={d.day} className="rounded-full border border-signal-rose/30 bg-signal-rose/10 px-2 py-0.5 font-mono text-[9px] text-signal-rose">
+                  {d.day} · L{d.losses}/{d.settled}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="relative grid grid-cols-3 gap-2 sm:gap-4">
         <div className="min-w-0 rounded-2xl border border-signal-sage/22 bg-signal-sage/5 px-2 py-3 shadow-inner sm:px-4">
           <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-sage sm:text-[10px]">Wins</div>

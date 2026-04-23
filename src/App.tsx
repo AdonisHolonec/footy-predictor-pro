@@ -38,6 +38,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useLiveFixtureScorePoll } from "./hooks/useLiveFixtureScorePoll";
 import {
   dominantColorFromImage,
+  filterHistoryByWorstLossDays,
   hashColor,
   inferSeason,
   isoToday,
@@ -68,6 +69,7 @@ export default function App() {
   const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [excludeWorstLossDays, setExcludeWorstLossDays] = useState<number>(1);
   const [status, setStatus] = useState<string>("");
   const [kpi, setKpi] = useState<BacktestKpi | null>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
@@ -204,22 +206,29 @@ export default function App() {
     return list;
   }, [preds, filterMode, sortBy, kickoffScope, minXgSpread]);
 
+  const { filtered: counterHistory, excludedDays: excludedLossDays } = useMemo(
+    () => filterHistoryByWorstLossDays(history, excludeWorstLossDays),
+    [history, excludeWorstLossDays]
+  );
   const trackerStats = useMemo(() => {
-    return historyStats;
-  }, [historyStats]);
+    const wins = counterHistory.filter((item) => item.validation === "win").length;
+    const losses = counterHistory.filter((item) => item.validation === "loss").length;
+    const settled = wins + losses;
+    return { wins, losses, settled, winRate: settled > 0 ? (wins / settled) * 100 : 0 };
+  }, [counterHistory]);
   const pendingHistoryCount = useMemo(
-    () => history.filter((item) => item.validation === "pending").length,
-    [history]
+    () => counterHistory.filter((item) => item.validation === "pending").length,
+    [counterHistory]
   );
   const predIdSet = useMemo(() => new Set(preds.map((p) => p.id)), [preds]);
   /** Pending rows in history that match the currently displayed prediction list (correlates with „Toate”). */
   const pendingAmongDisplayedPreds = useMemo(
-    () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
-    [history, predIdSet]
+    () => counterHistory.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
+    [counterHistory, predIdSet]
   );
   const globalPerformanceByLeague = useMemo((): PerformanceLeagueBreakdown[] => {
     const map = new Map<number, { leagueId: number; leagueName: string; wins: number; losses: number; pending: number }>();
-    for (const h of history) {
+    for (const h of counterHistory) {
       const lid = Number(h.leagueId);
       if (!Number.isFinite(lid)) continue;
       const name = h.league || String(lid);
@@ -235,7 +244,7 @@ export default function App() {
         return { ...o, settled, winRate: settled > 0 ? (o.wins / settled) * 100 : 0 };
       })
       .sort((a, b) => b.settled - a.settled);
-  }, [history]);
+  }, [counterHistory]);
   const prevWinRateRef = useRef<number>(trackerStats.winRate);
   const lastSelectionHydrateUserId = useRef<string | null>(null);
 
@@ -974,6 +983,9 @@ export default function App() {
                 pendingHistoryCount={pendingHistoryCount}
                 displayedPredsCount={preds.length}
                 pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+                excludedWorstLossDaysCount={excludeWorstLossDays}
+                onExcludedWorstLossDaysCountChange={setExcludeWorstLossDays}
+                excludedLossDays={excludedLossDays}
                 onBreakdownClick={() => setPerfCounterModalOpen(true)}
               />
               <div className="mt-3 grid max-w-[760px] grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1495,6 +1507,9 @@ export default function App() {
                 pendingHistoryCount={pendingHistoryCount}
                 displayedPredsCount={preds.length}
                 pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+                excludedWorstLossDaysCount={excludeWorstLossDays}
+                onExcludedWorstLossDaysCountChange={setExcludeWorstLossDays}
+                excludedLossDays={excludedLossDays}
                 onBreakdownClick={() => setPerfCounterModalOpen(true)}
               />
               <div className="mt-4 grid max-w-full grid-cols-2 gap-2 sm:grid-cols-4">

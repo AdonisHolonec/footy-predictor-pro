@@ -125,3 +125,54 @@ export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEn
   });
   return touched ? out : preds;
 }
+
+export type HistoryLossDay = {
+  day: string;
+  losses: number;
+  wins: number;
+  settled: number;
+  pending: number;
+};
+
+function historyDayKey(row: HistoryEntry): string {
+  const kickoff = String(row.kickoff || "").slice(0, 10);
+  if (kickoff) return kickoff;
+  const savedAt = String(row.savedAt || "").slice(0, 10);
+  if (savedAt) return savedAt;
+  return "unknown";
+}
+
+export function buildHistoryLossDays(rows: HistoryEntry[]): HistoryLossDay[] {
+  const map = new Map<string, HistoryLossDay>();
+  for (const row of rows || []) {
+    const day = historyDayKey(row);
+    if (!map.has(day)) {
+      map.set(day, { day, losses: 0, wins: 0, settled: 0, pending: 0 });
+    }
+    const cur = map.get(day)!;
+    if (row.validation === "loss") cur.losses += 1;
+    else if (row.validation === "win") cur.wins += 1;
+    else cur.pending += 1;
+  }
+  for (const d of map.values()) d.settled = d.wins + d.losses;
+  return Array.from(map.values());
+}
+
+export function filterHistoryByWorstLossDays(rows: HistoryEntry[], excludeDays: number): { filtered: HistoryEntry[]; excludedDays: HistoryLossDay[] } {
+  const safeExclude = Math.max(0, Math.min(Number(excludeDays) || 0, 7));
+  if (!rows?.length || safeExclude <= 0) return { filtered: rows || [], excludedDays: [] };
+
+  const ranked = buildHistoryLossDays(rows)
+    .filter((d) => d.losses > 0)
+    .sort((a, b) => {
+      if (b.losses !== a.losses) return b.losses - a.losses;
+      if (b.settled !== a.settled) return b.settled - a.settled;
+      return String(b.day).localeCompare(String(a.day));
+    })
+    .slice(0, safeExclude);
+  if (!ranked.length) return { filtered: rows, excludedDays: [] };
+
+  const excludedSet = new Set(ranked.map((d) => d.day));
+  const filtered = rows.filter((row) => !excludedSet.has(historyDayKey(row)));
+  return { filtered, excludedDays: ranked };
+}
