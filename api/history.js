@@ -19,6 +19,38 @@ async function isAuthorizedHistorySync(req) {
   return requester.ok;
 }
 
+function resolveHistorySyncSource(req) {
+  if (isAuthorizedCronOrInternalRequest(req)) {
+    const ua = String(req.headers["user-agent"] || "").toLowerCase();
+    return ua.includes("vercel-cron") ? "vercel_cron" : "cron_secret";
+  }
+  return "jwt_user";
+}
+
+/** Ultimul sync scris în `history_sync_status` (id=1) — vizibil în Supabase fără Vercel Logs. */
+async function persistHistorySyncStatus(supabase, req, payload) {
+  try {
+    const source = resolveHistorySyncSource(req);
+    const method = String(req.method || "GET").toUpperCase();
+    const { error } = await supabase.from("history_sync_status").upsert(
+      {
+        id: 1,
+        last_ran_at: new Date().toISOString(),
+        last_source: source,
+        last_method: method,
+        last_scanned: Math.max(0, Number(payload.scanned) || 0),
+        last_updated: Math.max(0, Number(payload.updated) || 0),
+        last_ok: payload.ok !== false,
+        last_error: payload.error != null ? String(payload.error).slice(0, 2000) : null
+      },
+      { onConflict: "id" }
+    );
+    if (error) throw error;
+  } catch (e) {
+    console.error("[history_sync_status]", e?.message || e);
+  }
+}
+
 function buildPerformancePayload(rows, requesterUserId, isAdmin) {
   const scoped = isAdmin ? rows || [] : (rows || []).filter((r) => String(r.user_id) === String(requesterUserId));
   const byUserLeague = scoped.map((r) => {
@@ -212,6 +244,7 @@ async function handleHistorySync(req, res) {
       console.info(
         JSON.stringify({ historySync: true, scanned: 0, updated: 0, note: "no_pending_or_nonfinal_rows" })
       );
+      await persistHistorySyncStatus(supabase, req, { ok: true, scanned: 0, updated: 0 });
       return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "Nu există înregistrări în așteptare." });
     }
 
@@ -308,13 +341,20 @@ async function handleHistorySync(req, res) {
         updated: updates.length
       })
     );
+    await persistHistorySyncStatus(supabase, req, {
+      ok: true,
+      scanned: candidates.length,
+      updated: updates.length
+    });
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
       updated: updates.length
     });
   } catch (error) {
-    return res.status(500).json({ ok: false, error: error?.message || "Sincronizarea istoricului a eșuat." });
+    const msg = error?.message || "Sincronizarea istoricului a eșuat.";
+    await persistHistorySyncStatus(supabase, req, { ok: false, error: msg, scanned: 0, updated: 0 });
+    return res.status(500).json({ ok: false, error: msg });
   }
 }
 
