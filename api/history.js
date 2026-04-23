@@ -61,7 +61,14 @@ function buildPerformancePayload(rows, requesterUserId, isAdmin) {
   return { byUser, byUserLeague };
 }
 
+function setNoStoreHeaders(res) {
+  res.setHeader("Cache-Control", "private, no-store, no-cache, max-age=0, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("CDN-Cache-Control", "no-store");
+}
+
 async function handlePerformanceRead(req, res) {
+  setNoStoreHeaders(res);
   if (req.method && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
@@ -174,6 +181,7 @@ async function handleHistoryRead(req, res) {
 }
 
 async function handleHistorySync(req, res) {
+  setNoStoreHeaders(res);
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
@@ -201,6 +209,9 @@ async function handleHistorySync(req, res) {
 
     if (readError) throw readError;
     if (!candidates || candidates.length === 0) {
+      console.info(
+        JSON.stringify({ historySync: true, scanned: 0, updated: 0, note: "no_pending_or_nonfinal_rows" })
+      );
       return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "Nu există înregistrări în așteptare." });
     }
 
@@ -214,14 +225,39 @@ async function handleHistorySync(req, res) {
       groupMap.get(key).fixtureIds.add(Number(row.fixture_id));
     }
 
+    /** Short TTL so nightly cron / sync nu citesc listing de acum 6h (FT lipsă). */
+    const dayLeagueTtl = Math.max(60, Math.min(Number(process.env.HISTORY_SYNC_DAY_LEAGUE_TTL_SEC || 300), 7200));
+
     const fixtureById = new Map();
     for (const group of groupMap.values()) {
-      const resp = await getWithCache("/fixtures", { date: group.date, league: group.leagueId }, 21600);
+      const resp = await getWithCache("/fixtures", { date: group.date, league: group.leagueId }, dayLeagueTtl);
       if (!resp.ok) continue;
       const fixtures = resp.data?.response || [];
       for (const fx of fixtures) {
         const id = Number(fx?.fixture?.id);
         if (!Number.isFinite(id) || !group.fixtureIds.has(id)) continue;
+        fixtureById.set(id, fx);
+      }
+    }
+
+    const missingIds = [
+      ...new Set(
+        candidates
+          .map((row) => Number(row.fixture_id))
+          .filter((id) => Number.isFinite(id) && id > 0 && !fixtureById.has(id))
+      )
+    ];
+    const IDS_CHUNK = 20;
+    const idsTtl = Math.max(30, Math.min(Number(process.env.HISTORY_SYNC_IDS_TTL_SEC || 120), 600));
+    for (let i = 0; i < missingIds.length; i += IDS_CHUNK) {
+      const chunk = missingIds.slice(i, i + IDS_CHUNK);
+      const idsParam = chunk.join("-");
+      const resp = await getWithCache("/fixtures", { ids: idsParam }, idsTtl);
+      if (!resp.ok) continue;
+      const fixtures = resp.data?.response || [];
+      for (const fx of fixtures) {
+        const id = Number(fx?.fixture?.id);
+        if (!Number.isFinite(id)) continue;
         fixtureById.set(id, fx);
       }
     }
@@ -264,6 +300,14 @@ async function handleHistorySync(req, res) {
       if (updateError) throw updateError;
     }
 
+    console.info(
+      JSON.stringify({
+        historySync: true,
+        method: req.method || "",
+        scanned: candidates.length,
+        updated: updates.length
+      })
+    );
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
