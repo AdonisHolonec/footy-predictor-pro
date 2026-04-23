@@ -317,12 +317,12 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       <div className="relative mt-4 sm:hidden">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/[0.07] bg-signal-void/30 px-2.5 py-2 max-[380px]:gap-1.5 max-[380px]:px-2 max-[380px]:py-1.5">
           <div className="min-w-0 text-center">
-            <img src={row.logos?.home} className="mx-auto h-8 w-8 object-contain opacity-90 max-[380px]:h-7 max-[380px]:w-7" alt="" />
+            <img src={row.logos?.home} className="mx-auto h-10 w-10 object-contain opacity-90 max-[380px]:h-8 max-[380px]:w-8" alt="" />
             <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px]">{row.teams.home}</div>
           </div>
           <div className="font-mono text-[10px] text-signal-stone/90 max-[380px]:text-[9px]">vs</div>
           <div className="min-w-0 text-center">
-            <img src={row.logos?.away} className="mx-auto h-8 w-8 object-contain opacity-90 max-[380px]:h-7 max-[380px]:w-7" alt="" />
+            <img src={row.logos?.away} className="mx-auto h-10 w-10 object-contain opacity-90 max-[380px]:h-8 max-[380px]:w-8" alt="" />
             <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-signal-ink max-[380px]:text-[10px]">{row.teams.away}</div>
           </div>
         </div>
@@ -395,7 +395,8 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
       )}
 
       <div className="relative mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2 sm:block min-w-0 flex-1">
+          <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-signal-petrol/75">
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
@@ -421,8 +422,8 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-emerald-300 animate-pulse motion-reduce:animate-none" : "text-signal-petrol"}`}>
             odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
           </div>
-        </div>
-        <div className="sm:hidden self-end">
+          </div>
+        <div className="sm:hidden self-center">
           {hasExactConfidence ? (
             <ConfidenceAura value={confPct} size="compact" className="self-end" />
           ) : (
@@ -433,6 +434,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
               </div>
             </div>
           )}
+        </div>
         </div>
         {(hasFinalScore || showRunningScore) && (
           <div className="self-end text-right font-mono text-xs tabular-nums">

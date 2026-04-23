@@ -835,7 +835,7 @@ export default function UserDashboard() {
               onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
               className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-2 text-xs font-semibold text-signal-petrol hover:bg-signal-petrol/20"
             >
-              +1 zi predictie
+              +1 zi
             </button>
           )}
           {userTier === "ultra" && (
@@ -845,14 +845,14 @@ export default function UserDashboard() {
                 onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
                 className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
               >
-                +1 zi predictie
+                +1 zi
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))}
                 className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
               >
-                +2 zile predictie
+                +2 zile
               </button>
             </>
           )}

@@ -738,7 +738,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
               <img
                 src={match.logos?.home}
-                className="h-11 w-11 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                className="h-14 w-14 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
               <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
@@ -800,7 +800,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
               {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-                <div className="mt-3 w-full min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-center sm:text-left shadow-[0_0_16px_rgba(16,185,129,0.26)]">
+                <div className="mx-auto mt-3 w-full max-w-[18rem] min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 text-center shadow-[0_0_16px_rgba(16,185,129,0.26)]">
                   <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">Special Bet · Top signals</div>
                     {specialBetCandidates.length >= 3 ? (
@@ -822,9 +822,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                   </div>
                   <div className="mt-1 space-y-0.5">
                     {specialBetLegs.map((leg) => (
-                      <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] max-[380px]:text-[7px] sm:text-[8px]">
-                        <span className="min-w-0 flex-1 truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
-                        <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
+                      <div key={`${leg.label}-${leg.pick}`} className="font-mono text-[7.5px] max-[380px]:text-[7px] sm:text-[8px] text-emerald-100/90">
+                        <span className="truncate">{leg.label}: {leg.pick}</span>
+                        <span className="ml-1 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
                       </div>
                     ))}
                   </div>
@@ -837,7 +837,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             <div className="flex min-w-0 flex-col items-center gap-1.5 sm:gap-2">
               <img
                 src={match.logos?.away}
-                className="h-11 w-11 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                className="h-14 w-14 shrink-0 object-contain opacity-90 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
               <div className="w-full px-0.5 text-center font-display text-[11px] font-semibold leading-tight text-signal-ink sm:text-sm lg:text-lg">
