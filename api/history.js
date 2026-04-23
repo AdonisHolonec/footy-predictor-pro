@@ -32,20 +32,37 @@ async function persistHistorySyncStatus(supabase, req, payload) {
   try {
     const source = resolveHistorySyncSource(req);
     const method = String(req.method || "GET").toUpperCase();
+    const nowIso = new Date().toISOString();
+    const scanned = Math.max(0, Number(payload.scanned) || 0);
+    const updated = Math.max(0, Number(payload.updated) || 0);
+    const ok = payload.ok !== false;
+    const errorText = payload.error != null ? String(payload.error).slice(0, 2000) : null;
+
     const { error } = await supabase.from("history_sync_status").upsert(
       {
         id: 1,
-        last_ran_at: new Date().toISOString(),
+        last_ran_at: nowIso,
         last_source: source,
         last_method: method,
-        last_scanned: Math.max(0, Number(payload.scanned) || 0),
-        last_updated: Math.max(0, Number(payload.updated) || 0),
-        last_ok: payload.ok !== false,
-        last_error: payload.error != null ? String(payload.error).slice(0, 2000) : null
+        last_scanned: scanned,
+        last_updated: updated,
+        last_ok: ok,
+        last_error: errorText
       },
       { onConflict: "id" }
     );
     if (error) throw error;
+
+    const { error: logError } = await supabase.from("history_sync_log").insert({
+      ran_at: nowIso,
+      source,
+      method,
+      ok,
+      scanned,
+      updated,
+      error: errorText
+    });
+    if (logError) throw logError;
   } catch (e) {
     console.error("[history_sync_status]", e?.message || e);
   }

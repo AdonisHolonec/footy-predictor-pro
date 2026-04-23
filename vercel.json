@@ -13,6 +13,14 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/history?sync=1&days=30",
+      "schedule": "35 8 * * *"
+    },
+    {
+      "path": "/api/history?sync=1&days=30",
+      "schedule": "30 21 * * *"
+    },
+    {
       "path": "/api/backtest?view=snapshot&days=45",
       "schedule": "15 3 * * *"
     },
