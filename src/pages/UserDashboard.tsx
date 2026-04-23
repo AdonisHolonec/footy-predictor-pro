@@ -5,7 +5,7 @@ import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
-import { ELITE_LEAGUES } from "../constants/appConstants";
+import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
 import { useAuth } from "../hooks/useAuth";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
@@ -52,6 +52,25 @@ function isFinalStatus(status?: string) {
 
 function hasDerivateMarkets(row: PredictionRow) {
   return Boolean(row.probs?.corners || row.probs?.shotsOnTarget || row.probs?.shotsTotal || row.probs?.firstHalf);
+}
+
+function tierPredictWindowDays(tier?: string) {
+  if (tier === "ultra") return 3; // today +2
+  if (tier === "premium") return 2; // today +1
+  return 1; // free
+}
+
+function addIsoDay(dateIso: string, plusDays: number) {
+  const d = new Date(`${dateIso}T00:00:00`);
+  d.setDate(d.getDate() + plusDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildTierDates(baseDate: string, tier?: string) {
+  const span = tierPredictWindowDays(tier);
+  const out: string[] = [];
+  for (let i = 0; i < span; i += 1) out.push(addIsoDay(baseDate, i));
+  return normalizeSelectedDates(out);
 }
 
 export default function UserDashboard() {
@@ -200,7 +219,17 @@ export default function UserDashboard() {
 
   const leaguesSorted = useMemo(() => {
     const allowedLeagueSet = new Set(ELITE_LEAGUES.map((id) => Number(id)));
-    const leagues = (day?.leagues ?? [])
+    const liveById = new Map((day?.leagues ?? []).map((league) => [Number(league.id), league] as const));
+    const leagues = ELITE_LEAGUE_META.map((meta) => {
+      const existing = liveById.get(Number(meta.id));
+      return {
+        id: meta.id,
+        name: existing?.name || meta.name,
+        country: existing?.country || meta.country,
+        matches: Number(existing?.matches || 0),
+        logo: existing?.logo
+      };
+    })
       .filter((league) => allowedLeagueSet.has(Number(league.id)))
       .filter((league) => league.name.toLowerCase().includes(searchLeague.toLowerCase()) || league.country.toLowerCase().includes(searchLeague.toLowerCase()));
     const favoriteSet = new Set((user?.favoriteLeagues || []).map((id) => Number(id)));
@@ -474,7 +503,8 @@ export default function UserDashboard() {
         setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
         return;
       }
-      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
+      const dates = buildTierDates(seedDate, userTier);
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
         const qs = new URLSearchParams({
@@ -534,7 +564,8 @@ export default function UserDashboard() {
         setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
         return;
       }
-      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+      const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
+      const dates = buildTierDates(seedDate, userTier);
       const batches: PredictionRow[] = [];
       for (let i = 0; i < dates.length; i++) {
         const currentDate = dates[i];
@@ -787,12 +818,12 @@ export default function UserDashboard() {
             Warm + Predict
           </button>
           <div className="rounded-lg border border-white/5 bg-signal-panel/45 px-2 py-1.5 text-[11px] font-medium text-signal-inkMuted shadow-inner">
-            <span className="text-signal-petrol">Warm/Predict nelimitat pentru utilizatori autentificați.</span>
+            <span className="text-signal-petrol">Predict window: FREE azi · PREMIUM +1 zi · ULTRA +2 zile.</span>
           </div>
           <div className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1.5 text-[11px] text-signal-ink shadow-inner">
             <span className="font-semibold text-signal-petrol">Tier:</span> {userTier.toUpperCase()}
             <span className="mx-1 text-signal-inkMuted">·</span>
-            <span className="font-mono tabular-nums">Warm/Predict nelimitat</span>
+            <span className="font-mono tabular-nums">{tierPredictWindowDays(userTier)} zi(le) incluse la Predict</span>
           </div>
           {tierQuotaExempt && (
             <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">

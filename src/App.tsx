@@ -33,7 +33,7 @@ import {
   RiskAlert,
   UserTier
 } from "./types";
-import { ELITE_LEAGUES, FilterMode, SortBy } from "./constants/appConstants";
+import { ELITE_LEAGUES, ELITE_LEAGUE_META, FilterMode, SortBy } from "./constants/appConstants";
 import { useAuth } from "./hooks/useAuth";
 import { useLiveFixtureScorePoll } from "./hooks/useLiveFixtureScorePoll";
 import {
@@ -171,10 +171,23 @@ export default function App() {
   }
 
   const leaguesSorted = useMemo(() => {
-    const leagues = day?.leagues ?? [];
-    const filtered = leagues.filter(l => l.name.toLowerCase().includes(searchLeague.toLowerCase()) || l.country.toLowerCase().includes(searchLeague.toLowerCase()));
-    const elite = filtered.filter(l => ELITE_LEAGUES.includes(Number(l.id)));
-    const rest = filtered.filter(l => !ELITE_LEAGUES.includes(Number(l.id))).sort((a, b) => b.matches - a.matches);
+    const dayLeagues = day?.leagues ?? [];
+    const byId = new Map(dayLeagues.map((league) => [Number(league.id), league] as const));
+    const eliteComplete = ELITE_LEAGUE_META.map((meta) => {
+      const existing = byId.get(Number(meta.id));
+      return {
+        id: meta.id,
+        name: existing?.name || meta.name,
+        country: existing?.country || meta.country,
+        matches: Number(existing?.matches || 0),
+        logo: existing?.logo
+      };
+    });
+    const nonElite = dayLeagues.filter((league) => !ELITE_LEAGUES.includes(Number(league.id)));
+    const leagues = [...eliteComplete, ...nonElite];
+    const filtered = leagues.filter((l) => l.name.toLowerCase().includes(searchLeague.toLowerCase()) || l.country.toLowerCase().includes(searchLeague.toLowerCase()));
+    const elite = filtered.filter((l) => ELITE_LEAGUES.includes(Number(l.id)));
+    const rest = filtered.filter((l) => !ELITE_LEAGUES.includes(Number(l.id))).sort((a, b) => b.matches - a.matches);
     return [...elite, ...rest];
   }, [day, searchLeague]);
 
