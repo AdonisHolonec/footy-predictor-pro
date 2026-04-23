@@ -763,7 +763,7 @@ export default function UserDashboard() {
           </div>
         </AdminPerformanceObservatory>
 
-        <header className="mb-8 mt-8 flex flex-col gap-6 border-b border-white/[0.06] pb-8 xl:flex-row xl:items-start xl:justify-between">
+        <header className="mb-4 mt-8 flex flex-col gap-4 border-b border-white/[0.06] pb-4 sm:mb-6 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -785,7 +785,20 @@ export default function UserDashboard() {
               </div>
               <div className="hidden rounded-2xl border border-white/[0.08] bg-signal-void/40 px-4 py-3 text-right font-mono text-[10px] text-signal-inkMuted sm:block">
                 <div className="text-signal-sage">● Calibrated</div>
-                <div className="mt-1 text-signal-silver">{user?.email}</div>
+                <div className="mt-1 inline-flex items-center justify-end gap-2 text-signal-silver">
+                  <span>{user?.email}</span>
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      userTier === "ultra"
+                        ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
+                        : userTier === "premium"
+                          ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
+                          : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
+                    }`}
+                  >
+                    {userTier.toUpperCase()}
+                  </span>
+                </div>
                 <Link to="/privacy" className="mt-2 inline-block text-signal-petrol hover:underline">
                   Confidențialitate
                 </Link>
@@ -793,8 +806,20 @@ export default function UserDashboard() {
             </div>
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="max-w-3xl" />
             <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
-            <p className="text-xs text-signal-inkMuted sm:hidden">
-              {user?.email} ·{" "}
+            <p className="flex flex-wrap items-center gap-1.5 text-xs text-signal-inkMuted sm:hidden">
+              <span>{user?.email}</span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                  userTier === "ultra"
+                    ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
+                    : userTier === "premium"
+                      ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
+                      : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
+                }`}
+              >
+                {userTier.toUpperCase()}
+              </span>
+              <span>·</span>
               <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
                 Confidențialitate
               </Link>
@@ -856,14 +881,28 @@ export default function UserDashboard() {
               </button>
             </>
           )}
-          <button
-            type="button"
-            onClick={() => void warmAndPredict()}
-            disabled={warmPredictBusy}
-            className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {warmPredictBusy ? "Warm + Predict…" : "Warm + Predict"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void warmAndPredict()}
+              disabled={warmPredictBusy}
+              className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {warmPredictBusy ? "Warm + Predict…" : "Warm + Predict"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSettledMarketsOnly((prev) => !prev)}
+              className={`rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-inner transition ${
+                showSettledMarketsOnly
+                  ? "border-signal-sage/35 bg-signal-sage/10 text-signal-mint"
+                  : "border-white/10 bg-signal-panel/45 text-signal-inkMuted hover:text-signal-ink"
+              }`}
+              title="Afișează doar meciurile finalizate unde piețele derivate pot primi badge WIN/LOSE"
+            >
+              {showSettledMarketsOnly ? "Settled markets: ON" : "Settled markets: OFF"}
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Zile active:</span>
             {activePredictDates.map((d) => (
@@ -875,34 +914,11 @@ export default function UserDashboard() {
               </span>
             ))}
           </div>
-          <div
-            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide shadow-inner ${
-              userTier === "ultra"
-                ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
-                : userTier === "premium"
-                  ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
-                  : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
-            }`}
-          >
-            {userTier.toUpperCase()}
-          </div>
           {tierQuotaExempt && (
             <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">
               Admin · Unlimited
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setShowSettledMarketsOnly((prev) => !prev)}
-            className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold shadow-inner transition ${
-              showSettledMarketsOnly
-                ? "border-signal-sage/35 bg-signal-sage/10 text-signal-mint"
-                : "border-white/10 bg-signal-panel/45 text-signal-inkMuted hover:text-signal-ink"
-            }`}
-            title="Afișează doar meciurile finalizate unde piețele derivate pot primi badge WIN/LOSE"
-          >
-            {showSettledMarketsOnly ? "Settled markets: ON" : "Settled markets: OFF"}
-          </button>
           {(warmPredictBusy || trialBusy !== null || exportBusy || notifSaveBusy) && (
             <span className="inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
