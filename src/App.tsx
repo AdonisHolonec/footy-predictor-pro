@@ -639,9 +639,11 @@ export default function App() {
   }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   const selectedSet = new Set(selectedLeagueIds);
-  const usageCount = day?.usage?.count || 0;
-  const usageLimit = day?.usage?.limit || 100;
-  const usagePct = (usageCount / usageLimit) * 100;
+  const usageCount = Number(day?.usage?.count) || 0;
+  const usageLimitRaw = Number(day?.usage?.limit);
+  const usageLimit = Number.isFinite(usageLimitRaw) ? usageLimitRaw : 100;
+  const usageDenominator = usageLimit > 0 ? usageLimit : 1;
+  const usagePct = Math.max(0, Math.min(100, (usageCount / usageDenominator) * 100));
   const hasThresholdDraftChanges =
     Math.abs(draftDrawdownThreshold - alertDrawdownThreshold) > 0.0001
     || Math.abs(draftDriftThreshold - alertDriftThreshold) > 0.0001

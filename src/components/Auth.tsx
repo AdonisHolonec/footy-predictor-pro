@@ -50,7 +50,7 @@ export default function Auth({
     setLocalError("");
     setLocalSuccess("");
 
-    if (!email.trim()) {
+    if (mode !== "reset" && !email.trim()) {
       setLocalError("Email este obligatoriu.");
       return;
     }

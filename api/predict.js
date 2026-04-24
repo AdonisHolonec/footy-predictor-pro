@@ -1651,7 +1651,7 @@ export default async function handler(req, res) {
 
     if (persistable.length > 0) {
       try {
-        await upsertPredictionsHistory(persistable);
+        const persistStats = await upsertPredictionsHistory(persistable);
         if (usageCtx.userId) {
           const supabase = getSupabaseAdmin();
           const linkRows = persistable
@@ -1667,6 +1667,28 @@ export default async function handler(req, res) {
               // Do not fail prediction delivery if history-link persistence has transient issues.
               res.setHeader("X-Persist-Warning", "user_prediction_fixtures_link_failed");
             }
+          }
+          // Best-effort operational telemetry row visible in Supabase history_sync_log.
+          try {
+            const persistInserted = Number(persistStats?.inserted ?? 0);
+            const persistUpdated = Number(persistStats?.updated ?? 0);
+            const persistSkippedFinal = Number(persistStats?.skippedFinal ?? 0);
+            const persistSkippedStale = Number(persistStats?.skippedStale ?? 0);
+            const persistSkippedPrekickoff = Number(persistStats?.skipped ?? 0);
+            await supabase.from("history_sync_log").insert({
+              source: "predict_persist",
+              method: String(req.method || "GET").toUpperCase(),
+              ok: true,
+              scanned: Number(persistStats?.count ?? persistable.length ?? 0),
+              updated: persistInserted + persistUpdated,
+              persist_inserted: persistInserted,
+              persist_updated: persistUpdated,
+              persist_skipped_final: persistSkippedFinal,
+              persist_skipped_stale: persistSkippedStale,
+              persist_skipped_prekickoff: persistSkippedPrekickoff
+            });
+          } catch {
+            // telemetry must never block predict response
           }
         }
       } catch (persistError) {

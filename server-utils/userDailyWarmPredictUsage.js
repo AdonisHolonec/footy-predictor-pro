@@ -1,4 +1,5 @@
 import { parseAdminEmails, readBearer } from "./authAdmin.js";
+import { todayCalendarEuropeBucharest } from "./fixtureCalendarDateKey.js";
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 const USAGE_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -11,7 +12,8 @@ export function parseUsageDayFromQuery(query) {
 
 /**
  * Resolves whether the request is anonymous or authenticated usage tracking.
- * If Authorization is present, token must be valid and usageDay query param is required.
+ * If Authorization is present, token must be valid.
+ * usageDay is optional; when omitted/invalid we fallback to current Europe/Bucharest calendar day.
  */
 export async function resolveAuthenticatedUsageContext(req) {
   const token = readBearer(req);
@@ -27,16 +29,7 @@ export async function resolveAuthenticatedUsageContext(req) {
     return { anonymous: false, error: { status: 401, body: { ok: false, error: "Token invalid sau expirat." } } };
   }
 
-  const usageDay = parseUsageDayFromQuery(req.query);
-  if (!usageDay) {
-    return {
-      anonymous: false,
-      error: {
-        status: 400,
-        body: { ok: false, error: "usageDay (YYYY-MM-DD) este obligatoriu când se trimite Authorization." }
-      }
-    };
-  }
+  const usageDay = parseUsageDayFromQuery(req.query) || todayCalendarEuropeBucharest();
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")

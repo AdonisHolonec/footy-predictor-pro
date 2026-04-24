@@ -1,7 +1,7 @@
 /**
  * Authorizes cron / internal maintenance requests.
- * - Production with CRON_SECRET: Bearer / x-cron-secret / query secret must match (Vercel Cron sends Bearer when the env var is set).
- * - Production without CRON_SECRET on Vercel: accept invocations whose User-Agent is Vercel Cron (so nightly jobs still run; set CRON_SECRET for stricter auth).
+ * - Production: requires CRON_SECRET match (Bearer / x-cron-secret / query secret).
+ * - Optional temporary production fallback: set ALLOW_VERCEL_CRON_UA_FALLBACK=1 to allow Vercel Cron UA only when CRON_SECRET is missing.
  * - Non-production: secret match OR same-origin browser (Origin/Referer) for local dev; if secret unset, allow dev.
  */
 export function isAuthorizedCronOrInternalRequest(req) {
@@ -20,8 +20,9 @@ export function isAuthorizedCronOrInternalRequest(req) {
   const isProd = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
   if (isProd) {
     const onVercel = String(process.env.VERCEL || "") === "1";
+    const allowUaFallback = String(process.env.ALLOW_VERCEL_CRON_UA_FALLBACK || "") === "1";
     const ua = String(req.headers["user-agent"] || "").toLowerCase();
-    if (onVercel && !secret && ua.includes("vercel-cron")) return true;
+    if (allowUaFallback && onVercel && !secret && ua.includes("vercel-cron")) return true;
     return false;
   }
 

@@ -144,6 +144,7 @@ export default function UserDashboard() {
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
+  const isSyncHistoryInFlightRef = useRef(false);
 
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
@@ -229,6 +230,8 @@ export default function UserDashboard() {
   }, [user?.id, session?.access_token]);
 
   const syncHistory = useCallback(async () => {
+    if (isSyncHistoryInFlightRef.current) return;
+    isSyncHistoryInFlightRef.current = true;
     setIsHistorySyncing(true);
     try {
       const headers: Record<string, string> = {};
@@ -239,6 +242,7 @@ export default function UserDashboard() {
       // indicator only
     } finally {
       setIsHistorySyncing(false);
+      isSyncHistoryInFlightRef.current = false;
     }
   }, [session?.access_token, loadHistory]);
 

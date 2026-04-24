@@ -247,16 +247,26 @@ async function handleHistorySync(req, res) {
   const supabase = getSupabaseAdmin();
   const days = Math.max(1, Math.min(Number(req.query.days || 30), 120));
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const scanChunkSize = Math.max(200, Math.min(Number(process.env.HISTORY_SYNC_SCAN_CHUNK || 1000), 2000));
+  const scanMaxRows = Math.max(scanChunkSize, Math.min(Number(process.env.HISTORY_SYNC_SCAN_MAX_ROWS || 10000), 50000));
 
   try {
-    const { data: candidates, error: readError } = await supabase
-      .from(HISTORY_TABLE)
-      .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload")
-      .gte("kickoff_at", cutoff)
-      .or("validation.eq.pending,match_status.not.in.(FT,AET,PEN)")
-      .limit(1000);
+    const candidates = [];
+    for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+      const { data: page, error: readError } = await supabase
+        .from(HISTORY_TABLE)
+        .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload")
+        .gte("kickoff_at", cutoff)
+        .or("validation.eq.pending,match_status.not.in.(FT,AET,PEN)")
+        .order("kickoff_at", { ascending: false })
+        .order("fixture_id", { ascending: false })
+        .range(offset, offset + scanChunkSize - 1);
+      if (readError) throw readError;
+      if (!page?.length) break;
+      candidates.push(...page);
+      if (page.length < scanChunkSize) break;
+    }
 
-    if (readError) throw readError;
     if (!candidates || candidates.length === 0) {
       console.info(
         JSON.stringify({ historySync: true, scanned: 0, updated: 0, note: "no_pending_or_nonfinal_rows" })
@@ -264,6 +274,7 @@ async function handleHistorySync(req, res) {
       await persistHistorySyncStatus(supabase, req, { ok: true, scanned: 0, updated: 0 });
       return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "Nu există înregistrări în așteptare." });
     }
+    const cappedScan = candidates.length >= scanMaxRows;
 
     const groupMap = new Map();
     for (const row of candidates) {
@@ -355,7 +366,8 @@ async function handleHistorySync(req, res) {
         historySync: true,
         method: req.method || "",
         scanned: candidates.length,
-        updated: updates.length
+        updated: updates.length,
+        cappedScan
       })
     );
     await persistHistorySyncStatus(supabase, req, {
@@ -366,7 +378,8 @@ async function handleHistorySync(req, res) {
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
-      updated: updates.length
+      updated: updates.length,
+      cappedScan
     });
   } catch (error) {
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";

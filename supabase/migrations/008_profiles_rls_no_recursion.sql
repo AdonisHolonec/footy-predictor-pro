@@ -9,6 +9,7 @@ drop policy if exists "users_can_update_own_profile" on public.profiles;
 drop policy if exists "users_can_insert_own_profile" on public.profiles;
 drop policy if exists "admins_manage_profiles" on public.profiles;
 drop policy if exists "users_update_own_favorites_only" on public.profiles;
+drop policy if exists "users_update_own_profile" on public.profiles;
 
 create policy "users_can_read_own_profile"
 on public.profiles

@@ -137,10 +137,78 @@ export async function upsertPredictionsHistory(predictions) {
   if (eligible.length === 0) return { count: 0, skipped };
 
   const rows = eligible.map(mapPredictionToDbRow);
-  const { error } = await supabase.from(HISTORY_TABLE).upsert(rows, { onConflict: "fixture_id" });
-  if (error) throw error;
+  const fixtureIds = rows
+    .map((row) => Number(row.fixture_id))
+    .filter((id) => Number.isFinite(id));
+
+  const { data: existingRows, error: existingErr } = await supabase
+    .from(HISTORY_TABLE)
+    .select("fixture_id, match_status, updated_at")
+    .in("fixture_id", fixtureIds);
+  if (existingErr) throw existingErr;
+
+  const existingById = new Map((existingRows || []).map((row) => [Number(row.fixture_id), row]));
+  const toInsert = [];
+  const toUpsert = [];
+  let skippedFinal = 0;
+  let skippedStale = 0;
+
+  for (const row of rows) {
+    const existing = existingById.get(Number(row.fixture_id));
+    if (!existing) {
+      toInsert.push(row);
+      continue;
+    }
+    // Guard: never let predict reruns overwrite settled/final rows.
+    if (isFinalStatus(existing.match_status)) {
+      skippedFinal += 1;
+      continue;
+    }
+
+    // Guard: ignore stale updates when DB row is already newer.
+    const incomingTs = new Date(row.updated_at || 0).getTime();
+    const existingTs = new Date(existing.updated_at || 0).getTime();
+    if (Number.isFinite(existingTs) && Number.isFinite(incomingTs) && existingTs > incomingTs) {
+      skippedStale += 1;
+      continue;
+    }
+
+    toUpsert.push(row);
+  }
+
+  if (toInsert.length > 0) {
+    const { error: insertErr } = await supabase.from(HISTORY_TABLE).insert(toInsert);
+    if (insertErr) throw insertErr;
+  }
+
+  if (toUpsert.length > 0) {
+    const { error: upsertErr } = await supabase.from(HISTORY_TABLE).upsert(toUpsert, { onConflict: "fixture_id" });
+    if (upsertErr) throw upsertErr;
+  }
+
+  const inserted = toInsert.length;
+  const updated = toUpsert.length;
+  console.info(
+    JSON.stringify({
+      historyPersist: true,
+      attempted: rows.length,
+      inserted,
+      updated,
+      skippedFinal,
+      skippedStale,
+      skippedPreKickoff: skipped
+    })
+  );
+
   await insertPredictionSnapshots(eligible);
-  return { count: rows.length, skipped };
+  return {
+    count: rows.length,
+    skipped,
+    inserted,
+    updated,
+    skippedFinal,
+    skippedStale
+  };
 }
 
 export function mapDbRowToHistoryEntry(row) {

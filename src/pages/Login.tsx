@@ -73,7 +73,7 @@ export default function Login() {
     event.preventDefault();
     setLocalError("");
     setMessage("");
-    if (!email.trim()) {
+    if (mode !== "reset" && !email.trim()) {
       setLocalError("Email este obligatoriu.");
       return;
     }
