@@ -1,7 +1,7 @@
 // api/predict.js
 import { readBearer } from "../server-utils/authAdmin.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
-import { getWithCache } from "../server-utils/fetcher.js";
+import { getApiUsage, getWithCache } from "../server-utils/fetcher.js";
 import {
   computeMatchProbs,
   clampLambda,
@@ -625,8 +625,7 @@ export default async function handler(req, res) {
       predictLimit: null
     };
 
-    // Free users are DB-only: serve persisted predictions without upstream calls.
-    if (!tierContext.quotaExempt && tierContext.effectiveTier === USER_TIERS.FREE) {
+    const readDbOnlyPredictions = async (reason = "db_only_free") => {
       const from = `${date}T00:00:00.000Z`;
       const to = `${date}T23:59:59.999Z`;
       const leagueFilter = leagueIds
@@ -654,8 +653,27 @@ export default async function handler(req, res) {
       res.setHeader("X-Tier", String(tierContext.effectiveTier));
       res.setHeader("X-Predict-Count", "0");
       res.setHeader("X-Predict-Limit", String(dailyLimit));
-      res.setHeader("X-Data-Source", "db_only_free");
+      res.setHeader("X-Data-Source", reason);
       return res.status(200).json(items);
+    };
+
+    // Free users are DB-only: serve persisted predictions without upstream calls.
+    if (!tierContext.quotaExempt && tierContext.effectiveTier === USER_TIERS.FREE) {
+      return readDbOnlyPredictions("db_only_free");
+    }
+
+    // Global cost guard: when daily usage is already high, serve DB-only for non-admin tiers.
+    if (!tierContext.quotaExempt) {
+      const usageHardStopPct = Math.max(60, Math.min(Number(process.env.PREDICT_USAGE_DB_ONLY_PCT || 90), 99));
+      const reserveCalls = Math.max(0, Number(process.env.PREDICT_USAGE_RESERVE_CALLS || 1000));
+      const usage = await getApiUsage().catch(() => ({ count: 0, limit: 0 }));
+      const usageCount = Number(usage?.count || 0);
+      const usageLimit = Number(usage?.limit || 0);
+      const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
+      const usageRemaining = Math.max(0, usageLimit - usageCount);
+      if (usagePct >= usageHardStopPct || usageRemaining <= reserveCalls) {
+        return readDbOnlyPredictions("db_only_budget_guard");
+      }
     }
   }
 

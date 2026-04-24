@@ -229,8 +229,10 @@ export default async function handler(req, res) {
   const usageLimit = Number(usageSnapshot?.limit || 0);
   const usageCount = Number(usageSnapshot?.count || 0);
   const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
+  const usageRemaining = Math.max(0, usageLimit - usageCount);
+  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 1000));
   const budgetMode = usagePct >= usageBudgetThresholdPct;
-  const hardStopMode = usagePct >= usageHardStopPct;
+  const hardStopMode = usagePct >= usageHardStopPct || usageRemaining <= reserveCalls;
 
   const warmQs = new URLSearchParams({
     date: dateRaw,
@@ -242,6 +244,28 @@ export default async function handler(req, res) {
   });
 
   try {
+    if (hardStopMode) {
+      return res.status(200).json({
+        ok: true,
+        skipped: true,
+        reason: "daily_api_budget_hard_stop",
+        date: dateRaw,
+        season,
+        leagueIds,
+        usageBudget: {
+          count: usageCount,
+          limit: usageLimit,
+          pct: Number(usagePct.toFixed(1)),
+        remaining: usageRemaining,
+          thresholdPct: usageBudgetThresholdPct,
+          hardStopPct: usageHardStopPct,
+        reserveCalls,
+          budgetMode,
+          hardStopMode
+        }
+      });
+    }
+
     const warmRes = await fetch(`${base}/api/warm?${warmQs.toString()}`, {
       method: "GET",
       headers: { Accept: "application/json", "x-internal-cron": "warm-predict" }
@@ -303,8 +327,10 @@ export default async function handler(req, res) {
         count: usageCount,
         limit: usageLimit,
         pct: Number(usagePct.toFixed(1)),
+        remaining: usageRemaining,
         thresholdPct: usageBudgetThresholdPct,
         hardStopPct: usageHardStopPct,
+        reserveCalls,
         budgetMode,
         hardStopMode
       },
