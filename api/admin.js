@@ -590,6 +590,7 @@ async function handleMl(req, res) {
   const successful24h = runs24h.filter((row) => row.ok).length;
   const successRate24h = runs24h.length > 0 ? Number(((successful24h / runs24h.length) * 100).toFixed(1)) : null;
   const updated24h = runs24h.reduce((sum, row) => sum + Number(row.updated || 0), 0);
+  const scanned24h = runs24h.reduce((sum, row) => sum + Number(row.scanned || 0), 0);
   const lastSuccessfulRunAtMs = lastSuccessfulRun?.ranAt ? new Date(lastSuccessfulRun.ranAt).getTime() : NaN;
   const hoursSinceLastSuccess = Number.isFinite(lastSuccessfulRunAtMs)
     ? Number(((Date.now() - lastSuccessfulRunAtMs) / (1000 * 60 * 60)).toFixed(2))
@@ -616,7 +617,7 @@ async function handleMl(req, res) {
       message: `Rata de succes pe 24h este ${successRate24h.toFixed(1)}% (<80%).`
     });
   }
-  if (updated24h === 0 && runs24h.length > 0) {
+  if (updated24h === 0 && scanned24h > 0) {
     proactiveAlerts.push({
       level: "warn",
       code: "no_updates_24h",
@@ -676,6 +677,7 @@ async function handleMl(req, res) {
         runs24h: runs24h.length,
         successRate24h,
         updated24h,
+        scanned24h,
         reliability
       },
       persist: persistSummary,

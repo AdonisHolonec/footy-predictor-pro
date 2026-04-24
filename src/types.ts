@@ -435,6 +435,7 @@ export type MlAdminStatus = {
       runs24h?: number;
       successRate24h?: number | null;
       updated24h?: number;
+      scanned24h?: number;
       reliability?: "HEALTHY" | "DEGRADED" | "CRITICAL" | string;
     };
     persist?: {
