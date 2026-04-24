@@ -338,6 +338,48 @@ async function handleMl(req, res) {
     }
   }
 
+  if (req.method === "POST" && action === "history-sync-now") {
+    const cronSecret = String(process.env.CRON_SECRET || "");
+    if (!cronSecret) {
+      return res.status(500).json({
+        ok: false,
+        error: "CRON_SECRET lipsește. History sync now folosește endpointul intern /api/history?sync=1."
+      });
+    }
+    try {
+      const days = Number(req.query.days || 30);
+      const safeDays = Number.isFinite(days) && days > 0 ? Math.min(90, Math.floor(days)) : 30;
+      const base = resolvePublicBaseUrl(req);
+      const run = await fetch(`${base}/api/history?sync=1&days=${safeDays}`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${cronSecret}`,
+          "x-internal-admin": "history-sync-now"
+        }
+      });
+      const body = await run.json().catch(() => ({}));
+      if (!run.ok || body?.ok === false) {
+        return res.status(502).json({
+          ok: false,
+          status: run.status,
+          error: body?.error || "History sync now a eșuat la /api/history?sync=1.",
+          sync: body
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        status: run.status,
+        sync: body
+      });
+    } catch (error) {
+      return res.status(500).json({
+        ok: false,
+        error: error?.message || "History sync now a eșuat."
+      });
+    }
+  }
+
   if (sub === "calibration") {
     const q = supabase
       .from("calibration_maps")
@@ -424,8 +466,19 @@ async function handleMl(req, res) {
     });
   }
 
+  const deriveHistorySyncHealth = (statusRow, recentRows) => {
+    const now = Date.now();
+    const lastRanAt = statusRow?.last_ran_at ? new Date(statusRow.last_ran_at).getTime() : NaN;
+    const hoursSinceLastRun = Number.isFinite(lastRanAt) ? (now - lastRanAt) / (1000 * 60 * 60) : Number.POSITIVE_INFINITY;
+    if (statusRow?.last_ok === false) return "fail";
+    if (!Number.isFinite(hoursSinceLastRun) || hoursSinceLastRun > 8) return "warn";
+    const failedRecent = (recentRows || []).some((row) => row?.ok === false);
+    if (failedRecent) return "warn";
+    return "ok";
+  };
+
   // default: status snapshot
-  const [calib, stacker, elo, marketRolling] = await Promise.all([
+  const [calib, stacker, elo, marketRolling, historyStatus, historyRecent] = await Promise.all([
     supabase
       .from("calibration_maps")
       .select("league_id", { count: "exact", head: true })
@@ -436,8 +489,32 @@ async function handleMl(req, res) {
       .eq("model_version", modelVersion)
       .eq("active", true),
     supabase.from("team_elo").select("team_id", { count: "exact", head: true }),
-    supabase.from("team_market_rolling").select("team_id", { count: "exact", head: true })
+    supabase.from("team_market_rolling").select("team_id", { count: "exact", head: true }),
+    supabase
+      .from("history_sync_status")
+      .select("last_ran_at, last_source, last_method, last_scanned, last_updated, last_ok, last_error")
+      .eq("id", 1)
+      .maybeSingle(),
+    supabase
+      .from("history_sync_log")
+      .select("ran_at, source, method, ok, scanned, updated, error")
+      .order("ran_at", { ascending: false })
+      .limit(8)
   ]);
+
+  const recentRuns = Array.isArray(historyRecent.data) ? historyRecent.data : [];
+  const recentRunsNormalized = recentRuns.map((row) => ({
+    ranAt: row.ran_at || null,
+    source: row.source || null,
+    method: row.method || null,
+    ok: Boolean(row.ok),
+    scanned: Number(row.scanned || 0),
+    updated: Number(row.updated || 0),
+    error: row.error || null
+  }));
+  const recentFailures = recentRunsNormalized.filter((row) => row.ok === false).length;
+  const recentUpdatedTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.updated || 0), 0);
+  const historySyncHealth = deriveHistorySyncHealth(historyStatus.data, recentRuns);
 
   return res.status(200).json({
     ok: true,
@@ -446,9 +523,30 @@ async function handleMl(req, res) {
     activeStackerWeights: stacker.count || 0,
     eloTeams: elo.count || 0,
     marketRollingTeams: marketRolling.count || 0,
+    historySync: {
+      health: historySyncHealth,
+      last: historyStatus.data
+        ? {
+            ranAt: historyStatus.data.last_ran_at || null,
+            source: historyStatus.data.last_source || null,
+            method: historyStatus.data.last_method || null,
+            scanned: Number(historyStatus.data.last_scanned || 0),
+            updated: Number(historyStatus.data.last_updated || 0),
+            ok: Boolean(historyStatus.data.last_ok),
+            error: historyStatus.data.last_error || null
+          }
+        : null,
+      recent: recentRunsNormalized,
+      summary: {
+        runs: recentRunsNormalized.length,
+        failures: recentFailures,
+        updatedTotal: recentUpdatedTotal
+      }
+    },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",
       trainNow: "POST /api/admin?view=ml&action=train-now&mode=all|calibration|stacker",
+      historySyncNow: "POST /api/admin?view=ml&action=history-sync-now&days=30",
       scripts: [
         "node --env-file=.env.local scripts/fitCalibration.js",
         "node --env-file=.env.local scripts/fitStacker.js",

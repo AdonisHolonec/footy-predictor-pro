@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test tests/math.test.js",
+    "test": "npm run test:math && npm run test:unit",
+    "test:math": "node --test tests/math.test.js",
+    "test:unit": "vitest run",
     "preview": "vite preview",
     "api": "npm --prefix server run api",
     "backtest": "node --env-file=.env.local scripts/backtest.js"
@@ -21,17 +23,21 @@
     "redis": "^5.11.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^25.1.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vercel/node": "^5.5.28",
     "@vitejs/plugin-react": "^5.0.1",
     "autoprefixer": "^10.4.27",
+    "jsdom": "^29.0.2",
     "postcss": "^8.5.9",
     "supabase": "^2.92.1",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.2",
-    "vite": "^5.3.4"
+    "vite": "^5.3.4",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=18"

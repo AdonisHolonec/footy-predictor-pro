@@ -439,6 +439,12 @@ function healthTone(value: number | null | undefined, good: number, warn: number
   return "text-signal-amber";
 }
 
+function syncHealthTone(health?: "ok" | "warn" | "fail") {
+  if (health === "ok") return "text-signal-sage";
+  if (health === "fail") return "text-signal-rose";
+  return "text-signal-amber";
+}
+
 export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMetricsPanelProps) {
   const [metrics, setMetrics] = useState<ModelMetricsResponse | null>(null);
   const [mlStatus, setMlStatus] = useState<MlAdminStatus | null>(null);
@@ -446,6 +452,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [training, setTraining] = useState(false);
+  const [syncingHistoryNow, setSyncingHistoryNow] = useState(false);
   const [trainReport, setTrainReport] = useState<{
     finishedAt?: string;
     mode?: string;
@@ -526,6 +533,26 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     }
   }, [accessToken, load]);
 
+  const runHistorySyncNow = useCallback(async () => {
+    if (!accessToken) return;
+    setSyncingHistoryNow(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/admin?view=ml&action=history-sync-now&days=30`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.ok === false) {
+        setErr(typeof body?.error === "string" ? body.error : "History sync now a eșuat.");
+        return;
+      }
+      await load();
+    } finally {
+      setSyncingHistoryNow(false);
+    }
+  }, [accessToken, load]);
+
   if (!accessToken) return null;
 
   const brier = metrics?.brier1x2 ?? null;
@@ -567,6 +594,15 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
           </button>
           <button
             type="button"
+            onClick={runHistorySyncNow}
+            disabled={syncingHistoryNow}
+            className="touch-manipulation rounded-lg border border-signal-sage/25 bg-signal-sage/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-sage hover:bg-signal-sage/15 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Rulează manual /api/history?sync=1 și reîncarcă monitorizarea."
+          >
+            {syncingHistoryNow ? "Syncing…" : "Run history sync"}
+          </button>
+          <button
+            type="button"
             onClick={() => void load()}
             disabled={loading}
             className="touch-manipulation rounded-lg border border-white/10 bg-signal-panel/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-ink hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
@@ -603,6 +639,64 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
           toneClass={(mlStatus?.activeStackerWeights || 0) > 0 ? "text-signal-mint" : (mlStatus?.calibrationMaps || 0) > 0 ? "text-signal-petrol" : "text-signal-silver"}
         />
       </div>
+
+      {mlStatus?.historySync && (
+        <div className="mt-4 rounded-xl border border-white/5 bg-signal-void/30 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">History sync monitor</span>
+            <span className={`font-mono text-[10px] uppercase tracking-wider ${syncHealthTone(mlStatus.historySync.health)}`}>
+              {mlStatus.historySync.health || "warn"}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last run</div>
+              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+                {mlStatus.historySync.last?.ranAt ? new Date(mlStatus.historySync.last.ranAt).toLocaleString() : "—"}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last updated</div>
+              <div className="mt-1 font-mono text-[10px] text-signal-silver">{mlStatus.historySync.last?.updated ?? 0}</div>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Recent failures</div>
+              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+                {mlStatus.historySync.summary?.failures ?? 0} / {mlStatus.historySync.summary?.runs ?? 0}
+              </div>
+            </div>
+          </div>
+          {mlStatus.historySync.last?.error && (
+            <div className="mt-2 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 font-mono text-[10px] text-signal-rose">
+              {mlStatus.historySync.last.error}
+            </div>
+          )}
+          {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[420px] font-mono text-[10px] tabular-nums">
+                <thead className="text-left text-signal-inkMuted">
+                  <tr>
+                    <th className="py-1 pr-2">Ran at</th>
+                    <th className="py-1 pr-2">Source</th>
+                    <th className="py-1 pr-2 text-right">Updated</th>
+                    <th className="py-1 pr-2 text-right">OK</th>
+                  </tr>
+                </thead>
+                <tbody className="text-signal-silver">
+                  {mlStatus.historySync.recent.slice(0, 5).map((row, idx) => (
+                    <tr key={`${row.ranAt || "na"}-${idx}`} className="border-t border-white/5">
+                      <td className="py-1 pr-2">{row.ranAt ? new Date(row.ranAt).toLocaleString() : "—"}</td>
+                      <td className="py-1 pr-2">{row.source || "—"}</td>
+                      <td className="py-1 pr-2 text-right">{row.updated ?? 0}</td>
+                      <td className={`py-1 pr-2 text-right ${row.ok ? "text-signal-sage" : "text-signal-rose"}`}>{row.ok ? "yes" : "no"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {metrics?.calibration1x2 && metrics.calibration1x2.length > 0 && (
         <div className="mt-5 rounded-xl border border-white/5 bg-signal-void/30 p-3">

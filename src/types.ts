@@ -401,7 +401,33 @@ export type MlAdminStatus = {
   calibrationMaps?: number;
   activeStackerWeights?: number;
   eloTeams?: number;
-  helpers?: { invalidate?: string; scripts?: string[] };
+  historySync?: {
+    health?: "ok" | "warn" | "fail";
+    last?: {
+      ranAt?: string | null;
+      source?: string | null;
+      method?: string | null;
+      scanned?: number;
+      updated?: number;
+      ok?: boolean;
+      error?: string | null;
+    } | null;
+    recent?: Array<{
+      ranAt?: string | null;
+      source?: string | null;
+      method?: string | null;
+      ok?: boolean;
+      scanned?: number;
+      updated?: number;
+      error?: string | null;
+    }>;
+    summary?: {
+      runs?: number;
+      failures?: number;
+      updatedTotal?: number;
+    };
+  };
+  helpers?: { invalidate?: string; trainNow?: string; historySyncNow?: string; scripts?: string[] };
 };
 
 export type RiskAlert = {
