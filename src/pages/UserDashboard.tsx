@@ -129,6 +129,7 @@ export default function UserDashboard() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isGdprOpen, setIsGdprOpen] = useState(false);
+  const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -182,6 +183,18 @@ export default function UserDashboard() {
     const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
     return clampTierDates(seedDate, userTier, selectedDates.length ? selectedDates : [seedDate]);
   }, [selectedDates, date, userTier]);
+  const rollToDate = useCallback(
+    (nextDate: string) => {
+      setDate(nextDate);
+      setSelectedDates((prev) => {
+        const normalized = normalizeSelectedDates(prev?.length ? prev : [nextDate]);
+        const anchored = [nextDate, ...normalized.filter((d) => d !== nextDate)];
+        return clampTierDates(nextDate, userTier, anchored);
+      });
+      setDateSyncBadgeUntil(Date.now() + 6000);
+    },
+    [setDate, setSelectedDates, userTier]
+  );
   const prevWinRateRef = useRef(trackerStats.winRate);
   const formatRemaining = (ms: number) => {
     if (!ms || ms <= 0) return "00:00:00";
@@ -331,14 +344,15 @@ export default function UserDashboard() {
     const tm = setInterval(() => {
       const today = localCalendarDateKey();
       if (today === date) return;
-      setDate(today);
-      setSelectedDates((prev) => {
-        const rest = (prev || []).filter((d) => d !== date);
-        return normalizeSelectedDates([today, ...rest]);
-      });
+      rollToDate(today);
     }, 60_000);
     return () => clearInterval(tm);
-  }, [date, setDate, setSelectedDates]);
+  }, [date, rollToDate]);
+
+  useEffect(() => {
+    const today = localCalendarDateKey();
+    if (today !== date) rollToDate(today);
+  }, [date, rollToDate]);
 
   useEffect(() => {
     if (!user?.id || !history.length) return;
@@ -368,11 +382,36 @@ export default function UserDashboard() {
   useEffect(() => {
     if (!session?.access_token) return;
     const onVis = () => {
-      if (document.visibilityState === "visible") void syncHistory();
+      if (document.visibilityState !== "visible") return;
+      const today = localCalendarDateKey();
+      if (today !== date) rollToDate(today);
+      void syncHistory();
+    };
+    const onFocus = () => {
+      const today = localCalendarDateKey();
+      if (today !== date) rollToDate(today);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "footy.date" && event.key !== "footy.user.date") return;
+      const next = String(event.newValue || "").slice(0, 10);
+      if (!next || next === date) return;
+      rollToDate(next);
     };
     document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [session?.access_token, syncHistory]);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [session?.access_token, syncHistory, date, rollToDate]);
+
+  useEffect(() => {
+    if (dateSyncBadgeUntil <= Date.now()) return;
+    const tm = setTimeout(() => setDateSyncBadgeUntil(0), Math.max(0, dateSyncBadgeUntil - Date.now()));
+    return () => clearTimeout(tm);
+  }, [dateSyncBadgeUntil]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -927,6 +966,12 @@ export default function UserDashboard() {
             <span className="inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
               Loading
+            </span>
+          )}
+          {dateSyncBadgeUntil > Date.now() && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-sage">
+              <span className="h-1.5 w-1.5 rounded-full bg-signal-sage" />
+              Data sincronizată
             </span>
           )}
         </div>
