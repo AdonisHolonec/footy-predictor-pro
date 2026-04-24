@@ -431,6 +431,10 @@ export type MlAdminStatus = {
       failures?: number;
       updatedTotal?: number;
       hoursSinceLastRun?: number | null;
+      hoursSinceLastSuccess?: number | null;
+      runs24h?: number;
+      successRate24h?: number | null;
+      updated24h?: number;
     };
     persist?: {
       runs?: number;
@@ -445,6 +449,25 @@ export type MlAdminStatus = {
       title?: string;
       message?: string;
     };
+    alerts?: Array<{
+      level?: "warn" | "fail" | "ok";
+      code?: string;
+      message?: string;
+    }>;
+    lastSuccessfulRun?: {
+      ranAt?: string | null;
+      source?: string | null;
+      method?: string | null;
+      ok?: boolean;
+      scanned?: number;
+      updated?: number;
+      error?: string | null;
+      persistInserted?: number;
+      persistUpdated?: number;
+      persistSkippedFinal?: number;
+      persistSkippedStale?: number;
+      persistSkippedPrekickoff?: number;
+    } | null;
   };
   helpers?: { invalidate?: string; trainNow?: string; historySyncNow?: string; scripts?: string[] };
 };

@@ -564,6 +564,7 @@ async function handleMl(req, res) {
     persistSkippedStale: Number(row.persist_skipped_stale || 0),
     persistSkippedPrekickoff: Number(row.persist_skipped_prekickoff || 0)
   }));
+  const lastSuccessfulRun = recentRunsNormalized.find((row) => row.ok === true) || null;
   const recentFailures = recentRunsNormalized.filter((row) => row.ok === false).length;
   const recentUpdatedTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.updated || 0), 0);
   const historySyncHealth = deriveHistorySyncHealth(historyStatus.data, recentRuns);
@@ -571,6 +572,47 @@ async function handleMl(req, res) {
   const hoursSinceLastRun = Number.isFinite(lastRanAtMs) ? Number(((Date.now() - lastRanAtMs) / (1000 * 60 * 60)).toFixed(2)) : null;
   const persistRuns = recentRunsNormalized.filter((row) => row.source === "predict_persist");
   const historySyncHint = deriveHistorySyncHint(historyStatus.data, recentRuns, hoursSinceLastRun);
+  const nowMs = Date.now();
+  const runs24h = recentRunsNormalized.filter((row) => {
+    const ts = row.ranAt ? new Date(row.ranAt).getTime() : NaN;
+    return Number.isFinite(ts) && nowMs - ts <= 24 * 60 * 60 * 1000;
+  });
+  const successful24h = runs24h.filter((row) => row.ok).length;
+  const successRate24h = runs24h.length > 0 ? Number(((successful24h / runs24h.length) * 100).toFixed(1)) : null;
+  const updated24h = runs24h.reduce((sum, row) => sum + Number(row.updated || 0), 0);
+  const lastSuccessfulRunAtMs = lastSuccessfulRun?.ranAt ? new Date(lastSuccessfulRun.ranAt).getTime() : NaN;
+  const hoursSinceLastSuccess = Number.isFinite(lastSuccessfulRunAtMs)
+    ? Number(((Date.now() - lastSuccessfulRunAtMs) / (1000 * 60 * 60)).toFixed(2))
+    : null;
+  const proactiveAlerts = [];
+  if ((hoursSinceLastRun ?? 999) > 8) {
+    proactiveAlerts.push({
+      level: "fail",
+      code: "sync_stale",
+      message: "Sync oprit/stale: ultima rulare este mai veche de 8h."
+    });
+  }
+  if (runs24h.length === 0) {
+    proactiveAlerts.push({
+      level: "fail",
+      code: "zero_runs_24h",
+      message: "Nu există rulări de sync în ultimele 24h."
+    });
+  }
+  if (successRate24h != null && successRate24h < 80) {
+    proactiveAlerts.push({
+      level: "warn",
+      code: "low_success_rate_24h",
+      message: `Rata de succes pe 24h este ${successRate24h.toFixed(1)}% (<80%).`
+    });
+  }
+  if (updated24h === 0 && runs24h.length > 0) {
+    proactiveAlerts.push({
+      level: "warn",
+      code: "no_updates_24h",
+      message: "Au existat rulări, dar fără update-uri în ultimele 24h."
+    });
+  }
   const persistSummary = {
     runs: persistRuns.length,
     inserted: persistRuns.reduce((sum, row) => sum + Number(row.persistInserted || 0), 0),
@@ -605,10 +647,16 @@ async function handleMl(req, res) {
         runs: recentRunsNormalized.length,
         failures: recentFailures,
         updatedTotal: recentUpdatedTotal,
-        hoursSinceLastRun
+        hoursSinceLastRun,
+        hoursSinceLastSuccess,
+        runs24h: runs24h.length,
+        successRate24h,
+        updated24h
       },
       persist: persistSummary,
-      hint: historySyncHint
+      hint: historySyncHint,
+      alerts: proactiveAlerts,
+      lastSuccessfulRun
     },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",

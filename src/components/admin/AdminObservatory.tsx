@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import type { FilterMode } from "../../constants/appConstants";
@@ -459,6 +459,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const [refreshing, setRefreshing] = useState(false);
   const [training, setTraining] = useState(false);
   const [syncingHistoryNow, setSyncingHistoryNow] = useState(false);
+  const [snoozedAlerts, setSnoozedAlerts] = useState<Record<string, number>>({});
+  const loadInFlightRef = useRef(false);
   const [trainReport, setTrainReport] = useState<{
     finishedAt?: string;
     mode?: string;
@@ -472,6 +474,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
 
   const load = useCallback(async () => {
     if (!accessToken) return;
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     setLoading(true);
     setErr(null);
     try {
@@ -488,6 +492,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       setErr("Rețea sau răspuns invalid.");
     } finally {
       setLoading(false);
+      loadInFlightRef.current = false;
     }
   }, [accessToken, days]);
 
@@ -498,10 +503,46 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   useEffect(() => {
     if (!accessToken) return;
     const tm = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       void load();
     }, 60_000);
     return () => clearInterval(tm);
   }, [accessToken, load]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [accessToken, load]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("footy.admin.syncAlerts.snoozed");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      if (!parsed || typeof parsed !== "object") return;
+      setSnoozedAlerts(parsed);
+    } catch {
+      // ignore malformed local storage payload
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("footy.admin.syncAlerts.snoozed", JSON.stringify(snoozedAlerts));
+    } catch {
+      // ignore quota/permission errors
+    }
+  }, [snoozedAlerts]);
+
+  const snoozeAlert = useCallback((code: string, minutes = 60) => {
+    if (!code) return;
+    const until = Date.now() + minutes * 60 * 1000;
+    setSnoozedAlerts((prev) => ({ ...prev, [code]: until }));
+  }, []);
 
   const invalidate = useCallback(async () => {
     if (!accessToken) return;
@@ -572,6 +613,12 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const brier = metrics?.brier1x2 ?? null;
   const logLoss = metrics?.logLoss1x2 ?? null;
   const ece = metrics?.ece1x2 ?? null;
+  const visibleSyncAlerts = (mlStatus?.historySync?.alerts || []).filter((alert) => {
+    const code = String(alert.code || "");
+    if (!code) return true;
+    const until = snoozedAlerts[code];
+    return !(Number.isFinite(until) && until > Date.now());
+  });
 
   return (
     <section className="rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6">
@@ -689,6 +736,24 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                 {mlStatus.historySync.summary?.hoursSinceLastRun != null ? mlStatus.historySync.summary.hoursSinceLastRun.toFixed(2) : "—"}
               </div>
             </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last successful run</div>
+              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+                {mlStatus.historySync.lastSuccessfulRun?.ranAt
+                  ? new Date(mlStatus.historySync.lastSuccessfulRun.ranAt).toLocaleString()
+                  : "No successful run in recent window"}
+              </div>
+              <div
+                className={`mt-1 font-mono text-[9px] ${
+                  (mlStatus.historySync.summary?.hoursSinceLastSuccess ?? 999) > 8 ? "text-signal-rose" : "text-signal-inkMuted"
+                }`}
+              >
+                age:{" "}
+                {mlStatus.historySync.summary?.hoursSinceLastSuccess != null
+                  ? `${mlStatus.historySync.summary.hoursSinceLastSuccess.toFixed(2)}h`
+                  : "—"}
+              </div>
+            </div>
           </div>
           {mlStatus.historySync.last?.error && (
             <div className="mt-2 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 font-mono text-[10px] text-signal-rose">
@@ -701,6 +766,57 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
               <div className="mt-1">{mlStatus.historySync.hint.message || "—"}</div>
             </div>
           )}
+          {Array.isArray(mlStatus.historySync.alerts) && visibleSyncAlerts.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {Object.keys(snoozedAlerts).length > 0 && (
+                <div className="mb-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSnoozedAlerts({})}
+                    className="rounded border border-white/20 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-signal-ink hover:bg-white/10"
+                    title="Reafișează toate alertele ascunse local."
+                  >
+                    Reset snoozed alerts
+                  </button>
+                </div>
+              )}
+              {visibleSyncAlerts.map((alert, idx) => (
+                <div
+                  key={`${alert.code || "alert"}-${idx}`}
+                  className={`rounded-lg border px-3 py-2 font-mono text-[10px] ${
+                    alert.level === "fail"
+                      ? "border-signal-rose/35 bg-signal-rose/10 text-signal-rose"
+                      : "border-signal-amber/30 bg-signal-amber/10 text-signal-amber"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{alert.message || "Atenție operațională."}</span>
+                    <button
+                      type="button"
+                      onClick={() => snoozeAlert(String(alert.code || ""), 60)}
+                      className="rounded border border-white/20 px-2 py-0.5 text-[9px] uppercase tracking-wide text-signal-ink hover:bg-white/10"
+                      title="Ascunde alerta 60 minute (local)."
+                    >
+                      Snooze 60m
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
+              24h runs: <span className="text-signal-ink">{mlStatus.historySync.summary?.runs24h ?? 0}</span>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
+              24h success: <span className={(mlStatus.historySync.summary?.successRate24h ?? 0) >= 90 ? "text-signal-sage" : "text-signal-amber"}>
+                {mlStatus.historySync.summary?.successRate24h != null ? `${mlStatus.historySync.summary.successRate24h.toFixed(1)}%` : "—"}
+              </span>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
+              24h updated: <span className="text-signal-ink">{mlStatus.historySync.summary?.updated24h ?? 0}</span>
+            </div>
+          </div>
           {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[420px] font-mono text-[10px] tabular-nums">
