@@ -409,6 +409,7 @@ export type MlAdminStatus = {
       method?: string | null;
       scanned?: number;
       updated?: number;
+      estimatedCalls?: number;
       ok?: boolean;
       error?: string | null;
     } | null;
@@ -419,6 +420,7 @@ export type MlAdminStatus = {
       ok?: boolean;
       scanned?: number;
       updated?: number;
+      estimatedCalls?: number;
       error?: string | null;
       persistInserted?: number;
       persistUpdated?: number;
@@ -430,12 +432,18 @@ export type MlAdminStatus = {
       runs?: number;
       failures?: number;
       updatedTotal?: number;
+      estimatedCallsTotal?: number;
+      avgEstimatedCallsPerRun?: number | null;
       hoursSinceLastRun?: number | null;
       hoursSinceLastSuccess?: number | null;
       runs24h?: number;
       successRate24h?: number | null;
       updated24h?: number;
       scanned24h?: number;
+      estimatedCalls24h?: number;
+      callsBudgetWarn24h?: number;
+      callsBudgetCritical24h?: number;
+      callsBudgetLevel?: "ok" | "warn" | "critical" | string;
       reliability?: "HEALTHY" | "DEGRADED" | "CRITICAL" | string;
     };
     persist?: {
@@ -463,6 +471,7 @@ export type MlAdminStatus = {
       ok?: boolean;
       scanned?: number;
       updated?: number;
+      estimatedCalls?: number;
       error?: string | null;
       persistInserted?: number;
       persistUpdated?: number;

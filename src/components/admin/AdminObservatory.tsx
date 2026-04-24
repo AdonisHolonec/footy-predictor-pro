@@ -457,6 +457,12 @@ function reliabilityTone(reliability?: string) {
   return "border-signal-amber/30 bg-signal-amber/10 text-signal-amber";
 }
 
+function callsBudgetTone(level?: string) {
+  if (level === "critical") return "text-signal-rose";
+  if (level === "warn") return "text-signal-amber";
+  return "text-signal-sage";
+}
+
 export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMetricsPanelProps) {
   const [metrics, setMetrics] = useState<ModelMetricsResponse | null>(null);
   const [mlStatus, setMlStatus] = useState<MlAdminStatus | null>(null);
@@ -755,6 +761,10 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
               <div className="mt-1 font-mono text-[10px] text-signal-silver">{mlStatus.historySync.last?.updated ?? 0}</div>
             </div>
             <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last est. calls</div>
+              <div className="mt-1 font-mono text-[10px] text-signal-silver">{mlStatus.historySync.last?.estimatedCalls ?? 0}</div>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
               <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Recent failures</div>
               <div className="mt-1 font-mono text-[10px] text-signal-silver">
                 {mlStatus.historySync.summary?.failures ?? 0} / {mlStatus.historySync.summary?.runs ?? 0}
@@ -853,6 +863,27 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-3">
               24h scanned: <span className="text-signal-ink">{mlStatus.historySync.summary?.scanned24h ?? 0}</span>
             </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
+              24h est. calls: <span className="text-signal-ink">{mlStatus.historySync.summary?.estimatedCalls24h ?? 0}</span>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-2">
+              Avg est. calls/run: <span className="text-signal-ink">
+                {mlStatus.historySync.summary?.avgEstimatedCallsPerRun != null
+                  ? mlStatus.historySync.summary.avgEstimatedCallsPerRun.toFixed(1)
+                  : "—"}
+              </span>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-3">
+              Calls budget:
+              {" "}
+              <span className={callsBudgetTone(mlStatus.historySync.summary?.callsBudgetLevel)}>
+                {String(mlStatus.historySync.summary?.callsBudgetLevel || "ok").toUpperCase()}
+              </span>
+              {" "}
+              <span className="text-signal-inkMuted">
+                ({mlStatus.historySync.summary?.estimatedCalls24h ?? 0} / warn {mlStatus.historySync.summary?.callsBudgetWarn24h ?? 500} / critical {mlStatus.historySync.summary?.callsBudgetCritical24h ?? 1000})
+              </span>
+            </div>
           </div>
           {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (
             <div className="mt-3 overflow-x-auto">
@@ -875,6 +906,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   <tr>
                     <th className="py-1 pr-2">Ran at</th>
                     <th className="py-1 pr-2">Source</th>
+                    <th className="py-1 pr-2 text-right">Est.calls</th>
                     <th className="py-1 pr-2 text-right">Updated</th>
                     <th className="py-1 pr-2 text-right">OK</th>
                   </tr>
@@ -884,6 +916,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                     <tr key={`${row.ranAt || "na"}-${idx}`} className="border-t border-white/5">
                       <td className="py-1 pr-2">{row.ranAt ? new Date(row.ranAt).toLocaleString() : "—"}</td>
                       <td className="py-1 pr-2">{row.source || "—"}</td>
+                      <td className="py-1 pr-2 text-right">{row.estimatedCalls ?? 0}</td>
                       <td className="py-1 pr-2 text-right">{row.updated ?? 0}</td>
                       <td className={`py-1 pr-2 text-right ${row.ok ? "text-signal-sage" : "text-signal-rose"}`}>{row.ok ? "yes" : "no"}</td>
                     </tr>

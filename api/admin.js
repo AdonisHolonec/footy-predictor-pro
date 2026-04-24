@@ -547,13 +547,13 @@ async function handleMl(req, res) {
     supabase.from("team_market_rolling").select("team_id", { count: "exact", head: true }),
     supabase
       .from("history_sync_status")
-      .select("last_ran_at, last_source, last_method, last_scanned, last_updated, last_ok, last_error")
+      .select("last_ran_at, last_source, last_method, last_scanned, last_updated, last_estimated_calls, last_ok, last_error")
       .eq("id", 1)
       .maybeSingle(),
     supabase
       .from("history_sync_log")
       .select(
-        "ran_at, source, method, ok, scanned, updated, error, persist_inserted, persist_updated, persist_skipped_final, persist_skipped_stale, persist_skipped_prekickoff"
+        "ran_at, source, method, ok, scanned, updated, estimated_calls, error, persist_inserted, persist_updated, persist_skipped_final, persist_skipped_stale, persist_skipped_prekickoff"
       )
       .order("ran_at", { ascending: false })
       .limit(8)
@@ -567,6 +567,7 @@ async function handleMl(req, res) {
     ok: Boolean(row.ok),
     scanned: Number(row.scanned || 0),
     updated: Number(row.updated || 0),
+    estimatedCalls: Number(row.estimated_calls || 0),
     error: row.error || null,
     persistInserted: Number(row.persist_inserted || 0),
     persistUpdated: Number(row.persist_updated || 0),
@@ -577,6 +578,7 @@ async function handleMl(req, res) {
   const lastSuccessfulRun = recentRunsNormalized.find((row) => row.ok === true) || null;
   const recentFailures = recentRunsNormalized.filter((row) => row.ok === false).length;
   const recentUpdatedTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.updated || 0), 0);
+  const recentEstimatedCallsTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.estimatedCalls || 0), 0);
   const historySyncHealth = deriveHistorySyncHealth(historyStatus.data, recentRuns);
   const lastRanAtMs = historyStatus.data?.last_ran_at ? new Date(historyStatus.data.last_ran_at).getTime() : NaN;
   const hoursSinceLastRun = Number.isFinite(lastRanAtMs) ? Number(((Date.now() - lastRanAtMs) / (1000 * 60 * 60)).toFixed(2)) : null;
@@ -591,6 +593,15 @@ async function handleMl(req, res) {
   const successRate24h = runs24h.length > 0 ? Number(((successful24h / runs24h.length) * 100).toFixed(1)) : null;
   const updated24h = runs24h.reduce((sum, row) => sum + Number(row.updated || 0), 0);
   const scanned24h = runs24h.reduce((sum, row) => sum + Number(row.scanned || 0), 0);
+  const estimatedCalls24h = runs24h.reduce((sum, row) => sum + Number(row.estimatedCalls || 0), 0);
+  const avgEstimatedCallsPerRun =
+    recentRunsNormalized.length > 0
+      ? Number((recentEstimatedCallsTotal / recentRunsNormalized.length).toFixed(1))
+      : null;
+  const callsBudgetWarn24h = Math.max(50, Number(process.env.HISTORY_SYNC_CALLS_WARN_24H || 500));
+  const callsBudgetCritical24h = Math.max(callsBudgetWarn24h, Number(process.env.HISTORY_SYNC_CALLS_CRITICAL_24H || 1000));
+  const callsBudgetLevel =
+    estimatedCalls24h >= callsBudgetCritical24h ? "critical" : estimatedCalls24h >= callsBudgetWarn24h ? "warn" : "ok";
   const lastSuccessfulRunAtMs = lastSuccessfulRun?.ranAt ? new Date(lastSuccessfulRun.ranAt).getTime() : NaN;
   const hoursSinceLastSuccess = Number.isFinite(lastSuccessfulRunAtMs)
     ? Number(((Date.now() - lastSuccessfulRunAtMs) / (1000 * 60 * 60)).toFixed(2))
@@ -622,6 +633,19 @@ async function handleMl(req, res) {
       level: "warn",
       code: "no_updates_24h",
       message: "Au existat rulări, dar fără update-uri în ultimele 24h."
+    });
+  }
+  if (callsBudgetLevel === "critical") {
+    proactiveAlerts.push({
+      level: "fail",
+      code: "high_sync_calls_24h_critical",
+      message: `Cost ridicat: history sync are ${estimatedCalls24h} calls estimate în 24h (>= ${callsBudgetCritical24h}).`
+    });
+  } else if (callsBudgetLevel === "warn") {
+    proactiveAlerts.push({
+      level: "warn",
+      code: "high_sync_calls_24h_warn",
+      message: `Cost în creștere: history sync are ${estimatedCalls24h} calls estimate în 24h (>= ${callsBudgetWarn24h}).`
     });
   }
   let reliability = "HEALTHY";
@@ -663,6 +687,7 @@ async function handleMl(req, res) {
             method: historyStatus.data.last_method || null,
             scanned: Number(historyStatus.data.last_scanned || 0),
             updated: Number(historyStatus.data.last_updated || 0),
+            estimatedCalls: Number(historyStatus.data.last_estimated_calls || 0),
             ok: Boolean(historyStatus.data.last_ok),
             error: historyStatus.data.last_error || null
           }
@@ -672,12 +697,18 @@ async function handleMl(req, res) {
         runs: recentRunsNormalized.length,
         failures: recentFailures,
         updatedTotal: recentUpdatedTotal,
+        estimatedCallsTotal: recentEstimatedCallsTotal,
+        avgEstimatedCallsPerRun,
         hoursSinceLastRun,
         hoursSinceLastSuccess,
         runs24h: runs24h.length,
         successRate24h,
         updated24h,
         scanned24h,
+        estimatedCalls24h,
+        callsBudgetWarn24h,
+        callsBudgetCritical24h,
+        callsBudgetLevel,
         reliability
       },
       persist: persistSummary,

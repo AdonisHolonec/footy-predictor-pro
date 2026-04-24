@@ -35,10 +35,12 @@ async function persistHistorySyncStatus(supabase, req, payload) {
     const nowIso = new Date().toISOString();
     const scanned = Math.max(0, Number(payload.scanned) || 0);
     const updated = Math.max(0, Number(payload.updated) || 0);
+    const estimatedCalls = Math.max(0, Number(payload.estimatedCalls) || 0);
     const ok = payload.ok !== false;
     const errorText = payload.error != null ? String(payload.error).slice(0, 2000) : null;
 
-    const { error } = await supabase.from("history_sync_status").upsert(
+    // Try schema with estimated call telemetry first; fallback if migration not applied yet.
+    let { error } = await supabase.from("history_sync_status").upsert(
       {
         id: 1,
         last_ran_at: nowIso,
@@ -46,22 +48,52 @@ async function persistHistorySyncStatus(supabase, req, payload) {
         last_method: method,
         last_scanned: scanned,
         last_updated: updated,
+        last_estimated_calls: estimatedCalls,
         last_ok: ok,
         last_error: errorText
       },
       { onConflict: "id" }
     );
+    if (error) {
+      const retry = await supabase.from("history_sync_status").upsert(
+        {
+          id: 1,
+          last_ran_at: nowIso,
+          last_source: source,
+          last_method: method,
+          last_scanned: scanned,
+          last_updated: updated,
+          last_ok: ok,
+          last_error: errorText
+        },
+        { onConflict: "id" }
+      );
+      error = retry.error;
+    }
     if (error) throw error;
 
-    const { error: logError } = await supabase.from("history_sync_log").insert({
+    let { error: logError } = await supabase.from("history_sync_log").insert({
       ran_at: nowIso,
       source,
       method,
       ok,
       scanned,
       updated,
+      estimated_calls: estimatedCalls,
       error: errorText
     });
+    if (logError) {
+      const retry = await supabase.from("history_sync_log").insert({
+        ran_at: nowIso,
+        source,
+        method,
+        ok,
+        scanned,
+        updated,
+        error: errorText
+      });
+      logError = retry.error;
+    }
     if (logError) throw logError;
   } catch (e) {
     console.error("[history_sync_status]", e?.message || e);
@@ -310,6 +342,9 @@ async function handleHistorySync(req, res) {
     ];
     const IDS_CHUNK = 20;
     const idsTtl = Math.max(30, Math.min(Number(process.env.HISTORY_SYNC_IDS_TTL_SEC || 120), 600));
+    const groupedFetchCalls = groupMap.size;
+    const idsFetchCalls = Math.ceil(missingIds.length / IDS_CHUNK);
+    const estimatedCalls = groupedFetchCalls + idsFetchCalls;
     for (let i = 0; i < missingIds.length; i += IDS_CHUNK) {
       const chunk = missingIds.slice(i, i + IDS_CHUNK);
       const idsParam = chunk.join("-");
@@ -373,17 +408,23 @@ async function handleHistorySync(req, res) {
     await persistHistorySyncStatus(supabase, req, {
       ok: true,
       scanned: candidates.length,
-      updated: updates.length
+        updated: updates.length,
+        estimatedCalls
     });
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
       updated: updates.length,
-      cappedScan
+        cappedScan,
+        estimatedCalls,
+        estimatedCallsBreakdown: {
+          dayLeagueGroups: groupedFetchCalls,
+          idsChunks: idsFetchCalls
+        }
     });
   } catch (error) {
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";
-    await persistHistorySyncStatus(supabase, req, { ok: false, error: msg, scanned: 0, updated: 0 });
+    await persistHistorySyncStatus(supabase, req, { ok: false, error: msg, scanned: 0, updated: 0, estimatedCalls: 0 });
     return res.status(500).json({ ok: false, error: msg });
   }
 }
