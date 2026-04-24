@@ -19,9 +19,9 @@ const kv = createClient({
 
 const FREE_DAYS_LIMIT = Math.max(1, Number(process.env.FREE_TIER_DAYS_LIMIT || 10));
 const LIMIT_BY_TIER = {
-  [USER_TIERS.FREE]: Math.max(1, Number(process.env.FREE_TIER_DAILY_MATCH_LIMIT || 5)),
-  [USER_TIERS.PREMIUM]: Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_MATCH_LIMIT || 10)),
-  [USER_TIERS.ULTRA]: Number.POSITIVE_INFINITY
+  [USER_TIERS.FREE]: Math.max(1, Number(process.env.FREE_TIER_DAILY_MATCH_LIMIT || 10)),
+  [USER_TIERS.PREMIUM]: Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_MATCH_LIMIT || 15)),
+  [USER_TIERS.ULTRA]: Math.max(1, Number(process.env.ULTRA_TIER_DAILY_MATCH_LIMIT || 20))
 };
 
 function parseDate(input) {

@@ -850,6 +850,9 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
               24h updated: <span className="text-signal-ink">{mlStatus.historySync.summary?.updated24h ?? 0}</span>
             </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-3">
+              24h scanned: <span className="text-signal-ink">{mlStatus.historySync.summary?.scanned24h ?? 0}</span>
+            </div>
           </div>
           {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (
             <div className="mt-3 overflow-x-auto">

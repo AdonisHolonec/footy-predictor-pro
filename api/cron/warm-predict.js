@@ -1,7 +1,7 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
 import { TOP_LEAGUE_IDS } from "../../server-utils/modelConstants.js";
-import { getWithCache } from "../../server-utils/fetcher.js";
+import { getApiUsage, getWithCache } from "../../server-utils/fetcher.js";
 import {
   extractFixtureMarketStats,
   aggregateRollingForTeam,
@@ -215,16 +215,31 @@ export default async function handler(req, res) {
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
   const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 30), 120));
   const cronSecret = String(process.env.CRON_SECRET || "");
+  const usageBudgetThresholdPct = Math.max(
+    1,
+    Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || 85), 99)
+  );
+  const usageHardStopPct = Math.max(
+    usageBudgetThresholdPct,
+    Math.min(Number(req.query.usageHardStopPct || process.env.CRON_USAGE_HARD_STOP_PCT || 95), 100)
+  );
 
   const base = resolvePublicBaseUrl();
   const startedAt = new Date().toISOString();
+  const usageSnapshot = await getApiUsage();
+  const usageLimit = Number(usageSnapshot?.limit || 0);
+  const usageCount = Number(usageSnapshot?.count || 0);
+  const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
+  const budgetMode = usagePct >= usageBudgetThresholdPct;
+  const hardStopMode = usagePct >= usageHardStopPct;
 
   const warmQs = new URLSearchParams({
     date: dateRaw,
     leagueIds: leagueIds.join(","),
     season: String(season),
     standings: "1",
-    teamstats: "1"
+    // Budget mode reduces expensive prefetch while keeping core pipeline alive.
+    teamstats: hardStopMode ? "0" : budgetMode ? "0" : "1"
   });
 
   try {
@@ -252,7 +267,7 @@ export default async function handler(req, res) {
       date: dateRaw,
       leagueIds: leagueIds.join(","),
       season: String(season),
-      limit: "50"
+      limit: hardStopMode ? "20" : budgetMode ? "30" : "50"
     });
 
     const predictRes = await fetch(`${base}/api/predict?${predictQs.toString()}`, {
@@ -299,6 +314,15 @@ export default async function handler(req, res) {
       season,
       leagueIds,
       syncDays,
+      usageBudget: {
+        count: usageCount,
+        limit: usageLimit,
+        pct: Number(usagePct.toFixed(1)),
+        thresholdPct: usageBudgetThresholdPct,
+        hardStopPct: usageHardStopPct,
+        budgetMode,
+        hardStopMode
+      },
       base,
       startedAt,
       finishedAt: new Date().toISOString(),
