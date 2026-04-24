@@ -187,6 +187,7 @@ export default function UserDashboard() {
     const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
     return clampTierDates(seedDate, userTier, selectedDates.length ? selectedDates : [seedDate]);
   }, [selectedDates, date, userTier]);
+  const isFreeDbOnlyMode = userTier === "free";
   const rollToDate = useCallback(
     (nextDate: string) => {
       setDate(nextDate);
@@ -710,6 +711,11 @@ export default function UserDashboard() {
                   >
                     {userTier.toUpperCase()}
                   </span>
+                  {isFreeDbOnlyMode && (
+                    <span className="rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint">
+                      DB mode
+                    </span>
+                  )}
                 </div>
                 <Link to="/privacy" className="mt-2 inline-block text-signal-petrol hover:underline">
                   Confidențialitate
@@ -731,6 +737,11 @@ export default function UserDashboard() {
               >
                 {userTier.toUpperCase()}
               </span>
+            {isFreeDbOnlyMode && (
+              <span className="rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint">
+                DB mode
+              </span>
+            )}
               <span>·</span>
               <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
                 Confidențialitate

@@ -34,7 +34,7 @@ import {
 } from "../server-utils/modelConstants.js";
 import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
-import { upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
+import { mapDbRowToHistoryEntry, upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
 import {
   loadCalibrationMaps,
   pickCalibrationMapForLeague,
@@ -61,7 +61,8 @@ import {
   decrementPredictCountBy,
   USER_TIERS,
   maskPredictionForTier,
-  resolveEffectiveTierFromProfile
+  resolveEffectiveTierFromProfile,
+  tierDailyLimit
 } from "../server-utils/accessTier.js";
 
 function isGoodNum(val) {
@@ -623,6 +624,39 @@ export default async function handler(req, res) {
       predictCountToday: null,
       predictLimit: null
     };
+
+    // Free users are DB-only: serve persisted predictions without upstream calls.
+    if (!tierContext.quotaExempt && tierContext.effectiveTier === USER_TIERS.FREE) {
+      const from = `${date}T00:00:00.000Z`;
+      const to = `${date}T23:59:59.999Z`;
+      const leagueFilter = leagueIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id));
+      const supabase = getSupabaseAdmin();
+      let query = supabase
+        .from("predictions_history")
+        .select("*")
+        .gte("kickoff_at", from)
+        .lte("kickoff_at", to)
+        .order("kickoff_at", { ascending: true })
+        .limit(200);
+      if (leagueFilter.length > 0) query = query.in("league_id", leagueFilter);
+      const { data, error } = await query;
+      if (error) {
+        return res.status(500).json({ ok: false, error: error.message || "Nu am putut citi predictions_history." });
+      }
+      const dbRows = Array.isArray(data) ? data : [];
+      const items = dbRows
+        .map((row) => mapDbRowToHistoryEntry(row))
+        .slice(0, effectiveLimit)
+        .map((row) => maskPredictionForTier(row, tierContext.effectiveTier));
+      const dailyLimit = tierDailyLimit(tierContext.effectiveTier);
+      res.setHeader("X-Tier", String(tierContext.effectiveTier));
+      res.setHeader("X-Predict-Count", "0");
+      res.setHeader("X-Predict-Limit", String(dailyLimit));
+      res.setHeader("X-Data-Source", "db_only_free");
+      return res.status(200).json(items);
+    }
   }
 
   try {
