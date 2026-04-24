@@ -9,36 +9,16 @@
   },
   "crons": [
     {
-      "path": "/api/history?sync=1&days=30",
+      "path": "/api/history?sync=1&days=7",
       "schedule": "30 11 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=30",
+      "path": "/api/history?sync=1&days=7",
       "schedule": "30 14 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=30",
+      "path": "/api/history?sync=1&days=7",
       "schedule": "30 17 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "30 20 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "30 23 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "30 2 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "30 5 * * *"
-    },
-    {
-      "path": "/api/history?sync=1&days=30",
-      "schedule": "30 8 * * *"
     },
     {
       "path": "/api/backtest?view=snapshot&days=45",
@@ -67,26 +47,6 @@
     {
       "path": "/api/cron/warm-predict",
       "schedule": "20 17 * * *"
-    },
-    {
-      "path": "/api/cron/warm-predict",
-      "schedule": "20 20 * * *"
-    },
-    {
-      "path": "/api/cron/warm-predict",
-      "schedule": "20 23 * * *"
-    },
-    {
-      "path": "/api/cron/warm-predict",
-      "schedule": "20 2 * * *"
-    },
-    {
-      "path": "/api/cron/warm-predict",
-      "schedule": "20 5 * * *"
-    },
-    {
-      "path": "/api/cron/warm-predict",
-      "schedule": "20 8 * * *"
     }
   ]
 }

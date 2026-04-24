@@ -213,8 +213,7 @@ export default async function handler(req, res) {
   );
   const leagueIds = parseLeagueIds(process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS);
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
-  const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 30), 120));
-  const cronSecret = String(process.env.CRON_SECRET || "");
+  const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 7), 120));
   const usageBudgetThresholdPct = Math.max(
     1,
     Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || 85), 99)
@@ -276,27 +275,13 @@ export default async function handler(req, res) {
     });
     const predictBody = await readJsonBody(predictRes);
 
-    let historySync = null;
-    if (predictRes.ok) {
-      const syncHeaders = {
-        Accept: "application/json",
-        "x-internal-cron": "warm-predict"
-      };
-      if (cronSecret) syncHeaders.Authorization = `Bearer ${cronSecret}`;
-      const syncRes = await fetch(`${base}/api/history?sync=1&days=${syncDays}`, {
-        method: "POST",
-        headers: syncHeaders
-      });
-      const syncBody = await readJsonBody(syncRes);
-      historySync = {
-        httpStatus: syncRes.status,
-        ok: syncRes.ok && syncBody?.ok !== false,
-        scanned: syncBody?.scanned,
-        updated: syncBody?.updated,
-        message: syncBody?.message,
-        error: syncBody?.error || (!cronSecret ? "CRON_SECRET nu este setat; sincronizarea istoricului va fi probabil respinsă în producție." : null)
-      };
-    }
+    // Cost mode: history sync runs on its dedicated cron schedule,
+    // not inline after every warm-predict run.
+    const historySync = {
+      skipped: true,
+      reason: "handled_by_dedicated_history_cron",
+      plannedSyncDays: syncDays
+    };
 
     // refresh incremental rolling stats (buget strict de apeluri noi la /fixtures/statistics)
     let marketRefresh = null;
@@ -306,10 +291,10 @@ export default async function handler(req, res) {
       marketRefresh = { error: err?.message || "market_refresh_failed" };
     }
 
-    const pipelineOk = predictRes.ok && (historySync === null || historySync.ok);
+    const pipelineOk = predictRes.ok;
     return res.status(pipelineOk ? 200 : 502).json({
       ok: pipelineOk,
-      step: !predictRes.ok ? "predict" : historySync && !historySync.ok ? "history-sync" : "done",
+      step: !predictRes.ok ? "predict" : "done",
       date: dateRaw,
       season,
       leagueIds,
