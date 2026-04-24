@@ -476,6 +476,51 @@ async function handleMl(req, res) {
     if (failedRecent) return "warn";
     return "ok";
   };
+  const deriveHistorySyncHint = (statusRow, recentRows, hoursSinceLastRun) => {
+    const errors = (recentRows || [])
+      .filter((row) => row?.ok === false && row?.error)
+      .map((row) => String(row.error).toLowerCase());
+    if ((hoursSinceLastRun ?? 999) > 8) {
+      return {
+        level: "warn",
+        title: "Sync stale",
+        message: "Ultima rulare este mai veche de 8h. Verifică jobul cron și deploy-ul curent."
+      };
+    }
+    if (errors.some((e) => e.includes("401") || e.includes("403") || e.includes("unauthorized") || e.includes("forbidden"))) {
+      return {
+        level: "fail",
+        title: "Auth failure",
+        message: "Au apărut erori de autorizare. Verifică CRON_SECRET și header-ele interne."
+      };
+    }
+    if (errors.some((e) => e.includes("429") || e.includes("rate"))) {
+      return {
+        level: "warn",
+        title: "Rate limited",
+        message: "Sync-ul întâlnește rate limiting. Ajustează frecvența cron sau cache TTL."
+      };
+    }
+    if (errors.some((e) => e.includes("timeout") || e.includes("fetch") || e.includes("network"))) {
+      return {
+        level: "warn",
+        title: "Upstream/network",
+        message: "Există indicii de timeout/network pe upstream. Verifică disponibilitatea providerului."
+      };
+    }
+    if (statusRow?.last_ok === false) {
+      return {
+        level: "warn",
+        title: "Recent failure",
+        message: "Ultima rulare a eșuat. Verifică eroarea curentă și rulează manual sync pentru confirmare."
+      };
+    }
+    return {
+      level: "ok",
+      title: "Healthy",
+      message: "Sync-ul rulează în parametri normali."
+    };
+  };
 
   // default: status snapshot
   const [calib, stacker, elo, marketRolling, historyStatus, historyRecent] = await Promise.all([
@@ -522,7 +567,10 @@ async function handleMl(req, res) {
   const recentFailures = recentRunsNormalized.filter((row) => row.ok === false).length;
   const recentUpdatedTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.updated || 0), 0);
   const historySyncHealth = deriveHistorySyncHealth(historyStatus.data, recentRuns);
+  const lastRanAtMs = historyStatus.data?.last_ran_at ? new Date(historyStatus.data.last_ran_at).getTime() : NaN;
+  const hoursSinceLastRun = Number.isFinite(lastRanAtMs) ? Number(((Date.now() - lastRanAtMs) / (1000 * 60 * 60)).toFixed(2)) : null;
   const persistRuns = recentRunsNormalized.filter((row) => row.source === "predict_persist");
+  const historySyncHint = deriveHistorySyncHint(historyStatus.data, recentRuns, hoursSinceLastRun);
   const persistSummary = {
     runs: persistRuns.length,
     inserted: persistRuns.reduce((sum, row) => sum + Number(row.persistInserted || 0), 0),
@@ -556,9 +604,11 @@ async function handleMl(req, res) {
       summary: {
         runs: recentRunsNormalized.length,
         failures: recentFailures,
-        updatedTotal: recentUpdatedTotal
+        updatedTotal: recentUpdatedTotal,
+        hoursSinceLastRun
       },
-      persist: persistSummary
+      persist: persistSummary,
+      hint: historySyncHint
     },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",

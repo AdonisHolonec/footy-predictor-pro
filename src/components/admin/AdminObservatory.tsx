@@ -445,6 +445,12 @@ function syncHealthTone(health?: "ok" | "warn" | "fail") {
   return "text-signal-amber";
 }
 
+function syncHintTone(level?: "ok" | "warn" | "fail") {
+  if (level === "ok") return "border-signal-sage/25 bg-signal-sage/5 text-signal-sage";
+  if (level === "fail") return "border-signal-rose/25 bg-signal-rose/5 text-signal-rose";
+  return "border-signal-amber/25 bg-signal-amber/5 text-signal-amber";
+}
+
 export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMetricsPanelProps) {
   const [metrics, setMetrics] = useState<ModelMetricsResponse | null>(null);
   const [mlStatus, setMlStatus] = useState<MlAdminStatus | null>(null);
@@ -488,6 +494,14 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const tm = setInterval(() => {
+      void load();
+    }, 60_000);
+    return () => clearInterval(tm);
+  }, [accessToken, load]);
 
   const invalidate = useCallback(async () => {
     if (!accessToken) return;
@@ -665,10 +679,26 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                 {mlStatus.historySync.summary?.failures ?? 0} / {mlStatus.historySync.summary?.runs ?? 0}
               </div>
             </div>
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Sync age (hours)</div>
+              <div
+                className={`mt-1 font-mono text-[10px] ${
+                  (mlStatus.historySync.summary?.hoursSinceLastRun ?? 999) > 8 ? "text-signal-rose" : "text-signal-silver"
+                }`}
+              >
+                {mlStatus.historySync.summary?.hoursSinceLastRun != null ? mlStatus.historySync.summary.hoursSinceLastRun.toFixed(2) : "—"}
+              </div>
+            </div>
           </div>
           {mlStatus.historySync.last?.error && (
             <div className="mt-2 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 font-mono text-[10px] text-signal-rose">
               {mlStatus.historySync.last.error}
+            </div>
+          )}
+          {mlStatus.historySync.hint && (
+            <div className={`mt-2 rounded-lg border px-3 py-2 font-mono text-[10px] ${syncHintTone(mlStatus.historySync.hint.level)}`}>
+              <div className="font-semibold uppercase tracking-wider">{mlStatus.historySync.hint.title || "Sync hint"}</div>
+              <div className="mt-1">{mlStatus.historySync.hint.message || "—"}</div>
             </div>
           )}
           {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (

@@ -430,6 +430,7 @@ export type MlAdminStatus = {
       runs?: number;
       failures?: number;
       updatedTotal?: number;
+      hoursSinceLastRun?: number | null;
     };
     persist?: {
       runs?: number;
@@ -438,6 +439,11 @@ export type MlAdminStatus = {
       skippedFinal?: number;
       skippedStale?: number;
       skippedPrekickoff?: number;
+    };
+    hint?: {
+      level?: "ok" | "warn" | "fail";
+      title?: string;
+      message?: string;
     };
   };
   helpers?: { invalidate?: string; trainNow?: string; historySyncNow?: string; scripts?: string[] };
