@@ -664,8 +664,8 @@ export default async function handler(req, res) {
 
     // Global cost guard: when daily usage is already high, serve DB-only for non-admin tiers.
     if (!tierContext.quotaExempt) {
-      const usageHardStopPct = Math.max(60, Math.min(Number(process.env.PREDICT_USAGE_DB_ONLY_PCT || 90), 99));
-      const reserveCalls = Math.max(0, Number(process.env.PREDICT_USAGE_RESERVE_CALLS || 1000));
+      const usageHardStopPct = Math.max(60, Math.min(Number(process.env.PREDICT_USAGE_DB_ONLY_PCT || 75), 99));
+      const reserveCalls = Math.max(0, Number(process.env.PREDICT_USAGE_RESERVE_CALLS || 2000));
       const usage = await getApiUsage().catch(() => ({ count: 0, limit: 0 }));
       const usageCount = Number(usage?.count || 0);
       const usageLimit = Number(usage?.limit || 0);

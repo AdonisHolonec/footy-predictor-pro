@@ -11,7 +11,7 @@ import {
 
 const MARKET_REFRESH_BUDGET_CALLS = Math.max(
   0,
-  Math.min(Number(process.env.CRON_MARKET_REFRESH_BUDGET || 20), 60)
+  Math.min(Number(process.env.CRON_MARKET_REFRESH_BUDGET || 0), 60)
 );
 const MARKET_REFRESH_WINDOW_DAYS = Math.max(1, Math.min(Number(process.env.CRON_MARKET_REFRESH_WINDOW_DAYS || 3), 7));
 const MARKET_REFRESH_ROLLING_WINDOW = 15;
@@ -216,11 +216,11 @@ export default async function handler(req, res) {
   const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 7), 120));
   const usageBudgetThresholdPct = Math.max(
     1,
-    Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || 85), 99)
+    Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || 70), 99)
   );
   const usageHardStopPct = Math.max(
     usageBudgetThresholdPct,
-    Math.min(Number(req.query.usageHardStopPct || process.env.CRON_USAGE_HARD_STOP_PCT || 95), 100)
+    Math.min(Number(req.query.usageHardStopPct || process.env.CRON_USAGE_HARD_STOP_PCT || 75), 100)
   );
 
   const base = resolvePublicBaseUrl();
@@ -230,7 +230,7 @@ export default async function handler(req, res) {
   const usageCount = Number(usageSnapshot?.count || 0);
   const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
   const usageRemaining = Math.max(0, usageLimit - usageCount);
-  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 1000));
+  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 2000));
   const budgetMode = usagePct >= usageBudgetThresholdPct;
   const hardStopMode = usagePct >= usageHardStopPct || usageRemaining <= reserveCalls;
 
@@ -290,7 +290,7 @@ export default async function handler(req, res) {
       date: dateRaw,
       leagueIds: leagueIds.join(","),
       season: String(season),
-      limit: hardStopMode ? "20" : budgetMode ? "30" : "50"
+      limit: hardStopMode ? "10" : budgetMode ? "15" : "30"
     });
 
     const predictRes = await fetch(`${base}/api/predict?${predictQs.toString()}`, {
