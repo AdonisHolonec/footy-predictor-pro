@@ -613,6 +613,20 @@ async function handleMl(req, res) {
       message: "Au existat rulări, dar fără update-uri în ultimele 24h."
     });
   }
+  let reliability = "HEALTHY";
+  if (
+    (hoursSinceLastSuccess ?? 999) > 8
+    || runs24h.length === 0
+    || (successRate24h != null && successRate24h < 60)
+  ) {
+    reliability = "CRITICAL";
+  } else if (
+    (hoursSinceLastSuccess ?? 0) > 4
+    || (successRate24h != null && successRate24h < 90)
+    || recentFailures > 0
+  ) {
+    reliability = "DEGRADED";
+  }
   const persistSummary = {
     runs: persistRuns.length,
     inserted: persistRuns.reduce((sum, row) => sum + Number(row.persistInserted || 0), 0),
@@ -651,7 +665,8 @@ async function handleMl(req, res) {
         hoursSinceLastSuccess,
         runs24h: runs24h.length,
         successRate24h,
-        updated24h
+        updated24h,
+        reliability
       },
       persist: persistSummary,
       hint: historySyncHint,

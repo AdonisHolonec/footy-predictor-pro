@@ -451,6 +451,12 @@ function syncHintTone(level?: "ok" | "warn" | "fail") {
   return "border-signal-amber/25 bg-signal-amber/5 text-signal-amber";
 }
 
+function reliabilityTone(reliability?: string) {
+  if (reliability === "HEALTHY") return "border-signal-sage/30 bg-signal-sage/10 text-signal-sage";
+  if (reliability === "CRITICAL") return "border-signal-rose/35 bg-signal-rose/12 text-signal-rose";
+  return "border-signal-amber/30 bg-signal-amber/10 text-signal-amber";
+}
+
 export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMetricsPanelProps) {
   const [metrics, setMetrics] = useState<ModelMetricsResponse | null>(null);
   const [mlStatus, setMlStatus] = useState<MlAdminStatus | null>(null);
@@ -460,6 +466,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const [training, setTraining] = useState(false);
   const [syncingHistoryNow, setSyncingHistoryNow] = useState(false);
   const [snoozedAlerts, setSnoozedAlerts] = useState<Record<string, number>>({});
+  const [showOnlySyncFailures, setShowOnlySyncFailures] = useState(false);
   const loadInFlightRef = useRef(false);
   const [trainReport, setTrainReport] = useState<{
     finishedAt?: string;
@@ -619,6 +626,15 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     const until = snoozedAlerts[code];
     return !(Number.isFinite(until) && until > Date.now());
   });
+  const syncRecentRows = (mlStatus?.historySync?.recent || [])
+    .slice()
+    .sort((a, b) => {
+      if (a.ok !== b.ok) return a.ok ? 1 : -1;
+      const ta = a.ranAt ? new Date(a.ranAt).getTime() : 0;
+      const tb = b.ranAt ? new Date(b.ranAt).getTime() : 0;
+      return tb - ta;
+    })
+    .filter((row) => (showOnlySyncFailures ? !row.ok : true));
 
   return (
     <section className="rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6">
@@ -710,6 +726,14 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             </span>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Reliability</div>
+              <div className="mt-1">
+                <span className={`inline-flex rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider ${reliabilityTone(mlStatus.historySync.summary?.reliability)}`}>
+                  {mlStatus.historySync.summary?.reliability || "DEGRADED"}
+                </span>
+              </div>
+            </div>
             <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
               <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last run</div>
               <div className="mt-1 font-mono text-[10px] text-signal-silver">
@@ -819,6 +843,20 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
           </div>
           {Array.isArray(mlStatus.historySync.recent) && mlStatus.historySync.recent.length > 0 && (
             <div className="mt-3 overflow-x-auto">
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowOnlySyncFailures((prev) => !prev)}
+                  className={`rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
+                    showOnlySyncFailures
+                      ? "border-signal-rose/35 bg-signal-rose/10 text-signal-rose"
+                      : "border-white/20 text-signal-ink hover:bg-white/10"
+                  }`}
+                  title="Afișează doar rulările eșuate."
+                >
+                  {showOnlySyncFailures ? "Showing failures only" : "Show only failures"}
+                </button>
+              </div>
               <table className="w-full min-w-[420px] font-mono text-[10px] tabular-nums">
                 <thead className="text-left text-signal-inkMuted">
                   <tr>
@@ -829,7 +867,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   </tr>
                 </thead>
                 <tbody className="text-signal-silver">
-                  {mlStatus.historySync.recent.slice(0, 5).map((row, idx) => (
+                  {syncRecentRows.slice(0, 6).map((row, idx) => (
                     <tr key={`${row.ranAt || "na"}-${idx}`} className="border-t border-white/5">
                       <td className="py-1 pr-2">{row.ranAt ? new Date(row.ranAt).toLocaleString() : "—"}</td>
                       <td className="py-1 pr-2">{row.source || "—"}</td>
