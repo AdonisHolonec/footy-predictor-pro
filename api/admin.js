@@ -497,7 +497,9 @@ async function handleMl(req, res) {
       .maybeSingle(),
     supabase
       .from("history_sync_log")
-      .select("ran_at, source, method, ok, scanned, updated, error")
+      .select(
+        "ran_at, source, method, ok, scanned, updated, error, persist_inserted, persist_updated, persist_skipped_final, persist_skipped_stale, persist_skipped_prekickoff"
+      )
       .order("ran_at", { ascending: false })
       .limit(8)
   ]);
@@ -510,11 +512,25 @@ async function handleMl(req, res) {
     ok: Boolean(row.ok),
     scanned: Number(row.scanned || 0),
     updated: Number(row.updated || 0),
-    error: row.error || null
+    error: row.error || null,
+    persistInserted: Number(row.persist_inserted || 0),
+    persistUpdated: Number(row.persist_updated || 0),
+    persistSkippedFinal: Number(row.persist_skipped_final || 0),
+    persistSkippedStale: Number(row.persist_skipped_stale || 0),
+    persistSkippedPrekickoff: Number(row.persist_skipped_prekickoff || 0)
   }));
   const recentFailures = recentRunsNormalized.filter((row) => row.ok === false).length;
   const recentUpdatedTotal = recentRunsNormalized.reduce((sum, row) => sum + Number(row.updated || 0), 0);
   const historySyncHealth = deriveHistorySyncHealth(historyStatus.data, recentRuns);
+  const persistRuns = recentRunsNormalized.filter((row) => row.source === "predict_persist");
+  const persistSummary = {
+    runs: persistRuns.length,
+    inserted: persistRuns.reduce((sum, row) => sum + Number(row.persistInserted || 0), 0),
+    updated: persistRuns.reduce((sum, row) => sum + Number(row.persistUpdated || 0), 0),
+    skippedFinal: persistRuns.reduce((sum, row) => sum + Number(row.persistSkippedFinal || 0), 0),
+    skippedStale: persistRuns.reduce((sum, row) => sum + Number(row.persistSkippedStale || 0), 0),
+    skippedPrekickoff: persistRuns.reduce((sum, row) => sum + Number(row.persistSkippedPrekickoff || 0), 0)
+  };
 
   return res.status(200).json({
     ok: true,
@@ -541,7 +557,8 @@ async function handleMl(req, res) {
         runs: recentRunsNormalized.length,
         failures: recentFailures,
         updatedTotal: recentUpdatedTotal
-      }
+      },
+      persist: persistSummary
     },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",

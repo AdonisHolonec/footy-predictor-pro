@@ -420,11 +420,24 @@ export type MlAdminStatus = {
       scanned?: number;
       updated?: number;
       error?: string | null;
+      persistInserted?: number;
+      persistUpdated?: number;
+      persistSkippedFinal?: number;
+      persistSkippedStale?: number;
+      persistSkippedPrekickoff?: number;
     }>;
     summary?: {
       runs?: number;
       failures?: number;
       updatedTotal?: number;
+    };
+    persist?: {
+      runs?: number;
+      inserted?: number;
+      updated?: number;
+      skippedFinal?: number;
+      skippedStale?: number;
+      skippedPrekickoff?: number;
     };
   };
   helpers?: { invalidate?: string; trainNow?: string; historySyncNow?: string; scripts?: string[] };

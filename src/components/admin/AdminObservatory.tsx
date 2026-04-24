@@ -695,6 +695,19 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
               </table>
             </div>
           )}
+          {mlStatus.historySync.persist && (
+            <div className="mt-3 rounded-lg border border-white/5 bg-signal-panel/20 p-2">
+              <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Predict persist telemetry</div>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-signal-silver sm:grid-cols-3">
+                <div>runs: {mlStatus.historySync.persist.runs ?? 0}</div>
+                <div>inserted: {mlStatus.historySync.persist.inserted ?? 0}</div>
+                <div>updated: {mlStatus.historySync.persist.updated ?? 0}</div>
+                <div>skip final: {mlStatus.historySync.persist.skippedFinal ?? 0}</div>
+                <div>skip stale: {mlStatus.historySync.persist.skippedStale ?? 0}</div>
+                <div>skip prekickoff: {mlStatus.historySync.persist.skippedPrekickoff ?? 0}</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
