@@ -717,6 +717,16 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
         />
       </div>
 
+      {mlStatus?.seasonInfo && (
+        <div className="mt-3 rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
+          <span className="mr-3">Effective season: <span className="text-signal-ink">{mlStatus.seasonInfo.effectiveSeason ?? "—"}</span></span>
+          <span className="mr-3">Inferred: <span className="text-signal-ink">{mlStatus.seasonInfo.inferredSeason ?? "—"}</span></span>
+          <span className={mlStatus.seasonInfo.overrideActive ? "text-signal-amber" : "text-signal-sage"}>
+            {mlStatus.seasonInfo.overrideActive ? "Override active" : "Auto season"}
+          </span>
+        </div>
+      )}
+
       {mlStatus?.historySync && (
         <div className="mt-4 rounded-xl border border-white/5 bg-signal-void/30 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">

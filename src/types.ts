@@ -470,6 +470,12 @@ export type MlAdminStatus = {
       persistSkippedPrekickoff?: number;
     } | null;
   };
+  seasonInfo?: {
+    today?: string;
+    inferredSeason?: number;
+    effectiveSeason?: number;
+    overrideActive?: boolean;
+  };
   helpers?: { invalidate?: string; trainNow?: string; historySyncNow?: string; scripts?: string[] };
 };
 

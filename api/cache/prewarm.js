@@ -10,6 +10,12 @@ function parseLeagueIds(raw) {
   return src.length ? Array.from(new Set(src)) : TOP_LEAGUE_IDS.slice();
 }
 
+function inferSeason(dateISO) {
+  const [y, m] = String(dateISO || "").split("-").map(Number);
+  if (!y || !m) return new Date().getFullYear() - 1;
+  return m >= 7 ? y : y - 1;
+}
+
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -19,7 +25,7 @@ export default async function handler(req, res) {
   }
 
   const date = String(req.query.date || new Date().toISOString().slice(0, 10));
-  const season = Number(req.query.season || process.env.PREWARM_SEASON || new Date().getFullYear());
+  const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(date));
   const leagueIds = parseLeagueIds(req.query.leagueIds || process.env.PREWARM_LEAGUE_IDS);
 
   const result = {

@@ -35,6 +35,12 @@ function resolvePublicBaseUrl(req) {
   return `${protocol}://${host}`.replace(/\/+$/, "");
 }
 
+function inferSeason(dateISO) {
+  const [y, m] = String(dateISO || "").split("-").map(Number);
+  if (!y || !m) return new Date().getFullYear() - 1;
+  return m >= 7 ? y : y - 1;
+}
+
 function parseBody(req) {
   if (!req.body) return {};
   if (typeof req.body === "string") {
@@ -278,6 +284,10 @@ async function handleMl(req, res) {
   const action = String(req.query.action || "").toLowerCase();
   const leagueId = req.query.leagueId != null ? Number(req.query.leagueId) : null;
   const modelVersion = String(req.query.modelVersion || MODEL_VERSION);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const inferredSeason = inferSeason(todayIso);
+  const prewarmSeasonOverrideRaw = String(process.env.PREWARM_SEASON || "").trim();
+  const prewarmSeasonOverride = prewarmSeasonOverrideRaw ? Number(prewarmSeasonOverrideRaw) : null;
 
   if (req.method === "POST" && action === "invalidate-cache") {
     invalidateCalibrationCache();
@@ -673,6 +683,12 @@ async function handleMl(req, res) {
       alerts: proactiveAlerts,
       lastSuccessfulRun
     },
+    seasonInfo: {
+      today: todayIso,
+      inferredSeason,
+      effectiveSeason: Number.isFinite(prewarmSeasonOverride) ? prewarmSeasonOverride : inferredSeason,
+      overrideActive: Number.isFinite(prewarmSeasonOverride)
+    },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",
       trainNow: "POST /api/admin?view=ml&action=train-now&mode=all|calibration|stacker",
@@ -681,7 +697,7 @@ async function handleMl(req, res) {
         "node --env-file=.env.local scripts/fitCalibration.js",
         "node --env-file=.env.local scripts/fitStacker.js",
         "BACKFILL_SEASONS=2023,2024 LEAGUE_IDS=39,140 node --env-file=.env.local scripts/rebuildElo.js",
-        "SEASON=2024 ROLLING_WINDOW=15 node --env-file=.env.local scripts/rebuildTeamMarketRolling.js"
+        "SEASON=<inferSeason(date)> ROLLING_WINDOW=15 node --env-file=.env.local scripts/rebuildTeamMarketRolling.js"
       ]
     }
   });

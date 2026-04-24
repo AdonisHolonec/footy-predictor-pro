@@ -556,7 +556,7 @@ export default async function handler(req, res) {
   const date = req.query.date || todayCalendarEuropeBucharest();
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
-  const season = req.query.season || new Date().getFullYear();
+  const season = Number(req.query.season || inferSeason(date));
   // Keep per-request compute bounded to avoid serverless timeouts on heavy market enrichment.
   const limit = Math.min(Number(req.query.limit || 15), 15);
   let effectiveLimit = limit;

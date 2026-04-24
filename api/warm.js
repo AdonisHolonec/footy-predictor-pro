@@ -6,12 +6,18 @@ import {
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 
+function inferSeason(dateISO) {
+  const [y, m] = String(dateISO || "").split("-").map(Number);
+  if (!y || !m) return new Date().getFullYear() - 1;
+  return m >= 7 ? y : y - 1;
+}
+
 export default async function handler(req, res) {
   // Pe Vercel, query params sunt automat în req.query
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(',').filter(Boolean).map(Number);
-  const season = req.query.season || new Date().getFullYear();
+  const season = Number(req.query.season || inferSeason(date));
   
   const wantStandings = req.query.standings === "1";
   const wantTeamStats = req.query.teamstats === "1";
