@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import {
@@ -514,10 +514,53 @@ function LeagueStandingsTable({
 
 export default function MatchModal({ match, logoColors, onClose, hashColor, canShowSpecialBet = false }: MatchModalProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
   const [xgData, setXgData] = useState<XGData | null>(() => {
     if (!match.luckStats) return null;
     return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
   });
+
+  useEffect(() => {
+    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
+    return () => {
+      clearTimeout(tm);
+      prevFocusRef.current?.focus?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const root = modalRef.current;
+      if (!root) return;
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -554,9 +597,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
             <p className="mt-2 text-sm leading-relaxed text-signal-inkMuted">{match.insufficientReason}</p>
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink"
+              className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
             >
               Închide
             </button>
@@ -575,16 +619,19 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="match-modal-insufficient-title"
+          aria-describedby="match-modal-insufficient-desc"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
-              <p className="mt-1 text-[11px] text-signal-inkMuted">{match.insufficientReason}</p>
+              <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
+              <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-signal-inkMuted">{match.insufficientReason}</p>
             </div>
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-sm text-signal-inkMuted hover:border-signal-petrol/40 hover:text-signal-petrol"
+              className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-sm text-signal-inkMuted hover:border-signal-petrol/40 hover:text-signal-petrol focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
               aria-label="Închide"
             >
               ✕
@@ -612,7 +659,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           <button
             type="button"
             onClick={onClose}
-            className="mt-8 w-full rounded-xl border border-signal-line bg-signal-fog py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink"
+            className="mt-8 w-full rounded-xl border border-signal-line bg-signal-fog py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
           >
             Închide
           </button>
@@ -715,15 +762,19 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
       <div
+        ref={modalRef}
         className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-signal-panel/98 to-signal-mist shadow-atelierLg backdrop-blur-2xl lg:max-w-5xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="match-modal-title"
+        aria-describedby="match-modal-desc"
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal-petrol/40 to-transparent" />
         <button
+          ref={closeBtnRef}
           onClick={onClose}
-          className="sticky top-3 z-10 ml-auto mr-3 mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-signal-void/80 text-signal-inkMuted transition hover:border-signal-petrol/40 hover:text-signal-petrol"
+          className="sticky top-3 z-10 ml-auto mr-3 mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-signal-void/80 text-signal-inkMuted transition hover:border-signal-petrol/40 hover:text-signal-petrol focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
           type="button"
           aria-label="Închide"
         >
@@ -731,7 +782,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
         </button>
 
         <div className="border-b border-white/5 px-5 pb-8 pt-2 sm:px-10">
-          <p className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
+          <p id="match-modal-title" className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
             Analitică predictivă · Poisson / xG
           </p>
           <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:gap-6">
@@ -794,7 +845,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                   {match.score?.home}-{match.score?.away}
                 </div>
               )}
-              <div className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-signal-inkMuted sm:mt-3 sm:gap-x-3 sm:text-[10px]">
+              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-signal-inkMuted sm:mt-3 sm:gap-x-3 sm:text-[10px]">
                 <span className="font-mono tabular-nums">{kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}</span>
                 <span>·</span>
                 <span className="font-mono tabular-nums">{new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>

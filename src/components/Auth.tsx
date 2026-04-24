@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 type AuthProps = {
   isOpen: boolean;
@@ -27,6 +27,9 @@ export default function Auth({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string>("");
   const [localSuccess, setLocalSuccess] = useState<string>("");
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -36,11 +39,51 @@ export default function Auth({
       setLocalSuccess("");
       return;
     }
+    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery") {
       setMode("reset");
       setLocalSuccess("Seteaza o parola noua pentru contul tau.");
     }
+    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
+    return () => clearTimeout(tm);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const root = modalRef.current;
+      if (!root) return;
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    prevFocusRef.current?.focus?.();
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -101,10 +144,12 @@ export default function Auth({
       role="presentation"
     >
       <div
+        ref={modalRef}
         className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/95 to-signal-mist shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
+        aria-describedby="auth-modal-desc"
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -130,14 +175,15 @@ export default function Auth({
                 {mode === "forgot" && "Forgot password"}
                 {mode === "reset" && "Set new password"}
               </h2>
-              <p className="mt-1 text-xs leading-relaxed text-signal-inkMuted">
+              <p id="auth-modal-desc" className="mt-1 text-xs leading-relaxed text-signal-inkMuted">
                 Acceseaza functiile personalizate Footy Predictor.
               </p>
             </div>
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full border border-white/10 bg-signal-fog/90 px-3 py-1.5 text-xs font-semibold text-signal-inkMuted transition hover:border-signal-line hover:bg-signal-panel hover:text-signal-ink"
+              className="shrink-0 rounded-full border border-white/10 bg-signal-fog/90 px-3 py-1.5 text-xs font-semibold text-signal-inkMuted transition hover:border-signal-line hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
             >
               Close
             </button>
@@ -186,12 +232,12 @@ export default function Auth({
             )}
 
             {(localError || authError) && (
-              <div className="rounded-xl border border-signal-rose/35 bg-signal-rose/10 px-3 py-2 text-xs font-semibold text-signal-rose">
+              <div role="alert" aria-live="assertive" className="rounded-xl border border-signal-rose/35 bg-signal-rose/10 px-3 py-2 text-xs font-semibold text-signal-rose">
                 {localError || authError}
               </div>
             )}
             {localSuccess && (
-              <div className="rounded-xl border border-signal-sage/35 bg-signal-sage/10 px-3 py-2 text-xs font-semibold text-signal-mint">
+              <div role="status" aria-live="polite" className="rounded-xl border border-signal-sage/35 bg-signal-sage/10 px-3 py-2 text-xs font-semibold text-signal-mint">
                 {localSuccess}
               </div>
             )}
@@ -199,7 +245,7 @@ export default function Auth({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-frost transition hover:bg-signal-petrolDeep disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-frost transition hover:bg-signal-petrolDeep disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
             >
               {isSubmitting
                 ? "Se proceseaza..."
@@ -218,7 +264,7 @@ export default function Auth({
               <button
                 type="button"
                 onClick={() => setMode((prev) => (prev === "login" ? "signup" : "login"))}
-                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint"
+                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/35 rounded-sm"
               >
                 {mode === "login"
                   ? "Nu ai cont? Creeaza unul."
@@ -229,7 +275,7 @@ export default function Auth({
               <button
                 type="button"
                 onClick={() => setMode("forgot")}
-                className="text-xs font-semibold text-signal-amberSoft/90 transition hover:text-signal-amber"
+                className="text-xs font-semibold text-signal-amberSoft/90 transition hover:text-signal-amber focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-amber/40 rounded-sm"
               >
                 Ai uitat parola?
               </button>
@@ -242,7 +288,7 @@ export default function Auth({
                   setLocalError("");
                   setLocalSuccess("");
                 }}
-                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint"
+                className="text-xs font-semibold text-signal-petrol transition hover:text-signal-mint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/35 rounded-sm"
               >
                 Inapoi la login
               </button>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PerformanceLeagueBreakdown, PerformanceUserBreakdown, PerformanceUserLeagueBreakdown } from "../types";
 
 type PerformanceApiResponse = {
@@ -38,6 +38,9 @@ export default function PerformanceCounterModal({
   const [byUser, setByUser] = useState<PerformanceUserBreakdown[]>([]);
   const [byUserLeague, setByUserLeague] = useState<PerformanceUserLeagueBreakdown[]>([]);
   const [serverIsAdmin, setServerIsAdmin] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     if (!accessToken) {
@@ -80,8 +83,48 @@ export default function PerformanceCounterModal({
 
   useEffect(() => {
     if (!open) return;
+    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     void load();
+    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
+    return () => clearTimeout(tm);
   }, [open, load]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const root = modalRef.current;
+      if (!root) return;
+      const focusable = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (open) return;
+    prevFocusRef.current?.focus?.();
+  }, [open]);
 
   if (!open) return null;
 
@@ -100,11 +143,13 @@ export default function PerformanceCounterModal({
       role="presentation"
     >
       <div
+        ref={modalRef}
         className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/10 bg-gradient-to-b from-signal-panel/98 to-signal-mist shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="perf-counter-title"
+        aria-describedby="perf-counter-desc"
       >
         <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-signal-void/40 px-4 py-3">
           <div>
@@ -114,6 +159,7 @@ export default function PerformanceCounterModal({
             <p className="font-mono text-[10px] text-signal-inkMuted">Fereastră {days} zile · kickoff</p>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             className="touch-manipulation rounded-full border border-white/10 bg-signal-fog px-3 py-1.5 text-xs font-semibold text-signal-petrol hover:bg-signal-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/40"
@@ -122,14 +168,14 @@ export default function PerformanceCounterModal({
           </button>
         </div>
         <div className="max-h-[calc(88vh-3.5rem)] overflow-y-auto px-4 py-3 text-left">
-          <p className="mb-3 text-[11px] leading-relaxed text-signal-inkMuted">
+          <p id="perf-counter-desc" className="mb-3 text-[11px] leading-relaxed text-signal-inkMuted">
             Scoruri din istoric sincronizat; rândurile per utilizator apar după Predict autentificat.
           </p>
           {err && (
-            <div className="mb-3 rounded-lg border border-signal-amber/40 bg-signal-amber/10 px-3 py-2 text-[11px] text-signal-amber">{err}</div>
+            <div role="alert" aria-live="assertive" className="mb-3 rounded-lg border border-signal-amber/40 bg-signal-amber/10 px-3 py-2 text-[11px] text-signal-amber">{err}</div>
           )}
           {loading && showServer && (
-            <div className="mb-3 text-center font-mono text-[11px] font-semibold uppercase tracking-widest text-signal-sage">Se încarcă…</div>
+            <div role="status" aria-live="polite" className="mb-3 text-center font-mono text-[11px] font-semibold uppercase tracking-widest text-signal-sage">Se încarcă…</div>
           )}
 
           {showGlobal && (

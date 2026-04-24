@@ -6,7 +6,12 @@ import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
+import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
+import { useDateRollover } from "../hooks/useDateRollover";
+import { useHistorySync } from "../hooks/useHistorySync";
+import { isCompactViewport, useLeaguePanelState } from "../hooks/useLeaguePanelState";
+import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import BrandArtboard from "../components/BrandArtboard";
@@ -22,6 +27,7 @@ import {
   normalizeSelectedDates,
   useLocalStorageState
 } from "../utils/appUtils";
+import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
 
 function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
   const wins = rows.filter((r) => r.validation === "win").length;
@@ -104,7 +110,7 @@ export default function UserDashboard() {
   const [favoriteLeaguesByUser, setFavoriteLeaguesByUser] = useLocalStorageState<Record<string, number[]>>("footy.user.favoriteLeagueByUser", {});
   const [predictionsByUser, setPredictionsByUser] = useLocalStorageState<Record<string, PredictionRow[]>>("footy.user.predictionsByUser", {});
   const [searchLeague, setSearchLeague] = useState("");
-  const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
+  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
   const [preds, setPreds] = useState<PredictionRow[]>([]);
   useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
 
@@ -121,7 +127,6 @@ export default function UserDashboard() {
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
   const [animatedLosses, setAnimatedLosses] = useState(0);
@@ -144,8 +149,6 @@ export default function UserDashboard() {
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
-  const isSyncHistoryInFlightRef = useRef(false);
-
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
   const pendingHistoryCount = useMemo(
@@ -196,6 +199,11 @@ export default function UserDashboard() {
     },
     [setDate, setSelectedDates, userTier]
   );
+  useDateRollover({
+    date,
+    onRollToDate: rollToDate,
+    storageKeys: ["footy.date", "footy.user.date"]
+  });
   const prevWinRateRef = useRef(trackerStats.winRate);
   const formatRemaining = (ms: number) => {
     if (!ms || ms <= 0) return "00:00:00";
@@ -229,22 +237,38 @@ export default function UserDashboard() {
     }
   }, [user?.id, session?.access_token]);
 
-  const syncHistory = useCallback(async () => {
-    if (isSyncHistoryInFlightRef.current) return;
-    isSyncHistoryInFlightRef.current = true;
-    setIsHistorySyncing(true);
-    try {
-      const headers: Record<string, string> = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      await fetch("/api/history?sync=1&days=30", { method: "POST", headers });
+  const { isHistorySyncing, syncHistory } = useHistorySync({
+    accessToken: session?.access_token,
+    defaultDays: 30,
+    onAfterSync: loadHistory
+  });
+  const { warm: runWarm, predict: runPredict } = usePredictFlow<PredictionRow>({
+    accessToken: session?.access_token,
+    getSession,
+    selectedLeagueIds,
+    inferSeason,
+    usageDay: todayKey,
+    setStatus,
+    predictLimit: "15",
+    messages: USER_PREDICT_FLOW_MESSAGES,
+    onWarmCompleted: async () => {
+      setStatus("Warm finalizat pentru ligile favorite.");
+    },
+    onPredictCompleted: async (deduped, token) => {
+      setPreds(deduped);
+      if (user?.id) {
+        setPredictionsByUser((prev) => ({ ...prev, [user.id]: deduped }));
+        setUserPredictionMap((prev) => {
+          const existing = prev[user.id] || [];
+          const merged = Array.from(new Set([...existing, ...deduped.map((item) => Number(item.id))]));
+          return { ...prev, [user.id]: merged };
+        });
+      }
+      setStatus(`Au fost generate ${deduped.length} predictii.`);
+      await syncHistoryAfterPredict(token, 30);
       await loadHistory();
-    } catch {
-      // indicator only
-    } finally {
-      setIsHistorySyncing(false);
-      isSyncHistoryInFlightRef.current = false;
     }
-  }, [session?.access_token, loadHistory]);
+  });
 
   function setSelectedLeagueIdsLimited(nextIds: number[]) {
     const normalized = Array.from(new Set(nextIds.map((value) => Number(value)).filter((value) => Number.isFinite(value))));
@@ -345,20 +369,6 @@ export default function UserDashboard() {
   }, [date, selectedDates.join("|")]);
 
   useEffect(() => {
-    const tm = setInterval(() => {
-      const today = localCalendarDateKey();
-      if (today === date) return;
-      rollToDate(today);
-    }, 60_000);
-    return () => clearInterval(tm);
-  }, [date, rollToDate]);
-
-  useEffect(() => {
-    const today = localCalendarDateKey();
-    if (today !== date) rollToDate(today);
-  }, [date, rollToDate]);
-
-  useEffect(() => {
     if (!user?.id || !history.length) return;
     setPredictionsByUser((prev) => {
       const rows = prev[user.id];
@@ -387,29 +397,13 @@ export default function UserDashboard() {
     if (!session?.access_token) return;
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
-      const today = localCalendarDateKey();
-      if (today !== date) rollToDate(today);
       void syncHistory();
     };
-    const onFocus = () => {
-      const today = localCalendarDateKey();
-      if (today !== date) rollToDate(today);
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== "footy.date" && event.key !== "footy.user.date") return;
-      const next = String(event.newValue || "").slice(0, 10);
-      if (!next || next === date) return;
-      rollToDate(next);
-    };
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("storage", onStorage);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("storage", onStorage);
     };
-  }, [session?.access_token, syncHistory, date, rollToDate]);
+  }, [session?.access_token, syncHistory]);
 
   useEffect(() => {
     if (dateSyncBadgeUntil <= Date.now()) return;
@@ -447,7 +441,7 @@ export default function UserDashboard() {
   }, [trackerStats.winRate]);
 
   useEffect(() => {
-    const durationMs = window.innerWidth < 768 ? 450 : 650;
+    const durationMs = isCompactViewport() ? 450 : 650;
     const start = performance.now();
     const fromWins = animatedWins;
     const fromLosses = animatedLosses;
@@ -553,141 +547,12 @@ export default function UserDashboard() {
 
   async function warm() {
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
-    try {
-      let accessToken: string | null = session?.access_token ?? null;
-      try {
-        const fresh = await getSession();
-        if (fresh?.access_token) accessToken = fresh.access_token;
-      } catch (authErr: unknown) {
-        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
-        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
-        return;
-      }
-      const dates = activePredictDates;
-      for (let i = 0; i < dates.length; i++) {
-        const currentDate = dates[i];
-        const qs = new URLSearchParams({
-          date: currentDate,
-          leagueIds: selectedLeagueIds.join(","),
-          season: String(inferSeason(currentDate))
-        });
-        qs.set("usageDay", todayKey);
-        const headers: Record<string, string> = {};
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
-        if (response.status === 429) {
-          try {
-            const errBody = (await response.json()) as { error?: string };
-            setStatus(
-              errBody?.error
-                ? errBody.error
-                : "Cererea Warm a fost limitată temporar de server."
-            );
-          } catch {
-            setStatus("Cererea Warm a fost limitată temporar de server.");
-          }
-          return;
-        }
-        if (!response.ok) {
-          let backendMessage = "";
-          try {
-            const errJson = await response.json();
-            if (typeof errJson?.error === "string") backendMessage = errJson.error;
-          } catch {
-            backendMessage = "";
-          }
-          setStatus(
-            backendMessage
-              ? `Warm a eșuat (HTTP ${response.status}) · ${backendMessage}`
-              : `Warm a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`
-          );
-          return;
-        }
-        await response.json();
-      }
-      setStatus("Warm finalizat pentru ligile favorite.");
-    } catch (error: any) {
-      setStatus(error?.message || "Warm a esuat.");
-    }
+    await runWarm(activePredictDates);
   }
 
   async function predict() {
     if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
-    try {
-      let accessToken: string | null = session?.access_token ?? null;
-      try {
-        const fresh = await getSession();
-        if (fresh?.access_token) accessToken = fresh.access_token;
-      } catch (authErr: unknown) {
-        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
-        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
-        return;
-      }
-      const dates = activePredictDates;
-      const batches: PredictionRow[] = [];
-      for (let i = 0; i < dates.length; i++) {
-        const currentDate = dates[i];
-        const qs = new URLSearchParams({
-          date: currentDate,
-          leagueIds: selectedLeagueIds.join(","),
-          season: String(inferSeason(currentDate)),
-          limit: "15"
-        });
-        qs.set("usageDay", todayKey);
-        const headers: Record<string, string> = {};
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const response = await fetch(`/api/predict?${qs.toString()}`, { headers });
-        if (response.status === 429) {
-          try {
-            const errBody = (await response.json()) as { error?: string };
-            setStatus(
-              errBody?.error
-                ? errBody.error
-                : "Cererea Predict a fost limitată temporar de server."
-            );
-          } catch {
-            setStatus("Cererea Predict a fost limitată temporar de server.");
-          }
-          return;
-        }
-        if (!response.ok) {
-          let backendMessage = "";
-          try {
-            const errJson = await response.json();
-            if (typeof errJson?.error === "string") backendMessage = errJson.error;
-          } catch {
-            backendMessage = "";
-          }
-          setStatus(
-            backendMessage
-              ? `Predict a eșuat (HTTP ${response.status}) · ${backendMessage}`
-              : `Predict a eșuat (HTTP ${response.status}). Limita nu e neapărat atinsă; încearcă din nou sau verifică rețeaua.`
-          );
-          return;
-        }
-        const json = await response.json();
-        if (Array.isArray(json)) batches.push(...json);
-      }
-      const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
-      setPreds(deduped);
-      if (user?.id) {
-        setPredictionsByUser((prev) => ({ ...prev, [user.id]: deduped }));
-      }
-      if (user?.id) {
-        setUserPredictionMap((prev) => {
-          const existing = prev[user.id] || [];
-          const merged = Array.from(new Set([...existing, ...deduped.map((item) => Number(item.id))]));
-          return { ...prev, [user.id]: merged };
-        });
-      }
-      setStatus(`Au fost generate ${batches.length} predictii.`);
-      const syncHeaders: Record<string, string> = {};
-      if (accessToken) syncHeaders.Authorization = `Bearer ${accessToken}`;
-      await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
-      await loadHistory();
-    } catch (error: any) {
-      setStatus(error?.message || "Predict a esuat.");
-    }
+    await runPredict(activePredictDates);
   }
 
   async function completeOnboarding() {
@@ -981,7 +846,7 @@ export default function UserDashboard() {
         </div>
 
         {status && (
-          <div className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
+          <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
         )}
 
         {!tierQuotaExempt && (

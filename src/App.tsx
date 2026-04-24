@@ -19,6 +19,7 @@ import {
 } from "./components/admin/AdminObservatory";
 import { ModelPulseStrip, ModelPulseWave } from "./components/SignalLab";
 import { BRAND_IMAGES } from "./constants/brandAssets";
+import { ADMIN_PREDICT_FLOW_MESSAGES } from "./constants/predictFlowMessages";
 import Auth from "./components/Auth";
 import {
   BacktestKpi,
@@ -35,6 +36,10 @@ import {
 } from "./types";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META, FilterMode, SortBy } from "./constants/appConstants";
 import { useAuth } from "./hooks/useAuth";
+import { useDateRollover } from "./hooks/useDateRollover";
+import { useHistorySync } from "./hooks/useHistorySync";
+import { isCompactViewport, isDesktopViewport, useLeaguePanelState } from "./hooks/useLeaguePanelState";
+import { usePredictFlow } from "./hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "./hooks/useLiveFixtureScorePoll";
 import {
   dominantColorFromImage,
@@ -47,6 +52,7 @@ import {
   normalizeSelectedDates,
   useLocalStorageState
 } from "./utils/appUtils";
+import { syncHistoryAfterPredict } from "./utils/predictFlowUtils";
 
 function hasTierMaskedPredictionShape(rows: PredictionRow[]): boolean {
   return rows.some((row) => {
@@ -82,7 +88,6 @@ export default function App() {
   const [draftDriftThreshold, setDraftDriftThreshold] = useState<number>(alertDriftThreshold);
   const [draftLowDataThreshold, setDraftLowDataThreshold] = useState<number>(alertLowDataThreshold);
   const [thresholdsSaved, setThresholdsSaved] = useState<"idle" | "saved" | "reset">("idle");
-  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
   const [isWinRatePulsing, setIsWinRatePulsing] = useState(false);
   const [animatedWins, setAnimatedWins] = useState(0);
   const [animatedLosses, setAnimatedLosses] = useState(0);
@@ -94,7 +99,7 @@ export default function App() {
   const [minXgSpread, setMinXgSpread] = useState(0);
   const [sortBy, setSortBy] = useState<SortBy>("TIME");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
-  const [isLeaguesOpen, setIsLeaguesOpen] = useState(window.innerWidth >= 1024);
+  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [isAdminWorking, setIsAdminWorking] = useState(false);
@@ -131,7 +136,21 @@ export default function App() {
   } = useAuth();
   const [adminTierDraftByUser, setAdminTierDraftByUser] = useState<Record<string, UserTier>>({});
   const [adminExpiryDraftByUser, setAdminExpiryDraftByUser] = useState<Record<string, string>>({});
-
+  const rollToDate = useCallback(
+    (nextDate: string) => {
+      setDate(nextDate);
+      setSelectedDates((prev) => {
+        const rest = (prev || []).filter((d) => d !== date);
+        return normalizeSelectedDates([nextDate, ...rest]);
+      });
+    },
+    [date, setDate, setSelectedDates]
+  );
+  useDateRollover({
+    date,
+    onRollToDate: rollToDate,
+    storageKeys: ["footy.date", "footy.user.date"]
+  });
   const loadPerfAdmin = useCallback(async () => {
     if (!session?.access_token || user?.role !== "admin") return;
     setPerfAdminLoading(true);
@@ -329,52 +348,8 @@ export default function App() {
     if (!requireAuth()) return;
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Se procesează datele (Warm)...");
-    try {
-      let accessToken: string | null = session?.access_token ?? null;
-      try {
-        const fresh = await getSession();
-        if (fresh?.access_token) accessToken = fresh.access_token;
-      } catch (authErr: unknown) {
-        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
-        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
-        return;
-      }
-      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
-      const usageDay = localCalendarDateKey();
-      const results = [];
-      for (let i = 0; i < dates.length; i++) {
-        const currentDate = dates[i];
-        const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)) });
-        qs.set("usageDay", usageDay);
-        const headers: Record<string, string> = {};
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const r = await fetch(`/api/warm?${qs}`, { headers });
-        if (r.status === 429) {
-          try {
-            const err = await r.json();
-            setStatus(typeof err?.error === "string" ? err.error : "Limită zilnică Warm atinsă.");
-          } catch {
-            setStatus("Limită zilnică Warm atinsă.");
-          }
-          return;
-        }
-        if (!r.ok) {
-          let backendMessage = "";
-          try {
-            const errJson = await r.json();
-            if (typeof errJson?.error === "string") backendMessage = errJson.error;
-          } catch {
-            backendMessage = "";
-          }
-          setStatus(backendMessage ? `Warm a eșuat (HTTP ${r.status}) · ${backendMessage}` : `Warm a eșuat (HTTP ${r.status}).`);
-          return;
-        }
-        const j = await r.json();
-        results.push({ date: currentDate, ok: !!j.ok });
-      }
-      const okCount = results.filter(r => r.ok).length;
-      setStatus(okCount === results.length ? `Date pregătite cu succes pentru ${results.length} zi(le).` : `Warm finalizat parțial (${okCount}/${results.length}).`);
-    } catch (e: any) { setStatus(`Eroare: ${e.message}`); }
+    const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+    await runWarm(dates);
   }
 
   async function prefetchColors(rows: PredictionRow[]) {
@@ -411,62 +386,8 @@ export default function App() {
     if (!requireAuth()) return;
     if (!selectedLeagueIds.length) return setStatus("Selectează o ligă.");
     setStatus("Generez predicțiile Premium...");
-    try {
-      let accessToken: string | null = session?.access_token ?? null;
-      try {
-        const fresh = await getSession();
-        if (fresh?.access_token) accessToken = fresh.access_token;
-      } catch (authErr: unknown) {
-        const msg = authErr instanceof Error ? authErr.message : "Nu am putut reîncărca sesiunea.";
-        setStatus(`${msg} Încearcă din nou sau autentifică-te din nou.`);
-        return;
-      }
-      const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
-      const usageDay = localCalendarDateKey();
-      const batches: PredictionRow[] = [];
-      for (let i = 0; i < dates.length; i++) {
-        const currentDate = dates[i];
-        const qs = new URLSearchParams({ date: currentDate, leagueIds: selectedLeagueIds.join(","), season: String(inferSeason(currentDate)), limit: "50" });
-        qs.set("usageDay", usageDay);
-        const headers: Record<string, string> = {};
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const r = await fetch(`/api/predict?${qs}`, { headers });
-        if (r.status === 429) {
-          try {
-            const err = await r.json();
-            setStatus(typeof err?.error === "string" ? err.error : "Limită zilnică Predict atinsă.");
-          } catch {
-            setStatus("Limită zilnică Predict atinsă.");
-          }
-          return;
-        }
-        if (!r.ok) {
-          let backendMessage = "";
-          try {
-            const errJson = await r.json();
-            if (typeof errJson?.error === "string") backendMessage = errJson.error;
-          } catch {
-            backendMessage = "";
-          }
-          setStatus(backendMessage ? `Predict a eșuat (HTTP ${r.status}) · ${backendMessage}` : `Predict a eșuat (HTTP ${r.status}).`);
-          return;
-        }
-        const j = await r.json();
-        if (Array.isArray(j)) batches.push(...j);
-      }
-      const deduped = Array.from(new Map(batches.map((row) => [row.id, row])).values());
-      setPreds(deduped);
-      const syncHeaders: Record<string, string> = {};
-      if (accessToken) syncHeaders.Authorization = `Bearer ${accessToken}`;
-      await fetch("/api/history?sync=1&days=30", { method: "POST", headers: syncHeaders }).catch(() => null);
-      await loadHistory(30);
-      await loadKpi(45);
-      await loadAlerts(7);
-      setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
-      void prefetchColors(deduped);
-      if (window.innerWidth < 1024) setIsLeaguesOpen(false);
-      if (user?.role === "admin") void loadPerfAdmin();
-    } catch (e: any) { setStatus(`Eroare: ${e.message}`); }
+    const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+    await runPredict(dates);
   }
 
   async function loadHistory(days = 30) {
@@ -490,20 +411,43 @@ export default function App() {
     }
   }
 
-  async function syncHistory(days = 30) {
-    setIsHistorySyncing(true);
-    try {
-      const headers: Record<string, string> = {};
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      await fetch(`/api/history?sync=1&days=${days}`, { method: "POST", headers });
+  const { isHistorySyncing, syncHistory } = useHistorySync({
+    accessToken: session?.access_token,
+    defaultDays: 30,
+    cooldownMs: 10_000,
+    onAfterSync: async (days) => {
       await loadHistory(days);
       if (user?.role === "admin") await loadPerfAdmin();
-    } catch {
-      // silent: indicator is enough
-    } finally {
-      setIsHistorySyncing(false);
     }
-  }
+  });
+  const { warm: runWarm, predict: runPredict } = usePredictFlow<PredictionRow>({
+    accessToken: session?.access_token,
+    getSession,
+    selectedLeagueIds,
+    inferSeason,
+    usageDay: localCalendarDateKey(),
+    setStatus,
+    predictLimit: "50",
+    messages: ADMIN_PREDICT_FLOW_MESSAGES,
+    onWarmCompleted: async (okCount, totalDates) => {
+      setStatus(
+        okCount === totalDates
+          ? `Date pregătite cu succes pentru ${totalDates} zi(le).`
+          : `Warm finalizat parțial (${okCount}/${totalDates}).`
+      );
+    },
+    onPredictCompleted: async (deduped, token, dates) => {
+      setPreds(deduped);
+      await syncHistoryAfterPredict(token, 30);
+      await loadHistory(30);
+      await loadKpi(45);
+      await loadAlerts(7);
+      setStatus(`Gata! ${deduped.length} predicții generate pentru ${dates.length} zi(le).`);
+      void prefetchColors(deduped);
+      if (!isDesktopViewport()) setIsLeaguesOpen(false);
+      if (user?.role === "admin") void loadPerfAdmin();
+    }
+  });
 
   async function loadKpi(days = 45) {
     setKpiLoading(true);
@@ -554,18 +498,6 @@ export default function App() {
     void fetchDays(normalized);
   }, [date, selectedDates]);
   useEffect(() => {
-    const tm = setInterval(() => {
-      const today = localCalendarDateKey();
-      if (today === date) return;
-      setDate(today);
-      setSelectedDates((prev) => {
-        const rest = (prev || []).filter((d) => d !== date);
-        return normalizeSelectedDates([today, ...rest]);
-      });
-    }, 60_000);
-    return () => clearInterval(tm);
-  }, [date, setDate, setSelectedDates]);
-  useEffect(() => {
     void loadKpi(45);
     void loadAlerts(7);
   }, []);
@@ -586,11 +518,10 @@ export default function App() {
     if (!session?.access_token) return;
     if (pendingHistoryCount <= 0) return;
     const tm = setInterval(() => {
-      if (isHistorySyncing) return;
       void syncHistory(30);
     }, 90_000);
     return () => clearInterval(tm);
-  }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory, user?.role]);
+  }, [session?.access_token, pendingHistoryCount, syncHistory, user?.role]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -616,7 +547,7 @@ export default function App() {
     prevWinRateRef.current = trackerStats.winRate;
   }, [trackerStats.winRate]);
   useEffect(() => {
-    const durationMs = window.innerWidth < 768 ? 450 : 650;
+    const durationMs = isCompactViewport() ? 450 : 650;
     const start = performance.now();
     const fromWins = animatedWins;
     const fromLosses = animatedLosses;
@@ -1221,7 +1152,7 @@ export default function App() {
         )}
 
         {status && (
-          <div className="mb-6 rounded-xl border border-signal-sage/25 bg-signal-panel/50 p-3 font-mono text-xs text-signal-petrol/90 shadow-inner backdrop-blur-sm">
+          <div role="status" aria-live="polite" className="mb-6 rounded-xl border border-signal-sage/25 bg-signal-panel/50 p-3 font-mono text-xs text-signal-petrol/90 shadow-inner backdrop-blur-sm">
             {"> "}
             {status}
           </div>
