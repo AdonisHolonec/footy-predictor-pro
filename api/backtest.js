@@ -523,13 +523,154 @@ async function handleMetrics(req, res) {
 }
 
 /**
+ * Public verified track record — no auth.
+ * GET /api/backtest?view=public-track&days=45
+ * Sanitized aggregates only (no bet rows, no CSV, no ops).
+ */
+async function handlePublicTrack(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+  }
+
+  const config = assertSupabaseConfigured();
+  if (!config.ok) {
+    return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
+  }
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
+  }
+
+  const allowedDays = new Set([30, 45, 90]);
+  const daysRaw = Number(req.query.days || 45);
+  const days = allowedDays.has(daysRaw) ? daysRaw : 45;
+
+  res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+
+  try {
+    // Prefer pre-aggregated snapshots (cron).
+    const { data: snapRows, error: snapError } = await supabase
+      .from("backtest_snapshots")
+      .select(
+        "snapshot_date, window_days, settled_bets, wins, losses, hit_rate, roi, max_drawdown, pnl_units, total_stake_units, avg_ev"
+      )
+      .eq("window_days", days)
+      .order("snapshot_date", { ascending: false })
+      .limit(14);
+
+    if (snapError) throw snapError;
+    const rows = snapRows || [];
+
+    if (rows.length > 0) {
+      const latest = rows[0];
+      const trend = rows
+        .slice()
+        .reverse()
+        .map((r) => ({
+          date: r.snapshot_date,
+          hitRate: Number(r.hit_rate || 0),
+          roi: Number(r.roi || 0),
+          settled: Number(r.settled_bets || 0),
+          pnlUnits: Number(r.pnl_units || 0)
+        }));
+
+      return res.status(200).json({
+        ok: true,
+        public: true,
+        source: "snapshots",
+        days,
+        asOf: latest.snapshot_date,
+        summary: {
+          settled: Number(latest.settled_bets || 0),
+          wins: Number(latest.wins || 0),
+          losses: Number(latest.losses || 0),
+          hitRate: Number(latest.hit_rate || 0),
+          roi: Number(latest.roi || 0),
+          pnlUnits: Number(latest.pnl_units || 0),
+          drawdown: Number(latest.max_drawdown || 0),
+          totalStake: Number(latest.total_stake_units || 0),
+          expectedValue: Number(latest.avg_ev || 0)
+        },
+        trend,
+        disclaimer:
+          "Track record verificat pe predicții settled (win/loss). Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
+      });
+    }
+
+    // Fallback: live aggregate from settled history (no bet list exposed).
+    const cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const { data: histRows, error: histError } = await supabase
+      .from("predictions_history")
+      .select(
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, recommended_pick, recommended_confidence, raw_payload"
+      )
+      .gte("kickoff_at", cutoffIso)
+      .in("validation", ["win", "loss"])
+      .order("kickoff_at", { ascending: true })
+      .limit(5000);
+
+    if (histError) throw histError;
+
+    const report = buildBacktestReport(histRows || [], { days, includeBets: "0" });
+    const m = report.metrics || {};
+    const equity = Array.isArray(m.equityCurve) ? m.equityCurve : [];
+    const trend = equity
+      .filter((_, i) => i % Math.max(1, Math.floor(equity.length / 14)) === 0 || i === equity.length - 1)
+      .slice(-14)
+      .map((p) => ({
+        date: null,
+        i: p.i,
+        hitRate: null,
+        roi: null,
+        settled: null,
+        pnlUnits: Number(p.equity || 0)
+      }));
+
+    return res.status(200).json({
+      ok: true,
+      public: true,
+      source: "live_settled",
+      days,
+      asOf: new Date().toISOString().slice(0, 10),
+      summary: {
+        settled: Number(m.settled || 0),
+        wins: Number(m.wins || 0),
+        losses: Number(m.losses || 0),
+        hitRate: Number(m.hitRate || 0),
+        roi: Number(m.roi || 0),
+        pnlUnits: Number(m.pnlUnits || 0),
+        drawdown: Number(m.maxDrawdown || 0),
+        totalStake: Number(m.totalStake || 0),
+        expectedValue: Number(m.expectedValue || 0)
+      },
+      trend,
+      byMarket: (m.byMarket || []).slice(0, 6).map((row) => ({
+        key: row.key,
+        settled: row.settled,
+        hitRate: row.hitRate,
+        roi: row.roi
+      })),
+      disclaimer:
+        "Track record verificat pe predicții settled (win/loss). Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || "Track record public a eșuat" });
+  }
+}
+
+/**
  * GET /api/backtest?view=kpi&days=45 — KPI read (replaces /api/backtest/kpi).
  * GET /api/backtest?view=analytics&period=30d — filtered advanced analytics (+ format=csv).
+ * GET /api/backtest?view=public-track&days=45 — public verified track record (no auth).
  * GET or POST /api/backtest?view=snapshot&days=45 — snapshot job (replaces /api/backtest/snapshot).
  * GET /api/backtest?view=metrics&days=45 — Brier / log loss (cron/auth).
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
+  // Public track record is intentionally ungated (sanitized aggregates only).
+  if (view === "public-track" || view === "publictrack" || view === "track-record") {
+    return handlePublicTrack(req, res);
+  }
   // P0: previously open read views — cron or admin JWT only.
   const gatedViews = new Set([
     "kpi",
@@ -552,6 +693,7 @@ export default async function handler(req, res) {
   if (view === "model-select" || view === "modelselect") return handleModelSelect(req, res);
   return res.status(400).json({
     ok: false,
-    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot, metrics, health sau model-lab."
+    error:
+      "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, public-track, snapshot, metrics, health sau model-lab."
   });
 }

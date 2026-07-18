@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import LandingAccess from "./pages/LandingAccess";
+import TrackRecordPage from "./pages/TrackRecordPage";
 import Login from "./pages/Login";
 import Privacy from "./pages/Privacy";
 import UserDashboard from "./pages/UserDashboard";
@@ -42,6 +43,7 @@ export default function RootRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingAccess />} />
+        <Route path="/track-record" element={<TrackRecordPage />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/workspace" element={<AuthGate />} />

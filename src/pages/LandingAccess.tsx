@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ModelPulseWave } from "../components/SignalLab";
+import TrackRecordSection from "../components/TrackRecordSection";
 import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useAuth } from "../hooks/useAuth";
 
@@ -176,6 +177,8 @@ export default function LandingAccess() {
             </div>
           </div>
 
+          <TrackRecordSection days={45} compact />
+
           <section id="pricing" className="scroll-mt-28 border-t border-white/[0.06] py-16">
             <h2 className="font-display text-2xl font-semibold text-signal-ink">Access Tiers · Intelligence Plans</h2>
             <p className="mt-2 max-w-2xl text-sm text-signal-inkMuted">
@@ -259,6 +262,9 @@ export default function LandingAccess() {
               {loading ? "Se încarcă sesiunea…" : user ? `Sesiune activă · ${user.email}` : "Nu ești autentificat."}
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-4 sm:mt-0 sm:justify-end">
+              <Link to="/track-record" className="font-mono text-[11px] text-signal-petrol hover:underline">
+                Track Record
+              </Link>
               <Link to="/privacy" className="font-mono text-[11px] text-signal-petrol hover:underline">
                 Privacy (GDPR)
               </Link>
