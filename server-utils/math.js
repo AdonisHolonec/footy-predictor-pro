@@ -178,120 +178,76 @@ export function buildMatchScorePmf(lambdaHome, lambdaAway, options = {}) {
  * @param {number} [options.tailTarget=1e-4]
  */
 export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, options = {}) {
-  const correlation = clamp(Number(options?.correlation ?? 0.12), 0, 0.45);
-  const rho = clamp(Number(options?.rho ?? -0.11), -0.25, 0.1);
-  const tailTarget = Math.max(1e-6, Number(options?.tailTarget ?? 1e-4));
+  // Single shared score PMF (also reused by Monte Carlo when returned as `.pmf`).
+  const pmf =
+    options.pmf && Array.isArray(options.pmf.cells) && Array.isArray(options.pmf.cdf)
+      ? options.pmf
+      : buildMatchScorePmf(lambdaHome, lambdaAway, options);
 
-  let maxN = Math.min(
-    25,
-    Math.max(
-      7,
-      Math.ceil(Math.max(lambdaHome, lambdaAway, 0.5) + 5 * Math.sqrt(Math.max(lambdaHome, lambdaAway, 0.3)))
-    )
-  );
+  const correlation = Number(pmf.correlation);
+  const rho = Number(pmf.rho);
+  const maxN = Number(pmf.gridMax) || 0;
 
-  function accumulate(gridN) {
-    let p1 = 0;
-    let pX = 0;
-    let p2 = 0;
-    let pO25 = 0;
-    let pGG = 0;
-    let pU35 = 0;
-    let pO15 = 0;
-    let pO05 = 0;
-    let mass = 0;
-    let maxProb1 = -1;
-    let maxProbX = -1;
-    let maxProb2 = -1;
-    let bestScore1 = "1-0";
-    let bestScoreX = "0-0";
-    let bestScore2 = "0-1";
-    for (let i = 0; i <= gridN; i++) {
-      for (let j = 0; j <= gridN; j++) {
-        const base = bivariatePoissonP(i, j, lambdaHome, lambdaAway, correlation);
-        const tau = dcTau(i, j, lambdaHome, lambdaAway, rho);
-        const prob = base * tau;
-        mass += prob;
-        if (i > j) {
-          p1 += prob;
-          if (prob > maxProb1) {
-            maxProb1 = prob;
-            bestScore1 = `${i}-${j}`;
-          }
-        } else if (i === j) {
-          pX += prob;
-          if (prob > maxProbX) {
-            maxProbX = prob;
-            bestScoreX = `${i}-${j}`;
-          }
-        } else {
-          p2 += prob;
-          if (prob > maxProb2) {
-            maxProb2 = prob;
-            bestScore2 = `${i}-${j}`;
-          }
-        }
-        if (i + j > 2.5) pO25 += prob;
-        if (i + j <= 3.5) pU35 += prob;
-        if (i + j > 1.5) pO15 += prob;
-        if (i + j > 0.5) pO05 += prob;
-        if (i > 0 && j > 0) pGG += prob;
+  let p1 = 0;
+  let pX = 0;
+  let p2 = 0;
+  let pO25 = 0;
+  let pGG = 0;
+  let pU35 = 0;
+  let pO15 = 0;
+  let pO05 = 0;
+  let maxProb1 = -1;
+  let maxProbX = -1;
+  let maxProb2 = -1;
+  let bestScore1 = "1-0";
+  let bestScoreX = "0-0";
+  let bestScore2 = "0-1";
+
+  const cells = pmf.cells || [];
+  for (let k = 0; k < cells.length; k++) {
+    const c = cells[k];
+    const i = c.home;
+    const j = c.away;
+    const prob = c.prob || 0;
+    if (i > j) {
+      p1 += prob;
+      if (prob > maxProb1) {
+        maxProb1 = prob;
+        bestScore1 = `${i}-${j}`;
+      }
+    } else if (i === j) {
+      pX += prob;
+      if (prob > maxProbX) {
+        maxProbX = prob;
+        bestScoreX = `${i}-${j}`;
+      }
+    } else {
+      p2 += prob;
+      if (prob > maxProb2) {
+        maxProb2 = prob;
+        bestScore2 = `${i}-${j}`;
       }
     }
-    return {
-      p1,
-      pX,
-      p2,
-      pO25,
-      pGG,
-      pU35,
-      pO15,
-      pO05,
-      mass,
-      bestScore1,
-      bestScoreX,
-      bestScore2,
-      maxProb1,
-      maxProbX,
-      maxProb2
-    };
+    if (i + j > 2.5) pO25 += prob;
+    if (i + j <= 3.5) pU35 += prob;
+    if (i + j > 1.5) pO15 += prob;
+    if (i + j > 0.5) pO05 += prob;
+    if (i > 0 && j > 0) pGG += prob;
   }
 
-  let acc = accumulate(maxN);
-  let guard = 0;
-  while (acc.mass < 1 - tailTarget && maxN < 25 && guard < 6) {
-    maxN += 2;
-    acc = accumulate(maxN);
-    guard += 1;
-  }
+  const norm = p1 + pX + p2;
+  const p1Pct = norm > 0 ? (p1 / norm) * 100 : 0;
+  const pXPct = norm > 0 ? (pX / norm) * 100 : 0;
+  const p2Pct = norm > 0 ? (p2 / norm) * 100 : 0;
 
-  // Re-normalizare globală: corecţia DC poate face mass ≠ 1 chiar pentru grid mare.
-  if (acc.mass > 0 && Math.abs(acc.mass - 1) > 1e-9) {
-    const k = 1 / acc.mass;
-    acc.p1 *= k;
-    acc.pX *= k;
-    acc.p2 *= k;
-    acc.pO25 *= k;
-    acc.pGG *= k;
-    acc.pU35 *= k;
-    acc.pO15 *= k;
-    acc.pO05 *= k;
-    acc.mass = 1;
-  }
-
-  const norm = acc.p1 + acc.pX + acc.p2;
-  const p1Pct = norm > 0 ? (acc.p1 / norm) * 100 : 0;
-  const pXPct = norm > 0 ? (acc.pX / norm) * 100 : 0;
-  const p2Pct = norm > 0 ? (acc.p2 / norm) * 100 : 0;
-
-  let finalBestScore = acc.bestScore1;
-  let finalBestScoreProb = acc.maxProb1;
-  if (acc.pX >= acc.p1 && acc.pX >= acc.p2) {
-    finalBestScore = acc.bestScoreX;
-    finalBestScoreProb = acc.maxProbX;
-  } else if (acc.p2 > acc.p1 && acc.p2 > acc.pX) {
-    finalBestScore = acc.bestScore2;
-    finalBestScoreProb = acc.maxProb2;
+  let finalBestScore = bestScore1;
+  let finalBestScoreProb = maxProb1;
+  if (pX >= p1 && pX >= p2) {
+    finalBestScore = bestScoreX;
+    finalBestScoreProb = maxProbX;
+  } else if (p2 > p1 && p2 > pX) {
+    finalBestScore = bestScore2;
+    finalBestScoreProb = maxProb2;
   }
 
   return {
@@ -299,21 +255,23 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
       p1: clamp(p1Pct, 0, 100),
       pX: clamp(pXPct, 0, 100),
       p2: clamp(p2Pct, 0, 100),
-      pGG: clamp(acc.pGG * 100, 0, 100),
-      pO25: clamp(acc.pO25 * 100, 0, 100),
-      pU35: clamp(acc.pU35 * 100, 0, 100),
-      pO15: clamp(acc.pO15 * 100, 0, 100),
-      pO05: clamp(acc.pO05 * 100, 0, 100)
+      pGG: clamp(pGG * 100, 0, 100),
+      pO25: clamp(pO25 * 100, 0, 100),
+      pU35: clamp(pU35 * 100, 0, 100),
+      pO15: clamp(pO15 * 100, 0, 100),
+      pO05: clamp(pO05 * 100, 0, 100)
     },
     bestScore: finalBestScore,
     bestScoreProb: clamp((finalBestScoreProb || 0) * 100, 0, 100),
-    pU35: clamp(acc.pU35 * 100, 0, 100),
+    pU35: clamp(pU35 * 100, 0, 100),
+    pmf,
     modelMeta: {
       method: "bivariate-poisson-dc-analytic",
       correlation,
       rho,
       gridMax: maxN,
-      massCaptured: acc.mass
+      massCaptured: 1,
+      sharedPmf: true
     }
   };
 }

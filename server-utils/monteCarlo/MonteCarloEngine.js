@@ -282,10 +282,14 @@ export function runMonteCarloSimulation(lambdaHome, lambdaAway, options = {}) {
       ? Number(options.seed) >>> 0
       : seedFromFixture(options.fixtureId, lambdaHome, lambdaAway);
 
-  const pmf = buildMatchScorePmf(lambdaHome, lambdaAway, {
-    correlation: options.correlation,
-    rho: options.rho
-  });
+  // Reuse analytical score PMF from computeMatchProbs when provided (Predictor V3 shared PMF).
+  const pmf =
+    options.pmf && Array.isArray(options.pmf.cells) && Array.isArray(options.pmf.cdf)
+      ? options.pmf
+      : buildMatchScorePmf(lambdaHome, lambdaAway, {
+          correlation: options.correlation,
+          rho: options.rho
+        });
 
   const resolved = resolveMonteCarloSimulations(lambdaHome, lambdaAway, {
     ...options,

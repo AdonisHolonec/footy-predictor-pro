@@ -234,6 +234,8 @@ export async function run(context) {
       Object.assign(f, { aborted: true, silentSkip: true });
       return context;
     }
+    // Shared score PMF for Stage05 Monte Carlo (avoid rebuilding the grid).
+    f.scorePmf = calc.pmf || null;
     // Apply league profile rates (draw / BTTS / over) — config-driven, not hardcoded.
     p = applyLeagueMarketPriors(calc.probs, leagueParams);
     // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline

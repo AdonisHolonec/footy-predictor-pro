@@ -219,13 +219,14 @@ export async function run(context) {
     if (f.xgModelMeta) xgModelMeta = f.xgModelMeta;
     if (f.xgLambdasForSources) xgLambdasForSources = f.xgLambdasForSources;
 
-    // === MONTE CARLO once on final λ (no second pass) ===
+    // === MONTE CARLO once on final λ (reuse Stage04 score PMF when present) ===
     monteCarlo = null;
     try {
       monteCarlo = runMonteCarloSimulation(lambdaHome, lambdaAway, {
         fixtureId,
         correlation: poissonCorrelation,
-        rho: leagueParams.rho
+        rho: leagueParams.rho,
+        pmf: f.scorePmf || undefined
       });
     } catch (mcErr) {
       console.warn("[monte-carlo]", fixtureId, mcErr?.message || mcErr);

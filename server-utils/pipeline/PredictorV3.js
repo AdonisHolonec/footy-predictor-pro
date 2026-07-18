@@ -23,7 +23,7 @@ import * as Stage07ModelFusion from "./stages/Stage07ModelFusion.js";
 import * as Stage08Decision from "./stages/Stage08Decision.js";
 import * as Stage09Explainability from "./stages/Stage09Explainability.js";
 
-export const PREDICTOR_V3_VERSION = "predictor-v3.1-xg-before-poisson";
+export const PREDICTOR_V3_VERSION = "predictor-v3.1-shared-pmf";
 
 /** Full stage graph (fixture stages run inside runFixtureStageLoop). */
 export const STAGE_ORDER = [

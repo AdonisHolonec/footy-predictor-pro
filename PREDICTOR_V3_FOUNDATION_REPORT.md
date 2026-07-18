@@ -4,7 +4,7 @@
 |-------|-------|
 | **Document** | `PREDICTOR_V3_FOUNDATION_REPORT.md` |
 | **Date** | 2026-07-18 |
-| **Version** | `predictor-v3.1-xg-before-poisson` |
+| **Version** | `predictor-v3.1-shared-pmf` |
 | **Constraint** | Architectural refactor only — **no algorithm / probability / calibration / UI / API contract changes** |
 | **Allowed numeric delta** | &lt; 0.1% floating-point (none intentionally introduced) |
 
@@ -16,7 +16,9 @@ The former **God Handler** `api/predict.js` (~2423 LOC) is now a **thin HTTP ada
 
 **Fixture-stage split:** Stage00 / Stage01 / Stage10–12 remain request-scoped. Per fixture, `runFixtureStageLoop` calls **real** Stage02→09 `run(context)` bodies that share `context.fixture` / `context.league`.
 
-**P4 (v3.1):** `finalizeLambdasWithRollingXg` runs at the start of Stage04 — live rolling hydrate + late xG blend **before** the single Poisson pass. Stage05 runs Monte Carlo **once** on final λ (no mid-pipeline recompute). Final outputs on the late-xG path match the previous post-recompute values; the discarded pre-blend Poisson/MC pass is gone.
+**P4 (v3.1):** `finalizeLambdasWithRollingXg` runs at the start of Stage04 — live rolling hydrate + late xG blend **before** the single Poisson pass. Stage05 runs Monte Carlo **once** on final λ (no mid-pipeline recompute).
+
+**P6 (shared PMF):** `computeMatchProbs` builds one score PMF (`buildMatchScorePmf`) and returns it as `calc.pmf`. Stage04 stores `fixture.scorePmf`; Stage05 passes it into `runMonteCarloSimulation` so the grid is not rebuilt.
 
 ---
 
@@ -206,6 +208,7 @@ No second prediction pass.
 | **P3 — Slice Stage02–09** | Done (real per-fixture `run()` bodies) | — |
 | **P4 — Single MC / xG before Poisson** | Done — `finalizeLambdasWithRollingXg` in Stage04; Stage05 MC once | — |
 | **P5 — Train/serve raw Poisson** | Done — `server-utils/ml/extractRawTriple.js` prefers `rawPoissonProbs1x2Pct`; used by daily-ml + fit scripts. Rollback: `PREDICT_TRAIN_USE_FINAL_PROBS=1` | — |
+| **P6 — Shared score PMF** | Done — `computeMatchProbs` builds `buildMatchScorePmf` once; Stage04 stores `fixture.scorePmf`; Stage05 MC reuses it | — |
 
 **Golden-fixture harness (done):** offline vitest suite locks `λ` / `pRaw` / final 1X2 / `recommended.pick` through Stage03–09 with mocked odds/Elo.
 
