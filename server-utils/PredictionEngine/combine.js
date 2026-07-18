@@ -70,8 +70,19 @@ export function combineLambdas(ctx, core, weights) {
   const adjHome = optionalAdjustment(optionalModules, "home", weights.modularBlend);
   const adjAway = optionalAdjustment(optionalModules, "away", weights.modularBlend);
 
-  const lambdaHome = clampLambda(baseLambdaHome * adjHome);
-  const lambdaAway = clampLambda(baseLambdaAway * adjAway);
+  let lambdaHome = clampLambda(baseLambdaHome * adjHome);
+  let lambdaAway = clampLambda(baseLambdaAway * adjAway);
+
+  // Predictor V2: blend strength λ toward rolling xG when ctx.xgHome/xgAway present.
+  const xgW = Math.max(0, Math.min(1, Number(weights.expectedGoals) || 0));
+  const xgH = Number(ctx.xgHome);
+  const xgA = Number(ctx.xgAway);
+  let xgBlend = null;
+  if (xgW > 0 && Number.isFinite(xgH) && Number.isFinite(xgA)) {
+    lambdaHome = clampLambda(lambdaHome * (1 - xgW) + xgH * xgW);
+    lambdaAway = clampLambda(lambdaAway * (1 - xgW) + xgA * xgW);
+    xgBlend = { weight: xgW, xgHome: xgH, xgAway: xgA, applied: true };
+  }
 
   const shrinkageK = Math.max(1, Number(ctx.shrinkageK) || 6);
   const homePlayed = ctx.hStats.playedHome ?? ctx.hStats.played ?? null;
@@ -95,7 +106,8 @@ export function combineLambdas(ctx, core, weights) {
     adjHome,
     adjAway,
     baseLambdaHome,
-    baseLambdaAway
+    baseLambdaAway,
+    xgBlend
   };
 
   return { lambdaHome, lambdaAway, strengthMeta };

@@ -131,10 +131,27 @@ export type MonteCarloGoalSide = {
   histogram: MonteCarloHistogramBin[];
 };
 
+export type MonteCarloAdaptiveMeta = {
+  enabled: boolean;
+  reason?: string;
+  score?: number | null;
+  tier?: number;
+  tiers?: number[];
+  components?: {
+    entropyNorm?: number;
+    competitiveness?: number;
+    goalVarNorm?: number;
+    ouCloseness?: number;
+  };
+  probs?: { p1?: number; pX?: number; p2?: number; pO25?: number };
+  totalLambda?: number;
+};
+
 export type MonteCarloResult = {
   version?: string;
   simulations: number;
   seed?: number;
+  adaptive?: MonteCarloAdaptiveMeta;
   lambdas?: { home: number; away: number };
   model?: {
     method?: string;
@@ -183,6 +200,8 @@ export type MonteCarloResult = {
     expectedGoalsAway?: number;
     expectedGoalsTotal?: number;
     ci95TotalGoals?: { low: number; high: number };
+    adaptiveSims?: number;
+    uncertaintyScore?: number | null;
   };
 };
 
@@ -729,6 +748,21 @@ export type BacktestMetrics = {
   maxDrawdown: number;
   winningStreak: number;
   losingStreak: number;
+  /** Professional quant metrics. */
+  logLoss?: number | null;
+  brier?: number | null;
+  kellyGrowthPct?: number;
+  kellyFinalBankroll?: number;
+  kellyMaxDrawdownPct?: number;
+  growthGeoMeanPct?: number;
+  sharpe?: number;
+  sharpeAnnualized?: number;
+  avgReturn?: number;
+  returnStd?: number;
+  clv?: number | null;
+  clvAvailable?: boolean;
+  clvCount?: number;
+  clvBeatRate?: number | null;
 };
 
 export type BacktestBetRow = {
@@ -803,6 +837,25 @@ export type ModelLabBundle = {
   models: ModelLabResult[];
   best?: { id: string; name: string; roi: number } | null;
   metrics?: string[];
+};
+
+export type ModelSelectionWindow = {
+  key: string;
+  days: number;
+  weight: number;
+  totalSettled: number;
+  winner?: { id: string; name: string; composite: number } | null;
+};
+
+export type ModelSelectionBundle = {
+  ok: boolean;
+  ran?: boolean;
+  active?: { id: string; name: string; promotedAt?: string | null; compositeScore?: number | null } | null;
+  selected?: { id: string; name: string; reason?: string };
+  totalSettled?: number;
+  windows?: ModelSelectionWindow[];
+  ranking?: Array<{ id: string; name: string; compositeScore: number | null; coverage: number }>;
+  promoted?: { id: string; name: string; promotedAt?: string; compositeScore?: number | null };
 };
 
 export type CacheHitStats = {
@@ -906,6 +959,8 @@ export type BacktestAnalyticsResponse = {
   totalsUnfiltered?: { settled: number; filtered: number };
   series?: {
     equity: Array<{ i: number; date: string; equity: number; pnl: number; drawdown: number }>;
+    kelly?: Array<{ i: number; date: string; bankroll: number }>;
+    returnsHistogram?: Array<{ bucket: string; count: number }>;
     daily: Array<{ date: string; pnl: number; equity: number; settled: number; hitRate: number }>;
     byMarket: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
     byLeague: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;

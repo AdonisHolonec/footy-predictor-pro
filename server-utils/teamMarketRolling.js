@@ -38,7 +38,12 @@ export function extractFixtureMarketStats(fixtureStatsPayload) {
     teamId: Number(block?.team?.id) || null,
     corners: readStat(block?.statistics, "Corner Kicks"),
     sot: readStat(block?.statistics, "Shots on Goal"),
-    shotsTotal: readStat(block?.statistics, "Total Shots")
+    shotsTotal: readStat(block?.statistics, "Total Shots"),
+    // Extra signals for the rolling xG model (present on richer API plans).
+    shotsInsideBox: readStat(block?.statistics, "Shots insidebox"),
+    shotsOutsideBox: readStat(block?.statistics, "Shots outsidebox"),
+    possession: readStat(block?.statistics, "Ball Possession"),
+    xg: readStat(block?.statistics, "expected_goals")
   }));
 }
 

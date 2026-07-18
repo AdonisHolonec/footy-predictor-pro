@@ -31,7 +31,8 @@ export const DEFAULT_PREDICTION_WEIGHTS = Object.freeze({
   odds: 0.15,
   motivation: 0.05,
   weather: 0.05,
-  expectedGoals: 0.0,
+  /** Blend strength λ toward rolling xG λ (0 = off, 1 = pure xG). */
+  expectedGoals: 0.2,
   poissonCorrelation: 0.12,
   modularBlend: 1
 });

@@ -26,11 +26,31 @@ import {
   getLeagueStakeCap,
   TOP_LEAGUE_IDS
 } from "../server-utils/modelConstants.js";
-import { fitIsotonicPav, applyIsotonicMap, applyCalibratedTriple } from "../server-utils/isotonicCalibration.js";
+import {
+  fitIsotonicPav,
+  applyIsotonicMap,
+  applyCalibratedTriple,
+  pickCalibrationMapForLeague
+} from "../server-utils/isotonicCalibration.js";
+import {
+  fitPlatt,
+  applyPlatt,
+  fitTemperature,
+  applyTemperature,
+  fitBeta,
+  applyBeta,
+  curveToPoints
+} from "../server-utils/calibration/methods.js";
+import {
+  evaluateCalibrationMethods,
+  selectBestCalibration
+} from "../server-utils/calibration/CalibrationSelector.js";
 import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
 import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
-import { runModelLab, reconstructSources, MODEL_REGISTRY } from "../server-utils/modelLab/ModelLab.js";
+import { runModelLab, reconstructSources, blendModel, getModelById, MODEL_REGISTRY } from "../server-utils/modelLab/ModelLab.js";
+import { runAutoSelection } from "../server-utils/modelLab/AutoModelSelection.js";
+import { estimateMatchXg, computeRollingXg, deriveXgLambdas, rollingXgRates } from "../server-utils/xg/RollingXgModel.js";
 import {
   calculateExpectedValue,
   calculateKellyPct,
@@ -44,6 +64,7 @@ import {
   buildBacktestReport,
   buildDashboardBundle,
   computeBacktestMetrics,
+  computeQuantMetrics,
   extractBetEvent,
   filterBetEvents,
   parseFilters,
@@ -51,7 +72,22 @@ import {
 } from "../server-utils/backtest/BacktestAnalytics.js";
 import { buildCacheKey } from "../server-utils/fetcher.js";
 import { buildPredictionLaboratory } from "../server-utils/predictionLaboratory/PredictionLaboratory.js";
-import { runMonteCarloSimulation, DEFAULT_MONTE_CARLO_SIMS } from "../server-utils/monteCarlo/MonteCarloEngine.js";
+import {
+  runMonteCarloSimulation,
+  DEFAULT_MONTE_CARLO_SIMS,
+  ADAPTIVE_SIM_TIERS,
+  estimateMonteCarloUncertainty,
+  selectAdaptiveSimulations,
+  resolveMonteCarloSimulations
+} from "../server-utils/monteCarlo/MonteCarloEngine.js";
+import {
+  PREDICTOR_V2_VERSION,
+  PIPELINE_STAGES,
+  blendLambdasWithXg,
+  buildXgSourceProbs,
+  buildPipelineTrace
+} from "../server-utils/pipeline/PredictorV2.js";
+import { getPredictionWeights } from "../server-utils/PredictionEngine/weights.js";
 import { buildMatchScorePmf } from "../server-utils/math.js";
 import {
   extractSamplesFromHistory,
@@ -399,8 +435,17 @@ test("extractFixtureMarketStats citeşte corner + SoT + shots din payload /fixtu
   };
   const out = extractFixtureMarketStats(payload);
   assert.equal(out.length, 2);
-  assert.deepEqual(out[0], { teamId: 42, corners: 6, sot: 5, shotsTotal: 14 });
-  assert.deepEqual(out[1], { teamId: 99, corners: 4, sot: 3, shotsTotal: 10 });
+  // Core market fields (extra xG signal fields default to null when absent).
+  assert.equal(out[0].teamId, 42);
+  assert.equal(out[0].corners, 6);
+  assert.equal(out[0].sot, 5);
+  assert.equal(out[0].shotsTotal, 14);
+  assert.equal(out[1].teamId, 99);
+  assert.equal(out[1].corners, 4);
+  assert.equal(out[1].sot, 3);
+  assert.equal(out[1].shotsTotal, 10);
+  // New signal keys exist on the shape.
+  assert.ok("shotsInsideBox" in out[0] && "possession" in out[0] && "xg" in out[0]);
 });
 
 test("extractFixtureMarketStats întoarce array gol pentru payload invalid", () => {
@@ -576,6 +621,93 @@ test("applyCalibratedTriple renormalizes output to sum=1", () => {
   const sum = result.p1 + result.pX + result.p2;
   assert.ok(Math.abs(sum - 1) < 1e-6, `sum=${sum}`);
   assert.equal(result.calibrationApplied, true);
+});
+
+test("pickCalibrationMapForLeague falls back to global league_id=-1", () => {
+  const maps = {
+    "39": { "1": { xPoints: [0, 1], yPoints: [0, 1] } },
+    "-1": { "1": { xPoints: [0, 1], yPoints: [0, 0.5] } }
+  };
+  assert.equal(pickCalibrationMapForLeague(maps, 39)["1"].yPoints[1], 1);
+  assert.equal(pickCalibrationMapForLeague(maps, 140)["1"].yPoints[1], 0.5);
+});
+
+// =============================================================================
+// Multi-method calibration (Platt / Temperature / Beta / selector)
+// =============================================================================
+
+function synthMiscalibrated(n, kind, seed = 7) {
+  let s = seed >>> 0;
+  const rnd = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const trueP = 0.15 + 0.7 * rnd();
+    let raw = trueP;
+    if (kind === "over") raw = Math.min(0.99, Math.max(0.01, 0.5 + (trueP - 0.5) * 1.8));
+    if (kind === "under") raw = Math.min(0.99, Math.max(0.01, 0.5 + (trueP - 0.5) * 0.45));
+    out.push({ x: raw, y: rnd() < trueP ? 1 : 0 });
+  }
+  return out;
+}
+
+test("fitPlatt / fitTemperature / fitBeta produce finite params and monotone curves", () => {
+  const samples = synthMiscalibrated(200, "over");
+  const platt = fitPlatt(samples);
+  const temp = fitTemperature(samples);
+  const beta = fitBeta(samples);
+  assert.ok(Number.isFinite(platt.a) && Number.isFinite(platt.b));
+  assert.ok(temp.t > 0);
+  assert.ok(beta.a >= 0 && beta.b >= 0);
+
+  for (const [applyFn, params] of [
+    [applyPlatt, platt],
+    [applyTemperature, temp],
+    [applyBeta, beta]
+  ]) {
+    const curve = curveToPoints(applyFn, params, 20);
+    assert.equal(curve.xPoints.length, 21);
+    for (let i = 1; i < curve.yPoints.length; i++) {
+      assert.ok(curve.yPoints[i] + 1e-9 >= curve.yPoints[i - 1]);
+    }
+  }
+});
+
+test("evaluateCalibrationMethods ranks all four methods and beats overconfident baseline", () => {
+  const samples = synthMiscalibrated(400, "over", 11);
+  const { ranking, best, baseline } = evaluateCalibrationMethods(samples, { folds: 4 });
+  assert.equal(ranking.length, 4);
+  assert.ok(["isotonic", "platt", "temperature", "beta"].includes(best));
+  const winner = ranking[0];
+  assert.ok(winner.logLoss < baseline.logLoss, `winner ${winner.method} LL ${winner.logLoss} vs baseline ${baseline.logLoss}`);
+});
+
+test("selectBestCalibration prefers parametric methods on underconfident data", () => {
+  const samples = synthMiscalibrated(400, "under", 22);
+  const sel = selectBestCalibration(samples, { minSamples: 40, folds: 4 });
+  assert.ok(["platt", "temperature", "beta"].includes(sel.method), `got ${sel.method}`);
+  assert.ok(sel.xPoints.length >= 2);
+  assert.ok(sel.baseline);
+});
+
+test("selectBestCalibration returns none when data is already well calibrated", () => {
+  let s = 4;
+  const rnd = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+  const samples = [];
+  for (let i = 0; i < 400; i++) {
+    const p = 0.1 + 0.8 * rnd();
+    samples.push({ x: p, y: rnd() < p ? 1 : 0 });
+  }
+  const sel = selectBestCalibration(samples, { minSamples: 40, folds: 4 });
+  // Identity guard: no fitted method may beat the uncalibrated baseline.
+  assert.equal(sel.method, "none");
+  assert.equal(sel.reason, "no_method_beats_baseline");
+  assert.ok(sel.ranking.every((r) => r.logLoss > sel.baseline.logLoss));
 });
 
 // =============================================================================
@@ -984,6 +1116,7 @@ test("Monte Carlo runs 10000 sims and returns distributions + CI", () => {
     rho: -0.11
   });
   assert.equal(mc.simulations, 10_000);
+  assert.equal(mc.adaptive?.enabled, false);
   assert.ok(mc.probabilityDistribution.p1 > 0);
   assert.ok(mc.probabilityDistribution.pX > 0);
   assert.ok(mc.probabilityDistribution.p2 > 0);
@@ -1008,6 +1141,73 @@ test("Monte Carlo runs 10000 sims and returns distributions + CI", () => {
   });
   assert.equal(mc.summary.mostLikelyScore, mc2.summary.mostLikelyScore);
   assert.equal(mc.probabilityDistribution.p1, mc2.probabilityDistribution.p1);
+});
+
+test("Predictor V2 pipeline contract and xG λ blend", () => {
+  assert.ok(PREDICTOR_V2_VERSION.startsWith("predictor-v2"));
+  assert.ok(PIPELINE_STAGES.includes("fetch"));
+  assert.ok(PIPELINE_STAGES.includes("predictionEngine"));
+  assert.ok(PIPELINE_STAGES.includes("xg"));
+  assert.ok(PIPELINE_STAGES.includes("calibration"));
+  assert.ok(PIPELINE_STAGES.includes("featureImportance"));
+  assert.equal(PIPELINE_STAGES[PIPELINE_STAGES.length - 1], "prediction");
+
+  const blended = blendLambdasWithXg(1.5, 1.2, 2.0, 0.8, 0.5);
+  assert.equal(blended.applied, true);
+  assert.ok(Math.abs(blended.lambdaHome - 1.75) < 1e-9);
+  assert.ok(Math.abs(blended.lambdaAway - 1.0) < 1e-9);
+
+  const off = blendLambdasWithXg(1.5, 1.2, 2.0, 0.8, 0);
+  assert.equal(off.applied, false);
+
+  const xgProbs = buildXgSourceProbs(2.1, 0.9, { correlation: 0.12, rho: -0.11 });
+  assert.ok(xgProbs);
+  assert.ok(xgProbs.p1 > xgProbs.p2);
+
+  const weights = getPredictionWeights();
+  assert.ok(weights.modularBlend > 0);
+  assert.ok(weights.expectedGoals > 0);
+
+  const trace = buildPipelineTrace({
+    fetch: { ok: true },
+    xg: { ok: true, detail: "blended" },
+    prediction: { ok: true }
+  });
+  assert.equal(trace.version, PREDICTOR_V2_VERSION);
+  assert.equal(trace.stages.xg.status, "ok");
+  assert.ok(trace.summary.includes("xg:ok"));
+});
+
+test("Adaptive Monte Carlo maps uncertainty into 1k/3k/5k/10k/25k tiers", () => {
+  assert.deepEqual([...ADAPTIVE_SIM_TIERS], [1000, 3000, 5000, 10000, 25000]);
+  assert.equal(selectAdaptiveSimulations(0.1), 1000);
+  assert.equal(selectAdaptiveSimulations(0.3), 3000);
+  assert.equal(selectAdaptiveSimulations(0.5), 5000);
+  assert.equal(selectAdaptiveSimulations(0.7), 10000);
+  assert.equal(selectAdaptiveSimulations(0.9), 25000);
+
+  // Blowout / low entropy → fewer sims
+  const blowout = estimateMonteCarloUncertainty(3.2, 0.4, { correlation: 0.12, rho: -0.11 });
+  const tight = estimateMonteCarloUncertainty(1.35, 1.3, { correlation: 0.12, rho: -0.11 });
+  assert.ok(blowout.score < tight.score, `blowout ${blowout.score} should be < tight ${tight.score}`);
+
+  const blowoutSims = resolveMonteCarloSimulations(3.2, 0.4, { correlation: 0.12, rho: -0.11 });
+  const tightSims = resolveMonteCarloSimulations(1.35, 1.3, { correlation: 0.12, rho: -0.11 });
+  assert.ok(blowoutSims.adaptive.enabled);
+  assert.ok(tightSims.adaptive.enabled);
+  assert.ok(blowoutSims.simulations <= tightSims.simulations);
+  assert.ok(ADAPTIVE_SIM_TIERS.includes(blowoutSims.simulations));
+  assert.ok(ADAPTIVE_SIM_TIERS.includes(tightSims.simulations));
+
+  const adaptiveRun = runMonteCarloSimulation(1.35, 1.3, {
+    fixtureId: 99,
+    correlation: 0.12,
+    rho: -0.11
+  });
+  assert.ok(adaptiveRun.adaptive?.enabled);
+  assert.equal(adaptiveRun.simulations, adaptiveRun.adaptive.tier);
+  assert.ok(ADAPTIVE_SIM_TIERS.includes(adaptiveRun.simulations));
+  assert.equal(adaptiveRun.version, "mc-v2-adaptive");
 });
 
 test("Prediction Laboratory builds radar, comparison, and evolution", () => {
@@ -1124,6 +1324,34 @@ test("PredictionContributions attributes signed per-module impact toward the pic
   assert.ok(away.contributions.poisson < 0);
 });
 
+test("Quant backtest metrics: LogLoss, Brier, Kelly growth, Sharpe, CLV, drawdown", () => {
+  const events = [
+    { kickoffAt: "2026-01-01T12:00:00Z", stake: 0.02, odd: 2.2, prob: 0.5, clvPct: 3, won: true, pnl: 0.02 * 1.2 },
+    { kickoffAt: "2026-01-05T12:00:00Z", stake: 0.02, odd: 1.9, prob: 0.55, clvPct: -1, won: false, pnl: -0.02 },
+    { kickoffAt: "2026-01-10T12:00:00Z", stake: 0.02, odd: 3.1, prob: 0.38, clvPct: 5, won: true, pnl: 0.02 * 2.1 },
+    { kickoffAt: "2026-01-20T12:00:00Z", stake: 0.02, odd: 2.0, prob: 0.52, clvPct: null, won: false, pnl: -0.02 }
+  ];
+  const q = computeQuantMetrics(events);
+  assert.ok(q.logLoss > 0);
+  assert.ok(q.brier >= 0 && q.brier <= 2);
+  assert.equal(typeof q.kellyGrowthPct, "number");
+  assert.equal(q.kellyCurve.length, 4);
+  assert.ok(q.kellyMaxDrawdownPct >= 0);
+  assert.equal(typeof q.sharpe, "number");
+  assert.equal(typeof q.sharpeAnnualized, "number");
+  // CLV present on 3 of 4 rows → available with mean of 3,-1,5.
+  assert.equal(q.clvAvailable, true);
+  assert.equal(q.clvCount, 3);
+  assert.ok(Math.abs(q.clv - (3 - 1 + 5) / 3) < 0.01);
+  assert.ok(Array.isArray(q.returnsHistogram) && q.returnsHistogram.length > 0);
+
+  // computeBacktestMetrics surfaces the quant fields.
+  const m = computeBacktestMetrics(events);
+  for (const key of ["logLoss", "brier", "kellyGrowthPct", "sharpe", "sharpeAnnualized", "clv", "kellyCurve", "returnsHistogram"]) {
+    assert.ok(key in m, `metrics missing ${key}`);
+  }
+});
+
 test("Model Lab evaluates each model independently with all six metrics", () => {
   const mkRow = (fixtureId, sh, sa, poisson, elo, xgH, xgA) => ({
     fixture_id: fixtureId,
@@ -1171,4 +1399,97 @@ test("Model Lab evaluates each model independently with all six metrics", () => 
     assert.ok(m.logLoss >= 0);
   }
   assert.ok(lab.best && typeof lab.best.roi === "number");
+});
+
+test("Rolling xG model: shot-based estimate, recency rolling, and DC lambdas", () => {
+  // Location-aware estimate: more inside-box shots → higher xG.
+  const highQ = estimateMatchXg({ shotsInsideBox: 12, shotsOutsideBox: 4, sot: 7, possession: 60 });
+  const lowQ = estimateMatchXg({ shotsInsideBox: 3, shotsOutsideBox: 8, sot: 2, possession: 40 });
+  assert.ok(highQ > lowQ);
+  assert.ok(highQ > 0 && highQ <= 6);
+
+  // Provider xG (recent xG) is blended in when present.
+  const withProvider = estimateMatchXg({ xg: 2.4, sot: 5, shotsTotal: 12 });
+  const withoutProvider = estimateMatchXg({ sot: 5, shotsTotal: 12 });
+  assert.ok(withProvider > withoutProvider);
+
+  // Reduced model works from SoT + total shots only (persisted rolling fallback).
+  const reduced = estimateMatchXg({ sot: 4.5, shotsTotal: 13 });
+  assert.ok(reduced > 0.8 && reduced < 2.5);
+
+  // Recency-weighted rolling: recent high-xG match dominates.
+  const matches = [
+    { date: "2026-01-20", isHome: true, teamStats: { sot: 8, shotsTotal: 18, shotsInsideBox: 12 }, opponentStats: { sot: 2, shotsTotal: 7 } },
+    { date: "2026-01-10", isHome: false, teamStats: { sot: 3, shotsTotal: 9 }, opponentStats: { sot: 5, shotsTotal: 12 } }
+  ];
+  const rolling = computeRollingXg(matches);
+  assert.equal(rolling.xg_samples, 2);
+  assert.ok(rolling.xg_for_avg > rolling.xg_against_avg);
+
+  // rollingXgRates falls back to SoT/shots when no xg fields present.
+  const rates = rollingXgRates({ sot_for_avg: 5, shots_total_for_avg: 13, sot_against_avg: 3, shots_total_against_avg: 9 });
+  assert.equal(rates.source, "sot_shots_derived");
+  assert.ok(rates.forRate > rates.againstRate);
+
+  // DC lambdas from rolling xG.
+  const lambdas = deriveXgLambdas({
+    rollingHome: { xg_for_avg: 1.8, xg_against_avg: 1.0, xg_samples: 6, xg_source: "shot_rolling_model" },
+    rollingAway: { xg_for_avg: 1.1, xg_against_avg: 1.5, xg_samples: 6, xg_source: "shot_rolling_model" },
+    leagueBaseXg: 1.35,
+    homeAdv: 1.08,
+    awayAdv: 0.95
+  });
+  assert.ok(lambdas && lambdas.xgHome > lambdas.xgAway);
+  assert.equal(lambdas.usedFallback, false);
+});
+
+test("blendModel produces a normalized triple and injuries modifier tilts it", () => {
+  const sources = {
+    poisson: { p1: 0.5, pX: 0.25, p2: 0.25 },
+    elo: { p1: 0.6, pX: 0.2, p2: 0.2 },
+    xg: { p1: 0.55, pX: 0.25, p2: 0.2 },
+    market: { p1: 0.52, pX: 0.26, p2: 0.22 },
+    everything: { p1: 0.58, pX: 0.22, p2: 0.2 }
+  };
+  const a = blendModel(getModelById("A"), sources, null);
+  assert.ok(Math.abs(a.p1 + a.pX + a.p2 - 1) < 1e-6);
+  assert.ok(Math.abs(a.p1 - 0.5) < 1e-9);
+  const d = blendModel(getModelById("D"), sources, { home: 0.95, away: 1.0 });
+  assert.ok(Math.abs(d.p1 + d.pX + d.p2 - 1) < 1e-6);
+  // Injured home side → its win prob is tilted down vs the no-injury blend.
+  const dNoInj = blendModel(getModelById("D"), sources, null);
+  assert.ok(d.p1 < dNoInj.p1);
+});
+
+test("Auto Model Selection competes over windows and picks a winner (default safe)", () => {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const rows = [];
+  for (let i = 0; i < 60; i++) {
+    const homeWin = i % 2 === 0;
+    rows.push({
+      fixture_id: i + 1,
+      kickoff_at: new Date(now - (i * 5 * day)).toISOString(),
+      score_home: homeWin ? 2 : 0,
+      score_away: homeWin ? 0 : 1,
+      odds_home: 2.0,
+      odds_draw: 3.4,
+      odds_away: 3.8,
+      luck_hxg: homeWin ? 1.8 : 1.0,
+      luck_axg: homeWin ? 0.9 : 1.4,
+      raw_payload: {
+        evaluation: {
+          rawPoissonProbs1x2Pct: homeWin ? { p1: 55, pX: 25, p2: 20 } : { p1: 35, pX: 30, p2: 35 },
+          modelProbs1x2Pct: homeWin ? { p1: 58, pX: 24, p2: 18 } : { p1: 33, pX: 30, p2: 37 }
+        },
+        modelMeta: { elo: { home: 1500, away: 1450 }, leagueParams: { homeAdv: 1.08, rho: -0.11 } }
+      }
+    });
+  }
+  const sel = runAutoSelection(rows);
+  assert.ok(sel.windows.length === 3);
+  assert.ok(["A", "B", "C", "D", "E"].includes(sel.selected.id));
+  assert.ok(Array.isArray(sel.ranking));
+  // Each window reports its own settled count.
+  for (const w of sel.windows) assert.ok(typeof w.totalSettled === "number");
 });

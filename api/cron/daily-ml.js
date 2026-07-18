@@ -13,9 +13,11 @@ import { MODEL_VERSION } from "../../server-utils/modelConstants.js";
 import { invalidateEloCache } from "../../server-utils/teamElo.js";
 import { invalidateTeamMarketRollingCache } from "../../server-utils/teamMarketRolling.js";
 import { runAutoCalibration } from "../../server-utils/calibration/AutoCalibrationEngine.js";
+import { selectBestCalibration } from "../../server-utils/calibration/CalibrationSelector.js";
 import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
 import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
+import { runAndPromote } from "../../server-utils/modelLab/AutoModelSelection.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const CALIBRATION_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
@@ -76,7 +78,7 @@ function brierForSamples(samples, fitted) {
 async function upsertCalibrationMap(supabase, { leagueId, modelVersion, outcome, fitted, samples }) {
   if (!fitted?.xPoints?.length) return { skipped: true };
   const brier = brierForSamples(samples, fitted);
-  const payload = {
+  const base = {
     league_id: leagueId,
     model_version: modelVersion,
     outcome,
@@ -87,11 +89,43 @@ async function upsertCalibrationMap(supabase, { leagueId, modelVersion, outcome,
     brier_calibrated: brier ? Number(brier.calibrated.toFixed(5)) : null,
     fitted_at: new Date().toISOString()
   };
-  const { error } = await supabase.from("calibration_maps").upsert(payload, {
+  const withMeta = {
+    ...base,
+    method: fitted.method || "isotonic",
+    metrics_json: {
+      ranking: fitted.ranking || [],
+      baseline: fitted.baseline || null
+    }
+  };
+  // Prefer persisting method + CV metrics; fall back if migration 025 not applied yet.
+  let { error } = await supabase.from("calibration_maps").upsert(withMeta, {
     onConflict: "league_id,model_version,outcome"
   });
+  if (error && /method|metrics_json|column|schema/i.test(String(error.message || error))) {
+    ({ error } = await supabase.from("calibration_maps").upsert(base, {
+      onConflict: "league_id,model_version,outcome"
+    }));
+  }
   if (error) throw error;
-  return { ok: true, brier };
+  return { ok: true, brier, method: fitted.method || "isotonic" };
+}
+
+/**
+ * Choose the best calibration method (isotonic / platt / temperature / beta) for a
+ * per-outcome sample set, returning a ready-to-store monotone curve.
+ */
+function fitBestCalibration(samples) {
+  const selection = selectBestCalibration(samples, {
+    minSamples: CALIBRATION_MIN_SAMPLES,
+    folds: 4
+  });
+  return {
+    xPoints: selection.xPoints,
+    yPoints: selection.yPoints,
+    method: selection.method,
+    ranking: selection.ranking,
+    baseline: selection.baseline
+  };
 }
 
 function oneHot(actual) {
@@ -295,7 +329,7 @@ async function runCalibration(supabase, modelVersion) {
     for (const outcome of ["1", "X", "2"]) {
       const samples = groups[outcome];
       if (samples.length < CALIBRATION_MIN_SAMPLES) continue;
-      const fitted = fitIsotonicPav(samples);
+      const fitted = fitBestCalibration(samples);
       const result = await upsertCalibrationMap(supabase, {
         leagueId,
         modelVersion,
@@ -303,15 +337,17 @@ async function runCalibration(supabase, modelVersion) {
         fitted,
         samples
       });
-      summary.push({ leagueId, outcome, n: samples.length, ...result });
+      summary.push({ leagueId, outcome, n: samples.length, method: fitted.method, ...result });
     }
   }
 
   const globalGroups = buildCalibrationGroups(rows);
+  const methodTally = {};
   for (const outcome of ["1", "X", "2"]) {
     const samples = globalGroups[outcome];
     if (samples.length < CALIBRATION_MIN_SAMPLES) continue;
-    const fitted = fitIsotonicPav(samples);
+    const fitted = fitBestCalibration(samples);
+    methodTally[outcome] = { method: fitted.method, ranking: fitted.ranking, baseline: fitted.baseline };
     const result = await upsertCalibrationMap(supabase, {
       leagueId: -1,
       modelVersion,
@@ -319,10 +355,10 @@ async function runCalibration(supabase, modelVersion) {
       fitted,
       samples
     });
-    summary.push({ leagueId: "GLOBAL", outcome, n: samples.length, ...result });
+    summary.push({ leagueId: "GLOBAL", outcome, n: samples.length, method: fitted.method, ...result });
   }
 
-  return { rows: rows.length, summary };
+  return { rows: rows.length, summary, methodSelection: methodTally };
 }
 
 async function runStacker(supabase, modelVersion) {
@@ -400,6 +436,27 @@ export default async function handler(req, res) {
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
   const supabase = getSupabaseAdmin();
   if (!supabase) return res.status(500).json({ ok: false, error: "Supabase nu este disponibil." });
+
+  // Auto model selection — every model competes over 30/90/365d; promote the best.
+  if (mode === "model-selection" || mode === "model_select" || mode === "model-select") {
+    try {
+      const cutoffIso = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("predictions_history")
+        .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+        .gte("kickoff_at", cutoffIso)
+        .in("validation", ["win", "loss"])
+        .order("kickoff_at", { ascending: true })
+        .limit(12000);
+      if (error) throw error;
+      const result = await runAndPromote(data || []);
+      logInfo("cron.model_selection", { promoted: result.promoted?.id, composite: result.promoted?.compositeScore });
+      return res.status(200).json({ ok: true, mode, promoted: result.promoted, selected: result.selected });
+    } catch (err) {
+      logError("cron.model_selection_failed", { error: err?.message || String(err) });
+      return res.status(500).json({ ok: false, mode, error: err?.message || "Model selection failed" });
+    }
+  }
 
   const startedAt = new Date().toISOString();
   const modelVersion = String(req.query.modelVersion || process.env.DAILY_ML_MODEL_VERSION || MODEL_VERSION);

@@ -143,7 +143,8 @@ export function pickCalibrationMapForLeague(allMaps, leagueId) {
   if (!allMaps || typeof allMaps !== "object") return null;
   const key = leagueId != null ? String(leagueId) : null;
   if (key && allMaps[key]) return allMaps[key];
-  return allMaps["*"] || null;
+  // Global maps are stored as league_id = -1 by daily-ml; "*" is a legacy alias.
+  return allMaps["-1"] || allMaps["*"] || null;
 }
 
 /** Hard-reset pentru testare / trigger manual după refit. */

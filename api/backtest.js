@@ -22,6 +22,50 @@ import { buildHealthBundle, generateDailyReport } from "../server-utils/observab
 import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
 import { logInfo } from "../server-utils/observability/logger.js";
 import { runModelLab } from "../server-utils/modelLab/ModelLab.js";
+import {
+  runAutoSelection,
+  runAndPromote,
+  getActiveModel
+} from "../server-utils/modelLab/AutoModelSelection.js";
+
+/**
+ * Auto Model Selection — every model competes over 30/90/365-day windows.
+ * GET  /api/backtest?view=model-select            → current active model + latest competition
+ * GET  /api/backtest?view=model-select&run=1      → run + promote (cron/admin auth)
+ */
+async function handleModelSelect(req, res) {
+  const config = assertSupabaseConfigured();
+  if (!config.ok) return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
+
+  const doRun = String(req.query.run || "") === "1" || req.method === "POST";
+  if (doRun && !(await isAuthorizedForMetrics(req))) {
+    return res.status(401).json({ ok: false, error: "Neautorizat pentru promovare model" });
+  }
+
+  const cutoffIso = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data, error } = await supabase
+      .from("predictions_history")
+      .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+      .gte("kickoff_at", cutoffIso)
+      .in("validation", ["win", "loss"])
+      .order("kickoff_at", { ascending: true })
+      .limit(12000);
+    if (error) throw error;
+
+    if (doRun) {
+      const result = await runAndPromote(data || []);
+      return res.status(200).json({ ok: true, ran: true, ...result });
+    }
+    const selection = runAutoSelection(data || []);
+    const active = await getActiveModel();
+    return res.status(200).json({ ok: true, ran: false, active, ...selection });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err?.message || "Auto model selection a eșuat" });
+  }
+}
 
 /**
  * Model Laboratory — evaluate multiple prediction models over settled history.
@@ -245,6 +289,8 @@ async function handleAnalytics(req, res) {
       // Keep chart series compact; full equity curve can be long.
       series: {
         equity: report.metrics.equityCurve,
+        kelly: report.metrics.kellyCurve,
+        returnsHistogram: report.metrics.returnsHistogram,
         daily: report.metrics.daily,
         byMarket: report.metrics.byMarket,
         byLeague: report.metrics.byLeague.slice(0, 12),
@@ -490,6 +536,7 @@ export default async function handler(req, res) {
   if (view === "metrics") return handleMetrics(req, res);
   if (view === "health") return handleHealth(req, res);
   if (view === "model-lab" || view === "modellab") return handleModelLab(req, res);
+  if (view === "model-select" || view === "modelselect") return handleModelSelect(req, res);
   return res.status(400).json({
     ok: false,
     error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot, metrics, health sau model-lab."

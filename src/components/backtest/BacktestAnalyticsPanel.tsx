@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { BacktestAnalyticsResponse, BacktestFilters, BacktestMetrics } from "../../types";
 import { buildAnalyticsExportUrl, loadAnalytics } from "../../services/backtestService";
-import { BreakdownBarChart, DailyPnlChart, EquityChart } from "./BacktestCharts";
+import {
+  BreakdownBarChart,
+  DailyPnlChart,
+  DrawdownChart,
+  EquityChart,
+  KellyGrowthChart,
+  ReturnsHistogramChart
+} from "./BacktestCharts";
 
 type PeriodKey = "7d" | "30d" | "season";
 
@@ -349,12 +356,62 @@ export default function BacktestAnalyticsPanel() {
             hint="best win / worst loss"
           />
         </div>
+
+        {/* Professional quant metrics */}
+        <div className="mb-2 mt-4 font-mono text-[9px] uppercase tracking-[0.18em] text-signal-inkMuted">
+          Quantitative metrics
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <MetricTile
+            label="Kelly Growth"
+            value={`${(metrics.kellyGrowthPct ?? 0) >= 0 ? "+" : ""}${(metrics.kellyGrowthPct ?? 0).toFixed(1)}%`}
+            hint={`bankroll ×${(metrics.kellyFinalBankroll ?? 1).toFixed(2)}`}
+            tone={(metrics.kellyGrowthPct ?? 0) >= 0 ? "good" : "bad"}
+          />
+          <MetricTile
+            label="Sharpe"
+            value={(metrics.sharpe ?? 0).toFixed(2)}
+            hint={`ann. ${(metrics.sharpeAnnualized ?? 0).toFixed(2)}`}
+            tone={(metrics.sharpe ?? 0) >= 0 ? "good" : "bad"}
+          />
+          <MetricTile
+            label="LogLoss"
+            value={metrics.logLoss != null ? metrics.logLoss.toFixed(3) : "—"}
+            hint="lower is better"
+          />
+          <MetricTile
+            label="Brier"
+            value={metrics.brier != null ? metrics.brier.toFixed(3) : "—"}
+            hint="lower is better"
+          />
+          <MetricTile
+            label="CLV"
+            value={metrics.clvAvailable && metrics.clv != null ? `${metrics.clv >= 0 ? "+" : ""}${metrics.clv.toFixed(2)}%` : "n/a"}
+            hint={metrics.clvAvailable ? `${metrics.clvCount ?? 0} bets · beat ${metrics.clvBeatRate ?? 0}%` : "no closing odds"}
+            tone={metrics.clvAvailable && (metrics.clv ?? 0) >= 0 ? "good" : "default"}
+          />
+          <MetricTile
+            label="Kelly DD"
+            value={`${(metrics.kellyMaxDrawdownPct ?? 0).toFixed(1)}%`}
+            hint="bankroll drawdown"
+            tone="amber"
+          />
+        </div>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 border-t border-white/[0.06] px-4 py-4 lg:grid-cols-2 sm:px-5">
         <ChartCard title="Equity curve" subtitle="Cumulative units">
           <EquityChart data={report?.series?.equity || []} />
+        </ChartCard>
+        <ChartCard title="Kelly bankroll growth" subtitle="Compounded ×">
+          <KellyGrowthChart data={report?.series?.kelly || []} />
+        </ChartCard>
+        <ChartCard title="Drawdown" subtitle="Underwater curve">
+          <DrawdownChart data={report?.series?.equity || []} />
+        </ChartCard>
+        <ChartCard title="Returns distribution" subtitle="Per-bet return buckets">
+          <ReturnsHistogramChart data={report?.series?.returnsHistogram || []} />
         </ChartCard>
         <ChartCard title="Daily PnL" subtitle="Wins green · losses red">
           <DailyPnlChart data={report?.series?.daily || []} />

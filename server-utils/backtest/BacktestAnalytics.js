@@ -60,6 +60,39 @@ function normalizeMarket(raw) {
  * Extract a stakeable bet event from a predictions_history row.
  * Returns null when the row cannot contribute to PnL.
  */
+/** Model probability (0–1) of the staked selection, from stored evaluation/confidence. */
+function selectionProbability(payload, valueBet, type, confidence) {
+  const evalBlock = payload.evaluation && typeof payload.evaluation === "object" ? payload.evaluation : {};
+  const triple = evalBlock.modelProbs1x2Pct || evalBlock.calibratedProbs1x2Pct || null;
+  if (triple && (type === "1" || type === "X" || type === "2")) {
+    const key = type === "1" ? "p1" : type === "X" ? "pX" : "p2";
+    const v = Number(triple[key]);
+    if (Number.isFinite(v)) return clamp(v > 1.5 ? v / 100 : v, 0, 1);
+  }
+  const vbProb = Number(valueBet.prob ?? valueBet.probability);
+  if (Number.isFinite(vbProb)) return clamp(vbProb > 1.5 ? vbProb / 100 : vbProb, 0, 1);
+  if (Number.isFinite(confidence)) return clamp(confidence / 100, 0, 1);
+  return null;
+}
+
+/** Closing odds for the staked selection, when the payload stored them (else null). */
+function selectionClosingOdd(payload, row, type) {
+  const closing =
+    payload.closingOdds ||
+    payload.oddsClosing ||
+    (payload.marketOdds && payload.marketOdds.closing) ||
+    null;
+  const pickKey = type === "1" ? "home" : type === "2" ? "away" : type === "X" ? "draw" : null;
+  if (closing && pickKey) {
+    const v = Number(closing[pickKey] ?? closing[type]);
+    if (Number.isFinite(v) && v > 1) return v;
+  }
+  const col =
+    type === "1" ? row.closing_odds_home : type === "2" ? row.closing_odds_away : type === "X" ? row.closing_odds_draw : null;
+  const cv = Number(col);
+  return Number.isFinite(cv) && cv > 1 ? cv : null;
+}
+
 export function extractBetEvent(row) {
   if (!row) return null;
   const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
@@ -83,6 +116,9 @@ export function extractBetEvent(row) {
   if (stake <= 0 || !Number.isFinite(odd) || odd <= 1) return null;
 
   const pnl = won ? stake * (odd - 1) : -stake;
+  const prob = selectionProbability(payload, valueBet, type, confidence);
+  const closingOdd = selectionClosingOdd(payload, row, type);
+  const clvPct = closingOdd && odd > 1 ? round((odd / closingOdd - 1) * 100, 3) : null;
 
   return {
     fixtureId: row.fixture_id ?? null,
@@ -98,10 +134,126 @@ export function extractBetEvent(row) {
     stakePct: round(stakePct, 3),
     ev: Number.isFinite(ev) ? round(ev, 3) : null,
     confidence: Number.isFinite(confidence) ? round(confidence, 2) : null,
+    prob: prob != null ? round(prob, 6) : null,
+    closingOdd: closingOdd != null ? round(closingOdd, 3) : null,
+    clvPct,
     won,
     pnl: round(pnl, 6),
     competition: String(row.league_name || "")
   };
+}
+
+/**
+ * Professional quant metrics: proper scores (LogLoss, Brier), Kelly bankroll
+ * growth, Sharpe ratio, CLV (when closing odds available), and return series.
+ */
+export function computeQuantMetrics(list) {
+  const events = Array.isArray(list) ? list : [];
+  let n = 0;
+  let sumBrier = 0;
+  let sumLog = 0;
+  let scoredN = 0;
+
+  const returns = [];
+  let bankroll = 1;
+  let peakBank = 1;
+  let maxBankDd = 0;
+  const kellyCurve = [];
+
+  let clvSum = 0;
+  let clvCount = 0;
+  let clvBeat = 0;
+
+  for (const e of events) {
+    n += 1;
+
+    // Proper scores on the binary staked selection.
+    if (e.prob != null && Number.isFinite(e.prob)) {
+      const p = clamp(e.prob, 1e-6, 1 - 1e-6);
+      const o = e.won ? 1 : 0;
+      sumBrier += (p - o) ** 2;
+      sumLog += o ? -Math.log(p) : -Math.log(1 - p);
+      scoredN += 1;
+    }
+
+    // Per-unit return for Sharpe.
+    const r = e.stake > 0 ? e.pnl / e.stake : 0;
+    returns.push(r);
+
+    // Kelly bankroll compounding using the staked fraction of bankroll.
+    const f = clamp(e.stake, 0, 0.5);
+    const mult = e.won ? 1 + f * (e.odd - 1) : 1 - f;
+    bankroll *= Math.max(1e-6, mult);
+    peakBank = Math.max(peakBank, bankroll);
+    if (peakBank > 0) maxBankDd = Math.max(maxBankDd, (peakBank - bankroll) / peakBank);
+    kellyCurve.push({
+      i: kellyCurve.length + 1,
+      date: e.kickoffAt ? String(e.kickoffAt).slice(0, 10) : "",
+      bankroll: round(bankroll, 6)
+    });
+
+    if (e.clvPct != null && Number.isFinite(e.clvPct)) {
+      clvSum += e.clvPct;
+      clvCount += 1;
+      if (e.clvPct > 0) clvBeat += 1;
+    }
+  }
+
+  const mean = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+  const variance =
+    returns.length > 1 ? returns.reduce((a, b) => a + (b - mean) ** 2, 0) / (returns.length - 1) : 0;
+  const std = Math.sqrt(variance);
+  const sharpe = std > 0 ? mean / std : 0;
+
+  // Annualize Sharpe via observed bet frequency.
+  let betsPerYear = n;
+  const firstDate = events[0]?.kickoffAt ? new Date(events[0].kickoffAt).getTime() : null;
+  const lastDate = events[n - 1]?.kickoffAt ? new Date(events[n - 1].kickoffAt).getTime() : null;
+  if (firstDate && lastDate && lastDate > firstDate) {
+    const spanDays = (lastDate - firstDate) / 86400000;
+    if (spanDays > 0) betsPerYear = n / (spanDays / 365);
+  }
+  const sharpeAnnualized = sharpe * Math.sqrt(Math.max(1, betsPerYear));
+
+  const returnsHistogram = buildReturnsHistogram(returns);
+  const kellyGrowthPct = (bankroll - 1) * 100;
+  const growthGeoMeanPct = returns.length ? (Math.pow(Math.max(1e-6, bankroll), 1 / returns.length) - 1) * 100 : 0;
+
+  return {
+    logLoss: scoredN ? round(sumLog / scoredN, 4) : null,
+    brier: scoredN ? round(sumBrier / scoredN, 4) : null,
+    scoredSamples: scoredN,
+    kellyGrowthPct: round(kellyGrowthPct, 3),
+    kellyFinalBankroll: round(bankroll, 4),
+    kellyMaxDrawdownPct: round(maxBankDd * 100, 3),
+    growthGeoMeanPct: round(growthGeoMeanPct, 4),
+    sharpe: round(sharpe, 4),
+    sharpeAnnualized: round(sharpeAnnualized, 4),
+    avgReturn: round(mean, 4),
+    returnStd: round(std, 4),
+    clv: clvCount ? round(clvSum / clvCount, 3) : null,
+    clvAvailable: clvCount > 0,
+    clvCount,
+    clvBeatRate: clvCount ? round((clvBeat / clvCount) * 100, 2) : null,
+    kellyCurve,
+    returnsHistogram
+  };
+}
+
+function buildReturnsHistogram(returns) {
+  const bins = [
+    { key: "≤-1", min: -Infinity, max: -0.999, count: 0 },
+    { key: "-1..0", min: -0.999, max: 0, count: 0 },
+    { key: "0..1", min: 0, max: 1, count: 0 },
+    { key: "1..2", min: 1, max: 2, count: 0 },
+    { key: "2..4", min: 2, max: 4, count: 0 },
+    { key: "4+", min: 4, max: Infinity, count: 0 }
+  ];
+  for (const r of returns || []) {
+    const b = bins.find((x) => r >= x.min && r < x.max) || bins[bins.length - 1];
+    b.count += 1;
+  }
+  return bins.map((b) => ({ bucket: b.key, count: b.count }));
 }
 
 export function parseFilters(query = {}) {
@@ -261,6 +413,8 @@ export function computeBacktestMetrics(events) {
   const byLeague = summarizeBy(list, (e) => e.leagueName || String(e.leagueId) || "?");
   const bySide = summarizeBy(list, (e) => e.side || "?");
 
+  const quant = computeQuantMetrics(list);
+
   return {
     settled,
     wins,
@@ -278,7 +432,24 @@ export function computeBacktestMetrics(events) {
     maxDrawdown: round(maxDrawdown, 6),
     winningStreak: maxWinStreak,
     losingStreak: maxLossStreak,
+    // --- Professional quant metrics ---
+    logLoss: quant.logLoss,
+    brier: quant.brier,
+    kellyGrowthPct: quant.kellyGrowthPct,
+    kellyFinalBankroll: quant.kellyFinalBankroll,
+    kellyMaxDrawdownPct: quant.kellyMaxDrawdownPct,
+    growthGeoMeanPct: quant.growthGeoMeanPct,
+    sharpe: quant.sharpe,
+    sharpeAnnualized: quant.sharpeAnnualized,
+    avgReturn: quant.avgReturn,
+    returnStd: quant.returnStd,
+    clv: quant.clv,
+    clvAvailable: quant.clvAvailable,
+    clvCount: quant.clvCount,
+    clvBeatRate: quant.clvBeatRate,
     equityCurve,
+    kellyCurve: quant.kellyCurve,
+    returnsHistogram: quant.returnsHistogram,
     daily,
     byMarket,
     byLeague,
@@ -573,6 +744,7 @@ export default {
   parseFilters,
   filterBetEvents,
   computeBacktestMetrics,
+  computeQuantMetrics,
   buildDashboardBundle,
   buildBacktestReport,
   betsToCsv

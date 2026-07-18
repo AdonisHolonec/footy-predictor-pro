@@ -24,6 +24,8 @@ import {
 import { buildPredictionExplanation } from "../server-utils/explanation/PredictionExplanation.js";
 import { buildFeatureImportance } from "../server-utils/importance/FeatureImportanceEngine.js";
 import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
+import { blendModel, getModelById } from "../server-utils/modelLab/ModelLab.js";
+import { getActiveModelId } from "../server-utils/modelLab/AutoModelSelection.js";
 import { persistFeatureImportanceRows } from "../server-utils/importance/persistFeatureImportance.js";
 import {
   buildValueEngine,
@@ -78,6 +80,14 @@ import {
   extractFixtureMarketStats,
   aggregateRollingForTeam
 } from "../server-utils/teamMarketRolling.js";
+import { computeRollingXg, deriveXgLambdas } from "../server-utils/xg/RollingXgModel.js";
+import {
+  PREDICTOR_V2_VERSION,
+  blendLambdasWithXg,
+  resolveFixtureXg,
+  buildXgSourceProbs,
+  buildPipelineTrace
+} from "../server-utils/pipeline/PredictorV2.js";
 import { poissonOverLine } from "../server-utils/math.js";
 import {
   resolveAuthenticatedUsageContext
@@ -201,7 +211,11 @@ async function buildLiveRollingForTeam({
   }
   if (!enriched.length) return null;
   const agg = aggregateRollingForTeam(enriched);
-  return agg?.matches_sampled ? agg : null;
+  if (!agg?.matches_sampled) return null;
+  // Attach real rolling xG (shots / SoT / big-chance / possession / recent xG),
+  // in-memory only — never persisted by this path.
+  const xg = computeRollingXg(enriched);
+  return { ...agg, ...xg };
 }
 
 /**
@@ -713,6 +727,8 @@ export default async function handler(req, res) {
       ? Number(engineWeights.poissonCorrelation)
       : 0.12;
     const shrinkageK = Math.max(1, Number(process.env.PREDICT_SHRINKAGE_K) || 6);
+    // Auto-selected model (single read per request; default "E" = current full stack).
+    const activeModelId = await getActiveModelId().catch(() => "E");
     const riskContext = await loadRiskContext();
     // single-flight: încărcăm calibrarea + stacker + auto-calib overlays o singură dată per request
     const [calibrationMaps, stackerWeightsMap] = await Promise.all([
@@ -782,6 +798,7 @@ export default async function handler(req, res) {
         let luckStats = null;
         let strengthMeta = null;
         let modularScores = null;
+        let xgLambdasForSources = null;
         let formHomeStr = null;
         let formAwayStr = null;
         // Independent Confidence Engine context — captured here (outer scope) so it survives
@@ -827,6 +844,16 @@ export default async function handler(req, res) {
                 oddsData: oddsByFixtureId.get(Number(fixtureId)),
                 fx
               });
+              // Predictor V2 — feed rolling xG into the engine before λ combine.
+              const earlyRollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
+              const earlyRollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
+              const earlyXg = resolveFixtureXg({
+                rollingHome: earlyRollingHome,
+                rollingAway: earlyRollingAway,
+                leagueAvg: leagueParams.leagueAvg,
+                homeAdv: leagueParams.homeAdv,
+                awayAdv: leagueParams.awayAdv
+              });
               const engineCtx = {
                 hStats,
                 aStats,
@@ -843,6 +870,13 @@ export default async function handler(req, res) {
                 homeTeamId: homeIdStr,
                 awayTeamId: awayIdStr,
                 shrinkageK,
+                ...(earlyXg
+                  ? {
+                      xgHome: earlyXg.xgHome,
+                      xgAway: earlyXg.xgAway,
+                      xgSource: earlyXg.source
+                    }
+                  : {}),
                 ...moduleInputs
               };
               // Snapshot the same context for the independent Confidence Engine. This is a
@@ -860,7 +894,11 @@ export default async function handler(req, res) {
                 refereeName: refereeName || undefined,
                 homeTeamId: homeIdStr,
                 awayTeamId: awayIdStr,
-                fixtureDate: fx.fixture?.date
+                fixtureDate: fx.fixture?.date,
+                ...moduleInputs,
+                ...(earlyXg
+                  ? { xgHome: earlyXg.xgHome, xgAway: earlyXg.xgAway, xgSource: earlyXg.source }
+                  : {})
               };
               let sr = null;
               try {
@@ -987,29 +1025,31 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
+        let calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
           correlation: poissonCorrelation,
           rho: leagueParams.rho
         });
         if (!calc || !calc.probs) continue;
         // Apply league profile rates (draw / BTTS / over) — config-driven, not hardcoded.
-        const p = applyLeagueMarketPriors(calc.probs, leagueParams);
+        let p = applyLeagueMarketPriors(calc.probs, leagueParams);
         // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline
-        const pRaw = { p1: calc.probs.p1, pX: calc.probs.pX, p2: calc.probs.p2 };
+        let pRaw = { p1: calc.probs.p1, pX: calc.probs.pX, p2: calc.probs.p2 };
 
-        // === MONTE CARLO (10k sims from bivariate Poisson + Dixon–Coles PMF) ===
+        // === MONTE CARLO (adaptive sims from bivariate Poisson + Dixon–Coles PMF) ===
         let monteCarlo = null;
-        try {
-          monteCarlo = runMonteCarloSimulation(lambdaHome, lambdaAway, {
-            simulations: 10_000,
-            fixtureId,
-            correlation: poissonCorrelation,
-            rho: leagueParams.rho
-          });
-        } catch (mcErr) {
-          console.warn("[monte-carlo]", fixtureId, mcErr?.message || mcErr);
-          monteCarlo = null;
-        }
+        const runMc = () => {
+          try {
+            return runMonteCarloSimulation(lambdaHome, lambdaAway, {
+              fixtureId,
+              correlation: poissonCorrelation,
+              rho: leagueParams.rho
+            });
+          } catch (mcErr) {
+            console.warn("[monte-carlo]", fixtureId, mcErr?.message || mcErr);
+            return null;
+          }
+        };
+        monteCarlo = runMc();
 
         // === PIEŢE CORNERE + ŞUTURI LA POARTĂ (Poisson din rolling stats) ===
         let cornersBlock = null;
@@ -1043,6 +1083,63 @@ export default async function handler(req, res) {
           }
           liveRollingApplied = true;
         }
+        // === REAL ROLLING xG (Predictor V2 — display + λ blend when not already applied) ===
+        let xgModelMeta = { source: "lambda_fallback", applied: false, blendedIntoLambda: false };
+        try {
+          const xgLambdas = deriveXgLambdas({
+            rollingHome,
+            rollingAway,
+            leagueBaseXg: leagueParams.leagueAvg,
+            homeAdv: leagueParams.homeAdv,
+            awayAdv: leagueParams.awayAdv
+          });
+          if (xgLambdas && Number.isFinite(xgLambdas.xgHome) && Number.isFinite(xgLambdas.xgAway)) {
+            xgLambdasForSources = xgLambdas;
+            if (luckStats) {
+              luckStats.hXG = roundDisplayRate(xgLambdas.xgHome);
+              luckStats.aXG = roundDisplayRate(xgLambdas.xgAway);
+              luckStats.xgSource = xgLambdas.source;
+              luckStats.intensityNote = "rolling_xg_model";
+            }
+            const hadEarlyXg = Boolean(strengthMeta?.xgBlend?.applied);
+            xgModelMeta = {
+              source: xgLambdas.source,
+              applied: true,
+              sample: xgLambdas.sample,
+              blendedIntoLambda: hadEarlyXg
+            };
+            // Late live-rolling path: xG arrived after engine build → blend + recompute Poisson/MC.
+            if (!hadEarlyXg) {
+              const xgW = Number(getPredictionWeights().expectedGoals) || 0;
+              const blended = blendLambdasWithXg(
+                lambdaHome,
+                lambdaAway,
+                xgLambdas.xgHome,
+                xgLambdas.xgAway,
+                xgW
+              );
+              if (blended.applied) {
+                lambdaHome = blended.lambdaHome;
+                lambdaAway = blended.lambdaAway;
+                xgModelMeta.blendedIntoLambda = true;
+                xgModelMeta.blendWeight = blended.weight;
+                const recalc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
+                  correlation: poissonCorrelation,
+                  rho: leagueParams.rho
+                });
+                if (recalc?.probs) {
+                  calc = recalc;
+                  p = applyLeagueMarketPriors(calc.probs, leagueParams);
+                  pRaw = { p1: calc.probs.p1, pX: calc.probs.pX, p2: calc.probs.p2 };
+                  monteCarlo = runMc();
+                }
+              }
+            }
+          }
+        } catch {
+          xgModelMeta = { source: "lambda_fallback", applied: false, blendedIntoLambda: false };
+        }
+
         const cornersLambdas = deriveMarketLambdas({
           rollingHome,
           rollingAway,
@@ -1579,6 +1676,46 @@ export default async function handler(req, res) {
           p2Adj = (p2Adj / sumAdj) * 100;
         }
 
+        // === AUTO MODEL SELECTION ===
+        // Apply the automatically-promoted model. Default "E"/everything is a no-op
+        // (keeps the full calibration+stacker+market stack). Simpler promoted models
+        // override the final 1X2 from their reconstructed sources for this fixture.
+        let appliedModelId = "E";
+        if (activeModelId && !["E", "EVERYTHING"].includes(String(activeModelId).toUpperCase())) {
+          try {
+            const model = getModelById(activeModelId);
+            if (model) {
+              const toFrac = (t) => (t ? { p1: t.p1 / 100, pX: t.pX / 100, p2: t.p2 / 100 } : null);
+              const xgSourceProbs =
+                buildXgSourceProbs(xgLambdasForSources?.xgHome, xgLambdasForSources?.xgAway, {
+                  fixtureId,
+                  correlation: poissonCorrelation,
+                  rho: leagueParams.rho
+                }) || toFrac(pRaw);
+              const sources = {
+                poisson: toFrac(pRaw),
+                xg: xgSourceProbs,
+                elo: eloInfo?.probs ? { p1: eloInfo.probs.p1, pX: eloInfo.probs.pX, p2: eloInfo.probs.p2 } : null,
+                market: marketProbs ? { p1: marketProbs.p1, pX: marketProbs.pX, p2: marketProbs.p2 } : null,
+                everything: { p1: p1Adj / 100, pX: pXAdj / 100, p2: p2Adj / 100 }
+              };
+              const injuriesDetail = modularScores?.injuries?.detail || modularScores?.injuries?.details || null;
+              const injuries = injuriesDetail
+                ? { home: Number(injuriesDetail.home) || 1, away: Number(injuriesDetail.away) || 1 }
+                : null;
+              const blended = blendModel(model, sources, injuries);
+              if (blended && Number.isFinite(blended.p1)) {
+                p1Adj = blended.p1 * 100;
+                pXAdj = blended.pX * 100;
+                p2Adj = blended.p2 * 100;
+                appliedModelId = model.id;
+              }
+            }
+          } catch {
+            appliedModelId = "E";
+          }
+        }
+
         const driftPenalty = riskContext.avgDist
           ? Math.abs(p1Adj - riskContext.avgDist.p1) +
             Math.abs(pXAdj - riskContext.avgDist.pX) +
@@ -2036,6 +2173,64 @@ export default async function handler(req, res) {
             },
             strengthMeta: strengthMeta || undefined,
             modularScores: modularScores || undefined,
+            activeModel: appliedModelId,
+            xgModel: xgModelMeta,
+            predictorVersion: PREDICTOR_V2_VERSION,
+            pipeline: buildPipelineTrace({
+              fetch: { ok: true, detail: "api-football+cache" },
+              cache: { ok: true, detail: "getWithCache" },
+              features: { ok: Boolean(confidenceCtx?.hStats), detail: "teamStats+moduleInputs" },
+              predictionEngine: { ok: method === "modular-engine" || Boolean(modularScores), detail: method },
+              poisson: { ok: Boolean(calc?.probs), detail: calc?.modelMeta?.method || null },
+              elo: { ok: Boolean(eloInfo), detail: eloInfo ? `spread=${eloInfo.eloSpread}` : "unavailable" },
+              xg: {
+                ok: Boolean(xgModelMeta?.applied),
+                detail: xgModelMeta?.blendedIntoLambda
+                  ? `blended:${xgModelMeta.source}`
+                  : xgModelMeta?.source || "lambda_fallback"
+              },
+              injuries: {
+                ok: modularScores?.injuries?.available !== false && Boolean(modularScores?.injuries),
+                detail: modularScores?.injuries ? "module" : "neutral"
+              },
+              weather: {
+                ok: Boolean(modularScores?.weather),
+                detail: modularScores?.weather?.details?.reason || modularScores?.weather?.detail?.reason || null
+              },
+              referee: {
+                ok: Boolean(refereeName),
+                detail: refereeName || "unassigned"
+              },
+              lineups: {
+                ok: Boolean(modularScores?.lineup),
+                detail: modularScores?.lineup ? "module" : "neutral"
+              },
+              restDays: {
+                ok: Boolean(modularScores?.restDays),
+                detail: modularScores?.restDays ? "module" : "neutral"
+              },
+              motivation: {
+                ok: Boolean(modularScores?.motivation),
+                detail: modularScores?.motivation ? "standings_rank" : "neutral"
+              },
+              calibration: {
+                ok: calibrationApplied,
+                detail: calibrationApplied ? "maps_applied" : "skipped"
+              },
+              confidence: {
+                ok: Boolean(confidenceEngine),
+                detail: confidenceEngine?.overall != null ? `overall=${confidenceEngine.overall}` : null
+              },
+              recommendation: {
+                ok: Boolean(topPick),
+                detail: topPick || null
+              },
+              featureImportance: {
+                ok: Boolean(featureImportance?.topFeatures?.length || predictionContributions),
+                detail: predictionContributions ? "contributions+fi" : "fi"
+              },
+              prediction: { ok: true, detail: "row_emitted" }
+            }),
             calibrationApplied,
             stackerApplied,
             stackerSampleSize: stackerEntry?.sampleSize || null,

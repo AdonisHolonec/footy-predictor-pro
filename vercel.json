@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/daily-ml?mode=ops-report",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/daily-ml?mode=model-selection",
+      "schedule": "35 3 * * *"
     }
   ]
 }

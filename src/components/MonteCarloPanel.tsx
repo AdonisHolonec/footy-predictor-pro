@@ -99,7 +99,11 @@ export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColo
             Monte Carlo Simulation
           </h3>
           <p className="mt-1 text-[11px] text-signal-inkMuted">
-            {mc.simulations.toLocaleString()} sims · bivariate Poisson + Dixon–Coles
+            {mc.simulations.toLocaleString()} sims
+            {mc.adaptive?.enabled && mc.adaptive.score != null
+              ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
+              : ""}{" "}
+            · bivariate Poisson + Dixon–Coles
           </p>
         </div>
         <div className="font-mono text-[9px] tabular-nums text-signal-inkMuted">

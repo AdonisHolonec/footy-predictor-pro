@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ModelLabBundle, ModelLabResult } from "../../types";
-import { loadModelLab } from "../../services/backtestService";
+import type { ModelLabBundle, ModelLabResult, ModelSelectionBundle } from "../../types";
+import { loadModelLab, loadModelSelection } from "../../services/backtestService";
 
 function metricTone(value: number, kind: "roi" | "ev"): string {
   if (kind === "roi" || kind === "ev") {
@@ -19,14 +19,19 @@ export default function ModelLabPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lab, setLab] = useState<ModelLabBundle | null>(null);
+  const [selection, setSelection] = useState<ModelSelectionBundle | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setLab(await loadModelLab(days));
+      const [labRes, selRes] = await Promise.allSettled([loadModelLab(days), loadModelSelection()]);
+      setLab(labRes.status === "fulfilled" ? labRes.value : null);
+      setSelection(selRes.status === "fulfilled" ? selRes.value : null);
+      if (labRes.status === "rejected" && selRes.status === "rejected") {
+        throw labRes.reason instanceof Error ? labRes.reason : new Error("Failed to load model lab");
+      }
     } catch (err) {
-      setLab(null);
       setError(err instanceof Error ? err.message : "Failed to load model lab");
     } finally {
       setLoading(false);
@@ -77,6 +82,29 @@ export default function ModelLabPanel() {
       {error ? (
         <div className="mx-4 mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-200 sm:mx-5">
           {error}
+        </div>
+      ) : null}
+
+      {selection ? (
+        <div className="mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-2.5 sm:mx-5">
+          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-signal-inkMuted">Auto-promoted model</span>
+          <span className="font-mono text-sm font-bold text-signal-mint">
+            {selection.active?.id || selection.selected?.id || "E"} · {selection.active?.name || selection.selected?.name || "Everything enabled"}
+          </span>
+          {selection.active?.promotedAt ? (
+            <span className="font-mono text-[9px] text-signal-inkMuted">
+              promoted {new Date(selection.active.promotedAt).toLocaleDateString()}
+            </span>
+          ) : (
+            <span className="font-mono text-[9px] text-signal-inkMuted">default (awaiting first cron)</span>
+          )}
+          <span className="ml-auto flex flex-wrap gap-2">
+            {(selection.windows || []).map((w) => (
+              <span key={w.key} className="font-mono text-[9px] text-signal-inkMuted">
+                {w.key}: <span className="text-signal-silver">{w.winner?.id || "—"}</span>
+              </span>
+            ))}
+          </span>
         </div>
       ) : null}
 

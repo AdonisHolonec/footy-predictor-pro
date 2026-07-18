@@ -124,6 +124,26 @@ function blendSources(reqSources, available) {
   return normTriple({ p1: acc.p1 / n, pX: acc.pX / n, p2: acc.p2 / n });
 }
 
+export function getModelById(id) {
+  const key = String(id || "").toUpperCase();
+  return MODEL_REGISTRY.find((m) => m.id === key) || null;
+}
+
+/**
+ * Pure blend of a model definition over an available source map (fractions).
+ * Shared by the lab evaluator and the live prediction path so promotion is consistent.
+ * @returns {{p1,pX,p2}|null}
+ */
+export function blendModel(model, available, injuries) {
+  if (!model) return null;
+  let triple = blendSources(model.sources, available || {});
+  if (!triple) return null;
+  if (Array.isArray(model.modifiers) && model.modifiers.includes("injuries")) {
+    triple = applyInjuries(triple, injuries) || triple;
+  }
+  return triple;
+}
+
 function applyInjuries(triple, injuries) {
   if (!triple || !injuries) return triple;
   const h = injuries.home;
@@ -164,9 +184,8 @@ export function evaluateModel(model, rows) {
     const actual = actual1x2FromScore(row.score_home, row.score_away);
     if (!actual) continue;
     const { sources, injuries } = reconstructSources(row);
-    let triple = blendSources(model.sources, sources);
+    const triple = blendModel(model, sources, injuries);
     if (!triple) continue;
-    if (model.modifiers.includes("injuries")) triple = applyInjuries(triple, injuries) || triple;
 
     const pick = argmax(triple);
     const oddPick = oddsForOutcome(row, pick);
@@ -226,5 +245,12 @@ export function runModelLab(rows, opts = {}) {
   };
 }
 
-export const ModelLab = { runModelLab, evaluateModel, reconstructSources, MODEL_REGISTRY };
+export const ModelLab = {
+  runModelLab,
+  evaluateModel,
+  reconstructSources,
+  blendModel,
+  getModelById,
+  MODEL_REGISTRY
+};
 export default ModelLab;
