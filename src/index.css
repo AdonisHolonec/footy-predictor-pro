@@ -4,22 +4,23 @@
 
 @layer base {
   :root {
-    --lab-blur: 16px;
-    --lab-blur-strong: 22px;
-    --lab-radius: 1.125rem;
-    --lab-radius-sm: 0.75rem;
-    --lab-radius-lg: 1.5rem;
+    --lab-blur: 12px;
+    --lab-blur-strong: 18px;
+    --lab-radius: 0.875rem;
+    --lab-radius-sm: 0.625rem;
+    --lab-radius-lg: 1.125rem;
     --lab-space-1: 0.25rem;
     --lab-space-2: 0.5rem;
     --lab-space-3: 0.75rem;
     --lab-space-4: 1rem;
+    --lab-space-5: 1.25rem;
     --lab-space-6: 1.5rem;
     --lab-space-8: 2rem;
-    --lab-transition: 280ms cubic-bezier(0.33, 1, 0.68, 1);
-    --lab-transition-fast: 160ms cubic-bezier(0.33, 1, 0.68, 1);
-    --lab-border-glow: rgba(56, 189, 248, 0.25);
-    --lab-border-subtle: rgba(255, 255, 255, 0.07);
-    --lab-shadow-elevated: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(56, 189, 248, 0.08);
+    --lab-transition: 240ms cubic-bezier(0.33, 1, 0.68, 1);
+    --lab-transition-fast: 150ms cubic-bezier(0.33, 1, 0.68, 1);
+    --lab-border-glow: rgba(62, 207, 191, 0.22);
+    --lab-border-subtle: rgba(255, 255, 255, 0.06);
+    --lab-shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04);
   }
 
   html,
@@ -32,6 +33,7 @@
     @apply antialiased font-sans text-signal-ink bg-signal-mist;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   button {
@@ -44,19 +46,19 @@
   }
 
   button:active:not(:disabled) {
-    transform: scale(0.98);
-    filter: brightness(0.97);
+    transform: scale(0.985);
+    filter: brightness(0.98);
   }
 
   button:focus-visible {
-    outline: 2px solid rgba(56, 189, 248, 0.55);
+    outline: 2px solid rgba(62, 207, 191, 0.55);
     outline-offset: 2px;
   }
 
   a[href]:focus-visible {
-    outline: 2px solid rgba(56, 189, 248, 0.55);
+    outline: 2px solid rgba(62, 207, 191, 0.55);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 4px;
   }
 
   a[href] {
@@ -65,48 +67,67 @@
 
   input:focus-visible,
   select:focus-visible {
-    outline: 2px solid rgba(56, 189, 248, 0.45);
+    outline: 2px solid rgba(62, 207, 191, 0.4);
     outline-offset: 0;
   }
 }
 
 @layer components {
   .lab-page {
-    @apply relative min-h-screen text-signal-ink selection:bg-signal-petrol/25;
+    @apply relative min-h-screen text-signal-ink selection:bg-signal-petrol/20;
   }
 
+  /* Cleaner dark canvas — soft depth, less neon grid */
   .lab-bg {
     pointer-events: none;
     position: fixed;
     inset: 0;
     z-index: 0;
-    background-color: #0a0e14;
-    background-image: radial-gradient(
-        ellipse 100% 60% at 15% -10%,
-        rgba(56, 189, 248, 0.09),
-        transparent 55%
-      ),
-      radial-gradient(ellipse 70% 45% at 95% 5%, rgba(52, 211, 153, 0.06), transparent 50%),
-      radial-gradient(ellipse 50% 35% at 50% 100%, rgba(14, 165, 233, 0.05), transparent 55%),
-      linear-gradient(rgba(56, 189, 248, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px);
-    background-size: auto, auto, auto, 32px 32px, 32px 32px;
+    background-color: #0b0f14;
+    background-image: radial-gradient(ellipse 80% 45% at 10% -5%, rgba(62, 207, 191, 0.08), transparent 55%),
+      radial-gradient(ellipse 55% 35% at 95% 0%, rgba(61, 214, 140, 0.05), transparent 50%),
+      linear-gradient(180deg, #111821 0%, #0b0f14 42%, #0b0f14 100%);
   }
 
   .lab-bg::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(6, 8, 13, 0.2) 0%, transparent 35%, rgba(6, 8, 13, 0.35) 100%);
+    background: radial-gradient(ellipse 70% 50% at 50% 120%, rgba(0, 0, 0, 0.35), transparent 60%);
     pointer-events: none;
   }
 
   .lab-glass {
-    @apply rounded-[var(--lab-radius)] border border-white/[0.08] bg-signal-bone/40 shadow-atelier backdrop-blur-[var(--lab-blur)] shadow-innerSoft;
+    @apply rounded-card border border-white/[0.07] bg-signal-panel/80 shadow-card backdrop-blur-[var(--lab-blur)];
   }
 
   .lab-glass-strong {
-    @apply rounded-[var(--lab-radius)] border border-signal-line/50 bg-signal-panel/70 shadow-atelierLg backdrop-blur-xl;
+    @apply rounded-card-lg border border-white/[0.08] bg-signal-panel/90 shadow-atelierLg backdrop-blur-md;
+  }
+
+  /* Modern SaaS / sports-app card */
+  .lab-card {
+    @apply rounded-card border border-white/[0.07] bg-signal-panel shadow-card transition-[transform,box-shadow,border-color] duration-atelier ease-out;
+  }
+
+  .lab-card:hover {
+    @apply border-white/[0.11] shadow-card-hover;
+  }
+
+  .lab-stat {
+    @apply rounded-card border border-white/[0.06] bg-signal-fog/80 px-3 py-3 shadow-innerSoft;
+  }
+
+  .lab-stat-label {
+    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-signal-inkMuted;
+  }
+
+  .lab-stat-value {
+    @apply mt-1 font-display text-xl font-semibold tabular-nums tracking-tight text-signal-ink sm:text-2xl;
+  }
+
+  .lab-chip {
+    @apply inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-signal-void/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-silver;
   }
 
   .lab-heading {
@@ -117,15 +138,23 @@
     @apply font-mono tabular-nums;
   }
 
+  .lab-section-title {
+    @apply font-display text-sm font-semibold tracking-tight text-signal-ink sm:text-base;
+  }
+
+  .lab-section-eyebrow {
+    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-signal-petrol/90;
+  }
+
   .glass-input {
-    @apply border border-white/10 bg-signal-fog/80 text-signal-ink placeholder:text-signal-inkMuted/60;
+    @apply rounded-lg border border-white/10 bg-signal-fog/90 text-signal-ink placeholder:text-signal-inkMuted/60;
   }
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -134,21 +163,21 @@
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: fadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes loginGlowDrift {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.5;
+    opacity: 0.45;
   }
   50% {
-    transform: translate3d(0, -1.6%, 0) scale(1.045);
-    opacity: 0.9;
+    transform: translate3d(0, -1.2%, 0) scale(1.03);
+    opacity: 0.75;
   }
   100% {
     transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.5;
+    opacity: 0.45;
   }
 }
 
@@ -164,10 +193,10 @@
 @keyframes loginAuthBreath {
   0%,
   100% {
-    box-shadow: 0 18px 64px rgba(2, 6, 23, 0.48), 0 0 0 1px rgba(56, 189, 248, 0.06);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(62, 207, 191, 0.08);
   }
   50% {
-    box-shadow: 0 24px 78px rgba(2, 6, 23, 0.58), 0 0 0 1px rgba(56, 189, 248, 0.12);
+    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(62, 207, 191, 0.14);
   }
 }
 
@@ -176,8 +205,8 @@
 }
 
 .login-ultra-noise {
-  opacity: 0.055;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.2) 1px, transparent 0);
+  opacity: 0.04;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.18) 1px, transparent 0);
   background-size: 3px 3px;
   mix-blend-mode: soft-light;
   animation: loginNoisePan 13s linear infinite;
@@ -186,8 +215,8 @@
 .login-auth-shell {
   position: relative;
   animation: loginAuthBreath 5.8s ease-in-out infinite;
-  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 280ms ease;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms ease;
 }
 
 .login-auth-shell::before {
@@ -198,14 +227,14 @@
   background: linear-gradient(
     115deg,
     transparent 34%,
-    rgba(94, 234, 212, 0.16) 45%,
-    rgba(56, 189, 248, 0.28) 50%,
-    rgba(14, 165, 233, 0.22) 54%,
+    rgba(110, 239, 176, 0.12) 45%,
+    rgba(62, 207, 191, 0.22) 50%,
+    rgba(26, 143, 131, 0.16) 54%,
     transparent 66%
   );
   transform: translateX(-48%) rotate(8deg);
   opacity: 0;
-  transition: opacity 360ms ease, transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 320ms ease, transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .login-auth-shell::after {
@@ -214,26 +243,26 @@
   inset: -1px;
   border-radius: inherit;
   pointer-events: none;
-  border: 1px solid rgba(56, 189, 248, 0);
-  box-shadow: 0 0 0 rgba(56, 189, 248, 0), 0 0 0 rgba(94, 234, 212, 0);
-  transition: border-color 280ms ease, box-shadow 380ms ease;
+  border: 1px solid rgba(62, 207, 191, 0);
+  box-shadow: 0 0 0 rgba(62, 207, 191, 0);
+  transition: border-color 240ms ease, box-shadow 320ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .login-auth-shell:hover {
-    transform: translateY(-2px) scale(1.005);
-    box-shadow: 0 22px 72px rgba(2, 6, 23, 0.68), 0 0 0 1px rgba(56, 189, 248, 0.2);
-    border-color: rgba(94, 234, 212, 0.28);
+    transform: translateY(-2px);
+    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(62, 207, 191, 0.18);
+    border-color: rgba(62, 207, 191, 0.28);
   }
 
   .login-auth-shell:hover::before {
-    opacity: 0.95;
+    opacity: 0.9;
     transform: translateX(34%) rotate(8deg);
   }
 
   .login-auth-shell:hover::after {
-    border-color: rgba(56, 189, 248, 0.42);
-    box-shadow: 0 0 52px rgba(56, 189, 248, 0.3), inset 0 0 24px rgba(94, 234, 212, 0.11);
+    border-color: rgba(62, 207, 191, 0.35);
+    box-shadow: 0 0 40px rgba(62, 207, 191, 0.18);
   }
 }
 
@@ -243,23 +272,16 @@
     filter: brightness(0.99);
   }
 
-  .animate-fadeIn {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  .animate-stagger-in {
+  .animate-fadeIn,
+  .animate-stagger-in,
+  .animate-card-in {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
   }
 
   .login-ultra-glow,
-  .login-ultra-noise {
-    animation: none !important;
-  }
-
+  .login-ultra-noise,
   .login-auth-shell {
     animation: none !important;
   }
@@ -276,13 +298,24 @@
   }
 }
 
+/* Mobile-friendly spacing helpers */
+@media (max-width: 640px) {
+  .lab-page {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+}
+
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   @apply bg-transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-signal-petrol/25;
+  @apply rounded-full bg-white/10;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-signal-petrol/35;
 }

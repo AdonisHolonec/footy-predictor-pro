@@ -29,6 +29,23 @@ import {
 import { fitIsotonicPav, applyIsotonicMap, applyCalibratedTriple } from "../server-utils/isotonicCalibration.js";
 import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
+import {
+  calculateExpectedValue,
+  calculateKellyPct,
+  evaluateValue,
+  selectBestValue,
+  buildValueEngine
+} from "../server-utils/value/ValueEngine.js";
+import {
+  buildBacktestReport,
+  buildDashboardBundle,
+  computeBacktestMetrics,
+  extractBetEvent,
+  filterBetEvents,
+  parseFilters,
+  seasonStartIso
+} from "../server-utils/backtest/BacktestAnalytics.js";
+import { buildCacheKey } from "../server-utils/fetcher.js";
 
 test("computeMatchProbs is deterministic for identical inputs", () => {
   const a = computeMatchProbs(1.8, 1.4, 0, { correlation: 0.12, rho: -0.11 });
@@ -625,4 +642,158 @@ test("eloProbabilities returns valid 3-way probabilities", () => {
   assert.ok(Math.abs(sLop - 1) < 1e-6);
   assert.ok(lopsided.p1 > lopsided.p2);
   assert.ok(lopsided.pX < moderate.pX, "draw prob should shrink for lopsided matches");
+});
+
+test("ValueEngine EV / Kelly / Value Score for positive edge", () => {
+  // p=0.55, odds=2.10 → EV = (0.55*2.10 - 1)*100 = 15.5%
+  const ev = calculateExpectedValue(0.55, 2.1);
+  assert.equal(ev, 15.5);
+  const kelly = calculateKellyPct(0.55, 2.1, { confidencePct: 70 });
+  assert.ok(kelly > 0 && kelly <= 3);
+  const v = evaluateValue(0.55, 2.1, { type: "1", confidencePct: 70 });
+  assert.equal(v.positiveEV, true);
+  assert.equal(v.negativeEV, false);
+  assert.equal(v.signal, "positive");
+  assert.equal(v.recommendable, true);
+  assert.ok(v.valueScore >= 50);
+  assert.equal(v.expectedValue, 15.5);
+});
+
+test("ValueEngine never recommends negative EV", () => {
+  // p=0.40, odds=2.00 → EV = (0.8 - 1)*100 = -20%
+  const v = evaluateValue(0.4, 2.0, { type: "X", confidencePct: 80 });
+  assert.equal(v.negativeEV, true);
+  assert.equal(v.positiveEV, false);
+  assert.equal(v.signal, "negative");
+  assert.equal(v.recommendable, false);
+  assert.ok(v.expectedValue < 0);
+
+  const selected = selectBestValue([
+    { probability: 0.4, odds: 2.0, type: "X", confidencePct: 80 },
+    { probability: 0.3, odds: 2.5, type: "2", confidencePct: 50 }
+  ]);
+  assert.equal(selected.best, null);
+  assert.ok(selected.rejectedNegative.length >= 1);
+
+  const engine = buildValueEngine([
+    { probability: 0.4, odds: 2.0, type: "X", confidencePct: 80 }
+  ]);
+  assert.equal(engine.detected, false);
+  assert.equal(engine.recommendable, false);
+  assert.equal(engine.rule, "never_recommend_negative_ev");
+});
+
+test("ValueEngine accepts 0-100 probability and picks best positive EV", () => {
+  const v = evaluateValue(55, 2.1, { type: "1", confidencePct: 70 });
+  assert.ok(Math.abs(v.probability - 0.55) < 1e-9);
+  assert.equal(v.recommendable, true);
+
+  const { best } = selectBestValue([
+    { probability: 0.4, odds: 2.0, type: "bad", confidencePct: 60 },
+    { probability: 0.55, odds: 2.1, type: "good", confidencePct: 70 },
+    { probability: 0.48, odds: 2.05, type: "meh", confidencePct: 55 }
+  ]);
+  assert.ok(best);
+  assert.equal(best.type, "good");
+  assert.equal(best.recommendable, true);
+  assert.ok(best.expectedValue > 0);
+});
+
+test("BacktestAnalytics computes ROI Yield Profit Loss streaks and drawdown", () => {
+  const rows = [
+    {
+      fixture_id: 1,
+      kickoff_at: "2026-01-01T12:00:00Z",
+      league_id: 39,
+      league_name: "Premier League",
+      home_team: "A",
+      away_team: "B",
+      validation: "win",
+      odds_home: 2.0,
+      odds_draw: 3.2,
+      odds_away: 3.5,
+      recommended_confidence: 62,
+      raw_payload: { valueBet: { type: "1", kelly: 2, ev: 8 } }
+    },
+    {
+      fixture_id: 2,
+      kickoff_at: "2026-01-02T12:00:00Z",
+      league_id: 39,
+      league_name: "Premier League",
+      home_team: "C",
+      away_team: "D",
+      validation: "loss",
+      odds_home: 1.8,
+      odds_draw: 3.4,
+      odds_away: 4.2,
+      recommended_confidence: 55,
+      raw_payload: { valueBet: { type: "1", kelly: 1, ev: 3 } }
+    },
+    {
+      fixture_id: 3,
+      kickoff_at: "2026-01-03T12:00:00Z",
+      league_id: 140,
+      league_name: "La Liga",
+      home_team: "E",
+      away_team: "F",
+      validation: "win",
+      odds_home: 2.5,
+      odds_draw: 3.1,
+      odds_away: 2.8,
+      recommended_confidence: 70,
+      raw_payload: { valueBet: { type: "2", kelly: 1.5, ev: 12 } }
+    }
+  ];
+
+  const report = buildBacktestReport(rows, { period: "30d" });
+  const m = report.metrics;
+  assert.equal(m.settled, 3);
+  assert.equal(m.wins, 2);
+  assert.equal(m.losses, 1);
+  assert.ok(m.hitRate > 60);
+  assert.equal(m.roi, m.yield);
+  assert.ok(m.profit > 0);
+  assert.ok(m.loss > 0);
+  assert.ok(m.averageOdds > 1);
+  assert.ok(m.averageConfidence > 0);
+  assert.ok(m.expectedValue > 0);
+  assert.ok(m.maxDrawdown >= 0);
+  assert.ok(m.winningStreak >= 1);
+  assert.ok(m.losingStreak >= 1);
+  assert.ok(m.equityCurve.length === 3);
+
+  const homeOnly = filterBetEvents(
+    rows.map(extractBetEvent).filter(Boolean),
+    parseFilters({ side: "home" })
+  );
+  assert.equal(homeOnly.length, 2);
+
+  const liga = buildBacktestReport(rows, { competition: "La Liga" });
+  assert.equal(liga.metrics.settled, 1);
+  assert.ok(seasonStartIso().startsWith("20"));
+
+  const metrics = computeBacktestMetrics([]);
+  assert.equal(metrics.settled, 0);
+  assert.equal(metrics.roi, 0);
+
+  const dash = report.dashboard;
+  assert.ok(dash);
+  assert.equal(typeof dash.predictionAccuracy, "number");
+  assert.ok(Array.isArray(dash.radar));
+  assert.ok(dash.radar.length >= 4);
+  assert.ok(dash.heatmap.markets.includes("1"));
+  assert.ok(Array.isArray(dash.confidenceDistribution));
+  assert.ok(Array.isArray(dash.bestLeagues));
+  assert.ok(Array.isArray(dash.worstLeagues));
+  const emptyDash = buildDashboardBundle(metrics, []);
+  assert.equal(emptyDash.dailyProfit, 0);
+});
+
+test("fetcher buildCacheKey is provider-agnostic and param-order stable", () => {
+  const a = buildCacheKey("/odds", { page: 1, date: "2026-07-18" });
+  const b = buildCacheKey("/odds", { date: "2026-07-18", page: 1 });
+  assert.equal(a, b);
+  assert.ok(a.startsWith("req:v2:/odds?"));
+  assert.ok(a.includes("date=2026-07-18"));
+  assert.ok(!a.includes("api-sports"));
 });

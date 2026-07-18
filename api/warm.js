@@ -1,10 +1,9 @@
-// api/warm.js
+// api/warm.js — prefetch fixtures/standings/teamstats/odds into KV for predict reuse
 import { readBearer } from "../server-utils/authAdmin.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
-import { getWithCache } from '../server-utils/fetcher.js';
-import {
-  resolveAuthenticatedUsageContext
-} from "../server-utils/userDailyWarmPredictUsage.js";
+import { getWithCache } from "../server-utils/fetcher.js";
+import { prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
+import { resolveAuthenticatedUsageContext } from "../server-utils/userDailyWarmPredictUsage.js";
 
 function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
@@ -13,14 +12,14 @@ function inferSeason(dateISO) {
 }
 
 export default async function handler(req, res) {
-  // Pe Vercel, query params sunt automat în req.query
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const leagueIdsStr = req.query.leagueIds || "";
-  const leagueIds = leagueIdsStr.split(',').filter(Boolean).map(Number);
+  const leagueIds = leagueIdsStr.split(",").filter(Boolean).map(Number);
   const season = Number(req.query.season || inferSeason(date));
-  
+
   const wantStandings = req.query.standings === "1";
   const wantTeamStats = req.query.teamstats === "1";
+  const wantOdds = req.query.odds === "1";
 
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Lipsesc leagueIds." });
@@ -42,14 +41,21 @@ export default async function handler(req, res) {
   if (usageCtx.error) {
     return res.status(usageCtx.error.status).json(usageCtx.error.body);
   }
-  // Authenticated users (free/premium/ultra) run warm without daily quota limits.
 
   const warmed = [];
   const errors = [];
   let teamStatsPrefetched = 0;
+  let teamStatsCached = 0;
+  let oddsPrefetchSummary = null;
 
-  // 1. Aducem meciurile zilei (cache 6 ore = 21600 sec)
-  const dayReq = await getWithCache('/fixtures', { date }, 21600);
+  // Align with predict cap (15 fixtures × ~2 teams) instead of 10 teams/league.
+  const TEAMSTATS_WARM_LIMIT = Math.max(
+    10,
+    Math.min(Number(process.env.TEAMSTATS_WARM_LIMIT || 30), 60)
+  );
+  const PREDICT_FIXTURE_CAP = 15;
+
+  const dayReq = await getWithCache("/fixtures", { date }, 21600);
   if (!dayReq.ok) {
     const status = Number(dayReq?.status);
     return res.status(Number.isFinite(status) && status >= 400 ? status : 502).json({
@@ -61,48 +67,79 @@ export default async function handler(req, res) {
 
   const allFixtures = dayReq.data.response || [];
 
-  // 2. Trecem prin fiecare ligă selectată
+  // Fixture-aligned unique teams in the same order predict will walk leagues.
+  const prioritizedTeams = [];
+  const seenTeamKeys = new Set();
+  let fixtureSlots = 0;
   for (const leagueId of leagueIds) {
-    const leagueFixtures = allFixtures.filter(f => f.league?.id === leagueId);
+    const leagueFixtures = allFixtures.filter((f) => f.league?.id === leagueId);
+    for (const f of leagueFixtures) {
+      if (fixtureSlots >= PREDICT_FIXTURE_CAP) break;
+      fixtureSlots += 1;
+      for (const side of ["home", "away"]) {
+        const tid = f.teams?.[side]?.id;
+        if (!tid) continue;
+        const key = `${leagueId}:${tid}`;
+        if (seenTeamKeys.has(key)) continue;
+        seenTeamKeys.add(key);
+        prioritizedTeams.push({ leagueId, teamId: tid });
+      }
+    }
+    if (fixtureSlots >= PREDICT_FIXTURE_CAP) break;
+  }
+
+  for (const leagueId of leagueIds) {
+    const leagueFixtures = allFixtures.filter((f) => f.league?.id === leagueId);
     const summary = { leagueId, season, date, fixtures: leagueFixtures.length };
 
-    // Standings (cache 24 ore = 86400 sec)
     if (wantStandings) {
-      const stReq = await getWithCache('/standings', { league: leagueId, season }, 86400);
+      const stReq = await getWithCache("/standings", { league: leagueId, season }, 86400);
       if (!stReq.ok) errors.push({ leagueId, where: "standings", error: stReq.error });
       else summary.standings = stReq.fromCache ? "cached" : "fetched";
-    }
-
-    // Team Stats (limita la 10 echipe pentru a nu consuma planul RapidAPI brusc)
-    if (wantTeamStats) {
-      const teamIds = new Set();
-      leagueFixtures.forEach(f => {
-        if (f.teams?.home?.id) teamIds.add(f.teams.home.id);
-        if (f.teams?.away?.id) teamIds.add(f.teams.away.id);
-      });
-
-      const uniqTeams = Array.from(teamIds).slice(0, 10); // TEAMSTATS_WARM_LIMIT
-
-      for (const teamId of uniqTeams) {
-        const tsReq = await getWithCache('/teams/statistics', { league: leagueId, season, team: teamId }, 86400);
-        if (!tsReq.ok) {
-          errors.push({ leagueId, teamId, where: "teamstats", error: tsReq.error });
-        } else {
-          if (!tsReq.fromCache) teamStatsPrefetched++;
-        }
-      }
     }
 
     warmed.push(summary);
   }
 
-  const payload = {
+  if (wantTeamStats) {
+    const uniqTeams = prioritizedTeams.slice(0, TEAMSTATS_WARM_LIMIT);
+    for (const { leagueId, teamId } of uniqTeams) {
+      const tsReq = await getWithCache("/teams/statistics", { league: leagueId, season, team: teamId }, 86400);
+      if (!tsReq.ok) {
+        errors.push({ leagueId, teamId, where: "teamstats", error: tsReq.error });
+      } else if (tsReq.fromCache) {
+        teamStatsCached += 1;
+      } else {
+        teamStatsPrefetched += 1;
+      }
+    }
+  }
+
+  if (wantOdds) {
+    oddsPrefetchSummary = await prefetchOddsByDate(date, {
+      leagueIds,
+      maxPages: Math.max(2, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES || 6), 12)),
+      ttlSeconds: 86400
+    });
+  }
+
+  return res.status(200).json({
     ok: errors.length === 0,
     warmed,
     teamStatsPrefetched,
+    teamStatsCached,
+    teamStatsLimit: TEAMSTATS_WARM_LIMIT,
+    teamsTargeted: wantTeamStats ? Math.min(prioritizedTeams.length, TEAMSTATS_WARM_LIMIT) : 0,
+    oddsPrefetch: oddsPrefetchSummary
+      ? {
+          pagesFetched: oddsPrefetchSummary.pagesFetched,
+          pagesFromCache: oddsPrefetchSummary.pagesFromCache,
+          fixturesMapped: oddsPrefetchSummary.fixturesMapped,
+          upstreamCalls: oddsPrefetchSummary.upstreamCalls
+        }
+      : null,
+    fixturesFromCache: Boolean(dayReq.fromCache),
     errors,
-    note: "Datele au fost salvate în Vercel KV (Redis)."
-  };
-
-  return res.status(200).json(payload);
+    note: "Datele au fost salvate în Vercel KV (Redis) pentru reutilizare de către /api/predict."
+  });
 }

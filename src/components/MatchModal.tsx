@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
+import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
+import ValueCard from "./ValueCard";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -760,10 +762,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
   })();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/90 p-2.5 backdrop-blur-sm sm:p-4" onClick={onClose}>
       <div
         ref={modalRef}
-        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-signal-panel/98 to-signal-mist shadow-atelierLg backdrop-blur-2xl lg:max-w-5xl"
+        className="lab-card relative max-h-[92vh] w-full max-w-lg overflow-y-auto border-white/[0.09] bg-signal-panel shadow-atelierLg lg:max-w-5xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -999,68 +1001,41 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                   </div>
                 </div>
               </div>
-              {match.valueBet?.detected && (
-                <div className="mt-4 rounded-xl border border-signal-amber/25 bg-signal-amber/10 p-4">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-amber">Value bet</div>
-                  {match.odds?.bookmaker && <div className="mt-1 text-[10px] text-signal-inkMuted">Operator · {match.odds.bookmaker}</div>}
-                  <div className="mt-2 flex flex-col gap-1 font-mono text-[12px] font-semibold text-signal-silver lg:flex-row lg:justify-between">
+              {match.valueEngine && (
+                <div className="mt-4">
+                  <ValueCard engine={match.valueEngine} bookmaker={match.odds?.bookmaker} />
+                </div>
+              )}
+              {match.valueBet?.detected && match.valueBet.stakePlan && (
+                <div className="mt-3 rounded-xl border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                  <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Stake plan</div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 tabular-nums">
                     <span>{match.valueBet.type}</span>
                     <span>EV +{match.valueBet.ev ?? 0}%</span>
                     <span>Stake {match.valueBet.kelly ?? 0}%</span>
+                    <span className="text-signal-inkMuted">Plan · {match.valueBet.stakePlan}</span>
                   </div>
-                  {match.valueBet.stakePlan && (
-                    <p className="mt-2 font-mono text-[10px] text-signal-inkMuted">Plan · {match.valueBet.stakePlan}</p>
-                  )}
                   {match.valueBet.ensemble && (
-                    <div className="mt-3 rounded-lg border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                      <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Ensemble</div>
-                      <div className="mt-1 grid gap-1 tabular-nums sm:grid-cols-2">
-                        <span>kelly base · {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
-                        {match.valueBet.ensemble.adjustment != null ? (
-                          <span>adj ×{match.valueBet.ensemble.adjustment.toFixed(3)}</span>
-                        ) : null}
-                        {match.valueBet.ensemble.confScore != null && (
-                          <span>conf {match.valueBet.ensemble.confScore >= 0 ? "+" : ""}{match.valueBet.ensemble.confScore.toFixed(3)}</span>
-                        )}
-                        {match.valueBet.ensemble.evScore != null && (
-                          <span>ev {match.valueBet.ensemble.evScore >= 0 ? "+" : ""}{match.valueBet.ensemble.evScore.toFixed(3)}</span>
-                        )}
-                        {match.valueBet.ensemble.dqScore != null && (
-                          <span>dq {match.valueBet.ensemble.dqScore >= 0 ? "+" : ""}{match.valueBet.ensemble.dqScore.toFixed(3)}</span>
-                        )}
-                        {match.valueBet.ensemble.gapPenalty != null && (
-                          <span>gap {match.valueBet.ensemble.gapPenalty.toFixed(3)}</span>
-                        )}
-                        {match.valueBet.ensemble.volPenalty != null && (
-                          <span>vol {match.valueBet.ensemble.volPenalty.toFixed(3)}</span>
-                        )}
-                        {/* Legacy fields (backward compat pentru istoric) */}
-                        {match.valueBet.ensemble.confidenceBoost != null && (
-                          <span>conf boost ×{String(match.valueBet.ensemble.confidenceBoost)}</span>
-                        )}
-                        {match.valueBet.ensemble.volatilityPenalty != null && (
-                          <span>vol penalty ×{String(match.valueBet.ensemble.volatilityPenalty)}</span>
-                        )}
-                        {match.valueBet.ensemble.evBoost != null && (
-                          <span>EV boost ×{String(match.valueBet.ensemble.evBoost)}</span>
-                        )}
-                      </div>
+                    <div className="mt-2 grid gap-1 text-signal-inkMuted sm:grid-cols-2">
+                      <span>kelly base · {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
+                      {match.valueBet.ensemble.adjustment != null ? (
+                        <span>adj ×{match.valueBet.ensemble.adjustment.toFixed(3)}</span>
+                      ) : null}
                     </div>
-                  )}
-                  {Array.isArray(match.valueBet.reasons) && match.valueBet.reasons.length > 0 && (
-                    <ul className="mt-3 list-inside list-disc space-y-1 text-[10px] text-signal-inkMuted">
-                      {match.valueBet.reasons.map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
                   )}
                 </div>
               )}
-              {!match.valueBet?.detected && (
+              {!match.valueEngine && !match.valueBet?.detected && (
                 <p className="mt-4 text-[10px] text-signal-inkMuted">Value bet · nu detectat</p>
               )}
             </section>
           </div>
+
+          {match.confidenceEngine && (
+            <div className="grid grid-cols-1 gap-6">
+              <ConfidenceEnginePanel engine={match.confidenceEngine} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 lg:col-span-2">

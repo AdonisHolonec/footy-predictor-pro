@@ -4,7 +4,7 @@ export function buildAuthHeaders(accessToken?: string | null) {
   return headers;
 }
 
-export async function syncHistoryAfterPredict(accessToken?: string | null, days = 30) {
+export async function syncHistoryAfterPredict(accessToken?: string | null, days = 7) {
   const headers = buildAuthHeaders(accessToken);
   await fetch(`/api/history?sync=1&days=${days}`, { method: "POST", headers }).catch(() => null);
 }

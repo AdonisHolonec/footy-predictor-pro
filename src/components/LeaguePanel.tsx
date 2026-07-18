@@ -28,22 +28,22 @@ export default function LeaguePanel({
   clearLeagueSelection
 }: LeaguePanelProps) {
   return (
-    <div className="rounded-3xl border border-white/[0.08] bg-signal-panel/40 shadow-atelier backdrop-blur-xl transition-all lg:sticky lg:top-6">
-      <div className="border-b border-white/5 bg-gradient-to-r from-signal-void/80 to-transparent px-4 py-4 sm:px-5">
+    <div className="lab-card lg:sticky lg:top-5">
+      <div className="border-b border-white/[0.06] px-3.5 py-3.5 sm:px-4">
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl px-1 py-1 -mx-1 text-left transition-colors duration-150 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50"
+          className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-1 py-1 -mx-1 text-left transition-colors duration-150 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50"
           onClick={() => setIsLeaguesOpen(!isLeaguesOpen)}
           aria-expanded={isLeaguesOpen}
           aria-controls="league-panel-content"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-signal-petrol/20 bg-signal-void/80 font-mono text-xs font-semibold text-signal-petrol shadow-inner">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-signal-petrol/25 bg-signal-void/70 font-display text-xs font-semibold text-signal-petrol">
               ║
             </div>
             <div>
-              <h2 className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Selectează ligile</h2>
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-signal-petrol/70">Competiții · filtru feed</p>
+              <h2 className="font-display text-base font-semibold tracking-tight text-signal-ink sm:text-lg">Selectează ligile</h2>
+              <p className="lab-section-eyebrow mt-0.5">Competiții · filtru feed</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -62,16 +62,16 @@ export default function LeaguePanel({
         </button>
       </div>
       {isLeaguesOpen && (
-        <div id="league-panel-content" className="p-4 sm:p-5">
-          <p className="mb-4 text-[11px] leading-relaxed text-signal-inkMuted">Filtru ligi pentru feed-ul de predictii.</p>
-          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div id="league-panel-content" className="p-3.5 sm:p-4">
+          <p className="mb-3 text-[11px] leading-relaxed text-signal-inkMuted">Filtru ligi pentru feed-ul de predictii.</p>
+          <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 selectEliteLeagues();
               }}
-              className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-4 py-3 text-xs font-semibold text-signal-petrol transition hover:bg-signal-petrol/20 sm:py-2.5"
+              className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-2.5 text-xs font-semibold text-signal-petrol transition hover:bg-signal-petrol/20"
             >
               Elite · select all
             </button>

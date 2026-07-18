@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "
 import type { PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
-/** Interval between live score polls when at least one fixture is in play (API + UX balance). */
-export const LIVE_SCORE_POLL_MS = 45_000;
+/** Interval between live score polls — keep ≥ server LIVE_SCORES_CACHE_TTL_SEC for cache hits. */
+export const LIVE_SCORE_POLL_MS = 75_000;
 
 function isTerminalOrAbandonedStatus(status?: string): boolean {
   const s = String(status ?? "")

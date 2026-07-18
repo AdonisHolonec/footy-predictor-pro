@@ -45,6 +45,37 @@ export type ValueBet = {
   reasons?: string[];
 };
 
+/** Value Betting Engine payload (predicted probability × bookmaker odds). */
+export type ValueEngine = {
+  type?: string;
+  probability?: number;
+  odds?: number;
+  expectedValue?: number;
+  kellyPct?: number;
+  valueScore?: number;
+  positiveEV?: boolean;
+  negativeEV?: boolean;
+  signal?: "positive" | "neutral" | "negative";
+  recommendable?: boolean;
+  edge?: number;
+  fairOdds?: number;
+  impliedProb?: number;
+  explanation?: string[];
+  detected?: boolean;
+  markets?: Array<{
+    type?: string;
+    expectedValue?: number;
+    kellyPct?: number;
+    valueScore?: number;
+    signal?: "positive" | "neutral" | "negative";
+    recommendable?: boolean;
+    negativeEV?: boolean;
+    positiveEV?: boolean;
+  }>;
+  rejectedNegativeCount?: number;
+  rule?: string;
+};
+
 /**
  * Probabilităţi Poisson pe piaţă cu linii Over/Under (ex: cornere, şuturi).
  * Cheile din `total`/`home`/`away` folosesc format "oX_Y" pentru linia X.Y (ex: "o8_5" = Over 8.5).
@@ -187,6 +218,33 @@ export type PredictionRow = {
   probs: Probs;
   odds?: Odds & { bookmakersUsed?: number };
   valueBet?: ValueBet;
+  /**
+   * Independent Confidence Engine block. Computed separately from λ/Poisson/pick selection —
+   * it never influences `recommended.confidence` or any prediction math. Purely explanatory
+   * "how much reliable context did we have for this match" scoring per dimension.
+   */
+  confidenceEngine?: {
+    overall: number;
+    scores: {
+      attack: number;
+      defense: number;
+      form: number;
+      standings: number;
+      h2h: number;
+      restDays: number;
+      referee: number;
+      injuries: number;
+      oddsConsensus: number;
+      teamStatistics: number;
+    };
+    available?: Record<string, boolean>;
+    explanation?: string[];
+  };
+  /**
+   * Value Betting Engine — EV / Kelly / Value Score from predicted probability × odds.
+   * Never recommends negative EV (`recommendable` is always false when `negativeEV`).
+   */
+  valueEngine?: ValueEngine;
   marketOdds?: {
     goals15?: MarketOddQuote;
     goals25?: MarketOddQuote;
@@ -369,6 +427,109 @@ export type BacktestKpi = {
   roi: number;
   drawdown: number;
   pnlUnits: number;
+  wins?: number;
+  losses?: number;
+  yield?: number;
+  profit?: number;
+  loss?: number;
+  totalStake?: number;
+  expectedValue?: number;
+};
+
+export type BacktestFilters = {
+  period: "7d" | "30d" | "season" | string;
+  days?: number | null;
+  leagueId?: number | null;
+  competition?: string | null;
+  market?: string;
+  side?: "all" | "home" | "away" | "draw";
+  minConfidence?: number | null;
+  maxConfidence?: number | null;
+  minOdds?: number | null;
+  maxOdds?: number | null;
+  requirePositiveEv?: boolean;
+};
+
+export type BacktestMetrics = {
+  settled: number;
+  wins: number;
+  losses: number;
+  hitRate: number;
+  roi: number;
+  yield: number;
+  profit: number;
+  loss: number;
+  pnlUnits: number;
+  totalStake: number;
+  averageOdds: number;
+  averageConfidence: number;
+  expectedValue: number;
+  maxDrawdown: number;
+  winningStreak: number;
+  losingStreak: number;
+};
+
+export type BacktestBetRow = {
+  fixtureId?: number | null;
+  kickoffAt?: string | null;
+  leagueId?: number;
+  leagueName?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  market?: string;
+  side?: string;
+  odd?: number;
+  stake?: number;
+  confidence?: number | null;
+  ev?: number | null;
+  won?: boolean;
+  pnl?: number;
+};
+
+export type DashboardBundle = {
+  predictionAccuracy: number;
+  roi: number;
+  yield: number;
+  dailyProfit: number;
+  weeklyProfit: number;
+  monthlyProfit: number;
+  leaguePerformance: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  marketPerformance: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  confidenceDistribution: Array<{ bucket: string; count: number; hitRate: number }>;
+  accuracyByLeague: Array<{ key: string; hitRate: number; settled: number }>;
+  accuracyByMarket: Array<{ key: string; hitRate: number; settled: number }>;
+  bestLeagues: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  worstLeagues: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  heatmap: {
+    leagues: string[];
+    markets: string[];
+    cells: Array<{ league: string; market: string; settled: number; hitRate: number | null; pnl: number }>;
+  };
+  radar: Array<{ metric: string; value: number }>;
+  profitLine: Array<{ date: string; equity: number; pnl: number; hitRate: number }>;
+};
+
+export type BacktestAnalyticsResponse = {
+  ok: boolean;
+  cutoff?: string;
+  filters?: BacktestFilters;
+  metrics?: BacktestMetrics;
+  dashboard?: DashboardBundle;
+  facets?: {
+    leagues: Array<{ id: number; name: string }>;
+    competitions: string[];
+    markets: string[];
+  };
+  totalsUnfiltered?: { settled: number; filtered: number };
+  series?: {
+    equity: Array<{ i: number; date: string; equity: number; pnl: number; drawdown: number }>;
+    daily: Array<{ date: string; pnl: number; equity: number; settled: number; hitRate: number }>;
+    byMarket: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+    byLeague: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+    bySide: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  };
+  bets?: BacktestBetRow[];
+  error?: string;
 };
 
 /** Bucket de calibrare: câtă încredere a raportat modelul (avgConfidence) vs accuracy empirică. */

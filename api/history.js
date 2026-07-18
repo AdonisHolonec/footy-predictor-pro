@@ -320,43 +320,62 @@ async function handleHistorySync(req, res) {
 
     /** Short TTL so nightly cron / sync nu citesc listing de acum 6h (FT lipsă). */
     const dayLeagueTtl = Math.max(60, Math.min(Number(process.env.HISTORY_SYNC_DAY_LEAGUE_TTL_SEC || 300), 7200));
-
-    const fixtureById = new Map();
-    for (const group of groupMap.values()) {
-      const resp = await getWithCache("/fixtures", { date: group.date, league: group.leagueId }, dayLeagueTtl);
-      if (!resp.ok) continue;
-      const fixtures = resp.data?.response || [];
-      for (const fx of fixtures) {
-        const id = Number(fx?.fixture?.id);
-        if (!Number.isFinite(id) || !group.fixtureIds.has(id)) continue;
-        fixtureById.set(id, fx);
-      }
-    }
-
-    const missingIds = [
+    // Longer TTL for ids= chunks — same FT rows are polled often by client + cron.
+    const idsTtl = Math.max(60, Math.min(Number(process.env.HISTORY_SYNC_IDS_TTL_SEC || 300), 1800));
+    const IDS_CHUNK = 20;
+    const allPendingIds = [
       ...new Set(
-        candidates
-          .map((row) => Number(row.fixture_id))
-          .filter((id) => Number.isFinite(id) && id > 0 && !fixtureById.has(id))
+        candidates.map((row) => Number(row.fixture_id)).filter((id) => Number.isFinite(id) && id > 0)
       )
     ];
-    const IDS_CHUNK = 20;
-    const idsTtl = Math.max(30, Math.min(Number(process.env.HISTORY_SYNC_IDS_TTL_SEC || 120), 600));
-    const groupedFetchCalls = groupMap.size;
-    const idsFetchCalls = Math.ceil(missingIds.length / IDS_CHUNK);
-    const estimatedCalls = groupedFetchCalls + idsFetchCalls;
-    for (let i = 0; i < missingIds.length; i += IDS_CHUNK) {
-      const chunk = missingIds.slice(i, i + IDS_CHUNK);
-      const idsParam = chunk.join("-");
-      const resp = await getWithCache("/fixtures", { ids: idsParam }, idsTtl);
-      if (!resp.ok) continue;
-      const fixtures = resp.data?.response || [];
-      for (const fx of fixtures) {
-        const id = Number(fx?.fixture?.id);
-        if (!Number.isFinite(id)) continue;
-        fixtureById.set(id, fx);
+
+    const fixtureById = new Map();
+    // Prefer batched /fixtures?ids= when cheaper than date×league fan-out
+    // (typical: few pending fixtures across many leagues → ids wins).
+    const idsOnlyCalls = Math.ceil(allPendingIds.length / IDS_CHUNK);
+    const preferIdsFirst =
+      String(process.env.HISTORY_SYNC_PREFER_IDS || "1") !== "0" &&
+      (idsOnlyCalls <= groupMap.size || allPendingIds.length <= 80);
+
+    let groupedFetchCalls = 0;
+    let idsFetchCalls = 0;
+
+    if (preferIdsFirst) {
+      for (let i = 0; i < allPendingIds.length; i += IDS_CHUNK) {
+        const chunk = allPendingIds.slice(i, i + IDS_CHUNK);
+        const resp = await getWithCache("/fixtures", { ids: chunk.join("-") }, idsTtl);
+        idsFetchCalls += 1;
+        if (!resp.ok) continue;
+        for (const fx of resp.data?.response || []) {
+          const id = Number(fx?.fixture?.id);
+          if (Number.isFinite(id)) fixtureById.set(id, fx);
+        }
+      }
+    } else {
+      for (const group of groupMap.values()) {
+        const resp = await getWithCache("/fixtures", { date: group.date, league: group.leagueId }, dayLeagueTtl);
+        groupedFetchCalls += 1;
+        if (!resp.ok) continue;
+        for (const fx of resp.data?.response || []) {
+          const id = Number(fx?.fixture?.id);
+          if (!Number.isFinite(id) || !group.fixtureIds.has(id)) continue;
+          fixtureById.set(id, fx);
+        }
+      }
+      const missingIds = allPendingIds.filter((id) => !fixtureById.has(id));
+      for (let i = 0; i < missingIds.length; i += IDS_CHUNK) {
+        const chunk = missingIds.slice(i, i + IDS_CHUNK);
+        const resp = await getWithCache("/fixtures", { ids: chunk.join("-") }, idsTtl);
+        idsFetchCalls += 1;
+        if (!resp.ok) continue;
+        for (const fx of resp.data?.response || []) {
+          const id = Number(fx?.fixture?.id);
+          if (Number.isFinite(id)) fixtureById.set(id, fx);
+        }
       }
     }
+
+    const estimatedCalls = groupedFetchCalls + idsFetchCalls;
 
     const updates = [];
     for (const row of candidates) {

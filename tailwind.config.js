@@ -6,71 +6,84 @@ export default {
     extend: {
       colors: {
         signal: {
-          void: "#06080d",
-          mist: "#0a0e14",
-          fog: "#0f1419",
-          bone: "#151d28",
-          panel: "#1a2432",
-          panelHi: "#1f2d3f",
-          stone: "#475569",
-          petrol: "#38bdf8",
-          petrolMuted: "#22d3ee",
-          petrolDeep: "#0284c7",
-          sage: "#34d399",
-          mint: "#5eead4",
-          mintSoft: "rgba(94, 234, 212, 0.12)",
-          amber: "#fbbf24",
-          amberSoft: "#fcd34d",
-          rose: "#fb7185",
-          ink: "#f1f5f9",
-          inkMuted: "#94a3b8",
-          silver: "#cbd5e1",
-          line: "rgba(56, 189, 248, 0.14)",
-          glow: "rgba(56, 189, 248, 0.12)"
+          /* Deep sports-dashboard dark (SofaScore / FotMob inspired) */
+          void: "#0b0f14",
+          mist: "#111821",
+          fog: "#161e28",
+          bone: "#1a2330",
+          panel: "#1c2633",
+          panelHi: "#243041",
+          stone: "#64748b",
+          /* Accent: electric teal-cyan (scoreboard energy, not purple) */
+          petrol: "#3ecfbf",
+          petrolMuted: "#2bb3a4",
+          petrolDeep: "#1a8f83",
+          sage: "#3dd68c",
+          mint: "#6eefb0",
+          mintSoft: "rgba(61, 214, 140, 0.12)",
+          amber: "#f5b942",
+          amberSoft: "#f7c96a",
+          rose: "#f07178",
+          ink: "#eef2f6",
+          inkMuted: "#8b9aab",
+          silver: "#c2ccd6",
+          line: "rgba(62, 207, 191, 0.14)",
+          glow: "rgba(62, 207, 191, 0.10)"
         }
       },
       fontFamily: {
-        display: ["Syne", "system-ui", "sans-serif"],
+        display: ["Sora", "Plus Jakarta Sans", "system-ui", "sans-serif"],
         sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"]
       },
+      borderRadius: {
+        card: "0.875rem",
+        "card-lg": "1.125rem"
+      },
       boxShadow: {
-        atelier: "0 4px 32px rgba(0, 0, 0, 0.45), 0 0 1px rgba(56, 189, 248, 0.2)",
-        atelierLg: "0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(56, 189, 248, 0.08)",
-        innerSoft: "inset 0 1px 0 rgba(255,255,255,0.06)",
-        frost: "0 0 40px rgba(56, 189, 248, 0.12), 0 0 80px rgba(52, 211, 153, 0.06)"
+        atelier: "0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 28px rgba(0, 0, 0, 0.28)",
+        atelierLg: "0 1px 0 rgba(255,255,255,0.05) inset, 0 16px 40px rgba(0, 0, 0, 0.35)",
+        innerSoft: "inset 0 1px 0 rgba(255,255,255,0.05)",
+        frost: "0 10px 32px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(62, 207, 191, 0.12)",
+        card: "0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 16px rgba(0, 0, 0, 0.22)",
+        "card-hover": "0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 36px rgba(0, 0, 0, 0.38)"
       },
       backgroundImage: {
         "lab-mesh":
-          "radial-gradient(ellipse 120% 80% at 10% -20%, rgba(56, 189, 248, 0.14), transparent 50%), radial-gradient(ellipse 80% 50% at 90% 0%, rgba(52, 211, 153, 0.08), transparent 45%), radial-gradient(ellipse 60% 40% at 50% 100%, rgba(14, 165, 233, 0.06), transparent 50%)",
+          "radial-gradient(ellipse 90% 50% at 0% 0%, rgba(62, 207, 191, 0.07), transparent 50%), radial-gradient(ellipse 60% 40% at 100% 0%, rgba(61, 214, 140, 0.05), transparent 45%)",
         "lab-grid":
-          "linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px)",
-        "lab-scan": "linear-gradient(180deg, transparent, rgba(56,189,248,0.03), transparent)"
+          "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
+        "lab-scan": "linear-gradient(180deg, transparent, rgba(62,207,191,0.02), transparent)"
       },
       backgroundSize: {
-        grid: "32px 32px"
+        grid: "40px 40px"
       },
       transitionDuration: {
-        atelier: "280ms"
+        atelier: "240ms"
       },
       keyframes: {
         "pulse-soft": {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.65" }
+          "50%": { opacity: "0.7" }
         },
         "stagger-in": {
-          from: { opacity: "0", transform: "translateY(8px)" },
+          from: { opacity: "0", transform: "translateY(10px)" },
           to: { opacity: "1", transform: "translateY(0)" }
         },
         shimmer: {
           "0%": { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" }
+        },
+        "card-in": {
+          from: { opacity: "0", transform: "translateY(12px) scale(0.985)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" }
         }
       },
       animation: {
         "pulse-soft": "pulse-soft 3s ease-in-out infinite",
-        "stagger-in": "stagger-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both",
-        shimmer: "shimmer 8s ease-in-out infinite"
+        "stagger-in": "stagger-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both",
+        shimmer: "shimmer 8s ease-in-out infinite",
+        "card-in": "card-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both"
       }
     }
   },

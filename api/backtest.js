@@ -9,6 +9,15 @@ import {
   expectedCalibrationError,
   logLoss1x2
 } from "../server-utils/probabilityMetrics.js";
+import {
+  betsToCsv,
+  buildBacktestReport,
+  computeBacktestMetrics,
+  extractBetEvent,
+  parseFilters,
+  resolveWindowDays,
+  seasonStartIso
+} from "../server-utils/backtest/BacktestAnalytics.js";
 
 async function isAuthorizedForMetrics(req) {
   if (isAuthorizedCronOrInternalRequest(req)) return true;
@@ -35,7 +44,9 @@ async function handleKpi(req, res) {
   try {
     const { data, error } = await supabase
       .from("backtest_snapshots")
-      .select("snapshot_date, window_days, settled_bets, hit_rate, roi, max_drawdown, pnl_units")
+      .select(
+        "snapshot_date, window_days, settled_bets, wins, losses, hit_rate, roi, max_drawdown, pnl_units, total_stake_units, avg_ev"
+      )
       .eq("window_days", days)
       .order("snapshot_date", { ascending: false })
       .limit(7);
@@ -61,19 +72,32 @@ async function handleKpi(req, res) {
         hitRate: Number(r.hit_rate || 0),
         roi: Number(r.roi || 0),
         drawdown: Number(r.max_drawdown || 0),
-        settled: Number(r.settled_bets || 0)
+        settled: Number(r.settled_bets || 0),
+        pnlUnits: Number(r.pnl_units || 0)
       }));
+
+    const settled = Number(latest.settled_bets || 0);
+    const pnlUnits = Number(latest.pnl_units || 0);
+    const totalStake = Number(latest.total_stake_units || 0);
+    const roi = Number(latest.roi || 0);
 
     return res.status(200).json({
       ok: true,
       days,
       latest: {
         date: latest.snapshot_date,
-        settled: Number(latest.settled_bets || 0),
+        settled,
+        wins: Number(latest.wins || 0),
+        losses: Number(latest.losses || 0),
         hitRate: Number(latest.hit_rate || 0),
-        roi: Number(latest.roi || 0),
+        roi,
+        yield: roi,
         drawdown: Number(latest.max_drawdown || 0),
-        pnlUnits: Number(latest.pnl_units || 0)
+        pnlUnits,
+        profit: pnlUnits > 0 ? pnlUnits : 0,
+        loss: pnlUnits < 0 ? Math.abs(pnlUnits) : 0,
+        totalStake,
+        expectedValue: Number(latest.avg_ev || 0)
       },
       delta: prev
         ? {
@@ -89,11 +113,76 @@ async function handleKpi(req, res) {
   }
 }
 
-function getSelectedOdd(row, type) {
-  if (type === "1") return Number(row.odds_home);
-  if (type === "X") return Number(row.odds_draw);
-  if (type === "2") return Number(row.odds_away);
-  return null;
+async function handleAnalytics(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+  }
+
+  const config = assertSupabaseConfigured();
+  if (!config.ok) {
+    return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
+  }
+
+  const filters = parseFilters(req.query || {});
+  const format = String(req.query.format || "json").toLowerCase();
+  const includeBets = String(req.query.includeBets || "1") !== "0";
+
+  let cutoffIso;
+  if (filters.period === "season" || filters.days == null) {
+    cutoffIso = seasonStartIso();
+  } else {
+    const days = resolveWindowDays(filters.period, filters.days) || 45;
+    cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("predictions_history")
+      .select(
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, recommended_pick, recommended_confidence, raw_payload"
+      )
+      .gte("kickoff_at", cutoffIso)
+      .in("validation", ["win", "loss"])
+      .order("kickoff_at", { ascending: true })
+      .limit(8000);
+
+    if (error) throw error;
+
+    const report = buildBacktestReport(data || [], req.query || {});
+    const payload = {
+      ok: true,
+      cutoff: cutoffIso,
+      filters: report.filters,
+      metrics: report.metrics,
+      dashboard: report.dashboard,
+      facets: report.facets,
+      totalsUnfiltered: report.totalsUnfiltered,
+      // Keep chart series compact; full equity curve can be long.
+      series: {
+        equity: report.metrics.equityCurve,
+        daily: report.metrics.daily,
+        byMarket: report.metrics.byMarket,
+        byLeague: report.metrics.byLeague.slice(0, 12),
+        bySide: report.metrics.bySide
+      },
+      bets: includeBets ? report.bets : undefined
+    };
+
+    if (format === "csv") {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="backtest-${filters.period || "custom"}.csv"`);
+      return res.status(200).send(betsToCsv(report.bets));
+    }
+
+    return res.status(200).json(payload);
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message || "Analiza backtest a eșuat" });
+  }
 }
 
 async function handleSnapshot(req, res) {
@@ -126,67 +215,23 @@ async function handleSnapshot(req, res) {
       .limit(5000);
 
     if (error) throw error;
-    const rows = data || [];
-
-    let wins = 0;
-    let losses = 0;
-    let stakeSum = 0;
-    let pnlUnits = 0;
-    let evSum = 0;
-    let evCount = 0;
-    let maxDrawdown = 0;
-    let peak = 0;
-
-    for (const row of rows) {
-      const payload = row.raw_payload || {};
-      const valueBet = payload.valueBet || {};
-      const stakePct = Math.min(Math.max(Number(valueBet.kelly || 0), 0), 3);
-      const stake = stakePct / 100;
-      const odd = getSelectedOdd(row, valueBet.type);
-      const ev = Number(valueBet.ev);
-      if (isFinite(ev)) {
-        evSum += ev;
-        evCount += 1;
-      }
-      if (stake <= 0 || !isFinite(odd) || odd <= 1) continue;
-
-      const vbOutcome = row.value_bet_validation ?? payload.value_bet_validation;
-      const won = vbOutcome === "win" || (vbOutcome == null && row.validation === "win");
-      const lost = vbOutcome === "loss" || (vbOutcome == null && row.validation === "loss");
-      if (!won && !lost) continue;
-
-      stakeSum += stake;
-      if (won) {
-        wins += 1;
-        pnlUnits += stake * (odd - 1);
-      } else {
-        losses += 1;
-        pnlUnits -= stake;
-      }
-
-      peak = Math.max(peak, pnlUnits);
-      maxDrawdown = Math.max(maxDrawdown, peak - pnlUnits);
-    }
-
-    const settled = wins + losses;
-    const hitRate = settled ? (wins / settled) * 100 : 0;
-    const roi = stakeSum > 0 ? (pnlUnits / stakeSum) * 100 : 0;
-    const avgEv = evCount ? evSum / evCount : 0;
+    const events = (data || []).map(extractBetEvent).filter(Boolean);
+    const metrics = computeBacktestMetrics(events);
     const snapshotDate = new Date().toISOString().slice(0, 10);
 
     const { error: upsertError } = await supabase.from("backtest_snapshots").upsert(
       {
         snapshot_date: snapshotDate,
         window_days: days,
-        settled_bets: settled,
-        wins,
-        losses,
-        hit_rate: Number(hitRate.toFixed(4)),
-        roi: Number(roi.toFixed(4)),
-        pnl_units: Number(pnlUnits.toFixed(6)),
-        total_stake_units: Number(stakeSum.toFixed(6)),
-        avg_ev: Number(avgEv.toFixed(4)),
-        max_drawdown: Number(maxDrawdown.toFixed(6))
+        settled_bets: metrics.settled,
+        wins: metrics.wins,
+        losses: metrics.losses,
+        hit_rate: Number(metrics.hitRate.toFixed(4)),
+        roi: Number(metrics.roi.toFixed(4)),
+        pnl_units: Number(metrics.pnlUnits.toFixed(6)),
+        total_stake_units: Number(metrics.totalStake.toFixed(6)),
+        avg_ev: Number(metrics.expectedValue.toFixed(4)),
+        max_drawdown: Number(metrics.maxDrawdown.toFixed(6))
       },
       { onConflict: "snapshot_date,window_days" }
     );
@@ -197,7 +242,22 @@ async function handleSnapshot(req, res) {
       ok: true,
       snapshotDate,
       days,
-      stats: { settled, wins, losses, hitRate, roi, avgEv, maxDrawdown }
+      stats: {
+        settled: metrics.settled,
+        wins: metrics.wins,
+        losses: metrics.losses,
+        hitRate: metrics.hitRate,
+        roi: metrics.roi,
+        yield: metrics.yield,
+        profit: metrics.profit,
+        loss: metrics.loss,
+        avgEv: metrics.expectedValue,
+        maxDrawdown: metrics.maxDrawdown,
+        averageOdds: metrics.averageOdds,
+        averageConfidence: metrics.averageConfidence,
+        winningStreak: metrics.winningStreak,
+        losingStreak: metrics.losingStreak
+      }
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message || "Snapshot-ul a eșuat" });
@@ -338,13 +398,18 @@ async function handleMetrics(req, res) {
 
 /**
  * GET /api/backtest?view=kpi&days=45 — KPI read (replaces /api/backtest/kpi).
+ * GET /api/backtest?view=analytics&period=30d — filtered advanced analytics (+ format=csv).
  * GET or POST /api/backtest?view=snapshot&days=45 — snapshot job (replaces /api/backtest/snapshot).
  * GET /api/backtest?view=metrics&days=45 — Brier / log loss (cron/auth).
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
   if (view === "kpi") return handleKpi(req, res);
+  if (view === "analytics") return handleAnalytics(req, res);
   if (view === "snapshot") return handleSnapshot(req, res);
   if (view === "metrics") return handleMetrics(req, res);
-  return res.status(400).json({ ok: false, error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, snapshot sau metrics." });
+  return res.status(400).json({
+    ok: false,
+    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot sau metrics."
+  });
 }

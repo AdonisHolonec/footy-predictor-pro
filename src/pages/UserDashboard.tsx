@@ -240,7 +240,8 @@ export default function UserDashboard() {
 
   const { isHistorySyncing, syncHistory } = useHistorySync({
     accessToken: session?.access_token,
-    defaultDays: 30,
+    defaultDays: 7,
+    cooldownMs: 10 * 60_000,
     onAfterSync: loadHistory
   });
   const { warm: runWarm, predict: runPredict } = usePredictFlow<PredictionRow>({
@@ -266,7 +267,7 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Au fost generate ${deduped.length} predictii.`);
-      await syncHistoryAfterPredict(token, 30);
+      await syncHistoryAfterPredict(token, 7);
       await loadHistory();
     }
   });
@@ -417,8 +418,8 @@ export default function UserDashboard() {
     if (pendingHistoryCount <= 0) return;
     const tm = setInterval(() => {
       if (isHistorySyncing) return;
-      void syncHistory();
-    }, 90_000);
+      void syncHistory(7);
+    }, 15 * 60_000);
     return () => clearInterval(tm);
   }, [session?.access_token, pendingHistoryCount, isHistorySyncing, syncHistory]);
 

@@ -305,7 +305,11 @@ async function handleDay(req, res) {
 
 // -------------------- Live-scores handler --------------------
 
-const LIVE_SCORES_CACHE_TTL_SEC = 30;
+// Align TTL with client poll interval (≥75s) so most ticks are cache hits.
+const LIVE_SCORES_CACHE_TTL_SEC = Math.max(
+  45,
+  Math.min(Number(process.env.LIVE_SCORES_CACHE_TTL_SEC || 75), 180)
+);
 
 function parseIds(raw) {
   const s = String(raw || "").trim();

@@ -64,19 +64,12 @@ export default function SuccessRateTracker({
 }: SuccessRateTrackerProps) {
   const inner = (
     <>
-      <div className="pointer-events-none absolute inset-0 opacity-[0.22]">
-        <div
-          className="absolute inset-0 bg-[linear-gradient(rgba(56,189,248,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(56,189,248,0.05)_1px,transparent_1px)]"
-          style={{ backgroundSize: "28px 28px" }}
-        />
-      </div>
-      <div className="pointer-events-none absolute -right-12 top-0 h-40 w-40 rounded-full bg-signal-petrol/8 blur-3xl" />
-      <div className="relative mb-5 flex flex-col gap-2 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative mb-4 flex flex-col gap-1.5 border-b border-white/[0.06] pb-3.5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-signal-petrol/75">Performance</div>
-          <div className="font-display text-xl font-semibold tracking-tight text-signal-ink sm:text-2xl">Performance Counter Pro</div>
+          <div className="lab-section-eyebrow">Performance</div>
+          <div className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Performance Counter Pro</div>
         </div>
-        <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
+        <div className="font-sans text-[11px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
       </div>
       {(onExcludedWorstLossDaysCountChange || excludedWorstLossDaysCount > 0) && (
         <div className="relative mb-4 rounded-xl border border-white/[0.08] bg-signal-void/35 px-3 py-2">
@@ -115,25 +108,25 @@ export default function SuccessRateTracker({
           )}
         </div>
       )}
-      <div className="relative grid grid-cols-3 gap-2 sm:gap-4">
-        <div className="min-w-0 rounded-2xl border border-signal-sage/22 bg-signal-sage/5 px-2 py-3 shadow-inner sm:px-4">
-          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-sage sm:text-[10px]">Wins</div>
-          <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-sage sm:text-3xl">{animatedWins}</div>
+      <div className="relative grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="lab-stat min-w-0 border-signal-sage/25 bg-signal-sage/[0.07] px-2 py-2.5 sm:px-3.5 sm:py-3">
+          <div className="lab-stat-label truncate text-signal-sage">Wins</div>
+          <div className="lab-stat-value text-signal-sage">{animatedWins}</div>
         </div>
-        <div className="min-w-0 rounded-2xl border border-signal-rose/22 bg-signal-rose/5 px-2 py-3 shadow-inner sm:px-4">
-          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-rose sm:text-[10px]">Losses</div>
-          <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-rose sm:text-3xl">{animatedLosses}</div>
+        <div className="lab-stat min-w-0 border-signal-rose/25 bg-signal-rose/[0.07] px-2 py-2.5 sm:px-3.5 sm:py-3">
+          <div className="lab-stat-label truncate text-signal-rose">Losses</div>
+          <div className="lab-stat-value text-signal-rose">{animatedLosses}</div>
         </div>
         <div
-          className={`min-w-0 rounded-2xl border border-signal-petrol/28 bg-signal-void/45 px-2 py-3 shadow-inner transition-all duration-500 sm:px-4 ${
-            isWinRatePulsing ? "shadow-frost ring-1 ring-signal-petrol/18" : ""
+          className={`lab-stat min-w-0 border-signal-petrol/30 bg-signal-void/50 px-2 py-2.5 transition-shadow duration-500 sm:px-3.5 sm:py-3 ${
+            isWinRatePulsing ? "shadow-frost ring-1 ring-signal-petrol/20" : ""
           }`}
         >
-          <div className="truncate text-[8px] font-semibold uppercase tracking-wide text-signal-petrol/80 sm:text-[10px]">Hit rate</div>
-          <div className="mt-1 font-mono text-xl font-semibold tabular-nums leading-none text-signal-petrol sm:text-3xl">{animatedWinRate.toFixed(1)}%</div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-signal-mist ring-1 ring-white/5">
+          <div className="lab-stat-label truncate text-signal-petrol/90">Hit rate</div>
+          <div className="lab-stat-value text-signal-petrol">{animatedWinRate.toFixed(1)}%</div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-signal-mist/80">
             <div
-              className={`h-full rounded-full bg-gradient-to-r from-signal-petrol via-signal-sage to-signal-mint transition-all duration-700 motion-reduce:animate-none ${isWinRatePulsing ? "animate-pulse-soft" : ""}`}
+              className={`h-full rounded-full bg-gradient-to-r from-signal-petrol to-signal-sage transition-all duration-700 motion-reduce:animate-none ${isWinRatePulsing ? "animate-pulse-soft" : ""}`}
               style={{ width: `${Math.max(0, Math.min(100, stats.winRate))}%` }}
             />
           </div>
@@ -182,14 +175,14 @@ export default function SuccessRateTracker({
   );
 
   const shellClass =
-    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-3xl border border-white/[0.07] bg-gradient-to-br from-signal-panel/88 via-signal-mist/94 to-signal-void/90 px-4 py-5 shadow-atelier backdrop-blur-xl sm:px-8 sm:py-6";
+    "lab-card relative mt-2 w-full max-w-[880px] overflow-hidden px-3.5 py-4 sm:px-6 sm:py-5";
 
   if (onBreakdownClick) {
     return (
       <button
         type="button"
         onClick={onBreakdownClick}
-        className={`${shellClass} w-full cursor-pointer touch-manipulation text-left outline-none transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-frost motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-signal-petrol/40 focus-visible:ring-offset-2 focus-visible:ring-offset-signal-mist`}
+        className={`${shellClass} w-full cursor-pointer touch-manipulation text-left outline-none hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-signal-petrol/40 focus-visible:ring-offset-2 focus-visible:ring-offset-signal-mist`}
       >
         {inner}
       </button>

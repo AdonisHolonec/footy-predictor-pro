@@ -23,9 +23,9 @@ describe("predictFlowUtils", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
-    await syncHistoryAfterPredict("tok-1", 30);
+    await syncHistoryAfterPredict("tok-1");
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/history?sync=1&days=30", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/history?sync=1&days=7", {
       method: "POST",
       headers: { Authorization: "Bearer tok-1" }
     });

@@ -230,16 +230,19 @@ export default async function handler(req, res) {
   const usageCount = Number(usageSnapshot?.count || 0);
   const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
   const usageRemaining = Math.max(0, usageLimit - usageCount);
-  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 2000));
+  // Reserve must be meaningful on Pro plans (~100–750/day). Old default 2000 never tripped.
+  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 80));
   const budgetMode = usagePct >= usageBudgetThresholdPct;
-  const hardStopMode = usagePct >= usageHardStopPct || usageRemaining <= reserveCalls;
+  const hardStopMode = usagePct >= usageHardStopPct || (usageLimit > 0 && usageRemaining <= reserveCalls);
 
   const warmQs = new URLSearchParams({
     date: dateRaw,
     leagueIds: leagueIds.join(","),
     season: String(season),
     standings: "1",
-    // Budget mode reduces expensive prefetch while keeping core pipeline alive.
+    // Prefetch odds by date so predict hits KV instead of 15× /odds?fixture=.
+    odds: hardStopMode ? "0" : "1",
+    // Budget mode reduces expensive teamstats prefetch while keeping odds+standings warm.
     teamstats: hardStopMode ? "0" : budgetMode ? "0" : "1"
   });
 

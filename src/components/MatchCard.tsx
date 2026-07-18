@@ -5,6 +5,7 @@ import {
   deriveSignalEdge,
   SignalScanStrip
 } from "./SignalLab";
+import ValueCard from "./ValueCard";
 import { MatchScore, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
@@ -258,7 +259,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           }
         }}
         style={{ animationDelay: `${animationDelayMs}ms` }}
-        className="relative flex h-full animate-stagger-in cursor-pointer flex-col rounded-2xl border border-signal-amber/25 bg-signal-fog/50 p-4 shadow-atelier backdrop-blur-md sm:rounded-3xl sm:p-5 touch-manipulation select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50 motion-reduce:animate-none"
+        className="lab-card relative flex h-full animate-stagger-in cursor-pointer flex-col border-signal-amber/30 bg-signal-fog/70 p-3.5 sm:p-4 touch-manipulation select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50 motion-reduce:animate-none"
       >
         <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-amber">Insufficient signal</div>
         <div className="font-display mt-1 text-base font-semibold text-signal-ink">
@@ -282,14 +283,13 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         }
       }}
       style={{ animationDelay: `${animationDelayMs}ms` }}
-      className="group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-gradient-to-b from-signal-panel/92 to-signal-mist/96 p-4 shadow-atelier backdrop-blur-xl sm:rounded-3xl sm:p-5 touch-manipulation select-none transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:border-signal-petrol/22 hover:shadow-frost active:translate-y-0 motion-reduce:animate-none motion-reduce:hover:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50"
+      className="lab-card group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden p-3.5 sm:p-4 touch-manipulation select-none hover:-translate-y-0.5 hover:border-signal-petrol/25 active:translate-y-0 motion-reduce:animate-none motion-reduce:hover:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/50"
     >
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-signal-petrol/6 blur-3xl transition-opacity group-hover:opacity-100" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal-petrol/30 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal-petrol/25 to-transparent opacity-80" />
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="truncate rounded-md border border-signal-line/45 bg-signal-void/45 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-silver">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span className="lab-chip truncate max-w-[9rem] sm:max-w-[12rem]">
             {row.league}
           </span>
           <span
@@ -304,6 +304,14 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
               title={tier.title}
             >
               {tier.label}
+            </span>
+          ) : null}
+          {row.confidenceEngine ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-signal-petrol/30 bg-signal-petrol/8 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide text-signal-petrol"
+              title="Confidence Engine · scor independent de context (nu e probabilitatea pick-ului)"
+            >
+              CTX {Math.round(row.confidenceEngine.overall)}%
             </span>
           ) : null}
         </div>
@@ -456,6 +464,12 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
 
       {hasExactConfidence ? (
         <SignalScanStrip edge={edgeScore} dataQuality={dq} valueDetected={Boolean(row.valueBet?.detected)} className="mt-1" />
+      ) : null}
+
+      {row.valueEngine ? (
+        <div className="mt-1.5">
+          <ValueCard engine={row.valueEngine} compact />
+        </div>
       ) : null}
 
       {(isPremiumLike || isFreeLike) && (

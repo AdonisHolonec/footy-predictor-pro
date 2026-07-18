@@ -68,7 +68,7 @@ export function AdminBrandLockup({ editorialDate }: { editorialDate: string }) {
     <div className="min-w-0">
       <div className="flex items-center gap-3">
         <div
-          className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-cyan-300/65 shadow-[0_0_42px_rgba(34,211,238,0.5)]"
+          className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-card border border-signal-petrol/40 shadow-card"
           aria-hidden
         >
           <img
@@ -193,7 +193,7 @@ export function AdminToolbarStrip({
 }: AdminToolbarStripProps) {
   const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-3 shadow-inner backdrop-blur-md sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div className="lab-card mb-4 flex flex-col gap-2.5 p-2.5 sm:mb-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-3">
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="date"
@@ -406,7 +406,7 @@ type AdminPerformanceObservatoryProps = {
 export function AdminPerformanceObservatory({ children, className = "mt-10" }: AdminPerformanceObservatoryProps) {
   return (
     <section
-      className={`rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6 ${className}`}
+      className={`lab-card border-signal-petrol/15 bg-signal-panel/50 p-3.5 sm:p-5 md:p-6 ${className}`}
     >
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-signal-petrolMuted">Performance observatory</h2>

@@ -76,7 +76,11 @@ export function usePredictFlow<TPrediction>(options: UsePredictFlowOptions<TPred
             date: currentDate,
             leagueIds: selectedLeagueIds.join(","),
             season: String(inferSeason(currentDate)),
-            usageDay
+            usageDay,
+            // Prefetch what predict will reuse from KV (avoids cold odds/teamstats).
+            standings: "1",
+            teamstats: "1",
+            odds: "1"
           });
           const response = await fetch(`/api/warm?${qs.toString()}`, { headers });
           if (response.status === 429) {

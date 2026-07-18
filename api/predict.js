@@ -1,7 +1,7 @@
 // api/predict.js
 import { readBearer } from "../server-utils/authAdmin.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
-import { getApiUsage, getWithCache } from "../server-utils/fetcher.js";
+import { getApiUsage, getLocalCacheStats, getWithCache } from "../server-utils/fetcher.js";
 import {
   computeMatchProbs,
   clampLambda,
@@ -12,6 +12,9 @@ import {
   normalizeTeamStatisticsPayload,
   strengthRatingsLambdas
 } from "../server-utils/math.js";
+import { PredictionEngine, summarizeModuleScores } from "../server-utils/prediction/PredictionEngine.js";
+import { buildConfidenceEngine } from "../server-utils/confidence/ConfidenceEngine.js";
+import { buildValueEngine, evaluateValue } from "../server-utils/value/ValueEngine.js";
 import {
   calculateEV,
   calculateKellyQuarter as calculateKelly,
@@ -25,6 +28,7 @@ import {
   consensusOverUnderOddsAtLine,
   consensusBttsOdds
 } from "../server-utils/marketOdds.js";
+import { getOddsForFixture, prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
 import {
   MODEL_VERSION,
   getModelMarketBlendWeight,
@@ -698,6 +702,15 @@ export default async function handler(req, res) {
     }
     const allFixtures = dayReq.data?.response || dayReq.data || [];
 
+    // Batch odds by date (paginated) — avoids 1 upstream call per fixture when cold.
+    // Falls back to /odds?fixture= inside the loop only for fixtures missing from the batch map.
+    const oddsPrefetch = await prefetchOddsByDate(date, {
+      leagueIds: leagueIds.map(Number),
+      maxPages: Math.max(2, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES || 6), 12)),
+      ttlSeconds: 86400
+    });
+    const oddsByFixtureId = oddsPrefetch.byFixtureId;
+
     for (const lId of leagueIds) {
       if (out.length >= effectiveLimit) break;
       const leagueFixtures = allFixtures.filter((f) => String(f.league?.id) === String(lId));
@@ -738,8 +751,13 @@ export default async function handler(req, res) {
         let lambdaAway;
         let luckStats = null;
         let strengthMeta = null;
+        let modularScores = null;
         let formHomeStr = null;
         let formAwayStr = null;
+        // Independent Confidence Engine context — captured here (outer scope) so it survives
+        // past the if-blocks below. NEVER read by the prediction/λ pipeline; only used to build
+        // the additive `confidenceEngine` explanation block further down.
+        let confidenceCtx = null;
         // Fracţiile de goluri (FH vs SH) sunt extrase din acelaşi payload /teams/statistics
         // şi folosite ulterior pentru predicţii prima repriză fără call suplimentar.
         let fhFractionsHome = null;
@@ -764,18 +782,67 @@ export default async function handler(req, res) {
             if (hStats && aStats) {
               const hMulti = extractFormMultiplier(tsHNorm.response?.form);
               const aMulti = extractFormMultiplier(tsANorm.response?.form);
-              const sr = strengthRatingsLambdas(hStats, aStats, hMulti, aMulti, {
-                leagueAvgGoals: leagueParams.leagueAvg,
-                leagueAvgHome: leagueParams.leagueAvgHome,
-                leagueAvgAway: leagueParams.leagueAvgAway,
-                homeAdv: leagueParams.homeAdv,
-                awayAdv: leagueParams.awayAdv,
-                homePlayed: hStats.playedHome || hStats.played,
-                awayPlayed: aStats.playedAway || aStats.played,
+              const rowH = standingsMap.get(homeIdStr);
+              const rowA = standingsMap.get(awayIdStr);
+              const engineCtx = {
+                hStats,
+                aStats,
+                formHome: tsHNorm.response?.form,
+                formAway: tsANorm.response?.form,
+                hFormMulti: hMulti,
+                aFormMulti: aMulti,
+                leagueParams,
+                homeStandingsRow: rowH || null,
+                awayStandingsRow: rowA || null,
+                refereeName: refereeName || undefined,
+                fixtureId,
+                fixtureDate: fx.fixture?.date,
+                homeTeamId: homeIdStr,
+                awayTeamId: awayIdStr,
                 shrinkageK: 6
-              });
+              };
+              // Snapshot the same context for the independent Confidence Engine. This is a
+              // read-only copy — the Confidence Engine never feeds back into λ/pick selection.
+              confidenceCtx = {
+                hStats,
+                aStats,
+                formHome: tsHNorm.response?.form,
+                formAway: tsANorm.response?.form,
+                hFormMulti: hMulti,
+                aFormMulti: aMulti,
+                leagueParams,
+                homeStandingsRow: rowH || null,
+                awayStandingsRow: rowA || null,
+                refereeName: refereeName || undefined,
+                homeTeamId: homeIdStr,
+                awayTeamId: awayIdStr,
+                fixtureDate: fx.fixture?.date
+              };
+              let sr = null;
+              try {
+                sr = PredictionEngine.build(engineCtx);
+              } catch {
+                sr = null;
+              }
+              if (!sr || !isGoodNum(sr.lambdaHome) || !isGoodNum(sr.lambdaAway)) {
+                sr = strengthRatingsLambdas(hStats, aStats, hMulti, aMulti, {
+                  leagueAvgGoals: leagueParams.leagueAvg,
+                  leagueAvgHome: leagueParams.leagueAvgHome,
+                  leagueAvgAway: leagueParams.leagueAvgAway,
+                  homeAdv: leagueParams.homeAdv,
+                  awayAdv: leagueParams.awayAdv,
+                  homePlayed: hStats.playedHome || hStats.played,
+                  awayPlayed: aStats.playedAway || aStats.played,
+                  shrinkageK: 6
+                });
+                if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
+                  method = "strength-ratings";
+                }
+              } else {
+                method = sr.method || "modular-engine";
+                modularScores = summarizeModuleScores(sr.moduleScores);
+              }
               if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
-                method = "strength-ratings";
                 lambdaHome = sr.lambdaHome;
                 lambdaAway = sr.lambdaAway;
                 strengthMeta = sr.strengthMeta;
@@ -862,6 +929,8 @@ export default async function handler(req, res) {
             recommended: { pick: "", confidence: 0 },
             predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
             valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: ["insufficient_data"] },
+            valueEngine: buildValueEngine([]),
+            confidenceEngine: buildConfidenceEngine({ refereeName: refereeName || undefined }),
             modelMeta: {
               method: "insufficient_data",
               dataQuality: 0,
@@ -1063,11 +1132,12 @@ export default async function handler(req, res) {
         let stakingCompact = "";
         let stakingBreakdown = undefined;
         let reasonCodes = [];
+        let valueEngine = null;
         const leagueMultiplier = getLeagueConfidenceMultiplier(Number(lId));
         const leagueStakeCap = getLeagueStakeCap(Number(lId));
         const blendW = getModelMarketBlendWeight(method, Number(lId));
 
-        const oddsReq = await getWithCache("/odds", { fixture: fixtureId }, 86400);
+        const oddsReq = await getOddsForFixture(fixtureId, oddsByFixtureId, 86400);
         let marketOdds = undefined;
         const consensus = oddsReq.ok ? consensusMatchWinnerOdds(oddsReq.data) : null;
         let marketProbs = null;
@@ -1103,9 +1173,24 @@ export default async function handler(req, res) {
             hasTeamIds: !!homeIdStr && !!awayIdStr
           });
 
+          // === VALUE ENGINE (predicted probability + bookmaker odds) ===
+          // Hard rule: negative EV selections are never recommendable.
+          valueEngine = buildValueEngine(
+            candidates.map((c) => ({
+              probability: c.prob,
+              odds: c.odd,
+              type: c.type,
+              confidencePct: c.confidence
+            }))
+          );
+
           const scored = candidates
             .map((c) => {
               const ev = calculateEV(c.prob, c.odd);
+              const value = evaluateValue(c.prob, c.odd, {
+                type: c.type,
+                confidencePct: c.confidence
+              });
               const rawEdge = c.prob * c.odd;
               const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
               const volatility = 1 - Math.abs(c.confidence - 50) / 50;
@@ -1125,9 +1210,10 @@ export default async function handler(req, res) {
                 marketGapPct
               });
               const score = (rawEdge - 1) * 120 + ev * 0.35 + ensembleStake.stakePct * 2;
-              return { ...c, ev, rawEdge, score, ensembleStake, kelly, noBet, marketGapPct };
+              return { ...c, ev, rawEdge, score, ensembleStake, kelly, noBet, marketGapPct, value };
             })
-            .filter((c) => c.noBet.allowBet)
+            // HARD RULE: never recommend negative (or zero) EV — Value Engine gate + legacy no-bet zone.
+            .filter((c) => c.value.recommendable && c.ev > 0 && !c.value.negativeEV && c.noBet.allowBet)
             .sort((a, b) => b.score - a.score);
 
           const dq = dqEarly;
@@ -1140,7 +1226,18 @@ export default async function handler(req, res) {
             finalKelly = best.ensembleStake.stakePct || best.kelly;
             stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
             stakingBreakdown = best.ensembleStake.components;
-            reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking"];
+            reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking", "value_engine"];
+
+            // Absolute safety net: never ship a negative-EV recommendation.
+            if (!(finalEv > 0) || best.value.negativeEV || !best.value.recommendable) {
+              valueDetected = false;
+              valueType = "";
+              finalEv = 0;
+              finalKelly = 0;
+              stakingCompact = "";
+              stakingBreakdown = undefined;
+              reasonCodes.push("negative_ev_rejected");
+            }
 
             if (dq < 0.55) {
               valueDetected = false;
@@ -1155,17 +1252,43 @@ export default async function handler(req, res) {
             const analyzed = candidates
               .map((c) => {
                 const ev = calculateEV(c.prob, c.odd);
+                const value = evaluateValue(c.prob, c.odd, {
+                  type: c.type,
+                  confidencePct: c.confidence
+                });
                 const rawEdge = c.prob * c.odd;
                 const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
-                return evaluateNoBetZone({
+                const reasons = evaluateNoBetZone({
                   edge: rawEdge,
                   evPct: ev,
                   confidencePct: c.confidence,
                   marketGapPct
                 }).reasons;
+                if (value.negativeEV || ev <= 0) reasons.push("negative_ev");
+                else if (!value.recommendable) reasons.push("value_engine_below_threshold");
+                return reasons;
               })
               .flat();
             reasonCodes = Array.from(new Set(analyzed)).slice(0, 4);
+          }
+
+          // Keep valueEngine.detected aligned with the final recommendation gate.
+          if (valueEngine) {
+            valueEngine = {
+              ...valueEngine,
+              detected: Boolean(valueDetected && finalEv > 0),
+              ...(valueDetected
+                ? {
+                    type: valueType,
+                    expectedValue: finalEv,
+                    kellyPct: finalKelly,
+                    positiveEV: finalEv > 0,
+                    negativeEV: false,
+                    signal: finalEv >= 1.25 ? "positive" : finalEv > 0 ? "neutral" : "negative",
+                    recommendable: Boolean(valueDetected && finalEv > 0)
+                  }
+                : {})
+            };
           }
         }
 
@@ -1377,6 +1500,19 @@ export default async function handler(req, res) {
         });
         const qualityPenalty = dataQuality < 0.6 ? 0.9 : 1;
 
+        // === CONFIDENCE ENGINE (independent of λ/Poisson/pick selection) ===
+        // Built entirely from context already gathered above; never feeds back into the model.
+        const confidenceEngine = buildConfidenceEngine({
+          ...(confidenceCtx || {}),
+          homePlayed: strengthMeta?.homePlayed ?? confidenceCtx?.hStats?.playedHome ?? confidenceCtx?.hStats?.played ?? null,
+          awayPlayed: strengthMeta?.awayPlayed ?? confidenceCtx?.aStats?.playedAway ?? confidenceCtx?.aStats?.played ?? null,
+          bookmakersUsed: odds?.bookmakersUsed ?? null,
+          shinZ: odds?.shinZ ?? null,
+          hasOdds: Boolean(odds),
+          dataQuality,
+          modularScores: modularScores || null
+        });
+
         const finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X";
         // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
         // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
@@ -1547,7 +1683,9 @@ export default async function handler(req, res) {
             ensemble: stakingBreakdown,
             reasons: reasonCodes
           },
+          valueEngine: valueEngine || buildValueEngine([]),
           marketOdds,
+          confidenceEngine,
           predictions: {
             oneXtwo: finalPick1X2,
             // prag corect 50 pentru pieţe binare (anterior 55 era greşit:
@@ -1612,6 +1750,7 @@ export default async function handler(req, res) {
               blendWeight: Number(blendW.toFixed(3))
             },
             strengthMeta: strengthMeta || undefined,
+            modularScores: modularScores || undefined,
             calibrationApplied,
             stackerApplied,
             stackerSampleSize: stackerEntry?.sampleSize || null,
@@ -1679,6 +1818,8 @@ export default async function handler(req, res) {
             recommended: { pick: "", confidence: 0 },
             predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
             valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: ["fixture_processing_error"] },
+            valueEngine: buildValueEngine([]),
+            confidenceEngine: buildConfidenceEngine({ refereeName: refereeName || undefined }),
             modelMeta: {
               method: "fixture_processing_error",
               dataQuality: 0,
@@ -1771,6 +1912,12 @@ export default async function handler(req, res) {
       res.setHeader("X-Tier", String(tierContext.effectiveTier));
       res.setHeader("X-Predict-Count", String(tierContext.predictCountToday ?? ""));
       res.setHeader("X-Predict-Limit", String(tierContext.predictLimit ?? ""));
+    }
+    res.setHeader("X-Odds-Prefetch-Mapped", String(oddsPrefetch.fixturesMapped || 0));
+    res.setHeader("X-Odds-Prefetch-Upstream", String(oddsPrefetch.upstreamCalls || 0));
+    const cacheStats = getLocalCacheStats();
+    if (cacheStats.hitRatio != null) {
+      res.setHeader("X-Cache-Hit-Ratio", String(cacheStats.hitRatio));
     }
     return res.status(200).json(masked);
   } catch (error) {
