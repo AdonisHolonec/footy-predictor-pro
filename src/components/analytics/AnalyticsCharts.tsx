@@ -96,6 +96,30 @@ export function MarketPieChart({ data }: { data: Array<{ key: string; settled: n
   );
 }
 
+/** Pie of prediction / pick distribution (counts). */
+export function PredictionDistributionPie({
+  data
+}: {
+  data: Array<{ key: string; count: number; pct?: number }>;
+}) {
+  const rows = (data || []).filter((d) => d.count > 0).map((d) => ({ name: d.key, value: d.count }));
+  return (
+    <div className="h-52 w-full sm:h-60">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Tooltip contentStyle={tip} />
+          <Legend wrapperStyle={{ fontSize: 10, color: "#9aabba" }} />
+          <Pie data={rows} dataKey="value" nameKey="name" innerRadius="40%" outerRadius="70%" paddingAngle={2}>
+            {rows.map((_, i) => (
+              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function ConfidenceAreaChart({ data }: { data: DashboardBundle["confidenceDistribution"] }) {
   return (
     <div className="h-52 w-full sm:h-60">

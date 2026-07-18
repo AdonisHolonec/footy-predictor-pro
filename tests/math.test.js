@@ -861,14 +861,21 @@ test("BacktestAnalytics computes ROI Yield Profit Loss streaks and drawdown", ()
   const dash = report.dashboard;
   assert.ok(dash);
   assert.equal(typeof dash.predictionAccuracy, "number");
+  assert.equal(dash.hitRate, dash.predictionAccuracy);
+  assert.ok(typeof dash.averageOdds === "number");
+  assert.ok(typeof dash.expectedValue === "number");
   assert.ok(Array.isArray(dash.radar));
   assert.ok(dash.radar.length >= 4);
   assert.ok(dash.heatmap.markets.includes("1"));
   assert.ok(Array.isArray(dash.confidenceDistribution));
+  assert.ok(Array.isArray(dash.predictionDistribution));
   assert.ok(Array.isArray(dash.bestLeagues));
   assert.ok(Array.isArray(dash.worstLeagues));
+  assert.ok(Array.isArray(dash.bestMarkets));
+  assert.ok(Array.isArray(dash.worstMarkets));
   const emptyDash = buildDashboardBundle(metrics, []);
   assert.equal(emptyDash.dailyProfit, 0);
+  assert.equal(emptyDash.hitRate, 0);
 });
 
 test("Auto Calibration compares predicted vs actual and respects manual locks", async () => {

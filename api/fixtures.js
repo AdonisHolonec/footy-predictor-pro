@@ -13,7 +13,13 @@
 // Păstrează neschimbate toate comportamentele fostelor fișiere.
 import { getRequester } from "../server-utils/authAdmin.js";
 import { handleClaimBootstrapAdmin } from "../server-utils/claimBootstrapAdmin.js";
-import { getWithCache, getApiUsage, getApiUsageHistory } from "../server-utils/fetcher.js";
+import {
+  getWithCache,
+  getApiUsage,
+  getApiUsageHistory,
+  getDailyCacheStats,
+  getLocalCacheStats
+} from "../server-utils/fetcher.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   isWarmPredictQuotaExempt,
@@ -210,11 +216,22 @@ async function handleDay(req, res) {
       const today = await getApiUsage();
       const yesterday = await getApiUsage(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
       const history = await getApiUsageHistory(usageDays);
+      const dailyCache = await getDailyCacheStats();
+      const processCache = getLocalCacheStats();
       return res.status(200).json({
         ok: true,
         usage: today,
         yesterday,
-        history
+        history,
+        cache: {
+          date: dailyCache.date,
+          hits: dailyCache.hits,
+          misses: dailyCache.misses,
+          inflightJoins: dailyCache.inflightJoins,
+          hitRatio: dailyCache.hitRatio,
+          processHitRatio: processCache.hitRatio,
+          updatedAt: dailyCache.updatedAt
+        }
       });
     }
 

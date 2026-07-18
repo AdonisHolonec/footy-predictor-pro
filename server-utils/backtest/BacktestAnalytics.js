@@ -395,34 +395,62 @@ function radarProfile(metrics) {
   ];
 }
 
+function predictionDistribution(events) {
+  const map = new Map();
+  for (const e of events || []) {
+    const key = String(e.market || e.side || "other");
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  const total = events?.length || 0;
+  return [...map.entries()]
+    .map(([key, count]) => ({
+      key,
+      count,
+      pct: total ? round((count / total) * 100, 1) : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+}
+
 /**
  * Dashboard-ready aggregates (widgets + chart series) derived from metrics/events.
  */
 export function buildDashboardBundle(metrics, events) {
   const byLeague = metrics.byLeague || [];
+  const byMarket = metrics.byMarket || [];
   const ranked = [...byLeague].filter((l) => l.settled >= 2).sort((a, b) => b.roi - a.roi);
   const bestLeagues = ranked.slice(0, 5);
   const worstLeagues = [...ranked].sort((a, b) => a.roi - b.roi).slice(0, 5);
+  const marketsRanked = [...byMarket].filter((m) => m.settled >= 2).sort((a, b) => b.roi - a.roi);
+  const bestMarkets = marketsRanked.slice(0, 5);
+  const worstMarkets = [...marketsRanked].sort((a, b) => a.roi - b.roi).slice(0, 5);
   const daily = metrics.daily || [];
 
   return {
     predictionAccuracy: round(metrics.hitRate, 2),
+    hitRate: round(metrics.hitRate, 2),
     roi: round(metrics.roi, 2),
     yield: round(metrics.yield, 2),
+    averageOdds: round(metrics.averageOdds, 3),
+    expectedValue: round(metrics.expectedValue, 4),
+    settled: metrics.settled || 0,
     dailyProfit: lastDayPnl(daily),
     weeklyProfit: sumPnlSince(daily, 7),
     monthlyProfit: sumPnlSince(daily, 30),
     leaguePerformance: byLeague.slice(0, 12),
-    marketPerformance: (metrics.byMarket || []).slice(0, 12),
+    marketPerformance: byMarket.slice(0, 12),
     confidenceDistribution: confidenceDistribution(events),
+    predictionDistribution: predictionDistribution(events),
     accuracyByLeague: byLeague.map((l) => ({ key: l.key, hitRate: l.hitRate, settled: l.settled })),
-    accuracyByMarket: (metrics.byMarket || []).map((m) => ({
+    accuracyByMarket: byMarket.map((m) => ({
       key: m.key,
       hitRate: m.hitRate,
       settled: m.settled
     })),
     bestLeagues,
     worstLeagues,
+    bestMarkets,
+    worstMarkets,
     heatmap: leagueMarketHeatmap(events),
     radar: radarProfile(metrics),
     profitLine: daily.map((d) => ({ date: d.date, equity: d.equity, pnl: d.pnl, hitRate: d.hitRate }))

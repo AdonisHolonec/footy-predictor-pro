@@ -6,6 +6,7 @@ export type UsageSnapshot = {
   today: { date?: string; count: number; limit: number; updatedAt?: string | null };
   yesterday: { date?: string; count: number; limit: number; updatedAt?: string | null };
   history: Array<{ date?: string; count: number; limit: number; updatedAt?: string | null }>;
+  cache?: import("../types").CacheHitStats | null;
 };
 
 export type PerfAdminSnapshot = {

@@ -721,18 +721,26 @@ export type BacktestBetRow = {
 
 export type DashboardBundle = {
   predictionAccuracy: number;
+  hitRate?: number;
   roi: number;
   yield: number;
+  averageOdds?: number;
+  expectedValue?: number;
+  settled?: number;
   dailyProfit: number;
   weeklyProfit: number;
   monthlyProfit: number;
   leaguePerformance: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
   marketPerformance: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
   confidenceDistribution: Array<{ bucket: string; count: number; hitRate: number }>;
+  /** Share of predictions by market / pick family. */
+  predictionDistribution?: Array<{ key: string; count: number; pct: number }>;
   accuracyByLeague: Array<{ key: string; hitRate: number; settled: number }>;
   accuracyByMarket: Array<{ key: string; hitRate: number; settled: number }>;
   bestLeagues: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
   worstLeagues: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  bestMarkets?: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
+  worstMarkets?: Array<{ key: string; settled: number; hitRate: number; roi: number; pnl: number }>;
   heatmap: {
     leagues: string[];
     markets: string[];
@@ -740,6 +748,16 @@ export type DashboardBundle = {
   };
   radar: Array<{ metric: string; value: number }>;
   profitLine: Array<{ date: string; equity: number; pnl: number; hitRate: number }>;
+};
+
+export type CacheHitStats = {
+  date?: string;
+  hits: number;
+  misses: number;
+  inflightJoins?: number;
+  hitRatio: number | null;
+  processHitRatio?: number | null;
+  updatedAt?: string | null;
 };
 
 export type BacktestAnalyticsResponse = {

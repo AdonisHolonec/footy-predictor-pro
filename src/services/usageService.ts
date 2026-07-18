@@ -7,6 +7,17 @@ export async function loadUsageSnapshot(): Promise<UsageSnapshot> {
   return {
     today: json.usage || { count: 0, limit: 100, updatedAt: null },
     yesterday: json.yesterday || { count: 0, limit: 100, updatedAt: null },
-    history: Array.isArray(json.history) ? json.history : []
+    history: Array.isArray(json.history) ? json.history : [],
+    cache: json.cache
+      ? {
+          date: json.cache.date,
+          hits: Number(json.cache.hits) || 0,
+          misses: Number(json.cache.misses) || 0,
+          inflightJoins: Number(json.cache.inflightJoins) || 0,
+          hitRatio: json.cache.hitRatio == null ? null : Number(json.cache.hitRatio),
+          processHitRatio: json.cache.processHitRatio == null ? null : Number(json.cache.processHitRatio),
+          updatedAt: json.cache.updatedAt ?? null
+        }
+      : null
   };
 }
