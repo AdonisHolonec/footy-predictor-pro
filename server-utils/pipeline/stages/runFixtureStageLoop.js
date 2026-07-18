@@ -6,6 +6,7 @@
 import { getWithCache } from "../../fetcher.js";
 import { getLeagueParams, getLeagueProfile } from "../../modelConstants.js";
 import { loadTeamMarketRolling } from "../../teamMarketRolling.js";
+import { loadLeagueElo } from "../../teamElo.js";
 import { logError } from "../../observability/logger.js";
 import {
   standingsRowsFromApi,
@@ -52,7 +53,11 @@ export async function runFixtureStageLoop(context) {
 
     const leagueParams = getLeagueParams(lId);
     const leagueProfile = getLeagueProfile(lId);
-    const marketRollingMap = await loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map());
+    // Warm league caches once (Elo + market rolling) before the per-fixture Stage02–09 loop.
+    const [marketRollingMap] = await Promise.all([
+      loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map()),
+      loadLeagueElo(lId).catch(() => new Map())
+    ]);
 
     const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
     const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];

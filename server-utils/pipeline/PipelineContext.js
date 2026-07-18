@@ -48,7 +48,7 @@ export function createPipelineContext(req, res) {
     // fixture working state (reset per fixture)
     fixture: null,
     /** Predictor version stamp for meta */
-    predictorVersion: "predictor-v3.1-shared-pmf"
+    predictorVersion: "predictor-v3.1-perf-elo-batch"
   };
 }
 

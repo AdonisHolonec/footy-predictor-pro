@@ -23,7 +23,7 @@ import * as Stage07ModelFusion from "./stages/Stage07ModelFusion.js";
 import * as Stage08Decision from "./stages/Stage08Decision.js";
 import * as Stage09Explainability from "./stages/Stage09Explainability.js";
 
-export const PREDICTOR_V3_VERSION = "predictor-v3.1-shared-pmf";
+export const PREDICTOR_V3_VERSION = "predictor-v3.1-perf-elo-batch";
 
 /** Full stage graph (fixture stages run inside runFixtureStageLoop). */
 export const STAGE_ORDER = [

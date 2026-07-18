@@ -134,8 +134,11 @@ export async function run(context) {
   let aMulti = null;
 
   if (homeIdStr && awayIdStr) {
-    const tsH = await getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400);
-    const tsA = await getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400);
+    // Independent cache keys — fetch in parallel (same TTL / payloads as sequential).
+    const [tsH, tsA] = await Promise.all([
+      getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400),
+      getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400)
+    ]);
     const tsHNorm = tsH.ok && tsH.data ? normalizeTeamStatisticsPayload(tsH.data) : null;
     const tsANorm = tsA.ok && tsA.data ? normalizeTeamStatisticsPayload(tsA.data) : null;
     if (tsHNorm) {
