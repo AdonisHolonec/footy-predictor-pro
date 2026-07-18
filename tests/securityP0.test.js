@@ -7,6 +7,7 @@ import {
   tierDailyLimit,
   USER_TIERS
 } from "../server-utils/accessTier.js";
+import { parseAdminEmails } from "../server-utils/authAdmin.js";
 import { tierFromPriceId } from "../server-utils/stripeBilling.js";
 
 function mockReq({ headers = {}, query = {} } = {}) {
@@ -109,6 +110,23 @@ describe("Stripe billing helpers", () => {
     } finally {
       process.env.STRIPE_PRICE_PREMIUM = prevP;
       process.env.STRIPE_PRICE_ULTRA = prevU;
+    }
+  });
+});
+
+describe("Security P0 — C6 admin emails", () => {
+  it("parseAdminEmails uses only ADMIN_EMAILS, not VITE_ADMIN_EMAILS", () => {
+    const prevAdmin = process.env.ADMIN_EMAILS;
+    const prevVite = process.env.VITE_ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = "server-admin@example.com";
+    process.env.VITE_ADMIN_EMAILS = "leaked-client@example.com";
+    try {
+      const set = parseAdminEmails();
+      assert.equal(set.has("server-admin@example.com"), true);
+      assert.equal(set.has("leaked-client@example.com"), false);
+    } finally {
+      process.env.ADMIN_EMAILS = prevAdmin;
+      process.env.VITE_ADMIN_EMAILS = prevVite;
     }
   });
 });

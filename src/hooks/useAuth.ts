@@ -31,17 +31,6 @@ type ManagedProfile = {
   warmPredictUsage?: { usageDay: string; warm: number; predict: number };
 };
 
-function parseBootstrapAdminEmails() {
-  const raw = String((import.meta.env.VITE_ADMIN_EMAILS as string | undefined) || "");
-  if (!raw.trim()) return new Set<string>();
-  return new Set(
-    raw
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
 function sanitizeLeagueIds(values: number[]) {
   return Array.from(
     new Set(
@@ -54,8 +43,6 @@ function sanitizeLeagueIds(values: number[]) {
 
 function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | null = null): User | null {
   if (!user) return null;
-  const bootstrapAdminEmails = parseBootstrapAdminEmails();
-  const isBootstrapAdmin = bootstrapAdminEmails.has(String(user.email || "").toLowerCase());
   const fallbackFavorites = Array.isArray(user.user_metadata?.favoriteLeagues)
     ? user.user_metadata.favoriteLeagues.filter((value: unknown): value is number => typeof value === "number")
     : [];
@@ -64,8 +51,8 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
   return {
     id: user.id,
     email: user.email ?? "",
-    // Bootstrap admin must override DB role "user" (signup creates user by default).
-    role: isBootstrapAdmin ? "admin" : (profile?.role ?? "user"),
+    // Admin UI from DB role only — never from client env email lists (C6).
+    role: profile?.role ?? "user",
     favoriteLeagues,
     isBlocked: Boolean(profile?.is_blocked),
     onboardingCompleted: Boolean(profile?.onboarding_completed),
@@ -121,11 +108,12 @@ export function useAuth() {
     return (data as ProfileRow | null) ?? null;
   }, []);
 
-  /** Syncs profiles.role to admin in DB when email is in VITE_ADMIN_EMAILS (server checks ADMIN_EMAILS). */
+  /**
+   * Asks the server to promote profiles.role → admin when email is in ADMIN_EMAILS.
+   * Client never sees the allowlist; UI updates only after DB role reloads.
+   */
   const promoteBootstrapAdminInDb = useCallback(
     async (authUser: SupabaseAuthUser, profile: ProfileRow | null, accessToken: string): Promise<ProfileRow | null> => {
-      const emails = parseBootstrapAdminEmails();
-      if (!emails.has(String(authUser.email || "").toLowerCase())) return profile;
       if (!profile || profile.role === "admin") return profile;
       if (profile.role !== "user") return profile;
       try {
@@ -143,7 +131,7 @@ export function useAuth() {
           return await loadProfile(authUser.id);
         }
       } catch {
-        // silent: UI still works via env bootstrap if sync fails
+        // silent — non-admin users get 403; admin UI waits for DB role
       }
       return profile;
     },

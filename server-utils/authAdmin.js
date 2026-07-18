@@ -1,10 +1,8 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
+/** Server-only allowlist. Never read VITE_ADMIN_EMAILS (must not ship in client bundles). */
 export function parseAdminEmails() {
-  const raw = [process.env.ADMIN_EMAILS, process.env.VITE_ADMIN_EMAILS]
-    .map((v) => String(v || "").trim())
-    .filter(Boolean)
-    .join(",");
+  const raw = String(process.env.ADMIN_EMAILS || "");
   if (!raw.trim()) return new Set();
   return new Set(
     raw
