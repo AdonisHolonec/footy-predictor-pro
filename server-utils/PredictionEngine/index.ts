@@ -1,6 +1,6 @@
 /**
- * Typed re-export of the canonical PredictionEngine.
- * Runtime: ../PredictionEngine/index.js
+ * Typed entry for PredictionEngine.
+ * Runtime orchestration: ./index.js
  */
 
 export {
@@ -10,12 +10,13 @@ export {
   MODULES,
   getPredictionWeights,
   DEFAULT_PREDICTION_WEIGHTS
-} from "../PredictionEngine/index.js";
+} from "./index.js";
 
 export type {
   ModuleResult,
   ModuleScore,
   PredictionContext,
   PredictionEngineResult,
-  PredictionWeights
-} from "../PredictionEngine/types.js";
+  PredictionWeights,
+  EngineModule
+} from "./types.js";

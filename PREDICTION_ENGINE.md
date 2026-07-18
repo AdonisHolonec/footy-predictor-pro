@@ -1,6 +1,10 @@
-# Modular Prediction Engine
+# Modular Prediction Engine (legacy doc)
 
-This document describes the modular football prediction engine under `server-utils/prediction/`. The engine is an **additive layer** on top of the existing `server-utils/math.js` primitives. `api/predict.js` tries the modular engine first and falls back to `strengthRatingsLambdas` if it fails.
+> **Canonical architecture doc:** [`PredictionEngine.md`](./PredictionEngine.md)  
+> **Canonical code:** `server-utils/PredictionEngine/`  
+> `server-utils/prediction/PredictionEngine.js` is a backwards-compatible façade.
+
+This document describes the modular football prediction engine. The engine is an **additive layer** on top of the existing `server-utils/math.js` primitives. `api/predict.js` tries the modular engine first and falls back to `strengthRatingsLambdas` if it fails.
 
 ## Architecture
 
