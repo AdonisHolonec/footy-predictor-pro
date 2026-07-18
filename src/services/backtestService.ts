@@ -1,21 +1,22 @@
 import { BacktestAnalyticsResponse, BacktestFilters, BacktestKpi, ModelLabBundle, ModelSelectionBundle } from "../types";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 export async function loadKpi(days = 45): Promise<BacktestKpi | null> {
-  const res = await fetch(`/api/backtest?view=kpi&days=${days}`);
+  const res = await fetchWithAuth(`/api/backtest?view=kpi&days=${days}`);
   const json = await res.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca KPI.");
   return json.latest || null;
 }
 
 export async function loadModelLab(days = 90): Promise<ModelLabBundle> {
-  const res = await fetch(`/api/backtest?view=model-lab&days=${days}`);
+  const res = await fetchWithAuth(`/api/backtest?view=model-lab&days=${days}`);
   const json = await res.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca Model Lab.");
   return json as ModelLabBundle;
 }
 
 export async function loadModelSelection(): Promise<ModelSelectionBundle> {
-  const res = await fetch(`/api/backtest?view=model-select`);
+  const res = await fetchWithAuth(`/api/backtest?view=model-select`);
   const json = await res.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca Model Selection.");
   return json as ModelSelectionBundle;
@@ -48,7 +49,7 @@ function toQuery(params: LoadAnalyticsParams): string {
 }
 
 export async function loadAnalytics(params: LoadAnalyticsParams = {}): Promise<BacktestAnalyticsResponse> {
-  const res = await fetch(`/api/backtest?${toQuery(params)}`);
+  const res = await fetchWithAuth(`/api/backtest?${toQuery(params)}`);
   const json = (await res.json()) as BacktestAnalyticsResponse;
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca analytics backtest.");
   return json;
@@ -59,4 +60,12 @@ export function buildAnalyticsExportUrl(params: LoadAnalyticsParams, format: "cs
   q.set("format", format);
   q.set("includeBets", "1");
   return `/api/backtest?${q.toString()}`;
+}
+
+/** Authenticated CSV/JSON export fetch (URL alone is no longer enough). */
+export async function fetchAnalyticsExport(
+  params: LoadAnalyticsParams,
+  format: "csv" | "json"
+): Promise<Response> {
+  return fetchWithAuth(buildAnalyticsExportUrl(params, format));
 }

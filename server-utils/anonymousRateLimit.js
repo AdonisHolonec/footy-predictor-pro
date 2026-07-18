@@ -1,8 +1,21 @@
 import { createClient } from "@vercel/kv";
 
+function isProduction() {
+  return process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+}
+
 function getKv() {
-  const url = process.env.STORAGEE_KV_REST_API_URL || process.env.KV_REST_API_URL;
-  const token = process.env.STORAGEE_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN;
+  // Align aliases with fetcher.js so cache + rate limit share the same store.
+  const url =
+    process.env.KV_REST_API_URL ||
+    process.env.STORAGEE_KV_REST_API_URL ||
+    process.env.Database_KV_REST_API_URL ||
+    process.env.UPSTASH_REDIS_REST_URL;
+  const token =
+    process.env.KV_REST_API_TOKEN ||
+    process.env.STORAGEE_KV_REST_API_TOKEN ||
+    process.env.Database_KV_REST_API_TOKEN ||
+    process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
   try {
     return createClient({ url, token });
@@ -25,11 +38,15 @@ function clientIp(req) {
 
 /**
  * Sliding hour bucket per IP for unauthenticated API abuse protection.
- * If KV is not configured, returns ok (skipped).
+ * Production: fail-closed when KV is missing or errors.
+ * Non-production: fail-open (skipped) so local/dev still works without KV.
  */
 export async function checkAnonymousRateLimit(req, { namespace, maxPerHour }) {
   const kv = getKv();
   if (!kv || !Number.isFinite(maxPerHour) || maxPerHour < 1) {
+    if (isProduction()) {
+      return { ok: false, retryAfterSec: 60, reason: "rate_limit_unavailable" };
+    }
     return { ok: true, skipped: true };
   }
   const ip = clientIp(req);
@@ -46,6 +63,9 @@ export async function checkAnonymousRateLimit(req, { namespace, maxPerHour }) {
     return { ok: true };
   } catch (e) {
     console.error("[anonymousRateLimit]", e?.message || e);
+    if (isProduction()) {
+      return { ok: false, retryAfterSec: 60, reason: "rate_limit_error" };
+    }
     return { ok: true, skipped: true };
   }
 }

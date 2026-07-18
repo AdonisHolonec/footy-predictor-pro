@@ -1,7 +1,8 @@
 import type { UsageSnapshot } from "../types/index";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 export async function loadUsageSnapshot(): Promise<UsageSnapshot> {
-  const response = await fetch("/api/fixtures?usageOnly=1&usageDays=7");
+  const response = await fetchWithAuth("/api/fixtures?usageOnly=1&usageDays=7");
   const json = await response.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut incarca usage.");
   return {

@@ -14,9 +14,10 @@ import {
 const HISTORY_TABLE = "predictions_history";
 
 async function isAuthorizedHistorySync(req) {
+  // P0: history sync burns API-Football — cron or admin only (not any JWT).
   if (isAuthorizedCronOrInternalRequest(req)) return true;
-  const requester = await getRequester(req);
-  return requester.ok;
+  const admin = await assertAdmin(req);
+  return admin.ok;
 }
 
 function resolveHistorySyncSource(req) {
@@ -24,7 +25,7 @@ function resolveHistorySyncSource(req) {
     const ua = String(req.headers["user-agent"] || "").toLowerCase();
     return ua.includes("vercel-cron") ? "vercel_cron" : "cron_secret";
   }
-  return "jwt_user";
+  return "admin_jwt";
 }
 
 /** Ultimul sync scris în `history_sync_status` (id=1) — vizibil în Supabase fără Vercel Logs. */

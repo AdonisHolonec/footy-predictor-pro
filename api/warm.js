@@ -1,9 +1,8 @@
 // api/warm.js — prefetch fixtures/standings/teamstats/odds into KV for predict reuse
-import { readBearer } from "../server-utils/authAdmin.js";
-import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { getWithCache } from "../server-utils/fetcher.js";
 import { prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
 import { resolveAuthenticatedUsageContext } from "../server-utils/userDailyWarmPredictUsage.js";
+import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 
 function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
@@ -25,21 +24,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ ok: false, error: "Lipsesc leagueIds." });
   }
 
-  if (!readBearer(req)) {
-    const maxPerHour = Math.max(1, Math.min(Number(process.env.ANON_RATE_WARM_PER_HOUR || 24), 200));
-    const rl = await checkAnonymousRateLimit(req, { namespace: "warm", maxPerHour });
-    if (!rl.ok) {
-      return res.status(429).json({
-        ok: false,
-        error: "Prea multe cereri anonime pentru Warm. Autentifica-te sau incearca mai tarziu.",
-        retryAfterSec: rl.retryAfterSec
-      });
+  // P0: warm requires cron secret or authenticated user (no anonymous upstream spend).
+  const isCron = isAuthorizedCronOrInternalRequest(req);
+  if (!isCron) {
+    const usageCtx = await resolveAuthenticatedUsageContext(req);
+    if (usageCtx.error) {
+      return res.status(usageCtx.error.status).json(usageCtx.error.body);
     }
-  }
-
-  const usageCtx = await resolveAuthenticatedUsageContext(req);
-  if (usageCtx.error) {
-    return res.status(usageCtx.error.status).json(usageCtx.error.body);
+    if (usageCtx.anonymous) {
+      return res.status(401).json({ ok: false, error: "Autentificare necesară pentru Warm." });
+    }
   }
 
   const warmed = [];

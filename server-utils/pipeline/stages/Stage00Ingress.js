@@ -5,13 +5,13 @@
 
 import { attachRequestMonitor } from "../../observability/requestMonitor.js";
 import { readBearer } from "../../authAdmin.js";
-import { checkAnonymousRateLimit } from "../../anonymousRateLimit.js";
+import { isAuthorizedCronOrInternalRequest } from "../../cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../fixtureCalendarDateKey.js";
 import { inferSeason } from "../predictHelpers.js";
 import { halt } from "../PipelineContext.js";
 
 export const STAGE_ID = "Stage00Ingress";
-export const STAGE_DESCRIPTION = "HTTP ingress: monitoring, query normalization, anonymous rate limit.";
+export const STAGE_DESCRIPTION = "HTTP ingress: monitoring, query normalization, auth gate.";
 
 /**
  * @param {object} context
@@ -36,16 +36,15 @@ export async function run(context) {
     return halt(context, 400, { ok: false, error: "Nu ai selectat nicio ligă." });
   }
 
-  if (!readBearer(req)) {
-    const maxPerHour = Math.max(1, Math.min(Number(process.env.ANON_RATE_PREDICT_PER_HOUR || 16), 200));
-    const rl = await checkAnonymousRateLimit(req, { namespace: "predict", maxPerHour });
-    if (!rl.ok) {
-      return halt(context, 429, {
-        ok: false,
-        error: "Prea multe cereri anonime pentru Predict. Autentifica-te sau incearca mai tarziu.",
-        retryAfterSec: rl.retryAfterSec
-      });
-    }
+  const isCron = isAuthorizedCronOrInternalRequest(req);
+  context.isCronInternal = isCron;
+
+  // P0: live predict requires cron secret or user JWT — no anonymous pipeline.
+  if (!isCron && !readBearer(req)) {
+    return halt(context, 401, {
+      ok: false,
+      error: "Autentificare necesară pentru Predict."
+    });
   }
 
   if (!context.stageMarks) context.stageMarks = {};

@@ -1,5 +1,6 @@
 import { RiskAlert } from "../types";
 import type { AlertThresholdOverrides } from "../types/index";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 export type LoadAlertsResult = {
   alerts: RiskAlert[];
@@ -16,7 +17,7 @@ export async function loadAlerts(
     drift: String(thresholds.drift),
     lowDataShare: String(thresholds.lowDataShare)
   });
-  const res = await fetch(`/api/alerts?${qs.toString()}`);
+  const res = await fetchWithAuth(`/api/alerts?${qs.toString()}`);
   const json = await res.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca alertele.");
   return {

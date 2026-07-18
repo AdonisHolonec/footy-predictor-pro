@@ -530,6 +530,19 @@ async function handleMetrics(req, res) {
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
+  // P0: previously open read views — cron or admin JWT only.
+  const gatedViews = new Set([
+    "kpi",
+    "analytics",
+    "health",
+    "model-lab",
+    "modellab",
+    "model-select",
+    "modelselect"
+  ]);
+  if (gatedViews.has(view) && !(await isAuthorizedForMetrics(req))) {
+    return res.status(401).json({ ok: false, error: "Neautorizat. Autentificare admin sau cron necesară." });
+  }
   if (view === "kpi") return handleKpi(req, res);
   if (view === "analytics") return handleAnalytics(req, res);
   if (view === "snapshot") return handleSnapshot(req, res);

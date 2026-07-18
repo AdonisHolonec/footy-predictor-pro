@@ -269,9 +269,19 @@ export default async function handler(req, res) {
       });
     }
 
+    const cronSecret = String(process.env.CRON_SECRET || "");
+    const cronHeaders = {
+      Accept: "application/json",
+      "x-internal-cron": "warm-predict"
+    };
+    if (cronSecret) {
+      cronHeaders.Authorization = `Bearer ${cronSecret}`;
+      cronHeaders["x-cron-secret"] = cronSecret;
+    }
+
     const warmRes = await fetch(`${base}/api/warm?${warmQs.toString()}`, {
       method: "GET",
-      headers: { Accept: "application/json", "x-internal-cron": "warm-predict" }
+      headers: cronHeaders
     });
     const warmBody = await readJsonBody(warmRes);
 
@@ -298,7 +308,7 @@ export default async function handler(req, res) {
 
     const predictRes = await fetch(`${base}/api/predict?${predictQs.toString()}`, {
       method: "GET",
-      headers: { Accept: "application/json", "x-internal-cron": "warm-predict" }
+      headers: cronHeaders
     });
     const predictBody = await readJsonBody(predictRes);
 

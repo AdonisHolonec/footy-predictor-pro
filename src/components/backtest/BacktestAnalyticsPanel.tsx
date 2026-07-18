@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { BacktestAnalyticsResponse, BacktestFilters, BacktestMetrics } from "../../types";
-import { buildAnalyticsExportUrl, loadAnalytics } from "../../services/backtestService";
+import { fetchAnalyticsExport, loadAnalytics } from "../../services/backtestService";
 import {
   BreakdownBarChart,
   DailyPnlChart,
@@ -129,8 +129,7 @@ export default function BacktestAnalyticsPanel() {
   }
 
   async function exportCsv() {
-    const url = buildAnalyticsExportUrl(filters, "csv");
-    const res = await fetch(url);
+    const res = await fetchAnalyticsExport(filters, "csv");
     const text = await res.text();
     if (!res.ok) {
       let message = "CSV export failed";

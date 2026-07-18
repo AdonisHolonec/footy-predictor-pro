@@ -5,6 +5,7 @@
 
 import { getApiUsage, getWithCache } from "../../fetcher.js";
 import { resolveAuthenticatedUsageContext } from "../../userDailyWarmPredictUsage.js";
+import { isAuthorizedCronOrInternalRequest } from "../../cronRequestAuth.js";
 import {
   USER_TIERS,
   maskPredictionForTier,
@@ -38,16 +39,29 @@ export async function run(context) {
   const leagueIds = context.leagueIds;
   let effectiveLimit = context.effectiveLimit;
 
-  const usageCtx = await resolveAuthenticatedUsageContext(req);
-  context.usageCtx = usageCtx;
-  if (usageCtx.error) {
-    return halt(context, usageCtx.error.status, usageCtx.error.body);
+  // Cron uses CRON_SECRET as Bearer — must not call auth.getUser on that token.
+  const isCron = context.isCronInternal === true || isAuthorizedCronOrInternalRequest(req);
+  context.isCronInternal = isCron;
+
+  let usageCtx;
+  if (isCron) {
+    usageCtx = { anonymous: true, cronInternal: true, userId: null };
+    context.usageCtx = usageCtx;
+  } else {
+    usageCtx = await resolveAuthenticatedUsageContext(req);
+    context.usageCtx = usageCtx;
+    if (usageCtx.error) {
+      return halt(context, usageCtx.error.status, usageCtx.error.body);
+    }
+    if (usageCtx.anonymous) {
+      return halt(context, 401, { ok: false, error: "Autentificare necesară pentru Predict." });
+    }
   }
 
   let tierContext = null;
   let reservedTierUsage = 0;
 
-  if (!usageCtx.anonymous && usageCtx.userId) {
+  if (!isCron && !usageCtx.anonymous && usageCtx.userId) {
     const supabase = getSupabaseAdmin();
     let profile = null;
     let { data: profData, error: profileError } = await supabase

@@ -2,7 +2,7 @@
  * Stage11Masking — tier mask (moved from api/predict.js).
  */
 
-import { maskPredictionForTier } from "../../accessTier.js";
+import { USER_TIERS, maskPredictionForTier } from "../../accessTier.js";
 
 export const STAGE_ID = "Stage11Masking";
 export const STAGE_DESCRIPTION = "Tier masking and usage header shaping.";
@@ -15,11 +15,18 @@ export async function run(context) {
 
   const out = context.out || [];
   const tierContext = context.tierContext;
+  const isCron = context.isCronInternal === true;
 
-  const masked =
-    tierContext && !tierContext.quotaExempt
-      ? out.map((row) => maskPredictionForTier(row, tierContext.effectiveTier))
-      : out;
+  // P0: never return unmasked Ultra payload to non-cron callers.
+  let masked = out;
+  if (isCron) {
+    masked = out;
+  } else if (tierContext?.quotaExempt) {
+    masked = out;
+  } else {
+    const tier = tierContext?.effectiveTier || USER_TIERS.FREE;
+    masked = out.map((row) => maskPredictionForTier(row, tier));
+  }
 
   context.masked = masked;
 

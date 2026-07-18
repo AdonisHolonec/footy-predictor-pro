@@ -11,7 +11,7 @@
 //   /api/fixtures?view=xg&fixtureId=123  → synthetic xG per fixture
 //
 // Păstrează neschimbate toate comportamentele fostelor fișiere.
-import { getRequester } from "../server-utils/authAdmin.js";
+import { assertAdmin, getRequester } from "../server-utils/authAdmin.js";
 import { handleClaimBootstrapAdmin } from "../server-utils/claimBootstrapAdmin.js";
 import {
   getWithCache,
@@ -214,6 +214,11 @@ async function handleDay(req, res) {
     }
 
     if (usageOnly) {
+      // P0: provider usage / cache stats are ops data — admin only.
+      const admin = await assertAdmin(req);
+      if (!admin.ok) {
+        return res.status(admin.status || 401).json({ ok: false, error: admin.error || "Neautorizat" });
+      }
       const today = await getApiUsage();
       const yesterday = await getApiUsage(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
       const history = await getApiUsageHistory(usageDays);

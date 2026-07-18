@@ -1,3 +1,5 @@
+import { assertAdmin } from "../server-utils/authAdmin.js";
+import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 
 function asNum(n) {
@@ -16,6 +18,14 @@ function reasonCodesFromRow(row) {
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+  }
+
+  // P0: ops alerts expose history + KPI — cron or admin only.
+  if (!isAuthorizedCronOrInternalRequest(req)) {
+    const admin = await assertAdmin(req);
+    if (!admin.ok) {
+      return res.status(admin.status || 401).json({ ok: false, error: admin.error || "Neautorizat" });
+    }
   }
 
   const cfg = assertSupabaseConfigured();
