@@ -1,0 +1,65 @@
+{
+  "id": "late-xg-blend",
+  "startStage": "Stage04ProbabilityGeneration",
+  "date": "2026-03-15",
+  "season": 2025,
+  "league": {
+    "lId": 39
+  },
+  "fixtureInit": {
+    "fixtureId": 910002,
+    "homeIdStr": "40",
+    "awayIdStr": "42",
+    "homeName": "LateXG Home",
+    "awayName": "LateXG Away"
+  },
+  "preStage": {
+    "method": "modular-engine",
+    "lambdaHome": 1.35,
+    "lambdaAway": 1.25,
+    "strengthMeta": {
+      "homePlayed": 12,
+      "awayPlayed": 12,
+      "atkH": 1.1,
+      "atkA": 1.05
+    },
+    "rollingHint": {
+      "home": {
+        "xg_for_avg": 1.9,
+        "xg_against_avg": 0.95,
+        "matches_sampled": 8
+      },
+      "away": {
+        "xg_for_avg": 1.05,
+        "xg_against_avg": 1.7,
+        "matches_sampled": 8
+      }
+    }
+  },
+  "mocks": {
+    "odds": null,
+    "elo": {
+      "eloHome": 1580,
+      "eloAway": 1560,
+      "thin": false
+    }
+  },
+  "expected": {
+    "lambdaHome": 1.5714000000000001,
+    "lambdaAway": 1.1292,
+    "pRaw": {
+      "p1": 46.58194351196216,
+      "pX": 27.839803289128444,
+      "p2": 25.578253198909394
+    },
+    "probs1x2": {
+      "p1": 46.15406463417375,
+      "pX": 27.80846466945053,
+      "p2": 26.037470696375713
+    },
+    "pick": "Peste 1.5",
+    "method": "modular-engine",
+    "aborted": false,
+    "insufficientReason": null
+  }
+}

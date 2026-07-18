@@ -101,6 +101,7 @@ import {
   buildCalibrationReport,
   runAutoCalibration
 } from "../server-utils/calibration/AutoCalibrationEngine.js";
+import { extractRawTriple } from "../server-utils/ml/extractRawTriple.js";
 import { setRuntimeOverlays, clearRuntimeOverlays } from "../server-utils/calibration/overlayRuntime.js";
 import { getConfidenceWeights } from "../server-utils/confidence/confidenceWeights.js";
 
@@ -1492,4 +1493,26 @@ test("Auto Model Selection competes over windows and picks a winner (default saf
   assert.ok(Array.isArray(sel.ranking));
   // Each window reports its own settled count.
   for (const w of sel.windows) assert.ok(typeof w.totalSettled === "number");
+});
+
+test("extractRawTriple prefers rawPoisson over final modelProbs (train/serve align)", () => {
+  const payload = {
+    evaluation: {
+      rawPoissonProbs1x2Pct: { p1: 50, pX: 30, p2: 20 },
+      modelProbs1x2Pct: { p1: 70, pX: 20, p2: 10 }
+    },
+    probs: { p1: 60, pX: 25, p2: 15 }
+  };
+  const t = extractRawTriple(payload);
+  assert.ok(t);
+  assert.ok(Math.abs(t.p1 - 0.5) < 1e-9);
+  assert.ok(Math.abs(t.pX - 0.3) < 1e-9);
+  assert.ok(Math.abs(t.p2 - 0.2) < 1e-9);
+
+  const prev = process.env.PREDICT_TRAIN_USE_FINAL_PROBS;
+  process.env.PREDICT_TRAIN_USE_FINAL_PROBS = "1";
+  const legacy = extractRawTriple(payload);
+  process.env.PREDICT_TRAIN_USE_FINAL_PROBS = prev;
+  assert.ok(legacy);
+  assert.ok(Math.abs(legacy.p1 - 0.7) < 1e-9);
 });

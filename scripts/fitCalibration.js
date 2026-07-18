@@ -7,8 +7,8 @@
  * Output: upsert în `calibration_maps` per (league_id, model_version, outcome).
  *
  * Filozofie:
- * - Scoatem p_raw (probabilitatea 1X2 a modelului înainte de blend cu piaţa) din `raw_payload.evaluation.modelProbs1x2Pct`.
- *   Dacă lipseşte, folosim `raw_payload.probs.{p1,pX,p2}` (blended — mai puţin curat, dar utilizabil).
+ * - Scoatem p_raw din `evaluation.rawPoissonProbs1x2Pct` (aliniat cu serve).
+ *   Fallback: modelProbs1x2Pct (istoric), apoi probs.
  * - Outcome real derivat din score_home/score_away.
  * - Brier înainte/după salvat în metrics_json pentru audit vizibil în observatory.
  */
@@ -16,24 +16,11 @@ import { createClient } from "@supabase/supabase-js";
 import { fitIsotonicPav, applyIsotonicMap } from "../server-utils/isotonicCalibration.js";
 import { actual1x2FromScore, brier1x2 } from "../server-utils/probabilityMetrics.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
+import { extractRawTriple } from "../server-utils/ml/extractRawTriple.js";
 
 const MIN_SAMPLES_PER_LEAGUE = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
 const FALLBACK_GLOBAL = true;
-
-function extractRawTriple(payload) {
-  const ev = payload?.evaluation?.modelProbs1x2Pct;
-  if (ev && Number.isFinite(ev.p1) && Number.isFinite(ev.pX) && Number.isFinite(ev.p2)) {
-    const s = ev.p1 + ev.pX + ev.p2;
-    if (s > 0) return { p1: ev.p1 / s, pX: ev.pX / s, p2: ev.p2 / s };
-  }
-  const pr = payload?.probs;
-  if (pr && Number.isFinite(pr.p1) && Number.isFinite(pr.pX) && Number.isFinite(pr.p2)) {
-    const s = pr.p1 + pr.pX + pr.p2;
-    if (s > 0) return { p1: pr.p1 / s, pX: pr.pX / s, p2: pr.p2 / s };
-  }
-  return null;
-}
 
 function collect(rows) {
   const out = { "1": [], X: [], "2": [] };

@@ -1,0 +1,132 @@
+/**
+ * League × fixture loop driver — calls Stage02…09 per fixture.
+ * Not a stage; owned by PredictorV3 orchestrator.
+ */
+
+import { getWithCache } from "../../fetcher.js";
+import { getLeagueParams, getLeagueProfile } from "../../modelConstants.js";
+import { loadTeamMarketRolling } from "../../teamMarketRolling.js";
+import { logError } from "../../observability/logger.js";
+import {
+  standingsRowsFromApi,
+  buildLeagueStandingsTable
+} from "../predictHelpers.js";
+import { beginFixture, resetFixture } from "../PipelineContext.js";
+import { initFixtureWorkingState, buildFixtureErrorRow } from "./fixtureStageShared.js";
+import * as Stage02FeatureCollection from "./Stage02FeatureCollection.js";
+import * as Stage03LambdaGeneration from "./Stage03LambdaGeneration.js";
+import * as Stage04ProbabilityGeneration from "./Stage04ProbabilityGeneration.js";
+import * as Stage05Simulation from "./Stage05Simulation.js";
+import * as Stage06Calibration from "./Stage06Calibration.js";
+import * as Stage07ModelFusion from "./Stage07ModelFusion.js";
+import * as Stage08Decision from "./Stage08Decision.js";
+import * as Stage09Explainability from "./Stage09Explainability.js";
+
+export const FIXTURE_STAGES = [
+  Stage02FeatureCollection,
+  Stage03LambdaGeneration,
+  Stage04ProbabilityGeneration,
+  Stage05Simulation,
+  Stage06Calibration,
+  Stage07ModelFusion,
+  Stage08Decision,
+  Stage09Explainability
+];
+
+/**
+ * @param {object} context
+ */
+export async function runFixtureStageLoop(context) {
+  if (context.halted) return context;
+
+  const leagueIds = context.leagueIds;
+  const season = context.season;
+  const effectiveLimit = context.effectiveLimit;
+  const allFixtures = context.allFixtures || [];
+  const out = context.out || (context.out = []);
+
+  for (const lId of leagueIds) {
+    if (out.length >= effectiveLimit) break;
+    const leagueFixtures = allFixtures.filter((f) => String(f.league?.id) === String(lId));
+    if (leagueFixtures.length === 0) continue;
+
+    const leagueParams = getLeagueParams(lId);
+    const leagueProfile = getLeagueProfile(lId);
+    const marketRollingMap = await loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map());
+
+    const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
+    const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
+    const standingsMap = new Map();
+    standingsRows.forEach((r) => {
+      if (r?.team?.id) standingsMap.set(String(r.team.id), r);
+    });
+    const leagueStandings = buildLeagueStandingsTable(standingsRows);
+
+    context.league = {
+      lId,
+      leagueParams,
+      leagueProfile,
+      marketRollingMap,
+      standingsMap,
+      leagueStandings,
+      standingsRows,
+      leagueFixtures
+    };
+
+    for (const fx of leagueFixtures) {
+      if (out.length >= effectiveLimit) break;
+
+      const fixtureId = fx.fixture?.id;
+      const homeName = fx.teams?.home?.name || "Home";
+      const awayName = fx.teams?.away?.name || "Away";
+      const homeIdStr = fx.teams?.home?.id ? String(fx.teams.home.id) : null;
+      const awayIdStr = fx.teams?.away?.id ? String(fx.teams.away.id) : null;
+      let refereeName = "";
+      try {
+        const r = fx.fixture?.referee;
+        if (r) {
+          if (typeof r === "string") refereeName = r;
+          else refereeName = r?.name || r?.full_name || r?.last_name || "";
+        }
+      } catch {
+        refereeName = "";
+      }
+
+      const f = beginFixture(context, {
+        fixtureId,
+        fx,
+        homeName,
+        awayName,
+        homeIdStr,
+        awayIdStr,
+        refereeName
+      });
+      initFixtureWorkingState(f);
+
+      try {
+        for (const stage of FIXTURE_STAGES) {
+          await stage.run(context);
+          if (context.fixture?.aborted) break;
+        }
+        if (context.fixture?.silentSkip) {
+          // legacy: !calc → no row
+        } else if (context.fixture?.row) {
+          out.push(context.fixture.row);
+        }
+      } catch (fixtureError) {
+        logError("predict.fixture_failed", {
+          fixtureId,
+          error: fixtureError?.message || String(fixtureError)
+        });
+        out.push(buildFixtureErrorRow(f, context.league));
+      } finally {
+        resetFixture(context);
+      }
+    }
+  }
+
+  context.out = out;
+  return context;
+}
+
+export default { runFixtureStageLoop, FIXTURE_STAGES };

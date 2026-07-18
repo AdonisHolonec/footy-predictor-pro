@@ -1,0 +1,87 @@
+{
+  "id": "standings-lambda",
+  "startStage": "Stage03LambdaGeneration",
+  "date": "2026-03-15",
+  "season": 2025,
+  "league": {
+    "lId": 39,
+    "standingsRows": [
+      {
+        "team": {
+          "id": 50
+        },
+        "all": {
+          "played": 18,
+          "goals": {
+            "for": 36,
+            "against": 18
+          }
+        }
+      },
+      {
+        "team": {
+          "id": 51
+        },
+        "all": {
+          "played": 18,
+          "goals": {
+            "for": 20,
+            "against": 30
+          }
+        }
+      }
+    ]
+  },
+  "fixtureInit": {
+    "fixtureId": 910003,
+    "homeIdStr": "50",
+    "awayIdStr": "51",
+    "homeName": "Standings Home",
+    "awayName": "Standings Away"
+  },
+  "preStage": {
+    "method": "none",
+    "engineCtx": null,
+    "hStats": null,
+    "aStats": null,
+    "lambdaHome": null,
+    "lambdaAway": null,
+    "strengthMeta": null,
+    "rollingHint": {
+      "home": {
+        "xg_for_avg": 1.4,
+        "xg_against_avg": 1.3
+      },
+      "away": {
+        "xg_for_avg": 1.15,
+        "xg_against_avg": 1.45
+      }
+    }
+  },
+  "mocks": {
+    "odds": null,
+    "elo": {
+      "eloHome": 1650,
+      "eloAway": 1500,
+      "thin": false
+    }
+  },
+  "expected": {
+    "lambdaHome": 1.827869090909091,
+    "lambdaAway": 1.0185402181818182,
+    "pRaw": {
+      "p1": 55.82951609660605,
+      "pX": 25.13199770234951,
+      "p2": 19.03848620104444
+    },
+    "probs1x2": {
+      "p1": 51.2397668270458,
+      "pX": 26.251435416459433,
+      "p2": 22.508797756494765
+    },
+    "pick": "Peste 1.5",
+    "method": "standings",
+    "aborted": false,
+    "insufficientReason": null
+  }
+}

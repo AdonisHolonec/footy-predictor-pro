@@ -18,6 +18,7 @@ import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../serv
 import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/AutoModelSelection.js";
+import { extractRawTriple } from "../../server-utils/ml/extractRawTriple.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const CALIBRATION_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
@@ -30,23 +31,6 @@ const SGD_EPOCHS = Math.max(40, Math.min(Number(process.env.STACKER_EPOCHS || 12
 const SGD_LR = Number(process.env.STACKER_LR || 0.08);
 const SGD_L2 = Number(process.env.STACKER_L2 || 1e-3);
 const SGD_BATCH = Math.max(16, Math.min(Number(process.env.STACKER_BATCH || 64), 256));
-
-function extractRawTriple(payload) {
-  const ev = payload?.evaluation?.modelProbs1x2Pct;
-  if (ev && Number.isFinite(ev.p1) && Number.isFinite(ev.pX) && Number.isFinite(ev.p2)) {
-    const s = ev.p1 + ev.pX + ev.p2;
-    if (s > 0) return { p1: ev.p1 / s, pX: ev.pX / s, p2: ev.p2 / s };
-  }
-  const pr = payload?.probs;
-  if (pr && Number.isFinite(pr.p1) && Number.isFinite(pr.pX) && Number.isFinite(pr.p2)) {
-    const p1 = pr.p1 > 1 ? pr.p1 / 100 : pr.p1;
-    const pX = pr.pX > 1 ? pr.pX / 100 : pr.pX;
-    const p2 = pr.p2 > 1 ? pr.p2 / 100 : pr.p2;
-    const s = p1 + pX + p2;
-    if (s > 0) return { p1: p1 / s, pX: pX / s, p2: p2 / s };
-  }
-  return null;
-}
 
 function buildCalibrationGroups(rows) {
   const out = { "1": [], X: [], "2": [] };

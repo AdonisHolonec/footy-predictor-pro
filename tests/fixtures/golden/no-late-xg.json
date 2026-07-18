@@ -1,0 +1,67 @@
+{
+  "id": "no-late-xg",
+  "startStage": "Stage04ProbabilityGeneration",
+  "date": "2026-03-15",
+  "season": 2025,
+  "league": {
+    "lId": 39
+  },
+  "fixtureInit": {
+    "fixtureId": 910001,
+    "homeIdStr": "33",
+    "awayIdStr": "34",
+    "homeName": "Home FC",
+    "awayName": "Away FC"
+  },
+  "preStage": {
+    "method": "modular-engine",
+    "lambdaHome": 1.45,
+    "lambdaAway": 1.12,
+    "strengthMeta": {
+      "xgBlend": {
+        "applied": true,
+        "source": "early_rolling"
+      },
+      "homePlayed": 10,
+      "awayPlayed": 10,
+      "atkH": 1.2,
+      "atkA": 1
+    },
+    "rollingHint": {
+      "home": {
+        "xg_for_avg": 1.6,
+        "xg_against_avg": 1.1
+      },
+      "away": {
+        "xg_for_avg": 1.2,
+        "xg_against_avg": 1.4
+      }
+    }
+  },
+  "mocks": {
+    "odds": null,
+    "elo": {
+      "eloHome": 1620,
+      "eloAway": 1540,
+      "thin": false
+    }
+  },
+  "expected": {
+    "lambdaHome": 1.45,
+    "lambdaAway": 1.12,
+    "pRaw": {
+      "p1": 43.491886683325646,
+      "pX": 29.118370358100176,
+      "p2": 27.389742958574192
+    },
+    "probs1x2": {
+      "p1": 43.9910248541282,
+      "pX": 28.703461617730742,
+      "p2": 27.305513528141066
+    },
+    "pick": "Sub 3.5",
+    "method": "modular-engine",
+    "aborted": false,
+    "insufficientReason": null
+  }
+}

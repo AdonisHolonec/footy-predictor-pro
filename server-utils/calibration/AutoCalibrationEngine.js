@@ -29,6 +29,9 @@ import {
   invalidateAutoCalibrationCache
 } from "./overlayStore.js";
 import { getSupabaseAdmin } from "../supabaseAdmin.js";
+import { extractPredictedTriple } from "../ml/extractRawTriple.js";
+
+export { extractPredictedTriple, extractRawTriple } from "../ml/extractRawTriple.js";
 
 const DEFAULT_WINDOW_DAYS = 180;
 const DEFAULT_MIN_SAMPLES = 80;
@@ -47,32 +50,6 @@ function round4(n) {
 
 function round5(n) {
   return Math.round(Number(n) * 100000) / 100000;
-}
-
-/** Prefer raw Poisson, then model, then top-level probs. */
-export function extractPredictedTriple(payload) {
-  const tryTriple = (t, scaleHint) => {
-    if (!t) return null;
-    let p1 = Number(t.p1);
-    let pX = Number(t.pX);
-    let p2 = Number(t.p2);
-    if (![p1, pX, p2].every(Number.isFinite)) return null;
-    if (scaleHint === "pct" || p1 + pX + p2 > 1.5) {
-      p1 /= 100;
-      pX /= 100;
-      p2 /= 100;
-    }
-    const s = p1 + pX + p2;
-    if (!(s > 0)) return null;
-    return { p1: p1 / s, pX: pX / s, p2: p2 / s };
-  };
-
-  const ev = payload?.evaluation || {};
-  return (
-    tryTriple(ev.rawPoissonProbs1x2Pct, "pct") ||
-    tryTriple(ev.modelProbs1x2Pct, "pct") ||
-    tryTriple(payload?.probs, "auto")
-  );
 }
 
 export function extractSamplesFromHistory(rows = []) {

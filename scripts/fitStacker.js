@@ -4,7 +4,7 @@
  * Rulează: `node --env-file=.env.local scripts/fitStacker.js`
  *
  * Antrenează o regresie logistică multinomială cu L2 pe features derivate din:
- * - Poisson model probs (din `raw_payload.evaluation.modelProbs1x2Pct`)
+ * - Raw Poisson probs (`evaluation.rawPoissonProbs1x2Pct`, train/serve aligned)
  * - Market probs Shin (derivate din `odds` dacă există în payload)
  * - Elo spread (din `raw_payload.modelMeta.eloSpread` dacă disponibil)
  * - Data quality, home advantage, rho (din `raw_payload.modelMeta.leagueParams`)
@@ -20,6 +20,7 @@ import { extractStackerFeatures, applyStacker, safeLog, softmax3 } from "../serv
 import { shinImpliedProbs } from "../server-utils/advancedMath.js";
 import { actual1x2FromScore, brier1x2, logLoss1x2 } from "../server-utils/probabilityMetrics.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
+import { extractRawTriple } from "../server-utils/ml/extractRawTriple.js";
 
 const MIN_SAMPLES_LEAGUE = Math.max(200, Number(process.env.STACKER_MIN_LEAGUE || 400));
 const MIN_SAMPLES_GLOBAL = Math.max(500, Number(process.env.STACKER_MIN_GLOBAL || 1200));
@@ -43,19 +44,7 @@ function buildDataset(rows) {
     const actual = actual1x2FromScore(row.score_home, row.score_away);
     if (!actual) continue;
     const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-    const ev = payload.evaluation?.modelProbs1x2Pct;
-    let poissonProbs = null;
-    if (ev && Number.isFinite(ev.p1) && Number.isFinite(ev.pX) && Number.isFinite(ev.p2)) {
-      const s = ev.p1 + ev.pX + ev.p2;
-      if (s > 0) poissonProbs = { p1: ev.p1 / s, pX: ev.pX / s, p2: ev.p2 / s };
-    }
-    if (!poissonProbs) {
-      const pr = payload.probs;
-      if (pr && Number.isFinite(pr.p1) && Number.isFinite(pr.pX) && Number.isFinite(pr.p2)) {
-        const s = (pr.p1 + pr.pX + pr.p2) / 100;
-        if (s > 0) poissonProbs = { p1: pr.p1 / 100 / s, pX: pr.pX / 100 / s, p2: pr.p2 / 100 / s };
-      }
-    }
+    const poissonProbs = extractRawTriple(payload);
     if (!poissonProbs) continue;
 
     let marketProbs = null;
