@@ -213,7 +213,7 @@ export default async function handler(req, res) {
   );
   const leagueIds = parseLeagueIds(process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS);
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
-  const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 7), 120));
+  const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 45), 120));
   const base = resolvePublicBaseUrl();
   const startedAt = new Date().toISOString();
   // C10: shared soft/hard circuit (defaults 80% / 95%, reserve 80). Legacy CRON_* envs still override soft/hard %.

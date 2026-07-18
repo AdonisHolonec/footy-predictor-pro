@@ -1011,6 +1011,32 @@ test("BacktestAnalytics computes ROI Yield Profit Loss streaks and drawdown", ()
   const emptyDash = buildDashboardBundle(metrics, []);
   assert.equal(emptyDash.dailyProfit, 0);
   assert.equal(emptyDash.hitRate, 0);
+
+  // Multi-market value bet: odds from valueEngine, settle from score (not 1X2 columns).
+  const ggRow = {
+    fixture_id: 99,
+    kickoff_at: "2026-01-04T12:00:00Z",
+    league_id: 39,
+    league_name: "Premier League",
+    validation: "pending",
+    value_bet_validation: null,
+    score_home: 2,
+    score_away: 1,
+    odds_home: 2.1,
+    odds_draw: 3.3,
+    odds_away: 3.4,
+    recommended_pick: "1",
+    raw_payload: {
+      valueBet: { detected: true, type: "GG", kelly: 1.2, ev: 6 },
+      valueEngine: { bestMarket: { type: "GG", odds: 1.85, kellyPct: 1.2 } },
+      score: { home: 2, away: 1 }
+    }
+  };
+  const ggEvent = extractBetEvent(ggRow);
+  assert.ok(ggEvent);
+  assert.equal(ggEvent.won, true);
+  assert.equal(ggEvent.odd, 1.85);
+  assert.ok(ggEvent.stake > 0);
 });
 
 test("Auto Calibration compares predicted vs actual and respects manual locks", async () => {

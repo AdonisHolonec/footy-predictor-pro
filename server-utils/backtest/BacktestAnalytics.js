@@ -9,6 +9,8 @@
  * `requirePositiveEv` is true (default false for historical parity with existing snapshots).
  */
 
+import { evaluateTopPick } from "../predictionsHistory.js";
+
 function round(n, digits = 4) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
@@ -41,10 +43,67 @@ export function resolveWindowDays(period, daysHint) {
 }
 
 export function getSelectedOdd(row, type) {
-  if (type === "1") return Number(row.odds_home);
-  if (type === "X") return Number(row.odds_draw);
-  if (type === "2") return Number(row.odds_away);
+  const t = String(type || "").trim().toUpperCase();
+  if (t === "1") return Number(row.odds_home);
+  if (t === "X") return Number(row.odds_draw);
+  if (t === "2") return Number(row.odds_away);
   return null;
+}
+
+/** Resolve stakeable odds: value-bet quote first, then 1X2 columns. */
+function resolveBetOdd(row, payload, valueBet, type) {
+  const ve = payload.valueEngine && typeof payload.valueEngine === "object" ? payload.valueEngine : {};
+  const best = ve.bestMarket && typeof ve.bestMarket === "object" ? ve.bestMarket : {};
+  const candidates = [
+    valueBet.odds,
+    valueBet.odd,
+    best.odds,
+    ve.odds,
+    getSelectedOdd(row, type)
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isFinite(n) && n > 1) return n;
+  }
+  return null;
+}
+
+function resolveBetStakePct(valueBet, ve) {
+  const raw = Number(
+    valueBet.kelly ??
+      valueBet.kellyPct ??
+      ve?.kellyPct ??
+      ve?.bestMarket?.kellyPct ??
+      0
+  );
+  return clamp(raw, 0, 3);
+}
+
+function resolveBetOutcome(row, payload, type) {
+  const vbOutcome = row.value_bet_validation ?? payload.value_bet_validation;
+  if (vbOutcome === "win") return { won: true, lost: false };
+  if (vbOutcome === "loss") return { won: false, lost: true };
+
+  // Re-settle from stored score when VB validation is missing/pending.
+  const score = {
+    home: row.score_home ?? payload.score?.home ?? null,
+    away: row.score_away ?? payload.score?.away ?? null
+  };
+  if (type && score.home != null && score.away != null) {
+    const hit = evaluateTopPick(type, score);
+    if (hit === true) return { won: true, lost: false };
+    if (hit === false) return { won: false, lost: true };
+  }
+
+  // Fallback: recommended-pick validation only when markets align or no VB type.
+  const rec = String(row.recommended_pick || payload.recommended?.pick || "").trim().toUpperCase();
+  const t = String(type || "").trim().toUpperCase();
+  const aligned = !t || !rec || t === rec;
+  if (aligned) {
+    if (row.validation === "win") return { won: true, lost: false };
+    if (row.validation === "loss") return { won: false, lost: true };
+  }
+  return { won: false, lost: false };
 }
 
 function normalizeMarket(raw) {
@@ -97,21 +156,21 @@ export function extractBetEvent(row) {
   if (!row) return null;
   const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
   const valueBet = payload.valueBet && typeof payload.valueBet === "object" ? payload.valueBet : {};
-  const type = String(valueBet.type || "").trim();
-  const stakePct = clamp(Number(valueBet.kelly || 0), 0, 3);
+  const ve = payload.valueEngine && typeof payload.valueEngine === "object" ? payload.valueEngine : {};
+  const type = String(valueBet.type || ve.type || ve.bestMarket?.type || "").trim();
+  const stakePct = resolveBetStakePct(valueBet, ve);
   const stake = stakePct / 100;
-  const odd = getSelectedOdd(row, type);
-  const ev = Number(valueBet.ev ?? valueBet.expectedValue);
+  const odd = resolveBetOdd(row, payload, valueBet, type);
+  const ev = Number(valueBet.ev ?? valueBet.expectedValue ?? ve.expectedValue ?? ve.bestMarket?.expectedValue);
   const confidence = Number(
     valueBet.confidence ??
+      ve.confidencePct ??
       payload.recommended?.confidence ??
       row.recommended_confidence ??
       0
   );
 
-  const vbOutcome = row.value_bet_validation ?? payload.value_bet_validation;
-  const won = vbOutcome === "win" || (vbOutcome == null && row.validation === "win");
-  const lost = vbOutcome === "loss" || (vbOutcome == null && row.validation === "loss");
+  const { won, lost } = resolveBetOutcome(row, payload, type);
   if (!won && !lost) return null;
   if (stake <= 0 || !Number.isFinite(odd) || odd <= 1) return null;
 

@@ -268,10 +268,10 @@ async function handleAnalytics(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, recommended_pick, recommended_confidence, raw_payload"
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
-      .in("validation", ["win", "loss"])
+      .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
       .limit(8000);
 
@@ -334,9 +334,11 @@ async function handleSnapshot(req, res) {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("predictions_history")
-      .select("kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, raw_payload")
+      .select(
+        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, raw_payload"
+      )
       .gte("kickoff_at", cutoff)
-      .in("validation", ["win", "loss"])
+      .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
       .limit(5000);
 
@@ -604,10 +606,10 @@ async function handlePublicTrack(req, res) {
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, recommended_pick, recommended_confidence, raw_payload"
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
-      .in("validation", ["win", "loss"])
+      .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
       .limit(5000);
 

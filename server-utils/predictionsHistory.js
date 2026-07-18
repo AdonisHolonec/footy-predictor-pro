@@ -18,13 +18,34 @@ export function evaluateTopPick(pick, score) {
   if (normalized === "1") return home > away;
   if (normalized === "2") return away > home;
   if (normalized === "x") return home === away;
+  // Double Chance
+  if (normalized === "1x") return home >= away;
+  if (normalized === "12") return home !== away;
+  if (normalized === "x2") return away >= home;
   if (normalized === "gg") return home > 0 && away > 0;
   if (normalized === "ngg") return home === 0 || away === 0;
-  const overMatch = normalized.match(/peste\s*(\d+(?:[.,]\d+)?)/);
+  const overMatch = normalized.match(/^(?:peste|over)\s*(\d+(?:[.,]\d+)?)/);
   if (overMatch) return total > Number(overMatch[1].replace(",", "."));
-  const underMatch = normalized.match(/sub\s*(\d+(?:[.,]\d+)?)/);
+  const underMatch = normalized.match(/^(?:sub|under)\s*(\d+(?:[.,]\d+)?)/);
   if (underMatch) return total < Number(underMatch[1].replace(",", "."));
   return null;
+}
+
+/** True when evaluateTopPick can grade this market label (1X2, DC, BTTS, O/U). */
+export function isGradeablePick(pick) {
+  const normalized = normalizePick(pick);
+  if (!normalized) return false;
+  if (["1", "2", "x", "1x", "12", "x2", "gg", "ngg"].includes(normalized)) return true;
+  return /^(?:peste|over|sub|under)\s*\d/.test(normalized);
+}
+
+/** Canonical value-bet pick string for settlement (preserves O/U wording). */
+export function resolveValueBetPick(type) {
+  const raw = String(type || "").trim();
+  if (!raw || !isGradeablePick(raw)) return null;
+  const upper = raw.toUpperCase();
+  if (["1", "X", "2", "1X", "12", "X2", "GG", "NGG"].includes(upper)) return upper;
+  return raw;
 }
 
 export function validationFromMatch(status, pick, score) {
@@ -44,8 +65,7 @@ function mapPredictionToDbRow(prediction) {
   const recommendedConfidence = asNum(prediction.recommended?.confidence);
   const generatedAt = new Date().toISOString();
   const modelVer = prediction.modelVersion || MODEL_VERSION;
-  const vbType = prediction.valueBet?.type ? String(prediction.valueBet.type).trim().toUpperCase() : "";
-  const valueBetPick = ["1", "X", "2"].includes(vbType) ? vbType : null;
+  const valueBetPick = resolveValueBetPick(prediction.valueBet?.type);
   const valueBetValidation = valueBetPick
     ? isFinalStatus(status)
       ? validationFromMatch(status, valueBetPick, score)

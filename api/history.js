@@ -8,6 +8,7 @@ import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
   readPredictionsHistoryForUser,
+  resolveValueBetPick,
   validationFromMatch
 } from "../server-utils/predictionsHistory.js";
 
@@ -388,8 +389,7 @@ async function handleHistorySync(req, res) {
       const scoreAway = typeof fx?.goals?.away === "number" ? fx.goals.away : null;
       const validation = validationFromMatch(matchStatus, row.recommended_pick, { home: scoreHome, away: scoreAway });
       const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-      const vbRaw = raw.valueBet?.type ? String(raw.valueBet.type).trim().toUpperCase() : "";
-      const vbPick = ["1", "X", "2"].includes(vbRaw) ? vbRaw : null;
+      const vbPick = resolveValueBetPick(raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type);
       const valueBetValidation = vbPick
         ? validationFromMatch(matchStatus, vbPick, { home: scoreHome, away: scoreAway })
         : row.value_bet_validation ?? null;
@@ -416,31 +416,87 @@ async function handleHistorySync(req, res) {
       if (updateError) throw updateError;
     }
 
+    // DB-only pass: grade multi-market value bets on already-finished rows
+    // (cron used to skip them once recommended_pick was settled).
+    let resettled = 0;
+    const resettleUpdates = [];
+    for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+      const { data: page, error: resettleErr } = await supabase
+        .from(HISTORY_TABLE)
+        .select(
+          "fixture_id, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload"
+        )
+        .gte("kickoff_at", cutoff)
+        .in("match_status", ["FT", "AET", "PEN"])
+        .or("value_bet_validation.is.null,value_bet_validation.eq.pending")
+        .order("kickoff_at", { ascending: false })
+        .order("fixture_id", { ascending: false })
+        .range(offset, offset + scanChunkSize - 1);
+      if (resettleErr) throw resettleErr;
+      if (!page?.length) break;
+      for (const row of page) {
+        const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+        const vbPick = resolveValueBetPick(
+          raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type
+        );
+        if (!vbPick) continue;
+        const score = { home: row.score_home, away: row.score_away };
+        if (score.home == null || score.away == null) continue;
+        const valueBetValidation = validationFromMatch(row.match_status, vbPick, score);
+        if (valueBetValidation !== "win" && valueBetValidation !== "loss") continue;
+        const validation =
+          row.validation === "win" || row.validation === "loss"
+            ? row.validation
+            : validationFromMatch(row.match_status, row.recommended_pick, score);
+        if (String(valueBetValidation) === String(row.value_bet_validation || "") &&
+            String(validation) === String(row.validation || "")) {
+          continue;
+        }
+        resettleUpdates.push({
+          fixture_id: Number(row.fixture_id),
+          validation,
+          value_bet_validation: valueBetValidation,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (page.length < scanChunkSize) break;
+    }
+    if (resettleUpdates.length > 0) {
+      const { error: resettleWriteErr } = await supabase
+        .from(HISTORY_TABLE)
+        .upsert(resettleUpdates, { onConflict: "fixture_id" });
+      if (resettleWriteErr) throw resettleWriteErr;
+      resettled = resettleUpdates.length;
+    }
+
+    const updatedTotal = updates.length + resettled;
     console.info(
       JSON.stringify({
         historySync: true,
         method: req.method || "",
         scanned: candidates.length,
         updated: updates.length,
+        resettled,
         cappedScan
       })
     );
     await persistHistorySyncStatus(supabase, req, {
       ok: true,
       scanned: candidates.length,
-        updated: updates.length,
-        estimatedCalls
+      updated: updatedTotal,
+      estimatedCalls
     });
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
       updated: updates.length,
-        cappedScan,
-        estimatedCalls,
-        estimatedCallsBreakdown: {
-          dayLeagueGroups: groupedFetchCalls,
-          idsChunks: idsFetchCalls
-        }
+      resettled,
+      cappedScan,
+      estimatedCalls,
+      estimatedCallsBreakdown: {
+        dayLeagueGroups: groupedFetchCalls,
+        idsChunks: idsFetchCalls
+      }
     });
   } catch (error) {
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";

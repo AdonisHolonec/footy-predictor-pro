@@ -28,15 +28,15 @@
   ],
   "crons": [
     {
-      "path": "/api/history?sync=1&days=7",
+      "path": "/api/history?sync=1&days=45",
       "schedule": "30 11 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=7",
+      "path": "/api/history?sync=1&days=45",
       "schedule": "30 14 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=7",
+      "path": "/api/history?sync=1&days=45",
       "schedule": "30 17 * * *"
     },
     {
