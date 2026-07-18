@@ -521,14 +521,15 @@ function LeagueStandingsTable({
 
 const DETAIL_TABS = [
   { id: "overview", label: "Overview" },
-  { id: "prediction", label: "AI Prediction" },
-  { id: "why", label: "Why" },
+  { id: "prediction", label: "Prediction" },
   { id: "statistics", label: "Statistics" },
+  { id: "h2h", label: "Head-to-head" },
   { id: "form", label: "Form" },
-  { id: "odds", label: "Odds" },
-  { id: "value", label: "Best Value" },
+  { id: "xg", label: "Expected Goals" },
   { id: "montecarlo", label: "Monte Carlo" },
-  { id: "xg", label: "xG" },
+  { id: "value", label: "Value Analysis" },
+  { id: "odds", label: "Markets" },
+  { id: "why", label: "Explanation" },
   { id: "timeline", label: "Timeline" }
 ] as const;
 
@@ -962,11 +963,17 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           </div>
 
           <section
-            className={`mx-auto mt-6 hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:block sm:p-5 ${
-              detailTab === "form" || detailTab === "overview" ? "" : "sm:hidden"
+            className={`mx-auto mt-6 max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:p-5 ${
+              detailTab === "form" || detailTab === "h2h"
+                ? ""
+                : detailTab === "overview"
+                  ? "hidden sm:block"
+                  : "hidden"
             }`}
           >
-            <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
+            <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
+              {detailTab === "h2h" ? "Head-to-head context" : "Standings & form"}
+            </h3>
             {showStandingsBlock ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -1002,9 +1009,9 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                 role="tab"
                 aria-selected={detailTab === t.id}
                 onClick={() => setDetailTab(t.id)}
-                className={`shrink-0 rounded-lg px-2.5 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-wide ${
+                className={`min-h-11 shrink-0 rounded-lg px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                   detailTab === t.id
-                    ? "bg-signal-petrol/20 text-signal-petrol"
+                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                     : "text-signal-inkMuted hover:bg-signal-void/40 hover:text-signal-ink"
                 }`}
               >

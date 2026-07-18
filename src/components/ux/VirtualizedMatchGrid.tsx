@@ -10,6 +10,9 @@ type Props = {
   hashColor: (seed: string) => string;
   isWatched: (id: number) => boolean;
   onToggleWatch: (id: number) => void;
+  isBookmarked?: (id: number) => boolean;
+  onToggleBookmark?: (id: number) => void;
+  onShare?: (message: string) => void;
   onOpen: (m: PredictionRow) => void;
   canShowSpecialBet?: boolean;
 };
@@ -22,6 +25,9 @@ export default function VirtualizedMatchGrid({
   hashColor,
   isWatched,
   onToggleWatch,
+  isBookmarked,
+  onToggleBookmark,
+  onShare,
   onOpen,
   canShowSpecialBet
 }: Props) {
@@ -40,6 +46,9 @@ export default function VirtualizedMatchGrid({
             compact
             watched={isWatched(Number(match.id))}
             onToggleWatch={() => onToggleWatch(Number(match.id))}
+            bookmarked={isBookmarked?.(Number(match.id))}
+            onToggleBookmark={onToggleBookmark ? () => onToggleBookmark(Number(match.id)) : undefined}
+            onShare={onShare}
             canShowSpecialBet={canShowSpecialBet}
             onClick={() => onOpen(match)}
           />
@@ -48,7 +57,7 @@ export default function VirtualizedMatchGrid({
       {visible < matches.length && (
         <div className="mt-4 flex justify-center">
           <Button variant="secondary" onClick={() => setVisible((v) => v + PAGE)}>
-            Încarcă mai multe ({matches.length - visible} rămase)
+            Load more ({matches.length - visible} left)
           </Button>
         </div>
       )}

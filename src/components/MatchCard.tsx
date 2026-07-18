@@ -23,6 +23,9 @@ type MatchCardProps = {
   compact?: boolean;
   watched?: boolean;
   onToggleWatch?: () => void;
+  bookmarked?: boolean;
+  onToggleBookmark?: () => void;
+  onShare?: (message: string) => void;
 };
 
 function isFinalStatus(status?: string) {
@@ -175,7 +178,10 @@ export default function MatchCard({
   canShowSpecialBet = false,
   compact = true,
   watched = false,
-  onToggleWatch
+  onToggleWatch,
+  bookmarked = false,
+  onToggleBookmark,
+  onShare
 }: MatchCardProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
@@ -313,15 +319,35 @@ export default function MatchCard({
                 e.stopPropagation();
                 onToggleWatch();
               }}
-              className={`flex h-9 min-w-9 items-center justify-center rounded-md border text-[12px] ${
+              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 watched
-                  ? "border-signal-amber/40 bg-signal-amber/15 text-signal-amber"
-                  : "border-white/10 text-signal-inkMuted"
+                  ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
+                  : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
-              aria-label={watched ? "Scoate din favorite" : "Adaugă la favorite"}
+              aria-label={watched ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={watched}
               title="Favorite"
             >
               ★
+            </button>
+          )}
+          {onToggleBookmark && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleBookmark();
+              }}
+              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                bookmarked
+                  ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                  : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
+              }`}
+              aria-label={bookmarked ? "Remove bookmark" : "Bookmark match"}
+              aria-pressed={bookmarked}
+              title="Bookmark"
+            >
+              🔖
             </button>
           )}
           <button
@@ -332,10 +358,12 @@ export default function MatchCard({
               if (navigator.share) {
                 void navigator.share({ title: "Footy Predictor", text }).catch(() => undefined);
               } else if (navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(text);
+                void navigator.clipboard.writeText(text).then(() => onShare?.("Link copied"));
+              } else {
+                onShare?.(text);
               }
             }}
-            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-white/10 text-[11px] text-signal-inkMuted"
+            className="flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[11px] text-[var(--fp-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
             aria-label="Share prediction"
             title="Share"
           >

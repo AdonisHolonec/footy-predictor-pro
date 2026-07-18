@@ -1,223 +1,138 @@
-# Design System V3 — Footy Predictor Pro
+# DESIGN_SYSTEM.md
+## Footy Predictor Pro — UX V4 Design System Spec
 
-**Codename:** Signal Atelier v3  
-**Constraint:** Evolve existing `signal.*` / `lab-*` tokens — do not invent a second parallel system overnight.  
-**Modes:** Dark (default) · Light · High contrast
-
----
-
-## 1. Brand posture
-
-Premium sports intelligence — **calm, precise, athletic**.  
-Not neon betting. Not purple AI cliché. Not newspaper clutter.
-
-**Voice of UI:** short labels, mono for metrics, display for match names only.
+**Status:** Spec for V4 implementation (tokens partially exist in `src/design-system/`).  
+**Constraint:** Visual/system only — no engine/API/auth changes.
 
 ---
 
-## 2. Color palette
+## 1. Principles
 
-### 2.1 Core (map to CSS variables)
-
-| Token | Dark | Light | Usage |
-|-------|------|-------|-------|
-| `--bg` | `#0B0F14` | `#F4F6F8` | Page |
-| `--bg-elevated` | `#121821` | `#FFFFFF` | Cards |
-| `--bg-muted` | `#1C2633` | `#E8EEF4` | Wells / filters |
-| `--border` | `rgba(255,255,255,0.08)` | `rgba(15,23,42,0.08)` | Hairlines |
-| `--text` | `#E8EEF4` | `#0F172A` | Primary |
-| `--text-muted` | `#8B9BB0` | `#64748B` | Secondary |
-| `--text-faint` | `#5C6B7A` | `#94A3B8` | Meta |
-
-### 2.2 Accents (≤3 chromatic)
-
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `--accent` | `#5EC4B6` (petrol/mint) | Primary CTA, focus, links |
-| `--accent-2` | `#E0B46A` (amber) | Value / EV / warning soft |
-| `--danger` | `#E07A7A` | Loss / error |
-| `--success` | `#6FCF97` | Win / healthy |
-| `--info` | `#6A9BB8` | Live / info |
-
-**Rule:** One accent per view region. Never rainbow chips.
-
-### 2.3 Semantic badges
-
-| State | BG / Text |
-|-------|---------|
-| LIVE | info / white |
-| WIN | success muted |
-| LOSE | danger muted |
-| VALUE | amber muted |
-| SAFE | accent muted |
-| LOCKED | muted / faint |
-| OPEN | border only |
-
-### 2.4 Compatibility with today
-
-Keep Tailwind `signal.*` names; remap internals:
-
-```
-signal.void → --bg
-signal.panel → --bg-elevated
-signal.petrol → --accent
-signal.amber → --accent-2
-```
+1. **Dark-first** — almost black canvas, graphite cards, subtle borders  
+2. **One accent** — Electric Blue for primary actions only  
+3. **8pt spacing** — no arbitrary gaps  
+4. **One card language** — shared radius, padding, elevation, hover  
+5. **Bettor language** — hide lab/pipeline jargon from user surfaces  
+6. **Motion subtle** — ≤200ms ease; no decorative gradient noise  
 
 ---
 
-## 3. Typography
+## 2. Color (V4 target)
 
-| Role | Family | Size / weight | Notes |
-|------|--------|---------------|-------|
-| Display | Sora | 28–40 / 600 | Match titles sparingly |
-| Title | Sora | 20–24 / 600 | Section headers |
-| Body | Plus Jakarta Sans | 14–16 / 400–500 | UI copy |
-| Label | Plus Jakarta Sans | 11–12 / 600 | Uppercase tracking optional |
-| Metric | JetBrains Mono | 12–18 / 500 | Probabilities, KPIs |
-| Micro | JetBrains Mono | 10 / 500 | Badges |
+| Token | Role | Hex / value |
+|-------|------|-------------|
+| `--fp-bg` | Background | `#0a0a0b` (Almost black) |
+| `--fp-bg-card` | Cards (Graphite) | `#1a1a1e` |
+| `--fp-bg-elevated` | Elevated surfaces | `#141416` |
+| `--fp-border` | Subtle border | `rgba(255,255,255,0.08)` |
+| `--fp-accent` | Primary / Electric Blue | `#1d6bff` *(shipped)* |
+| `--fp-navy` | Deep Navy (brand) | `#0B1F3A` *(shipped)* |
+| `--fp-success` | Emerald | `#22c55e` |
+| `--fp-warning` | Amber | `#f59e0b` |
+| `--fp-danger` | Red | `#ef4444` |
+| `--fp-text` | Primary text | `#f4f4f5` |
+| `--fp-text-muted` | Secondary | `#a1a1aa` |
 
-**Line length:** body ≤ 68ch. Cards: 1 title + 1 meta line max above fold.
+**Light / contrast themes:** already bridged in `tokens.css` (`html.theme-light`, `html.theme-contrast`).
+
+**Migration risk:** MatchCard / MatchModal / Landing still use Tailwind `signal-*`. V4 must migrate user surfaces to `--fp-*` only.
+
+**Gradients:** avoid unless conveying live pulse or scoreboard identity. Prefer flat + border.
 
 ---
 
-## 4. Spacing scale
+## 3. Typography scale
 
-```
-0  2  4  8  12  16  24  32  40  48  64  96
-```
+| Role | Token | Size | Weight | Use |
+|------|-------|------|--------|-----|
+| Hero | `--fp-hero` | clamp 1.75–2.25rem | 700 | Home “Today’s opportunities” |
+| Section | `--fp-section` | 1.25rem | 600 | Section headers |
+| Card title | `--fp-card-title` | 1rem | 600 | Match/teams |
+| Body | `--fp-body` | 0.875rem | 400 | Copy |
+| Caption | `--fp-caption` | 0.75rem | 500 | Kickoff, league |
+| Badge | `--fp-badge` | 0.625rem | 700 | Value / Live |
+| Numbers | *(add)* `--fp-num` | tabular-nums | 600–700 | Odds, %, confidence |
 
-| Token | px | Use |
-|-------|-----|-----|
-| `space-1` | 4 | Icon gaps |
-| `space-2` | 8 | Chip padding |
-| `space-3` | 12 | Dense lists |
-| `space-4` | 16 | Card inner |
-| `space-5` | 24 | Card sections |
-| `space-6` | 32 | Between cards |
-| `space-8` | 48 | Section breaks |
-| `space-10` | 64 | Page padding desktop |
+**Font:** keep existing display + body stack from app; do not introduce Inter/Roboto as new default if brand fonts exist.
 
-**Layout grid:** 12-col desktop · 8-col tablet · 4-col mobile. Gutter 24 / 16 / 12.
+---
+
+## 4. Spacing (8pt)
+
+| Token | Value |
+|-------|-------|
+| `--fp-space-1` | 4px |
+| `--fp-space-2` | 8px |
+| `--fp-space-3` | 12px |
+| `--fp-space-4` | 16px |
+| `--fp-space-5` | 24px |
+| `--fp-space-6` | 32px |
+| `--fp-space-7` | 40px |
+| `--fp-space-8` | 48px |
+
+**Card padding:** 16px mobile / 16–24px desktop.  
+**Section gap:** 24–32px.  
+**Touch target:** `--fp-touch: 44px` minimum.
 
 ---
 
 ## 5. Radius & elevation
 
-| Token | Value |
-|-------|-------|
-| `radius-sm` | 8px |
-| `radius-md` | 12px |
-| `radius-lg` | 16px |
-| `radius-xl` | 24px |
-| `radius-pill` | 999px |
+| Token | Value | Use |
+|-------|-------|-----|
+| `--fp-radius-sm` | 8px | Chips, badges |
+| `--fp-radius` | 12px | Cards, inputs |
+| `--fp-radius-lg` | 16px | Modals, hero blocks |
 
-| Elevation | Shadow |
-|-----------|--------|
-| `e0` | none |
-| `e1` | `0 1px 2px rgba(0,0,0,.24)` |
-| `e2` | `0 8px 24px rgba(0,0,0,.28)` (modals) |
-
-Prefer **border + bg** over heavy glass. Soften existing `.lab-glass`.
+**Elevation:** border + slight bg lift on hover (`--fp-bg-elevated`), not multi-layer shadows.  
+**Hover:** border strengthen + 180ms transition (`--fp-ease`).  
+**Press:** scale `0.98` on buttons only.
 
 ---
 
-## 6. Iconography
+## 6. Components (canonical)
 
-- Style: 1.5px stroke, 24px grid, rounded joins (Lucide or equivalent).  
-- Semantic set: kickoff, trophy, chart, shield, bolt (value), lock, star, live, search, command, bell, moon/sun.  
-- Never emoji in product chrome.
+| Primitive | File | States |
+|-----------|------|--------|
+| Button | `Button.tsx` | primary / secondary / ghost / danger · loading · disabled · focus-visible |
+| Card | `Card.tsx` | default · interactive hover |
+| Badge | `Badge.tsx` | success / warning / danger / accent / muted |
+| Skeleton | `Skeleton.tsx` | pulse for lists/cards |
 
----
-
-## 7. Motion
-
-| Token | ms | Easing |
-|-------|-----|--------|
-| `fast` | 120 | ease-out |
-| `base` | 200 | cubic-bezier(0.2, 0.8, 0.2, 1) |
-| `slow` | 320 | same |
-
-**Use for:** tab underline, drawer enter, chart draw, skeleton shimmer.  
-**Avoid:** parallax, continuous pulse on KPIs, page-wide fades.
-
-`prefers-reduced-motion: reduce` → disable non-essential motion.
+**V4 additions needed:** Input, Select, Tabs, EmptyState, ErrorState, Toast, MatchCard (ds), Modal shell.
 
 ---
 
-## 8. Themes
+## 7. Terminology (user-facing)
 
-### Dark (default)
-Current sports-lab DNA preserved.
+| Internal / current | User-facing |
+|--------------------|-------------|
+| Prediction Laboratory | Prediction Analysis |
+| Feature Importance | Key Factors *(already used in chart)* |
+| Prediction Contributions | Why This Prediction *(already used)* |
+| Confidence Engine | Confidence |
+| Recommendation Engine | Top Pick |
+| Value Engine | Best Value |
+| Raw Probability | Initial Probability |
+| Calibrated Probability | Final Probability |
+| Model Lab | Prediction Models |
+| Pipeline | Prediction Process |
+| Model Insights | Prediction Analysis *(or keep Insights if clearer)* |
 
-### Light
-Elevated white cards on cool gray bg; accent unchanged; borders stronger.
-
-### High contrast
-`--text` pure white/black; borders 2px; badges solid; focus ring 3px accent.
-
-**Toggle:** Settings + header control; persist `localStorage.theme`.
-
----
-
-## 9. Accessibility (WCAG AA)
-
-- Contrast ≥ 4.5:1 body, ≥ 3:1 large.  
-- Focus visible: 2px accent ring, offset 2.  
-- Hit targets ≥ 44×44.  
-- Keyboard: tab order = visual; Esc closes modal; arrows in tabs.  
-- `aria-label` on icon buttons; live region for predict status.  
-- Charts: pattern + color; table fallback for MC/backtest.
+Admin observatory may keep technical labels.
 
 ---
 
-## 10. Component token recipes (summary)
+## 8. Iconography
 
-| Component | Recipe |
-|-----------|--------|
-| Button primary | bg accent · text void · radius-md · h-10 |
-| Button ghost | border · text · hover bg-muted |
-| Card | bg-elevated · border · radius-lg · p-4/5 · e1 |
-| Badge | radius-pill · mono 10 · px-2 py-0.5 |
-| Input | h-10 · radius-md · border · bg-muted |
-| Table | mono metrics · zebra muted · sticky header |
-| Alert | left accent bar · soft bg |
-| Dialog | e2 · radius-xl · max-w-lg · focus trap |
-
-Full specs → `COMPONENT_LIBRARY.md`.
+- Single stroke set (current SVG/inline)  
+- Size: 16 / 20 / 24  
+- Live: emerald pulse (subtle opacity, not glow spam)  
+- Value badge: amber/emerald depending on EV sign  
 
 ---
 
-## 11. Data visualization rules
+## 9. Do / Don’t
 
-1. **One message per chart.**  
-2. Max **2** series in default view.  
-3. Tooltip on hover/focus; no permanent clutter.  
-4. Empty state illustration + CTA, not blank axes.  
-5. Contribution bars: shared scale 0–max; label left, value right.  
-6. MC: density/histogram preferred over raw tables (table in “Data” disclosure).  
-7. Colorblind-safe: accent vs amber vs gray — never red/green alone.
-
----
-
-## 12. Migration of tokens
-
-| Step | Action |
-|------|--------|
-| 1 | Add CSS variables in `index.css` mirroring table §2 |
-| 2 | Alias `signal.*` Tailwind colors to variables |
-| 3 | Introduce `.theme-light` / `.theme-contrast` on `<html>` |
-| 4 | Replace one-off hex in components gradually |
-| 5 | Document forbidden colors (purple glow, cream-terracotta kitsch) |
-
----
-
-## 13. Do / Don’t
-
-| Do | Don’t |
-|----|-------|
-| Airy section gaps (32–48) | Stack 8 KPI cards |
-| One primary CTA per region | Equal-weight rainbow buttons |
-| Truncate with expand | Walls of explanation on cards |
-| Skeleton on predict | Layout jump |
-| Sticky filters | Filters buried in modal only |
+**Do:** dark navy + electric blue accent; compact match cards; tabbed detail; persistent filters.  
+**Don’t:** purple themes; cream+serif AI cliché; card-in-card nesting; endless scroll detail pages; engine jargon on Home.

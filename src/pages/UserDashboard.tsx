@@ -26,6 +26,8 @@ import { AdminPerformanceObservatory } from "../components/admin/AdminObservator
 import Button from "../design-system/Button";
 import Card from "../design-system/Card";
 import Badge from "../design-system/Badge";
+import EmptyState from "../design-system/EmptyState";
+import Toast from "../design-system/Toast";
 import {
   hashColor,
   inferSeason,
@@ -141,8 +143,8 @@ export default function UserDashboard() {
   const [animatedWins, setAnimatedWins] = useState(0);
   const [animatedLosses, setAnimatedLosses] = useState(0);
   const [animatedWinRate, setAnimatedWinRate] = useState(0);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -158,19 +160,21 @@ export default function UserDashboard() {
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [billingBusy, setBillingBusy] = useState<"premium" | "ultra" | "portal" | null>(null);
   const [billingConfigured, setBillingConfigured] = useState(false);
-  const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
   const [navView, setNavView] = useState<AppNavView>("home");
-  const [matchesFilter, setMatchesFilter] = useState<MatchesSubFilter>("all");
   const [commandOpen, setCommandOpen] = useState(false);
-  const [matchSearch, setMatchSearch] = useState("");
   const {
     prefs,
     cycleTheme,
     toggleWatchlist,
+    toggleBookmark,
     pushRecent,
     updateFilters,
-    isWatched
+    isWatched,
+    isBookmarked
   } = useUiPrefs(user?.id);
+  const matchesFilter = prefs.matchesFilter;
+  const matchSearch = prefs.matchSearch;
+  const showSettledMarketsOnly = prefs.settledOnly;
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
   const pendingHistoryCount = useMemo(
@@ -184,12 +188,18 @@ export default function UserDashboard() {
   );
   const visiblePreds = useMemo(() => {
     let rows = preds;
-    const listFilter = navView === "matches" ? matchesFilter : "all";
+    const listFilter: MatchesSubFilter | "predictions" =
+      navView === "live" ? "live" : navView === "predictions" ? "predictions" : navView === "matches" ? matchesFilter : "all";
     if (listFilter === "live") {
       rows = rows.filter((row) => isFixtureInPlay(row.status));
     } else if (listFilter === "favorites") {
       const ids = new Set(prefs.watchlistFixtureIds);
       rows = rows.filter((row) => ids.has(Number(row.id)));
+    } else if (listFilter === "predictions") {
+      rows = rows
+        .filter((row) => !row.insufficientData && Boolean(row.recommended?.pick))
+        .slice()
+        .sort((a, b) => Number(b.recommended?.confidence || 0) - Number(a.recommended?.confidence || 0));
     }
     if (showSettledMarketsOnly) {
       rows = rows.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
@@ -219,7 +229,17 @@ export default function UserDashboard() {
       );
     }
     return rows;
-  }, [preds, showSettledMarketsOnly, navView, matchesFilter, prefs.watchlistFixtureIds, prefs.minConfidence, prefs.minEv, prefs.valueOnly, matchSearch]);
+  }, [
+    preds,
+    showSettledMarketsOnly,
+    navView,
+    matchesFilter,
+    prefs.watchlistFixtureIds,
+    prefs.minConfidence,
+    prefs.minEv,
+    prefs.valueOnly,
+    matchSearch
+  ]);
   const continueMatch = useMemo(() => {
     const recent = prefs.recentFixtureIds[0];
     if (!recent) return null;
@@ -730,11 +750,33 @@ export default function UserDashboard() {
     [pushRecent]
   );
 
-  const handleNav = useCallback((view: AppNavView) => {
-    setNavView(view);
-    if (view === "notifications") setIsNotificationsOpen(true);
-    if (view === "matches") setMatchesFilter("all");
-  }, []);
+  const handleNav = useCallback(
+    (view: AppNavView) => {
+      setNavView(view);
+      if (view === "matches") updateFilters({ matchesFilter: "all" });
+      if (view === "live") updateFilters({ matchesFilter: "live" });
+    },
+    [updateFilters]
+  );
+
+  const historySearchLabels = useMemo(
+    () =>
+      history
+        .slice(0, 40)
+        .map((h) => `${h.teams?.home || "?"} vs ${h.teams?.away || "?"} · ${h.league || ""}`.trim()),
+    [history]
+  );
+
+  const showMatchBoard = navView === "matches" || navView === "live" || navView === "predictions";
+
+  const matchBoardTitle =
+    navView === "live"
+      ? "Live"
+      : navView === "predictions"
+        ? "Predictions"
+        : matchesFilter === "favorites"
+          ? "Favorites"
+          : "All matches";
 
   const trackerSlot = (
     <AdminPerformanceObservatory className="mt-0">
@@ -763,10 +805,7 @@ export default function UserDashboard() {
       onPredict={() => void warmAndPredict()}
       predictBusy={warmPredictBusy}
       onOpenCommand={() => setCommandOpen(true)}
-      onOpenNotifications={() => {
-        setNavView("notifications");
-        setIsNotificationsOpen(true);
-      }}
+      onOpenNotifications={() => setNavView("notifications")}
       onLogout={() => void logout()}
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
@@ -800,44 +839,60 @@ export default function UserDashboard() {
         <HomeSection
           matches={preds}
           onOpenMatch={openMatch}
-          onGoMatches={() => setNavView("matches")}
+          onGoMatches={() => handleNav("matches")}
+          onGoLive={() => handleNav("live")}
+          onGoHistory={() => handleNav("history")}
+          onGoStatistics={() => handleNav("statistics")}
+          onPredict={() => void warmAndPredict()}
           continueMatch={continueMatch}
           winRate={trackerStats.winRate}
           pendingCount={pendingHistoryCount}
           settledCount={trackerStats.settled}
+          wins={trackerStats.wins}
+          losses={trackerStats.losses}
           usageLabel={tierQuotaExempt ? "Unlimited" : userTier}
         />
       )}
 
-      {navView === "matches" && (
+      {showMatchBoard && (
         <>
           <header className="mb-4">
             <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              Meciuri
+              {navView === "predictions" ? "Predictions" : navView === "live" ? "Live" : "Matches"}
             </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Matches</h1>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(
-                [
-                  ["all", "Toate"],
-                  ["live", "Live"],
-                  ["favorites", "Favorite"]
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMatchesFilter(id)}
-                  className={`min-h-9 rounded-full border px-3 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                    matchesFilter === id
-                      ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                      : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{matchBoardTitle}</h1>
+            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">
+              {navView === "predictions"
+                ? "Top Picks ranked by confidence — same model, curated view."
+                : navView === "live"
+                  ? "In-play fixtures from your current prediction set."
+                  : "Browse fixtures, filter by league, confidence, and Best Value."}
+            </p>
+            {navView === "matches" && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(
+                  [
+                    ["all", "All"],
+                    ["live", "Live"],
+                    ["favorites", "Favorites"]
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => updateFilters({ matchesFilter: id })}
+                    className={`min-h-[var(--fp-touch)] rounded-full border px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                      matchesFilter === id
+                        ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                        : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
+                    }`}
+                    aria-pressed={matchesFilter === id}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </header>
           <StickyFilterBar
             date={date}
@@ -847,7 +902,7 @@ export default function UserDashboard() {
               void fetchDays([next]);
             }}
             search={matchSearch}
-            onSearchChange={setMatchSearch}
+            onSearchChange={(q) => updateFilters({ matchSearch: q })}
             minConfidence={prefs.minConfidence}
             onMinConfidence={(n) => updateFilters({ minConfidence: n })}
             minEv={prefs.minEv}
@@ -855,7 +910,7 @@ export default function UserDashboard() {
             valueOnly={prefs.valueOnly}
             onValueOnly={(v) => updateFilters({ valueOnly: v })}
             settledOnly={showSettledMarketsOnly}
-            onSettledOnly={setShowSettledMarketsOnly}
+            onSettledOnly={(v) => updateFilters({ settledOnly: v })}
             onOpenLeagues={() => setIsLeaguesOpen(true)}
             extraDates={
               <>
@@ -863,9 +918,9 @@ export default function UserDashboard() {
                   <button
                     type="button"
                     onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                    className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-accent)]"
+                    className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-accent)]"
                   >
-                    +1 zi
+                    +1 day
                   </button>
                 )}
                 {userTier === "ultra" && (
@@ -873,18 +928,18 @@ export default function UserDashboard() {
                     <button
                       type="button"
                       onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                      className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-warning)]"
+                      className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-warning)]"
                     >
-                      +1 zi
+                      +1 day
                     </button>
                     <button
                       type="button"
                       onClick={() =>
                         setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
                       }
-                      className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-warning)]"
+                      className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-warning)]"
                     >
-                      +2 zile
+                      +2 days
                     </button>
                   </>
                 )}
@@ -910,27 +965,49 @@ export default function UserDashboard() {
             </div>
             <div className="lg:col-span-8 xl:col-span-9">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="font-display text-lg font-semibold">
-                  {matchesFilter === "live" ? "Live" : matchesFilter === "favorites" ? "Favorite" : "Toate meciurile"}
-                </h2>
+                <h2 className="font-display text-lg font-semibold">{matchBoardTitle}</h2>
                 <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">{visiblePreds.length}</span>
               </div>
               {!visiblePreds.length ? (
-                <div className="grid h-[280px] place-items-center rounded-[var(--fp-radius-lg)] border border-dashed border-[var(--fp-border)] text-center text-[var(--fp-text-muted)]">
-                  {matchesFilter === "favorites"
-                    ? "Favorite goale — apasă steaua pe un meci."
-                    : matchesFilter === "live"
-                      ? "Niciun meci Live în selecția curentă."
-                      : showSettledMarketsOnly
-                        ? "Nu există meciuri finalizate cu piețe derivate."
-                        : "Selectează ligi și apasă Predict."}
-                </div>
+                <EmptyState
+                  title={
+                    matchesFilter === "favorites" && navView === "matches"
+                      ? "No favorites yet"
+                      : navView === "live" || matchesFilter === "live"
+                        ? "No live matches"
+                        : showSettledMarketsOnly
+                          ? "No settled markets"
+                          : "No matches to show"
+                  }
+                  description={
+                    matchesFilter === "favorites" && navView === "matches"
+                      ? "Tap the star on a match card to save it here."
+                      : navView === "live" || matchesFilter === "live"
+                        ? "Nothing is in play in your current leagues and date. Check Upcoming on Home or widen the date."
+                        : showSettledMarketsOnly
+                          ? "No finished fixtures with extra markets in this selection. Turn off Settled or run Predict again."
+                          : "Select leagues on the left, then run Predict to load today’s opportunities."
+                  }
+                  actionLabel={
+                    matchesFilter === "favorites" && navView === "matches"
+                      ? "Browse matches"
+                      : "Run Predict"
+                  }
+                  onAction={
+                    matchesFilter === "favorites" && navView === "matches"
+                      ? () => updateFilters({ matchesFilter: "all" })
+                      : () => void warmAndPredict()
+                  }
+                />
               ) : (
                 <VirtualizedMatchGrid
                   matches={visiblePreds}
                   hashColor={hashColor}
                   isWatched={isWatched}
                   onToggleWatch={toggleWatchlist}
+                  isBookmarked={isBookmarked}
+                  onToggleBookmark={toggleBookmark}
+                  onShare={setToast}
                   onOpen={openMatch}
                   canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
                 />
@@ -1170,30 +1247,90 @@ export default function UserDashboard() {
           )}
 
           <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Date personale (GDPR)</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              Export JSON — vezi{" "}
-              <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                politica
-              </Link>
-              .
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Settings</h2>
+                <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Theme, filters defaults, and privacy export.</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => handleNav("settings")}>
+                Open Settings
+              </Button>
+            </div>
+            <div className="mt-4">
+              <Button variant="danger" onClick={() => void logout()}>
+                Log out
+              </Button>
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {navView === "settings" && (
+        <section className="space-y-6">
+          <header>
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+              Settings
             </p>
-            <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
-              Descarcă export JSON
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Settings</h1>
+            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">Appearance, saved filters, and privacy.</p>
+          </header>
+
+          <Card>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Appearance</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+              Current theme: <strong className="text-[var(--fp-text)]">{prefs.theme}</strong>
+            </p>
+            <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
+              Change theme
             </Button>
           </Card>
 
           <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Aspect</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Temă: {prefs.theme}</p>
-            <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
-              Schimbă tema
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Saved filters</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+              Confidence ≥ {prefs.minConfidence}% · EV ≥ {prefs.minEv}% · Best Value only:{" "}
+              {prefs.valueOnly ? "on" : "off"} · Settled: {prefs.settledOnly ? "on" : "off"}
+            </p>
+            <p className="mt-2 text-xs text-[var(--fp-text-faint)]">
+              Filters persist across sessions. Adjust them on Matches / Predictions / Live.
+            </p>
+            <Button
+              className="mt-3"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                updateFilters({
+                  minConfidence: 0,
+                  minEv: 0,
+                  valueOnly: false,
+                  settledOnly: false,
+                  matchSearch: "",
+                  matchesFilter: "all"
+                })
+              }
+            >
+              Reset filters
             </Button>
-            <div className="mt-4">
-              <Button variant="danger" onClick={() => void logout()}>
-                Logout
-              </Button>
-            </div>
+          </Card>
+
+          <Card>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Personal data (GDPR)</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+              Download your export JSON — see the{" "}
+              <Link to="/privacy" className="text-[var(--fp-accent)] underline">
+                privacy policy
+              </Link>
+              .
+            </p>
+            <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
+              Download export JSON
+            </Button>
+          </Card>
+
+          <Card>
+            <Button variant="danger" onClick={() => void logout()}>
+              Log out
+            </Button>
           </Card>
         </section>
       )}
@@ -1221,10 +1358,12 @@ export default function UserDashboard() {
         onClose={() => setCommandOpen(false)}
         onOpen={() => setCommandOpen(true)}
         matches={preds}
+        historyLabels={historySearchLabels}
         onSelectMatch={openMatch}
         onNavigate={handleNav}
         onPredict={() => void warmAndPredict()}
       />
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </AppShell>
   );
 }

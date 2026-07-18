@@ -1,16 +1,24 @@
 import type { PredictionRow } from "../../types";
+import { isFixtureInPlay } from "../../utils/appUtils";
 import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
 import Button from "../../design-system/Button";
+import EmptyState from "../../design-system/EmptyState";
 
 type Props = {
   matches: PredictionRow[];
   onOpenMatch: (m: PredictionRow) => void;
   onGoMatches: () => void;
+  onGoLive?: () => void;
+  onGoHistory?: () => void;
+  onGoStatistics?: () => void;
+  onPredict?: () => void;
   continueMatch?: PredictionRow | null;
   winRate?: number;
   pendingCount?: number;
   settledCount?: number;
+  wins?: number;
+  losses?: number;
   usageLabel?: string;
 };
 
@@ -22,6 +30,10 @@ function confOf(m: PredictionRow) {
 function evOf(m: PredictionRow) {
   const e = Number(m.valueBet?.ev ?? m.valueEngine?.expectedValue);
   return Number.isFinite(e) ? e : 0;
+}
+
+function isFinal(m: PredictionRow) {
+  return ["FT", "AET", "PEN"].includes(String(m.status || "").toUpperCase());
 }
 
 function PickTile({
@@ -41,7 +53,7 @@ function PickTile({
         <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-text-muted)]">
           {label}
         </p>
-        <p className="mt-2 text-sm text-[var(--fp-text-faint)]">Rulează Predict pentru a vedea pick-uri.</p>
+        <p className="mt-2 text-sm text-[var(--fp-text-faint)]">Run Predict to unlock today’s picks.</p>
       </Card>
     );
   }
@@ -49,7 +61,7 @@ function PickTile({
     <button
       type="button"
       onClick={() => onOpen(match)}
-      className="w-full rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 text-left transition hover:border-[var(--fp-accent)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] active:scale-[0.99]"
+      className="w-full rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 text-left transition-[border-color,transform] duration-[var(--fp-ease)] hover:border-[var(--fp-accent)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] active:scale-[0.99]"
     >
       <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-accent)]">
         {label}
@@ -62,6 +74,9 @@ function PickTile({
         {" · "}
         {meta}
       </p>
+      {match.league && (
+        <p className="mt-2 font-mono text-[length:var(--fp-caption)] text-[var(--fp-text-faint)]">{match.league}</p>
+      )}
     </button>
   );
 }
@@ -70,24 +85,57 @@ export default function HomeSection({
   matches,
   onOpenMatch,
   onGoMatches,
+  onGoLive,
+  onGoHistory,
+  onGoStatistics,
+  onPredict,
   continueMatch,
   winRate = 0,
   pendingCount = 0,
   settledCount = 0,
+  wins = 0,
+  losses = 0,
   usageLabel
 }: Props) {
   const playable = matches.filter((m) => !m.insufficientData);
-  const bestPick = [...playable].sort((a, b) => confOf(b) - confOf(a))[0] || null;
+  const byConf = [...playable].sort((a, b) => confOf(b) - confOf(a));
+  const bestPick = byConf[0] || null;
+  const highestConfidence = byConf.find((m) => m.id !== bestPick?.id) || bestPick;
   const bestValue =
     [...playable]
       .filter((m) => m.valueBet?.detected || evOf(m) > 0)
       .sort((a, b) => evOf(b) - evOf(a))[0] || null;
-  const avgConf = playable.length
-    ? playable.reduce((s, m) => s + confOf(m), 0) / playable.length
-    : 0;
+  const live = playable.filter((m) => isFixtureInPlay(m.status)).slice(0, 6);
   const upcoming = [...playable]
-    .filter((m) => !["FT", "AET", "PEN"].includes(String(m.status || "").toUpperCase()))
+    .filter((m) => !isFinal(m) && !isFixtureInPlay(m.status))
+    .slice(0, 6);
+  const trending = [...playable]
+    .filter((m) => confOf(m) >= 65 || evOf(m) > 0)
+    .sort((a, b) => confOf(b) + evOf(b) - (confOf(a) + evOf(a)))
     .slice(0, 5);
+  const avgConf = playable.length ? playable.reduce((s, m) => s + confOf(m), 0) / playable.length : 0;
+  const valueCount = playable.filter((m) => m.valueBet?.detected || evOf(m) > 0).length;
+
+  if (!matches.length) {
+    return (
+      <section className="space-y-6">
+        <header>
+          <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+            Home
+          </p>
+          <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold tracking-tight">
+            Today’s best opportunities
+          </h1>
+        </header>
+        <EmptyState
+          title="No predictions yet"
+          description="Select your leagues, then run Predict to see Top Picks, Best Value, and Live matches for today."
+          actionLabel={onPredict ? "Run Predict" : "Go to Matches"}
+          onAction={onPredict || onGoMatches}
+        />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -96,40 +144,45 @@ export default function HomeSection({
           Home
         </p>
         <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold tracking-tight text-[var(--fp-text)]">
-          Pe ce pariez azi?
+          Today’s best opportunities
         </h1>
         <p className="mt-2 max-w-xl text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
-          Scorul zilei, cele mai bune pick-uri și meciurile următoare — fără zgomot.
+          Top Pick, highest confidence, and Best Value — then Live and upcoming fixtures.
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Today's Summary */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
-          { label: "Meciuri azi", value: String(matches.length) },
-          { label: "Confidence medie", value: avgConf ? `${Math.round(avgConf)}%` : "—" },
+          { label: "Matches", value: String(matches.length) },
+          { label: "Avg confidence", value: avgConf ? `${Math.round(avgConf)}%` : "—" },
+          { label: "Best Value spots", value: String(valueCount) },
           { label: "Success Rate", value: winRate ? `${winRate.toFixed(0)}%` : "—" },
-          { label: "Settled", value: String(settledCount) }
+          { label: "Live now", value: String(live.length) }
         ].map((k) => (
           <Card key={k.label} padding="sm">
             <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-text-muted)]">
               {k.label}
             </p>
-            <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-[var(--fp-text)]">{k.value}</p>
+            <p className="mt-1 font-display text-[length:var(--fp-num)] font-semibold tabular-nums text-[var(--fp-text)]">
+              {k.value}
+            </p>
           </Card>
         ))}
       </div>
 
+      {/* Best Pick / Highest Confidence / Best Value */}
       <div className="grid gap-3 md:grid-cols-3">
         <PickTile
-          label="Cel mai bun pick"
+          label="Top Pick today"
           match={bestPick}
           meta={bestPick ? `${Math.round(confOf(bestPick))}% confidence` : ""}
           onOpen={onOpenMatch}
         />
         <PickTile
-          label="Confidence maximă"
-          match={bestPick}
-          meta={bestPick ? `Top Pick ${bestPick.recommended?.pick || "—"}` : ""}
+          label="Highest confidence"
+          match={highestConfidence}
+          meta={highestConfidence ? `${Math.round(confOf(highestConfidence))}% · ${highestConfidence.recommended?.pick || "—"}` : ""}
           onOpen={onOpenMatch}
         />
         <PickTile
@@ -144,29 +197,69 @@ export default function HomeSection({
         <button
           type="button"
           onClick={() => onOpenMatch(continueMatch)}
-          className="flex w-full items-center justify-between rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+          className="flex w-full min-h-[var(--fp-touch)] items-center justify-between rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
         >
           <div>
             <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-accent)]">
-              Continuă
+              Continue
             </p>
             <p className="mt-0.5 font-semibold">
               {continueMatch.teams.home} vs {continueMatch.teams.away}
             </p>
           </div>
-          <span className="text-sm text-[var(--fp-accent)]">Deschide →</span>
+          <span className="text-sm text-[var(--fp-accent)]">Open →</span>
         </button>
       )}
 
+      {/* Live */}
       <Card>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Meciuri viitoare</h2>
+          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Live matches</h2>
+          {onGoLive && (
+            <Button variant="ghost" size="sm" onClick={onGoLive}>
+              All live
+            </Button>
+          )}
+        </div>
+        {!live.length ? (
+          <p className="mt-3 text-sm text-[var(--fp-text-muted)]">No live fixtures in your current set.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-[var(--fp-border)]">
+            {live.map((m) => (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenMatch(m)}
+                  className="flex w-full min-h-[var(--fp-touch)] items-center justify-between gap-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                >
+                  <span>
+                    <span className="inline-flex items-center gap-1.5 text-[var(--fp-danger)]">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
+                      LIVE
+                    </span>
+                    <br />
+                    <span className="font-semibold">
+                      {m.teams.home} {m.score?.home ?? ""} – {m.score?.away ?? ""} {m.teams.away}
+                    </span>
+                  </span>
+                  <Badge tone="accent">{m.recommended?.pick || "—"}</Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {/* Upcoming */}
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Upcoming matches</h2>
           <Button variant="ghost" size="sm" onClick={onGoMatches}>
-            Vezi toate
+            See all
           </Button>
         </div>
         {!upcoming.length ? (
-          <p className="mt-3 text-sm text-[var(--fp-text-muted)]">Niciun meci încă — selectează ligi și apasă Predict.</p>
+          <p className="mt-3 text-sm text-[var(--fp-text-muted)]">No upcoming matches — expand leagues or date.</p>
         ) : (
           <ul className="mt-3 divide-y divide-[var(--fp-border)]">
             {upcoming.map((m) => (
@@ -191,18 +284,63 @@ export default function HomeSection({
         )}
       </Card>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--fp-text-muted)]">
-        <span>
-          Succes recent:{" "}
-          <strong className="text-[var(--fp-text)]">{winRate ? `${winRate.toFixed(0)}%` : "—"}</strong>
-        </span>
-        {pendingCount > 0 && <span>{pendingCount} pending</span>}
-        {usageLabel && (
+      {/* Trending */}
+      {trending.length > 0 && (
+        <Card>
+          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Trending predictions</h2>
+          <ul className="mt-3 divide-y divide-[var(--fp-border)]">
+            {trending.map((m) => (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenMatch(m)}
+                  className="flex w-full min-h-[var(--fp-touch)] items-center justify-between gap-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                >
+                  <span className="font-semibold">
+                    {m.teams.home} vs {m.teams.away}
+                  </span>
+                  <span className="font-mono text-[length:var(--fp-caption)] tabular-nums text-[var(--fp-text-muted)]">
+                    {Math.round(confOf(m))}% · {m.recommended?.pick || "—"}
+                    {evOf(m) > 0 ? ` · EV ${evOf(m).toFixed(0)}%` : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* Recent performance + shortcuts */}
+      <Card>
+        <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Recent performance</h2>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-[var(--fp-text-muted)]">
           <span>
-            Usage: <strong className="text-[var(--fp-text)]">{usageLabel}</strong>
+            Success Rate{" "}
+            <strong className="tabular-nums text-[var(--fp-text)]">{winRate ? `${winRate.toFixed(0)}%` : "—"}</strong>
           </span>
-        )}
-      </div>
+          <span>
+            {wins}W · {losses}L · {settledCount} settled
+          </span>
+          {pendingCount > 0 && <span>{pendingCount} pending</span>}
+          {usageLabel && (
+            <span>
+              Plan <strong className="text-[var(--fp-text)]">{usageLabel}</strong>
+            </span>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {onGoHistory && (
+            <Button variant="secondary" size="sm" onClick={onGoHistory}>
+              History
+            </Button>
+          )}
+          {onGoStatistics && (
+            <Button variant="ghost" size="sm" onClick={onGoStatistics}>
+              Statistics
+            </Button>
+          )}
+        </div>
+      </Card>
     </section>
   );
 }
