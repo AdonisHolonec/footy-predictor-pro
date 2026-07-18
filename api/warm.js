@@ -1,8 +1,18 @@
 // api/warm.js — prefetch fixtures/standings/teamstats/odds into KV for predict reuse
+import {
+  resolveEffectiveTierFromProfile,
+  tierDailyActionLimit,
+  USER_TIERS
+} from "../server-utils/accessTier.js";
 import { getWithCache } from "../server-utils/fetcher.js";
 import { prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
-import { resolveAuthenticatedUsageContext } from "../server-utils/userDailyWarmPredictUsage.js";
+import {
+  commitWarmPredictIncrement,
+  isWarmPredictQuotaExempt,
+  resolveAuthenticatedUsageContext
+} from "../server-utils/userDailyWarmPredictUsage.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 
 function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
@@ -33,6 +43,38 @@ export default async function handler(req, res) {
     }
     if (usageCtx.anonymous) {
       return res.status(401).json({ ok: false, error: "Autentificare necesară pentru Warm." });
+    }
+
+    if (!(await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail))) {
+      let effectiveTier = USER_TIERS.FREE;
+      try {
+        const sb = getSupabaseAdmin();
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at")
+          .eq("user_id", usageCtx.userId)
+          .maybeSingle();
+        effectiveTier = resolveEffectiveTierFromProfile(profile || {}).effectiveTier;
+      } catch {
+        effectiveTier = USER_TIERS.FREE;
+      }
+      const actionMax = tierDailyActionLimit(effectiveTier);
+      const actionInc = await commitWarmPredictIncrement(
+        usageCtx.userId,
+        usageCtx.usageDay,
+        "warm",
+        actionMax
+      );
+      if (!actionInc?.ok) {
+        return res.status(429).json({
+          ok: false,
+          error: "Ai atins limita zilnică de Warm pentru abonamentul tău.",
+          reason: actionInc?.reason || "warm_limit",
+          warmCount: actionInc?.warm_count,
+          predictCount: actionInc?.predict_count,
+          actionLimit: actionMax
+        });
+      }
     }
   }
 

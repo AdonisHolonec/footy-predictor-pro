@@ -195,7 +195,7 @@ function summarizePredictBody(body) {
 
 /**
  * Vercel Cron: authorize with CRON_SECRET, then call /api/warm and /api/predict on this deployment
- * without a user JWT (anonymous path — no per-user daily quota).
+ * with CRON_SECRET forwarded (cron path — no per-user daily quota).
  * After a successful predict, POST /api/history?sync=1 with the same CRON_SECRET to refresh scores / validation.
  */
 export default async function handler(req, res) {

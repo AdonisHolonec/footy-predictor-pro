@@ -4,12 +4,19 @@
  */
 
 import { getApiUsage, getWithCache } from "../../fetcher.js";
-import { resolveAuthenticatedUsageContext } from "../../userDailyWarmPredictUsage.js";
+import {
+  commitWarmPredictIncrement,
+  isWarmPredictQuotaExempt,
+  resolveAuthenticatedUsageContext
+} from "../../userDailyWarmPredictUsage.js";
 import { isAuthorizedCronOrInternalRequest } from "../../cronRequestAuth.js";
 import {
   USER_TIERS,
+  getPredictCountToday,
+  incrementPredictCountBy,
   maskPredictionForTier,
   resolveEffectiveTierFromProfile,
+  tierDailyActionLimit,
   tierDailyLimit
 } from "../../accessTier.js";
 import { getSupabaseAdmin } from "../../supabaseAdmin.js";
@@ -93,13 +100,29 @@ export async function run(context) {
 
     const tierInfo = resolveEffectiveTierFromProfile(profile);
     const role = String(profile?.role || "").toLowerCase();
-    const quotaExempt = role === "admin";
+    const quotaExempt =
+      role === "admin" || (await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail));
+    const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(tierInfo.effectiveTier);
+    let predictCountToday = 0;
+    try {
+      predictCountToday = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay, {
+        failClosed: !quotaExempt
+      });
+    } catch (e) {
+      if (!quotaExempt) {
+        return halt(context, 503, {
+          ok: false,
+          error: "Contorul zilnic de predicții nu este disponibil. Încearcă din nou."
+        });
+      }
+    }
+
     tierContext = {
       ...tierInfo,
       effectiveTier: quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier,
       quotaExempt,
-      predictCountToday: null,
-      predictLimit: null
+      predictCountToday,
+      predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
     };
 
     const readDbOnlyPredictions = async (reason = "db_only_free") => {
@@ -124,11 +147,11 @@ export async function run(context) {
         .map((row) => mapDbRowToHistoryEntry(row))
         .slice(0, effectiveLimit)
         .map((row) => maskPredictionForTier(row, tierContext.effectiveTier));
-      const dailyLimit = tierDailyLimit(tierContext.effectiveTier);
+      const limitHdr = Number.isFinite(dailyLimit) ? dailyLimit : tierDailyLimit(tierContext.effectiveTier);
       context.responseHeaders = {
         "X-Tier": String(tierContext.effectiveTier),
-        "X-Predict-Count": "0",
-        "X-Predict-Limit": String(dailyLimit),
+        "X-Predict-Count": String(tierContext.predictCountToday ?? 0),
+        "X-Predict-Limit": String(limitHdr),
         "X-Data-Source": reason
       };
       return halt(context, 200, items);
@@ -155,11 +178,56 @@ export async function run(context) {
         context.reservedTierUsage = reservedTierUsage;
         return context;
       }
+
+      // Action quota (runs/day) — separate from match-row KV reservation.
+      const actionMax = tierDailyActionLimit(tierContext.effectiveTier);
+      const actionInc = await commitWarmPredictIncrement(
+        usageCtx.userId,
+        usageCtx.usageDay,
+        "predict",
+        actionMax
+      );
+      if (!actionInc?.ok) {
+        return halt(context, 429, {
+          ok: false,
+          error: "Ai atins limita zilnică de Predict pentru abonamentul tău.",
+          reason: actionInc?.reason || "predict_limit",
+          warmCount: actionInc?.warm_count,
+          predictCount: actionInc?.predict_count,
+          actionLimit: actionMax
+        });
+      }
+
+      // Match-row KV quota: reserve up to remaining daily matches for this request.
+      const remainingMatches = Math.max(0, dailyLimit - predictCountToday);
+      if (remainingMatches <= 0) {
+        return halt(context, 429, {
+          ok: false,
+          error: `Ai atins limita zilnică de ${dailyLimit} meciuri predictate.`,
+          predictCountToday,
+          predictLimit: dailyLimit
+        });
+      }
+      const reserveAmount = Math.min(effectiveLimit, remainingMatches);
+      try {
+        const after = await incrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reserveAmount);
+        reservedTierUsage = reserveAmount;
+        effectiveLimit = reserveAmount;
+        tierContext.predictCountToday = after;
+        tierContext.predictLimit = dailyLimit;
+      } catch (e) {
+        console.error("[predict quota reserve]", e?.message || e);
+        return halt(context, 503, {
+          ok: false,
+          error: "Nu am putut rezerva cota de predicții. Încearcă din nou."
+        });
+      }
     }
   }
 
   context.tierContext = tierContext;
   context.reservedTierUsage = reservedTierUsage;
+  context.effectiveLimit = effectiveLimit;
 
   // Request-scoped model assets + upstream data (was top of try-block).
   context.out = [];

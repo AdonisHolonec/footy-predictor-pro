@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { tierDailyActionLimit, tierDailyLimit, USER_TIERS } from "../server-utils/accessTier.js";
 
 function mockReq({ headers = {}, query = {} } = {}) {
   return { headers, query };
@@ -68,5 +69,23 @@ describe("Security P0 — cron auth", () => {
       process.env.NODE_ENV = prevNode;
       process.env.VERCEL_ENV = prevVercel;
     }
+  });
+});
+
+describe("Security P0 — tier quotas", () => {
+  it("Premium and Ultra daily match limits are >= Free", () => {
+    const free = tierDailyLimit(USER_TIERS.FREE);
+    const premium = tierDailyLimit(USER_TIERS.PREMIUM);
+    const ultra = tierDailyLimit(USER_TIERS.ULTRA);
+    assert.ok(premium >= free, `premium ${premium} < free ${free}`);
+    assert.ok(ultra >= premium, `ultra ${ultra} < premium ${premium}`);
+  });
+
+  it("Premium and Ultra daily action limits are >= Free", () => {
+    const free = tierDailyActionLimit(USER_TIERS.FREE);
+    const premium = tierDailyActionLimit(USER_TIERS.PREMIUM);
+    const ultra = tierDailyActionLimit(USER_TIERS.ULTRA);
+    assert.ok(premium >= free);
+    assert.ok(ultra >= premium);
   });
 });

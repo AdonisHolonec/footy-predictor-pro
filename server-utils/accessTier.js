@@ -18,11 +18,38 @@ const kv = createClient({
 });
 
 const FREE_DAYS_LIMIT = Math.max(1, Number(process.env.FREE_TIER_DAYS_LIMIT || 10));
-const LIMIT_BY_TIER = {
-  [USER_TIERS.FREE]: Math.max(1, Number(process.env.FREE_TIER_DAILY_MATCH_LIMIT || 10)),
-  [USER_TIERS.PREMIUM]: Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_MATCH_LIMIT || 7)),
-  [USER_TIERS.ULTRA]: Math.max(1, Number(process.env.ULTRA_TIER_DAILY_MATCH_LIMIT || 15))
-};
+
+/** Daily match caps — Premium/Ultra must never be below Free (audit P0). */
+function buildMatchLimitByTier() {
+  const free = Math.max(1, Number(process.env.FREE_TIER_DAILY_MATCH_LIMIT || 10));
+  let premium = Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_MATCH_LIMIT || 25));
+  let ultra = Math.max(1, Number(process.env.ULTRA_TIER_DAILY_MATCH_LIMIT || 50));
+  if (premium < free) premium = free;
+  if (ultra < premium) ultra = premium;
+  return {
+    [USER_TIERS.FREE]: free,
+    [USER_TIERS.PREMIUM]: premium,
+    [USER_TIERS.ULTRA]: ultra
+  };
+}
+
+const LIMIT_BY_TIER = buildMatchLimitByTier();
+
+/** Daily warm/predict *action* caps (Supabase RPC), separate from match-row KV quota. */
+function buildActionLimitByTier() {
+  const free = Math.max(1, Number(process.env.FREE_TIER_DAILY_ACTION_LIMIT || 3));
+  let premium = Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_ACTION_LIMIT || 10));
+  let ultra = Math.max(1, Number(process.env.ULTRA_TIER_DAILY_ACTION_LIMIT || 30));
+  if (premium < free) premium = free;
+  if (ultra < premium) ultra = premium;
+  return {
+    [USER_TIERS.FREE]: free,
+    [USER_TIERS.PREMIUM]: premium,
+    [USER_TIERS.ULTRA]: ultra
+  };
+}
+
+const ACTION_LIMIT_BY_TIER = buildActionLimitByTier();
 
 function parseDate(input) {
   if (!input) return null;
@@ -88,16 +115,22 @@ export function tierDailyLimit(tier) {
   return LIMIT_BY_TIER[String(tier || USER_TIERS.FREE)] ?? LIMIT_BY_TIER[USER_TIERS.FREE];
 }
 
+export function tierDailyActionLimit(tier) {
+  return ACTION_LIMIT_BY_TIER[String(tier || USER_TIERS.FREE)] ?? ACTION_LIMIT_BY_TIER[USER_TIERS.FREE];
+}
+
 function keyForPredictCount(userId, usageDay) {
   return `footy_tier_predict_count:${String(userId)}:${String(usageDay)}`;
 }
 
-export async function getPredictCountToday(userId, usageDay) {
+export async function getPredictCountToday(userId, usageDay, options = {}) {
   if (!userId || !usageDay) return 0;
+  const failClosed = options.failClosed === true;
   try {
     const val = await kv.get(keyForPredictCount(userId, usageDay));
     return Math.max(0, Number(val) || 0);
-  } catch {
+  } catch (err) {
+    if (failClosed) throw err;
     return 0;
   }
 }
