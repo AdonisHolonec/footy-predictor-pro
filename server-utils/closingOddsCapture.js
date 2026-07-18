@@ -103,7 +103,11 @@ export async function captureClosingOdds(options = {}) {
   }
 
   const now = Date.now();
-  const fromIso = new Date(now - hoursAfter * 3600 * 1000).toISOString();
+  const backfillDays = Math.max(0, Math.min(Number(options.backfillDays || 0), 14));
+  // Near-kickoff window; optional backfill pulls recent history still missing closing lines.
+  const fromIso = new Date(
+    now - Math.max(hoursAfter, backfillDays * 24) * 3600 * 1000
+  ).toISOString();
   const toIso = new Date(now + hoursBefore * 3600 * 1000).toISOString();
 
   const { data: rows, error } = await supabase
@@ -113,7 +117,8 @@ export async function captureClosingOdds(options = {}) {
     )
     .gte("kickoff_at", fromIso)
     .lte("kickoff_at", toIso)
-    .order("kickoff_at", { ascending: true })
+    .is("closing_odds_captured_at", null)
+    .order("kickoff_at", { ascending: false })
     .limit(Math.min(limit * 3, 200));
 
   if (error) {

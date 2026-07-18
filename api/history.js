@@ -494,7 +494,8 @@ async function handleHistorySync(req, res) {
     if (closingOn) {
       closing = await captureClosingOdds({
         hours: req.query.hours,
-        limit: req.query.limit || 30
+        limit: req.query.limit || 30,
+        backfillDays: req.query.backfillDays ?? 7
       }).catch((err) => ({ ok: false, error: err?.message || "closing capture failed" }));
     }
 
@@ -538,7 +539,8 @@ async function handleClosingOdds(req, res) {
       hoursBefore: req.query.hoursBefore,
       hoursAfter: req.query.hoursAfter,
       limit: req.query.limit,
-      ttlSeconds: req.query.ttlSeconds
+      ttlSeconds: req.query.ttlSeconds,
+      backfillDays: req.query.backfillDays ?? 7
     });
     if (!result.ok) {
       return res.status(500).json(result);
