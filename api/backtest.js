@@ -560,9 +560,10 @@ async function handlePublicTrack(req, res) {
 
     if (snapError) throw snapError;
     const rows = snapRows || [];
+    const latestSnap = rows[0] || null;
+    const snapSettled = latestSnap ? Number(latestSnap.settled_bets || 0) : 0;
 
-    if (rows.length > 0) {
-      const latest = rows[0];
+    if (latestSnap && snapSettled > 0) {
       const trend = rows
         .slice()
         .reverse()
@@ -579,17 +580,17 @@ async function handlePublicTrack(req, res) {
         public: true,
         source: "snapshots",
         days,
-        asOf: latest.snapshot_date,
+        asOf: latestSnap.snapshot_date,
         summary: {
-          settled: Number(latest.settled_bets || 0),
-          wins: Number(latest.wins || 0),
-          losses: Number(latest.losses || 0),
-          hitRate: Number(latest.hit_rate || 0),
-          roi: Number(latest.roi || 0),
-          pnlUnits: Number(latest.pnl_units || 0),
-          drawdown: Number(latest.max_drawdown || 0),
-          totalStake: Number(latest.total_stake_units || 0),
-          expectedValue: Number(latest.avg_ev || 0)
+          settled: snapSettled,
+          wins: Number(latestSnap.wins || 0),
+          losses: Number(latestSnap.losses || 0),
+          hitRate: Number(latestSnap.hit_rate || 0),
+          roi: Number(latestSnap.roi || 0),
+          pnlUnits: Number(latestSnap.pnl_units || 0),
+          drawdown: Number(latestSnap.max_drawdown || 0),
+          totalStake: Number(latestSnap.total_stake_units || 0),
+          expectedValue: Number(latestSnap.avg_ev || 0)
         },
         trend,
         disclaimer:
@@ -598,6 +599,7 @@ async function handlePublicTrack(req, res) {
     }
 
     // Fallback: live aggregate from settled history (no bet list exposed).
+    // Used when snapshots are missing or empty (settled=0).
     const cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
