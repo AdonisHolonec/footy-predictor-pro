@@ -519,8 +519,27 @@ function LeagueStandingsTable({
   );
 }
 
+const DETAIL_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "prediction", label: "Prediction" },
+  { id: "statistics", label: "Statistics" },
+  { id: "form", label: "Form" },
+  { id: "odds", label: "Odds" },
+  { id: "xg", label: "xG" },
+  { id: "confidence", label: "Confidence" },
+  { id: "importance", label: "Importance" },
+  { id: "montecarlo", label: "Monte Carlo" },
+  { id: "value", label: "Value" },
+  { id: "timeline", label: "Timeline" },
+  { id: "live", label: "Live" }
+] as const;
+
+type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
+
 export default function MatchModal({ match, logoColors, onClose, hashColor, canShowSpecialBet = false }: MatchModalProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
+  const [detailTab, setDetailTab] = useState<DetailTabId>("overview");
+  const tab = (ids: DetailTabId[]) => (ids.includes(detailTab) ? "" : "hidden");
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
@@ -944,7 +963,11 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             )}
           </div>
 
-          <section className="mx-auto mt-6 hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:block sm:p-5">
+          <section
+            className={`mx-auto mt-6 hidden max-w-2xl rounded-2xl border border-white/5 bg-signal-void/25 p-4 sm:block sm:p-5 ${
+              detailTab === "form" || detailTab === "overview" ? "" : "sm:hidden"
+            }`}
+          >
             <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament & mini-formă</h3>
             {showStandingsBlock ? (
               <>
@@ -972,13 +995,38 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           </section>
         </div>
 
+        <div className="sticky top-0 z-20 border-b border-white/5 bg-signal-panel/95 px-3 py-2 backdrop-blur-md sm:px-6">
+          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Match detail">
+            {DETAIL_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={detailTab === t.id}
+                onClick={() => setDetailTab(t.id)}
+                className={`shrink-0 rounded-lg px-2.5 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-wide ${
+                  detailTab === t.id
+                    ? "bg-signal-petrol/20 text-signal-petrol"
+                    : "text-signal-inkMuted hover:bg-signal-void/40 hover:text-signal-ink"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-8 p-5 sm:p-10">
-          <PredictionLaboratoryPanel match={match} />
+          <div className={tab(["prediction"])}>
+            <PredictionLaboratoryPanel match={match} />
+          </div>
 
-          <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} />
+          <div className={tab(["montecarlo"])}>
+            <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} />
+          </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
+            <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["xg", "overview"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">01 — xG & luck</h3>
               <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
@@ -990,7 +1038,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               {!match.luckStats && <p className="text-center text-[10px] text-signal-inkMuted">Luck factor indisponibil</p>}
             </section>
 
-            <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
+            <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["odds", "value", "overview"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">02 — Cote & value</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-white/5 bg-signal-mist/50 p-3">
@@ -1041,25 +1089,25 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           </div>
 
           {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
-            <div className="grid grid-cols-1 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${tab(["prediction", "overview"])}`}>
               <ExplanationCard explanation={match.explanation} />
             </div>
           ) : null}
 
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
-            <div className="grid grid-cols-1 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${tab(["importance", "prediction"])}`}>
               <FeatureImportanceChart importance={match.featureImportance} />
             </div>
           ) : null}
 
           {match.predictionContributions?.items?.length ? (
-            <div className="grid grid-cols-1 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${tab(["importance", "prediction"])}`}>
               <PredictionContributionsChart data={match.predictionContributions} />
             </div>
           ) : null}
 
           {match.confidenceEngine && (
-            <div className="grid grid-cols-1 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${tab(["confidence", "overview"])}`}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
                 recommendationPick={match.recommended?.pick || null}
@@ -1067,7 +1115,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["statistics", "overview", "live", "timeline"])}`}>
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
@@ -1359,7 +1407,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               match.modelMeta.reasonCodes?.length ||
               match.modelMeta.stakeBucket ||
               match.evaluation) && (
-              <details className="group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5">
+              <details className={`group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5 ${tab(["prediction", "confidence"])}`}>
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
                     Model audit

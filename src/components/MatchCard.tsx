@@ -19,6 +19,10 @@ type MatchCardProps = {
   hashColor: (seed: string) => string;
   animationDelayMs?: number;
   canShowSpecialBet?: boolean;
+  /** V3: declutter card — deep panels live in Match Detail tabs */
+  compact?: boolean;
+  watched?: boolean;
+  onToggleWatch?: () => void;
 };
 
 function isFinalStatus(status?: string) {
@@ -162,7 +166,17 @@ function modelTierBadge(row: PredictionRow): { label: string; title: string; cla
   };
 }
 
-export default function MatchCard({ row, logoColors, onClick, hashColor, animationDelayMs = 0, canShowSpecialBet = false }: MatchCardProps) {
+export default function MatchCard({
+  row,
+  logoColors,
+  onClick,
+  hashColor,
+  animationDelayMs = 0,
+  canShowSpecialBet = false,
+  compact = true,
+  watched = false,
+  onToggleWatch
+}: MatchCardProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
@@ -292,6 +306,24 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {onToggleWatch && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleWatch();
+              }}
+              className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
+                watched
+                  ? "border-signal-amber/40 bg-signal-amber/15 text-signal-amber"
+                  : "border-white/10 text-signal-inkMuted"
+              }`}
+              aria-label={watched ? "Remove from watchlist" : "Add to watchlist"}
+              title="Watchlist"
+            >
+              ★
+            </button>
+          )}
           <span className="lab-chip truncate max-w-[9rem] sm:max-w-[12rem]">
             {row.league}
           </span>
@@ -467,23 +499,59 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         )}
       </div>
 
-      {hasExactConfidence ? (
+      {/* Compact V3: probability bars + value chip */}
+      {compact && row.probs && (
+        <div className="mt-3 space-y-1.5">
+          {[
+            { label: "1", val: row.probs.p1, color: homeColor },
+            { label: "X", val: row.probs.pX, color: "#3ecfbf" },
+            { label: "2", val: row.probs.p2, color: awayColor }
+          ].map((b) => (
+            <div key={b.label} className="flex items-center gap-2">
+              <span className="w-3 font-mono text-[9px] text-signal-inkMuted">{b.label}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-signal-void/60">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.max(0, Math.min(100, b.val || 0))}%`, backgroundColor: b.color }}
+                />
+              </div>
+              <span className="w-8 text-right font-mono text-[9px] tabular-nums text-signal-silver">
+                {Math.round(b.val || 0)}%
+              </span>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {row.valueBet?.detected && (
+              <span className="rounded-md border border-signal-amber/35 bg-signal-amber/10 px-1.5 py-0.5 font-mono text-[8px] uppercase text-signal-amberSoft">
+                +EV
+              </span>
+            )}
+            {hasExactConfidence && confPct > 0 && (
+              <span className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[8px] text-signal-inkMuted">
+                Risk {confPct >= 70 ? "Low" : confPct >= 55 ? "Med" : "High"}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!compact && hasExactConfidence ? (
         <SignalScanStrip edge={edgeScore} dataQuality={dq} valueDetected={Boolean(row.valueBet?.detected)} className="mt-1" />
       ) : null}
 
-      {row.valueEngine ? (
+      {!compact && row.valueEngine ? (
         <div className="mt-1.5">
           <ValueCard engine={row.valueEngine} compact />
         </div>
       ) : null}
 
-      {!row.insufficientData ? <PredictionLaboratoryPanel match={row} compact /> : null}
+      {!compact && !row.insufficientData ? <PredictionLaboratoryPanel match={row} compact /> : null}
 
-      {row.explanation && (row.explanation.reasons?.length || row.explanation.reasoning?.length) ? (
+      {!compact && row.explanation && (row.explanation.reasons?.length || row.explanation.reasoning?.length) ? (
         <ExplanationCard explanation={row.explanation} compact />
       ) : null}
 
-      {row.featureImportance?.items?.length || row.featureImportance?.contributions ? (
+      {!compact && (row.featureImportance?.items?.length || row.featureImportance?.contributions) ? (
         <FeatureImportanceChart importance={row.featureImportance} compact />
       ) : null}
 
@@ -501,7 +569,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       )}
 
-      {hasExactConfidence && (cornersPick || shotsPick || firstHalfPick) && (
+      {!compact && hasExactConfidence && (cornersPick || shotsPick || firstHalfPick) && (
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {[
             {
@@ -558,7 +626,7 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       )}
 
-      {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
+      {!compact && canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
         <div className="mt-2 min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">
@@ -598,7 +666,9 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       )}
 
-      <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">Fișă analitică · tap pentru detalii</p>
+      <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">
+        {compact ? "Expand → detail tabs" : "Fișă analitică · tap pentru detalii"}
+      </p>
     </div>
   );
 }

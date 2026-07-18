@@ -5,6 +5,10 @@ import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
+import TopNav, { type AppNavView } from "../components/ux/TopNav";
+import StickyFilterBar from "../components/ux/StickyFilterBar";
+import CommandPalette from "../components/ux/CommandPalette";
+import TodayOverview from "../components/ux/TodayOverview";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
 import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
@@ -13,6 +17,7 @@ import { useHistorySync } from "../hooks/useHistorySync";
 import { isCompactViewport, useLeaguePanelState } from "../hooks/useLeaguePanelState";
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
+import { useUiPrefs } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import BrandArtboard from "../components/BrandArtboard";
 import { AdminPerformanceObservatory } from "../components/admin/AdminObservatory";
@@ -21,6 +26,7 @@ import { BRAND_IMAGES } from "../constants/brandAssets";
 import {
   hashColor,
   inferSeason,
+  isFixtureInPlay,
   isoToday,
   localCalendarDateKey,
   mergePredsWithHistory,
@@ -149,6 +155,17 @@ export default function UserDashboard() {
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
+  const [navView, setNavView] = useState<AppNavView>("today");
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [matchSearch, setMatchSearch] = useState("");
+  const {
+    prefs,
+    cycleTheme,
+    toggleWatchlist,
+    pushRecent,
+    updateFilters,
+    isWatched
+  } = useUiPrefs(user?.id);
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
   const pendingHistoryCount = useMemo(
@@ -161,9 +178,47 @@ export default function UserDashboard() {
     [history, predIdSet]
   );
   const visiblePreds = useMemo(() => {
-    if (!showSettledMarketsOnly) return preds;
-    return preds.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
-  }, [preds, showSettledMarketsOnly]);
+    let rows = preds;
+    if (navView === "live") {
+      rows = rows.filter((row) => isFixtureInPlay(row.status));
+    } else if (navView === "watchlist") {
+      const ids = new Set(prefs.watchlistFixtureIds);
+      rows = rows.filter((row) => ids.has(Number(row.id)));
+    }
+    if (showSettledMarketsOnly) {
+      rows = rows.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
+    }
+    const q = matchSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((row) => {
+        const hay = `${row.teams.home} ${row.teams.away} ${row.league} ${row.recommended?.pick || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    if (prefs.minConfidence > 0) {
+      rows = rows.filter((row) => {
+        const c = Number(row.recommended?.confidence);
+        return Number.isFinite(c) && c >= prefs.minConfidence;
+      });
+    }
+    if (prefs.minEv > 0) {
+      rows = rows.filter((row) => {
+        const e = Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue);
+        return Number.isFinite(e) && e >= prefs.minEv;
+      });
+    }
+    if (prefs.valueOnly) {
+      rows = rows.filter(
+        (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
+      );
+    }
+    return rows;
+  }, [preds, showSettledMarketsOnly, navView, prefs.watchlistFixtureIds, prefs.minConfidence, prefs.minEv, prefs.valueOnly, matchSearch]);
+  const continueMatch = useMemo(() => {
+    const recent = prefs.recentFixtureIds[0];
+    if (!recent) return null;
+    return preds.find((p) => Number(p.id) === recent) || null;
+  }, [prefs.recentFixtureIds, preds]);
   const userPerformanceByLeague = useMemo((): PerformanceLeagueBreakdown[] => {
     const map = new Map<number, { leagueId: number; leagueName: string; wins: number; losses: number; pending: number }>();
     for (const h of history) {
@@ -631,6 +686,28 @@ export default function UserDashboard() {
     }
   }
 
+  const openMatch = useCallback(
+    (match: PredictionRow) => {
+      pushRecent(Number(match.id));
+      setSelectedMatch(match);
+    },
+    [pushRecent]
+  );
+
+  const handleNav = useCallback(
+    (view: AppNavView) => {
+      if (view === "admin") {
+        window.location.href = "/workspace";
+        return;
+      }
+      setNavView(view);
+      if (view === "settings") {
+        setIsNotificationsOpen(true);
+      }
+    },
+    []
+  );
+
   return (
     <div className="lab-page relative min-h-screen font-sans">
       <div className="lab-bg" aria-hidden />
@@ -639,229 +716,179 @@ export default function UserDashboard() {
         style={{ backgroundImage: `url(${BRAND_IMAGES.refDashboard})` }}
         aria-hidden
       />
-      <div className="relative z-10 mx-auto max-w-[1500px] px-4 py-8 lg:px-6">
-        <AdminPerformanceObservatory className="mt-0">
-          <SuccessRateTracker
-            stats={trackerStats}
-            animatedWins={animatedWins}
-            animatedLosses={animatedLosses}
-            animatedWinRate={animatedWinRate}
-            isWinRatePulsing={isWinRatePulsing}
-            isHistorySyncing={isHistorySyncing}
-            pendingHistoryCount={pendingHistoryCount}
-            displayedPredsCount={visiblePreds.length}
-            pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
-            onBreakdownClick={() => setPerfCounterModalOpen(true)}
-          />
-          <div className="mt-4 grid max-w-full grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Win rate</div>
-              <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
-                {trackerStats.settled > 0 ? `${animatedWinRate.toFixed(1)}%` : "—"}
-              </div>
-            </div>
-            <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">W / L</div>
-              <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
-                {animatedWins} <span className="text-signal-inkMuted">/</span> {animatedLosses}
-              </div>
-            </div>
-            <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Pending</div>
-              <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">{pendingHistoryCount}</div>
-            </div>
-            <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Settled</div>
-              <div className="font-mono text-sm font-semibold tabular-nums text-signal-sage">{trackerStats.settled}</div>
-            </div>
-          </div>
-        </AdminPerformanceObservatory>
+      <div className="relative z-10 mx-auto max-w-[1680px] px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
+        <TopNav
+          active={navView}
+          onNavigate={handleNav}
+          email={user?.email}
+          tier={userTier}
+          dbMode={isFreeDbOnlyMode}
+          theme={prefs.theme}
+          onCycleTheme={cycleTheme}
+          onOpenCommand={() => setCommandOpen(true)}
+          onOpenNotifications={() => {
+            setNavView("settings");
+            setIsNotificationsOpen(true);
+          }}
+          onPredict={() => void warmAndPredict()}
+          predictBusy={warmPredictBusy}
+          showAdmin={user?.role === "admin"}
+          onLogout={() => void logout()}
+        />
 
-        <header className="mb-4 mt-8 flex flex-col gap-4 border-b border-white/[0.06] pb-4 sm:mb-6 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol/85">Footy Predictor · Laborator utilizator</p>
-                <p className="font-mono text-[10px] text-signal-inkMuted">
-                  {localCalendarDateKey()} · S{inferSeason(date)}
-                </p>
-                <img
-                  src={BRAND_IMAGES.logoPrimary}
-                  alt="Footy Predictor"
-                  className="mt-2 h-20 w-20 rounded-2xl border-2 border-cyan-300/60 object-contain p-1 brightness-110 saturate-150 shadow-[0_0_38px_rgba(34,211,238,0.46)] sm:h-24 sm:w-24"
-                />
-                <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight text-signal-ink sm:text-4xl">
-                  Observatorul <span className="text-signal-petrol">tău</span>
-                </h1>
-                <p className="mt-2 max-w-xl text-sm leading-relaxed text-signal-inkMuted">
-                  Feed curat: pick, încredere și semnal. Detaliile complete sunt în fișa meciului.
-                </p>
-              </div>
-              <div className="hidden rounded-2xl border border-white/[0.08] bg-signal-void/40 px-4 py-3 text-right font-mono text-[10px] text-signal-inkMuted sm:block">
-                <div className="text-signal-sage">● Calibrated</div>
-                <div className="mt-1 inline-flex items-center justify-end gap-2 text-signal-silver">
-                  <span>{user?.email}</span>
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      userTier === "ultra"
-                        ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
-                        : userTier === "premium"
-                          ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
-                          : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
-                    }`}
-                  >
-                    {userTier.toUpperCase()}
-                  </span>
-                  {isFreeDbOnlyMode && (
-                    <span className="rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint">
-                      DB mode
-                    </span>
-                  )}
-                </div>
-                <Link to="/privacy" className="mt-2 inline-block text-signal-petrol hover:underline">
-                  Confidențialitate
-                </Link>
-              </div>
-            </div>
-            <ModelPulseWave status="OPTIMAL CALIBRATION" className="max-w-3xl" />
-            <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
-            <p className="flex flex-wrap items-center gap-1.5 text-xs text-signal-inkMuted sm:hidden">
-              <span>{user?.email}</span>
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                  userTier === "ultra"
-                    ? "border-signal-amber/35 bg-signal-amber/10 text-signal-amber"
-                    : userTier === "premium"
-                      ? "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol"
-                      : "border-white/10 bg-signal-panel/45 text-signal-inkMuted"
-                }`}
-              >
-                {userTier.toUpperCase()}
-              </span>
-            {isFreeDbOnlyMode && (
-              <span className="rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint">
-                DB mode
-              </span>
-            )}
-              <span>·</span>
-              <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
-                Confidențialitate
-              </Link>
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-4 xl:w-auto xl:max-w-[280px] xl:shrink-0">
-            <BrandArtboard
-              src={BRAND_IMAGES.refDossier}
-              alt="Referință vizuală — prediction dossier și instrumente analitice"
-              frameClassName="max-h-[200px] w-full xl:max-h-[240px]"
-              className="hidden xl:block"
-            />
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="touch-manipulation w-full rounded-xl border border-white/10 bg-signal-panel/55 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-signal-petrol transition hover:bg-signal-fog xl:w-auto"
-            >
-              Logout
-            </button>
-          </div>
-        </header>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => {
-              const next = event.target.value;
+        {(navView === "today" || navView === "live" || navView === "watchlist") && (
+          <StickyFilterBar
+            date={date}
+            onDateChange={(next) => {
               setDate(next);
               setSelectedDates(normalizeSelectedDates([next]));
               void fetchDays([next]);
             }}
-            className="rounded-xl border glass-input px-4 py-2.5 text-sm text-signal-ink outline-none focus:ring-2 focus:ring-signal-petrol/30"
+            search={matchSearch}
+            onSearchChange={setMatchSearch}
+            minConfidence={prefs.minConfidence}
+            onMinConfidence={(n) => updateFilters({ minConfidence: n })}
+            minEv={prefs.minEv}
+            onMinEv={(n) => updateFilters({ minEv: n })}
+            valueOnly={prefs.valueOnly}
+            onValueOnly={(v) => updateFilters({ valueOnly: v })}
+            settledOnly={showSettledMarketsOnly}
+            onSettledOnly={setShowSettledMarketsOnly}
+            onOpenLeagues={() => setIsLeaguesOpen(true)}
+            extraDates={
+              <>
+                {userTier === "premium" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+                    className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent)]"
+                  >
+                    +1 zi
+                  </button>
+                )}
+                {userTier === "ultra" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+                      className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent-2)]"
+                    >
+                      +1 zi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
+                      }
+                      className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent-2)]"
+                    >
+                      +2 zile
+                    </button>
+                  </>
+                )}
+                <div className="flex flex-wrap items-center gap-1">
+                  {activePredictDates.map((d) => (
+                    <span
+                      key={d}
+                      className="rounded-full border border-[var(--border)] px-2 py-0.5 font-mono text-[9px] text-[var(--text-muted)]"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+                {tierQuotaExempt && (
+                  <span className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">
+                    Unlimited
+                  </span>
+                )}
+              </>
+            }
           />
-          {userTier === "premium" && (
-            <button
-              type="button"
-              onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-              className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-2 text-xs font-semibold text-signal-petrol hover:bg-signal-petrol/20"
-            >
-              +1 zi
-            </button>
-          )}
-          {userTier === "ultra" && (
-            <>
-              <button
-                type="button"
-                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
-              >
-                +1 zi
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))}
-                className="rounded-xl border border-signal-amber/25 bg-signal-amber/10 px-3 py-2 text-xs font-semibold text-signal-amber hover:bg-signal-amber/20"
-              >
-                +2 zile
-              </button>
-            </>
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void warmAndPredict()}
-              disabled={warmPredictBusy}
-              className="touch-manipulation rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-signal-mist hover:bg-signal-petrolMuted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {warmPredictBusy ? "Warm + Predict…" : "Warm + Predict"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSettledMarketsOnly((prev) => !prev)}
-              className={`rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-inner transition ${
-                showSettledMarketsOnly
-                  ? "border-signal-sage/35 bg-signal-sage/10 text-signal-mint"
-                  : "border-white/10 bg-signal-panel/45 text-signal-inkMuted hover:text-signal-ink"
-              }`}
-              title="Afișează doar meciurile finalizate unde piețele derivate pot primi badge WIN/LOSE"
-            >
-              {showSettledMarketsOnly ? "Settled markets: ON" : "Settled markets: OFF"}
-            </button>
+        )}
+
+        {(navView === "history" || navView === "today") && (
+          <div className={navView === "history" ? "mt-6" : "mt-4"}>
+            <AdminPerformanceObservatory className="mt-0">
+              <SuccessRateTracker
+                stats={trackerStats}
+                animatedWins={animatedWins}
+                animatedLosses={animatedLosses}
+                animatedWinRate={animatedWinRate}
+                isWinRatePulsing={isWinRatePulsing}
+                isHistorySyncing={isHistorySyncing}
+                pendingHistoryCount={pendingHistoryCount}
+                displayedPredsCount={visiblePreds.length}
+                pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+                onBreakdownClick={() => setPerfCounterModalOpen(true)}
+              />
+              {navView === "history" && (
+                <div className="mt-4 grid max-w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Win rate</div>
+                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
+                      {trackerStats.settled > 0 ? `${animatedWinRate.toFixed(1)}%` : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">W / L</div>
+                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
+                      {animatedWins} <span className="text-signal-inkMuted">/</span> {animatedLosses}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Pending</div>
+                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">{pendingHistoryCount}</div>
+                  </div>
+                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
+                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Settled</div>
+                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-sage">{trackerStats.settled}</div>
+                  </div>
+                </div>
+              )}
+            </AdminPerformanceObservatory>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">Zile active:</span>
-            {activePredictDates.map((d) => (
-              <span
-                key={d}
-                className="rounded-full border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-0.5 font-mono text-[10px] text-signal-petrol"
-              >
-                {d}
+        )}
+
+        {navView === "today" && (
+          <div className="mt-6">
+            <TodayOverview
+              matches={preds}
+              onOpenMatch={openMatch}
+              continueMatch={continueMatch}
+              winRate={trackerStats.winRate}
+              pendingCount={pendingHistoryCount}
+            />
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <ModelPulseWave status="OPTIMAL CALIBRATION" className="max-w-3xl" />
+              <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
+              <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                {localCalendarDateKey()} · S{inferSeason(date)}
               </span>
-            ))}
-          </div>
-          {tierQuotaExempt && (
-            <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-[11px] font-semibold text-emerald-300 shadow-inner">
-              Admin · Unlimited
+              <Link to="/privacy" className="text-xs text-[var(--accent)] hover:underline">
+                Confidențialitate
+              </Link>
             </div>
-          )}
-          {(warmPredictBusy || trialBusy !== null || exportBusy || notifSaveBusy) && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
-              Loading
-            </span>
-          )}
-          {dateSyncBadgeUntil > Date.now() && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-sage">
-              <span className="h-1.5 w-1.5 rounded-full bg-signal-sage" />
-              Data sincronizată
-            </span>
-          )}
-        </div>
+          </div>
+        )}
+
+        {(warmPredictBusy || trialBusy !== null || exportBusy || notifSaveBusy) && (
+          <span className="mt-3 inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
+            Loading
+          </span>
+        )}
+        {dateSyncBadgeUntil > Date.now() && (
+          <span className="mt-3 ml-2 inline-flex items-center gap-1 rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-sage">
+            <span className="h-1.5 w-1.5 rounded-full bg-signal-sage" />
+            Data sincronizată
+          </span>
+        )}
 
         {status && (
           <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
         )}
 
-        {!tierQuotaExempt && (
+        {navView === "settings" && !tierQuotaExempt && (
           <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -933,7 +960,7 @@ export default function UserDashboard() {
           </div>
         )}
 
-        {!user?.onboardingCompleted && (
+        {(navView === "settings" || !user?.onboardingCompleted) && !user?.onboardingCompleted && (
           <section className="mt-4 rounded-2xl border border-signal-sage/30 bg-signal-mintSoft/20 p-4 shadow-inner">
             <button
               type="button"
@@ -958,6 +985,8 @@ export default function UserDashboard() {
           </section>
         )}
 
+        {navView === "settings" && (
+        <>
         <section className="mt-4 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-1 shadow-inner backdrop-blur-md">
           <button
             type="button"
@@ -1054,6 +1083,28 @@ export default function UserDashboard() {
           )}
         </section>
 
+        <section className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+          <h2 className="text-sm font-semibold text-[var(--text)]">Appearance</h2>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">Theme: {prefs.theme}</p>
+          <button
+            type="button"
+            onClick={cycleTheme}
+            className="mt-3 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--accent)]"
+          >
+            Cycle theme
+          </button>
+          <div className="mt-4">
+            <BrandArtboard
+              src={BRAND_IMAGES.refDossier}
+              alt="Referință vizuală — prediction dossier"
+              frameClassName="max-h-[180px] w-full"
+            />
+          </div>
+        </section>
+        </>
+        )}
+
+        {(navView === "today" || navView === "live" || navView === "watchlist") && (
         <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
           <div className="lg:col-span-4 xl:col-span-3">
             <LeaguePanel
@@ -1071,9 +1122,21 @@ export default function UserDashboard() {
             />
           </div>
           <div className="lg:col-span-8 xl:col-span-9">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-[var(--text)]">
+                {navView === "live" ? "Live matches" : navView === "watchlist" ? "Watchlist" : "All matches"}
+              </h2>
+              <span className="font-mono text-[10px] text-[var(--text-muted)]">{visiblePreds.length}</span>
+            </div>
             {!visiblePreds.length ? (
               <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/30 bg-signal-void/35 text-center text-signal-inkMuted">
-                {showSettledMarketsOnly ? "Nu există încă meciuri finalizate cu piețe derivate în selecția curentă." : "Selectează ligi și apasă Predict."}
+                {navView === "watchlist"
+                  ? "Watchlist empty — star a match to save it."
+                  : navView === "live"
+                    ? "No live matches in the current selection."
+                    : showSettledMarketsOnly
+                      ? "Nu există încă meciuri finalizate cu piețe derivate în selecția curentă."
+                      : "Selectează ligi și apasă Predict."}
               </div>
             ) : (
               <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
@@ -1083,14 +1146,18 @@ export default function UserDashboard() {
                     row={match}
                     logoColors={{}}
                     hashColor={hashColor}
+                    compact
+                    watched={isWatched(Number(match.id))}
+                    onToggleWatch={() => toggleWatchlist(Number(match.id))}
                     canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
-                    onClick={() => setSelectedMatch(match)}
+                    onClick={() => openMatch(match)}
                   />
                 ))}
               </div>
             )}
           </div>
         </div>
+        )}
       </div>
       <PerformanceCounterModal
         open={perfCounterModalOpen}
@@ -1110,6 +1177,16 @@ export default function UserDashboard() {
           onClose={() => setSelectedMatch(null)}
         />
       )}
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onOpen={() => setCommandOpen(true)}
+        matches={preds}
+        onSelectMatch={openMatch}
+        onNavigate={handleNav}
+        onPredict={() => void warmAndPredict()}
+        showAdmin={user?.role === "admin"}
+      />
     </div>
   );
 }
