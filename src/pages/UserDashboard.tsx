@@ -927,7 +927,7 @@ export default function UserDashboard() {
               <div>
                 <h2 className="text-sm font-semibold tracking-wide text-signal-ink">Abonament Stripe</h2>
                 <p className="mt-1 text-[11px] text-signal-inkMuted">
-                  Premium (25 meciuri/zi) sau Ultra (50 meciuri/zi). Plățile actualizează automat tier-ul din profil.
+                  Premium (25 meciuri/zi) sau Ultra (50 meciuri/zi). Poți plăti oricând — inclusiv în timpul unui trial 24h.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -946,7 +946,7 @@ export default function UserDashboard() {
                   }}
                   className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
                 >
-                  {billingBusy === "premium" ? "Redirect…" : "Upgrade Premium"}
+                  {billingBusy === "premium" ? "Redirect…" : "Subscribe Premium"}
                 </button>
                 <button
                   type="button"
@@ -963,7 +963,7 @@ export default function UserDashboard() {
                   }}
                   className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
                 >
-                  {billingBusy === "ultra" ? "Redirect…" : "Upgrade Ultra"}
+                  {billingBusy === "ultra" ? "Redirect…" : "Subscribe Ultra"}
                 </button>
                 <button
                   type="button"
@@ -984,6 +984,11 @@ export default function UserDashboard() {
                 </button>
               </div>
             </div>
+            {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
+              <p className="mt-3 text-[11px] text-signal-petrol">
+                Trial activ acum — Subscribe rămâne disponibil și înlocuiește trial-ul cu abonament plătit.
+              </p>
+            )}
             {!billingConfigured && (
               <p className="mt-3 text-[11px] text-signal-inkMuted">
                 Stripe nu este configurat pe server (lipsesc cheile / price IDs). Trial-urile 24h rămân disponibile mai jos.
@@ -996,20 +1001,24 @@ export default function UserDashboard() {
           <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial Control</h2>
+                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial (opțional)</h2>
                 <p className="mt-1 text-[11px] text-signal-inkMuted">
-                  Activează la cerere upgrade temporar pentru Premium (cornere) sau Ultra (inteligență completă).
+                  Un singur trial activ odată. Nu blochează Subscribe — poți plăti oricând din secțiunea de mai sus.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={trialBusy !== null || !!user?.premium_trial_activated_at}
+                  disabled={
+                    trialBusy !== null ||
+                    !!user?.premium_trial_activated_at ||
+                    trialRemainingTime.ultraMs > 0
+                  }
                   onClick={async () => {
                     setTrialBusy("premium");
                     try {
                       await activate24hTrial("premium");
-                      setStatus("Trial Premium activat pentru 24h.");
+                      setStatus("Trial Premium activat pentru 24h. Poți face Subscribe oricând.");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
                     } finally {
@@ -1018,16 +1027,26 @@ export default function UserDashboard() {
                   }}
                   className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
                 >
-                  {user?.premium_trial_activated_at ? "Premium trial used" : trialBusy === "premium" ? "Activating..." : "Activate Premium 24h"}
+                  {user?.premium_trial_activated_at
+                    ? "Premium trial used"
+                    : trialRemainingTime.ultraMs > 0
+                      ? "Ultra trial activ"
+                      : trialBusy === "premium"
+                        ? "Activating..."
+                        : "Activate Premium 24h"}
                 </button>
                 <button
                   type="button"
-                  disabled={trialBusy !== null || !!user?.ultra_trial_activated_at}
+                  disabled={
+                    trialBusy !== null ||
+                    !!user?.ultra_trial_activated_at ||
+                    trialRemainingTime.premiumMs > 0
+                  }
                   onClick={async () => {
                     setTrialBusy("ultra");
                     try {
                       await activate24hTrial("ultra");
-                      setStatus("Trial Ultra activat pentru 24h.");
+                      setStatus("Trial Ultra activat pentru 24h. Poți face Subscribe oricând.");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
                     } finally {
@@ -1036,7 +1055,13 @@ export default function UserDashboard() {
                   }}
                   className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
                 >
-                  {user?.ultra_trial_activated_at ? "Ultra trial used" : trialBusy === "ultra" ? "Activating..." : "Activate Ultra 24h"}
+                  {user?.ultra_trial_activated_at
+                    ? "Ultra trial used"
+                    : trialRemainingTime.premiumMs > 0
+                      ? "Premium trial activ"
+                      : trialBusy === "ultra"
+                        ? "Activating..."
+                        : "Activate Ultra 24h"}
                 </button>
               </div>
             </div>

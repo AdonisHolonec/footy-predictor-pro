@@ -1,7 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
-import { tierDailyActionLimit, tierDailyLimit, USER_TIERS } from "../server-utils/accessTier.js";
+import {
+  resolveEffectiveTierFromProfile,
+  tierDailyActionLimit,
+  tierDailyLimit,
+  USER_TIERS
+} from "../server-utils/accessTier.js";
 import { tierFromPriceId } from "../server-utils/stripeBilling.js";
 
 function mockReq({ headers = {}, query = {} } = {}) {
@@ -105,5 +110,33 @@ describe("Stripe billing helpers", () => {
       process.env.STRIPE_PRICE_PREMIUM = prevP;
       process.env.STRIPE_PRICE_ULTRA = prevU;
     }
+  });
+});
+
+describe("Trial vs paid subscription priority", () => {
+  it("active 24h trial grants tier when no paid sub", () => {
+    const now = Date.now();
+    const info = resolveEffectiveTierFromProfile({
+      tier: "free",
+      subscription_expires_at: null,
+      premium_trial_activated_at: new Date(now - 60 * 60 * 1000).toISOString(),
+      ultra_trial_activated_at: null
+    });
+    assert.equal(info.effectiveTier, "premium");
+    assert.equal(info.hasActiveSubscription, false);
+    assert.ok(info.premiumTrialRemainingMs > 0);
+  });
+
+  it("paid subscription beats an active free trial", () => {
+    const now = Date.now();
+    const info = resolveEffectiveTierFromProfile({
+      tier: "ultra",
+      subscription_expires_at: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      premium_trial_activated_at: new Date(now - 60 * 60 * 1000).toISOString(),
+      ultra_trial_activated_at: null
+    });
+    assert.equal(info.effectiveTier, "ultra");
+    assert.equal(info.hasActiveSubscription, true);
+    assert.ok(info.premiumTrialRemainingMs > 0);
   });
 });

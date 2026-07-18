@@ -11,6 +11,7 @@
  * Rewrites: /api/stripe-webhook → webhook, /api/activate-trial → trial
  */
 import { getRequester } from "../server-utils/authAdmin.js";
+import { resolveEffectiveTierFromProfile } from "../server-utils/accessTier.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   applySubscriptionToProfile,
@@ -106,13 +107,14 @@ async function handleCheckout(req, res) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("user_id, stripe_customer_id, is_blocked")
+    .select("user_id, stripe_customer_id, stripe_subscription_id, is_blocked, tier, subscription_expires_at")
     .eq("user_id", requester.user.id)
     .maybeSingle();
   if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
   if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
   if (profile.is_blocked) return res.status(403).json({ ok: false, error: "Cont blocat." });
 
+  // App 24h trials must never block paid Checkout.
   const stripe = getStripe();
   const origin = appOrigin(req);
   const customerId = await ensureStripeCustomer({
@@ -120,6 +122,29 @@ async function handleCheckout(req, res) {
     email: requester.user.email,
     existingCustomerId: profile.stripe_customer_id
   });
+
+  // If they already have an active Stripe subscription, upgrade/downgrade via Portal
+  // instead of opening a second Checkout (which Stripe often rejects).
+  if (profile.stripe_subscription_id) {
+    try {
+      const existing = await stripe.subscriptions.retrieve(String(profile.stripe_subscription_id));
+      const status = String(existing?.status || "");
+      if (["active", "trialing", "past_due"].includes(status)) {
+        const portal = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${origin}/workspace?billing=portal`
+        });
+        return res.status(200).json({
+          ok: true,
+          url: portal.url,
+          mode: "portal",
+          message: "Ai deja un abonament activ — te redirecționăm la portal pentru upgrade/gestionare."
+        });
+      }
+    } catch {
+      /* fall through to new Checkout */
+    }
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -135,7 +160,7 @@ async function handleCheckout(req, res) {
     }
   });
 
-  return res.status(200).json({ ok: true, url: session.url, sessionId: session.id });
+  return res.status(200).json({ ok: true, url: session.url, sessionId: session.id, mode: "checkout" });
 }
 
 async function handlePortal(req, res) {
@@ -205,13 +230,36 @@ async function handleTrial(req, res) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("user_id, premium_trial_activated_at, ultra_trial_activated_at")
+    .select(
+      "user_id, tier, subscription_expires_at, stripe_subscription_id, premium_trial_activated_at, ultra_trial_activated_at"
+    )
     .eq("user_id", requester.user.id)
     .maybeSingle();
   if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
   if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
+
+  const tierInfo = resolveEffectiveTierFromProfile(profile);
+  if (tierInfo.hasActiveSubscription) {
+    return res.status(409).json({
+      ok: false,
+      error: "Ai deja un abonament plătit activ. Folosește Upgrade / Manage billing — trial-ul nu e necesar."
+    });
+  }
   if (profile[trialField]) {
     return res.status(409).json({ ok: false, error: "Acest trial a fost deja folosit." });
+  }
+  // Only one free 24h trial window at a time (the other remains available after expiry).
+  if (tier === "premium" && tierInfo.ultraTrialRemainingMs > 0) {
+    return res.status(409).json({
+      ok: false,
+      error: "Trial Ultra este deja activ. Poți face Upgrade plătit oricând din Abonament Stripe."
+    });
+  }
+  if (tier === "ultra" && tierInfo.premiumTrialRemainingMs > 0) {
+    return res.status(409).json({
+      ok: false,
+      error: "Trial Premium este deja activ. Poți face Upgrade Ultra plătit oricând din Abonament Stripe."
+    });
   }
 
   const nowIso = new Date().toISOString();
@@ -227,7 +275,8 @@ async function handleTrial(req, res) {
     ok: true,
     tier,
     activatedAt: nowIso,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    canSubscribe: true
   });
 }
 

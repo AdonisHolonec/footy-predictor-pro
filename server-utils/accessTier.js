@@ -85,13 +85,14 @@ export function resolveEffectiveTierFromProfile(profile) {
   const premiumTrialRemainingMs = hoursRemaining(profile?.premium_trial_activated_at, 24);
   const ultraTrialRemainingMs = hoursRemaining(profile?.ultra_trial_activated_at, 24);
 
+  // Paid subscription always beats free 24h trials so Upgrade/Checkout still grants access.
   let effectiveTier = USER_TIERS.FREE;
-  if (ultraTrialRemainingMs > 0) {
+  if (hasActiveSubscription && (requestedTier === USER_TIERS.PREMIUM || requestedTier === USER_TIERS.ULTRA)) {
+    effectiveTier = requestedTier;
+  } else if (ultraTrialRemainingMs > 0) {
     effectiveTier = USER_TIERS.ULTRA;
   } else if (premiumTrialRemainingMs > 0) {
     effectiveTier = USER_TIERS.PREMIUM;
-  } else if (hasActiveSubscription && (requestedTier === USER_TIERS.PREMIUM || requestedTier === USER_TIERS.ULTRA)) {
-    effectiveTier = requestedTier;
   }
 
   return {
