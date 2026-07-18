@@ -5,9 +5,6 @@
     },
     "api/cron/daily-ml.js": {
       "maxDuration": 300
-    },
-    "api/cron/daily-report.js": {
-      "maxDuration": 60
     }
   },
   "crons": [
@@ -44,7 +41,7 @@
       "schedule": "20 17 * * *"
     },
     {
-      "path": "/api/cron/daily-report",
+      "path": "/api/cron/daily-ml?mode=ops-report",
       "schedule": "5 0 * * *"
     }
   ]

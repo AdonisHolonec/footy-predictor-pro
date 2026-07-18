@@ -14,6 +14,8 @@ import { invalidateEloCache } from "../../server-utils/teamElo.js";
 import { invalidateTeamMarketRollingCache } from "../../server-utils/teamMarketRolling.js";
 import { runAutoCalibration } from "../../server-utils/calibration/AutoCalibrationEngine.js";
 import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
+import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
+import { logError, logInfo } from "../../server-utils/observability/logger.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const CALIBRATION_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
@@ -380,6 +382,20 @@ export default async function handler(req, res) {
   if (!isAuthorizedCronOrInternalRequest(req)) {
     return res.status(401).json({ ok: false, error: "Cerere cron neautorizată." });
   }
+
+  const mode = String(req.query.mode || "all").toLowerCase();
+  // Ops daily report — no ML training; folded here for Hobby serverless function limits.
+  if (mode === "ops-report" || mode === "ops_report" || mode === "daily-report") {
+    try {
+      const report = await generateDailyReport(req.query.date || undefined);
+      logInfo("cron.daily_report", { date: report?.date, status: report?.status });
+      return res.status(200).json({ ok: true, mode, report });
+    } catch (err) {
+      logError("cron.daily_report_failed", { error: err?.message || String(err) });
+      return res.status(500).json({ ok: false, mode, error: err?.message || "Daily report failed" });
+    }
+  }
+
   const cfg = assertSupabaseConfigured();
   if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
   const supabase = getSupabaseAdmin();
@@ -387,7 +403,6 @@ export default async function handler(req, res) {
 
   const startedAt = new Date().toISOString();
   const modelVersion = String(req.query.modelVersion || process.env.DAILY_ML_MODEL_VERSION || MODEL_VERSION);
-  const mode = String(req.query.mode || "all").toLowerCase();
 
   try {
     let calibration = null;

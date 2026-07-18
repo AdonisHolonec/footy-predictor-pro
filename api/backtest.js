@@ -18,6 +18,52 @@ import {
   resolveWindowDays,
   seasonStartIso
 } from "../server-utils/backtest/BacktestAnalytics.js";
+import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
+import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
+import { logInfo } from "../server-utils/observability/logger.js";
+
+/**
+ * Enterprise Monitoring — folded into backtest to stay within Hobby serverless limits.
+ * GET /api/backtest?view=health
+ * GET /api/backtest?view=health&sub=live
+ * GET /api/backtest?view=health&sub=report
+ */
+async function handleHealth(req, res) {
+  if (req.method !== "GET" && req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+  }
+
+  const sub = String(req.query.sub || req.query.healthView || "dashboard").toLowerCase();
+  const days = Math.max(1, Math.min(Number(req.query.days || 7), 30));
+
+  try {
+    if (sub === "live") {
+      const bundle = await buildHealthBundle({ historyDays: 1 });
+      return res.status(bundle.ok ? 200 : 503).json({
+        ok: bundle.ok,
+        status: bundle.status,
+        severity: bundle.severity,
+        generatedAt: bundle.generatedAt
+      });
+    }
+
+    if (sub === "report") {
+      if (String(req.query.generate || "") === "1" || req.method === "POST") {
+        const report = await generateDailyReport(req.query.date || undefined);
+        return res.status(200).json({ ok: true, report });
+      }
+      const latest = await getDailyReport(req.query.date || undefined);
+      const recent = await listDailyReports(days);
+      return res.status(200).json({ ok: true, report: latest, recent });
+    }
+
+    const bundle = await buildHealthBundle({ historyDays: days });
+    logInfo("health.dashboard", { status: bundle.status, alerts: bundle.alerts.length });
+    return res.status(200).json({ ok: true, ...bundle });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err?.message || "Health check failed" });
+  }
+}
 
 async function isAuthorizedForMetrics(req) {
   if (isAuthorizedCronOrInternalRequest(req)) return true;
@@ -408,8 +454,9 @@ export default async function handler(req, res) {
   if (view === "analytics") return handleAnalytics(req, res);
   if (view === "snapshot") return handleSnapshot(req, res);
   if (view === "metrics") return handleMetrics(req, res);
+  if (view === "health") return handleHealth(req, res);
   return res.status(400).json({
     ok: false,
-    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot sau metrics."
+    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot, metrics sau health."
   });
 }
