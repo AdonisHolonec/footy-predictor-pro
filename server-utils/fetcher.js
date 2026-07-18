@@ -1,4 +1,6 @@
 import { createClient } from "@vercel/kv";
+import { logError, logWarn } from "./observability/logger.js";
+import { recordObservation } from "./observability/metricsStore.js";
 
 const kv = createClient({
   url: process.env.KV_REST_API_URL || process.env.Database_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,
@@ -209,13 +211,19 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
   const fetchUrl = buildFetchUrl(primary.baseUrl, endpoint, paramsObj);
 
   try {
+    const cacheStarted = Date.now();
     const cached = (await kv.get(cacheKey)) || (await kv.get(legacyKey));
+    const cacheMs = Date.now() - cacheStarted;
     if (cached) {
       localCacheStats.hits += 1;
       void bumpDailyCacheStats({ hit: true });
-      return { ok: true, fromCache: true, data: cached, cacheKey };
+      void recordObservation("cache", { durationMs: cacheMs, ok: true });
+      return { ok: true, fromCache: true, data: cached, cacheKey, cacheMs };
     }
-  } catch {
+    void recordObservation("cache", { durationMs: cacheMs, ok: true });
+  } catch (err) {
+    void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
+    logWarn("cache.read_failed", { endpoint, error: err?.message || "kv_read" });
     // KV read failure → proceed to network
   }
 
@@ -229,6 +237,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
     localCacheStats.misses += 1;
     localCacheStats.upstream += 1;
     void bumpDailyCacheStats({ miss: true });
+    const apiStarted = Date.now();
 
     try {
       const fetchWith = async (upstreamCfg) => {
@@ -262,28 +271,51 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
         json.errors &&
         ((Array.isArray(json.errors) && json.errors.length > 0) ||
           (!Array.isArray(json.errors) && Object.keys(json.errors).length > 0));
+      const apiMs = Date.now() - apiStarted;
       if (!attempt.res.ok || hasErrors) {
+        void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
+        logError("api.upstream_failed", {
+          endpoint,
+          status: attempt.res.status,
+          provider: attempt.upstreamCfg.provider,
+          durationMs: apiMs
+        });
         return {
           ok: false,
           error: json.message || json.errors || `Eroare API ${attempt.res.status}`,
           status: attempt.res.status,
           provider: attempt.upstreamCfg.provider,
-          fromCache: false
+          fromCache: false,
+          apiMs
         };
       }
 
       const ttl = Math.max(30, Number(ttlSeconds) || 300);
       try {
+        const writeStarted = Date.now();
         await kv.set(cacheKey, json, { ex: ttl });
         // Dual-write legacy key briefly so mixed deploys still share hits.
         await kv.set(legacyKey, json, { ex: ttl });
-      } catch {
-        // non-fatal cache write
+        void recordObservation("cache", { durationMs: Date.now() - writeStarted, ok: true });
+      } catch (writeErr) {
+        void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
+        logWarn("cache.write_failed", { endpoint, error: writeErr?.message || "kv_write" });
       }
 
-      return { ok: true, fromCache: false, data: json, cacheKey, provider: attempt.upstreamCfg.provider };
+      void recordObservation("api", { durationMs: apiMs, ok: true });
+      return {
+        ok: true,
+        fromCache: false,
+        data: json,
+        cacheKey,
+        provider: attempt.upstreamCfg.provider,
+        apiMs
+      };
     } catch (err) {
-      return { ok: false, error: err.message, fromCache: false };
+      const apiMs = Date.now() - apiStarted;
+      void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
+      logError("api.upstream_exception", { endpoint, error: err.message, durationMs: apiMs });
+      return { ok: false, error: err.message, fromCache: false, apiMs };
     } finally {
       inflight.delete(cacheKey);
     }

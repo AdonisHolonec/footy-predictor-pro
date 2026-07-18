@@ -2,6 +2,9 @@
 import { readBearer } from "../server-utils/authAdmin.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { getApiUsage, getLocalCacheStats, getWithCache } from "../server-utils/fetcher.js";
+import { logError } from "../server-utils/observability/logger.js";
+import { attachRequestMonitor } from "../server-utils/observability/requestMonitor.js";
+import { bumpFailure } from "../server-utils/observability/metricsStore.js";
 import {
   computeMatchProbs,
   clampLambda,
@@ -574,6 +577,7 @@ async function loadRiskContext() {
 }
 
 export default async function handler(req, res) {
+  attachRequestMonitor(req, res, { route: "predict" });
   const date = req.query.date || todayCalendarEuropeBucharest();
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
@@ -2026,7 +2030,11 @@ export default async function handler(req, res) {
         predictionRow.predictionLaboratory = buildPredictionLaboratory(predictionRow);
         out.push(predictionRow);
         } catch (fixtureError) {
-          console.error("[predict fixture]", fixtureId, fixtureError?.message || fixtureError);
+          logError("predict.fixture_failed", {
+            fixtureId,
+            error: fixtureError?.message || String(fixtureError)
+          });
+          void bumpFailure("prediction");
           out.push({
             id: fixtureId,
             leagueId: Number(lId),
@@ -2173,6 +2181,7 @@ export default async function handler(req, res) {
     }
     return res.status(200).json(masked);
   } catch (error) {
+    logError("predict.handler_failed", { error: error?.message || String(error) });
     if (reservedTierUsage > 0 && usageCtx.userId) {
       await decrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reservedTierUsage);
     }

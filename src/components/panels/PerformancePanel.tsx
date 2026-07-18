@@ -6,6 +6,7 @@ import type { HistoryStats } from "../../types";
 import type { UsageSnapshot } from "../../types/index";
 
 const EnterpriseDashboard = lazy(() => import("../analytics/EnterpriseDashboard"));
+const HealthDashboard = lazy(() => import("../monitoring/HealthDashboard"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 
 type TrackerProps = {
@@ -77,6 +78,15 @@ export default function PerformancePanel({
           usageSnapshot={usageSnapshot}
           onLoadUsage={onLoadUsage}
         />
+      </Suspense>
+      <Suspense
+        fallback={
+          <div className="mt-5 rounded-2xl border border-white/[0.07] bg-signal-void/40 px-4 py-8 text-center font-mono text-[11px] text-signal-inkMuted">
+            Loading Health Dashboard…
+          </div>
+        }
+      >
+        <HealthDashboard />
       </Suspense>
       <Suspense
         fallback={

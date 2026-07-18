@@ -760,6 +760,83 @@ export type CacheHitStats = {
   updatedAt?: string | null;
 };
 
+export type LatencyChannelStats = {
+  count: number;
+  errors: number;
+  errorRate: number;
+  avgMs: number;
+  maxMs: number;
+  p50Ms: number | null;
+  p95Ms: number | null;
+};
+
+export type OpsAlert = {
+  id: string;
+  level: "high" | "medium" | string;
+  message: string;
+  value?: number;
+};
+
+export type DailyOpsReport = {
+  date: string;
+  status: string;
+  severity: string;
+  usage?: { count: number; limit: number; remaining?: number; pct?: number };
+  cache?: { hits: number; misses: number; hitRatio: number | null };
+  performance?: {
+    predictionP95: number | null;
+    apiP95: number | null;
+    cacheP95: number | null;
+    predictionAvg?: number;
+    apiAvg?: number;
+  };
+  failures?: { prediction: number; api: number; cache: number };
+  alertCount?: number;
+  alerts?: Array<{ id: string; level: string; message: string }>;
+  memoryMb?: number;
+  generatedAt?: string;
+};
+
+export type HealthDashboardBundle = {
+  ok: boolean;
+  status: "healthy" | "degraded" | "critical" | string;
+  severity: "none" | "medium" | "high" | string;
+  generatedAt: string;
+  checks: {
+    kv: { ok: boolean; latencyMs?: number; error?: string };
+    supabase: { ok: boolean; latencyMs?: number; error?: string };
+    upstreamConfigured: boolean;
+  };
+  process: {
+    uptimeSec: number;
+    memory: { rssMb: number; heapUsedMb: number; heapTotalMb: number; externalMb: number };
+    cpu: { userUs: number; systemUs: number } | null;
+    node?: string;
+  };
+  usage: { count: number; limit: number; remaining: number; pct: number; updatedAt?: string | null };
+  cache: CacheHitStats;
+  performance: {
+    predictionLatency: LatencyChannelStats;
+    apiLatency: LatencyChannelStats;
+    cacheLatency: LatencyChannelStats;
+    fixturesLatency: LatencyChannelStats;
+  };
+  failures: { prediction: number; api: number; cache: number };
+  alerts: OpsAlert[];
+  history?: Array<{
+    date: string;
+    failures: { prediction: number; api: number; cache: number };
+    routes: {
+      predict: LatencyChannelStats;
+      fixtures: LatencyChannelStats;
+      api: LatencyChannelStats;
+      cache: LatencyChannelStats;
+    };
+  }>;
+  dailyReport?: DailyOpsReport | null;
+  recentReports?: DailyOpsReport[];
+};
+
 export type BacktestAnalyticsResponse = {
   ok: boolean;
   cutoff?: string;

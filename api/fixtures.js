@@ -20,6 +20,7 @@ import {
   getDailyCacheStats,
   getLocalCacheStats
 } from "../server-utils/fetcher.js";
+import { attachRequestMonitor } from "../server-utils/observability/requestMonitor.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   isWarmPredictQuotaExempt,
@@ -460,6 +461,7 @@ async function handleXg(req, res) {
 // -------------------- Dispatcher --------------------
 
 export default async function handler(req, res) {
+  attachRequestMonitor(req, res, { route: "fixtures" });
   const view = String(req.query.view || "").toLowerCase();
   if (view === "live") return handleLive(req, res);
   if (view === "xg") return handleXg(req, res);

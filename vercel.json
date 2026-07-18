@@ -5,6 +5,9 @@
     },
     "api/cron/daily-ml.js": {
       "maxDuration": 300
+    },
+    "api/cron/daily-report.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -39,6 +42,10 @@
     {
       "path": "/api/cron/warm-predict",
       "schedule": "20 17 * * *"
+    },
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "5 0 * * *"
     }
   ]
 }
