@@ -186,6 +186,28 @@ export type MarketOddQuote = {
   bookmakersUsed?: number;
 };
 
+/** Single data-backed reason for a pick (from PredictionExplanation). */
+export type PredictionReason = {
+  code: string;
+  label: string;
+  value?: number | null;
+  unit?: string | null;
+  polarity?: "positive" | "negative" | "neutral" | "support";
+  source: string;
+  meta?: Record<string, unknown>;
+};
+
+/** Explainable prediction block — reasons only from real finite inputs. */
+export type PredictionExplanation = {
+  pick: string;
+  confidence: number | null;
+  reasons: PredictionReason[];
+  formHome?: string | null;
+  formAway?: string | null;
+  expectedGoals?: number | null;
+  reasoning?: string[];
+};
+
 /** Nivel de încredere semantic pentru o piaţă, folosit în UI pentru culoare/badge. */
 export type MarketTier = "strong" | "lean" | "toss" | "lean_off" | "strong_off";
 
@@ -259,6 +281,8 @@ export type PredictionRow = {
    * Never recommends negative EV (`recommendable` is always false when `negativeEV`).
    */
   valueEngine?: ValueEngine;
+  /** Data-backed pick explanation (attack/defense/xG/form/odds…). */
+  explanation?: PredictionExplanation;
   marketOdds?: {
     goals15?: MarketOddQuote;
     goals25?: MarketOddQuote;

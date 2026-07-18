@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
+import ExplanationCard from "./ExplanationCard";
 import ValueCard from "./ValueCard";
 import {
   ConfidenceAura,
@@ -1030,6 +1031,12 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               )}
             </section>
           </div>
+
+          {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
+            <div className="grid grid-cols-1 gap-6">
+              <ExplanationCard explanation={match.explanation} />
+            </div>
+          ) : null}
 
           {match.confidenceEngine && (
             <div className="grid grid-cols-1 gap-6">

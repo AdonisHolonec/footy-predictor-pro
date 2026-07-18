@@ -6,6 +6,7 @@ import {
   SignalScanStrip
 } from "./SignalLab";
 import ValueCard from "./ValueCard";
+import ExplanationCard from "./ExplanationCard";
 import { MatchScore, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
@@ -472,6 +473,10 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         <div className="mt-1.5">
           <ValueCard engine={row.valueEngine} compact />
         </div>
+      ) : null}
+
+      {row.explanation && (row.explanation.reasons?.length || row.explanation.reasoning?.length) ? (
+        <ExplanationCard explanation={row.explanation} compact />
       ) : null}
 
       {(isPremiumLike || isFreeLike) && (

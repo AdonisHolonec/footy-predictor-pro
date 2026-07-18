@@ -17,6 +17,7 @@ import {
   buildConfidenceEngine,
   attachRecommendationExplanation
 } from "../server-utils/confidence/ConfidenceEngine.js";
+import { buildPredictionExplanation } from "../server-utils/explanation/PredictionExplanation.js";
 import { buildValueEngine, evaluateValue } from "../server-utils/value/ValueEngine.js";
 import {
   calculateEV,
@@ -1660,6 +1661,30 @@ export default async function handler(req, res) {
           pickProb: maxConf
         });
 
+        // Explainable prediction — reasons only from finite real inputs (no generic copy).
+        const explanation = buildPredictionExplanation({
+          pick: topPick,
+          confidence: maxConf,
+          strengthMeta,
+          leagueParams,
+          lambdas: { home: lambdaHome, away: lambdaAway },
+          luckStats,
+          probs: pOut,
+          formHome: formHomeStr,
+          formAway: formAwayStr,
+          teamContext,
+          odds,
+          marketOdds,
+          shin: marketProbs || null,
+          shinImplied: marketProbs || null,
+          refereeName: refereeName || null,
+          refereeStats: null,
+          elo: eloInfo
+            ? { home: eloInfo.eloHome, away: eloInfo.eloAway, spread: eloInfo.eloSpread }
+            : null,
+          eloSpread: eloInfo?.eloSpread ?? null
+        });
+
         out.push({
           id: fixtureId,
           leagueId: Number(lId),
@@ -1695,6 +1720,7 @@ export default async function handler(req, res) {
           valueEngine: valueEngine || buildValueEngine([]),
           marketOdds,
           confidenceEngine,
+          explanation,
           predictions: {
             oneXtwo: finalPick1X2,
             // prag corect 50 pentru pieţe binare (anterior 55 era greşit:
