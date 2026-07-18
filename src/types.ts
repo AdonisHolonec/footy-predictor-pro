@@ -779,6 +779,32 @@ export type DashboardBundle = {
   profitLine: Array<{ date: string; equity: number; pnl: number; hitRate: number }>;
 };
 
+export type ModelLabResult = {
+  id: string;
+  name: string;
+  sources: string[];
+  modifiers: string[];
+  samples: number;
+  bets: number;
+  accuracy: number;
+  roi: number;
+  yield: number;
+  logLoss: number | null;
+  brier: number | null;
+  expectedValue: number;
+};
+
+export type ModelLabBundle = {
+  ok: boolean;
+  schemaVersion?: string;
+  generatedAt?: string;
+  days?: number;
+  totalSettled: number;
+  models: ModelLabResult[];
+  best?: { id: string; name: string; roi: number } | null;
+  metrics?: string[];
+};
+
 export type CacheHitStats = {
   date?: string;
   hits: number;

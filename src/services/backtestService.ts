@@ -1,10 +1,17 @@
-import { BacktestAnalyticsResponse, BacktestFilters, BacktestKpi } from "../types";
+import { BacktestAnalyticsResponse, BacktestFilters, BacktestKpi, ModelLabBundle } from "../types";
 
 export async function loadKpi(days = 45): Promise<BacktestKpi | null> {
   const res = await fetch(`/api/backtest?view=kpi&days=${days}`);
   const json = await res.json();
   if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca KPI.");
   return json.latest || null;
+}
+
+export async function loadModelLab(days = 90): Promise<ModelLabBundle> {
+  const res = await fetch(`/api/backtest?view=model-lab&days=${days}`);
+  const json = await res.json();
+  if (!json?.ok) throw new Error(json?.error || "Nu am putut încărca Model Lab.");
+  return json as ModelLabBundle;
 }
 
 export type LoadAnalyticsParams = Partial<BacktestFilters> & {

@@ -21,6 +21,40 @@ import {
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
 import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
 import { logInfo } from "../server-utils/observability/logger.js";
+import { runModelLab } from "../server-utils/modelLab/ModelLab.js";
+
+/**
+ * Model Laboratory — evaluate multiple prediction models over settled history.
+ * GET /api/backtest?view=model-lab&days=45
+ */
+async function handleModelLab(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+  }
+  const config = assertSupabaseConfigured();
+  if (!config.ok) return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
+
+  const days = Math.max(7, Math.min(Number(req.query.days || 90), 365));
+  const cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const { data, error } = await supabase
+      .from("predictions_history")
+      .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+      .gte("kickoff_at", cutoffIso)
+      .in("validation", ["win", "loss"])
+      .order("kickoff_at", { ascending: true })
+      .limit(6000);
+    if (error) throw error;
+
+    const lab = runModelLab(data || []);
+    return res.status(200).json({ ok: true, days, cutoff: cutoffIso, ...lab });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err?.message || "Model lab a eșuat" });
+  }
+}
 
 /**
  * Enterprise Monitoring — folded into backtest to stay within Hobby serverless limits.
@@ -455,8 +489,9 @@ export default async function handler(req, res) {
   if (view === "snapshot") return handleSnapshot(req, res);
   if (view === "metrics") return handleMetrics(req, res);
   if (view === "health") return handleHealth(req, res);
+  if (view === "model-lab" || view === "modellab") return handleModelLab(req, res);
   return res.status(400).json({
     ok: false,
-    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot, metrics sau health."
+    error: "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, snapshot, metrics, health sau model-lab."
   });
 }

@@ -7,6 +7,7 @@ import type { UsageSnapshot } from "../../types/index";
 
 const EnterpriseDashboard = lazy(() => import("../analytics/EnterpriseDashboard"));
 const HealthDashboard = lazy(() => import("../monitoring/HealthDashboard"));
+const ModelLabPanel = lazy(() => import("../modelLab/ModelLabPanel"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 
 type TrackerProps = {
@@ -87,6 +88,15 @@ export default function PerformancePanel({
         }
       >
         <HealthDashboard />
+      </Suspense>
+      <Suspense
+        fallback={
+          <div className="mt-5 rounded-2xl border border-white/[0.07] bg-signal-void/40 px-4 py-8 text-center font-mono text-[11px] text-signal-inkMuted">
+            Loading Model Laboratory…
+          </div>
+        }
+      >
+        <ModelLabPanel />
       </Suspense>
       <Suspense
         fallback={

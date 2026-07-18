@@ -30,6 +30,7 @@ import { fitIsotonicPav, applyIsotonicMap, applyCalibratedTriple } from "../serv
 import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
 import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
+import { runModelLab, reconstructSources, MODEL_REGISTRY } from "../server-utils/modelLab/ModelLab.js";
 import {
   calculateExpectedValue,
   calculateKellyPct,
@@ -1121,4 +1122,53 @@ test("PredictionContributions attributes signed per-module impact toward the pic
   // Away-oriented pick flips Poisson sign.
   const away = buildPredictionContributions({ ...ctx, pick: "2", probsFinal: { p1: 62, pX: 24, p2: 14 } });
   assert.ok(away.contributions.poisson < 0);
+});
+
+test("Model Lab evaluates each model independently with all six metrics", () => {
+  const mkRow = (fixtureId, sh, sa, poisson, elo, xgH, xgA) => ({
+    fixture_id: fixtureId,
+    score_home: sh,
+    score_away: sa,
+    odds_home: 2.0,
+    odds_draw: 3.4,
+    odds_away: 3.8,
+    luck_hxg: xgH,
+    luck_axg: xgA,
+    raw_payload: {
+      evaluation: {
+        rawPoissonProbs1x2Pct: poisson,
+        modelProbs1x2Pct: poisson
+      },
+      modelMeta: {
+        elo: { home: elo.home, away: elo.away },
+        leagueParams: { homeAdv: 1.08, rho: -0.11 },
+        modularScores: { injuries: { detail: { home: 0.98, away: 1.0, available: true } } }
+      }
+    }
+  });
+
+  const rows = [
+    mkRow(1, 2, 0, { p1: 55, pX: 25, p2: 20 }, { home: 1550, away: 1450 }, 1.8, 1.0),
+    mkRow(2, 0, 1, { p1: 40, pX: 28, p2: 32 }, { home: 1400, away: 1500 }, 1.0, 1.4),
+    mkRow(3, 1, 1, { p1: 33, pX: 34, p2: 33 }, { home: 1480, away: 1480 }, 1.2, 1.2),
+    mkRow(4, 3, 1, { p1: 60, pX: 22, p2: 18 }, { home: 1600, away: 1400 }, 2.1, 0.9)
+  ];
+
+  // Every registered model reconstructs from a row.
+  const src = reconstructSources(rows[0]);
+  assert.ok(src.sources.poisson && src.sources.elo && src.sources.xg && src.sources.everything);
+
+  const lab = runModelLab(rows);
+  assert.equal(lab.totalSettled, 4);
+  assert.equal(lab.models.length, MODEL_REGISTRY.length);
+  for (const m of lab.models) {
+    assert.ok(m.samples > 0, `${m.id} has samples`);
+    for (const key of ["accuracy", "roi", "yield", "logLoss", "brier", "expectedValue"]) {
+      assert.ok(m[key] !== undefined && m[key] !== null, `${m.id} missing ${key}`);
+    }
+    assert.equal(m.yield, m.roi); // flat stake
+    assert.ok(m.brier >= 0 && m.brier <= 2);
+    assert.ok(m.logLoss >= 0);
+  }
+  assert.ok(lab.best && typeof lab.best.roi === "number");
 });
