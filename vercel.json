@@ -7,6 +7,10 @@
       "maxDuration": 300
     }
   },
+  "rewrites": [
+    { "source": "/api/stripe-webhook", "destination": "/api/billing?view=webhook" },
+    { "source": "/api/activate-trial", "destination": "/api/billing?view=trial" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

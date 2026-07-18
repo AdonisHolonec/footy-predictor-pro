@@ -226,7 +226,7 @@ export function useAuth() {
   const activate24hTrial = useCallback(
     async (tier: "premium" | "ultra") => {
       if (!session?.access_token) throw new Error("Autentificare necesară.");
-      const response = await fetch("/api/activate-trial", {
+      const response = await fetch("/api/billing?view=trial", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
