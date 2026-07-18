@@ -4,6 +4,7 @@ import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAu
 import { getWithCache } from "../server-utils/fetcher.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
@@ -486,6 +487,17 @@ async function handleHistorySync(req, res) {
       updated: updatedTotal,
       estimatedCalls
     });
+
+    const closingOn =
+      String(req.query.closing || "") === "1" || String(req.query.closing || "").toLowerCase() === "true";
+    let closing = null;
+    if (closingOn) {
+      closing = await captureClosingOdds({
+        hours: req.query.hours,
+        limit: req.query.limit || 30
+      }).catch((err) => ({ ok: false, error: err?.message || "closing capture failed" }));
+    }
+
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
@@ -496,7 +508,8 @@ async function handleHistorySync(req, res) {
       estimatedCallsBreakdown: {
         dayLeagueGroups: groupedFetchCalls,
         idsChunks: idsFetchCalls
-      }
+      },
+      ...(closing ? { closing } : {})
     });
   } catch (error) {
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";
@@ -505,16 +518,57 @@ async function handleHistorySync(req, res) {
   }
 }
 
+async function handleClosingOdds(req, res) {
+  setNoStoreHeaders(res);
+  if (req.method && req.method !== "GET" && req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
+  }
+  if (!(await isAuthorizedHistorySync(req))) {
+    return res.status(401).json({ ok: false, error: "Cerere de closing odds neautorizată." });
+  }
+
+  const supabaseConfig = assertSupabaseConfigured();
+  if (!supabaseConfig.ok) {
+    return res.status(500).json({ ok: false, error: supabaseConfig.error });
+  }
+
+  try {
+    const result = await captureClosingOdds({
+      hours: req.query.hours,
+      hoursBefore: req.query.hoursBefore,
+      hoursAfter: req.query.hoursAfter,
+      limit: req.query.limit,
+      ttlSeconds: req.query.ttlSeconds
+    });
+    if (!result.ok) {
+      return res.status(500).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Captura closing odds a eșuat."
+    });
+  }
+}
+
 /**
  * GET /api/history — aggregate stats only (items=[]); no row payloads for anonymous/non-admin.
  * GET /api/history + Bearer + admin — full global predictions_history (admin observatory).
  * GET /api/history?mine=1 — scoped to the authenticated user (Bearer required).
  * GET or POST /api/history?sync=1 — sync scores/validation (replaces former /api/history/sync).
+ * GET or POST /api/history?closing=1 — capture near-kickoff closing odds for CLV.
  */
 export default async function handler(req, res) {
   const syncOn = String(req.query.sync || "") === "1" || String(req.query.sync || "").toLowerCase() === "true";
+  const closingOn =
+    String(req.query.closing || "") === "1" || String(req.query.closing || "").toLowerCase() === "true";
+
   if (syncOn) {
     return handleHistorySync(req, res);
+  }
+  if (closingOn) {
+    return handleClosingOdds(req, res);
   }
   const perfOn = String(req.query.performance || "") === "1" || String(req.query.performance || "").toLowerCase() === "true";
   if (perfOn) {

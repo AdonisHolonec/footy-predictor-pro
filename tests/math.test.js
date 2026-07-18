@@ -1351,6 +1351,59 @@ test("PredictionContributions attributes signed per-module impact toward the pic
   assert.ok(away.contributions.poisson < 0);
 });
 
+test("Closing odds blob + selectionClosingOdd resolve 1X2 and GG", async () => {
+  const { buildClosingOddsBlob } = await import("../server-utils/closingOddsCapture.js");
+  const { selectionClosingOdd } = await import("../server-utils/backtest/BacktestAnalytics.js");
+
+  const oddsApi = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "A",
+            bets: [
+              {
+                name: "Match Winner",
+                values: [
+                  { value: "Home", odd: "2.10" },
+                  { value: "Draw", odd: "3.40" },
+                  { value: "Away", odd: "3.50" }
+                ]
+              },
+              {
+                name: "Both Teams Score",
+                values: [
+                  { value: "Yes", odd: "1.80" },
+                  { value: "No", odd: "2.00" }
+                ]
+              },
+              {
+                name: "Goals Over/Under",
+                values: [
+                  { value: "Over 2.5", odd: "1.95" },
+                  { value: "Under 2.5", odd: "1.90" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  const blob = buildClosingOddsBlob(oddsApi, "2026-07-18T12:00:00.000Z");
+  assert.ok(blob);
+  assert.equal(blob.home, 2.1);
+  assert.equal(blob.gg, 1.8);
+  assert.equal(blob.over25, 1.95);
+
+  const payload = { closingOdds: blob };
+  assert.equal(selectionClosingOdd(payload, {}, "1"), 2.1);
+  assert.equal(selectionClosingOdd(payload, {}, "GG"), 1.8);
+  assert.equal(selectionClosingOdd(payload, {}, "Peste 2.5"), 1.95);
+  assert.equal(selectionClosingOdd(payload, { closing_odds_away: 3.6 }, "2"), 3.5);
+});
+
 test("Quant backtest metrics: LogLoss, Brier, Kelly growth, Sharpe, CLV, drawdown", () => {
   const events = [
     { kickoffAt: "2026-01-01T12:00:00Z", stake: 0.02, odd: 2.2, prob: 0.5, clvPct: 3, won: true, pnl: 0.02 * 1.2 },

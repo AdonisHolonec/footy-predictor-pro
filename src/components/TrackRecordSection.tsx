@@ -103,7 +103,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
 
       {!loading && !error && s && (
         <>
-          <div className={`mt-8 grid gap-3 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-5"}`}>
+          <div className={`mt-8 grid gap-3 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
             {[
               { label: "Settled", value: String(s.settled), tone: "text-signal-ink" },
               { label: "Hit rate", value: fmtPct(s.hitRate), tone: "text-signal-mint" },
@@ -117,9 +117,19 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
                 value: fmtUnits(s.pnlUnits),
                 tone: s.pnlUnits >= 0 ? "text-emerald-300" : "text-rose-300"
               },
-              { label: "Max DD", value: fmtUnits(s.drawdown), tone: "text-signal-amberSoft" }
+              { label: "Max DD", value: fmtUnits(s.drawdown), tone: "text-signal-amberSoft" },
+              {
+                label: "CLV",
+                value: s.clvAvailable ? fmtPct(s.clv) : "—",
+                tone:
+                  s.clvAvailable && s.clv != null
+                    ? s.clv >= 0
+                      ? "text-emerald-300"
+                      : "text-rose-300"
+                    : "text-signal-inkMuted"
+              }
             ]
-              .slice(0, compact ? 4 : 5)
+              .slice(0, compact ? 4 : 6)
               .map((tile) => (
                 <div
                   key={tile.label}
@@ -147,6 +157,14 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
                 <p>
                   W/L: {s.wins}/{s.losses}
                 </p>
+                {s.clvAvailable ? (
+                  <p>
+                    CLV sample: <span className="text-signal-ink">{s.clvCount ?? 0}</span>
+                    {s.clvBeatRate != null ? ` · beat close ${fmtPct(s.clvBeatRate)}` : ""}
+                  </p>
+                ) : (
+                  <p>CLV: awaiting closing-line captures</p>
+                )}
               </div>
             </div>
           )}

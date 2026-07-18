@@ -8,6 +8,10 @@ export type TrackRecordSummary = {
   drawdown: number;
   totalStake: number;
   expectedValue: number;
+  clv?: number | null;
+  clvAvailable?: boolean;
+  clvCount?: number;
+  clvBeatRate?: number | null;
 };
 
 export type TrackRecordTrendPoint = {

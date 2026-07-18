@@ -28,16 +28,20 @@
   ],
   "crons": [
     {
-      "path": "/api/history?sync=1&days=45",
+      "path": "/api/history?sync=1&closing=1&days=45",
       "schedule": "30 11 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=45",
+      "path": "/api/history?sync=1&closing=1&days=45",
       "schedule": "30 14 * * *"
     },
     {
-      "path": "/api/history?sync=1&days=45",
+      "path": "/api/history?sync=1&closing=1&days=45",
       "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/history?closing=1&hours=4&limit=50",
+      "schedule": "10 * * * *"
     },
     {
       "path": "/api/backtest?view=snapshot&days=45",

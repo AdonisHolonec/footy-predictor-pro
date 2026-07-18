@@ -268,7 +268,7 @@ async function handleAnalytics(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -335,7 +335,7 @@ async function handleSnapshot(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, raw_payload"
+        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, raw_payload"
       )
       .gte("kickoff_at", cutoff)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -359,7 +359,10 @@ async function handleSnapshot(req, res) {
         pnl_units: Number(metrics.pnlUnits.toFixed(6)),
         total_stake_units: Number(metrics.totalStake.toFixed(6)),
         avg_ev: Number(metrics.expectedValue.toFixed(4)),
-        max_drawdown: Number(metrics.maxDrawdown.toFixed(6))
+        max_drawdown: Number(metrics.maxDrawdown.toFixed(6)),
+        avg_clv: metrics.clvAvailable ? Number(Number(metrics.clv).toFixed(4)) : null,
+        clv_count: Number(metrics.clvCount || 0),
+        clv_beat_rate: metrics.clvBeatRate != null ? Number(Number(metrics.clvBeatRate).toFixed(4)) : null
       },
       { onConflict: "snapshot_date,window_days" }
     );
@@ -384,7 +387,11 @@ async function handleSnapshot(req, res) {
         averageOdds: metrics.averageOdds,
         averageConfidence: metrics.averageConfidence,
         winningStreak: metrics.winningStreak,
-        losingStreak: metrics.losingStreak
+        losingStreak: metrics.losingStreak,
+        clv: metrics.clv,
+        clvAvailable: metrics.clvAvailable,
+        clvCount: metrics.clvCount,
+        clvBeatRate: metrics.clvBeatRate
       }
     });
   } catch (error) {
@@ -554,7 +561,7 @@ async function handlePublicTrack(req, res) {
     const { data: snapRows, error: snapError } = await supabase
       .from("backtest_snapshots")
       .select(
-        "snapshot_date, window_days, settled_bets, wins, losses, hit_rate, roi, max_drawdown, pnl_units, total_stake_units, avg_ev"
+        "snapshot_date, window_days, settled_bets, wins, losses, hit_rate, roi, max_drawdown, pnl_units, total_stake_units, avg_ev, avg_clv, clv_count, clv_beat_rate"
       )
       .eq("window_days", days)
       .order("snapshot_date", { ascending: false })
@@ -566,6 +573,7 @@ async function handlePublicTrack(req, res) {
     const snapSettled = latestSnap ? Number(latestSnap.settled_bets || 0) : 0;
 
     if (latestSnap && snapSettled > 0) {
+      const clvCount = Number(latestSnap.clv_count || 0);
       const trend = rows
         .slice()
         .reverse()
@@ -574,7 +582,8 @@ async function handlePublicTrack(req, res) {
           hitRate: Number(r.hit_rate || 0),
           roi: Number(r.roi || 0),
           settled: Number(r.settled_bets || 0),
-          pnlUnits: Number(r.pnl_units || 0)
+          pnlUnits: Number(r.pnl_units || 0),
+          clv: r.avg_clv != null ? Number(r.avg_clv) : null
         }));
 
       return res.status(200).json({
@@ -592,11 +601,15 @@ async function handlePublicTrack(req, res) {
           pnlUnits: Number(latestSnap.pnl_units || 0),
           drawdown: Number(latestSnap.max_drawdown || 0),
           totalStake: Number(latestSnap.total_stake_units || 0),
-          expectedValue: Number(latestSnap.avg_ev || 0)
+          expectedValue: Number(latestSnap.avg_ev || 0),
+          clv: clvCount > 0 && latestSnap.avg_clv != null ? Number(latestSnap.avg_clv) : null,
+          clvAvailable: clvCount > 0,
+          clvCount,
+          clvBeatRate: latestSnap.clv_beat_rate != null ? Number(latestSnap.clv_beat_rate) : null
         },
         trend,
         disclaimer:
-          "Track record verificat pe predicții settled (win/loss). Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
+          "Track record verificat pe predicții settled (win/loss). CLV apare după acumularea liniilor de closing. Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
       });
     }
 
@@ -606,7 +619,7 @@ async function handlePublicTrack(req, res) {
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -645,7 +658,11 @@ async function handlePublicTrack(req, res) {
         pnlUnits: Number(m.pnlUnits || 0),
         drawdown: Number(m.maxDrawdown || 0),
         totalStake: Number(m.totalStake || 0),
-        expectedValue: Number(m.expectedValue || 0)
+        expectedValue: Number(m.expectedValue || 0),
+        clv: m.clvAvailable ? Number(m.clv) : null,
+        clvAvailable: Boolean(m.clvAvailable),
+        clvCount: Number(m.clvCount || 0),
+        clvBeatRate: m.clvBeatRate != null ? Number(m.clvBeatRate) : null
       },
       trend,
       byMarket: (m.byMarket || []).slice(0, 6).map((row) => ({
@@ -655,7 +672,7 @@ async function handlePublicTrack(req, res) {
         roi: row.roi
       })),
       disclaimer:
-        "Track record verificat pe predicții settled (win/loss). Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
+        "Track record verificat pe predicții settled (win/loss). CLV apare după acumularea liniilor de closing. Nu este sfat financiar; performanța trecută nu garantează rezultate viitoare."
     });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error?.message || "Track record public a eșuat" });
