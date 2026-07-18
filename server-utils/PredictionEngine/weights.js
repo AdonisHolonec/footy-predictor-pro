@@ -1,8 +1,14 @@
 /**
  * PredictionEngine weights.
- * Optional modules default to modularBlend=0 → numeric parity with strength-ratings.
  *
- * Resolution: DEFAULT → env manual → auto-calibration overlay (skips env-locked keys).
+ * Every weight is env-configurable (PREDICT_WEIGHT_*) and resolves as:
+ *   DEFAULT → env manual override → auto-calibration overlay (skips env-locked keys).
+ *
+ * `modularBlend` is the master gate on all optional modules
+ * (standings, recentMatches, h2h, restDays, referee, awayStrength,
+ * injuries, lineup, odds, motivation, weather). At 0 the optional block
+ * collapses to a no-op; at 1 the modules contribute their configured weights.
+ * Defaults below ACTIVATE the optional modules; override any value via env.
  */
 
 import { getPredictionManualLocks } from "../calibration/manualLocks.js";
@@ -14,20 +20,20 @@ export const DEFAULT_PREDICTION_WEIGHTS = Object.freeze({
   defense: 1.0,
   form: 1.0,
   homeAdvantage: 1.0,
-  awayStrength: 0.0,
+  awayStrength: 0.05,
   standings: 0.15,
   h2h: 0.1,
   referee: 0.05,
   restDays: 0.08,
   recentMatches: 0.12,
-  injuries: 0.0,
-  lineup: 0.0,
-  odds: 0.0,
-  motivation: 0.0,
-  weather: 0.0,
+  injuries: 0.1,
+  lineup: 0.08,
+  odds: 0.15,
+  motivation: 0.05,
+  weather: 0.05,
   expectedGoals: 0.0,
   poissonCorrelation: 0.12,
-  modularBlend: 0
+  modularBlend: 1
 });
 
 function envNum(key, fallback) {

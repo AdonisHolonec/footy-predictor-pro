@@ -15,7 +15,8 @@ import {
   normalizeTeamStatisticsPayload,
   strengthRatingsLambdas
 } from "../server-utils/math.js";
-import { PredictionEngine, summarizeModuleScores } from "../server-utils/prediction/PredictionEngine.js";
+import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../server-utils/prediction/PredictionEngine.js";
+import { collectModuleInputs } from "../server-utils/PredictionEngine/moduleInputs.js";
 import {
   buildConfidenceEngine,
   attachRecommendationExplanation
@@ -705,6 +706,12 @@ export default async function handler(req, res) {
     const out = [];
     const liveRollingCache = new Map();
     const statsBudgetRef = { remaining: LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS };
+    // Prediction-engine tunables (fully env-configurable; no hardcoded weights).
+    const engineWeights = getPredictionWeights();
+    const poissonCorrelation = Number.isFinite(Number(engineWeights.poissonCorrelation))
+      ? Number(engineWeights.poissonCorrelation)
+      : 0.12;
+    const shrinkageK = Math.max(1, Number(process.env.PREDICT_SHRINKAGE_K) || 6);
     const riskContext = await loadRiskContext();
     // single-flight: încărcăm calibrarea + stacker + auto-calib overlays o singură dată per request
     const [calibrationMaps, stackerWeightsMap] = await Promise.all([
@@ -806,6 +813,19 @@ export default async function handler(req, res) {
               const aMulti = extractFormMultiplier(tsANorm.response?.form);
               const rowH = standingsMap.get(homeIdStr);
               const rowA = standingsMap.get(awayIdStr);
+              // Connect existing endpoints/data into the optional modules
+              // (odds, h2h, injuries, lineups, recent matches, rest dates, weather).
+              // Fails safe to undefined per source → module stays neutral if unavailable.
+              const moduleInputs = await collectModuleInputs({
+                fixtureId,
+                homeTeamId: homeIdStr,
+                awayTeamId: awayIdStr,
+                leagueId: lId,
+                season,
+                fixtureDate: fx.fixture?.date,
+                oddsData: oddsByFixtureId.get(Number(fixtureId)),
+                fx
+              });
               const engineCtx = {
                 hStats,
                 aStats,
@@ -821,7 +841,8 @@ export default async function handler(req, res) {
                 fixtureDate: fx.fixture?.date,
                 homeTeamId: homeIdStr,
                 awayTeamId: awayIdStr,
-                shrinkageK: 6
+                shrinkageK,
+                ...moduleInputs
               };
               // Snapshot the same context for the independent Confidence Engine. This is a
               // read-only copy — the Confidence Engine never feeds back into λ/pick selection.
@@ -855,7 +876,7 @@ export default async function handler(req, res) {
                   awayAdv: leagueParams.awayAdv,
                   homePlayed: hStats.playedHome || hStats.played,
                   awayPlayed: aStats.playedAway || aStats.played,
-                  shrinkageK: 6
+                  shrinkageK
                 });
                 if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
                   method = "strength-ratings";
@@ -966,7 +987,7 @@ export default async function handler(req, res) {
         }
 
         const calc = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
-          correlation: 0.12,
+          correlation: poissonCorrelation,
           rho: leagueParams.rho
         });
         if (!calc || !calc.probs) continue;
@@ -981,7 +1002,7 @@ export default async function handler(req, res) {
           monteCarlo = runMonteCarloSimulation(lambdaHome, lambdaAway, {
             simulations: 10_000,
             fixtureId,
-            correlation: 0.12,
+            correlation: poissonCorrelation,
             rho: leagueParams.rho
           });
         } catch (mcErr) {
