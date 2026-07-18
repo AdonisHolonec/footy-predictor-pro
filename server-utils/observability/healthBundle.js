@@ -76,12 +76,17 @@ export function buildOpsAlerts({ metrics, usage, cache, checks }) {
     });
   }
 
+  // C10: soft alert ≥80%, hard ≥95% (aligned with apiBudgetCircuit defaults).
   const usagePct = usage?.limit ? (usage.count / usage.limit) * 100 : 0;
-  if (usagePct >= 90) {
+  const softPct = Math.max(50, Math.min(Number(process.env.API_BUDGET_SOFT_PCT || 80), 99));
+  const hardPct = Math.max(softPct, Math.min(Number(process.env.API_BUDGET_HARD_PCT || 95), 100));
+  if (usagePct >= softPct) {
     alerts.push({
       id: "api_quota",
-      level: usagePct >= 98 ? "high" : "medium",
-      message: `API quota ${usagePct.toFixed(0)}% (${usage.count}/${usage.limit})`,
+      level: usagePct >= hardPct ? "high" : "medium",
+      message: `API quota ${usagePct.toFixed(0)}% (${usage.count}/${usage.limit}) — circuit ${
+        usagePct >= hardPct ? "HARD" : "SOFT"
+      }`,
       value: usagePct
     });
   }

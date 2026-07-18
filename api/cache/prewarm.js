@@ -24,6 +24,21 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: "Cerere prewarm neautorizată." });
   }
 
+  try {
+    const { evaluateApiBudget } = await import("../../server-utils/apiBudgetCircuit.js");
+    const budget = await evaluateApiBudget();
+    if (budget.hardStop) {
+      return res.status(200).json({
+        ok: true,
+        skipped: true,
+        reason: "api_budget_hard_stop",
+        usageBudget: budget
+      });
+    }
+  } catch {
+    /* fail-open */
+  }
+
   const date = String(req.query.date || new Date().toISOString().slice(0, 10));
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(date));
   const leagueIds = parseLeagueIds(req.query.leagueIds || process.env.PREWARM_LEAGUE_IDS);

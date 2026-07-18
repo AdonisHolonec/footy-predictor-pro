@@ -26,12 +26,33 @@ export default async function handler(req, res) {
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map(Number);
   const season = Number(req.query.season || inferSeason(date));
 
-  const wantStandings = req.query.standings === "1";
-  const wantTeamStats = req.query.teamstats === "1";
-  const wantOdds = req.query.odds === "1";
-
   if (leagueIds.length === 0) {
     return res.status(400).json({ ok: false, error: "Lipsesc leagueIds." });
+  }
+
+  let wantStandings = req.query.standings === "1";
+  let wantTeamStats = req.query.teamstats === "1";
+  let wantOdds = req.query.odds === "1";
+
+  // C10: hard stop — do not warm (upstream) when daily API budget is exhausted.
+  try {
+    const { evaluateApiBudget } = await import("../server-utils/apiBudgetCircuit.js");
+    const budget = await evaluateApiBudget();
+    if (budget.hardStop) {
+      return res.status(200).json({
+        ok: true,
+        skipped: true,
+        reason: "api_budget_hard_stop",
+        usageBudget: budget,
+        warmed: []
+      });
+    }
+    // Soft stop: skip expensive teamstats prefetch.
+    if (budget.softStop) {
+      wantTeamStats = false;
+    }
+  } catch {
+    /* fail-open */
   }
 
   // P0: warm requires cron secret or authenticated user (no anonymous upstream spend).

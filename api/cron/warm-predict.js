@@ -214,26 +214,33 @@ export default async function handler(req, res) {
   const leagueIds = parseLeagueIds(process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS);
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
   const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 7), 120));
-  const usageBudgetThresholdPct = Math.max(
-    1,
-    Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || 70), 99)
-  );
-  const usageHardStopPct = Math.max(
-    usageBudgetThresholdPct,
-    Math.min(Number(req.query.usageHardStopPct || process.env.CRON_USAGE_HARD_STOP_PCT || 75), 100)
-  );
-
   const base = resolvePublicBaseUrl();
   const startedAt = new Date().toISOString();
+  // C10: shared soft/hard circuit (defaults 80% / 95%, reserve 80). Legacy CRON_* envs still override soft/hard %.
+  const { classifyApiBudget, getBudgetThresholds } = await import("../../server-utils/apiBudgetCircuit.js");
+  const defaults = getBudgetThresholds();
+  const softPct = Math.max(
+    1,
+    Math.min(Number(req.query.usageBudgetThresholdPct || process.env.CRON_USAGE_BUDGET_THRESHOLD_PCT || defaults.softPct), 99)
+  );
+  const hardPct = Math.max(
+    softPct,
+    Math.min(Number(req.query.usageHardStopPct || process.env.CRON_USAGE_HARD_STOP_PCT || defaults.hardPct), 100)
+  );
+  const reserveCalls = Math.max(
+    0,
+    Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || process.env.API_BUDGET_RESERVE_CALLS || defaults.reserveCalls)
+  );
   const usageSnapshot = await getApiUsage();
-  const usageLimit = Number(usageSnapshot?.limit || 0);
-  const usageCount = Number(usageSnapshot?.count || 0);
-  const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
-  const usageRemaining = Math.max(0, usageLimit - usageCount);
-  // Reserve must be meaningful on Pro plans (~100–750/day). Old default 2000 never tripped.
-  const reserveCalls = Math.max(0, Number(req.query.reserveCalls || process.env.CRON_USAGE_RESERVE_CALLS || 80));
-  const budgetMode = usagePct >= usageBudgetThresholdPct;
-  const hardStopMode = usagePct >= usageHardStopPct || (usageLimit > 0 && usageRemaining <= reserveCalls);
+  const budget = classifyApiBudget(usageSnapshot, { softPct, hardPct, reserveCalls });
+  const usageLimit = budget.limit;
+  const usageCount = budget.count;
+  const usagePct = budget.pct;
+  const usageRemaining = budget.remaining;
+  const budgetMode = budget.softStop;
+  const hardStopMode = budget.hardStop;
+  const usageBudgetThresholdPct = softPct;
+  const usageHardStopPct = hardPct;
 
   const warmQs = new URLSearchParams({
     date: dateRaw,

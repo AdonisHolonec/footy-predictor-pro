@@ -227,6 +227,29 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
     // KV read failure → proceed to network
   }
 
+  // C10 global hard stop: serve cache only; never burn remaining upstream quota.
+  try {
+    const { classifyApiBudget } = await import("./apiBudgetCircuit.js");
+    const budget = classifyApiBudget(await getApiUsage());
+    if (budget.hardStop) {
+      logWarn("api.budget_hard_stop", {
+        endpoint,
+        pct: budget.pct,
+        remaining: budget.remaining,
+        limit: budget.limit
+      });
+      return {
+        ok: false,
+        error: "Circuit breaker: bugetul zilnic API-Football este epuizat. Folosim doar cache/DB.",
+        reason: "api_budget_hard_stop",
+        fromCache: false,
+        circuit: budget
+      };
+    }
+  } catch {
+    // fail-open on classifier/KV errors so predict can still run
+  }
+
   if (inflight.has(cacheKey)) {
     localCacheStats.inflightJoins += 1;
     void bumpDailyCacheStats({ inflightJoin: true });

@@ -7,6 +7,7 @@ import {
   tierDailyLimit,
   USER_TIERS
 } from "../server-utils/accessTier.js";
+import { classifyApiBudget } from "../server-utils/apiBudgetCircuit.js";
 import { parseAdminEmails } from "../server-utils/authAdmin.js";
 import { tierFromPriceId } from "../server-utils/stripeBilling.js";
 
@@ -111,6 +112,30 @@ describe("Stripe billing helpers", () => {
       process.env.STRIPE_PRICE_PREMIUM = prevP;
       process.env.STRIPE_PRICE_ULTRA = prevU;
     }
+  });
+});
+
+describe("Security P0 — C10 API budget circuit", () => {
+  it("classifies soft at 80% and hard at 95% / reserve", () => {
+    const thresholds = { softPct: 80, hardPct: 95, reserveCalls: 80 };
+    // remaining must stay above soft reserve band (2×80) for mode=ok
+    const ok = classifyApiBudget({ count: 100, limit: 1000 }, thresholds);
+    assert.equal(ok.mode, "ok");
+    assert.equal(ok.softStop, false);
+    assert.equal(ok.hardStop, false);
+
+    const soft = classifyApiBudget({ count: 820, limit: 1000 }, thresholds);
+    assert.equal(soft.mode, "soft");
+    assert.equal(soft.softStop, true);
+    assert.equal(soft.hardStop, false);
+
+    const hardPct = classifyApiBudget({ count: 960, limit: 1000 }, thresholds);
+    assert.equal(hardPct.mode, "hard");
+    assert.equal(hardPct.hardStop, true);
+
+    const hardReserve = classifyApiBudget({ count: 950, limit: 1000 }, thresholds);
+    assert.equal(hardReserve.hardStop, true);
+    assert.ok(hardReserve.remaining <= 80);
   });
 });
 

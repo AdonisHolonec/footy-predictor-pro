@@ -3,7 +3,7 @@
  * Moved from api/predict.js. Never calls other stages.
  */
 
-import { getApiUsage, getWithCache } from "../../fetcher.js";
+import { getWithCache } from "../../fetcher.js";
 import {
   commitWarmPredictIncrement,
   isWarmPredictQuotaExempt,
@@ -165,17 +165,16 @@ export async function run(context) {
     }
 
     if (!tierContext.quotaExempt) {
-      const usageHardStopPct = Math.max(60, Math.min(Number(process.env.PREDICT_USAGE_DB_ONLY_PCT || 75), 99));
-      const reserveCalls = Math.max(0, Number(process.env.PREDICT_USAGE_RESERVE_CALLS || 2000));
-      const usage = await getApiUsage().catch(() => ({ count: 0, limit: 0 }));
-      const usageCount = Number(usage?.count || 0);
-      const usageLimit = Number(usage?.limit || 0);
-      const usagePct = usageLimit > 0 ? (usageCount / usageLimit) * 100 : 0;
-      const usageRemaining = Math.max(0, usageLimit - usageCount);
-      if (usagePct >= usageHardStopPct || usageRemaining <= reserveCalls) {
-        await readDbOnlyPredictions("db_only_budget_guard");
+      // C10: soft (≥80%) or hard (≥95%/reserve) → DB-only instead of burning upstream.
+      const { evaluateApiBudget } = await import("../../apiBudgetCircuit.js");
+      const budget = await evaluateApiBudget().catch(() => null);
+      if (budget?.softStop || budget?.hardStop) {
+        await readDbOnlyPredictions(
+          budget.hardStop ? "db_only_budget_hard_stop" : "db_only_budget_soft_stop"
+        );
         context.tierContext = tierContext;
         context.reservedTierUsage = reservedTierUsage;
+        context.apiBudget = budget;
         return context;
       }
 
