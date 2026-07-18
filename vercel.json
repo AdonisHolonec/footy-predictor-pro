@@ -40,10 +40,6 @@
       "schedule": "30 17 * * *"
     },
     {
-      "path": "/api/history?closing=1&hours=4&limit=50",
-      "schedule": "10 * * * *"
-    },
-    {
       "path": "/api/backtest?view=snapshot&days=45",
       "schedule": "0 3 * * *"
     },
