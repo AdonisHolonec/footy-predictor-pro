@@ -223,22 +223,36 @@ export type PredictionRow = {
    * it never influences `recommended.confidence` or any prediction math. Purely explanatory
    * "how much reliable context did we have for this match" scoring per dimension.
    */
+  /**
+   * Independent Confidence Engine — context reliability only.
+   * Never influences λ / Poisson / recommended.confidence.
+   */
   confidenceEngine?: {
+    /** 0–100 overall (alias of overall). */
+    confidence?: number;
     overall: number;
+    category?: "Very High" | "High" | "Medium" | "Low" | "Very Low";
     scores: {
       attack: number;
       defense: number;
       form: number;
+      recentMatches?: number;
       standings: number;
-      h2h: number;
-      restDays: number;
       referee: number;
       injuries: number;
+      lineups?: number;
+      restDays: number;
+      homeAdvantage?: number;
       oddsConsensus: number;
-      teamStatistics: number;
+      h2h: number;
+      /** @deprecated kept for older persisted rows */
+      teamStatistics?: number;
     };
     available?: Record<string, boolean>;
+    weights?: Record<string, number>;
     explanation?: string[];
+    why?: string;
+    recommendationWhy?: string[];
   };
   /**
    * Value Betting Engine — EV / Kelly / Value Score from predicted probability × odds.

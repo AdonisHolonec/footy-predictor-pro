@@ -309,9 +309,11 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
           {row.confidenceEngine ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-signal-petrol/30 bg-signal-petrol/8 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide text-signal-petrol"
-              title="Confidence Engine · scor independent de context (nu e probabilitatea pick-ului)"
+              title={`Confidence Engine · ${row.confidenceEngine.category || "context"} · independent of pick probability`}
             >
-              CTX {Math.round(row.confidenceEngine.overall)}%
+              {row.confidenceEngine.category
+                ? `${row.confidenceEngine.category.replace("Very ", "V.")} ${Math.round(row.confidenceEngine.confidence ?? row.confidenceEngine.overall)}%`
+                : `CTX ${Math.round(row.confidenceEngine.overall)}%`}
             </span>
           ) : null}
         </div>

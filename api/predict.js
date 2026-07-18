@@ -13,7 +13,10 @@ import {
   strengthRatingsLambdas
 } from "../server-utils/math.js";
 import { PredictionEngine, summarizeModuleScores } from "../server-utils/prediction/PredictionEngine.js";
-import { buildConfidenceEngine } from "../server-utils/confidence/ConfidenceEngine.js";
+import {
+  buildConfidenceEngine,
+  attachRecommendationExplanation
+} from "../server-utils/confidence/ConfidenceEngine.js";
 import { buildValueEngine, evaluateValue } from "../server-utils/value/ValueEngine.js";
 import {
   calculateEV,
@@ -1501,16 +1504,16 @@ export default async function handler(req, res) {
         const qualityPenalty = dataQuality < 0.6 ? 0.9 : 1;
 
         // === CONFIDENCE ENGINE (independent of λ/Poisson/pick selection) ===
-        // Built entirely from context already gathered above; never feeds back into the model.
-        const confidenceEngine = buildConfidenceEngine({
+        // Built from context only; never feeds back into λ / probs / pick.
+        // Recommendation WHY is attached after topPick is known (explanation only).
+        let confidenceEngine = buildConfidenceEngine({
           ...(confidenceCtx || {}),
           homePlayed: strengthMeta?.homePlayed ?? confidenceCtx?.hStats?.playedHome ?? confidenceCtx?.hStats?.played ?? null,
           awayPlayed: strengthMeta?.awayPlayed ?? confidenceCtx?.aStats?.playedAway ?? confidenceCtx?.aStats?.played ?? null,
           bookmakersUsed: odds?.bookmakersUsed ?? null,
           shinZ: odds?.shinZ ?? null,
           hasOdds: Boolean(odds),
-          dataQuality,
-          modularScores: modularScores || null
+          dataQuality
         });
 
         const finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X";
@@ -1650,6 +1653,12 @@ export default async function handler(req, res) {
           stackerApplied,
           calibrationApplied
         };
+
+        // Attach WHY for this recommendation — explanation only; scores unchanged.
+        confidenceEngine = attachRecommendationExplanation(confidenceEngine, {
+          pick: topPick,
+          pickProb: maxConf
+        });
 
         out.push({
           id: fixtureId,

@@ -1033,7 +1033,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
 
           {match.confidenceEngine && (
             <div className="grid grid-cols-1 gap-6">
-              <ConfidenceEnginePanel engine={match.confidenceEngine} />
+              <ConfidenceEnginePanel
+                engine={match.confidenceEngine}
+                recommendationPick={match.recommended?.pick || null}
+              />
             </div>
           )}
 
