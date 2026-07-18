@@ -1,0 +1,91 @@
+/**
+ * Footy Predictor Pro — Design System tokens (user shell).
+ * Dark-first · single accent · 8pt spacing.
+ */
+
+:root {
+  /* Surfaces */
+  --fp-bg: #0a0a0b;
+  --fp-bg-elevated: #141416;
+  --fp-bg-card: #1a1a1e;
+  --fp-bg-muted: #121214;
+  --fp-border: rgba(255, 255, 255, 0.08);
+  --fp-border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --fp-text: #f4f4f5;
+  --fp-text-muted: #a1a1aa;
+  --fp-text-faint: #71717a;
+
+  /* Semantic — one accent only */
+  --fp-accent: #2563eb;
+  --fp-accent-hover: #3b82f6;
+  --fp-accent-muted: rgba(37, 99, 235, 0.15);
+  --fp-success: #22c55e;
+  --fp-danger: #ef4444;
+  --fp-warning: #f59e0b;
+
+  /* Bridge to existing V3 vars used across components */
+  --bg: var(--fp-bg);
+  --bg-elevated: var(--fp-bg-card);
+  --bg-muted: var(--fp-bg-muted);
+  --border: var(--fp-border);
+  --text: var(--fp-text);
+  --text-muted: var(--fp-text-muted);
+  --text-faint: var(--fp-text-faint);
+  --accent: var(--fp-accent);
+  --accent-2: var(--fp-warning);
+  --danger: var(--fp-danger);
+  --success: var(--fp-success);
+  --info: var(--fp-accent);
+
+  /* Spacing (8pt) */
+  --fp-space-1: 4px;
+  --fp-space-2: 8px;
+  --fp-space-3: 12px;
+  --fp-space-4: 16px;
+  --fp-space-5: 24px;
+  --fp-space-6: 32px;
+  --fp-space-7: 40px;
+  --fp-space-8: 48px;
+
+  /* Radius */
+  --fp-radius-sm: 8px;
+  --fp-radius: 12px;
+  --fp-radius-lg: 16px;
+
+  /* Type */
+  --fp-hero: clamp(1.75rem, 2.5vw, 2.25rem);
+  --fp-section: 1.25rem;
+  --fp-card-title: 1rem;
+  --fp-body: 0.875rem;
+  --fp-caption: 0.75rem;
+  --fp-badge: 0.625rem;
+
+  /* Motion */
+  --fp-ease: 180ms cubic-bezier(0.33, 1, 0.68, 1);
+  --fp-touch: 44px;
+}
+
+html.theme-light {
+  --fp-bg: #f4f4f5;
+  --fp-bg-elevated: #ffffff;
+  --fp-bg-card: #ffffff;
+  --fp-bg-muted: #e4e4e7;
+  --fp-border: rgba(15, 23, 42, 0.1);
+  --fp-text: #09090b;
+  --fp-text-muted: #52525b;
+  --fp-text-faint: #a1a1aa;
+  --fp-accent: #2563eb;
+  --fp-accent-muted: rgba(37, 99, 235, 0.1);
+}
+
+html.theme-contrast {
+  --fp-bg: #000000;
+  --fp-bg-elevated: #0a0a0a;
+  --fp-bg-card: #111111;
+  --fp-border: rgba(255, 255, 255, 0.35);
+  --fp-text: #ffffff;
+  --fp-text-muted: #e4e4e7;
+  --fp-accent: #3b82f6;
+}

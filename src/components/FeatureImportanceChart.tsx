@@ -33,7 +33,7 @@ export default function FeatureImportanceChart({
     return (
       <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
         <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/75">
-          Feature Importance
+          Key Factors
         </div>
         {top.map((item, i) => (
           <div key={item.key} className="flex items-center gap-2 font-mono text-[9px]">
@@ -56,7 +56,7 @@ export default function FeatureImportanceChart({
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-white/5 pb-3">
         <div>
           <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Feature Importance
+            Key Factors
           </h3>
           <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
             Contribution to this prediction · stored for ML

@@ -34,8 +34,8 @@ export default function StickyFilterBar({
   extraDates
 }: Props) {
   return (
-    <div className="sticky top-[7.5rem] z-30 -mx-3 border-b border-[var(--border)] bg-[var(--bg)]/85 px-3 py-2 backdrop-blur-md sm:top-[4.5rem] sm:-mx-5 sm:px-5 md:top-[3.75rem] lg:-mx-8 lg:px-8">
-      <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2">
+    <div className="sticky top-14 z-30 -mx-4 border-b border-[var(--fp-border)] bg-[var(--fp-bg)]/90 px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-0 lg:px-0">
+      <div className="flex max-w-[1280px] flex-wrap items-center gap-2">
         <input
           type="date"
           value={date}

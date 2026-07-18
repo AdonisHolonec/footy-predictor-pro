@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PredictionRow } from "../../types";
-import type { AppNavView } from "./TopNav";
+import type { AppNavView } from "./appNav";
 
 type Props = {
   open: boolean;
@@ -10,7 +10,6 @@ type Props = {
   onSelectMatch: (m: PredictionRow) => void;
   onNavigate: (view: AppNavView) => void;
   onPredict?: () => void;
-  showAdmin?: boolean;
 };
 
 export default function CommandPalette({
@@ -20,8 +19,7 @@ export default function CommandPalette({
   matches,
   onSelectMatch,
   onNavigate,
-  onPredict,
-  showAdmin
+  onPredict
 }: Props) {
   const [q, setQ] = useState("");
 
@@ -44,15 +42,13 @@ export default function CommandPalette({
 
   const actions = useMemo(() => {
     const list: { id: string; label: string; run: () => void }[] = [
-      { id: "nav-today", label: "Go to Today", run: () => onNavigate("today") },
-      { id: "nav-live", label: "Go to Live", run: () => onNavigate("live") },
-      { id: "nav-watch", label: "Go to Watchlist", run: () => onNavigate("watchlist") },
+      { id: "nav-home", label: "Go to Home", run: () => onNavigate("home") },
+      { id: "nav-matches", label: "Go to Matches", run: () => onNavigate("matches") },
       { id: "nav-history", label: "Go to History", run: () => onNavigate("history") },
-      { id: "nav-settings", label: "Go to Settings", run: () => onNavigate("settings") }
+      { id: "nav-stats", label: "Go to Statistics", run: () => onNavigate("statistics") },
+      { id: "nav-notif", label: "Go to Notifications", run: () => onNavigate("notifications") },
+      { id: "nav-profile", label: "Go to Profile", run: () => onNavigate("profile") }
     ];
-    if (showAdmin) {
-      list.push({ id: "nav-admin", label: "Go to Admin", run: () => onNavigate("admin") });
-    }
     if (onPredict) {
       list.push({ id: "act-predict", label: "Run Warm + Predict", run: () => onPredict() });
     }
@@ -69,35 +65,28 @@ export default function CommandPalette({
         label: `Match: ${m.teams.home} vs ${m.teams.away}`,
         run: () => onSelectMatch(m)
       }));
-    const filteredActions = qq
-      ? list.filter((a) => a.label.toLowerCase().includes(qq))
-      : list;
+    const filteredActions = qq ? list.filter((a) => a.label.toLowerCase().includes(qq)) : list;
     return [...filteredActions, ...matchHits];
-  }, [q, matches, onNavigate, onPredict, onSelectMatch, showAdmin]);
+  }, [q, matches, onNavigate, onPredict, onSelectMatch]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 p-4 pt-[12vh]" onClick={onClose}>
-      <div
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Command palette"
-      >
+    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh]" role="dialog" aria-modal>
+      <div className="w-full max-w-lg overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-xl">
         <input
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search actions & matches…"
-          className="w-full border-b border-[var(--border)] bg-transparent px-4 py-3 text-sm text-[var(--text)] outline-none"
+          placeholder="Caută meciuri sau navighează…"
+          className="w-full border-b border-[var(--fp-border)] bg-transparent px-4 py-3 text-sm text-[var(--fp-text)] outline-none placeholder:text-[var(--fp-text-faint)]"
         />
-        <ul className="max-h-72 overflow-y-auto py-1">
+        <ul className="max-h-72 overflow-y-auto py-2">
           {actions.map((a) => (
             <li key={a.id}>
               <button
                 type="button"
-                className="flex w-full px-4 py-2.5 text-left text-sm text-[var(--text)] hover:bg-[var(--bg-muted)]"
+                className="flex min-h-[var(--fp-touch)] w-full items-center px-4 text-left text-sm text-[var(--fp-text)] hover:bg-[var(--fp-accent-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
                 onClick={() => {
                   a.run();
                   onClose();
@@ -108,10 +97,11 @@ export default function CommandPalette({
             </li>
           ))}
           {!actions.length && (
-            <li className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">No results</li>
+            <li className="px-4 py-3 text-sm text-[var(--fp-text-muted)]">Niciun rezultat</li>
           )}
         </ul>
       </div>
+      <button type="button" className="absolute inset-0 -z-10" aria-label="Închide" onClick={onClose} />
     </div>
   );
 }

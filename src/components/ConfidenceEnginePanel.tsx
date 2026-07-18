@@ -81,7 +81,7 @@ export default function ConfidenceEnginePanel({
     <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/5 pb-3">
         <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Confidence Engine</h3>
+          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Confidence</h3>
           <p className="mt-1 max-w-md font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
             Independent context reliability · does not change the prediction
           </p>

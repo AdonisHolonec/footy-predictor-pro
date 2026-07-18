@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import LeaguePanel from "../components/LeaguePanel";
-import MatchCard from "../components/MatchCard";
 import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
-import TopNav, { type AppNavView } from "../components/ux/TopNav";
+import AppShell from "../components/ux/AppShell";
+import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
 import StickyFilterBar from "../components/ux/StickyFilterBar";
 import CommandPalette from "../components/ux/CommandPalette";
-import TodayOverview from "../components/ux/TodayOverview";
+import HomeSection from "../components/ux/HomeSection";
+import HistorySection from "../components/ux/HistorySection";
+import StatisticsSection from "../components/ux/StatisticsSection";
+import VirtualizedMatchGrid from "../components/ux/VirtualizedMatchGrid";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
 import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
@@ -19,10 +22,10 @@ import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
-import BrandArtboard from "../components/BrandArtboard";
 import { AdminPerformanceObservatory } from "../components/admin/AdminObservatory";
-import { ModelPulseStrip, ModelPulseWave } from "../components/SignalLab";
-import { BRAND_IMAGES } from "../constants/brandAssets";
+import Button from "../design-system/Button";
+import Card from "../design-system/Card";
+import Badge from "../design-system/Badge";
 import {
   hashColor,
   inferSeason,
@@ -138,9 +141,7 @@ export default function UserDashboard() {
   const [animatedWins, setAnimatedWins] = useState(0);
   const [animatedLosses, setAnimatedLosses] = useState(0);
   const [animatedWinRate, setAnimatedWinRate] = useState(0);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isGdprOpen, setIsGdprOpen] = useState(false);
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
@@ -158,7 +159,8 @@ export default function UserDashboard() {
   const [billingBusy, setBillingBusy] = useState<"premium" | "ultra" | "portal" | null>(null);
   const [billingConfigured, setBillingConfigured] = useState(false);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
-  const [navView, setNavView] = useState<AppNavView>("today");
+  const [navView, setNavView] = useState<AppNavView>("home");
+  const [matchesFilter, setMatchesFilter] = useState<MatchesSubFilter>("all");
   const [commandOpen, setCommandOpen] = useState(false);
   const [matchSearch, setMatchSearch] = useState("");
   const {
@@ -182,9 +184,10 @@ export default function UserDashboard() {
   );
   const visiblePreds = useMemo(() => {
     let rows = preds;
-    if (navView === "live") {
+    const listFilter = navView === "matches" ? matchesFilter : "all";
+    if (listFilter === "live") {
       rows = rows.filter((row) => isFixtureInPlay(row.status));
-    } else if (navView === "watchlist") {
+    } else if (listFilter === "favorites") {
       const ids = new Set(prefs.watchlistFixtureIds);
       rows = rows.filter((row) => ids.has(Number(row.id)));
     }
@@ -216,7 +219,7 @@ export default function UserDashboard() {
       );
     }
     return rows;
-  }, [preds, showSettledMarketsOnly, navView, prefs.watchlistFixtureIds, prefs.minConfidence, prefs.minEv, prefs.valueOnly, matchSearch]);
+  }, [preds, showSettledMarketsOnly, navView, matchesFilter, prefs.watchlistFixtureIds, prefs.minConfidence, prefs.minEv, prefs.valueOnly, matchSearch]);
   const continueMatch = useMemo(() => {
     const recent = prefs.recentFixtureIds[0];
     if (!recent) return null;
@@ -727,49 +730,115 @@ export default function UserDashboard() {
     [pushRecent]
   );
 
-  const handleNav = useCallback(
-    (view: AppNavView) => {
-      if (view === "admin") {
-        window.location.href = "/workspace";
-        return;
-      }
-      setNavView(view);
-      if (view === "settings") {
-        setIsNotificationsOpen(true);
-      }
-    },
-    []
+  const handleNav = useCallback((view: AppNavView) => {
+    setNavView(view);
+    if (view === "notifications") setIsNotificationsOpen(true);
+    if (view === "matches") setMatchesFilter("all");
+  }, []);
+
+  const trackerSlot = (
+    <AdminPerformanceObservatory className="mt-0">
+      <SuccessRateTracker
+        stats={trackerStats}
+        animatedWins={animatedWins}
+        animatedLosses={animatedLosses}
+        animatedWinRate={animatedWinRate}
+        isWinRatePulsing={isWinRatePulsing}
+        isHistorySyncing={isHistorySyncing}
+        pendingHistoryCount={pendingHistoryCount}
+        displayedPredsCount={visiblePreds.length}
+        pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+        onBreakdownClick={() => setPerfCounterModalOpen(true)}
+      />
+    </AdminPerformanceObservatory>
   );
 
   return (
-    <div className="lab-page relative min-h-screen font-sans">
-      <div className="lab-bg" aria-hidden />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.04]"
-        style={{ backgroundImage: `url(${BRAND_IMAGES.refDashboard})` }}
-        aria-hidden
-      />
-      <div className="relative z-10 mx-auto max-w-[1680px] px-3 py-5 sm:px-5 sm:py-7 lg:px-8 lg:py-8">
-        <TopNav
-          active={navView}
-          onNavigate={handleNav}
-          email={user?.email}
-          tier={userTier}
-          dbMode={isFreeDbOnlyMode}
-          theme={prefs.theme}
-          onCycleTheme={cycleTheme}
-          onOpenCommand={() => setCommandOpen(true)}
-          onOpenNotifications={() => {
-            setNavView("settings");
-            setIsNotificationsOpen(true);
-          }}
-          onPredict={() => void warmAndPredict()}
-          predictBusy={warmPredictBusy}
-          showAdmin={user?.role === "admin"}
-          onLogout={() => void logout()}
-        />
+    <AppShell
+      active={navView}
+      onNavigate={handleNav}
+      email={user?.email}
+      tier={userTier}
+      dbMode={isFreeDbOnlyMode}
+      onPredict={() => void warmAndPredict()}
+      predictBusy={warmPredictBusy}
+      onOpenCommand={() => setCommandOpen(true)}
+      onOpenNotifications={() => {
+        setNavView("notifications");
+        setIsNotificationsOpen(true);
+      }}
+      onLogout={() => void logout()}
+    >
+      {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
+        <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-accent)] motion-reduce:animate-none" />
+          Loading
+        </span>
+      )}
+      {dateSyncBadgeUntil > Date.now() && (
+        <span className="mb-3 ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-success)]">
+          Data sincronizată
+        </span>
+      )}
+      {status && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-sm text-[var(--fp-text)]"
+        >
+          {status}
+        </div>
+      )}
+      {rehydratedNotice && (
+        <div className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-3 py-2 text-xs">
+          <span className="font-semibold text-[var(--fp-accent)]">Date vechi actualizate.</span>{" "}
+          <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
+        </div>
+      )}
 
-        {(navView === "today" || navView === "live" || navView === "watchlist") && (
+      {navView === "home" && (
+        <HomeSection
+          matches={preds}
+          onOpenMatch={openMatch}
+          onGoMatches={() => setNavView("matches")}
+          continueMatch={continueMatch}
+          winRate={trackerStats.winRate}
+          pendingCount={pendingHistoryCount}
+          settledCount={trackerStats.settled}
+          usageLabel={tierQuotaExempt ? "Unlimited" : userTier}
+        />
+      )}
+
+      {navView === "matches" && (
+        <>
+          <header className="mb-4">
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+              Meciuri
+            </p>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Matches</h1>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "Toate"],
+                  ["live", "Live"],
+                  ["favorites", "Favorite"]
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMatchesFilter(id)}
+                  className={`min-h-9 rounded-full border px-3 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                    matchesFilter === id
+                      ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                      : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </header>
           <StickyFilterBar
             date={date}
             onDateChange={(next) => {
@@ -794,7 +863,7 @@ export default function UserDashboard() {
                   <button
                     type="button"
                     onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                    className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent)]"
+                    className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-accent)]"
                   >
                     +1 zi
                   </button>
@@ -804,7 +873,7 @@ export default function UserDashboard() {
                     <button
                       type="button"
                       onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                      className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent-2)]"
+                      className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-warning)]"
                     >
                       +1 zi
                     </button>
@@ -813,481 +882,322 @@ export default function UserDashboard() {
                       onClick={() =>
                         setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
                       }
-                      className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--accent-2)]"
+                      className="rounded-lg border border-[var(--fp-border)] px-2 py-1.5 text-[10px] font-semibold text-[var(--fp-warning)]"
                     >
                       +2 zile
                     </button>
                   </>
                 )}
-                <div className="flex flex-wrap items-center gap-1">
-                  {activePredictDates.map((d) => (
-                    <span
-                      key={d}
-                      className="rounded-full border border-[var(--border)] px-2 py-0.5 font-mono text-[9px] text-[var(--text-muted)]"
-                    >
-                      {d}
-                    </span>
-                  ))}
-                </div>
-                {tierQuotaExempt && (
-                  <span className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">
-                    Unlimited
-                  </span>
-                )}
+                {tierQuotaExempt && <Badge tone="success">Unlimited</Badge>}
               </>
             }
           />
-        )}
-
-        {(navView === "history" || navView === "today") && (
-          <div className={navView === "history" ? "mt-6" : "mt-4"}>
-            <AdminPerformanceObservatory className="mt-0">
-              <SuccessRateTracker
-                stats={trackerStats}
-                animatedWins={animatedWins}
-                animatedLosses={animatedLosses}
-                animatedWinRate={animatedWinRate}
-                isWinRatePulsing={isWinRatePulsing}
-                isHistorySyncing={isHistorySyncing}
-                pendingHistoryCount={pendingHistoryCount}
-                displayedPredsCount={visiblePreds.length}
-                pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
-                onBreakdownClick={() => setPerfCounterModalOpen(true)}
+          <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
+            <div className="lg:col-span-4 xl:col-span-3">
+              <LeaguePanel
+                leaguesSorted={leaguesSorted}
+                selectedSet={new Set(selectedLeagueIds)}
+                selectedLeagueIds={selectedLeagueIds}
+                isLeaguesOpen={isLeaguesOpen}
+                searchLeague={searchLeague}
+                eliteLeagues={ELITE_LEAGUES}
+                setIsLeaguesOpen={setIsLeaguesOpen}
+                setSearchLeague={setSearchLeague}
+                setSelectedLeagueIds={setSelectedLeagueIdsLimited}
+                selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
+                clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
               />
-              {navView === "history" && (
-                <div className="mt-4 grid max-w-full grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Win rate</div>
-                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrolMuted">
-                      {trackerStats.settled > 0 ? `${animatedWinRate.toFixed(1)}%` : "—"}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">W / L</div>
-                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-petrol">
-                      {animatedWins} <span className="text-signal-inkMuted">/</span> {animatedLosses}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Pending</div>
-                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-amber">{pendingHistoryCount}</div>
-                  </div>
-                  <div className="rounded-xl border border-signal-line/40 bg-signal-panel/45 px-3 py-2 shadow-inner">
-                    <div className="text-[9px] font-semibold uppercase tracking-wider text-signal-inkMuted">Settled</div>
-                    <div className="font-mono text-sm font-semibold tabular-nums text-signal-sage">{trackerStats.settled}</div>
-                  </div>
+            </div>
+            <div className="lg:col-span-8 xl:col-span-9">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-semibold">
+                  {matchesFilter === "live" ? "Live" : matchesFilter === "favorites" ? "Favorite" : "Toate meciurile"}
+                </h2>
+                <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">{visiblePreds.length}</span>
+              </div>
+              {!visiblePreds.length ? (
+                <div className="grid h-[280px] place-items-center rounded-[var(--fp-radius-lg)] border border-dashed border-[var(--fp-border)] text-center text-[var(--fp-text-muted)]">
+                  {matchesFilter === "favorites"
+                    ? "Favorite goale — apasă steaua pe un meci."
+                    : matchesFilter === "live"
+                      ? "Niciun meci Live în selecția curentă."
+                      : showSettledMarketsOnly
+                        ? "Nu există meciuri finalizate cu piețe derivate."
+                        : "Selectează ligi și apasă Predict."}
                 </div>
+              ) : (
+                <VirtualizedMatchGrid
+                  matches={visiblePreds}
+                  hashColor={hashColor}
+                  isWatched={isWatched}
+                  onToggleWatch={toggleWatchlist}
+                  onOpen={openMatch}
+                  canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
+                />
               )}
-            </AdminPerformanceObservatory>
-          </div>
-        )}
-
-        {navView === "today" && (
-          <div className="mt-6">
-            <TodayOverview
-              matches={preds}
-              onOpenMatch={openMatch}
-              continueMatch={continueMatch}
-              winRate={trackerStats.winRate}
-              pendingCount={pendingHistoryCount}
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <ModelPulseWave status="OPTIMAL CALIBRATION" className="max-w-3xl" />
-              <ModelPulseStrip status="Sincronizat cu istoricul contului" tone="healthy" />
-              <span className="font-mono text-[10px] text-[var(--text-muted)]">
-                {localCalendarDateKey()} · S{inferSeason(date)}
-              </span>
-              <Link to="/privacy" className="text-xs text-[var(--accent)] hover:underline">
-                Confidențialitate
-              </Link>
             </div>
           </div>
-        )}
+        </>
+      )}
 
-        {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
-          <span className="mt-3 inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
-            Loading
-          </span>
-        )}
-        {dateSyncBadgeUntil > Date.now() && (
-          <span className="mt-3 ml-2 inline-flex items-center gap-1 rounded-full border border-signal-sage/35 bg-signal-sage/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-sage">
-            <span className="h-1.5 w-1.5 rounded-full bg-signal-sage" />
-            Data sincronizată
-          </span>
-        )}
+      {navView === "history" && (
+        <HistorySection
+          history={history}
+          trackerSlot={trackerSlot}
+          pendingCount={pendingHistoryCount}
+          wins={trackerStats.wins}
+          losses={trackerStats.losses}
+          settled={trackerStats.settled}
+          winRate={trackerStats.winRate}
+        />
+      )}
 
-        {status && (
-          <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
-        )}
+      {navView === "statistics" && (
+        <StatisticsSection
+          trackerSlot={trackerSlot}
+          winRate={trackerStats.winRate}
+          settled={trackerStats.settled}
+          wins={trackerStats.wins}
+          losses={trackerStats.losses}
+        />
+      )}
 
-        {navView === "settings" && !tierQuotaExempt && (
-          <section className="mt-4 rounded-2xl border border-signal-sage/25 bg-signal-panel/35 p-4 shadow-inner">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">Abonament Stripe</h2>
-                <p className="mt-1 text-[11px] text-signal-inkMuted">
-                  Premium (25 meciuri/zi) sau Ultra (50 meciuri/zi). Poți plăti oricând — inclusiv în timpul unui trial 24h.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
+      {navView === "notifications" && (
+        <section className="space-y-6">
+          <header>
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+              Notificări
+            </p>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Notifications</h1>
+            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">Alerte Low Risk / Value și email (beta).</p>
+          </header>
+          <Card>
+            <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
+              Preview: {alertsPreview.safe} low-risk · {alertsPreview.value} value
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
+                <input type="checkbox" checked={notifySafe} onChange={(e) => setNotifySafe(e.target.checked)} />
+                Low Risk alerts
+              </label>
+              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
+                <input type="checkbox" checked={notifyValue} onChange={(e) => setNotifyValue(e.target.checked)} />
+                Value alerts
+              </label>
+              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={notifyEmail}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setNotifyEmail(next);
+                    if (!next) setNotifyEmailConsent(false);
+                  }}
+                />
+                Email (beta)
+              </label>
+            </div>
+            {notifyEmail && (
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-[var(--fp-text-muted)]">
+                <input
+                  type="checkbox"
+                  checked={notifyEmailConsent}
+                  onChange={(e) => setNotifyEmailConsent(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Confirm consimțământul pentru email — vezi{" "}
+                  <Link to="/privacy" className="text-[var(--fp-accent)] underline">
+                    politica
+                  </Link>
+                  .
+                </span>
+              </label>
+            )}
+            <Button className="mt-4" loading={notifSaveBusy} onClick={() => void saveNotificationPrefs()}>
+              Salvează preferințe
+            </Button>
+          </Card>
+        </section>
+      )}
+
+      {navView === "profile" && (
+        <section className="space-y-6">
+          <header>
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+              Profil
+            </p>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Profile</h1>
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
+              {user?.email} <Badge tone="accent">{userTier}</Badge>
+            </p>
+          </header>
+
+          {!tierQuotaExempt && (
+            <Card>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Abonament</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+                Premium (25/zi) sau Ultra (50/zi). Poți plăti inclusiv în timpul unui trial.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
                   disabled={!billingConfigured || billingBusy !== null}
+                  loading={billingBusy === "premium"}
                   onClick={async () => {
                     setBillingBusy("premium");
                     try {
-                      const url = await startCheckout("premium");
-                      window.location.href = url;
+                      window.location.href = await startCheckout("premium");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Checkout Premium eșuat.");
                       setBillingBusy(null);
                     }
                   }}
-                  className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
                 >
-                  {billingBusy === "premium" ? "Redirect…" : "Subscribe Premium"}
-                </button>
-                <button
-                  type="button"
+                  Subscribe Premium
+                </Button>
+                <Button
+                  variant="secondary"
                   disabled={!billingConfigured || billingBusy !== null}
+                  loading={billingBusy === "ultra"}
                   onClick={async () => {
                     setBillingBusy("ultra");
                     try {
-                      const url = await startCheckout("ultra");
-                      window.location.href = url;
+                      window.location.href = await startCheckout("ultra");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Checkout Ultra eșuat.");
                       setBillingBusy(null);
                     }
                   }}
-                  className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
                 >
-                  {billingBusy === "ultra" ? "Redirect…" : "Subscribe Ultra"}
-                </button>
-                <button
-                  type="button"
+                  Subscribe Ultra
+                </Button>
+                <Button
+                  variant="ghost"
                   disabled={!billingConfigured || billingBusy !== null}
+                  loading={billingBusy === "portal"}
                   onClick={async () => {
                     setBillingBusy("portal");
                     try {
-                      const url = await openBillingPortal();
-                      window.location.href = url;
+                      window.location.href = await openBillingPortal();
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Portal billing eșuat.");
                       setBillingBusy(null);
                     }
                   }}
-                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-signal-ink disabled:opacity-50"
                 >
-                  {billingBusy === "portal" ? "Redirect…" : "Manage billing"}
-                </button>
+                  Manage billing
+                </Button>
               </div>
-            </div>
-            {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
-              <p className="mt-3 text-[11px] text-signal-petrol">
-                Trial activ acum — Subscribe rămâne disponibil și înlocuiește trial-ul cu abonament plătit.
-              </p>
-            )}
-            {!billingConfigured && (
-              <p className="mt-3 text-[11px] text-signal-inkMuted">
-                Stripe nu este configurat pe server (lipsesc cheile / price IDs). Trial-urile 24h rămân disponibile mai jos.
-              </p>
-            )}
-          </section>
-        )}
-
-        {navView === "settings" && !tierQuotaExempt && (
-          <section className="mt-4 rounded-2xl border border-signal-petrol/25 bg-signal-panel/35 p-4 shadow-inner">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">24h Trial (opțional)</h2>
-                <p className="mt-1 text-[11px] text-signal-inkMuted">
-                  Un singur trial activ odată. Nu blochează Subscribe — poți plăti oricând din secțiunea de mai sus.
+              {!billingConfigured && (
+                <p className="mt-3 text-xs text-[var(--fp-text-muted)]">
+                  Stripe nu este configurat pe server. Trial-urile 24h rămân disponibile.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={
-                    trialBusy !== null ||
-                    !!user?.premium_trial_activated_at ||
-                    trialRemainingTime.ultraMs > 0
-                  }
+              )}
+            </Card>
+          )}
+
+          {!tierQuotaExempt && (
+            <Card>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Trial 24h</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Un singur trial activ. Nu blochează Subscribe.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={trialBusy !== null || !!user?.premium_trial_activated_at || trialRemainingTime.ultraMs > 0}
+                  loading={trialBusy === "premium"}
                   onClick={async () => {
                     setTrialBusy("premium");
                     try {
                       await activate24hTrial("premium");
-                      setStatus("Trial Premium activat pentru 24h. Poți face Subscribe oricând.");
+                      setStatus("Trial Premium activat pentru 24h.");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
                     } finally {
                       setTrialBusy(null);
                     }
                   }}
-                  className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
                 >
                   {user?.premium_trial_activated_at
                     ? "Premium trial used"
                     : trialRemainingTime.ultraMs > 0
                       ? "Ultra trial activ"
-                      : trialBusy === "premium"
-                        ? "Activating..."
-                        : "Activate Premium 24h"}
-                </button>
-                <button
-                  type="button"
-                  disabled={
-                    trialBusy !== null ||
-                    !!user?.ultra_trial_activated_at ||
-                    trialRemainingTime.premiumMs > 0
-                  }
+                      : "Activate Premium 24h"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={trialBusy !== null || !!user?.ultra_trial_activated_at || trialRemainingTime.premiumMs > 0}
+                  loading={trialBusy === "ultra"}
                   onClick={async () => {
                     setTrialBusy("ultra");
                     try {
                       await activate24hTrial("ultra");
-                      setStatus("Trial Ultra activat pentru 24h. Poți face Subscribe oricând.");
+                      setStatus("Trial Ultra activat pentru 24h.");
                     } catch (e: unknown) {
                       setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
                     } finally {
                       setTrialBusy(null);
                     }
                   }}
-                  className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
                 >
                   {user?.ultra_trial_activated_at
                     ? "Ultra trial used"
                     : trialRemainingTime.premiumMs > 0
                       ? "Premium trial activ"
-                      : trialBusy === "ultra"
-                        ? "Activating..."
-                        : "Activate Ultra 24h"}
-                </button>
+                      : "Activate Ultra 24h"}
+                </Button>
               </div>
-            </div>
-            {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
-              <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                {trialRemainingTime.premiumMs > 0 && (
-                  <span className="rounded-md border border-signal-petrol/25 bg-signal-petrol/10 px-2 py-1 font-mono text-signal-petrol">
-                    Trial Premium activ: {formatRemaining(trialRemainingTime.premiumMs)}
-                  </span>
-                )}
-                {trialRemainingTime.ultraMs > 0 && (
-                  <span className="rounded-md border border-signal-amber/25 bg-signal-amber/10 px-2 py-1 font-mono text-signal-amber">
-                    Trial Ultra activ: {formatRemaining(trialRemainingTime.ultraMs)}
-                  </span>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {rehydratedNotice && (
-          <div className="mt-3 rounded-xl border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-2 text-xs text-signal-ink shadow-inner">
-            <span className="font-semibold text-signal-petrol">Date vechi actualizate.</span>{" "}
-            <span className="text-signal-inkMuted">{rehydratedNotice}</span>
-          </div>
-        )}
-
-        {(navView === "settings" || !user?.onboardingCompleted) && !user?.onboardingCompleted && (
-          <section className="mt-4 rounded-2xl border border-signal-sage/30 bg-signal-mintSoft/20 p-4 shadow-inner">
-            <button
-              type="button"
-              onClick={() => setIsOnboardingOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left"
-            >
-              <span className="text-sm font-semibold tracking-wide text-signal-ink">Onboarding</span>
-              <span className="font-mono text-[11px] text-signal-petrol">{selectedLeagueIds.length} ligi</span>
-            </button>
-            {isOnboardingOpen && (
-              <div className="mt-3">
-                <p className="text-xs text-signal-inkMuted">Alege ligi în panoul din stânga, apoi confirmă.</p>
-                <button
-                  type="button"
-                  onClick={() => void completeOnboarding()}
-                  className="mt-3 rounded-lg bg-signal-petrol px-3 py-2 text-xs font-semibold uppercase tracking-wide text-signal-mist hover:bg-signal-petrolMuted"
-                >
-                  Finalizează onboarding
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {navView === "settings" && (
-        <>
-        <section className="mt-4 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-1 shadow-inner backdrop-blur-md">
-          <button
-            type="button"
-            onClick={() => setIsNotificationsOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-signal-void/30"
-          >
-            <span className="text-sm font-semibold tracking-wide text-signal-ink">Notificări</span>
-            <span className="font-mono text-[11px] text-signal-petrol">
-              {alertsPreview.safe} safe · {alertsPreview.value} value
-            </span>
-          </button>
-          {isNotificationsOpen && (
-            <div className="border-t border-white/[0.06] px-4 pb-4 pt-2">
-              <div className="grid gap-2 sm:grid-cols-3">
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
-                  <input type="checkbox" checked={notifySafe} onChange={(event) => setNotifySafe(event.target.checked)} />
-                  Safe alerts
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
-                  <input type="checkbox" checked={notifyValue} onChange={(event) => setNotifyValue(event.target.checked)} />
-                  Value alerts
-                </label>
-                <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-petrol">
-                  <input
-                    type="checkbox"
-                    checked={notifyEmail}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      setNotifyEmail(next);
-                      if (!next) setNotifyEmailConsent(false);
-                    }}
-                  />
-                  Email (beta)
-                </label>
-              </div>
-              {notifyEmail && (
-                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-signal-line/80 bg-signal-fog/50 px-3 py-2 text-[11px] text-signal-inkMuted">
-                  <input
-                    type="checkbox"
-                    checked={notifyEmailConsent}
-                    onChange={(event) => setNotifyEmailConsent(event.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    Confirm că am citit secțiunea despre e-mail din{" "}
-                    <Link to="/privacy" className="font-semibold text-signal-petrolMuted underline-offset-2 hover:underline">
-                      politica de confidențialitate
-                    </Link>{" "}
-                    și sunt de acord cu alertele pe adresa contului.
-                  </span>
-                </label>
+              {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  {trialRemainingTime.premiumMs > 0 && (
+                    <Badge tone="accent">Trial Premium: {formatRemaining(trialRemainingTime.premiumMs)}</Badge>
+                  )}
+                  {trialRemainingTime.ultraMs > 0 && (
+                    <Badge tone="warning">Trial Ultra: {formatRemaining(trialRemainingTime.ultraMs)}</Badge>
+                  )}
+                </div>
               )}
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void saveNotificationPrefs()}
-                  disabled={notifSaveBusy}
-                  className="rounded-lg border border-signal-petrol/25 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-petrol/15"
-                >
-                  {notifSaveBusy ? "Se salvează…" : "Salvează preferințe"}
-                </button>
-              </div>
-            </div>
+            </Card>
           )}
-        </section>
 
-        <section className="mt-3 rounded-2xl border border-white/[0.07] bg-signal-panel/30 p-1 shadow-inner backdrop-blur-md">
-          <button
-            type="button"
-            onClick={() => setIsGdprOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition hover:bg-signal-void/30"
-          >
-            <span className="text-sm font-semibold tracking-wide text-signal-ink">Date personale (GDPR)</span>
-            <span className="font-mono text-[11px] text-signal-petrol">{exportBusy ? "se generează…" : "export"}</span>
-          </button>
-          {isGdprOpen && (
-            <div className="border-t border-white/[0.06] px-4 pb-4 pt-2">
-              <p className="text-[11px] leading-relaxed text-signal-inkMuted">
-                Export JSON — vezi{" "}
-                <Link to="/privacy" className="font-medium text-signal-petrol underline-offset-2 hover:underline">
-                  politica
-                </Link>
-                .
-              </p>
-              <button
-                type="button"
-                disabled={exportBusy}
-                onClick={() => void downloadPersonalDataExport()}
-                className="mt-3 rounded-lg border border-white/10 bg-signal-fog px-3 py-2 text-[11px] font-semibold text-signal-petrol transition hover:bg-signal-panel disabled:opacity-50"
-              >
-                {exportBusy ? "Se generează..." : "Descarcă export JSON"}
-              </button>
-            </div>
+          {!user?.onboardingCompleted && (
+            <Card>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Onboarding</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Alege ligi favorite în Matches, apoi confirmă.</p>
+              <Button className="mt-3" onClick={() => void completeOnboarding()}>
+                Finalizează onboarding
+              </Button>
+            </Card>
           )}
-        </section>
 
-        <section className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--text)]">Appearance</h2>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">Theme: {prefs.theme}</p>
-          <button
-            type="button"
-            onClick={cycleTheme}
-            className="mt-3 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--accent)]"
-          >
-            Cycle theme
-          </button>
-          <div className="mt-4">
-            <BrandArtboard
-              src={BRAND_IMAGES.refDossier}
-              alt="Referință vizuală — prediction dossier"
-              frameClassName="max-h-[180px] w-full"
-            />
-          </div>
-        </section>
-        </>
-        )}
+          <Card>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Date personale (GDPR)</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+              Export JSON — vezi{" "}
+              <Link to="/privacy" className="text-[var(--fp-accent)] underline">
+                politica
+              </Link>
+              .
+            </p>
+            <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
+              Descarcă export JSON
+            </Button>
+          </Card>
 
-        {(navView === "today" || navView === "live" || navView === "watchlist") && (
-        <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
-          <div className="lg:col-span-4 xl:col-span-3">
-            <LeaguePanel
-              leaguesSorted={leaguesSorted}
-              selectedSet={new Set(selectedLeagueIds)}
-              selectedLeagueIds={selectedLeagueIds}
-              isLeaguesOpen={isLeaguesOpen}
-              searchLeague={searchLeague}
-              eliteLeagues={ELITE_LEAGUES}
-              setIsLeaguesOpen={setIsLeaguesOpen}
-              setSearchLeague={setSearchLeague}
-              setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
-              clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
-            />
-          </div>
-          <div className="lg:col-span-8 xl:col-span-9">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-[var(--text)]">
-                {navView === "live" ? "Live matches" : navView === "watchlist" ? "Watchlist" : "All matches"}
-              </h2>
-              <span className="font-mono text-[10px] text-[var(--text-muted)]">{visiblePreds.length}</span>
+          <Card>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Aspect</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Temă: {prefs.theme}</p>
+            <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
+              Schimbă tema
+            </Button>
+            <div className="mt-4">
+              <Button variant="danger" onClick={() => void logout()}>
+                Logout
+              </Button>
             </div>
-            {!visiblePreds.length ? (
-              <div className="grid h-[340px] place-items-center rounded-[2rem] border border-dashed border-signal-line/30 bg-signal-void/35 text-center text-signal-inkMuted">
-                {navView === "watchlist"
-                  ? "Watchlist empty — star a match to save it."
-                  : navView === "live"
-                    ? "No live matches in the current selection."
-                    : showSettledMarketsOnly
-                      ? "Nu există încă meciuri finalizate cu piețe derivate în selecția curentă."
-                      : "Selectează ligi și apasă Predict."}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                {visiblePreds.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    row={match}
-                    logoColors={{}}
-                    hashColor={hashColor}
-                    compact
-                    watched={isWatched(Number(match.id))}
-                    onToggleWatch={() => toggleWatchlist(Number(match.id))}
-                    canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
-                    onClick={() => openMatch(match)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        )}
-      </div>
+          </Card>
+        </section>
+      )}
+
       <PerformanceCounterModal
         open={perfCounterModalOpen}
         onClose={() => setPerfCounterModalOpen(false)}
@@ -1314,8 +1224,7 @@ export default function UserDashboard() {
         onSelectMatch={openMatch}
         onNavigate={handleNav}
         onPredict={() => void warmAndPredict()}
-        showAdmin={user?.role === "admin"}
       />
-    </div>
+    </AppShell>
   );
 }

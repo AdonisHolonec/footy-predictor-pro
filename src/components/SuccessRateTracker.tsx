@@ -67,7 +67,7 @@ export default function SuccessRateTracker({
       <div className="relative mb-4 flex flex-col gap-1.5 border-b border-white/[0.06] pb-3.5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="lab-section-eyebrow">Performance</div>
-          <div className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Performance Counter Pro</div>
+          <div className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Success Rate</div>
         </div>
         <div className="font-sans text-[11px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
       </div>

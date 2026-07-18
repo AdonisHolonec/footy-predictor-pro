@@ -1,3 +1,5 @@
+@import "./design-system/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,19 +23,19 @@
     --lab-border-glow: rgba(62, 207, 191, 0.22);
     --lab-border-subtle: rgba(255, 255, 255, 0.06);
     --lab-shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04);
-    /* Design System V3 tokens */
-    --bg: #0b0f14;
-    --bg-elevated: #1c2633;
-    --bg-muted: #161e28;
+    /* Bridged by design-system/tokens.css — keep fallbacks */
+    --bg: #0a0a0b;
+    --bg-elevated: #1a1a1e;
+    --bg-muted: #121214;
     --border: rgba(255, 255, 255, 0.08);
-    --text: #eef2f6;
-    --text-muted: #8b9aab;
-    --text-faint: #5c6b7a;
-    --accent: #3ecfbf;
-    --accent-2: #f5b942;
-    --danger: #f07178;
-    --success: #3dd68c;
-    --info: #6a9bb8;
+    --text: #f4f4f5;
+    --text-muted: #a1a1aa;
+    --text-faint: #71717a;
+    --accent: #2563eb;
+    --accent-2: #f59e0b;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --info: #2563eb;
   }
 
   html.theme-light {

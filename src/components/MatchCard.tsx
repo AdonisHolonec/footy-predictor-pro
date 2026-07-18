@@ -131,7 +131,7 @@ function statusChip(
     return { label: "VALUE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
   }
   if (confPct >= 70) {
-    return { label: "SAFE", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
+    return { label: "LOW RISK", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
   }
   return { label: "OPEN", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
 }
@@ -313,17 +313,34 @@ export default function MatchCard({
                 e.stopPropagation();
                 onToggleWatch();
               }}
-              className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
+              className={`flex h-9 min-w-9 items-center justify-center rounded-md border text-[12px] ${
                 watched
                   ? "border-signal-amber/40 bg-signal-amber/15 text-signal-amber"
                   : "border-white/10 text-signal-inkMuted"
               }`}
-              aria-label={watched ? "Remove from watchlist" : "Add to watchlist"}
-              title="Watchlist"
+              aria-label={watched ? "Scoate din favorite" : "Adaugă la favorite"}
+              title="Favorite"
             >
               ★
             </button>
           )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const text = `${row.teams.home} vs ${row.teams.away} · Top Pick ${row.recommended?.pick || "—"} · ${Math.round(Number(row.recommended?.confidence) || 0)}%`;
+              if (navigator.share) {
+                void navigator.share({ title: "Footy Predictor", text }).catch(() => undefined);
+              } else if (navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(text);
+              }
+            }}
+            className="flex h-9 min-w-9 items-center justify-center rounded-md border border-white/10 text-[11px] text-signal-inkMuted"
+            aria-label="Share prediction"
+            title="Share"
+          >
+            ↗
+          </button>
           <span className="lab-chip truncate max-w-[9rem] sm:max-w-[12rem]">
             {row.league}
           </span>
@@ -344,7 +361,7 @@ export default function MatchCard({
           {row.confidenceEngine ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-signal-petrol/30 bg-signal-petrol/8 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide text-signal-petrol"
-              title={`Confidence Engine · ${row.confidenceEngine.category || "context"} · independent of pick probability`}
+              title={`Confidence · ${row.confidenceEngine.category || "context"} · independent of pick probability`}
             >
               {row.confidenceEngine.category
                 ? `${row.confidenceEngine.category.replace("Very ", "V.")} ${Math.round(row.confidenceEngine.confidence ?? row.confidenceEngine.overall)}%`
@@ -667,7 +684,7 @@ export default function MatchCard({
       )}
 
       <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">
-        {compact ? "Expand → detail tabs" : "Fișă analitică · tap pentru detalii"}
+        {compact ? "Detalii predicție →" : "Deschide detalii"}
       </p>
     </div>
   );

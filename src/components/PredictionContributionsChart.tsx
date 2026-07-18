@@ -26,7 +26,7 @@ export default function PredictionContributionsChart({
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-white/5 pb-3">
         <div>
           <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Feature Contributions
+            Why This Prediction
           </h3>
           <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
             Signed impact on pick {data.pick ? `· ${data.pick}` : ""} · {data.schemaVersion || "contrib-v1"}

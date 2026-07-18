@@ -183,7 +183,7 @@ export default function Login() {
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-mint sm:text-3xl">
                     {globalStats.settled ? globalStats.winRate.toFixed(1) : "—"}%
                   </div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-ink">Hit rate · 30d</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-signal-ink">Success Rate · 30d</div>
                 </div>
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-signal-petrol sm:text-3xl">{globalStats.settled || "—"}</div>
@@ -232,11 +232,11 @@ export default function Login() {
             <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-signal-panel/100 via-signal-mist/100 to-signal-panel/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
-                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-silver">Credentials</span>
+                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-silver">Autentificare</span>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrol">Secure gateway</p>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrol">Acces securizat</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && "Login"}
                   {mode === "signup" && "Create account"}

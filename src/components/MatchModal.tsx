@@ -521,17 +521,15 @@ function LeagueStandingsTable({
 
 const DETAIL_TABS = [
   { id: "overview", label: "Overview" },
-  { id: "prediction", label: "Prediction" },
+  { id: "prediction", label: "AI Prediction" },
+  { id: "why", label: "Why" },
   { id: "statistics", label: "Statistics" },
   { id: "form", label: "Form" },
   { id: "odds", label: "Odds" },
-  { id: "xg", label: "xG" },
-  { id: "confidence", label: "Confidence" },
-  { id: "importance", label: "Importance" },
+  { id: "value", label: "Best Value" },
   { id: "montecarlo", label: "Monte Carlo" },
-  { id: "value", label: "Value" },
-  { id: "timeline", label: "Timeline" },
-  { id: "live", label: "Live" }
+  { id: "xg", label: "xG" },
+  { id: "timeline", label: "Timeline" }
 ] as const;
 
 type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
@@ -1095,19 +1093,19 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           ) : null}
 
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["importance", "prediction"])}`}>
+            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "prediction"])}`}>
               <FeatureImportanceChart importance={match.featureImportance} />
             </div>
           ) : null}
 
           {match.predictionContributions?.items?.length ? (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["importance", "prediction"])}`}>
+            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "prediction"])}`}>
               <PredictionContributionsChart data={match.predictionContributions} />
             </div>
           ) : null}
 
           {match.confidenceEngine && (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["confidence", "overview"])}`}>
+            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "overview"])}`}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
                 recommendationPick={match.recommended?.pick || null}
@@ -1115,7 +1113,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
             </div>
           )}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["statistics", "overview", "live", "timeline"])}`}>
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["statistics", "overview", "timeline"])}`}>
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
@@ -1407,7 +1405,7 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
               match.modelMeta.reasonCodes?.length ||
               match.modelMeta.stakeBucket ||
               match.evaluation) && (
-              <details className={`group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5 ${tab(["prediction", "confidence"])}`}>
+              <details className={`group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5 ${tab(["prediction", "why"])}`}>
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
                     Model audit

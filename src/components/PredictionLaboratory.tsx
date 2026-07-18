@@ -55,7 +55,7 @@ function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
           <PolarAngleAxis dataKey="metric" tick={{ fill: "#9aabba", fontSize: 10 }} />
           <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#7a8a9a", fontSize: 9 }} />
           <Radar
-            name="Laboratory"
+            name="Model Insights"
             dataKey="value"
             stroke="#5ec4b6"
             fill="#5ec4b6"
@@ -164,7 +164,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
     return (
       <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
         <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-          Prediction Laboratory
+          Model Insights
         </h3>
         <p className="mt-2 text-[11px] text-signal-inkMuted">Insufficient data for laboratory diagnostics.</p>
       </section>
@@ -177,7 +177,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
       <div className="mt-1.5 rounded-xl border border-white/5 bg-signal-void/40 px-2.5 py-2">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/80">
-            Laboratory
+            Model Insights
           </span>
           {lab.bookmaker?.differencePp != null && (
             <span className={`font-mono text-[9px] tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
@@ -206,7 +206,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Prediction Laboratory
+            Model Insights
           </h3>
           <p className="mt-1 text-[11px] text-signal-inkMuted">
             Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
