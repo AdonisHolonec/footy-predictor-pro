@@ -34,6 +34,7 @@ import {
   useLocalStorageState
 } from "../utils/appUtils";
 import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
+import { loadBillingConfig, openBillingPortal, startCheckout } from "../services/billingService";
 
 function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
   const wins = rows.filter((r) => r.validation === "win").length;
@@ -154,6 +155,8 @@ export default function UserDashboard() {
   const [notifSaveBusy, setNotifSaveBusy] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
+  const [billingBusy, setBillingBusy] = useState<"premium" | "ultra" | "portal" | null>(null);
+  const [billingConfigured, setBillingConfigured] = useState(false);
   const [showSettledMarketsOnly, setShowSettledMarketsOnly] = useState(false);
   const [navView, setNavView] = useState<AppNavView>("today");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -269,6 +272,36 @@ export default function UserDashboard() {
     const s = String(total % 60).padStart(2, "0");
     return `${h}:${m}:${s}`;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBillingConfig()
+      .then((cfg) => {
+        if (!cancelled) setBillingConfigured(Boolean(cfg.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setBillingConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const billing = params.get("billing");
+    if (!billing) return;
+    if (billing === "success") {
+      setStatus("Plată reușită. Abonamentul se activează în câteva secunde — reîncarcă profilul dacă tier-ul nu apare.");
+      setNavView("settings");
+    } else if (billing === "cancel") {
+      setStatus("Checkout anulat.");
+    }
+    params.delete("billing");
+    params.delete("tier");
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState({}, "", next);
+  }, [setStatus]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -871,7 +904,7 @@ export default function UserDashboard() {
           </div>
         )}
 
-        {(warmPredictBusy || trialBusy !== null || exportBusy || notifSaveBusy) && (
+        {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
           <span className="mt-3 inline-flex items-center gap-1 rounded-full border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-signal-petrol">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-petrol motion-reduce:animate-none" />
             Loading
@@ -886,6 +919,77 @@ export default function UserDashboard() {
 
         {status && (
           <div role="status" aria-live="polite" className="mt-2 rounded-xl border border-signal-sage/20 bg-signal-panel/45 px-3 py-2 font-mono text-xs text-signal-petrol/90 shadow-inner">{status}</div>
+        )}
+
+        {navView === "settings" && !tierQuotaExempt && (
+          <section className="mt-4 rounded-2xl border border-signal-sage/25 bg-signal-panel/35 p-4 shadow-inner">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold tracking-wide text-signal-ink">Abonament Stripe</h2>
+                <p className="mt-1 text-[11px] text-signal-inkMuted">
+                  Premium (25 meciuri/zi) sau Ultra (50 meciuri/zi). Plățile actualizează automat tier-ul din profil.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!billingConfigured || billingBusy !== null}
+                  onClick={async () => {
+                    setBillingBusy("premium");
+                    try {
+                      const url = await startCheckout("premium");
+                      window.location.href = url;
+                    } catch (e: unknown) {
+                      setStatus(e instanceof Error ? e.message : "Checkout Premium eșuat.");
+                      setBillingBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 text-[11px] font-semibold text-signal-petrol disabled:opacity-50"
+                >
+                  {billingBusy === "premium" ? "Redirect…" : "Upgrade Premium"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!billingConfigured || billingBusy !== null}
+                  onClick={async () => {
+                    setBillingBusy("ultra");
+                    try {
+                      const url = await startCheckout("ultra");
+                      window.location.href = url;
+                    } catch (e: unknown) {
+                      setStatus(e instanceof Error ? e.message : "Checkout Ultra eșuat.");
+                      setBillingBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-signal-amber/30 bg-signal-amber/10 px-3 py-1.5 text-[11px] font-semibold text-signal-amber disabled:opacity-50"
+                >
+                  {billingBusy === "ultra" ? "Redirect…" : "Upgrade Ultra"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!billingConfigured || billingBusy !== null}
+                  onClick={async () => {
+                    setBillingBusy("portal");
+                    try {
+                      const url = await openBillingPortal();
+                      window.location.href = url;
+                    } catch (e: unknown) {
+                      setStatus(e instanceof Error ? e.message : "Portal billing eșuat.");
+                      setBillingBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-signal-ink disabled:opacity-50"
+                >
+                  {billingBusy === "portal" ? "Redirect…" : "Manage billing"}
+                </button>
+              </div>
+            </div>
+            {!billingConfigured && (
+              <p className="mt-3 text-[11px] text-signal-inkMuted">
+                Stripe nu este configurat pe server (lipsesc cheile / price IDs). Trial-urile 24h rămân disponibile mai jos.
+              </p>
+            )}
+          </section>
         )}
 
         {navView === "settings" && !tierQuotaExempt && (

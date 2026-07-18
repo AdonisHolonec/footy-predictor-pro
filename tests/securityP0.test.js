@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { tierDailyActionLimit, tierDailyLimit, USER_TIERS } from "../server-utils/accessTier.js";
+import { tierFromPriceId } from "../server-utils/stripeBilling.js";
 
 function mockReq({ headers = {}, query = {} } = {}) {
   return { headers, query };
@@ -87,5 +88,22 @@ describe("Security P0 — tier quotas", () => {
     const ultra = tierDailyActionLimit(USER_TIERS.ULTRA);
     assert.ok(premium >= free);
     assert.ok(ultra >= premium);
+  });
+});
+
+describe("Stripe billing helpers", () => {
+  it("maps price IDs to tiers from env", () => {
+    const prevP = process.env.STRIPE_PRICE_PREMIUM;
+    const prevU = process.env.STRIPE_PRICE_ULTRA;
+    process.env.STRIPE_PRICE_PREMIUM = "price_premium_test";
+    process.env.STRIPE_PRICE_ULTRA = "price_ultra_test";
+    try {
+      assert.equal(tierFromPriceId("price_premium_test"), "premium");
+      assert.equal(tierFromPriceId("price_ultra_test"), "ultra");
+      assert.equal(tierFromPriceId("price_other"), null);
+    } finally {
+      process.env.STRIPE_PRICE_PREMIUM = prevP;
+      process.env.STRIPE_PRICE_ULTRA = prevU;
+    }
   });
 });

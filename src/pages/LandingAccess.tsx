@@ -186,7 +186,7 @@ export default function LandingAccess() {
                 {
                   title: "Free Habit Trial",
                   price: "FREE",
-                  metrics: ["05 meciuri / zi", "10 zile active", "1X2 + O/U"],
+                  metrics: ["10 meciuri / zi (istoric)", "10 zile active", "1X2 + O/U"],
                   desc: "Ideal pentru rutină rapidă și validare de semnal.",
                   to: signup,
                   cta: "Pornește Free"
@@ -194,18 +194,18 @@ export default function LandingAccess() {
                 {
                   title: "Tactical Premium",
                   price: "PREMIUM",
-                  metrics: ["10 meciuri / zi", "Corners incluse", "Signal Lens Basic"],
+                  metrics: ["25 meciuri / zi", "Corners incluse", "Signal Lens Basic"],
                   desc: "Pentru workflow constant cu un nivel tactic superior.",
                   to: `${login}?from=pricing&tier=premium`,
-                  cta: "Disponibil curând"
+                  cta: "Abonează-te"
                 },
                 {
                   title: "Intelligence Ultra",
                   price: "ULTRA",
-                  metrics: ["Nelimitat", "Shots + HT Goals", "Edge Compass"],
+                  metrics: ["50 meciuri / zi", "Shots + HT Goals", "Edge Compass"],
                   desc: "Control complet al piețelor avansate și al edge-ului.",
                   to: `${login}?from=pricing&tier=ultra`,
-                  cta: "Disponibil curând"
+                  cta: "Abonează-te"
                 }
               ].map((tier) => (
                 <div
