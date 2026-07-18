@@ -29,6 +29,7 @@ import {
 import { fitIsotonicPav, applyIsotonicMap, applyCalibratedTriple } from "../server-utils/isotonicCalibration.js";
 import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
+import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
 import {
   calculateExpectedValue,
   calculateKellyPct,
@@ -1063,4 +1064,61 @@ test("fetcher buildCacheKey is provider-agnostic and param-order stable", () => 
   assert.ok(a.startsWith("req:v2:/odds?"));
   assert.ok(a.includes("date=2026-07-18"));
   assert.ok(!a.includes("api-sports"));
+});
+
+test("PredictionContributions attributes signed per-module impact toward the pick", () => {
+  const ctx = {
+    pick: "1",
+    confidence: 63,
+    overallConfidence: 85,
+    weights: {
+      attack: 1,
+      defense: 1,
+      form: 1,
+      homeAdvantage: 1,
+      odds: 0.15,
+      injuries: 0.1,
+      weather: 0.05,
+      referee: 0.05,
+      modularBlend: 1
+    },
+    strengthMeta: {
+      leagueAvg: 1.35,
+      atkH: 1.8,
+      atkA: 1.1,
+      defH: 1.0,
+      defA: 1.4,
+      homeAdv: 1.08,
+      awayAdv: 0.95
+    },
+    modularScores: {
+      form: { details: { home: 1.05, away: 0.97, available: true } },
+      odds: { details: { home: 1.06, away: 0.94, available: true } },
+      injuries: { details: { home: 1.0, away: 0.96, available: true } },
+      weather: { details: { home: 0.98, away: 0.98, available: true } }
+    },
+    eloInfo: { eloSpread: 80 },
+    probsRaw: { p1: 58, pX: 25, p2: 17 },
+    probsFinal: { p1: 62, pX: 24, p2: 14 }
+  };
+  const fi = buildPredictionContributions(ctx);
+  assert.equal(fi.outcome, "1");
+  assert.equal(fi.confidence, 85);
+  const keys = fi.items.map((i) => i.key);
+  for (const k of ["poisson", "elo", "form", "homeAdvantage", "odds", "injuries", "calibration"]) {
+    assert.ok(keys.includes(k), `missing ${k}`);
+  }
+  // Home is the stronger side → Poisson should push positively toward pick "1".
+  assert.ok(fi.contributions.poisson > 0);
+  // Calibration raised P(home) from 58 → 62 → +4pp.
+  assert.equal(fi.contributions.calibration, 4);
+  // Every item carries a signed contribution and a normalized share.
+  for (const it of fi.items) {
+    assert.equal(typeof it.contribution, "number");
+    assert.ok(it.share >= 0);
+    assert.ok(["positive", "negative", "neutral"].includes(it.direction));
+  }
+  // Away-oriented pick flips Poisson sign.
+  const away = buildPredictionContributions({ ...ctx, pick: "2", probsFinal: { p1: 62, pX: 24, p2: 14 } });
+  assert.ok(away.contributions.poisson < 0);
 });

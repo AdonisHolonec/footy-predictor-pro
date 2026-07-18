@@ -336,6 +336,33 @@ export type FeatureImportance = {
   method?: string;
 };
 
+export type PredictionContributionItem = {
+  key: string;
+  label: string;
+  /** Signed effect on the pick probability, in percentage points. */
+  contribution: number;
+  direction: "positive" | "negative" | "neutral";
+  /** |contribution| normalized to the largest driver (0–100), for bar width. */
+  share?: number;
+};
+
+/** Prediction Contributions Engine — signed per-module attribution for one pick. */
+export type PredictionContributions = {
+  schemaVersion?: string;
+  method?: string;
+  pick?: string | null;
+  outcome?: "1" | "X" | "2" | string;
+  /** Independent Confidence Engine overall (0–100). */
+  confidence?: number | null;
+  /** Recommended pick probability (0–100). */
+  pickProbability?: number | null;
+  /** Sum of all signed contributions (pp). */
+  net?: number;
+  contributions: Record<string, number>;
+  items: PredictionContributionItem[];
+  topDrivers?: string[];
+};
+
 /** Nivel de încredere semantic pentru o piaţă, folosit în UI pentru culoare/badge. */
 export type MarketTier = "strong" | "lean" | "toss" | "lean_off" | "strong_off";
 
@@ -413,6 +440,8 @@ export type PredictionRow = {
   explanation?: PredictionExplanation;
   /** Per-feature contribution % (sums to 100) — Feature Importance Engine. */
   featureImportance?: FeatureImportance;
+  /** Signed per-module contribution (pp) toward this pick — Prediction Contributions Engine. */
+  predictionContributions?: PredictionContributions;
   /** Configurable league behaviour profile applied to this prediction. */
   leagueProfile?: {
     leagueId: number | null;

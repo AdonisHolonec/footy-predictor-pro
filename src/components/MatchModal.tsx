@@ -4,6 +4,7 @@ import XGPerformanceBar from "./XGPerformanceBar";
 import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
 import ExplanationCard from "./ExplanationCard";
 import FeatureImportanceChart from "./FeatureImportanceChart";
+import PredictionContributionsChart from "./PredictionContributionsChart";
 import ValueCard from "./ValueCard";
 import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import MonteCarloPanel from "./MonteCarloPanel";
@@ -1048,6 +1049,12 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
             <div className="grid grid-cols-1 gap-6">
               <FeatureImportanceChart importance={match.featureImportance} />
+            </div>
+          ) : null}
+
+          {match.predictionContributions?.items?.length ? (
+            <div className="grid grid-cols-1 gap-6">
+              <PredictionContributionsChart data={match.predictionContributions} />
             </div>
           ) : null}
 

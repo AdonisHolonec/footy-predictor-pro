@@ -23,6 +23,7 @@ import {
 } from "../server-utils/confidence/ConfidenceEngine.js";
 import { buildPredictionExplanation } from "../server-utils/explanation/PredictionExplanation.js";
 import { buildFeatureImportance } from "../server-utils/importance/FeatureImportanceEngine.js";
+import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
 import { persistFeatureImportanceRows } from "../server-utils/importance/persistFeatureImportance.js";
 import {
   buildValueEngine,
@@ -1902,6 +1903,20 @@ export default async function handler(req, res) {
           aFormMulti: confidenceCtx?.aFormMulti
         });
 
+        // Signed per-module contribution attribution for this prediction.
+        const predictionContributions = buildPredictionContributions({
+          pick: topPick,
+          confidence: maxConf,
+          overallConfidence: confidenceEngine?.overall ?? maxConf,
+          strengthMeta,
+          modularScores,
+          weights: engineWeights,
+          eloInfo,
+          probsRaw: pRaw,
+          probsFinal: { p1: p1Adj, pX: pXAdj, p2: p2Adj },
+          leagueParams
+        });
+
         topFeatures = [
           ...(featureImportance.topFeatures || []),
           `method:${method}`,
@@ -1946,6 +1961,7 @@ export default async function handler(req, res) {
           confidenceEngine,
           explanation,
           featureImportance,
+          predictionContributions,
           leagueProfile,
           predictions: {
             oneXtwo: finalPick1X2,
