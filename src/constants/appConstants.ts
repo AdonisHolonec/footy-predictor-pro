@@ -1,20 +1,21 @@
 /**
- * Top 10 ligi suportate oficial. Trebuie să rămână sincronizat cu
- * `TOP_LEAGUE_IDS` din `server-utils/modelConstants.js`.
+ * Top leagues supported officially. Keep in sync with
+ * `TOP_LEAGUE_IDS` from leagueProfiles.config.json / modelConstants.js.
  *
- * Ordinea e cea folosită la sortarea implicită în UI (core → UEFA → naţionale).
+ * Order = default UI sort (core → UEFA → other).
  */
 export const ELITE_LEAGUES: number[] = [
-  39,   // Premier League
-  140,  // La Liga
-  135,  // Serie A
-  78,   // Bundesliga
-  61,   // Ligue 1
-  2,    // UEFA Champions League
-  3,    // UEFA Europa League
-  848,  // UEFA Conference League
-  88,   // Eredivisie
-  283   // SuperLiga România
+  39, // Premier League
+  140, // La Liga
+  135, // Serie A
+  78, // Bundesliga
+  61, // Ligue 1
+  2, // UEFA Champions League
+  3, // UEFA Europa League
+  848, // UEFA Conference League
+  88, // Eredivisie
+  283, // SuperLiga România
+  253 // MLS
 ];
 
 export const ELITE_LEAGUE_META: Array<{ id: number; name: string; country: string }> = [
@@ -27,7 +28,8 @@ export const ELITE_LEAGUE_META: Array<{ id: number; name: string; country: strin
   { id: 3, name: "UEFA Europa League", country: "Europe" },
   { id: 848, name: "UEFA Conference League", country: "Europe" },
   { id: 88, name: "Eredivisie", country: "Netherlands" },
-  { id: 283, name: "SuperLiga", country: "Romania" }
+  { id: 283, name: "SuperLiga", country: "Romania" },
+  { id: 253, name: "MLS", country: "USA" }
 ];
 
 export type FilterMode = "ALL" | "VALUE" | "SAFE" | "LOW";

@@ -12,6 +12,8 @@ import { actual1x2FromScore, brier1x2, logLoss1x2 } from "../../server-utils/pro
 import { MODEL_VERSION } from "../../server-utils/modelConstants.js";
 import { invalidateEloCache } from "../../server-utils/teamElo.js";
 import { invalidateTeamMarketRollingCache } from "../../server-utils/teamMarketRolling.js";
+import { runAutoCalibration } from "../../server-utils/calibration/AutoCalibrationEngine.js";
+import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const CALIBRATION_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
@@ -390,8 +392,14 @@ export default async function handler(req, res) {
   try {
     let calibration = null;
     let stacker = null;
+    let autoCalibration = null;
     if (mode === "all" || mode === "calibration") calibration = await runCalibration(supabase, modelVersion);
     if (mode === "all" || mode === "stacker") stacker = await runStacker(supabase, modelVersion);
+    if (mode === "all" || mode === "auto-calibration" || mode === "auto_calibration") {
+      autoCalibration = await runAutoCalibration({ modelVersion, mode: "auto" });
+      clearRuntimeOverlays();
+      await refreshAutoCalibrationOverlays(modelVersion).catch(() => ({}));
+    }
 
     invalidateCalibrationCache();
     invalidateStackerCache();
@@ -415,7 +423,16 @@ export default async function handler(req, res) {
       },
       calibration,
       stacker,
-      cacheInvalidated: ["calibration", "stacker", "elo", "market-rolling"]
+      autoCalibration: autoCalibration
+        ? {
+            ok: autoCalibration.ok,
+            skipped: autoCalibration.skipped || false,
+            reason: autoCalibration.reason || null,
+            summary: autoCalibration.summary || null,
+            report: autoCalibration.report || null
+          }
+        : null,
+      cacheInvalidated: ["calibration", "stacker", "elo", "market-rolling", "auto-calibration"]
     });
   } catch (error) {
     return res.status(500).json({

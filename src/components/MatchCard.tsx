@@ -7,6 +7,8 @@ import {
 } from "./SignalLab";
 import ValueCard from "./ValueCard";
 import ExplanationCard from "./ExplanationCard";
+import FeatureImportanceChart from "./FeatureImportanceChart";
+import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import { MatchScore, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 
@@ -475,8 +477,14 @@ export default function MatchCard({ row, logoColors, onClick, hashColor, animati
         </div>
       ) : null}
 
+      {!row.insufficientData ? <PredictionLaboratoryPanel match={row} compact /> : null}
+
       {row.explanation && (row.explanation.reasons?.length || row.explanation.reasoning?.length) ? (
         <ExplanationCard explanation={row.explanation} compact />
+      ) : null}
+
+      {row.featureImportance?.items?.length || row.featureImportance?.contributions ? (
+        <FeatureImportanceChart importance={row.featureImportance} compact />
       ) : null}
 
       {(isPremiumLike || isFreeLike) && (

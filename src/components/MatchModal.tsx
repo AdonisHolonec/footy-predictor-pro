@@ -3,7 +3,10 @@ import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
 import ExplanationCard from "./ExplanationCard";
+import FeatureImportanceChart from "./FeatureImportanceChart";
 import ValueCard from "./ValueCard";
+import PredictionLaboratoryPanel from "./PredictionLaboratory";
+import MonteCarloPanel from "./MonteCarloPanel";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -969,6 +972,10 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
         </div>
 
         <div className="space-y-8 p-5 sm:p-10">
+          <PredictionLaboratoryPanel match={match} />
+
+          <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} />
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">01 — xG & luck</h3>
@@ -1035,6 +1042,12 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
           {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
             <div className="grid grid-cols-1 gap-6">
               <ExplanationCard explanation={match.explanation} />
+            </div>
+          ) : null}
+
+          {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
+            <div className="grid grid-cols-1 gap-6">
+              <FeatureImportanceChart importance={match.featureImportance} />
             </div>
           ) : null}
 
@@ -1462,27 +1475,58 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
                     </div>
                   )}
 
-                  {/* === League params (DC / home adv / blend) === */}
-                  {match.modelMeta.leagueParams && (
+                  {/* === League profile + derived params === */}
+                  {(match.leagueProfile || match.modelMeta.leagueParams) && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">League parameters</div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
-                        {match.modelMeta.leagueParams.leagueAvg != null && (
-                          <span>λ̄ lig {match.modelMeta.leagueParams.leagueAvg.toFixed(2)}</span>
-                        )}
-                        {match.modelMeta.leagueParams.homeAdv != null && (
-                          <span>home {match.modelMeta.leagueParams.homeAdv.toFixed(2)}×</span>
-                        )}
-                        {match.modelMeta.leagueParams.awayAdv != null && (
-                          <span>away {match.modelMeta.leagueParams.awayAdv.toFixed(2)}×</span>
-                        )}
-                        {match.modelMeta.leagueParams.rho != null && (
-                          <span>DC ρ {match.modelMeta.leagueParams.rho.toFixed(3)}</span>
-                        )}
-                        {match.modelMeta.leagueParams.blendWeight != null && (
-                          <span>blend {Math.round(match.modelMeta.leagueParams.blendWeight * 100)}%</span>
-                        )}
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">
+                        League profile
+                        {match.leagueProfile?.name ? ` · ${match.leagueProfile.name}` : ""}
+                        {match.leagueProfile?.fromCatalog === false ? " · default" : ""}
                       </div>
+                      {match.leagueProfile?.rates && (
+                        <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
+                          {match.leagueProfile.rates.goalFrequency != null && (
+                            <span>goals {match.leagueProfile.rates.goalFrequency.toFixed(2)}</span>
+                          )}
+                          {match.leagueProfile.rates.drawFrequency != null && (
+                            <span>draw {(match.leagueProfile.rates.drawFrequency * 100).toFixed(0)}%</span>
+                          )}
+                          {match.leagueProfile.rates.bttsRate != null && (
+                            <span>BTTS {(match.leagueProfile.rates.bttsRate * 100).toFixed(0)}%</span>
+                          )}
+                          {match.leagueProfile.rates.overFrequency != null && (
+                            <span>O2.5 {(match.leagueProfile.rates.overFrequency * 100).toFixed(0)}%</span>
+                          )}
+                          {match.leagueProfile.rates.homeAdvantage != null && (
+                            <span>home {match.leagueProfile.rates.homeAdvantage.toFixed(2)}×</span>
+                          )}
+                          {match.leagueProfile.rates.corners != null && (
+                            <span>corners {match.leagueProfile.rates.corners.toFixed(1)}</span>
+                          )}
+                          {match.leagueProfile.rates.cards != null && (
+                            <span>cards {match.leagueProfile.rates.cards.toFixed(1)}</span>
+                          )}
+                          {match.leagueProfile.rates.possessionTendency != null && (
+                            <span>poss {(match.leagueProfile.rates.possessionTendency * 100).toFixed(0)}%</span>
+                          )}
+                        </div>
+                      )}
+                      {match.modelMeta.leagueParams && (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums text-signal-inkMuted/80 sm:grid-cols-4">
+                          {match.modelMeta.leagueParams.leagueAvg != null && (
+                            <span>λ̄ {match.modelMeta.leagueParams.leagueAvg.toFixed(2)}</span>
+                          )}
+                          {match.modelMeta.leagueParams.rho != null && (
+                            <span>DC ρ {match.modelMeta.leagueParams.rho.toFixed(3)}</span>
+                          )}
+                          {match.modelMeta.leagueParams.blendWeight != null && (
+                            <span>blend {Math.round(match.modelMeta.leagueParams.blendWeight * 100)}%</span>
+                          )}
+                          {match.modelMeta.leagueParams.profileKey != null && (
+                            <span>key {match.modelMeta.leagueParams.profileKey}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 

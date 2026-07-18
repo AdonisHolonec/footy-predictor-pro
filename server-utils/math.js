@@ -61,7 +61,7 @@ export function poissonOverLine(line, lambda) {
  * Bivariate Poisson (Karlis-Ntzoufras) pentru corelaţia goalurilor prin shared component.
  * Folosit în afara zonei low-score; acolo aplicăm şi corecţia Dixon-Coles τ.
  */
-function bivariatePoissonP(i, j, lambdaHome, lambdaAway, lambdaShared = 0.12) {
+export function bivariatePoissonP(i, j, lambdaHome, lambdaAway, lambdaShared = 0.12) {
   const shared = clamp(lambdaShared, 0, Math.min(lambdaHome, lambdaAway, 1.25));
   const lambda1 = Math.max(0.05, lambdaHome - shared);
   const lambda2 = Math.max(0.05, lambdaAway - shared);
@@ -82,13 +82,88 @@ function bivariatePoissonP(i, j, lambdaHome, lambdaAway, lambdaShared = 0.12) {
  * Empiric, ρ tipic în [-0.20, -0.05]; negativ înseamnă că Poisson pur subestimează egalurile.
  * Valoarea este clampată pentru a garanta τ ≥ 0 chiar şi pentru λ mari.
  */
-function dcTau(i, j, lambdaHome, lambdaAway, rho) {
+export function dcTau(i, j, lambdaHome, lambdaAway, rho) {
   if (!Number.isFinite(rho) || rho === 0) return 1;
   if (i === 0 && j === 0) return Math.max(0, 1 - lambdaHome * lambdaAway * rho);
   if (i === 0 && j === 1) return Math.max(0, 1 + lambdaHome * rho);
   if (i === 1 && j === 0) return Math.max(0, 1 + lambdaAway * rho);
   if (i === 1 && j === 1) return Math.max(0, 1 - rho);
   return 1;
+}
+
+/**
+ * Discrete joint score PMF used by analytic probs + Monte Carlo sampling.
+ * Returns renormalized cells `{ home, away, prob }` sorted for CDF sampling.
+ */
+export function buildMatchScorePmf(lambdaHome, lambdaAway, options = {}) {
+  const correlation = clamp(Number(options?.correlation ?? 0.12), 0, 0.45);
+  const rho = clamp(Number(options?.rho ?? -0.11), -0.25, 0.1);
+  const tailTarget = Math.max(1e-6, Number(options?.tailTarget ?? 1e-4));
+  const lh = clampLambda(Number(lambdaHome) || 1.2);
+  const la = clampLambda(Number(lambdaAway) || 1.1);
+
+  let maxN = Math.min(
+    25,
+    Math.max(7, Math.ceil(Math.max(lh, la, 0.5) + 5 * Math.sqrt(Math.max(lh, la, 0.3))))
+  );
+
+  function build(gridN) {
+    const cells = [];
+    let mass = 0;
+    for (let i = 0; i <= gridN; i++) {
+      for (let j = 0; j <= gridN; j++) {
+        const base = bivariatePoissonP(i, j, lh, la, correlation);
+        const tau = dcTau(i, j, lh, la, rho);
+        const prob = base * tau;
+        if (prob <= 0) continue;
+        cells.push({ home: i, away: j, prob });
+        mass += prob;
+      }
+    }
+    return { cells, mass };
+  }
+
+  let { cells, mass } = build(maxN);
+  let guard = 0;
+  while (mass < 1 - tailTarget && maxN < 25 && guard < 6) {
+    maxN += 2;
+    ({ cells, mass } = build(maxN));
+    guard += 1;
+  }
+
+  if (!(mass > 0)) {
+    return {
+      cells: [{ home: 1, away: 0, prob: 1 }],
+      cdf: [1],
+      gridMax: maxN,
+      mass: 1,
+      correlation,
+      rho,
+      lambdaHome: lh,
+      lambdaAway: la
+    };
+  }
+
+  const inv = 1 / mass;
+  for (const c of cells) c.prob *= inv;
+  const cdf = new Array(cells.length);
+  let run = 0;
+  for (let i = 0; i < cells.length; i++) {
+    run += cells[i].prob;
+    cdf[i] = run;
+  }
+  cdf[cdf.length - 1] = 1;
+
+  return {
+    cells,
+    cdf,
+    gridMax: maxN,
+    mass: 1,
+    correlation,
+    rho,
+    lambdaHome: lh,
+    lambdaAway: la
+  };
 }
 
 /**

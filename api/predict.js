@@ -18,7 +18,13 @@ import {
   attachRecommendationExplanation
 } from "../server-utils/confidence/ConfidenceEngine.js";
 import { buildPredictionExplanation } from "../server-utils/explanation/PredictionExplanation.js";
-import { buildValueEngine, evaluateValue } from "../server-utils/value/ValueEngine.js";
+import { buildFeatureImportance } from "../server-utils/importance/FeatureImportanceEngine.js";
+import { persistFeatureImportanceRows } from "../server-utils/importance/persistFeatureImportance.js";
+import {
+  buildValueEngine,
+  buildProfessionalValueEngine,
+  evaluateValue
+} from "../server-utils/value/ValueEngine.js";
 import {
   calculateEV,
   calculateKellyQuarter as calculateKelly,
@@ -30,16 +36,22 @@ import {
 import {
   consensusMatchWinnerOdds,
   consensusOverUnderOddsAtLine,
-  consensusBttsOdds
+  consensusBttsOdds,
+  consensusDoubleChanceOdds
 } from "../server-utils/marketOdds.js";
 import { getOddsForFixture, prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
 import {
   MODEL_VERSION,
   getModelMarketBlendWeight,
   getLeagueParams,
+  getLeagueProfile,
   getLeagueConfidenceMultiplier,
   getLeagueStakeCap
 } from "../server-utils/modelConstants.js";
+import { applyLeagueMarketPriors } from "../server-utils/leagueProfiles/LeagueProfile.js";
+import { buildPredictionLaboratory } from "../server-utils/predictionLaboratory/PredictionLaboratory.js";
+import { runMonteCarloSimulation } from "../server-utils/monteCarlo/MonteCarloEngine.js";
+import { refreshAutoCalibrationOverlays } from "../server-utils/calibration/overlayRuntime.js";
 import { todayCalendarEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { mapDbRowToHistoryEntry, upsertPredictionsHistory } from "../server-utils/predictionsHistory.js";
@@ -690,10 +702,11 @@ export default async function handler(req, res) {
     const liveRollingCache = new Map();
     const statsBudgetRef = { remaining: LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS };
     const riskContext = await loadRiskContext();
-    // single-flight: încărcăm calibrarea + stacker o singură dată per request
+    // single-flight: încărcăm calibrarea + stacker + auto-calib overlays o singură dată per request
     const [calibrationMaps, stackerWeightsMap] = await Promise.all([
       loadCalibrationMaps(MODEL_VERSION).catch(() => ({})),
-      loadStackerWeights(MODEL_VERSION).catch(() => new Map())
+      loadStackerWeights(MODEL_VERSION).catch(() => new Map()),
+      refreshAutoCalibrationOverlays(MODEL_VERSION).catch(() => ({}))
     ]);
     const dayReq = await getWithCache("/fixtures", { date }, 21600);
     if (!dayReq.ok) {
@@ -721,6 +734,7 @@ export default async function handler(req, res) {
       if (leagueFixtures.length === 0) continue;
 
       const leagueParams = getLeagueParams(lId);
+      const leagueProfile = getLeagueProfile(lId);
       const marketRollingMap = await loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map());
 
       const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
@@ -952,9 +966,24 @@ export default async function handler(req, res) {
           rho: leagueParams.rho
         });
         if (!calc || !calc.probs) continue;
-        const p = calc.probs;
+        // Apply league profile rates (draw / BTTS / over) — config-driven, not hardcoded.
+        const p = applyLeagueMarketPriors(calc.probs, leagueParams);
         // păstrăm probabilităţile raw Poisson (înainte de calibrare / stacker) pentru audit şi fit offline
-        const pRaw = { p1: p.p1, pX: p.pX, p2: p.p2 };
+        const pRaw = { p1: calc.probs.p1, pX: calc.probs.pX, p2: calc.probs.p2 };
+
+        // === MONTE CARLO (10k sims from bivariate Poisson + Dixon–Coles PMF) ===
+        let monteCarlo = null;
+        try {
+          monteCarlo = runMonteCarloSimulation(lambdaHome, lambdaAway, {
+            simulations: 10_000,
+            fixtureId,
+            correlation: 0.12,
+            rho: leagueParams.rho
+          });
+        } catch (mcErr) {
+          console.warn("[monte-carlo]", fixtureId, mcErr?.message || mcErr);
+          monteCarlo = null;
+        }
 
         // === PIEŢE CORNERE + ŞUTURI LA POARTĂ (Poisson din rolling stats) ===
         let cornersBlock = null;
@@ -1036,7 +1065,7 @@ export default async function handler(req, res) {
         const shotsLambdas = deriveMarketLambdas({
           rollingHome,
           rollingAway,
-          baseAvgTotal: (leagueParams.sotAvgTotal || 8.6) * 2.3, // ~23 şuturi/meci în top-5
+          baseAvgTotal: leagueParams.shotsAvgTotal,
           marketKey: "shots_total",
           homeAdv: leagueParams.homeAdv,
           awayAdv: leagueParams.awayAdv
@@ -1300,9 +1329,12 @@ export default async function handler(req, res) {
         let goals25Quote = null;
         let goals35Quote = null;
         let bttsQuote = null;
+        let doubleChanceQuote = null;
+        let cardsQuote = null;
+        let cornersPick = null;
         if (oddsReq.ok && oddsReq.data) {
           try {
-          const cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
+          cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
           const shotsOnTargetPick = shotsOnTargetBlock ? deriveBestOverUnderPick(shotsOnTargetBlock.total) : null;
           const shotsTotalPick = shotsTotalBlock ? deriveBestOverUnderPick(shotsTotalBlock.total) : null;
           const firstHalfPick = firstHalfProbs
@@ -1361,6 +1393,21 @@ export default async function handler(req, res) {
             3.5
           );
           bttsQuote = consensusBttsOdds(oddsReq.data);
+          doubleChanceQuote = consensusDoubleChanceOdds(oddsReq.data);
+          const cardsLine = Number(process.env.VALUE_CARDS_LINE || 3.5);
+          cardsQuote = consensusOverUnderOddsAtLine(
+            oddsReq.data,
+            [
+              "Cards Over/Under",
+              "Total Cards",
+              "Bookings",
+              "Cards",
+              "Yellow Cards Over/Under",
+              "Total Bookings"
+            ],
+            cardsLine
+          );
+          if (cardsQuote) cardsQuote.line = cardsLine;
 
           marketOdds = {
             goals15: goals15Quote
@@ -1432,6 +1479,26 @@ export default async function handler(req, res) {
                   odd: selectOddByPick(firstHalfQuote, firstHalfPick.pick),
                   bookmaker: firstHalfQuote ? `median(${firstHalfQuote.bookmakersUsed})` : null,
                   bookmakersUsed: firstHalfQuote?.bookmakersUsed || 0
+                }
+              : undefined,
+            doubleChance: doubleChanceQuote
+              ? {
+                  homeDraw: doubleChanceQuote.homeDraw,
+                  homeAway: doubleChanceQuote.homeAway,
+                  drawAway: doubleChanceQuote.drawAway,
+                  bookmaker: `median(${doubleChanceQuote.bookmakersUsed})`,
+                  bookmakersUsed: doubleChanceQuote.bookmakersUsed || 0
+                }
+              : undefined,
+            cards: cardsQuote
+              ? {
+                  pick: "Cards Over/Under",
+                  line: cardsQuote.line ?? 3.5,
+                  odd: cardsQuote.over,
+                  over: cardsQuote.over,
+                  under: cardsQuote.under,
+                  bookmaker: `median(${cardsQuote.bookmakersUsed})`,
+                  bookmakersUsed: cardsQuote.bookmakersUsed || 0
                 }
               : undefined
           };
@@ -1610,6 +1677,114 @@ export default async function handler(req, res) {
         if (cornersBlock) pOut.corners = cornersBlock;
         if (shotsOnTargetBlock) pOut.shotsOnTarget = shotsOnTargetBlock;
         if (shotsTotalBlock) pOut.shotsTotal = shotsTotalBlock;
+
+        // === PROFESSIONAL VALUE BETTING ENGINE ===
+        // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards
+        // using final calibrated probs. Never recommend negative EV.
+        try {
+          const cardsLine = Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5);
+          const cardsLambda = Number(leagueParams.cardsAvgTotal ?? leagueParams.cards) || 4.2;
+          const pCardsOver =
+            Number.isFinite(cardsLine) && cardsLambda > 0
+              ? clampPct(poissonOverLine(cardsLine, cardsLambda) * 100)
+              : null;
+          const pCardsUnder = pCardsOver != null ? clampPct(100 - pCardsOver) : null;
+
+          valueEngine = buildProfessionalValueEngine({
+            probs: pOut,
+            matchWinnerOdds: odds
+              ? { home: odds.home, draw: odds.draw, away: odds.away }
+              : null,
+            doubleChanceOdds: doubleChanceQuote,
+            bttsOdds: bttsQuote,
+            goals15Odds: goals15Quote,
+            goals25Odds: goals25Quote,
+            goals35Odds: goals35Quote,
+            cornersQuote: marketOdds?.corners || null,
+            cornersProbPct: cornersPick?.probability ?? null,
+            cardsOdds: cardsQuote
+              ? { over: cardsQuote.over, under: cardsQuote.under, line: cardsLine }
+              : null,
+            cardsOverProbPct: pCardsOver,
+            cardsUnderProbPct: pCardsUnder
+          });
+
+          const bestVe = valueEngine?.bestMarket;
+          if (
+            bestVe &&
+            valueEngine.detected &&
+            bestVe.recommendable !== false &&
+            Number(bestVe.expectedValue) > 0 &&
+            !bestVe.negativeEV &&
+            dataQuality >= 0.55
+          ) {
+            valueDetected = true;
+            valueType = bestVe.type;
+            finalEv = Number(bestVe.expectedValue) || 0;
+            finalKelly = Number(bestVe.kellyPct) || finalKelly;
+            const restaked = applyStakePolicyV2({
+              stakePct: finalKelly,
+              confidencePct: maxConf,
+              dataQuality,
+              leagueStakeCap,
+              cooldownCap: riskContext.cooldownCap
+            });
+            finalKelly = restaked.stakePct;
+            stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
+            reasonCodes = Array.from(
+              new Set([
+                ...reasonCodes,
+                "value_engine_pro",
+                `value_family_${String(bestVe.family || "other")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_")}`,
+                `selected_${String(bestVe.type || "").replace(/\s+/g, "_")}`
+              ])
+            ).slice(0, 10);
+          } else if (valueEngine && (!bestVe || Number(bestVe.expectedValue) <= 0)) {
+            // Absolute safety: never keep a negative/zero EV recommendation.
+            if (!(finalEv > 0)) {
+              valueDetected = false;
+              valueType = "";
+              stakingCompact = "";
+            }
+            valueEngine = {
+              ...valueEngine,
+              detected: false,
+              recommendable: false,
+              highlighted: false
+            };
+          }
+
+          if (valueEngine) {
+            valueEngine = {
+              ...valueEngine,
+              detected: Boolean(valueDetected && finalEv > 0),
+              recommendable: Boolean(valueDetected && finalEv > 0 && !(finalEv <= 0)),
+              ...(valueDetected && valueEngine.bestMarket
+                ? {
+                    type: valueEngine.bestMarket.type,
+                    family: valueEngine.bestMarket.family,
+                    expectedValue: finalEv,
+                    kellyPct: finalKelly,
+                    valueScore: valueEngine.bestMarket.valueScore,
+                    positiveEV: finalEv > 0,
+                    negativeEV: false,
+                    signal: finalEv >= 1.25 ? "positive" : finalEv > 0 ? "neutral" : "negative",
+                    bestMarket: {
+                      ...valueEngine.bestMarket,
+                      kellyPct: finalKelly,
+                      expectedValue: finalEv
+                    }
+                  }
+                : {})
+            };
+          }
+        } catch (veErr) {
+          console.warn("[value-engine]", fixtureId, veErr?.message || veErr);
+          if (!valueEngine) valueEngine = buildValueEngine([]);
+        }
+
         const teamContext = buildTeamContext({
           homeIdStr,
           awayIdStr,
@@ -1618,7 +1793,8 @@ export default async function handler(req, res) {
           formAway: formAwayStr
         });
 
-        const topFeatures = [
+        // Placeholder — replaced after featureImportance is built (see below).
+        let topFeatures = [
           `method:${method}`,
           `dq:${dataQuality.toFixed(2)}`,
           stackerApplied ? "stacker:on" : calibrationApplied ? "cal:on" : `blend:${blendW.toFixed(2)}`,
@@ -1685,7 +1861,29 @@ export default async function handler(req, res) {
           eloSpread: eloInfo?.eloSpread ?? null
         });
 
-        out.push({
+        const featureImportance = buildFeatureImportance({
+          pick: topPick,
+          pickProb: maxConf,
+          confidence: maxConf,
+          strengthMeta,
+          leagueParams,
+          modularScores,
+          confidenceEngine,
+          odds,
+          hasOdds: Boolean(odds),
+          shin: marketProbs || null,
+          marketProbs,
+          hFormMulti: confidenceCtx?.hFormMulti,
+          aFormMulti: confidenceCtx?.aFormMulti
+        });
+
+        topFeatures = [
+          ...(featureImportance.topFeatures || []),
+          `method:${method}`,
+          `dq:${dataQuality.toFixed(2)}`
+        ].slice(0, 10);
+
+        const predictionRow = {
           id: fixtureId,
           leagueId: Number(lId),
           league: fx.league?.name || "Unknown",
@@ -1703,6 +1901,7 @@ export default async function handler(req, res) {
           },
           referee: refereeName || undefined,
           lambdas: { home: roundDisplayRate(lambdaHome), away: roundDisplayRate(lambdaAway) },
+          monteCarlo,
           teamContext,
           leagueStandings,
           probs: pOut,
@@ -1721,6 +1920,8 @@ export default async function handler(req, res) {
           marketOdds,
           confidenceEngine,
           explanation,
+          featureImportance,
+          leagueProfile,
           predictions: {
             oneXtwo: finalPick1X2,
             // prag corect 50 pentru pieţe binare (anterior 55 era greşit:
@@ -1782,7 +1983,15 @@ export default async function handler(req, res) {
               homeAdv: leagueParams.homeAdv,
               awayAdv: leagueParams.awayAdv,
               rho: leagueParams.rho,
-              blendWeight: Number(blendW.toFixed(3))
+              blendWeight: Number(blendW.toFixed(3)),
+              goalFrequency: leagueParams.goalFrequency,
+              drawFrequency: leagueParams.drawFrequency,
+              bttsRate: leagueParams.bttsRate,
+              overFrequency: leagueParams.overFrequency,
+              corners: leagueParams.corners,
+              cards: leagueParams.cards,
+              possessionTendency: leagueParams.possessionTendency,
+              profileKey: leagueParams.profileKey
             },
             strengthMeta: strengthMeta || undefined,
             modularScores: modularScores || undefined,
@@ -1813,7 +2022,9 @@ export default async function handler(req, res) {
           },
           modelVersion: MODEL_VERSION,
           evaluation
-        });
+        };
+        predictionRow.predictionLaboratory = buildPredictionLaboratory(predictionRow);
+        out.push(predictionRow);
         } catch (fixtureError) {
           console.error("[predict fixture]", fixtureId, fixtureError?.message || fixtureError);
           out.push({
@@ -1880,6 +2091,12 @@ export default async function handler(req, res) {
     if (persistable.length > 0) {
       try {
         const persistStats = await upsertPredictionsHistory(persistable);
+        // Store feature importance for ML (non-fatal if table not migrated yet).
+        try {
+          await persistFeatureImportanceRows(persistable);
+        } catch (fiErr) {
+          console.error("[predict featureImportance]", fiErr?.message || fiErr);
+        }
         if (usageCtx.userId) {
           const supabase = getSupabaseAdmin();
           const linkRows = persistable

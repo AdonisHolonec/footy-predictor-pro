@@ -1,7 +1,13 @@
 /**
  * Weights for the independent Confidence Engine only.
  * Never affects λ, Poisson probs, or recommended.confidence.
+ *
+ * Resolution: DEFAULT → env manual → auto-calibration overlay (skips env-locked keys).
  */
+
+import { getConfidenceManualLocks } from "../calibration/manualLocks.js";
+import { getRuntimeOverlay } from "../calibration/overlayRuntime.js";
+import { mergeWithAutoOverlay } from "../calibration/mergeWeights.js";
 
 export const DEFAULT_CONFIDENCE_WEIGHTS = {
   attack: 0.14,
@@ -30,7 +36,7 @@ function envNum(key, fallback) {
 
 export function getConfidenceWeights() {
   const d = DEFAULT_CONFIDENCE_WEIGHTS;
-  return {
+  const manual = {
     attack: envNum("CONFIDENCE_WEIGHT_ATTACK", d.attack),
     defense: envNum("CONFIDENCE_WEIGHT_DEFENSE", d.defense),
     form: envNum("CONFIDENCE_WEIGHT_FORM", d.form),
@@ -44,6 +50,8 @@ export function getConfidenceWeights() {
     oddsConsensus: envNum("CONFIDENCE_WEIGHT_ODDS_CONSENSUS", d.oddsConsensus),
     h2h: envNum("CONFIDENCE_WEIGHT_H2H", d.h2h)
   };
+  // Manual env keys are never overwritten by auto overlays.
+  return mergeWithAutoOverlay(manual, getRuntimeOverlay("confidence"), getConfidenceManualLocks());
 }
 
 export function normalizeConfidenceWeights(weights) {

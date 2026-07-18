@@ -41,7 +41,19 @@ export const AVAILABLE_FEATURES = Object.freeze([
   { name: "kickoff_hour_utc", group: "meta", dtype: "int", source: "kickoff_at" },
   { name: "kickoff_dow", group: "meta", dtype: "int", source: "kickoff_at (0=Sun)" },
   { name: "calibration_applied", group: "pipeline", dtype: "binary", source: "modelMeta.calibrationApplied" },
-  { name: "stacker_applied", group: "pipeline", dtype: "binary", source: "modelMeta.stackerApplied" }
+  { name: "stacker_applied", group: "pipeline", dtype: "binary", source: "modelMeta.stackerApplied" },
+
+  // Feature Importance Engine contributions (fi-v1)
+  { name: "fi_attack", group: "importance", dtype: "float", source: "featureImportance.contributions.attack" },
+  { name: "fi_defense", group: "importance", dtype: "float", source: "featureImportance.contributions.defense" },
+  { name: "fi_form", group: "importance", dtype: "float", source: "featureImportance.contributions.form" },
+  { name: "fi_standings", group: "importance", dtype: "float", source: "featureImportance.contributions.standings" },
+  { name: "fi_h2h", group: "importance", dtype: "float", source: "featureImportance.contributions.h2h" },
+  { name: "fi_referee", group: "importance", dtype: "float", source: "featureImportance.contributions.referee" },
+  { name: "fi_odds", group: "importance", dtype: "float", source: "featureImportance.contributions.odds" },
+  { name: "fi_restDays", group: "importance", dtype: "float", source: "featureImportance.contributions.restDays" },
+  { name: "fi_weather", group: "importance", dtype: "float", source: "featureImportance.contributions.weather" },
+  { name: "fi_injuries", group: "importance", dtype: "float", source: "featureImportance.contributions.injuries" }
 ]);
 
 /** Features we want for stronger models but do not reliably store yet. */

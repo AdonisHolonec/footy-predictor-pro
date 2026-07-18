@@ -48,6 +48,7 @@ export type ValueBet = {
 /** Value Betting Engine payload (predicted probability × bookmaker odds). */
 export type ValueEngine = {
   type?: string;
+  family?: string;
   probability?: number;
   odds?: number;
   expectedValue?: number;
@@ -62,8 +63,25 @@ export type ValueEngine = {
   impliedProb?: number;
   explanation?: string[];
   detected?: boolean;
+  highlighted?: boolean;
+  /** Best recommendable (+EV) market across supported families. */
+  bestMarket?: {
+    type?: string;
+    family?: string;
+    expectedValue?: number;
+    kellyPct?: number;
+    valueScore?: number;
+    odds?: number;
+    probability?: number;
+    signal?: "positive" | "neutral" | "negative";
+    recommendable?: boolean;
+    positiveEV?: boolean;
+    negativeEV?: boolean;
+    line?: number | null;
+  } | null;
   markets?: Array<{
     type?: string;
+    family?: string;
     expectedValue?: number;
     kellyPct?: number;
     valueScore?: number;
@@ -71,9 +89,101 @@ export type ValueEngine = {
     recommendable?: boolean;
     negativeEV?: boolean;
     positiveEV?: boolean;
+    bestMarket?: boolean;
+    odds?: number;
+    probability?: number;
+    line?: number | null;
+  }>;
+  positiveMarkets?: Array<{
+    type?: string;
+    family?: string;
+    expectedValue?: number;
+    kellyPct?: number;
+    valueScore?: number;
+    bestMarket?: boolean;
+  }>;
+  negativeMarkets?: Array<{
+    type?: string;
+    family?: string;
+    expectedValue?: number;
   }>;
   rejectedNegativeCount?: number;
+  positiveEvCount?: number;
+  negativeEvCount?: number;
+  familiesSupported?: string[];
+  familiesPresent?: string[];
   rule?: string;
+};
+
+/** Monte Carlo simulation payload (10k sims by default). */
+export type MonteCarloHistogramBin = {
+  goals?: number;
+  label?: string;
+  count: number;
+  pct: number;
+};
+
+export type MonteCarloGoalSide = {
+  mean: number;
+  median: number;
+  p05: number;
+  p95: number;
+  histogram: MonteCarloHistogramBin[];
+};
+
+export type MonteCarloResult = {
+  version?: string;
+  simulations: number;
+  seed?: number;
+  lambdas?: { home: number; away: number };
+  model?: {
+    method?: string;
+    correlation?: number;
+    rho?: number;
+    gridMax?: number;
+  };
+  probabilityDistribution: {
+    p1: number;
+    pX: number;
+    p2: number;
+    pGG: number;
+    pNGG?: number;
+    pO05?: number;
+    pO15?: number;
+    pO25: number;
+    pU25?: number;
+    pU35?: number;
+  };
+  expectedGoalsDistribution: {
+    home: MonteCarloGoalSide;
+    away: MonteCarloGoalSide;
+    total: MonteCarloGoalSide;
+  };
+  scoreDistribution: Array<{ score: string; count: number; pct: number }>;
+  mostLikelyScores: Array<{ score: string; count: number; pct: number }>;
+  goalDistribution: MonteCarloHistogramBin[];
+  confidenceInterval: {
+    level: number;
+    method?: string;
+    homeGoals: { low: number; high: number };
+    awayGoals: { low: number; high: number };
+    totalGoals: { low: number; high: number };
+    markets?: Record<string, { low: number; high: number }>;
+  };
+  histogram?: {
+    totalGoals: MonteCarloHistogramBin[];
+    homeGoals: MonteCarloHistogramBin[];
+    awayGoals: MonteCarloHistogramBin[];
+    scores: MonteCarloHistogramBin[];
+  };
+  summary?: {
+    mostLikelyScore?: string | null;
+    mostLikelyScorePct?: number;
+    expectedGoalsHome?: number;
+    expectedGoalsAway?: number;
+    expectedGoalsTotal?: number;
+    ci95TotalGoals?: { low: number; high: number };
+  };
 };
 
 /**
@@ -208,6 +318,24 @@ export type PredictionExplanation = {
   reasoning?: string[];
 };
 
+export type FeatureImportanceItem = {
+  key: string;
+  label: string;
+  contribution: number;
+  activation?: number;
+  prior?: number;
+};
+
+/** Feature Importance Engine — contribution chart + ML storage. */
+export type FeatureImportance = {
+  schemaVersion?: string;
+  contributions: Record<string, number>;
+  items: FeatureImportanceItem[];
+  total?: number;
+  topFeatures?: string[];
+  method?: string;
+};
+
 /** Nivel de încredere semantic pentru o piaţă, folosit în UI pentru culoare/badge. */
 export type MarketTier = "strong" | "lean" | "toss" | "lean_off" | "strong_off";
 
@@ -283,6 +411,57 @@ export type PredictionRow = {
   valueEngine?: ValueEngine;
   /** Data-backed pick explanation (attack/defense/xG/form/odds…). */
   explanation?: PredictionExplanation;
+  /** Per-feature contribution % (sums to 100) — Feature Importance Engine. */
+  featureImportance?: FeatureImportance;
+  /** Configurable league behaviour profile applied to this prediction. */
+  leagueProfile?: {
+    leagueId: number | null;
+    key: string;
+    name: string;
+    configVersion?: string;
+    fromCatalog?: boolean;
+    rates: {
+      goalFrequency?: number | null;
+      drawFrequency?: number | null;
+      cards?: number | null;
+      corners?: number | null;
+      homeAdvantage?: number | null;
+      bttsRate?: number | null;
+      overFrequency?: number | null;
+      possessionTendency?: number | null;
+    };
+  };
+  /** Monte Carlo simulation (default 10k) from bivariate Poisson + Dixon–Coles. */
+  monteCarlo?: MonteCarloResult;
+  /** Prediction Laboratory — radar / comparison / evolution diagnostics. */
+  predictionLaboratory?: {
+    version: string;
+    updatedAt: string;
+    available: boolean;
+    scores?: Record<string, number> | null;
+    radar?: Array<{ metric: string; key: string; value: number }>;
+    comparison?: {
+      homeName: string;
+      awayName: string;
+      drawOdd: number | null;
+      rows: Array<{
+        metric: string;
+        home: number | null;
+        away: number | null;
+        homeDisplay: string;
+        awayDisplay: string;
+        edge: number | null;
+      }>;
+    } | null;
+    evolution?: Array<{ stage: string; p1: number; pX: number; p2: number }>;
+    bookmaker?: {
+      modelPct: number | null;
+      impliedPct: number | null;
+      differencePp: number | null;
+      score: number;
+    } | null;
+    metrics?: Array<{ key: string; label: string; value: number | null; display?: string; unit: string }>;
+  };
   marketOdds?: {
     goals15?: MarketOddQuote;
     goals25?: MarketOddQuote;
@@ -292,6 +471,14 @@ export type PredictionRow = {
     shotsOnTarget?: MarketOddQuote;
     shotsTotal?: MarketOddQuote;
     firstHalfGoals?: MarketOddQuote;
+    doubleChance?: {
+      homeDraw?: number | null;
+      homeAway?: number | null;
+      drawAway?: number | null;
+      bookmaker?: string | null;
+      bookmakersUsed?: number;
+    };
+    cards?: MarketOddQuote & { over?: number | null; under?: number | null };
   };
   predictions: {
     oneXtwo: string;
@@ -354,6 +541,14 @@ export type PredictionRow = {
       awayAdv?: number;
       rho?: number;
       blendWeight?: number;
+      goalFrequency?: number;
+      drawFrequency?: number;
+      bttsRate?: number;
+      overFrequency?: number;
+      corners?: number;
+      cards?: number;
+      possessionTendency?: number;
+      profileKey?: string;
     };
     strengthMeta?: {
       atkH?: number;

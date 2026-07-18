@@ -1,7 +1,13 @@
 /**
  * PredictionEngine weights.
  * Optional modules default to modularBlend=0 → numeric parity with strength-ratings.
+ *
+ * Resolution: DEFAULT → env manual → auto-calibration overlay (skips env-locked keys).
  */
+
+import { getPredictionManualLocks } from "../calibration/manualLocks.js";
+import { getRuntimeOverlay } from "../calibration/overlayRuntime.js";
+import { mergeWithAutoOverlay } from "../calibration/mergeWeights.js";
 
 export const DEFAULT_PREDICTION_WEIGHTS = Object.freeze({
   attack: 1.0,
@@ -33,7 +39,7 @@ function envNum(key, fallback) {
 
 export function getPredictionWeights() {
   const d = DEFAULT_PREDICTION_WEIGHTS;
-  return {
+  const manual = {
     attack: envNum("PREDICT_WEIGHT_ATTACK", d.attack),
     defense: envNum("PREDICT_WEIGHT_DEFENSE", d.defense),
     form: envNum("PREDICT_WEIGHT_FORM", d.form),
@@ -53,4 +59,5 @@ export function getPredictionWeights() {
     poissonCorrelation: envNum("PREDICT_WEIGHT_POISSON_CORRELATION", d.poissonCorrelation),
     modularBlend: envNum("PREDICT_WEIGHT_MODULAR_BLEND", d.modularBlend)
   };
+  return mergeWithAutoOverlay(manual, getRuntimeOverlay("prediction"), getPredictionManualLocks());
 }

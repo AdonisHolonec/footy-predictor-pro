@@ -148,6 +148,11 @@ export function extractFeatureMap(row) {
   const { hour, dow } = kickoffParts(c.kickoffAt);
   const value = c.valueBet || {};
   const conf = c.confidenceEngine || {};
+  const fi =
+    c.sourceRow?.featureImportance?.contributions ||
+    c.sourceRow?.raw_payload?.featureImportance?.contributions ||
+    row?.featureImportance?.contributions ||
+    {};
 
   const map = {
     ...stacker,
@@ -170,7 +175,17 @@ export function extractFeatureMap(row) {
     kickoff_hour_utc: hour,
     kickoff_dow: dow,
     calibration_applied: binary(c.modelMeta.calibrationApplied),
-    stacker_applied: binary(c.modelMeta.stackerApplied)
+    stacker_applied: binary(c.modelMeta.stackerApplied),
+    fi_attack: num(fi.attack),
+    fi_defense: num(fi.defense),
+    fi_form: num(fi.form),
+    fi_standings: num(fi.standings),
+    fi_h2h: num(fi.h2h),
+    fi_referee: num(fi.referee),
+    fi_odds: num(fi.odds),
+    fi_restDays: num(fi.restDays),
+    fi_weather: num(fi.weather),
+    fi_injuries: num(fi.injuries)
   };
 
   const names = availableFeatureNames().filter((n) => n in map);

@@ -34,7 +34,9 @@ import {
   calculateKellyPct,
   evaluateValue,
   selectBestValue,
-  buildValueEngine
+  buildValueEngine,
+  buildProfessionalValueEngine,
+  classifyMarketFamily
 } from "../server-utils/value/ValueEngine.js";
 import {
   buildBacktestReport,
@@ -46,6 +48,23 @@ import {
   seasonStartIso
 } from "../server-utils/backtest/BacktestAnalytics.js";
 import { buildCacheKey } from "../server-utils/fetcher.js";
+import { buildPredictionLaboratory } from "../server-utils/predictionLaboratory/PredictionLaboratory.js";
+import { runMonteCarloSimulation, DEFAULT_MONTE_CARLO_SIMS } from "../server-utils/monteCarlo/MonteCarloEngine.js";
+import { buildMatchScorePmf } from "../server-utils/math.js";
+import {
+  extractSamplesFromHistory,
+  computeReliabilityBuckets,
+  computeEce,
+  computeBrier1x2,
+  fitFeatureWeightDeltas,
+  applyWeightDeltas,
+  mergeWithAutoOverlay,
+  fitAutoCalibrationOverlays,
+  buildCalibrationReport,
+  runAutoCalibration
+} from "../server-utils/calibration/AutoCalibrationEngine.js";
+import { setRuntimeOverlays, clearRuntimeOverlays } from "../server-utils/calibration/overlayRuntime.js";
+import { getConfidenceWeights } from "../server-utils/confidence/confidenceWeights.js";
 
 test("computeMatchProbs is deterministic for identical inputs", () => {
   const a = computeMatchProbs(1.8, 1.4, 0, { correlation: 0.12, rho: -0.11 });
@@ -174,9 +193,15 @@ test("getLeagueParams returns calibrated values for top leagues and defaults oth
   const epl = getLeagueParams(39);
   assert.ok(epl.leagueAvg > 0 && epl.homeAdv > 1);
   assert.ok(epl.rho <= 0);
+  assert.ok(epl.goalFrequency > 2 && epl.bttsRate > 0 && epl.overFrequency > 0);
+  assert.ok(epl.corners > 0 && epl.cards > 0);
+  assert.equal(epl.profileKey, "premier_league");
+  const bundes = getLeagueParams(78);
+  assert.ok(bundes.goalFrequency > epl.goalFrequency, "Bundesliga should score more than EPL profile");
   const unknown = getLeagueParams(99999);
   assert.ok(unknown.leagueAvg > 0);
   assert.ok(unknown.blendWeight >= 0.35 && unknown.blendWeight <= 0.9);
+  assert.equal(unknown.profileKey, "default");
 });
 
 test("getModelMarketBlendWeight respects method heuristic", () => {
@@ -185,16 +210,16 @@ test("getModelMarketBlendWeight respects method heuristic", () => {
   assert.ok(getModelMarketBlendWeight("standings", 39) <= baseEpl);
 });
 
-test("TOP_LEAGUE_IDS conţine exact cele 10 ligi canonice, inclusiv UEFA", () => {
-  assert.equal(TOP_LEAGUE_IDS.length, 10);
-  const expected = [39, 140, 135, 78, 61, 2, 3, 848, 88, 283];
+test("TOP_LEAGUE_IDS conţine ligile din League Profiles (inclusiv UEFA + MLS)", () => {
+  assert.ok(TOP_LEAGUE_IDS.length >= 11);
+  const expected = [39, 140, 135, 78, 61, 2, 3, 848, 88, 283, 253];
   for (const id of expected) {
     assert.ok(TOP_LEAGUE_IDS.includes(id), `Lipseşte liga ${id}`);
   }
-  // UEFA comps sunt obligatorii
   assert.ok(TOP_LEAGUE_IDS.includes(2), "UCL lipseşte");
   assert.ok(TOP_LEAGUE_IDS.includes(3), "UEL lipseşte");
   assert.ok(TOP_LEAGUE_IDS.includes(848), "UECL lipseşte");
+  assert.ok(TOP_LEAGUE_IDS.includes(253), "MLS lipseşte");
 });
 
 // =============================================================================
@@ -699,6 +724,63 @@ test("ValueEngine accepts 0-100 probability and picks best positive EV", () => {
   assert.ok(best.expectedValue > 0);
 });
 
+test("Professional Value Engine covers families and highlights best market", () => {
+  assert.equal(classifyMarketFamily("1X"), "Double Chance");
+  assert.equal(classifyMarketFamily("GG"), "BTTS");
+  assert.equal(classifyMarketFamily("Peste 2.5"), "Over/Under");
+  assert.equal(classifyMarketFamily("Cards Over 3.5"), "Cards");
+
+  const engine = buildProfessionalValueEngine({
+    probs: {
+      p1: 48,
+      pX: 26,
+      p2: 26,
+      pDC1X: 74,
+      pDC12: 74,
+      pDCX2: 52,
+      pGG: 55,
+      pNGG: 45,
+      pO25: 58,
+      pU25: 42,
+      pO15: 78,
+      pU15: 22,
+      pU35: 70
+    },
+    matchWinnerOdds: { home: 2.2, draw: 3.4, away: 3.3 },
+    doubleChanceOdds: { homeDraw: 1.35, homeAway: 1.4, drawAway: 1.7 },
+    bttsOdds: { yes: 1.85, no: 1.95 },
+    goals25Odds: { over: 1.9, under: 1.95 },
+    goals15Odds: { over: 1.25, under: 3.8 },
+    cornersQuote: { pick: "Over 9.5 Corners", line: 9.5, odd: 1.95 },
+    cornersProbPct: 56,
+    cardsOdds: { over: 1.9, under: 1.9, line: 3.5 },
+    cardsOverProbPct: 54,
+    cardsUnderProbPct: 46
+  });
+
+  assert.ok(engine.markets.length >= 8);
+  const families = new Set(engine.markets.map((m) => m.family));
+  for (const f of ["1X2", "Double Chance", "BTTS", "Over/Under", "Corners", "Cards"]) {
+    assert.ok(families.has(f), `missing family ${f}`);
+  }
+  assert.ok(Array.isArray(engine.positiveMarkets));
+  assert.ok(Array.isArray(engine.negativeMarkets));
+  if (engine.detected) {
+    assert.ok(engine.bestMarket);
+    assert.equal(engine.bestMarket.negativeEV, false);
+    assert.ok(engine.bestMarket.expectedValue > 0);
+    assert.equal(engine.recommendable, true);
+    assert.ok(engine.markets.some((m) => m.bestMarket));
+  }
+  // Negative EV markets must never be recommendable
+  for (const m of engine.markets) {
+    if (m.negativeEV || m.expectedValue <= 0) {
+      assert.equal(m.recommendable, false);
+    }
+  }
+  assert.equal(engine.rule, "never_recommend_negative_ev");
+});
+
 test("BacktestAnalytics computes ROI Yield Profit Loss streaks and drawdown", () => {
   const rows = [
     {
@@ -787,6 +869,184 @@ test("BacktestAnalytics computes ROI Yield Profit Loss streaks and drawdown", ()
   assert.ok(Array.isArray(dash.worstLeagues));
   const emptyDash = buildDashboardBundle(metrics, []);
   assert.equal(emptyDash.dailyProfit, 0);
+});
+
+test("Auto Calibration compares predicted vs actual and respects manual locks", async () => {
+  clearRuntimeOverlays();
+  const historyRows = [];
+  for (let i = 0; i < 120; i++) {
+    const homeWin = i % 3 !== 0;
+    historyRows.push({
+      league_id: 39,
+      score_home: homeWin ? 2 : 0,
+      score_away: homeWin ? 0 : 1,
+      validation: homeWin ? "win" : "loss",
+      recommended_pick: "1",
+      recommended_confidence: 70,
+      raw_payload: {
+        evaluation: {
+          rawPoissonProbs1x2Pct: { p1: 65, pX: 20, p2: 15 }
+        },
+        featureImportance: {
+          contributions: {
+            attack: 0.3,
+            defense: 0.2,
+            form: 0.15,
+            odds: 0.2,
+            standings: 0.15
+          }
+        }
+      }
+    });
+  }
+
+  const samples = extractSamplesFromHistory(historyRows);
+  assert.equal(samples.length, 120);
+  const buckets = computeReliabilityBuckets(samples);
+  assert.ok(buckets.some((b) => b.n > 0));
+  const ece = computeEce(buckets);
+  assert.ok(ece == null || ece >= 0);
+  assert.ok(computeBrier1x2(samples) > 0);
+
+  const fi = fitFeatureWeightDeltas(samples, ["attack", "defense", "odds"], {
+    lockedKeys: ["odds"],
+    maxDelta: 0.15
+  });
+  assert.equal(fi.deltas.odds, 0, "locked key must stay at zero delta");
+
+  const merged = applyWeightDeltas({ attack: 0.2, odds: 0.1 }, { attack: 0.1, odds: -0.2 }, ["odds"]);
+  assert.equal(merged.odds, 0.1);
+  assert.ok(merged.attack > 0.2);
+
+  const prevAttack = process.env.CONFIDENCE_WEIGHT_ATTACK;
+  process.env.CONFIDENCE_WEIGHT_ATTACK = "0.22";
+  try {
+    setRuntimeOverlays({
+      confidence: { deltas: { attack: -0.5, form: 0.1 }, lockedKeys: ["attack"] }
+    });
+    const w = getConfidenceWeights();
+    assert.equal(w.attack, 0.22, "manual env weight must not be overwritten");
+  } finally {
+    if (prevAttack === undefined) delete process.env.CONFIDENCE_WEIGHT_ATTACK;
+    else process.env.CONFIDENCE_WEIGHT_ATTACK = prevAttack;
+    clearRuntimeOverlays();
+  }
+
+  const fitted = fitAutoCalibrationOverlays(samples, { maxDelta: 0.12, learningRate: 0.4 });
+  assert.ok(fitted.confidence && fitted.feature_importance && fitted.prediction);
+  const report = buildCalibrationReport({
+    samples,
+    buckets,
+    ece,
+    brier: computeBrier1x2(samples),
+    overlays: fitted,
+    modelVersion: "test",
+    windowDays: 90,
+    config: {}
+  });
+  assert.equal(report.rule, "never_overwrite_manual_weights");
+  assert.ok(report.predictedVsActual);
+
+  const run = await runAutoCalibration({
+    rows: historyRows,
+    modelVersion: "test-auto-calib",
+    minSamples: 50,
+    persist: true,
+    mode: "test"
+  });
+  assert.equal(run.ok, true);
+  assert.ok(run.report.nRows >= 50);
+  assert.ok(run.summary.ece != null || run.summary.brier1x2 != null);
+
+  // Overlay merge helper skips when no deltas
+  const base = { a: 1 };
+  assert.deepEqual(mergeWithAutoOverlay(base, null), { a: 1 });
+});
+
+test("Monte Carlo runs 10000 sims and returns distributions + CI", () => {
+  const pmf = buildMatchScorePmf(1.6, 1.1, { correlation: 0.12, rho: -0.11 });
+  assert.ok(pmf.cells.length > 10);
+  assert.ok(Math.abs(pmf.cells.reduce((s, c) => s + c.prob, 0) - 1) < 1e-6);
+
+  const mc = runMonteCarloSimulation(1.6, 1.1, {
+    simulations: DEFAULT_MONTE_CARLO_SIMS,
+    fixtureId: 4242,
+    correlation: 0.12,
+    rho: -0.11
+  });
+  assert.equal(mc.simulations, 10_000);
+  assert.ok(mc.probabilityDistribution.p1 > 0);
+  assert.ok(mc.probabilityDistribution.pX > 0);
+  assert.ok(mc.probabilityDistribution.p2 > 0);
+  const sum1x2 =
+    mc.probabilityDistribution.p1 + mc.probabilityDistribution.pX + mc.probabilityDistribution.p2;
+  assert.ok(Math.abs(sum1x2 - 100) < 0.5);
+  assert.ok(mc.expectedGoalsDistribution.home.mean > 0);
+  assert.ok(mc.expectedGoalsDistribution.away.mean > 0);
+  assert.ok(mc.expectedGoalsDistribution.total.histogram.length >= 1);
+  assert.ok(mc.mostLikelyScores.length >= 5);
+  assert.ok(mc.goalDistribution.length >= 1);
+  assert.ok(mc.confidenceInterval.totalGoals.high >= mc.confidenceInterval.totalGoals.low);
+  assert.equal(mc.confidenceInterval.level, 0.95);
+  assert.ok(mc.histogram.scores.length >= 5);
+  assert.ok(mc.summary.mostLikelyScore);
+
+  const mc2 = runMonteCarloSimulation(1.6, 1.1, {
+    simulations: 10_000,
+    fixtureId: 4242,
+    correlation: 0.12,
+    rho: -0.11
+  });
+  assert.equal(mc.summary.mostLikelyScore, mc2.summary.mostLikelyScore);
+  assert.equal(mc.probabilityDistribution.p1, mc2.probabilityDistribution.p1);
+});
+
+test("Prediction Laboratory builds radar, comparison, and evolution", () => {
+  const lab = buildPredictionLaboratory({
+    id: 101,
+    teams: { home: "Arsenal", away: "Chelsea" },
+    lambdas: { home: 1.55, away: 1.1 },
+    luckStats: { hG: 1.4, hXG: 1.5, aG: 1.0, aXG: 1.05 },
+    probs: { p1: 48, pX: 26, p2: 26, pGG: 54, pO25: 52 },
+    odds: { home: 2.1, draw: 3.4, away: 3.5, bookmakersUsed: 8 },
+    recommended: { pick: "1", confidence: 62, odd: 2.1 },
+    valueEngine: { expectedValue: 8.5, edge: 6.2 },
+    confidenceEngine: {
+      overall: 64,
+      scores: { attack: 70, defense: 58, standings: 66, oddsConsensus: 72 }
+    },
+    teamContext: {
+      home: { rank: 2, points: 40, played: 18 },
+      away: { rank: 8, points: 28, played: 18 }
+    },
+    modelMeta: {
+      massCaptured: 0.92,
+      strengthMeta: { atkH: 1.6, defH: 1.1, atkA: 1.2, defA: 1.3 },
+      leagueParams: { leagueAvg: 1.4 }
+    },
+    evaluation: {
+      rawPoissonProbs1x2Pct: { p1: 46, pX: 27, p2: 27 },
+      calibratedProbs1x2Pct: { p1: 47, pX: 26.5, p2: 26.5 },
+      modelProbs1x2Pct: { p1: 48, pX: 26, p2: 26 }
+    }
+  });
+
+  assert.equal(lab.available, true);
+  assert.equal(lab.radar.length, 10);
+  assert.ok(lab.scores.poisson > 0);
+  assert.ok(lab.scores.expectedGoals > 0);
+  assert.ok(lab.scores.attack > 0);
+  assert.ok(lab.scores.defense > 0);
+  assert.ok(lab.scores.standings > 0);
+  assert.ok(lab.scores.odds > 0);
+  assert.ok(lab.scores.confidence > 0);
+  assert.ok(lab.scores.expectedValue > 0);
+  assert.ok(lab.scores.bookmakerDifference > 0);
+  assert.ok(lab.scores.predictionEvolution > 0);
+  assert.ok(lab.comparison.rows.length >= 5);
+  assert.ok(lab.evolution.length >= 2);
+  assert.ok(lab.bookmaker.differencePp != null);
+  assert.equal(buildPredictionLaboratory({ insufficientData: true }).available, false);
 });
 
 test("fetcher buildCacheKey is provider-agnostic and param-order stable", () => {

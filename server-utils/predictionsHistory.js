@@ -84,7 +84,11 @@ function mapPredictionToDbRow(prediction) {
     value_bet_validation: valueBetValidation,
     model_version: modelVer,
     reason_codes: Array.isArray(prediction?.auditLog?.reasonCodes) ? prediction.auditLog.reasonCodes : null,
-    top_features: Array.isArray(prediction?.auditLog?.topFeatures) ? prediction.auditLog.topFeatures : null,
+    top_features: Array.isArray(prediction?.featureImportance?.topFeatures)
+      ? prediction.featureImportance.topFeatures
+      : Array.isArray(prediction?.auditLog?.topFeatures)
+        ? prediction.auditLog.topFeatures
+        : null,
     saved_at: generatedAt,
     updated_at: generatedAt,
     raw_payload: payloadWithMeta

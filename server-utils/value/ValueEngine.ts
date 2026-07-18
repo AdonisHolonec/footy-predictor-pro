@@ -4,8 +4,19 @@ import { getValueWeights, normalizeScoreWeights, type ValueWeights } from "./val
 
 export type EvSignal = "positive" | "neutral" | "negative";
 
+export type ValueCandidate = {
+  probability: number;
+  odds: number;
+  type?: string;
+  family?: string;
+  line?: number | null;
+  confidencePct?: number;
+};
+
 export type ValueEngineResult = {
   type: string;
+  family?: string;
+  line?: number | null;
   probability: number;
   odds: number;
   expectedValue: number;
@@ -15,23 +26,25 @@ export type ValueEngineResult = {
   negativeEV: boolean;
   signal: EvSignal;
   recommendable: boolean;
+  bestMarket?: boolean;
   edge: number;
   fairOdds: number;
   impliedProb: number;
   explanation: string[];
 };
 
-export type ValueCandidate = {
-  probability: number;
-  odds: number;
-  type?: string;
-  confidencePct?: number;
-};
-
 export type ValueEnginePayload = ValueEngineResult & {
   detected: boolean;
+  highlighted?: boolean;
+  bestMarket?: ValueEngineResult | null;
   markets: ValueEngineResult[];
+  positiveMarkets?: ValueEngineResult[];
+  negativeMarkets?: ValueEngineResult[];
   rejectedNegativeCount: number;
+  positiveEvCount?: number;
+  negativeEvCount?: number;
+  familiesSupported?: string[];
+  familiesPresent?: string[];
   rule: "never_recommend_negative_ev";
 };
 
@@ -256,8 +269,17 @@ export function buildValueEngine(
   return {
     ...display,
     detected: Boolean(best),
+    highlighted: Boolean(best),
+    bestMarket: best,
     markets: evaluated,
     rejectedNegativeCount: rejectedNegative.length,
     rule: "never_recommend_negative_ev"
   };
 }
+
+export {
+  VALUE_MARKET_FAMILIES,
+  classifyMarketFamily,
+  buildValueCandidates,
+  buildProfessionalValueEngine
+} from "./ValueEngine.js";

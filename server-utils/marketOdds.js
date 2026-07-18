@@ -106,6 +106,61 @@ function valueKind(label) {
  * Median odds for Over/Under at a specific line from candidate market names.
  * Returns null when no usable bookmaker quotes exist.
  */
+/**
+ * Median Double Chance odds (Home/Draw, Home/Away, Draw/Away).
+ */
+export function consensusDoubleChanceOdds(oddsApiResponse) {
+  const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+
+  const hd = [];
+  const ha = [];
+  const da = [];
+  const names = [];
+
+  const matchBucket = (label) => {
+    const s = String(label || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (s === "1x" || s.includes("home/draw") || s.includes("home or draw")) return "hd";
+    if (s === "12" || s.includes("home/away") || s.includes("home or away")) return "ha";
+    if (s === "x2" || s.includes("draw/away") || s.includes("draw or away")) return "da";
+    if (s.startsWith("home") && s.includes("draw")) return "hd";
+    if (s.startsWith("home") && s.includes("away")) return "ha";
+    if (s.startsWith("draw") && s.includes("away")) return "da";
+    return null;
+  };
+
+  for (const b of bookmakers) {
+    const market = b.bets?.find((x) => String(x?.name || "").toLowerCase() === "double chance");
+    if (!market?.values || !Array.isArray(market.values)) continue;
+    let got = false;
+    for (const v of market.values) {
+      const bucket = matchBucket(v?.value);
+      const odd = Number.parseFloat(String(v?.odd ?? ""));
+      if (!bucket || !Number.isFinite(odd) || odd <= 1) continue;
+      if (bucket === "hd") hd.push(odd);
+      if (bucket === "ha") ha.push(odd);
+      if (bucket === "da") da.push(odd);
+      got = true;
+    }
+    if (got) names.push(b.name || "?");
+  }
+
+  const medHd = median(hd);
+  const medHa = median(ha);
+  const medDa = median(da);
+  if (medHd == null && medHa == null && medDa == null) return null;
+  return {
+    homeDraw: medHd,
+    homeAway: medHa,
+    drawAway: medDa,
+    bookmakersUsed: Math.max(hd.length, ha.length, da.length),
+    bookmakerNames: names.slice(0, 8)
+  };
+}
+
 export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targetLine) {
   const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
   if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;

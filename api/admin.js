@@ -7,6 +7,13 @@ import { invalidateStackerCache } from "../server-utils/mlStacker.js";
 import { invalidateEloCache } from "../server-utils/teamElo.js";
 import { invalidateTeamMarketRollingCache } from "../server-utils/teamMarketRolling.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
+import {
+  listCalibrationRuns,
+  getLatestCalibrationReport,
+  loadActiveOverlays
+} from "../server-utils/calibration/overlayStore.js";
+import { clearRuntimeOverlays } from "../server-utils/calibration/overlayRuntime.js";
+import { locksForKind } from "../server-utils/calibration/manualLocks.js";
 
 /**
  * Unified admin endpoint (consolidează fostele /api/admin/profiles și /api/admin/ml).
@@ -15,9 +22,11 @@ import { MODEL_VERSION } from "../server-utils/modelConstants.js";
  *   /api/admin?view=profiles         → profiles
  *   /api/admin?view=ml               → ML status (calibration + stacker + elo summary)
  *   /api/admin?view=ml&sub=calibration&leagueId=39   → calibration maps
+ *   /api/admin?view=ml&sub=auto-calibration          → auto-calib report + overlays + run history
  *   /api/admin?view=ml&sub=stacker&leagueId=39       → active stacker weights
  *   /api/admin?view=ml&sub=elo&leagueId=39           → team elo ratings
  *   POST /api/admin?view=ml&action=invalidate-cache  → soft refresh of in-memory caches
+ *   POST /api/admin?view=ml&action=train-now&mode=auto-calibration → run auto calib
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
@@ -294,7 +303,11 @@ async function handleMl(req, res) {
     invalidateStackerCache();
     invalidateEloCache();
     invalidateTeamMarketRollingCache();
-    return res.status(200).json({ ok: true, invalidated: ["calibration", "stacker", "elo", "market-rolling"] });
+    clearRuntimeOverlays();
+    return res.status(200).json({
+      ok: true,
+      invalidated: ["calibration", "stacker", "elo", "market-rolling", "auto-calibration"]
+    });
   }
 
   if (req.method === "POST" && action === "train-now") {
@@ -420,6 +433,29 @@ async function handleMl(req, res) {
       modelVersion,
       count: data?.length || 0,
       byLeague: Array.from(byLeague.values())
+    });
+  }
+
+  if (sub === "auto-calibration" || sub === "auto_calibration") {
+    const [overlays, latest, runs] = await Promise.all([
+      loadActiveOverlays(modelVersion),
+      getLatestCalibrationReport(modelVersion),
+      listCalibrationRuns({ modelVersion, limit: 15 })
+    ]);
+    return res.status(200).json({
+      ok: true,
+      modelVersion,
+      rule: "never_overwrite_manual_weights",
+      manualLocks: {
+        confidence: locksForKind("confidence"),
+        feature_importance: locksForKind("feature_importance"),
+        prediction: locksForKind("prediction")
+      },
+      activeOverlays: overlays,
+      latestReport: latest.report || null,
+      latestRun: latest.run || null,
+      history: runs.runs || [],
+      trainHint: "POST /api/admin?view=ml&action=train-now&mode=auto-calibration"
     });
   }
 
@@ -724,7 +760,8 @@ async function handleMl(req, res) {
     },
     helpers: {
       invalidate: "POST /api/admin?view=ml&action=invalidate-cache",
-      trainNow: "POST /api/admin?view=ml&action=train-now&mode=all|calibration|stacker",
+      trainNow: "POST /api/admin?view=ml&action=train-now&mode=all|calibration|stacker|auto-calibration",
+      autoCalibrationReport: "GET /api/admin?view=ml&sub=auto-calibration",
       historySyncNow: "POST /api/admin?view=ml&action=history-sync-now&days=30",
       scripts: [
         "node --env-file=.env.local scripts/fitCalibration.js",
