@@ -106,22 +106,22 @@ export default function SuccessRateTracker({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-success)]">Wins</p>
-          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">{animatedWins}</p>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-3 sm:px-3">
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">Wins</p>
+          <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedWins}</p>
         </div>
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-danger)]">Losses</p>
-          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">{animatedLosses}</p>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-2 py-3 sm:px-3">
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">Losses</p>
+          <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedLosses}</p>
         </div>
         <div
-          className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-3 py-3 ${
+          className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-2 py-3 sm:px-3 ${
             isWinRatePulsing ? "ring-2 ring-[var(--fp-accent)]/30" : ""
           }`}
         >
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">Hit rate</p>
-          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">Hit rate</p>
+          <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">
             {animatedWinRate.toFixed(1)}%
           </p>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-card)]">

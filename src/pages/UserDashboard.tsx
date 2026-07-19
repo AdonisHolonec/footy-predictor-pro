@@ -946,7 +946,8 @@ export default function UserDashboard() {
                       updateFilters({ matchesFilter: id });
                     }
                   }}
-                  className={`min-h-[var(--fp-touch)] rounded-full border px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                  title={`Filter: ${label}`}
+                  className={`min-h-[var(--fp-touch)] rounded-full border px-3 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:px-4 ${
                     (id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live")
                       ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                       : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
@@ -1211,7 +1212,7 @@ export default function UserDashboard() {
           </header>
 
           {!tierQuotaExempt && (
-            <Card id="upgrade">
+            <Card id="upgrade" className="scroll-mt-28">
               <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Abonament</h2>
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
                 Premium (25/zi) sau Ultra (50/zi). Poți plăti inclusiv în timpul unui trial.
@@ -1480,9 +1481,9 @@ export default function UserDashboard() {
       />
       <Toast message={toast} onDismiss={() => setToast(null)} />
       {isLeaguesOpen && (
-        <div className="fixed inset-0 z-[70] flex justify-end bg-[var(--fp-navy)]/30 backdrop-blur-[1px]" onClick={() => setIsLeaguesOpen(false)}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-end bg-[var(--fp-navy)]/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
           <div
-            className="h-full w-full max-w-md overflow-y-auto border-l border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-lg)]"
+            className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--fp-shadow-lg)] sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal

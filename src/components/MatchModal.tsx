@@ -808,8 +808,8 @@ export default function MatchModal({
     <div
       className={
         isFocus
-          ? "fixed inset-0 z-50 flex items-end justify-end bg-[var(--fp-navy)]/40 backdrop-blur-[2px] sm:items-stretch"
-          : "fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/50 p-2.5 backdrop-blur-sm sm:p-4"
+          ? "fixed inset-0 z-50 flex items-end justify-end bg-[var(--fp-navy)]/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-[2px] sm:items-stretch sm:pb-0"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/50 p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-4"
       }
       onClick={onClose}
     >
@@ -817,8 +817,8 @@ export default function MatchModal({
         ref={modalRef}
         className={
           isFocus
-            ? "fp-readable relative flex h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
-            : "fp-readable relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] lg:max-w-5xl"
+            ? "fp-readable relative flex h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
+            : "fp-readable relative max-h-[min(92dvh,100%)] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] lg:max-w-5xl"
         }
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -896,8 +896,8 @@ export default function MatchModal({
                 </div>
               )}
               {hasLiveScore && (
-                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-red-300 sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
-                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-400 motion-reduce:animate-none" /> Live ·{" "}
+                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" /> Live ·{" "}
                   {match.score?.home}-{match.score?.away}
                 </div>
               )}
@@ -991,7 +991,7 @@ export default function MatchModal({
                       type="button"
                       title={`${label} — upgrade to ${tier}`}
                       onClick={() => onUpgradeRequired?.(label, tier)}
-                      className="inline-flex min-h-9 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                      className="inline-flex min-h-11 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
                     >
                       🔒 {label}
                     </button>
@@ -1453,7 +1453,7 @@ export default function MatchModal({
                     type="button"
                     title={`${label} — upgrade to ${tier}`}
                     onClick={() => onUpgradeRequired?.(label, tier)}
-                    className="inline-flex min-h-9 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
+                    className="inline-flex min-h-11 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
                   >
                     🔒 {label}
                   </button>

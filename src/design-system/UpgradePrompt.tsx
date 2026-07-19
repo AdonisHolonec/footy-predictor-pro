@@ -18,14 +18,14 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-[var(--fp-navy)]/45 px-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[95] flex items-end justify-center bg-[var(--fp-navy)]/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:px-4"
       role="dialog"
       aria-modal
       aria-labelledby="upgrade-prompt-title"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-[var(--fp-shadow-lg)]"
+        className="max-h-[min(90dvh,40rem)] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-[var(--fp-shadow-lg)] sm:rounded-[var(--fp-radius-lg)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Upgrade required</p>
@@ -36,8 +36,9 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
           This feature is available on the <strong className="text-[var(--fp-text)]">{planLabel}</strong> plan (or
           higher). Upgrade to see full confidence, advanced signals, and markets.
         </p>
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap">
           <Button
+            className="w-full sm:w-auto"
             onClick={() => {
               onGoUpgrade();
               onClose();
@@ -45,7 +46,7 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
           >
             Go to upgrade
           </Button>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={onClose}>
             Not now
           </Button>
         </div>

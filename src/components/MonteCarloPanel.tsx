@@ -89,7 +89,7 @@ export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColo
   }));
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-[var(--fp-shadow-sm)] sm:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5 lg:p-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Monte Carlo Simulation</h3>
