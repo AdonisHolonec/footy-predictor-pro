@@ -381,3 +381,49 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-signal-petrol/35;
 }
+
+/**
+ * Legacy signal/lab panels inside consumer Focus Mode — force readable light surfaces.
+ * Avoids mixed "dark film" cards on the bright dashboard.
+ */
+.fp-readable {
+  color: var(--fp-text);
+}
+.fp-readable [class*="text-signal-inkMuted"],
+.fp-readable [class*="text-signal-silver"],
+.fp-readable [class*="text-signal-stone"] {
+  color: var(--fp-text-muted) !important;
+}
+.fp-readable [class*="text-signal-ink"]:not([class*="text-signal-inkMuted"]) {
+  color: var(--fp-text) !important;
+}
+.fp-readable [class*="text-signal-petrol"] {
+  color: var(--fp-accent) !important;
+}
+.fp-readable [class*="text-signal-mint"],
+.fp-readable [class*="text-signal-sage"] {
+  color: #15803d !important;
+}
+.fp-readable [class*="bg-signal-void"],
+.fp-readable [class*="bg-signal-panel"],
+.fp-readable [class*="bg-signal-mist"],
+.fp-readable [class*="bg-signal-fog"] {
+  background-color: var(--fp-bg-muted) !important;
+}
+.fp-readable .lab-card,
+.fp-readable .lab-stat {
+  background-color: var(--fp-bg-card) !important;
+  border-color: var(--fp-border) !important;
+  color: var(--fp-text) !important;
+  box-shadow: var(--fp-shadow-sm);
+}
+.fp-readable [class*="border-white/"] {
+  border-color: var(--fp-border) !important;
+}
+.fp-readable thead {
+  background-color: var(--fp-navy) !important;
+  color: #ffffff !important;
+}
+.fp-readable thead [class*="text-"] {
+  color: #ffffff !important;
+}

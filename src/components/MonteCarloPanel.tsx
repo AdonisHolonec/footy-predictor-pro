@@ -11,11 +11,11 @@ import {
 import type { MonteCarloResult, PredictionRow } from "../types";
 
 const tip = {
-  background: "rgba(10, 16, 24, 0.96)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "#0f172a",
+  border: "1px solid #334155",
   borderRadius: 10,
-  fontSize: 11,
-  color: "#d5dee8"
+  fontSize: 12,
+  color: "#f8fafc"
 };
 
 type Props = {
@@ -27,7 +27,7 @@ type Props = {
 function HistChart({
   data,
   xKey,
-  barColor = "#5ec4b6",
+  barColor = "#2563eb",
   heightClass = "h-44"
 }: {
   data: Array<Record<string, string | number>>;
@@ -40,16 +40,13 @@ function HistChart({
     <div className={`w-full ${heightClass}`}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-          <XAxis dataKey={xKey} tick={{ fill: "#8a9aaa", fontSize: 10 }} interval={0} />
-          <YAxis tick={{ fill: "#7a8a9a", fontSize: 10 }} width={32} unit="%" />
-          <Tooltip
-            contentStyle={tip}
-            formatter={(v: number) => [`${Number(v).toFixed(1)}%`, "Frequency"]}
-          />
-          <Bar dataKey="pct" radius={[3, 3, 0, 0]}>
+          <CartesianGrid stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey={xKey} tick={{ fill: "#475569", fontSize: 11 }} interval={0} />
+          <YAxis tick={{ fill: "#475569", fontSize: 11 }} width={36} unit="%" />
+          <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}%`, "Frequency"]} />
+          <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
             {data.map((_, i) => (
-              <Cell key={i} fill={barColor} fillOpacity={0.75 + (i % 3) * 0.05} />
+              <Cell key={i} fill={barColor} fillOpacity={0.85 + (i % 3) * 0.04} />
             ))}
           </Bar>
         </BarChart>
@@ -60,14 +57,14 @@ function HistChart({
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-signal-mist/25 px-2.5 py-2">
-      <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">{label}</div>
-      <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-signal-ink">{value}</div>
+    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2.5 shadow-[var(--fp-shadow-sm)]">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
+      <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">{value}</p>
     </div>
   );
 }
 
-export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColor = "#e0b46a" }: Props) {
+export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColor = "#f59e0b" }: Props) {
   const mc = match.monteCarlo as MonteCarloResult | undefined;
   if (!mc || !mc.simulations) return null;
 
@@ -92,13 +89,11 @@ export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColo
   }));
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5 sm:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-[var(--fp-shadow-sm)] sm:p-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Monte Carlo Simulation
-          </h3>
-          <p className="mt-1 text-[11px] text-signal-inkMuted">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Monte Carlo Simulation</h3>
+          <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
             {mc.simulations.toLocaleString()} sims
             {mc.adaptive?.enabled && mc.adaptive.score != null
               ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
@@ -106,10 +101,10 @@ export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColo
             · bivariate Poisson + Dixon–Coles
           </p>
         </div>
-        <div className="font-mono text-[9px] tabular-nums text-signal-inkMuted">
+        <p className="text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
           λ {mc.lambdas?.home?.toFixed(2)} / {mc.lambdas?.away?.toFixed(2)}
           {mc.seed != null ? ` · seed ${mc.seed}` : ""}
-        </div>
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
@@ -144,51 +139,40 @@ export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColo
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Goal distribution · total
-          </div>
-          <HistChart data={totalHist} xKey="goals" barColor="#5ec4b6" />
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Goal distribution · total</p>
+          <HistChart data={totalHist} xKey="goals" barColor="#14b8a6" />
         </div>
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Score distribution · top 10
-          </div>
-          <HistChart data={scoreHist} xKey="label" barColor="#6a9bb8" heightClass="h-48" />
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Score distribution · top 10</p>
+          <HistChart data={scoreHist} xKey="label" barColor="#2563eb" heightClass="h-48" />
         </div>
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Expected goals · home
-          </div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Expected goals · home</p>
           <HistChart data={homeHist} xKey="goals" barColor={homeColor} />
         </div>
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Expected goals · away
-          </div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Expected goals · away</p>
           <HistChart data={awayHist} xKey="goals" barColor={awayColor} />
         </div>
       </div>
 
       {mc.mostLikelyScores?.length ? (
-        <div className="mt-5 overflow-x-auto rounded-xl border border-white/5 bg-signal-void/35">
-          <table className="w-full min-w-[360px] border-collapse text-left font-mono text-[11px]">
+        <div className="mt-5 overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]">
+          <table className="w-full min-w-[360px] border-collapse text-left text-sm">
             <thead>
-              <tr className="border-b border-white/8 text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                <th className="px-3 py-2 font-medium">Most likely scores</th>
-                <th className="px-3 py-2 text-right font-medium">Count</th>
-                <th className="px-3 py-2 text-right font-medium">Pct</th>
+              <tr className="border-b border-[var(--fp-border)] text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                <th className="px-3 py-2">Most likely scores</th>
+                <th className="px-3 py-2 text-right">Count</th>
+                <th className="px-3 py-2 text-right">Pct</th>
               </tr>
             </thead>
             <tbody>
               {mc.mostLikelyScores.slice(0, 10).map((s) => (
-                <tr key={s.score} className="border-b border-white/[0.04] last:border-0">
-                  <td className="px-3 py-1.5 text-signal-ink">{s.score}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-signal-silver">{s.count}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-signal-petrol">
+                <tr key={s.score} className="border-b border-[var(--fp-border)] last:border-0">
+                  <td className="px-3 py-1.5 font-semibold text-[var(--fp-text)]">{s.score}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--fp-text-muted)]">{s.count}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[var(--fp-accent)]">
                     {s.pct.toFixed(1)}%
                   </td>
                 </tr>
@@ -196,7 +180,7 @@ export default function MonteCarloPanel({ match, homeColor = "#5ec4b6", awayColo
             </tbody>
           </table>
           {ci.markets && (
-            <div className="border-t border-white/5 px-3 py-2 font-mono text-[9px] text-signal-inkMuted">
+            <div className="border-t border-[var(--fp-border)] px-3 py-2 text-xs text-[var(--fp-text-muted)]">
               {(ci.level * 100).toFixed(0)}% CI markets · 1 {ci.markets.p1?.low}–{ci.markets.p1?.high}% · X{" "}
               {ci.markets.pX?.low}–{ci.markets.pX?.high}% · 2 {ci.markets.p2?.low}–{ci.markets.p2?.high}% · O2.5{" "}
               {ci.markets.pO25?.low}–{ci.markets.pO25?.high}%

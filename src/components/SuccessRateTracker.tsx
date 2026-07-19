@@ -1,11 +1,8 @@
 import { HistoryStats } from "../types";
 
 export type ModelHealthSummary = {
-  /** Brier 1X2 (0..1, lower=better). */
   brier: number | null;
-  /** Log-loss 1X2 (lower=better). */
   logLoss: number | null;
-  /** Expected Calibration Error în puncte procentuale (lower=better). */
   ece: number | null;
 };
 
@@ -26,24 +23,17 @@ type SuccessRateTrackerProps = {
   displayedPredsCount?: number;
   pendingAmongDisplayedPreds?: number;
   onBreakdownClick?: () => void;
-  /** Sănătatea modelului pe ultimele N zile (opţional — apare doar dacă admin/debug). */
   modelHealth?: ModelHealthSummary | null;
   excludedWorstLossDaysCount?: number;
   onExcludedWorstLossDaysCountChange?: (count: number) => void;
   excludedLossDays?: ExcludedLossDay[];
 };
 
-function healthToneClass(value: number | null, good: number, warn: number, higherIsBetter = false) {
-  if (value == null || !Number.isFinite(value)) return "text-signal-inkMuted";
-  const v = value;
-  if (higherIsBetter) {
-    if (v >= good) return "text-signal-sage";
-    if (v >= warn) return "text-signal-amber";
-    return "text-signal-rose";
-  }
-  if (v <= good) return "text-signal-sage";
-  if (v <= warn) return "text-signal-amber";
-  return "text-signal-rose";
+function healthToneClass(value: number | null, good: number, warn: number) {
+  if (value == null || !Number.isFinite(value)) return "text-[var(--fp-text-muted)]";
+  if (value <= good) return "text-[var(--fp-success)]";
+  if (value <= warn) return "text-[var(--fp-warning)]";
+  return "text-[var(--fp-danger)]";
 }
 
 export default function SuccessRateTracker({
@@ -64,43 +54,50 @@ export default function SuccessRateTracker({
 }: SuccessRateTrackerProps) {
   const inner = (
     <>
-      <div className="relative mb-4 flex flex-col gap-1.5 border-b border-white/[0.06] pb-3.5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-4 flex flex-col gap-1 border-b border-[var(--fp-border)] pb-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="lab-section-eyebrow">Performance</div>
-          <div className="font-display text-lg font-semibold tracking-tight text-signal-ink sm:text-xl">Success Rate</div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Performance</p>
+          <h3 className="font-display text-lg font-semibold text-[var(--fp-text)] sm:text-xl">Success Rate</h3>
         </div>
-        <div className="font-sans text-[11px] tabular-nums text-signal-inkMuted">n = {stats.settled} settled</div>
+        <p className="text-sm font-medium tabular-nums text-[var(--fp-text-muted)]">n = {stats.settled} settled</p>
       </div>
+
       {(onExcludedWorstLossDaysCountChange || excludedWorstLossDaysCount > 0) && (
-        <div className="relative mb-4 rounded-xl border border-white/[0.08] bg-signal-void/35 px-3 py-2">
+        <div className="mb-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-signal-inkMuted">Window optimizer</div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Window optimizer</p>
             {onExcludedWorstLossDaysCountChange && (
-              <div className="inline-flex rounded-lg border border-white/[0.1] bg-signal-panel/60 p-0.5">
+              <div className="inline-flex rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
                 {[0, 1, 2, 3].map((n) => (
                   <button
                     key={n}
                     type="button"
+                    title={`Exclude worst ${n} day(s)`}
                     onClick={() => onExcludedWorstLossDaysCountChange(n)}
-                    className={`rounded-md px-2 py-1 font-mono text-[9px] font-semibold transition-colors ${
-                      excludedWorstLossDaysCount === n ? "bg-signal-petrol/30 text-signal-ink" : "text-signal-inkMuted hover:text-signal-ink"
+                    className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
+                      excludedWorstLossDaysCount === n
+                        ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                        : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
                     }`}
                   >
-                    -{n} zi
+                    -{n} day
                   </button>
                 ))}
               </div>
             )}
           </div>
           {excludedWorstLossDaysCount > 0 && (
-            <div className="mt-1.5 text-[10px] text-signal-inkMuted">
-              Excluse din counter: <span className="font-mono text-signal-ink">{excludedWorstLossDaysCount}</span> zile cu cele mai multe pierderi.
-            </div>
+            <p className="mt-1.5 text-xs text-[var(--fp-text-muted)]">
+              Excluded from counter: {excludedWorstLossDaysCount} worst loss day(s).
+            </p>
           )}
           {excludedLossDays.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {excludedLossDays.slice(0, 3).map((d) => (
-                <span key={d.day} className="rounded-full border border-signal-rose/30 bg-signal-rose/10 px-2 py-0.5 font-mono text-[9px] text-signal-rose">
+                <span
+                  key={d.day}
+                  className="rounded-full border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--fp-danger)]"
+                >
                   {d.day} · L{d.losses}/{d.settled}
                 </span>
               ))}
@@ -108,81 +105,89 @@ export default function SuccessRateTracker({
           )}
         </div>
       )}
-      <div className="relative grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="lab-stat min-w-0 border-signal-sage/25 bg-signal-sage/[0.07] px-2 py-2.5 sm:px-3.5 sm:py-3">
-          <div className="lab-stat-label truncate text-signal-sage">Wins</div>
-          <div className="lab-stat-value text-signal-sage">{animatedWins}</div>
+
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-success)]">Wins</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">{animatedWins}</p>
         </div>
-        <div className="lab-stat min-w-0 border-signal-rose/25 bg-signal-rose/[0.07] px-2 py-2.5 sm:px-3.5 sm:py-3">
-          <div className="lab-stat-label truncate text-signal-rose">Losses</div>
-          <div className="lab-stat-value text-signal-rose">{animatedLosses}</div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-danger)]">Losses</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">{animatedLosses}</p>
         </div>
         <div
-          className={`lab-stat min-w-0 border-signal-petrol/30 bg-signal-void/50 px-2 py-2.5 transition-shadow duration-500 sm:px-3.5 sm:py-3 ${
-            isWinRatePulsing ? "shadow-frost ring-1 ring-signal-petrol/20" : ""
+          className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-3 py-3 ${
+            isWinRatePulsing ? "ring-2 ring-[var(--fp-accent)]/30" : ""
           }`}
         >
-          <div className="lab-stat-label truncate text-signal-petrol/90">Hit rate</div>
-          <div className="lab-stat-value text-signal-petrol">{animatedWinRate.toFixed(1)}%</div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-signal-mist/80">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">Hit rate</p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-[var(--fp-text)]">
+            {animatedWinRate.toFixed(1)}%
+          </p>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
             <div
-              className={`h-full rounded-full bg-gradient-to-r from-signal-petrol to-signal-sage transition-all duration-700 motion-reduce:animate-none ${isWinRatePulsing ? "animate-pulse-soft" : ""}`}
+              className="h-full rounded-full bg-[var(--fp-accent)] transition-all duration-700"
               style={{ width: `${Math.max(0, Math.min(100, stats.winRate))}%` }}
             />
           </div>
         </div>
       </div>
+
       {modelHealth && (modelHealth.brier != null || modelHealth.logLoss != null || modelHealth.ece != null) && (
-        <div className="relative mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/[0.06] bg-signal-void/40 px-2 py-2 font-mono text-[9px] text-signal-inkMuted sm:text-[10px]">
+        <div className="mt-4 grid grid-cols-3 gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-2 text-xs">
           <div className="flex flex-col items-center">
-            <span className="text-[8px] uppercase tracking-wider">Brier 1X2</span>
-            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.brier, 0.185, 0.205)}`}>
+            <span className="font-semibold uppercase text-[var(--fp-text-muted)]">Brier</span>
+            <span className={`mt-0.5 font-bold tabular-nums ${healthToneClass(modelHealth.brier, 0.185, 0.205)}`}>
               {modelHealth.brier != null ? modelHealth.brier.toFixed(3) : "—"}
             </span>
           </div>
           <div className="flex flex-col items-center">
-            <span className="text-[8px] uppercase tracking-wider">LogLoss</span>
-            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.logLoss, 0.98, 1.05)}`}>
+            <span className="font-semibold uppercase text-[var(--fp-text-muted)]">LogLoss</span>
+            <span className={`mt-0.5 font-bold tabular-nums ${healthToneClass(modelHealth.logLoss, 0.98, 1.05)}`}>
               {modelHealth.logLoss != null ? modelHealth.logLoss.toFixed(3) : "—"}
             </span>
           </div>
           <div className="flex flex-col items-center">
-            <span className="text-[8px] uppercase tracking-wider">ECE</span>
-            <span className={`mt-0.5 font-semibold tabular-nums ${healthToneClass(modelHealth.ece, 3, 6)}`}>
+            <span className="font-semibold uppercase text-[var(--fp-text-muted)]">ECE</span>
+            <span className={`mt-0.5 font-bold tabular-nums ${healthToneClass(modelHealth.ece, 3, 6)}`}>
               {modelHealth.ece != null ? `${modelHealth.ece.toFixed(1)}%` : "—"}
             </span>
           </div>
         </div>
       )}
+
       {pendingHistoryCount > 0 && (
-        <div className="relative mt-4 rounded-xl border border-signal-amber/22 bg-signal-amber/5 px-3 py-2 text-center text-[9px] font-medium leading-snug text-signal-amber sm:text-[10px]">
-          {pendingHistoryCount} meciuri fără rezultat FT în istoric
+        <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 px-3 py-2 text-center text-xs font-medium text-[var(--fp-text)]">
+          {pendingHistoryCount} matches without FT result
           {displayedPredsCount > 0 && (
-            <span className="block text-signal-inkMuted">
-              În lista curentă: {pendingAmongDisplayedPreds}
-              {pendingHistoryCount > pendingAmongDisplayedPreds ? ` · +${pendingHistoryCount - pendingAmongDisplayedPreds} alte zile` : ""}
+            <span className="mt-0.5 block text-[var(--fp-text-muted)]">
+              In current list: {pendingAmongDisplayedPreds}
+              {pendingHistoryCount > pendingAmongDisplayedPreds
+                ? ` · +${pendingHistoryCount - pendingAmongDisplayedPreds} other days`
+                : ""}
             </span>
           )}
         </div>
       )}
       {isHistorySyncing && (
-        <div className="relative mt-2 text-center font-mono text-[10px] font-semibold uppercase tracking-widest text-signal-petrol">Sync…</div>
+        <p className="mt-2 text-center text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Sync…</p>
       )}
       {onBreakdownClick && (
-        <div className="relative mt-3 text-center font-mono text-[9px] text-signal-inkMuted">Consolă detaliată · click</div>
+        <p className="mt-3 text-center text-xs font-semibold text-[var(--fp-accent)]">Open detailed console · click</p>
       )}
     </>
   );
 
   const shellClass =
-    "lab-card relative mt-2 w-full max-w-[880px] overflow-hidden px-3.5 py-4 sm:px-6 sm:py-5";
+    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-4 shadow-[var(--fp-shadow-sm)] sm:px-6 sm:py-5";
 
   if (onBreakdownClick) {
     return (
       <button
         type="button"
+        title="Open detailed performance console"
         onClick={onBreakdownClick}
-        className={`${shellClass} w-full cursor-pointer touch-manipulation text-left outline-none hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-signal-petrol/40 focus-visible:ring-offset-2 focus-visible:ring-offset-signal-mist`}
+        className={`${shellClass} cursor-pointer text-left transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]`}
       >
         {inner}
       </button>

@@ -6,3 +6,6 @@ export { default as EmptyState } from "./EmptyState";
 export { default as ErrorState } from "./ErrorState";
 export { default as Toast } from "./Toast";
 export { default as CollapsiblePanel } from "./CollapsiblePanel";
+export { default as Tooltip } from "./Tooltip";
+export { default as UpgradePrompt } from "./UpgradePrompt";
+export type { UpgradeTier } from "./UpgradePrompt";

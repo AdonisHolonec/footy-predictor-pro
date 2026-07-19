@@ -87,6 +87,7 @@ export default function PredictionFocusCard({ row, watched, onToggleWatch, onOpe
                   ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
+              title={watched ? "Remove from favorites" : "Add to favorites"}
               aria-label={watched ? "Remove from favorites" : "Add to favorites"}
               aria-pressed={watched}
             >
@@ -96,6 +97,7 @@ export default function PredictionFocusCard({ row, watched, onToggleWatch, onOpe
           <button
             type="button"
             onClick={onOpen}
+            title="Open match analysis"
             className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[var(--fp-text-muted)] transition-colors hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
             aria-label="Expand match details"
           >

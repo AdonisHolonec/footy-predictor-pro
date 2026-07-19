@@ -26,6 +26,8 @@ import Badge from "../design-system/Badge";
 import EmptyState from "../design-system/EmptyState";
 import Toast from "../design-system/Toast";
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
+import Tooltip from "../design-system/Tooltip";
+import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 
 const PredictionLaboratoryPanel = lazy(() => import("../components/PredictionLaboratory"));
 const MonteCarloPanel = lazy(() => import("../components/MonteCarloPanel"));
@@ -187,6 +189,7 @@ export default function UserDashboard() {
   const [billingConfigured, setBillingConfigured] = useState(false);
   const [navView, setNavView] = useState<AppNavView>("home");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; requiredTier: UpgradeTier } | null>(null);
   const {
     prefs,
     cycleTheme,
@@ -847,32 +850,41 @@ export default function UserDashboard() {
       extraDates={
         <>
           {userTier === "premium" && (
-            <button
-              type="button"
-              onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-              className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-accent)]"
-            >
-              +1 day
-            </button>
-          )}
-          {userTier === "ultra" && (
-            <>
+            <Tooltip label="Include tomorrow’s fixtures">
               <button
                 type="button"
+                title="Include tomorrow’s fixtures"
                 onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-warning)]"
+                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
               >
                 +1 day
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
-                }
-                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-warning)]"
-              >
-                +2 days
-              </button>
+            </Tooltip>
+          )}
+          {userTier === "ultra" && (
+            <>
+              <Tooltip label="Include tomorrow’s fixtures">
+                <button
+                  type="button"
+                  title="Include tomorrow’s fixtures"
+                  onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+                  className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
+                >
+                  +1 day
+                </button>
+              </Tooltip>
+              <Tooltip label="Include next 2 days">
+                <button
+                  type="button"
+                  title="Include next 2 days"
+                  onClick={() =>
+                    setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
+                  }
+                  className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
+                >
+                  +2 days
+                </button>
+              </Tooltip>
             </>
           )}
         </>
@@ -893,7 +905,7 @@ export default function UserDashboard() {
         <div
           role="status"
           aria-live="polite"
-          className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-sm text-[var(--fp-text)]"
+          className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] px-3 py-2.5 text-sm font-semibold text-[var(--fp-text)]"
         >
           {status}
         </div>
@@ -1199,7 +1211,7 @@ export default function UserDashboard() {
           </header>
 
           {!tierQuotaExempt && (
-            <Card>
+            <Card id="upgrade">
               <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Abonament</h2>
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
                 Premium (25/zi) sau Ultra (50/zi). Poți plăti inclusiv în timpul unui trial.
@@ -1440,8 +1452,22 @@ export default function UserDashboard() {
           canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
           presentation="focus"
           onClose={() => setSelectedMatch(null)}
+          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
         />
       )}
+      <UpgradePrompt
+        open={Boolean(upgradePrompt)}
+        feature={upgradePrompt?.feature ?? ""}
+        requiredTier={upgradePrompt?.requiredTier ?? "premium"}
+        onClose={() => setUpgradePrompt(null)}
+        onGoUpgrade={() => {
+          setSelectedMatch(null);
+          setNavView("profile");
+          window.setTimeout(() => {
+            document.getElementById("upgrade")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }}
+      />
       <CommandPalette
         open={commandOpen}
         onClose={() => setCommandOpen(false)}

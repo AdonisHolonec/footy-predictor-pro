@@ -19,10 +19,10 @@
   --fp-accent-muted: rgba(37, 99, 235, 0.1);
   --fp-purple: #7c3aed;
 
-  /* Text */
+  /* Text — strong contrast on light surfaces (WCAG AA+) */
   --fp-text: #0f172a;
-  --fp-text-muted: #64748b;
-  --fp-text-faint: #94a3b8;
+  --fp-text-muted: #334155;
+  --fp-text-faint: #475569;
 
   /* Semantic */
   --fp-success: #22c55e;

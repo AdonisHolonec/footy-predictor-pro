@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Button from "../../design-system/Button";
 import Badge from "../../design-system/Badge";
+import Tooltip from "../../design-system/Tooltip";
 
 type Props = {
   date: string;
@@ -24,7 +25,7 @@ type Props = {
 
 /**
  * Enterprise UI V2 consumer chrome.
- * Header only: Date · League · Search · Refresh · Favorites · Notifications · Profile · Settings.
+ * Header: Date · League · Search · Refresh · Favorites · Notifications · Profile · Settings.
  */
 export default function ConsumerShell({
   date,
@@ -46,7 +47,7 @@ export default function ConsumerShell({
   children
 }: Props) {
   const iconBtn =
-    "flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-sm font-semibold text-[var(--fp-text-muted)] transition-colors hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]";
+    "flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-base font-semibold text-[var(--fp-text)] transition-colors hover:border-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]";
 
   return (
     <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
@@ -55,8 +56,9 @@ export default function ConsumerShell({
           <button
             type="button"
             onClick={onOpenProfile}
+            title="Open profile"
             className="mr-1 font-display text-base font-bold tracking-tight text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:text-lg"
-            aria-label="Footy Predictor home"
+            aria-label="Footy Predictor — profile"
           >
             Footy<span className="text-[var(--fp-accent)]">Predictor</span>
           </button>
@@ -67,15 +69,18 @@ export default function ConsumerShell({
           <input
             id="consumer-date"
             type="date"
+            title="Select date"
             value={date}
             onChange={(e) => onDateChange(e.target.value)}
-            className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 text-sm text-[var(--fp-text)]"
+            className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 text-sm font-medium text-[var(--fp-text)]"
           />
           {extraDates}
 
-          <button type="button" onClick={onOpenLeagues} className={iconBtn} aria-label="League filter">
-            Leagues
-          </button>
+          <Tooltip label="Filter leagues">
+            <button type="button" onClick={onOpenLeagues} className={iconBtn} aria-label="Filter leagues">
+              Leagues
+            </button>
+          </Tooltip>
 
           <label className="sr-only" htmlFor="consumer-search">
             Search
@@ -83,38 +88,53 @@ export default function ConsumerShell({
           <input
             id="consumer-search"
             type="search"
+            title="Search teams"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             onFocus={() => onOpenSearch?.()}
             placeholder="Search teams…"
-            className="min-h-11 min-w-[8rem] flex-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 text-sm text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-xs"
+            className="min-h-11 min-w-[8rem] flex-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-xs"
           />
 
-          <Button size="sm" loading={refreshBusy} onClick={onRefresh} aria-label="Refresh predictions" aria-busy={refreshBusy}>
-            Refresh
-          </Button>
+          <Tooltip label="Refresh predictions">
+            <span>
+              <Button size="sm" loading={refreshBusy} onClick={onRefresh} aria-label="Refresh predictions" aria-busy={refreshBusy}>
+                Refresh
+              </Button>
+            </span>
+          </Tooltip>
 
-          <button
-            type="button"
-            onClick={onToggleFavorites}
-            className={`${iconBtn} ${favoritesActive ? "border-[var(--fp-warning)] text-[var(--fp-warning)]" : ""}`}
-            aria-label="Favorites filter"
-            aria-pressed={favoritesActive}
-          >
-            ★
-          </button>
-          <button type="button" onClick={onOpenNotifications} className={iconBtn} aria-label="Notifications">
-            🔔
-          </button>
-          <button type="button" onClick={onOpenProfile} className={iconBtn} aria-label="Profile">
-            👤
-          </button>
-          <button type="button" onClick={onOpenSettings} className={iconBtn} aria-label="Settings">
-            ⚙
-          </button>
+          <Tooltip label={favoritesActive ? "Show all matches" : "Show favorites only"}>
+            <button
+              type="button"
+              onClick={onToggleFavorites}
+              className={`${iconBtn} ${favoritesActive ? "border-[var(--fp-warning)] bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]" : ""}`}
+              aria-label={favoritesActive ? "Show all matches" : "Show favorites only"}
+              aria-pressed={favoritesActive}
+            >
+              ★
+            </button>
+          </Tooltip>
+          <Tooltip label="Notifications">
+            <button type="button" onClick={onOpenNotifications} className={iconBtn} aria-label="Notifications">
+              🔔
+            </button>
+          </Tooltip>
+          <Tooltip label="Profile & upgrade">
+            <button type="button" onClick={onOpenProfile} className={iconBtn} aria-label="Profile and upgrade">
+              👤
+            </button>
+          </Tooltip>
+          <Tooltip label="Settings">
+            <button type="button" onClick={onOpenSettings} className={iconBtn} aria-label="Settings">
+              ⚙
+            </button>
+          </Tooltip>
 
           <div className="ml-auto hidden items-center gap-2 sm:flex">
-            <span className="max-w-[10rem] truncate font-mono text-[10px] text-[var(--fp-text-faint)]">{email}</span>
+            <span className="max-w-[12rem] truncate text-xs font-medium text-[var(--fp-text-muted)]" title={email || undefined}>
+              {email}
+            </span>
             <Badge tone="accent">{tier}</Badge>
           </div>
         </div>

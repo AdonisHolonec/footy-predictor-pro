@@ -71,32 +71,33 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
   const s = data?.summary;
 
   return (
-    <section id="track-record" className="scroll-mt-28 border-t border-white/[0.06] py-16">
+    <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol">Verified Track Record</p>
-          <h2 className="font-display mt-2 text-2xl font-semibold text-signal-ink sm:text-3xl">
-            Performanță settled · ultimele {days} zile
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">Verified Track Record</p>
+          <h2 className="font-display mt-2 text-2xl font-semibold text-[var(--fp-text)] sm:text-3xl">
+            Settled performance · last {days} days
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-signal-inkMuted">
-            Metrici calculate pe predicții deja validate (win/loss), nu pe claim-uri de marketing.
+          <p className="mt-2 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">
+            Metrics from validated predictions (win/loss), not marketing claims.
           </p>
         </div>
         {showLinkToFull && (
           <Link
             to="/track-record"
-            className="font-mono text-[11px] uppercase tracking-wider text-signal-petrol hover:underline"
+            title="Open full track record page"
+            className="text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent)] hover:underline"
           >
-            Vezi pagina dedicată →
+            Open dedicated page →
           </Link>
         )}
       </div>
 
       {loading && (
-        <p className="mt-8 font-mono text-xs text-signal-inkMuted">Se încarcă track record-ul…</p>
+        <p className="mt-8 text-sm font-medium text-[var(--fp-text-muted)]">Loading track record…</p>
       )}
       {error && !loading && (
-        <p className="mt-8 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <p className="mt-8 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]">
           {error}
         </p>
       )}
@@ -105,61 +106,61 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
         <>
           <div className={`mt-8 grid gap-3 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
             {[
-              { label: "Settled", value: String(s.settled), tone: "text-signal-ink" },
-              { label: "Hit rate", value: fmtPct(s.hitRate), tone: "text-signal-mint" },
+              { label: "Settled", value: String(s.settled), tone: "text-[var(--fp-text)]" },
+              { label: "Hit rate", value: fmtPct(s.hitRate), tone: "text-[var(--fp-success)]" },
               {
                 label: "ROI",
                 value: fmtPct(s.roi),
-                tone: s.roi >= 0 ? "text-emerald-300" : "text-rose-300"
+                tone: s.roi >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"
               },
               {
                 label: "PnL",
                 value: fmtUnits(s.pnlUnits),
-                tone: s.pnlUnits >= 0 ? "text-emerald-300" : "text-rose-300"
+                tone: s.pnlUnits >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"
               },
-              { label: "Max DD", value: fmtUnits(s.drawdown), tone: "text-signal-amberSoft" },
+              { label: "Max DD", value: fmtUnits(s.drawdown), tone: "text-[var(--fp-warning)]" },
               {
                 label: "CLV",
                 value: s.clvAvailable ? fmtPct(s.clv) : "—",
                 tone:
                   s.clvAvailable && s.clv != null
                     ? s.clv >= 0
-                      ? "text-emerald-300"
-                      : "text-rose-300"
-                    : "text-signal-inkMuted"
+                      ? "text-[var(--fp-success)]"
+                      : "text-[var(--fp-danger)]"
+                    : "text-[var(--fp-text-muted)]"
               }
             ]
               .slice(0, compact ? 4 : 6)
               .map((tile) => (
                 <div
                   key={tile.label}
-                  className="rounded-2xl border border-white/[0.12] bg-signal-panel/65 p-4 shadow-[0_0_22px_rgba(56,189,248,0.12)] backdrop-blur-md"
+                  className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]"
                 >
-                  <p className="font-mono text-[10px] uppercase tracking-wider text-signal-inkMuted">{tile.label}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{tile.label}</p>
                   <p className={`mt-2 font-display text-2xl font-bold ${tile.tone}`}>{tile.value}</p>
                 </div>
               ))}
           </div>
 
           {(data?.trend?.length || 0) > 1 && (
-            <div className="mt-6 flex flex-wrap items-center gap-6 rounded-2xl border border-white/[0.08] bg-signal-void/40 px-4 py-3">
+            <div className="mt-6 flex flex-wrap items-center gap-6 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-3 shadow-[var(--fp-shadow-sm)]">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-signal-inkMuted">Equity spark</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Equity spark</p>
                 <EquitySpark points={data!.trend} />
               </div>
-              <div className="font-mono text-[11px] text-signal-inkMuted">
+              <div className="text-xs font-medium text-[var(--fp-text-muted)]">
                 <p>
-                  As of <span className="text-signal-ink">{data?.asOf}</span>
+                  As of <span className="font-semibold text-[var(--fp-text)]">{data?.asOf}</span>
                 </p>
                 <p>
-                  Source: <span className="text-signal-petrol">{data?.source}</span>
+                  Source: <span className="font-semibold text-[var(--fp-accent)]">{data?.source}</span>
                 </p>
                 <p>
                   W/L: {s.wins}/{s.losses}
                 </p>
                 {s.clvAvailable ? (
                   <p>
-                    CLV sample: <span className="text-signal-ink">{s.clvCount ?? 0}</span>
+                    CLV sample: <span className="font-semibold text-[var(--fp-text)]">{s.clvCount ?? 0}</span>
                     {s.clvBeatRate != null ? ` · beat close ${fmtPct(s.clvBeatRate)}` : ""}
                   </p>
                 ) : (
@@ -172,7 +173,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
           {!compact && data?.byMarket && data.byMarket.length > 0 && (
             <div className="mt-6 overflow-x-auto">
               <table className="min-w-[420px] w-full text-left text-xs">
-                <thead className="font-mono uppercase tracking-wider text-signal-inkMuted">
+                <thead className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
                   <tr>
                     <th className="py-2 pr-4">Market</th>
                     <th className="py-2 pr-4">Settled</th>
@@ -180,13 +181,13 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
                     <th className="py-2">ROI</th>
                   </tr>
                 </thead>
-                <tbody className="text-signal-ink">
+                <tbody className="font-medium text-[var(--fp-text)]">
                   {data.byMarket.map((row) => (
-                    <tr key={row.key} className="border-t border-white/[0.06]">
+                    <tr key={row.key} className="border-t border-[var(--fp-border)]">
                       <td className="py-2 pr-4 font-mono">{row.key}</td>
                       <td className="py-2 pr-4">{row.settled}</td>
                       <td className="py-2 pr-4">{fmtPct(row.hitRate)}</td>
-                      <td className={`py-2 ${row.roi >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      <td className={`py-2 ${row.roi >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}`}>
                         {fmtPct(row.roi)}
                       </td>
                     </tr>
