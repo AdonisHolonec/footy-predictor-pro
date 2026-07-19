@@ -240,8 +240,11 @@ export default function LandingAccess() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
-                  {tier.planKey ? <PlanCampaignPrice tier={tier.planKey} /> : null}
+                  {tier.planKey && PRICING_CAMPAIGN.active ? (
+                    <PlanCampaignPrice tier={tier.planKey} />
+                  ) : (
+                    <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
+                  )}
                   <p className="mt-2 text-sm text-signal-inkMuted">{tier.desc}</p>
                   <div className="mt-3 space-y-1 font-mono text-[10px] uppercase tracking-wider text-signal-silver">
                     {tier.metrics.map((metric) => (

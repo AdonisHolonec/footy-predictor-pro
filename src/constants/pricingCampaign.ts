@@ -10,14 +10,14 @@ export const PRICING_CAMPAIGN = {
   endsAt: null as string | null,
   plans: {
     premium: {
-      /** What users pay now (EUR / month). null = hide amounts, show % only. */
-      campaignEur: null as number | null,
+      /** What users pay now (EUR / month). */
+      campaignEur: 9.99,
       /** Full / standard price before discount. */
-      listEur: null as number | null
+      listEur: 19.99
     },
     ultra: {
-      campaignEur: null as number | null,
-      listEur: null as number | null
+      campaignEur: 19.99,
+      listEur: 39.99
     }
   }
 } as const;

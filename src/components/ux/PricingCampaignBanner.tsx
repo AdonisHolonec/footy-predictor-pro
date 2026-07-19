@@ -77,8 +77,11 @@ export function PlanCampaignPrice({ tier, className = "" }: PlanPriceProps) {
 
   return (
     <div className={`mt-2 ${className}`}>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="text-sm font-medium text-[var(--fp-text-muted)] line-through decoration-[var(--fp-danger)]/70">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span
+          className="text-base font-semibold text-[var(--fp-text-muted)] line-through decoration-2 decoration-[var(--fp-danger)]/80"
+          title={t("pricing.vsStandard")}
+        >
           {formatLocalEur(list)}
         </span>
         <span className="font-display text-3xl font-bold tabular-nums text-[var(--fp-text)]">{formatLocalEur(campaign)}</span>
