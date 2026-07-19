@@ -3,8 +3,12 @@ import Button from "../../design-system/Button";
 import Badge from "../../design-system/Badge";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
+import { MOBILE_TAB_ITEMS, type AppNavView } from "./appNav";
+import { NavIcon } from "./navIcons";
 
 type Props = {
+  activeNav: AppNavView;
+  onNavigate: (view: AppNavView) => void;
   date: string;
   onDateChange: (date: string) => void;
   search: string;
@@ -25,10 +29,12 @@ type Props = {
 };
 
 /**
- * Consumer chrome — compact toolbar + RO/EN switch.
- * Mobile: 2 rows; sm+: single wrapping row.
+ * Consumer chrome — compact toolbar + RO/EN switch + mobile bottom tabs.
+ * Mobile: 2 toolbar rows + fixed bottom nav (Home included).
  */
 export default function ConsumerShell({
+  activeNav,
+  onNavigate,
   date,
   onDateChange,
   search,
@@ -121,8 +127,8 @@ export default function ConsumerShell({
           <div className="flex items-center gap-1.5 sm:contents">
             <button
               type="button"
-              onClick={onOpenProfile}
-              title={t("shell.openProfile")}
+              onClick={() => onNavigate("home")}
+              title={t("nav.home")}
               className="mr-auto min-w-0 truncate font-display text-base font-bold tracking-tight text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:mr-1 sm:text-lg"
               aria-label={t("shell.brandAria")}
             >
@@ -195,7 +201,32 @@ export default function ConsumerShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1280px] px-3 py-4 sm:px-6 sm:py-5 lg:px-8">{children}</main>
+      <main className="mx-auto max-w-[1280px] px-3 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8 lg:pb-5">
+        {children}
+      </main>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        aria-label={t("nav.home")}
+      >
+        {MOBILE_TAB_ITEMS.map((item) => {
+          const isActive = activeNav === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.id)}
+              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                isActive ? "text-[var(--fp-accent)]" : "text-[var(--fp-text-muted)]"
+              }`}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <NavIcon id={item.id} />
+              {t(item.shortKey)}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }

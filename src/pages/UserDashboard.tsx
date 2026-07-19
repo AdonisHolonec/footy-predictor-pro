@@ -872,6 +872,8 @@ export default function UserDashboard() {
 
   return (
     <ConsumerShell
+      activeNav={navView}
+      onNavigate={handleNav}
       date={date}
       onDateChange={(next) => {
         setDate(next);
@@ -1242,14 +1244,19 @@ export default function UserDashboard() {
 
       {navView === "profile" && (
         <section className="space-y-6">
-          <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              Profil
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Profile</h1>
-            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
-              {user?.email} <Badge tone="accent">{userTier}</Badge>
-            </p>
+          <header className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+                {t("nav.profile")}
+              </p>
+              <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
+              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
+                {user?.email} <Badge tone="accent">{userTier}</Badge>
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" className="lg:hidden" onClick={() => handleNav("home")}>
+              {t("nav.home")}
+            </Button>
           </header>
 
           {!tierQuotaExempt && (
