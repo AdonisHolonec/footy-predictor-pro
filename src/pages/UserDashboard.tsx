@@ -8,6 +8,7 @@ import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
 import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
+import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
@@ -1257,6 +1258,17 @@ export default function UserDashboard() {
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
                 Premium (25/zi) sau Ultra (50/zi). Poți plăti inclusiv în timpul unui trial.
               </p>
+              <PricingCampaignBanner className="mt-3" />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Premium</p>
+                  <PlanCampaignPrice tier="premium" />
+                </div>
+                <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Ultra</p>
+                  <PlanCampaignPrice tier="ultra" />
+                </div>
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   disabled={!billingConfigured || billingBusy !== null}
@@ -1271,7 +1283,7 @@ export default function UserDashboard() {
                     }
                   }}
                 >
-                  Subscribe Premium
+                  {t("pricing.subscribePremium")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -1287,7 +1299,7 @@ export default function UserDashboard() {
                     }
                   }}
                 >
-                  Subscribe Ultra
+                  {t("pricing.subscribeUltra")}
                 </Button>
                 <Button
                   variant="ghost"

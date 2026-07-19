@@ -1,5 +1,7 @@
-import Button from "./Button";
+import PricingCampaignBanner from "../components/ux/PricingCampaignBanner";
+import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
 import { useLocale } from "../context/LocaleContext";
+import Button from "./Button";
 
 export type UpgradeTier = "premium" | "ultra";
 
@@ -35,6 +37,7 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
           {t("upgrade.unlock", { feature })}
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{t("upgrade.body", { plan: planLabel })}</p>
+        {PRICING_CAMPAIGN.active ? <PricingCampaignBanner compact className="mt-3" /> : null}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap">
           <Button
             className="w-full sm:w-auto"

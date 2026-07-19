@@ -170,6 +170,20 @@ export const ro: Dict = {
     go: "Mergi la upgrade",
     notNow: "Nu acum"
   },
+  pricing: {
+    badge: "−{pct}% acum",
+    limited: "Campanie · durată limitată",
+    headline: "Prețurile actuale includ deja {pct}% reducere",
+    body: "Față de prețul standard, plătești jumătate în perioada campaniei. Oferta este temporară — după încheiere se aplică prețul real.",
+    compact: "Campanie limitată: prețul actual include {pct}% reducere față de prețul standard.",
+    promoLabel: "Preț promoțional",
+    vsStandard: "față de prețul standard",
+    perMonth: "/ lună",
+    includesDiscount: "Include {pct}% discount față de prețul real · ofertă limitată",
+    sectionHint: "Premium și Ultra sunt acum la jumătate de preț — campanie pe durată limitată.",
+    subscribePremium: "Abonează-te Premium · −50%",
+    subscribeUltra: "Abonează-te Ultra · −50%"
+  },
   stats: {
     eyebrow: "Statistici",
     title: "Statistici",

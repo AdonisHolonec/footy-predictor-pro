@@ -2,10 +2,14 @@ import { useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ModelPulseWave } from "../components/SignalLab";
 import TrackRecordSection from "../components/TrackRecordSection";
+import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import { BRAND_IMAGES } from "../constants/brandAssets";
+import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
+import { useLocale } from "../context/LocaleContext";
 import { useAuth } from "../hooks/useAuth";
 
 export default function LandingAccess() {
+  const { t } = useLocale();
   const { user, loading } = useAuth();
   const previewRef = useRef<HTMLDivElement | null>(null);
   const scrollPreview = useCallback(() => {
@@ -184,11 +188,18 @@ export default function LandingAccess() {
             <p className="mt-2 max-w-2xl text-sm text-signal-inkMuted">
               Trei niveluri gândite pentru ritmuri diferite: explorare, execuție tactical și intelligence complet.
             </p>
+            {PRICING_CAMPAIGN.active ? (
+              <div className="mt-5 max-w-2xl">
+                <PricingCampaignBanner />
+                <p className="mt-2 text-xs font-medium text-signal-amberSoft">{t("pricing.sectionHint")}</p>
+              </div>
+            ) : null}
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
               {[
                 {
                   title: "Free Habit Trial",
                   price: "FREE",
+                  planKey: null as "premium" | "ultra" | null,
                   metrics: ["10 meciuri / zi (istoric)", "10 zile active", "1X2 + O/U"],
                   desc: "Ideal pentru rutină rapidă și validare de semnal.",
                   to: signup,
@@ -197,26 +208,40 @@ export default function LandingAccess() {
                 {
                   title: "Tactical Premium",
                   price: "PREMIUM",
+                  planKey: "premium" as const,
                   metrics: ["25 meciuri / zi", "Corners incluse", "Signal Lens Basic"],
                   desc: "Pentru workflow constant cu un nivel tactic superior.",
                   to: `${login}?from=pricing&tier=premium`,
-                  cta: "Abonează-te"
+                  cta: PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : "Abonează-te"
                 },
                 {
                   title: "Intelligence Ultra",
                   price: "ULTRA",
+                  planKey: "ultra" as const,
                   metrics: ["50 meciuri / zi", "Shots + HT Goals", "Edge Compass"],
                   desc: "Control complet al piețelor avansate și al edge-ului.",
                   to: `${login}?from=pricing&tier=ultra`,
-                  cta: "Abonează-te"
+                  cta: PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : "Abonează-te"
                 }
               ].map((tier) => (
                 <div
                   key={tier.title}
-                  className="rounded-2xl border border-white/[0.12] bg-signal-panel/65 p-5 shadow-[0_0_22px_rgba(56,189,248,0.14)] backdrop-blur-md"
+                  className={`rounded-2xl border bg-signal-panel/65 p-5 shadow-[0_0_22px_rgba(56,189,248,0.14)] backdrop-blur-md ${
+                    tier.planKey && PRICING_CAMPAIGN.active
+                      ? "border-signal-amber/45 ring-1 ring-signal-amber/25"
+                      : "border-white/[0.12]"
+                  }`}
                 >
-                  <p className="font-mono text-[10px] uppercase tracking-wider text-signal-petrol">{tier.title}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-signal-petrol">{tier.title}</p>
+                    {tier.planKey && PRICING_CAMPAIGN.active ? (
+                      <span className="rounded-md bg-signal-amber px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-signal-void">
+                        −{PRICING_CAMPAIGN.discountPercent}%
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
+                  {tier.planKey ? <PlanCampaignPrice tier={tier.planKey} /> : null}
                   <p className="mt-2 text-sm text-signal-inkMuted">{tier.desc}</p>
                   <div className="mt-3 space-y-1 font-mono text-[10px] uppercase tracking-wider text-signal-silver">
                     {tier.metrics.map((metric) => (
@@ -225,7 +250,7 @@ export default function LandingAccess() {
                   </div>
                   <Link
                     to={tier.to}
-                  className="mt-4 inline-block rounded-lg border border-signal-petrol/45 bg-signal-petrol/18 px-4 py-2 text-xs font-semibold text-signal-petrol transition hover:-translate-y-0.5 hover:bg-signal-petrol/28"
+                    className="mt-4 inline-block rounded-lg border border-signal-petrol/45 bg-signal-petrol/18 px-4 py-2 text-xs font-semibold text-signal-petrol transition hover:-translate-y-0.5 hover:bg-signal-petrol/28"
                   >
                     {tier.cta}
                   </Link>

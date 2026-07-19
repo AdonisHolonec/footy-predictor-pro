@@ -170,6 +170,20 @@ export const en: Dict = {
     go: "Go to upgrade",
     notNow: "Not now"
   },
+  pricing: {
+    badge: "−{pct}% now",
+    limited: "Campaign · limited time",
+    headline: "Current prices already include {pct}% off",
+    body: "Versus the standard price, you pay half during the campaign. This offer is temporary — after it ends, the full price applies.",
+    compact: "Limited campaign: the current price includes {pct}% off the standard price.",
+    promoLabel: "Promo price",
+    vsStandard: "vs standard price",
+    perMonth: "/ month",
+    includesDiscount: "Includes {pct}% off the real price · limited offer",
+    sectionHint: "Premium and Ultra are half price right now — limited-time campaign.",
+    subscribePremium: "Subscribe Premium · −50%",
+    subscribeUltra: "Subscribe Ultra · −50%"
+  },
   stats: {
     eyebrow: "Statistics",
     title: "Statistics",
