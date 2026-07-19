@@ -231,6 +231,7 @@ export async function run(context) {
         away: typeof fx.goals?.away === "number" ? fx.goals.away : null
       },
       referee: refereeName || undefined,
+      venue: f.venue || undefined,
       insufficientData: true,
       insufficientReason: "no_team_or_standings_data",
       teamContext: teamContextEarly,

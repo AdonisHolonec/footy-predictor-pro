@@ -52,15 +52,9 @@ import {
   useLocalStorageState
 } from "../utils/appUtils";
 import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
+import { historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historyStats";
 import { loadBillingConfig, openBillingPortal, startCheckout } from "../services/billingService";
 
-function historyStatsFromRows(rows: HistoryEntry[]): HistoryStats {
-  const wins = rows.filter((r) => r.validation === "win").length;
-  const losses = rows.filter((r) => r.validation === "loss").length;
-  const settled = wins + losses;
-  const winRate = settled ? (wins / settled) * 100 : 0;
-  return { wins, losses, settled, winRate };
-}
 
 function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
   return rows.some((row) => {
@@ -299,9 +293,10 @@ export default function UserDashboard() {
       const name = h.league || String(lid);
       if (!map.has(lid)) map.set(lid, { leagueId: lid, leagueName: name, wins: 0, losses: 0, pending: 0 });
       const o = map.get(lid)!;
-      if (h.validation === "win") o.wins += 1;
-      else if (h.validation === "loss") o.losses += 1;
-      else if (h.validation === "pending") o.pending += 1;
+      const t = tallyEntryCardMarkets(h);
+      o.wins += t.wins;
+      o.losses += t.losses;
+      o.pending += t.pending;
     }
     return Array.from(map.values())
       .map((o) => {
@@ -1041,6 +1036,7 @@ export default function UserDashboard() {
                   watched={isWatched(Number(row.id))}
                   onToggleWatch={() => toggleWatchlist(Number(row.id))}
                   onOpen={() => openMatch(row)}
+                  onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
                 />
               ))}
             </div>

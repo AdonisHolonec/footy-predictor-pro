@@ -267,6 +267,7 @@ export async function run(context) {
         away: typeof fx.goals?.away === "number" ? fx.goals.away : null
       },
       referee: refereeName || undefined,
+      venue: f.venue || undefined,
       lambdas: { home: roundDisplayRate(lambdaHome), away: roundDisplayRate(lambdaAway) },
       monteCarlo,
       teamContext,

@@ -393,6 +393,14 @@ export type MarketTierInfo = {
   tier: MarketTier;
 };
 
+/** Stadium / kickoff location — used for weather lookup (Open-Meteo). */
+export type MatchVenue = {
+  name?: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
+};
+
 export type PredictionRow = {
   id: number;
   leagueId: number;
@@ -405,6 +413,8 @@ export type PredictionRow = {
   status: string;
   score?: MatchScore;
   referee?: string;
+  /** Venue from API-Football fixture (coords/city for weather). */
+  venue?: MatchVenue;
   lambdas?: { home: number; away: number };
   luckStats?: { hG: number; hXG: number; aG: number; aXG: number; intensityNote?: string };
   /** Clasament + formă din API (nu afectează λ dacă lipsește). */
@@ -633,9 +643,18 @@ export type PredictionRow = {
   };
 };
 
+export type CardMarketValidations = {
+  recommended?: "pending" | "win" | "loss" | null;
+  goals?: "pending" | "win" | "loss" | null;
+  corners?: "pending" | "win" | "loss" | null;
+  shots?: "pending" | "win" | "loss" | null;
+};
+
 export type HistoryEntry = PredictionRow & {
   savedAt: string;
   validation: "pending" | "win" | "loss";
+  /** Settled outcomes for FocusCard markets (recommended / goals / corners / shots). */
+  cardMarketValidations?: CardMarketValidations | null;
 };
 
 export type HistoryStats = {

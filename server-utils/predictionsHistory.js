@@ -1,5 +1,10 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { MODEL_VERSION } from "./modelConstants.js";
+import {
+  aggregateCardMarketStats,
+  attachCardMarketsToPayload,
+  resolveCardMarketValidations
+} from "./cardMarketSettlement.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
@@ -72,13 +77,16 @@ function mapPredictionToDbRow(prediction) {
       : "pending"
     : null;
 
-  const payloadWithMeta = {
-    ...prediction,
-    historyMeta: { generatedAt, source: "api/predict", schemaVersion: 2 },
-    modelVersion: modelVer,
-    value_bet_validation: valueBetValidation,
-    evaluation: prediction.evaluation || null
-  };
+  const payloadWithMeta = attachCardMarketsToPayload(
+    {
+      ...prediction,
+      historyMeta: { generatedAt, source: "api/predict", schemaVersion: 2 },
+      modelVersion: modelVer,
+      value_bet_validation: valueBetValidation,
+      evaluation: prediction.evaluation || null
+    },
+    { status, score }
+  );
 
   return {
     fixture_id: prediction.id,
@@ -237,6 +245,7 @@ export async function upsertPredictionsHistory(predictions) {
 
 export function mapDbRowToHistoryEntry(row) {
   const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+  const cardMarketValidations = resolveCardMarketValidations(row);
   return {
     ...payload,
     id: row.fixture_id,
@@ -249,6 +258,8 @@ export function mapDbRowToHistoryEntry(row) {
     recommended: payload.recommended || { pick: row.recommended_pick || "", confidence: row.recommended_confidence || 0 },
     savedAt: row.saved_at,
     validation: row.validation,
+    cardMarkets: payload.cardMarkets || null,
+    cardMarketValidations,
     modelVersion: row.model_version ?? payload.modelVersion
   };
 }
@@ -263,15 +274,12 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
   if (error) throw error;
   const rows = data || [];
   const items = rows.map(mapDbRowToHistoryEntry);
-  const wins = rows.filter((r) => r.validation === "win").length;
-  const losses = rows.filter((r) => r.validation === "loss").length;
-  const settled = wins + losses;
-  const winRate = settled ? (wins / settled) * 100 : 0;
-  return { items, stats: { wins, losses, settled, winRate } };
+  return { items, stats: aggregateCardMarketStats(rows) };
 }
 
 /**
- * Win/loss aggregates for marketing / login stats without exposing predictions (only `validation` column).
+ * Win/loss aggregates for marketing / login stats.
+ * Uses raw_payload card markets when present so goals/corners/shots count too.
  */
 export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500) {
   const supabase = getSupabaseAdmin();
@@ -281,17 +289,13 @@ export async function readPredictionsHistoryAggregateStats(days = 30, limit = 50
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
-    .select("validation")
+    .select("validation, match_status, score_home, score_away, recommended_pick, raw_payload")
     .gte("kickoff_at", cutoff)
     .order("kickoff_at", { ascending: false })
     .limit(safeLimit);
   if (error) throw error;
   const rows = data || [];
-  const wins = rows.filter((r) => r.validation === "win").length;
-  const losses = rows.filter((r) => r.validation === "loss").length;
-  const settled = wins + losses;
-  const winRate = settled ? (wins / settled) * 100 : 0;
-  return { stats: { wins, losses, settled, winRate } };
+  return { stats: aggregateCardMarketStats(rows) };
 }
 
 /** Rows from predictions_history joined via user_prediction_fixtures (service role RPC). */
@@ -308,9 +312,5 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
   if (error) throw error;
   const rows = data || [];
   const items = rows.map(mapDbRowToHistoryEntry);
-  const wins = rows.filter((r) => r.validation === "win").length;
-  const losses = rows.filter((r) => r.validation === "loss").length;
-  const settled = wins + losses;
-  const winRate = settled ? (wins / settled) * 100 : 0;
-  return { items, stats: { wins, losses, settled, winRate } };
+  return { items, stats: aggregateCardMarketStats(rows) };
 }

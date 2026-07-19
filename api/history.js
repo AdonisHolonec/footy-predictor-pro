@@ -6,12 +6,54 @@ import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
+  attachCardMarketsToPayload,
+  deriveCardMarketPicks,
+  needsMarketTotalsForSettlement
+} from "../server-utils/cardMarketSettlement.js";
+import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
   readPredictionsHistoryForUser,
   resolveValueBetPick,
   validationFromMatch
 } from "../server-utils/predictionsHistory.js";
+
+function parseNumericStat(statistics, candidates) {
+  if (!Array.isArray(statistics)) return null;
+  for (const cand of candidates) {
+    const row = statistics.find((s) => String(s?.type || "").toLowerCase() === cand.toLowerCase());
+    if (!row) continue;
+    const raw = row.value;
+    if (raw == null) return null;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string") {
+      const parsed = Number(raw.replace(/[^\d.-]/g, ""));
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
+async function fetchFixtureMarketTotals(fixtureId) {
+  const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
+  if (!statsReq.ok || !statsReq.data?.response || statsReq.data.response.length < 2) {
+    return { cornersTotal: null, shotsOnTargetTotal: null, ok: false };
+  }
+  const homeStats = statsReq.data.response[0].statistics;
+  const awayStats = statsReq.data.response[1].statistics;
+  const cornersHome = parseNumericStat(homeStats, ["Corner Kicks"]);
+  const cornersAway = parseNumericStat(awayStats, ["Corner Kicks"]);
+  const shotsOnTargetHome = parseNumericStat(homeStats, ["Shots on Goal", "Shots on Target"]);
+  const shotsOnTargetAway = parseNumericStat(awayStats, ["Shots on Goal", "Shots on Target"]);
+  return {
+    ok: true,
+    cornersTotal: cornersHome != null && cornersAway != null ? cornersHome + cornersAway : null,
+    shotsOnTargetTotal:
+      shotsOnTargetHome != null && shotsOnTargetAway != null
+        ? shotsOnTargetHome + shotsOnTargetAway
+        : null
+  };
+}
 
 const HISTORY_TABLE = "predictions_history";
 
@@ -388,19 +430,33 @@ async function handleHistorySync(req, res) {
       const matchStatus = fx?.fixture?.status?.short || row.match_status || "";
       const scoreHome = typeof fx?.goals?.home === "number" ? fx.goals.home : null;
       const scoreAway = typeof fx?.goals?.away === "number" ? fx.goals.away : null;
-      const validation = validationFromMatch(matchStatus, row.recommended_pick, { home: scoreHome, away: scoreAway });
+      const score = { home: scoreHome, away: scoreAway };
+      const validation = validationFromMatch(matchStatus, row.recommended_pick, score);
       const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
       const vbPick = resolveValueBetPick(raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type);
       const valueBetValidation = vbPick
-        ? validationFromMatch(matchStatus, vbPick, { home: scoreHome, away: scoreAway })
+        ? validationFromMatch(matchStatus, vbPick, score)
         : row.value_bet_validation ?? null;
+
+      const enrichedPayload = attachCardMarketsToPayload(
+        {
+          ...raw,
+          recommended: raw.recommended || { pick: row.recommended_pick || "" },
+          status: matchStatus,
+          score
+        },
+        { status: matchStatus, score }
+      );
+      const cardChanged =
+        JSON.stringify(raw.cardMarketValidations || null) !==
+        JSON.stringify(enrichedPayload.cardMarketValidations || null);
 
       const statusChanged = String(matchStatus || "") !== String(row.match_status || "");
       const scoreChanged = scoreHome !== row.score_home || scoreAway !== row.score_away;
       const validationChanged = String(validation) !== String(row.validation || "");
       const vbValChanged = String(valueBetValidation ?? "") !== String(row.value_bet_validation ?? "");
 
-      if (!statusChanged && !scoreChanged && !validationChanged && !vbValChanged) continue;
+      if (!statusChanged && !scoreChanged && !validationChanged && !vbValChanged && !cardChanged) continue;
       updates.push({
         fixture_id: fixtureId,
         match_status: matchStatus,
@@ -408,6 +464,7 @@ async function handleHistorySync(req, res) {
         score_away: scoreAway,
         validation,
         value_bet_validation: valueBetValidation,
+        raw_payload: enrichedPayload,
         updated_at: new Date().toISOString()
       });
     }
@@ -470,7 +527,128 @@ async function handleHistorySync(req, res) {
       resettled = resettleUpdates.length;
     }
 
-    const updatedTotal = updates.length + resettled;
+    // Resettle card markets (goals / corners / shots) on finished rows.
+    // Corners & shots need /fixtures/statistics — capped per sync.
+    const statsFetchCap = Math.max(
+      0,
+      Math.min(Number(process.env.HISTORY_SYNC_CARD_STATS_MAX || 40), 120)
+    );
+    let cardResettled = 0;
+    let statsFetchCalls = 0;
+    const cardUpdates = [];
+    for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+      const { data: page, error: cardErr } = await supabase
+        .from(HISTORY_TABLE)
+        .select(
+          "fixture_id, recommended_pick, match_status, score_home, score_away, validation, raw_payload"
+        )
+        .gte("kickoff_at", cutoff)
+        .in("match_status", ["FT", "AET", "PEN"])
+        .order("kickoff_at", { ascending: false })
+        .order("fixture_id", { ascending: false })
+        .range(offset, offset + scanChunkSize - 1);
+      if (cardErr) throw cardErr;
+      if (!page?.length) break;
+
+      for (const row of page) {
+        const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+        const score = { home: row.score_home, away: row.score_away };
+        if (score.home == null || score.away == null) continue;
+
+        const picks =
+          raw.cardMarkets && typeof raw.cardMarkets === "object"
+            ? raw.cardMarkets
+            : deriveCardMarketPicks({
+                ...raw,
+                recommended: raw.recommended || { pick: row.recommended_pick || "" }
+              });
+
+        const storedVals = raw.cardMarketValidations;
+        const hasAnyPick = Boolean(picks.recommended || picks.goals || picks.corners || picks.shots);
+        if (!hasAnyPick) continue;
+
+        const allSettled =
+          storedVals &&
+          typeof storedVals === "object" &&
+          ["recommended", "goals", "corners", "shots"].every((key) => {
+            if (!picks[key]) return true;
+            return storedVals[key] === "win" || storedVals[key] === "loss";
+          });
+        if (allSettled) continue;
+
+        let marketTotals = {
+          cornersTotal: raw.marketResults?.cornersTotal ?? null,
+          shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null
+        };
+
+        const provisional = attachCardMarketsToPayload(
+          {
+            ...raw,
+            recommended: raw.recommended || { pick: row.recommended_pick || "" },
+            cardMarkets: picks,
+            status: row.match_status,
+            score
+          },
+          { status: row.match_status, score, marketTotals }
+        );
+
+        if (
+          needsMarketTotalsForSettlement(provisional.cardMarketValidations, picks) &&
+          statsFetchCalls < statsFetchCap
+        ) {
+          const totals = await fetchFixtureMarketTotals(Number(row.fixture_id));
+          statsFetchCalls += 1;
+          if (totals.ok) {
+            marketTotals = {
+              cornersTotal: totals.cornersTotal,
+              shotsOnTargetTotal: totals.shotsOnTargetTotal
+            };
+          }
+        }
+
+        const enriched = attachCardMarketsToPayload(
+          {
+            ...raw,
+            recommended: raw.recommended || { pick: row.recommended_pick || "" },
+            cardMarkets: picks,
+            status: row.match_status,
+            score
+          },
+          { status: row.match_status, score, marketTotals }
+        );
+
+        const validation =
+          row.validation === "win" || row.validation === "loss"
+            ? row.validation
+            : validationFromMatch(row.match_status, row.recommended_pick, score);
+
+        const cardChanged =
+          JSON.stringify(raw.cardMarketValidations || null) !==
+            JSON.stringify(enriched.cardMarketValidations || null) ||
+          JSON.stringify(raw.cardMarkets || null) !== JSON.stringify(enriched.cardMarkets || null) ||
+          JSON.stringify(raw.marketResults || null) !== JSON.stringify(enriched.marketResults || null);
+        const validationChanged = String(validation) !== String(row.validation || "");
+        if (!cardChanged && !validationChanged) continue;
+
+        cardUpdates.push({
+          fixture_id: Number(row.fixture_id),
+          validation,
+          raw_payload: enriched,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (page.length < scanChunkSize) break;
+    }
+    if (cardUpdates.length > 0) {
+      const { error: cardWriteErr } = await supabase
+        .from(HISTORY_TABLE)
+        .upsert(cardUpdates, { onConflict: "fixture_id" });
+      if (cardWriteErr) throw cardWriteErr;
+      cardResettled = cardUpdates.length;
+    }
+
+    const updatedTotal = updates.length + resettled + cardResettled;
+    const estimatedCallsTotal = estimatedCalls + statsFetchCalls;
     console.info(
       JSON.stringify({
         historySync: true,
@@ -478,6 +656,8 @@ async function handleHistorySync(req, res) {
         scanned: candidates.length,
         updated: updates.length,
         resettled,
+        cardResettled,
+        statsFetchCalls,
         cappedScan
       })
     );
@@ -485,7 +665,7 @@ async function handleHistorySync(req, res) {
       ok: true,
       scanned: candidates.length,
       updated: updatedTotal,
-      estimatedCalls
+      estimatedCalls: estimatedCallsTotal
     });
 
     const closingOn =
@@ -502,13 +682,15 @@ async function handleHistorySync(req, res) {
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
-      updated: updates.length,
+      updated: updatedTotal,
       resettled,
+      cardResettled,
       cappedScan,
-      estimatedCalls,
+      estimatedCalls: estimatedCallsTotal,
       estimatedCallsBreakdown: {
         dayLeagueGroups: groupedFetchCalls,
-        idsChunks: idsFetchCalls
+        idsChunks: idsFetchCalls,
+        cardStats: statsFetchCalls
       },
       ...(closing ? { closing } : {})
     });

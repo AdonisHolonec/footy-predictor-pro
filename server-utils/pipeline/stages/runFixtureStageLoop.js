@@ -13,7 +13,11 @@ import {
   buildLeagueStandingsTable
 } from "../predictHelpers.js";
 import { beginFixture, resetFixture } from "../PipelineContext.js";
-import { initFixtureWorkingState, buildFixtureErrorRow } from "./fixtureStageShared.js";
+import {
+  initFixtureWorkingState,
+  buildFixtureErrorRow,
+  extractVenueFromFixture
+} from "./fixtureStageShared.js";
 import * as Stage02FeatureCollection from "./Stage02FeatureCollection.js";
 import * as Stage03LambdaGeneration from "./Stage03LambdaGeneration.js";
 import * as Stage04ProbabilityGeneration from "./Stage04ProbabilityGeneration.js";
@@ -97,6 +101,7 @@ export async function runFixtureStageLoop(context) {
         refereeName = "";
       }
 
+      const venue = extractVenueFromFixture(fx);
       const f = beginFixture(context, {
         fixtureId,
         fx,
@@ -104,7 +109,8 @@ export async function runFixtureStageLoop(context) {
         awayName,
         homeIdStr,
         awayIdStr,
-        refereeName
+        refereeName,
+        venue
       });
       initFixtureWorkingState(f);
 

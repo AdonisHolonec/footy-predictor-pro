@@ -7,6 +7,30 @@ import { buildConfidenceEngine } from "../../confidence/ConfidenceEngine.js";
 import { MODEL_VERSION } from "../../modelConstants.js";
 import { beginFixture } from "../PipelineContext.js";
 
+/**
+ * Extract venue from API-Football fixture payload for weather / display.
+ * @param {object} fx
+ * @returns {{ name?: string, city?: string, lat?: number, lon?: number } | undefined}
+ */
+export function extractVenueFromFixture(fx) {
+  const v = fx?.fixture?.venue || fx?.venue;
+  if (!v || typeof v !== "object") return undefined;
+  const name = typeof v.name === "string" && v.name.trim() ? v.name.trim() : undefined;
+  const city = typeof v.city === "string" && v.city.trim() ? v.city.trim() : undefined;
+  const latRaw = v.lat ?? v.latitude;
+  const lonRaw = v.lon ?? v.longitude ?? v.lng;
+  const lat = Number(latRaw);
+  const lon = Number(lonRaw);
+  const out = {};
+  if (name) out.name = name;
+  if (city) out.city = city;
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    out.lat = lat;
+    out.lon = lon;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function initFixtureWorkingState(f) {
   Object.assign(f, {
     method: "none",
@@ -72,6 +96,7 @@ export function buildFixtureErrorRow(f, league) {
       away: typeof f.fx.goals?.away === "number" ? f.fx.goals.away : null
     },
     referee: f.refereeName || undefined,
+    venue: f.venue || undefined,
     insufficientData: true,
     insufficientReason: "fixture_processing_error",
     probs: {

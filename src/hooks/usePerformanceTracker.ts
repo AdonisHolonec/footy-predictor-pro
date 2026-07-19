@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HistoryEntry, PerformanceLeagueBreakdown } from "../types";
 import { filterHistoryByWorstLossDays } from "../utils/appUtils";
+import { historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historyStats";
 import { isCompactViewport } from "./useLeaguePanelState";
 
 export function usePerformanceTracker(history: HistoryEntry[], predIds: Array<string | number>) {
@@ -15,13 +16,9 @@ export function usePerformanceTracker(history: HistoryEntry[], predIds: Array<st
     [history, excludeWorstLossDays]
   );
 
-  const trackerStats = useMemo(() => {
-    const wins = counterHistory.filter((item) => item.validation === "win").length;
-    const losses = counterHistory.filter((item) => item.validation === "loss").length;
-    const settled = wins + losses;
-    return { wins, losses, settled, winRate: settled > 0 ? (wins / settled) * 100 : 0 };
-  }, [counterHistory]);
+  const trackerStats = useMemo(() => historyStatsFromRows(counterHistory), [counterHistory]);
 
+  // Fixture-level pending (matches without FT) — used for sync triggers / UI copy.
   const pendingHistoryCount = useMemo(
     () => counterHistory.filter((item) => item.validation === "pending").length,
     [counterHistory]
@@ -41,9 +38,10 @@ export function usePerformanceTracker(history: HistoryEntry[], predIds: Array<st
       const name = h.league || String(lid);
       if (!map.has(lid)) map.set(lid, { leagueId: lid, leagueName: name, wins: 0, losses: 0, pending: 0 });
       const o = map.get(lid)!;
-      if (h.validation === "win") o.wins += 1;
-      else if (h.validation === "loss") o.losses += 1;
-      else if (h.validation === "pending") o.pending += 1;
+      const t = tallyEntryCardMarkets(h);
+      o.wins += t.wins;
+      o.losses += t.losses;
+      o.pending += t.pending;
     }
     return Array.from(map.values())
       .map((o) => {

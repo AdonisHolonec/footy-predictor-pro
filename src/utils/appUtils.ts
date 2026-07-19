@@ -174,9 +174,22 @@ export function buildHistoryLossDays(rows: HistoryEntry[]): HistoryLossDay[] {
       map.set(day, { day, losses: 0, wins: 0, settled: 0, pending: 0 });
     }
     const cur = map.get(day)!;
-    if (row.validation === "loss") cur.losses += 1;
-    else if (row.validation === "win") cur.wins += 1;
-    else cur.pending += 1;
+    const stored = row.cardMarketValidations;
+    const outcomes: Array<"pending" | "win" | "loss"> = [];
+    if (stored && typeof stored === "object") {
+      for (const key of ["recommended", "goals", "corners", "shots"] as const) {
+        const v = stored[key];
+        if (v === "win" || v === "loss" || v === "pending") outcomes.push(v);
+      }
+    }
+    if (!outcomes.length && (row.validation === "win" || row.validation === "loss" || row.validation === "pending")) {
+      outcomes.push(row.validation);
+    }
+    for (const v of outcomes) {
+      if (v === "loss") cur.losses += 1;
+      else if (v === "win") cur.wins += 1;
+      else cur.pending += 1;
+    }
   }
   for (const d of map.values()) d.settled = d.wins + d.losses;
   return Array.from(map.values());
