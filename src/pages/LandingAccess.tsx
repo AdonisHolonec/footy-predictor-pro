@@ -1,308 +1,275 @@
-import { useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
-import { ModelPulseWave } from "../components/SignalLab";
-import TrackRecordSection from "../components/TrackRecordSection";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import { BRAND_IMAGES } from "../constants/brandAssets";
 import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
 import { useLocale } from "../context/LocaleContext";
+import Badge from "../design-system/Badge";
+import Card from "../design-system/Card";
 import { useAuth } from "../hooks/useAuth";
 
 export default function LandingAccess() {
-  const { t } = useLocale();
+  const { t, locale, setLocale } = useLocale();
   const { user, loading } = useAuth();
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const scrollPreview = useCallback(() => {
-    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
 
   const workspace = "/workspace";
   const login = "/login";
   const signup = "/login?mode=signup";
 
+  const langBtn = (code: "ro" | "en") =>
+    `min-w-9 px-2 text-[11px] font-bold ${
+      locale === code ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
+    }`;
+
+  const linkPrimary =
+    "inline-flex min-h-[var(--fp-touch)] items-center justify-center rounded-[var(--fp-radius-sm)] bg-[var(--fp-accent)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--fp-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]";
+  const linkSecondary =
+    "inline-flex min-h-[var(--fp-touch)] items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 text-sm font-semibold text-[var(--fp-text)] transition-colors hover:border-[var(--fp-border-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]";
+
   return (
-    <div className="lab-page min-h-screen">
-      <div className="lab-bg" aria-hidden />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.2] saturate-125"
-        style={{ backgroundImage: `url(${BRAND_IMAGES.heroPlatform})` }}
-        aria-hidden
-      />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_18%_14%,rgba(56,189,248,0.46),transparent_40%),radial-gradient(circle_at_90%_13%,rgba(251,191,36,0.36),transparent_42%),radial-gradient(circle_at_55%_100%,rgba(244,63,94,0.28),transparent_38%)]" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-signal-mist/20 via-signal-void/35 to-signal-void/98" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(118deg,rgba(56,189,248,0.12),transparent_34%,rgba(244,63,94,0.1)_62%,rgba(251,191,36,0.12)_82%,transparent)]" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 z-[1] opacity-35 [background-size:26px_26px] [background-image:linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)]" aria-hidden />
+    <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-3 sm:px-4">
+          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+            <img
+              src={BRAND_IMAGES.logoPrimary}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] object-contain p-0.5"
+            />
+            <div className="min-w-0">
+              <p className="truncate font-display text-sm font-semibold tracking-tight">{t("landing.brand")}</p>
+              <p className="truncate text-[10px] font-medium text-[var(--fp-text-muted)]">{t("landing.brandSub")}</p>
+            </div>
+          </Link>
 
-      <div className="relative z-10">
-        <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-signal-mist/70 px-4 py-3 backdrop-blur-xl sm:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-            <Link to="/" className="group flex items-center gap-2.5 text-signal-ink transition hover:text-signal-petrol">
-              <img
-                src={BRAND_IMAGES.logoPrimary}
-                alt="Footy Predictor"
-                className="h-14 w-14 rounded-xl border border-cyan-300/60 object-contain p-0.5 brightness-110 saturate-150 shadow-[0_0_30px_rgba(34,211,238,0.48)] transition-transform duration-300 group-hover:scale-105 animate-[pulse_3.8s_ease-in-out_infinite] motion-reduce:animate-none"
-              />
-              <span className="font-display text-sm font-semibold tracking-tight sm:text-base">Footy Predictor · Laborator de inteligență</span>
-            </Link>
-            <Link
-              to={user ? workspace : login}
-              className="rounded-xl border border-signal-petrol/50 bg-signal-petrol/20 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-signal-petrol transition hover:bg-signal-petrol/30"
+          <div className="flex shrink-0 items-center gap-2">
+            <div
+              className="inline-flex h-9 overflow-hidden rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]"
+              role="group"
+              aria-label={t("shell.switchLang")}
             >
-              {user ? "Deschide aplicația" : "Autentificare"}
+              <button type="button" className={langBtn("ro")} onClick={() => setLocale("ro")}>
+                {t("shell.langRo")}
+              </button>
+              <button type="button" className={langBtn("en")} onClick={() => setLocale("en")}>
+                {t("shell.langEn")}
+              </button>
+            </div>
+            <Link to={user ? workspace : login} className={`${linkSecondary} !min-h-9 px-3 text-xs`}>
+              {user ? t("landing.openApp") : t("landing.login")}
             </Link>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:py-16">
-          <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:gap-16">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/85">Footy Predictor · Laborator de inteligență</p>
-              <h1 className="font-display mt-3 text-4xl font-bold leading-[1.02] tracking-tight text-signal-ink drop-shadow-[0_0_38px_rgba(56,189,248,0.34)] sm:text-5xl lg:text-[3.55rem]">
-                Predicții fotbal cu energie de stadion și analiză de laborator.
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-relaxed text-signal-inkMuted">
-                Construiești decizii pe 1X2, Over/Under, Corners, Shots și HT Goals într-un dashboard vibrant,
-                clar și orientat pe edge real.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                {user ? (
-                  <Link
-                    to={workspace}
-                    className="inline-flex items-center justify-center rounded-xl border border-signal-petrol/80 bg-gradient-to-r from-signal-petrol/55 via-signal-petrol/42 to-signal-sage/35 px-6 py-3 font-semibold text-signal-mist shadow-[0_0_40px_rgba(56,189,248,0.58)] transition hover:-translate-y-1 hover:scale-[1.015] hover:from-signal-petrol/70 hover:to-signal-sage/45 hover:shadow-[0_0_56px_rgba(56,189,248,0.72)]"
-                  >
-                    Deschide observatorul
-                  </Link>
-                ) : (
-                  <Link
-                    to={signup}
-                    className="inline-flex items-center justify-center rounded-xl border border-signal-petrol/80 bg-gradient-to-r from-signal-petrol/55 via-signal-petrol/42 to-signal-sage/35 px-6 py-3 font-semibold text-signal-mist shadow-[0_0_40px_rgba(56,189,248,0.58)] transition hover:-translate-y-1 hover:scale-[1.015] hover:from-signal-petrol/70 hover:to-signal-sage/45 hover:shadow-[0_0_56px_rgba(56,189,248,0.72)]"
-                  >
-                    Start Gratuit
-                  </Link>
-                )}
-                <button
-                  type="button"
-                  onClick={scrollPreview}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-signal-void/65 px-6 py-3 font-semibold text-signal-ink transition hover:-translate-y-1 hover:border-signal-amber/45 hover:bg-signal-panel/70 hover:text-signal-amberSoft"
-                >
-                  Explorează platforma
-                </button>
-              </div>
-              <div className="mt-10 max-w-xl space-y-4">
-                <ModelPulseWave status="STREAM ACTIVE" className="w-full" />
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    { label: "Meciuri analizate", value: "400+" },
-                    { label: "Semnale / fixture", value: "20+" },
-                    { label: "Actualizare live", value: "<60s" }
-                  ].map((kpi) => (
-                    <div key={kpi.label} className="rounded-xl border border-white/20 bg-signal-panel/75 p-3 shadow-[0_0_24px_rgba(56,189,248,0.24)] backdrop-blur-sm">
-                      <p className="font-mono text-[9px] uppercase tracking-wide text-signal-inkMuted">{kpi.label}</p>
-                      <p className="mt-1 font-display text-xl font-bold text-signal-mint drop-shadow-[0_0_18px_rgba(16,185,129,0.45)]">{kpi.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div ref={previewRef} id="platform-preview" className="relative scroll-mt-28">
-              <div className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-signal-petrol/5 blur-3xl" aria-hidden />
-              <div className="relative space-y-4">
-                <div className="relative z-10 rounded-2xl border border-signal-petrol/55 bg-signal-panel/80 p-4 shadow-[0_0_46px_rgba(56,189,248,0.36)] backdrop-blur-md sm:p-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-signal-amber">Inteligență meci</p>
-                      <p className="mt-1 font-display text-lg font-semibold text-signal-ink">Liverpool vs Tottenham</p>
-                      <p className="mt-1 font-mono text-[11px] text-signal-inkMuted">20:45 · Today</p>
-                    </div>
-                    <Link
-                      to={login}
-                      className="shrink-0 rounded-lg border border-signal-petrol/30 bg-signal-petrol/10 px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-signal-petrol transition hover:bg-signal-petrol/20"
-                    >
-                      Open
-                    </Link>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <p className="font-mono text-[9px] uppercase text-signal-inkMuted">Top pick</p>
-                      <p className="font-display text-xl font-bold text-signal-mint drop-shadow-[0_0_20px_rgba(16,185,129,0.65)]">Over 2.5 goals</p>
-                    </div>
-                    <div className="rounded-xl border border-signal-sage/55 bg-signal-sage/20 px-3 py-2 text-center shadow-[0_0_26px_rgba(16,185,129,0.36)]">
-                      <p className="font-mono text-[9px] uppercase text-signal-silver">Confidence</p>
-                      <p className="font-mono text-xl font-bold tabular-nums text-signal-mint">79%</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 font-mono text-[10px] text-signal-silver">
-                    <span className="rounded-md border border-white/10 bg-signal-void/40 px-2 py-1">xG 2.10 · 1.41</span>
-                    <span className="rounded-md border border-signal-petrol/30 bg-signal-petrol/10 px-2 py-1 text-signal-petrol">Edge +0.22 EV</span>
-                    <span className="rounded-md border border-white/10 bg-signal-void/40 px-2 py-1">Corners O/U 9.5</span>
-                    <span className="rounded-md border border-signal-rose/35 bg-signal-rose/12 px-2 py-1 text-signal-rose">HT Goals O/U 1.5</span>
-                  </div>
-                  <div className="mt-3 flex gap-1.5" aria-label="Form ribbon">
-                    {["W", "W", "D", "L", "W"].map((x, i) => (
-                      <span
-                        key={i}
-                        className={`grid h-7 w-7 place-items-center rounded-md border text-[10px] font-bold ${
-                          x === "W"
-                            ? "border-signal-sage/35 bg-signal-sage/15 text-signal-mint"
-                            : x === "L"
-                              ? "border-signal-rose/35 bg-signal-rose/15 text-signal-rose"
-                              : "border-white/10 bg-signal-void/50 text-signal-amberSoft"
-                        }`}
-                      >
-                        {x}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    { label: "Signal Lens", detail: "Pattern match live", tone: "text-signal-petrol border-signal-petrol/30 bg-signal-petrol/10" },
-                    { label: "Edge Compass", detail: "Value lane detect", tone: "text-signal-amber border-signal-amber/30 bg-signal-amber/10" },
-                    { label: "Risk Guard", detail: "Stake discipline", tone: "text-signal-mint border-signal-sage/35 bg-signal-sage/10" }
-                  ].map((item) => (
-                    <div key={item.label} className={`rounded-xl border p-3 shadow-[0_0_22px_rgba(56,189,248,0.22)] backdrop-blur-sm ${item.tone}`}>
-                      <p className="font-mono text-[9px] uppercase tracking-wide">{item.label}</p>
-                      <p className="mt-1 text-xs">{item.detail}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-2xl border border-white/15 bg-signal-void/65 p-4 shadow-[0_0_20px_rgba(244,63,94,0.18)] backdrop-blur-md">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol">Ce primești</p>
-                  <div className="mt-3 grid gap-2 text-sm text-signal-silver">
-                    <p>• Predicții explicabile, nu doar scoruri brute.</p>
-                    <p>• Piețe clasice + piețe avansate în aceeași interfață.</p>
-                    <p>• Performance counter real pe user și pe ligă.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <main className="mx-auto max-w-5xl space-y-6 px-3 py-6 sm:px-4 sm:py-8">
+        {/* Hero */}
+        <section className="text-center sm:text-left">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("landing.brand")}</p>
+          <h1 className="mt-2 font-display text-[length:var(--fp-hero)] font-semibold leading-tight tracking-tight">
+            {t("landing.headline")}
+          </h1>
+          <p className="mx-auto mt-2 max-w-xl text-sm font-medium leading-relaxed text-[var(--fp-text-muted)] sm:mx-0">
+            {t("landing.sub")}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            {user ? (
+              <Link to={workspace} className={linkPrimary}>
+                {t("landing.ctaWorkspace")}
+              </Link>
+            ) : (
+              <Link to={signup} className={linkPrimary}>
+                {t("landing.ctaStart")}
+              </Link>
+            )}
+            <a href="#pricing" className={linkSecondary}>
+              {t("landing.ctaPlans")}
+            </a>
           </div>
+        </section>
 
-          <TrackRecordSection days={45} compact />
-
-          <section id="pricing" className="scroll-mt-28 border-t border-white/[0.06] py-16">
-            <h2 className="font-display text-2xl font-semibold text-signal-ink">Access Tiers · Intelligence Plans</h2>
-            <p className="mt-2 max-w-2xl text-sm text-signal-inkMuted">
-              Trei niveluri gândite pentru ritmuri diferite: explorare, execuție tactical și intelligence complet.
+        {/* Preview + benefits */}
+        <section className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <Card padding="sm" className="border-[var(--fp-accent)]/25 shadow-[var(--fp-shadow)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+                {t("landing.previewEyebrow")}
+              </p>
+              <span className="font-mono text-[11px] tabular-nums text-[var(--fp-text-faint)]">{t("landing.previewTime")}</span>
+            </div>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">
+              {t("landing.previewLeague")}
             </p>
-            {PRICING_CAMPAIGN.active ? (
-              <div className="mt-5 max-w-2xl">
-                <PricingCampaignBanner />
-                <p className="mt-2 text-xs font-medium text-signal-amberSoft">{t("pricing.sectionHint")}</p>
+            <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="text-center">
+                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--fp-bg-muted)] text-xs font-bold text-[var(--fp-accent)]">
+                  LIV
+                </div>
+                <p className="mt-1 text-sm font-semibold">{t("landing.previewHome")}</p>
               </div>
-            ) : null}
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <span className="text-[10px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
+              <div className="text-center">
+                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--fp-bg-muted)] text-xs font-bold text-[var(--fp-warning)]">
+                  TOT
+                </div>
+                <p className="mt-1 text-sm font-semibold">{t("landing.previewAway")}</p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-1 border-t border-[var(--fp-border)] pt-2">
               {[
-                {
-                  title: "Free Habit Trial",
-                  price: "FREE",
-                  planKey: null as "premium" | "ultra" | null,
-                  metrics: ["10 meciuri / zi (istoric)", "10 zile active", "1X2 + O/U"],
-                  desc: "Ideal pentru rutină rapidă și validare de semnal.",
-                  to: signup,
-                  cta: "Pornește Free"
-                },
-                {
-                  title: "Tactical Premium",
-                  price: "PREMIUM",
-                  planKey: "premium" as const,
-                  metrics: ["25 meciuri / zi", "Corners incluse", "Signal Lens Basic"],
-                  desc: "Pentru workflow constant cu un nivel tactic superior.",
-                  to: `${login}?from=pricing&tier=premium`,
-                  cta: PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : "Abonează-te"
-                },
-                {
-                  title: "Intelligence Ultra",
-                  price: "ULTRA",
-                  planKey: "ultra" as const,
-                  metrics: ["50 meciuri / zi", "Shots + HT Goals", "Edge Compass"],
-                  desc: "Control complet al piețelor avansate și al edge-ului.",
-                  to: `${login}?from=pricing&tier=ultra`,
-                  cta: PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : "Abonează-te"
-                }
-              ].map((tier) => (
-                <div
-                  key={tier.title}
-                  className={`rounded-2xl border bg-signal-panel/65 p-5 shadow-[0_0_22px_rgba(56,189,248,0.14)] backdrop-blur-md ${
-                    tier.planKey && PRICING_CAMPAIGN.active
-                      ? "border-signal-amber/45 ring-1 ring-signal-amber/25"
-                      : "border-white/[0.12]"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-mono text-[10px] uppercase tracking-wider text-signal-petrol">{tier.title}</p>
-                    {tier.planKey && PRICING_CAMPAIGN.active ? (
-                      <span className="rounded-md bg-signal-amber px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-signal-void">
-                        −{PRICING_CAMPAIGN.discountPercent}%
-                      </span>
-                    ) : null}
-                  </div>
-                  {tier.planKey && PRICING_CAMPAIGN.active ? (
-                    <PlanCampaignPrice tier={tier.planKey} />
-                  ) : (
-                    <p className="mt-2 font-display text-3xl font-bold text-signal-ink">{tier.price}</p>
-                  )}
-                  <p className="mt-2 text-sm text-signal-inkMuted">{tier.desc}</p>
-                  <div className="mt-3 space-y-1 font-mono text-[10px] uppercase tracking-wider text-signal-silver">
-                    {tier.metrics.map((metric) => (
-                      <p key={metric}>{metric}</p>
-                    ))}
-                  </div>
-                  <Link
-                    to={tier.to}
-                    className="mt-4 inline-block rounded-lg border border-signal-petrol/45 bg-signal-petrol/18 px-4 py-2 text-xs font-semibold text-signal-petrol transition hover:-translate-y-0.5 hover:bg-signal-petrol/28"
+                { label: t("card.prediction"), value: t("landing.previewPick"), accent: true },
+                { label: t("card.confidence"), value: "79%" },
+                { label: t("card.odds"), value: "1.85" },
+                { label: t("card.value"), value: "+4.2%" }
+              ].map((m) => (
+                <div key={m.label} className="min-w-0 px-0.5 text-center">
+                  <p className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{m.label}</p>
+                  <p
+                    className={`mt-0.5 truncate font-display text-sm font-bold tabular-nums ${
+                      m.accent ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
+                    }`}
                   >
-                    {tier.cta}
-                  </Link>
+                    {m.value}
+                  </p>
                 </div>
               ))}
             </div>
-          </section>
+          </Card>
 
-          <section className="border-t border-white/[0.06] py-14">
-            <div className="rounded-3xl border border-signal-petrol/50 bg-gradient-to-r from-signal-petrol/38 via-signal-sage/26 to-signal-amber/30 p-6 shadow-[0_0_60px_rgba(56,189,248,0.34)] backdrop-blur-md sm:p-8">
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-signal-petrol">Ready for kickoff?</p>
-              <h3 className="mt-2 font-display text-2xl font-semibold text-signal-ink sm:text-3xl">
-                Intră în platformă și rulează primele predicții în mai puțin de 2 minute.
-              </h3>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Link
-                  to={user ? workspace : signup}
-                  className="rounded-xl border border-signal-petrol/70 bg-gradient-to-r from-signal-petrol/60 to-signal-sage/45 px-5 py-2.5 font-semibold text-signal-mist shadow-[0_0_30px_rgba(56,189,248,0.5)] transition hover:-translate-y-1 hover:scale-[1.01] hover:from-signal-petrol/75 hover:to-signal-sage/60"
-                >
-                  {user ? "Deschide aplicația" : "Creează cont"}
-                </Link>
-                <Link
-                  to={login}
-                  className="rounded-xl border border-white/28 bg-signal-void/55 px-5 py-2.5 font-semibold text-signal-ink transition hover:-translate-y-1 hover:bg-signal-panel/65 hover:text-signal-amberSoft"
-                >
-                  Login
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+            {[t("landing.benefitMarkets"), t("landing.benefitValue"), t("landing.benefitHistory")].map((label) => (
+              <Card key={label} padding="sm" className="flex items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] bg-[var(--fp-accent-muted)] text-sm font-bold text-[var(--fp-accent)]">
+                  ✓
+                </span>
+                <p className="text-sm font-semibold text-[var(--fp-text)]">{label}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" className="scroll-mt-20 space-y-3">
+          <header>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("landing.pricingTitle")}</p>
+            <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold">{t("landing.pricingTitle")}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--fp-text-muted)]">{t("landing.pricingSub")}</p>
+          </header>
+
+          {PRICING_CAMPAIGN.active ? <PricingCampaignBanner /> : null}
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Card padding="sm" className="flex h-full flex-col">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("landing.freeTitle")}</p>
+              <p className="mt-1 font-display text-2xl font-bold">{t("landing.freePrice")}</p>
+              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.freeDesc")}</p>
+              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
+                <li>{t("landing.freeM1")}</li>
+                <li>{t("landing.freeM2")}</li>
+                <li>{t("landing.freeM3")}</li>
+              </ul>
+              <div className="mt-auto pt-3">
+                <Link to={signup} className={`${linkSecondary} !min-h-9 w-full text-xs`}>
+                  {t("landing.freeCta")}
                 </Link>
               </div>
-            </div>
-          </section>
+            </Card>
 
-          <footer className="border-t border-white/[0.06] py-8 text-center sm:flex sm:items-center sm:justify-between sm:text-left">
-            <p className="font-mono text-[11px] text-signal-inkMuted">
-              {loading ? "Se încarcă sesiunea…" : user ? `Sesiune activă · ${user.email}` : "Nu ești autentificat."}
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-4 sm:mt-0 sm:justify-end">
-              <Link to="/track-record" className="font-mono text-[11px] text-signal-petrol hover:underline">
-                Track Record
+            <Card
+              padding="sm"
+              className="relative flex h-full flex-col border-[var(--fp-warning)]/45 ring-1 ring-[var(--fp-warning)]/25"
+            >
+              {PRICING_CAMPAIGN.active ? (
+                <Badge tone="warning" className="absolute right-2 top-2">
+                  −{PRICING_CAMPAIGN.discountPercent}%
+                </Badge>
+              ) : null}
+              <p className="pr-14 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
+                {t("landing.premiumTitle")}
+              </p>
+              <PlanCampaignPrice tier="premium" />
+              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.premiumDesc")}</p>
+              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
+                <li>{t("landing.premiumM1")}</li>
+                <li>{t("landing.premiumM2")}</li>
+                <li>{t("landing.premiumM3")}</li>
+              </ul>
+              <div className="mt-auto pt-3">
+                <Link
+                  to={`${login}?from=pricing&tier=premium`}
+                  className={`${linkPrimary} !min-h-9 w-full text-xs`}
+                >
+                  {PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : t("landing.premiumTitle")}
+                </Link>
+              </div>
+            </Card>
+
+            <Card padding="sm" className="relative flex h-full flex-col">
+              {PRICING_CAMPAIGN.active ? (
+                <Badge tone="warning" className="absolute right-2 top-2">
+                  −{PRICING_CAMPAIGN.discountPercent}%
+                </Badge>
+              ) : null}
+              <p className="pr-14 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
+                {t("landing.ultraTitle")}
+              </p>
+              <PlanCampaignPrice tier="ultra" />
+              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.ultraDesc")}</p>
+              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
+                <li>{t("landing.ultraM1")}</li>
+                <li>{t("landing.ultraM2")}</li>
+                <li>{t("landing.ultraM3")}</li>
+              </ul>
+              <div className="mt-auto pt-3">
+                <Link
+                  to={`${login}?from=pricing&tier=ultra`}
+                  className={`${linkSecondary} !min-h-9 w-full text-xs`}
+                >
+                  {PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : t("landing.ultraTitle")}
+                </Link>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <Card padding="sm" className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-display text-base font-semibold">{t("landing.finalTitle")}</h3>
+            <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">{t("landing.finalSub")}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to={user ? workspace : signup} className={`${linkPrimary} !min-h-9 text-xs`}>
+              {user ? t("landing.openApp") : t("landing.finalCta")}
+            </Link>
+            {!user ? (
+              <Link to={login} className={`${linkSecondary} !min-h-9 text-xs`}>
+                {t("landing.login")}
               </Link>
-              <Link to="/privacy" className="font-mono text-[11px] text-signal-petrol hover:underline">
-                Privacy (GDPR)
-              </Link>
-              <Link to={login} className="font-mono text-[11px] text-signal-petrol hover:underline">
-                Login
-              </Link>
-            </div>
-          </footer>
-        </main>
-      </div>
+            ) : null}
+          </div>
+        </Card>
+
+        <footer className="flex flex-col gap-3 border-t border-[var(--fp-border)] py-4 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <p className="text-xs text-[var(--fp-text-muted)]">
+            {loading
+              ? t("landing.sessionLoading")
+              : user
+                ? t("landing.sessionActive", { email: user.email || "" })
+                : t("landing.sessionGuest")}
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 sm:justify-end">
+            <Link to="/track-record" className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+              {t("landing.trackRecord")}
+            </Link>
+            <Link to="/privacy" className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+              {t("landing.privacy")}
+            </Link>
+            <Link to={login} className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+              {t("landing.login")}
+            </Link>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }
