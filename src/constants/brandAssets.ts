@@ -15,3 +15,10 @@ export const BRAND_IMAGES = {
   /** Landing / access hero (nav + floating cards) */
   landingAccessHero: "/brand/landing-access-hero.png"
 } as const;
+
+/** Static match preview on landing — same CDN as API-Football fixture logos. */
+export const LANDING_PREVIEW_LOGOS = {
+  league: "https://media.api-sports.io/football/leagues/39.png",
+  home: "https://media.api-sports.io/football/teams/40.png",
+  away: "https://media.api-sports.io/football/teams/47.png"
+} as const;

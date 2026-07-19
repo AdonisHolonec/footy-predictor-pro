@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
-import { BRAND_IMAGES } from "../constants/brandAssets";
+import { BRAND_IMAGES, LANDING_PREVIEW_LOGOS } from "../constants/brandAssets";
 import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
 import { useLocale } from "../context/LocaleContext";
 import Badge from "../design-system/Badge";
@@ -96,22 +96,39 @@ export default function LandingAccess() {
               </p>
               <span className="font-mono text-[11px] tabular-nums text-[var(--fp-text-faint)]">{t("landing.previewTime")}</span>
             </div>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">
-              {t("landing.previewLeague")}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <img
+                src={LANDING_PREVIEW_LOGOS.league}
+                alt=""
+                className="h-4 w-4 object-contain"
+                loading="lazy"
+                decoding="async"
+              />
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">
+                {t("landing.previewLeague")}
+              </p>
+            </div>
             <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div className="text-center">
-                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--fp-bg-muted)] text-xs font-bold text-[var(--fp-accent)]">
-                  LIV
-                </div>
-                <p className="mt-1 text-sm font-semibold">{t("landing.previewHome")}</p>
+              <div className="flex min-w-0 flex-col items-center gap-1">
+                <img
+                  src={LANDING_PREVIEW_LOGOS.home}
+                  alt=""
+                  className="h-11 w-11 object-contain sm:h-12 sm:w-12"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <p className="line-clamp-2 text-center text-sm font-semibold">{t("landing.previewHome")}</p>
               </div>
               <span className="text-[10px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
-              <div className="text-center">
-                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--fp-bg-muted)] text-xs font-bold text-[var(--fp-warning)]">
-                  TOT
-                </div>
-                <p className="mt-1 text-sm font-semibold">{t("landing.previewAway")}</p>
+              <div className="flex min-w-0 flex-col items-center gap-1">
+                <img
+                  src={LANDING_PREVIEW_LOGOS.away}
+                  alt=""
+                  className="h-11 w-11 object-contain sm:h-12 sm:w-12"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <p className="line-clamp-2 text-center text-sm font-semibold">{t("landing.previewAway")}</p>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-4 gap-1 border-t border-[var(--fp-border)] pt-2">
