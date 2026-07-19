@@ -994,6 +994,8 @@ export default function UserDashboard() {
                   }}
                   title={t("dash.filterTitle", { label: t(key) })}
                   className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                    id === "live" ? "hidden lg:inline-flex" : ""
+                  } ${
                     (id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live")
                       ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                       : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
@@ -1244,19 +1246,14 @@ export default function UserDashboard() {
 
       {navView === "profile" && (
         <section className="space-y-6">
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-                {t("nav.profile")}
-              </p>
-              <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
-              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
-                {user?.email} <Badge tone="accent">{userTier}</Badge>
-              </p>
-            </div>
-            <Button variant="secondary" size="sm" className="lg:hidden" onClick={() => handleNav("home")}>
-              {t("nav.home")}
-            </Button>
+          <header>
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+              {t("nav.profile")}
+            </p>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
+              {user?.email} <Badge tone="accent">{userTier}</Badge>
+            </p>
           </header>
 
           {!tierQuotaExempt && (
@@ -1407,13 +1404,16 @@ export default function UserDashboard() {
           )}
 
           <Card>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Settings</h2>
-                <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Theme, filters defaults, and privacy export.</p>
-              </div>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("nav.profile")}</h2>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+              {t("shell.notifications")} · {t("nav.settings")}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={() => handleNav("notifications")}>
+                {t("nav.notifications")}
+              </Button>
               <Button variant="secondary" size="sm" onClick={() => handleNav("settings")}>
-                Open Settings
+                {t("nav.settings")}
               </Button>
             </div>
             <div className="mt-4">

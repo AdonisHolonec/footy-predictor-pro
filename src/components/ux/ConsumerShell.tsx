@@ -29,8 +29,9 @@ type Props = {
 };
 
 /**
- * Consumer chrome — compact toolbar + RO/EN switch + mobile bottom tabs.
- * Mobile: 2 toolbar rows + fixed bottom nav (Home included).
+ * Consumer chrome — tools toolbar + RO/EN + mobile bottom tabs (primary nav).
+ * Mobile: top = brand + filters/tools only; nav lives in the bottom bar.
+ * Desktop (lg+): top also shows favorites / alerts / profile / settings icons.
  */
 export default function ConsumerShell({
   activeNav,
@@ -87,8 +88,9 @@ export default function ConsumerShell({
     </div>
   );
 
-  const actionIcons = (
-    <>
+  /** Desktop-only: duplicates bottom tabs / profile shortcuts on mobile. */
+  const desktopNavIcons = (
+    <div className="hidden items-center gap-1 lg:flex">
       <Tooltip label={favoritesActive ? t("shell.favoritesOn") : t("shell.favoritesOff")} align="end">
         <button
           type="button"
@@ -115,6 +117,12 @@ export default function ConsumerShell({
           ⚙
         </button>
       </Tooltip>
+    </div>
+  );
+
+  const actionIcons = (
+    <>
+      {desktopNavIcons}
       {langSwitch}
       <Badge tone="accent">{tier}</Badge>
     </>

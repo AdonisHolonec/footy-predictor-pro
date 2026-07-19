@@ -17,7 +17,7 @@ export const ro: Dict = {
   },
   shell: {
     openProfile: "Deschide profilul",
-    brandAria: "Footy Predictor — profil",
+    brandAria: "Footy Predictor — acasă",
     favoritesOn: "Arată doar favoritele",
     favoritesOff: "Arată toate meciurile",
     notifications: "Notificări",

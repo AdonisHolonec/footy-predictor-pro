@@ -17,7 +17,7 @@ export const en: Dict = {
   },
   shell: {
     openProfile: "Open profile",
-    brandAria: "Footy Predictor — profile",
+    brandAria: "Footy Predictor — home",
     favoritesOn: "Show favorites only",
     favoritesOff: "Show all matches",
     notifications: "Notifications",
