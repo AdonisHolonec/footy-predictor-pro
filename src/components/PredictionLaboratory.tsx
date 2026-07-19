@@ -14,6 +14,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { useLocale } from "../context/LocaleContext";
 import type { PredictionRow } from "../types";
 import { buildPredictionLaboratory, type PredictionLaboratory } from "../utils/predictionLaboratory";
 
@@ -154,14 +155,15 @@ function MetricsStrip({ lab }: { lab: PredictionLaboratory }) {
 }
 
 export default function PredictionLaboratoryPanel({ match, compact = false }: Props) {
+  const { t } = useLocale();
   const lab = useMemo(() => buildPredictionLaboratory(match), [match]);
 
   if (!lab.available) {
     if (compact) return null;
     return (
-      <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-[var(--fp-shadow-sm)]">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Prediction Analysis</h3>
-        <p className="mt-2 text-sm font-medium text-[var(--fp-text-muted)]">Insufficient data for laboratory diagnostics.</p>
+      <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+        <p className="mt-1.5 text-sm font-medium text-[var(--fp-text-muted)]">{t("match.insufficientTitle")}</p>
       </section>
     );
   }
@@ -171,7 +173,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
     return (
       <div className="mt-1.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">Prediction Analysis</span>
+          <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</span>
           {lab.bookmaker?.differencePp != null && (
             <span className={`text-[9px] font-bold tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
               Δ {lab.bookmaker.differencePp >= 0 ? "+" : ""}
@@ -195,11 +197,11 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
   }
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Prediction Analysis</h3>
-          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
             Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
           </p>
         </div>
@@ -211,21 +213,21 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
 
       <MetricsStrip lab={lab} />
 
-      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Radar profile</div>
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
+          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.radar")}</div>
           <LabRadar data={lab.radar} />
         </div>
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Comparison table</div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
+          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.comparison")}</div>
           <ComparisonTable lab={lab} />
         </div>
       </div>
 
       {lab.evolution.length > 0 && (
-        <div className="mt-5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-            Prediction evolution · 1X2 %
+        <div className="mt-3 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
+          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
+            {t("panels.evolution")}
           </div>
           <EvolutionChart data={lab.evolution} />
         </div>

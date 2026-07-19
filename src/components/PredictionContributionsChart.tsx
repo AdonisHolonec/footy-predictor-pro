@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import type { PredictionContributions } from "../types";
 
 /**
@@ -11,6 +12,7 @@ export default function PredictionContributionsChart({
   data: PredictionContributions;
   compact?: boolean;
 }) {
+  const { t } = useLocale();
   const items = Array.isArray(data?.items)
     ? [...data.items].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
     : [];
@@ -22,17 +24,20 @@ export default function PredictionContributionsChart({
   const shown = compact ? items.slice(0, 5) : items;
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-3">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
         <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Why This Prediction</h3>
-          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">
-            Signed impact on pick {data.pick ? `· ${data.pick}` : ""} · {data.schemaVersion || "contrib-v1"}
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.whyPrediction")}</h3>
+          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
+            {t("panels.whyPredictionSub", {
+              pick: data.pick ? `· ${data.pick}` : "",
+              schema: data.schemaVersion || "contrib-v1"
+            })}
           </p>
         </div>
         {data.confidence != null ? (
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Confidence</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</span>
             <span className="text-lg font-bold tabular-nums text-[var(--fp-success)]">{Math.round(data.confidence)}%</span>
           </div>
         ) : null}

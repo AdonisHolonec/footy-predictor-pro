@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PredictionRow } from "../../types";
 import type { AppNavView } from "./appNav";
+import { useLocale } from "../../context/LocaleContext";
 import { APP_NAV_ITEMS } from "./appNav";
 
 type Props = {
@@ -24,6 +25,7 @@ export default function CommandPalette({
   onNavigate,
   onPredict
 }: Props) {
+  const { t } = useLocale();
   const [q, setQ] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -50,11 +52,11 @@ export default function CommandPalette({
   const actions = useMemo(() => {
     const list: { id: string; label: string; run: () => void }[] = APP_NAV_ITEMS.map((item) => ({
       id: `nav-${item.id}`,
-      label: `Go to ${item.label}`,
+      label: t(item.labelKey),
       run: () => onNavigate(item.id)
     }));
     if (onPredict) {
-      list.push({ id: "act-predict", label: "Run Warm + Predict", run: () => onPredict() });
+      list.push({ id: "act-predict", label: t("shell.refreshPredictions"), run: () => onPredict() });
     }
     const qq = q.trim().toLowerCase();
     const matchHits = matches
@@ -66,7 +68,7 @@ export default function CommandPalette({
       .slice(0, 8)
       .map((m) => ({
         id: `m-${m.id}`,
-        label: `Fixture: ${m.teams.home} vs ${m.teams.away} · ${m.league}`,
+        label: `${m.teams.home} ${t("common.vs")} ${m.teams.away} · ${m.league}`,
         run: () => onSelectMatch(m)
       }));
     const historyHits = qq
@@ -75,13 +77,13 @@ export default function CommandPalette({
           .slice(0, 5)
           .map((h, i) => ({
             id: `h-${i}`,
-            label: `History: ${h}`,
+            label: `${t("nav.history")}: ${h}`,
             run: () => onNavigate("history")
           }))
       : [];
     const filteredActions = qq ? list.filter((a) => a.label.toLowerCase().includes(qq)) : list;
     return [...filteredActions, ...matchHits, ...historyHits];
-  }, [q, matches, historyLabels, onNavigate, onPredict, onSelectMatch]);
+  }, [q, matches, historyLabels, onNavigate, onPredict, onSelectMatch, t]);
 
   useEffect(() => {
     setActiveIndex(0);

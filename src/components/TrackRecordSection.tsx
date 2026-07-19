@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useLocale } from "../context/LocaleContext";
 import { loadPublicTrackRecord, type PublicTrackRecord } from "../services/trackRecordService";
 
 function fmtPct(n: number | null | undefined, digits = 1) {
@@ -45,6 +46,7 @@ type Props = {
 };
 
 export default function TrackRecordSection({ days = 45, showLinkToFull = true, compact = false }: Props) {
+  const { t } = useLocale();
   const [data, setData] = useState<PublicTrackRecord | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -71,30 +73,28 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
   const s = data?.summary;
 
   return (
-    <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-12">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">Verified Track Record</p>
-          <h2 className="font-display mt-2 text-2xl font-semibold text-[var(--fp-text)] sm:text-3xl">
-            Settled performance · last {days} days
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">{t("track.verified")}</p>
+          <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
+            {t("track.settledPerf", { days })}
           </h2>
-          <p className="mt-2 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">
-            Metrics from validated predictions (win/loss), not marketing claims.
-          </p>
+          <p className="mt-1.5 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">{t("track.metricsNote")}</p>
         </div>
         {showLinkToFull && (
           <Link
             to="/track-record"
-            title="Open full track record page"
+            title={t("track.openPage")}
             className="text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent)] hover:underline"
           >
-            Open dedicated page →
+            {t("track.openPage")}
           </Link>
         )}
       </div>
 
       {loading && (
-        <p className="mt-8 text-sm font-medium text-[var(--fp-text-muted)]">Loading track record…</p>
+        <p className="mt-6 text-sm font-medium text-[var(--fp-text-muted)]">{t("track.loading")}</p>
       )}
       {error && !loading && (
         <p className="mt-8 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]">
@@ -106,8 +106,8 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
         <>
           <div className={`mt-8 grid gap-3 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
             {[
-              { label: "Settled", value: String(s.settled), tone: "text-[var(--fp-text)]" },
-              { label: "Hit rate", value: fmtPct(s.hitRate), tone: "text-[var(--fp-success)]" },
+              { label: t("stats.settled"), value: String(s.settled), tone: "text-[var(--fp-text)]" },
+              { label: t("tracker.hitRate"), value: fmtPct(s.hitRate), tone: "text-[var(--fp-success)]" },
               {
                 label: "ROI",
                 value: fmtPct(s.roi),

@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import { HistoryStats } from "../types";
 
 export type ModelHealthSummary = {
@@ -52,14 +53,15 @@ export default function SuccessRateTracker({
   onExcludedWorstLossDaysCountChange,
   excludedLossDays = []
 }: SuccessRateTrackerProps) {
+  const { t } = useLocale();
   const inner = (
     <>
-      <div className="mb-4 flex flex-col gap-1 border-b border-[var(--fp-border)] pb-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-3 flex flex-col gap-0.5 border-b border-[var(--fp-border)] pb-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Performance</p>
-          <h3 className="font-display text-lg font-semibold text-[var(--fp-text)] sm:text-xl">Success Rate</h3>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("tracker.performance")}</p>
+          <h3 className="font-display text-base font-semibold text-[var(--fp-text)] sm:text-lg">{t("tracker.successRate")}</h3>
         </div>
-        <p className="text-sm font-medium tabular-nums text-[var(--fp-text-muted)]">n = {stats.settled} settled</p>
+        <p className="text-sm font-medium tabular-nums text-[var(--fp-text-muted)]">{t("tracker.settledN", { n: stats.settled })}</p>
       </div>
 
       {(onExcludedWorstLossDaysCountChange || excludedWorstLossDaysCount > 0) && (
@@ -108,11 +110,11 @@ export default function SuccessRateTracker({
 
       <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">Wins</p>
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedWins}</p>
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">Losses</p>
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">{t("tracker.losses")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedLosses}</p>
         </div>
         <div
@@ -120,7 +122,7 @@ export default function SuccessRateTracker({
             isWinRatePulsing ? "ring-2 ring-[var(--fp-accent)]/30" : ""
           }`}
         >
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">Hit rate</p>
+          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">
             {animatedWinRate.toFixed(1)}%
           </p>
@@ -170,22 +172,22 @@ export default function SuccessRateTracker({
         </div>
       )}
       {isHistorySyncing && (
-        <p className="mt-2 text-center text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Sync…</p>
+        <p className="mt-2 text-center text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("tracker.sync")}</p>
       )}
       {onBreakdownClick && (
-        <p className="mt-3 text-center text-xs font-semibold text-[var(--fp-accent)]">Open detailed console · click</p>
+        <p className="mt-2 text-center text-xs font-semibold text-[var(--fp-accent)]">{t("tracker.openConsole")}</p>
       )}
     </>
   );
 
   const shellClass =
-    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-4 shadow-[var(--fp-shadow-sm)] sm:px-6 sm:py-5";
+    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-[var(--fp-shadow-sm)] sm:px-4 sm:py-4";
 
   if (onBreakdownClick) {
     return (
       <button
         type="button"
-        title="Open detailed performance console"
+        title={t("tracker.openConsole")}
         onClick={onBreakdownClick}
         className={`${shellClass} cursor-pointer text-left transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]`}
       >

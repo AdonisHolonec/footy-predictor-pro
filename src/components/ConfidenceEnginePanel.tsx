@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import { PredictionRow } from "../types";
 
 type ConfidenceEngineData = NonNullable<PredictionRow["confidenceEngine"]>;
@@ -64,6 +65,7 @@ export default function ConfidenceEnginePanel({
   engine: ConfidenceEngineData;
   recommendationPick?: string | null;
 }) {
+  const { t } = useLocale();
   const overall = Math.round(engine.confidence ?? engine.overall ?? 0);
   const category = engine.category || "Medium";
   const available = engine.available || {};
@@ -78,16 +80,14 @@ export default function ConfidenceEnginePanel({
     : [];
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--fp-border)] pb-3">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
         <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Confidence</h3>
-          <p className="mt-1 max-w-md text-xs font-medium text-[var(--fp-text-muted)]">
-            Independent context reliability · does not change the prediction
-          </p>
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.confidence")}</h3>
+          <p className="mt-0.5 max-w-md text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.confidenceSub")}</p>
           {recommendationPick ? (
-            <p className="mt-2 text-sm font-medium text-[var(--fp-text)]">
-              For recommendation <span className="font-bold">{recommendationPick}</span>
+            <p className="mt-1.5 text-sm font-medium text-[var(--fp-text)]">
+              {t("panels.forRec", { pick: recommendationPick })}
             </p>
           ) : null}
         </div>
@@ -97,8 +97,8 @@ export default function ConfidenceEnginePanel({
           >
             {category}
           </div>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Confidence</div>
-          <div className={`font-display text-3xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
+          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</div>
+          <div className={`font-display text-2xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export default function ConfidenceEnginePanel({
       {(whyLines.length > 0 || engine.why) && (
         <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] p-3">
           <div className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-            Why this recommendation got {category}
+            {t("panels.whyRec", { category })}
           </div>
           <ul className="mt-2 space-y-1.5 text-sm font-medium leading-relaxed text-[var(--fp-text)]">
             {(whyLines.length > 0 ? whyLines : [engine.why || ""]).filter(Boolean).map((line, i) => (

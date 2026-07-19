@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "../context/LocaleContext";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
@@ -416,31 +417,36 @@ function TeamSnapshotCard({
   snap?: TeamStandingsFormSnapshot | null;
   accent: string;
 }) {
+  const { t } = useLocale();
   if (!snap) {
     return (
-      <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 text-center shadow-[var(--fp-shadow-sm)]">
+      <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center shadow-[var(--fp-shadow-sm)]">
         <div className="text-[10px] font-bold uppercase text-[var(--fp-text-muted)]">{title}</div>
-        <p className="mt-2 text-sm text-[var(--fp-text-muted)]">No standings / form data</p>
+        <p className="mt-1.5 text-sm text-[var(--fp-text-muted)]">{t("match.noStandings")}</p>
       </div>
     );
   }
   return (
-    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{title}</div>
+    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{title}</div>
       <div className="flex flex-wrap items-baseline gap-2">
         {snap.rank != null && (
-          <span className="font-display text-2xl font-bold tabular-nums" style={{ color: accent }}>
+          <span className="font-display text-xl font-bold tabular-nums" style={{ color: accent }}>
             #{snap.rank}
           </span>
         )}
         {snap.points != null && (
-          <span className="text-sm font-bold tabular-nums text-[var(--fp-text)]">{snap.points} pt</span>
+          <span className="text-sm font-bold tabular-nums text-[var(--fp-text)]">
+            {snap.points} {t("match.points")}
+          </span>
         )}
         {snap.played != null && (
-          <span className="text-xs font-medium text-[var(--fp-text-muted)]">· {snap.played} matches</span>
+          <span className="text-xs font-medium text-[var(--fp-text-muted)]">
+            · {snap.played} {t("match.matches")}
+          </span>
         )}
       </div>
-      <div className="mt-2 text-sm font-semibold tabular-nums text-[var(--fp-text)]">
+      <div className="mt-1.5 text-sm font-semibold tabular-nums text-[var(--fp-text)]">
         GF {snap.goalsFor ?? "—"} · GA {snap.goalsAgainst ?? "—"}
         {snap.goalsDiff != null && (
           <span className="text-[var(--fp-text-muted)]">
@@ -451,13 +457,13 @@ function TeamSnapshotCard({
         )}
       </div>
       {snap.form ? (
-        <div className="mt-3">
-          <div className="mb-1 text-[10px] font-bold uppercase text-[var(--fp-text-muted)]">Form</div>
+        <div className="mt-2">
+          <div className="mb-1 text-[10px] font-bold uppercase text-[var(--fp-text-muted)]">{t("match.form")}</div>
           <div className="flex flex-wrap gap-1">
             {snap.form.split("").map((ch, i) => (
               <span
                 key={`${ch}-${i}`}
-                className={`inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border text-[10px] font-bold ${
+                className={`inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md border text-[10px] font-bold ${
                   ch === "W"
                     ? "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
                     : ch === "L"
@@ -484,17 +490,18 @@ function LeagueStandingsTable({
   highlightHomeId?: number;
   highlightAwayId?: number;
 }) {
+  const { t } = useLocale();
   return (
-    <div className="max-h-64 overflow-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]">
+    <div className="max-h-56 overflow-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]">
       <table className="w-full min-w-[480px] text-left text-xs">
         <thead className="sticky top-0 z-[1] bg-[var(--fp-navy)] text-white">
           <tr className="uppercase tracking-wide">
-            <th className="px-2 py-2.5 font-bold">#</th>
-            <th className="px-2 py-2.5 font-bold">Team</th>
-            <th className="px-2 py-2.5 font-bold">P</th>
-            <th className="px-2 py-2.5 font-bold">Pts</th>
-            <th className="px-2 py-2.5 font-bold">GF-GA</th>
-            <th className="px-2 py-2.5 font-bold">Form</th>
+            <th className="px-2 py-2 font-bold">#</th>
+            <th className="px-2 py-2 font-bold">{t("match.team")}</th>
+            <th className="px-2 py-2 font-bold">{t("match.played")}</th>
+            <th className="px-2 py-2 font-bold">{t("match.points")}</th>
+            <th className="px-2 py-2 font-bold">{t("match.gfGa")}</th>
+            <th className="px-2 py-2 font-bold">{t("match.form")}</th>
           </tr>
         </thead>
         <tbody>
@@ -530,17 +537,17 @@ function LeagueStandingsTable({
 }
 
 const DETAIL_TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "prediction", label: "Prediction" },
-  { id: "statistics", label: "Statistics" },
-  { id: "h2h", label: "Head-to-head" },
-  { id: "form", label: "Form" },
-  { id: "xg", label: "Expected Goals" },
-  { id: "montecarlo", label: "Monte Carlo" },
-  { id: "value", label: "Value Analysis" },
-  { id: "odds", label: "Markets" },
-  { id: "why", label: "Explanation" },
-  { id: "timeline", label: "Timeline" }
+  { id: "overview", labelKey: "match.tabOverview" },
+  { id: "prediction", labelKey: "match.tabPrediction" },
+  { id: "statistics", labelKey: "nav.statistics" },
+  { id: "h2h", labelKey: "match.tabH2h" },
+  { id: "form", labelKey: "match.tabForm" },
+  { id: "xg", labelKey: "match.tabXg" },
+  { id: "montecarlo", labelKey: "match.tabMc" },
+  { id: "value", labelKey: "match.tabValue" },
+  { id: "odds", labelKey: "match.tabMarkets" },
+  { id: "why", labelKey: "match.tabWhy" },
+  { id: "timeline", labelKey: "match.tabLabs" }
 ] as const;
 
 type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
@@ -554,6 +561,7 @@ export default function MatchModal({
   presentation = "focus",
   onUpgradeRequired
 }: MatchModalProps) {
+  const { t: tr } = useLocale();
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const [detailTab, setDetailTab] = useState<DetailTabId>("overview");
   const tab = (ids: DetailTabId[]) => (ids.includes(detailTab) ? "" : "hidden");
@@ -637,7 +645,7 @@ export default function MatchModal({
             className="w-full max-w-md rounded-2xl border border-signal-amber/25 bg-signal-panel/90 p-8 text-center shadow-atelierLg backdrop-blur-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
+            <p className="font-display text-lg font-semibold text-signal-ink">{tr("match.insufficientTitle")}</p>
             <p className="mt-2 text-sm leading-relaxed text-signal-inkMuted">{match.insufficientReason}</p>
             <button
               ref={closeBtnRef}
@@ -645,7 +653,7 @@ export default function MatchModal({
               onClick={onClose}
               className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
             >
-              Închide
+              {tr("match.close")}
             </button>
           </div>
         </div>
@@ -667,7 +675,7 @@ export default function MatchModal({
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-signal-ink">Date insuficiente pentru model</p>
+              <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-signal-ink">{tr("match.insufficientTitle")}</p>
               <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-signal-inkMuted">{match.insufficientReason}</p>
             </div>
             <button
@@ -675,7 +683,7 @@ export default function MatchModal({
               type="button"
               onClick={onClose}
               className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-sm text-signal-inkMuted hover:border-signal-petrol/40 hover:text-signal-petrol focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
-              aria-label="Închide"
+              aria-label={tr("match.close")}
             >
               ✕
             </button>
@@ -687,14 +695,14 @@ export default function MatchModal({
 
           {(ctx?.home || ctx?.away) && (
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <TeamSnapshotCard title="Gazde" snap={ctx?.home} accent={homeColor} />
-              <TeamSnapshotCard title="Oaspeți" snap={ctx?.away} accent={awayColor} />
+              <TeamSnapshotCard title={tr("match.home")} snap={ctx?.home} accent={homeColor} />
+              <TeamSnapshotCard title={tr("match.away")} snap={ctx?.away} accent={awayColor} />
             </div>
           )}
 
           {table && table.length > 0 ? (
             <div className="mt-6">
-              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Clasament ligă</h3>
+              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.standings")}</h3>
               <LeagueStandingsTable rows={table} highlightHomeId={hid} highlightAwayId={aid} />
             </div>
           ) : null}
@@ -704,7 +712,7 @@ export default function MatchModal({
             onClick={onClose}
             className="mt-8 w-full rounded-xl border border-signal-line bg-signal-fog py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
           >
-            Închide
+            {tr("match.close")}
           </button>
         </div>
       </div>
@@ -829,26 +837,26 @@ export default function MatchModal({
         <button
           ref={closeBtnRef}
           onClick={onClose}
-          title="Close"
-          className="sticky top-3 z-10 ml-auto mr-3 mt-3 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] transition hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+          title={tr("match.close")}
+          className="sticky top-2 z-10 ml-auto mr-2 mt-2 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] transition hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
           type="button"
-          aria-label="Close"
+          aria-label={tr("match.close")}
         >
           ✕
         </button>
 
-        <div className="border-b border-[var(--fp-border)] px-5 pb-8 pt-2 sm:px-10">
-          <p id="match-modal-title" className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-            Match analysis
+        <div className="border-b border-[var(--fp-border)] px-4 pb-4 pt-1 sm:px-6">
+          <p id="match-modal-title" className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+            {tr("match.analysis")}
           </p>
-          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:gap-6">
-            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-full sm:gap-2">
+          <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3">
+            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
               <img
                 src={match.logos?.home}
-                className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
+                className="h-14 w-14 shrink-0 object-contain opacity-95 max-[380px]:h-12 max-[380px]:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-lg">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-base">
                 {match.teams.home}
               </div>
             </div>
@@ -865,26 +873,26 @@ export default function MatchModal({
                     <ConfidenceAura value={confPct} size="compact" />
                   ) : (
                     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-1.5 text-center">
-                      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">Confidence</div>
+                      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">{tr("match.confidence")}</div>
                       <div className="mt-0.5 text-[11px] font-bold text-[var(--fp-accent)]">
-                        {confidenceCategory || "Locked"}
+                        {confidenceCategory || tr("match.locked")}
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 text-left">
                   <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">
-                    <span>Pick</span>
+                    <span>{tr("match.pick")}</span>
                     <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7px] font-bold tracking-wider text-signal-petrol">
-                      {hasExactConfidence ? `${confPct}%` : confidenceCategory || "LOCKED"}
+                      {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                     </span>
                   </div>
                   <div className="line-clamp-2 break-words font-display text-lg font-bold leading-tight text-signal-petrol max-[380px]:text-base sm:text-3xl">{match.recommended.pick}</div>
                   <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-mint sm:text-[11px]">
-                    odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
+                    {tr("match.odd")} {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
                   </div>
                   <div className="hidden font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:block sm:text-[11px]">
-                    {hasExactConfidence ? `${confPct}%` : confidenceCategory || "Tier locked"}
+                    {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.tierLocked")}
                   </div>
                 </div>
               </div>
@@ -909,13 +917,13 @@ export default function MatchModal({
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
             </div>
-            <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-full sm:gap-2">
+            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
               <img
                 src={match.logos?.away}
-                className="h-20 w-20 shrink-0 object-contain opacity-95 max-[380px]:h-16 max-[380px]:w-16 sm:h-24 sm:w-24 lg:h-28 lg:w-28"
+                className="h-14 w-14 shrink-0 object-contain opacity-95 max-[380px]:h-12 max-[380px]:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-lg">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-base">
                 {match.teams.away}
               </div>
             </div>
@@ -970,28 +978,26 @@ export default function MatchModal({
             ) : (
               <>
                 <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center text-sm font-medium text-[var(--fp-text)]">
-                  {isPremiumLike
-                    ? "Advanced Signal Lens and Edge Compass need Ultra."
-                    : "Advanced signals are available on higher plans."}
+                  {isPremiumLike ? tr("match.advancedNeedUltra") : tr("match.advancedHigher")}
                 </div>
-                <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                <div className="mt-2 flex flex-wrap justify-center gap-1">
                   {(isFreeLike
                     ? [
-                        { label: "Confidence %", tier: "premium" as const },
-                        { label: "Signal Lens", tier: "ultra" as const },
-                        { label: "Edge Compass", tier: "ultra" as const }
+                        { label: tr("match.featConfidence"), tier: "premium" as const },
+                        { label: tr("match.featSignalLens"), tier: "ultra" as const },
+                        { label: tr("match.featEdgeCompass"), tier: "ultra" as const }
                       ]
                     : [
-                        { label: "Confidence %", tier: "ultra" as const },
-                        { label: "Edge Compass", tier: "ultra" as const }
+                        { label: tr("match.featConfidence"), tier: "ultra" as const },
+                        { label: tr("match.featEdgeCompass"), tier: "ultra" as const }
                       ]
                   ).map(({ label, tier }) => (
                     <button
                       key={label}
                       type="button"
-                      title={`${label} — upgrade to ${tier}`}
+                      title={tr("match.upgradeTo", { label, tier })}
                       onClick={() => onUpgradeRequired?.(label, tier)}
-                      className="inline-flex min-h-11 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                      className="inline-flex h-9 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
                     >
                       🔒 {label}
                     </button>
@@ -1014,17 +1020,19 @@ export default function MatchModal({
             }`}
           >
             <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-              {detailTab === "h2h" ? "Head-to-head context" : "Standings & form"}
+              {detailTab === "h2h" ? tr("match.h2hContext") : tr("match.standingsForm")}
             </h3>
             {showStandingsBlock ? (
               <>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <TeamSnapshotCard title="Gazde" snap={match.teamContext?.home} accent={homeColor} />
-                  <TeamSnapshotCard title="Oaspeți" snap={match.teamContext?.away} accent={awayColor} />
+                  <TeamSnapshotCard title={tr("match.home")} snap={match.teamContext?.home} accent={homeColor} />
+                  <TeamSnapshotCard title={tr("match.away")} snap={match.teamContext?.away} accent={awayColor} />
                 </div>
                 {standingsRows && standingsRows.length > 0 ? (
                   <div className="mt-4">
-                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Clasament complet · {match.league}</h4>
+                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                      {tr("match.fullStandings", { league: match.league })}
+                    </h4>
                     <LeagueStandingsTable
                       rows={standingsRows}
                       highlightHomeId={match.fixtureTeamIds?.home}
@@ -1035,35 +1043,35 @@ export default function MatchModal({
               </>
             ) : (
               <p className="text-[11px] leading-relaxed text-signal-inkMuted">
-                Nu am primit date de clasament sau formă pentru acest meci (de obicei sezonul ligii sau răspunsul API la clasament/statistici).
-                <span className="mt-2 block font-mono text-[10px] text-signal-petrol/90">Încearcă din nou Predict după deploy; datele vechi din browser fără aceste câmpuri nu se completează retroactiv.</span>
+                {tr("match.noStandingsBody")}
+                <span className="mt-2 block font-mono text-[10px] text-signal-petrol/90">{tr("match.noStandingsHint")}</span>
               </p>
             )}
           </section>
         </div>
 
-        <div className="sticky top-0 z-20 border-b border-white/5 bg-signal-panel/95 px-3 py-2 backdrop-blur-md sm:px-6">
-          <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Match detail">
-            {DETAIL_TABS.map((t) => (
+        <div className="sticky top-0 z-20 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 px-2 py-1.5 backdrop-blur-md sm:px-4">
+          <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={tr("match.analysis")}>
+            {DETAIL_TABS.map((tabItem) => (
               <button
-                key={t.id}
+                key={tabItem.id}
                 type="button"
                 role="tab"
-                aria-selected={detailTab === t.id}
-                onClick={() => setDetailTab(t.id)}
-                className={`min-h-11 shrink-0 rounded-lg px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                  detailTab === t.id
+                aria-selected={detailTab === tabItem.id}
+                onClick={() => setDetailTab(tabItem.id)}
+                className={`h-9 shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                  detailTab === tabItem.id
                     ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-signal-inkMuted hover:bg-signal-void/40 hover:text-signal-ink"
+                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
                 }`}
               >
-                {t.label}
+                {tr(tabItem.labelKey)}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="space-y-8 p-5 sm:p-10">
+        <div className="space-y-5 p-3 sm:p-5">
           <div className={tab(["prediction"])}>
             <PredictionLaboratoryPanel match={match} />
           </div>
@@ -1316,9 +1324,9 @@ export default function MatchModal({
                     <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
                       Rezultat la pauză (1X2 FH)
                     </div>
-                    <ProbBar label="Gazde conduc la pauză" val={match.probs.firstHalf.p1} color={homeColor} />
-                    <ProbBar label="Egalitate la pauză" val={match.probs.firstHalf.pX} color="#94a3b8" />
-                    <ProbBar label="Oaspeţi conduc la pauză" val={match.probs.firstHalf.p2} color={awayColor} />
+                    <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
+                    <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#94a3b8" />
+                    <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
                   </div>
                   {/* Coloana dreaptă: goluri FH */}
                   <div>
@@ -1360,12 +1368,10 @@ export default function MatchModal({
             </div>
           )}
           {!match.probs.firstHalf && !hasExactConfidence && (
-            <section className="rounded-2xl border border-white/10 bg-signal-void/25 p-4 sm:p-5">
-              <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-inkMuted">Prima repriză · blocat</h3>
-              <p className="mt-2 text-[11px] text-signal-inkMuted">
-                {isPremiumLike
-                  ? "Predicțiile HT Goals sunt disponibile în Ultra."
-                  : "Predicțiile HT Goals sunt disponibile din tier-urile superioare."}
+            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{tr("match.htLockedTitle")}</h3>
+              <p className="mt-1.5 text-sm text-[var(--fp-text-muted)]">
+                {isPremiumLike ? tr("match.htLockedUltra") : tr("match.htLocked")}
               </p>
             </section>
           )}
@@ -1429,31 +1435,29 @@ export default function MatchModal({
             </div>
           )}
           {!match.probs.corners && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence && (
-            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">Locked markets</h3>
-              <p className="mt-2 text-sm font-medium text-[var(--fp-text)]">
-                {isFreeLike
-                  ? "Corners, Shots and Edge unlock on Premium/Ultra."
-                  : "Shots and Edge unlock on Ultra."}
+            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{tr("match.lockedMarkets")}</h3>
+              <p className="mt-1.5 text-sm font-medium text-[var(--fp-text)]">
+                {isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap gap-1">
                 {(isFreeLike
                   ? [
-                      { label: "Corners", tier: "premium" as const },
-                      { label: "Shots", tier: "ultra" as const },
-                      { label: "Edge", tier: "ultra" as const }
+                      { label: tr("match.featCorners"), tier: "premium" as const },
+                      { label: tr("match.featShots"), tier: "ultra" as const },
+                      { label: tr("match.featEdge"), tier: "ultra" as const }
                     ]
                   : [
-                      { label: "Shots", tier: "ultra" as const },
-                      { label: "Edge", tier: "ultra" as const }
+                      { label: tr("match.featShots"), tier: "ultra" as const },
+                      { label: tr("match.featEdge"), tier: "ultra" as const }
                     ]
                 ).map(({ label, tier }) => (
                   <button
                     key={label}
                     type="button"
-                    title={`${label} — upgrade to ${tier}`}
+                    title={tr("match.upgradeTo", { label, tier })}
                     onClick={() => onUpgradeRequired?.(label, tier)}
-                    className="inline-flex min-h-11 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
+                    className="inline-flex h-9 items-center rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
                   >
                     🔒 {label}
                   </button>

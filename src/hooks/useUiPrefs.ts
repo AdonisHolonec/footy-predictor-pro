@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { readStoredLocale, writeStoredLocale, type Locale } from "../i18n";
 
 export type UiTheme = "light" | "dark" | "contrast";
+export type { Locale };
 
 export type MatchesSubFilterPref = "all" | "live" | "favorites";
 
 export type UiPrefsV3 = {
   theme: UiTheme;
+  locale: Locale;
   watchlistFixtureIds: number[];
   bookmarkFixtureIds: number[];
   favoriteTeamIds: number[];
@@ -23,6 +26,7 @@ export type UiPrefsV3 = {
 
 const DEFAULT_PREFS: UiPrefsV3 = {
   theme: "light",
+  locale: "ro",
   watchlistFixtureIds: [],
   bookmarkFixtureIds: [],
   favoriteTeamIds: [],
@@ -48,20 +52,24 @@ function legacyKeys(userId?: string | null) {
 }
 
 function readPrefs(userId?: string | null): UiPrefsV3 {
+  const storedLocale = readStoredLocale();
   try {
     const raw = localStorage.getItem(storageKey(userId));
-    if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<UiPrefsV3>;
+      return { ...DEFAULT_PREFS, ...parsed, locale: parsed.locale || storedLocale, theme: parsed.theme || "light" };
+    }
     for (const key of legacyKeys(userId)) {
       const legacy = localStorage.getItem(key);
       if (legacy) {
         const parsed = JSON.parse(legacy) as Partial<UiPrefsV3>;
         /* Enterprise UI V2: light-first — do not carry over dark as default. */
-        return { ...DEFAULT_PREFS, ...parsed, theme: "light" };
+        return { ...DEFAULT_PREFS, ...parsed, theme: "light", locale: parsed.locale || storedLocale };
       }
     }
-    return { ...DEFAULT_PREFS };
+    return { ...DEFAULT_PREFS, locale: storedLocale };
   } catch {
-    return { ...DEFAULT_PREFS };
+    return { ...DEFAULT_PREFS, locale: storedLocale };
   }
 }
 
@@ -84,6 +92,7 @@ export function useUiPrefs(userId?: string | null) {
 
   useEffect(() => {
     applyTheme(prefs.theme);
+    writeStoredLocale(prefs.locale || "ro");
     try {
       localStorage.setItem(storageKey(userId), JSON.stringify(prefs));
     } catch {
@@ -93,6 +102,11 @@ export function useUiPrefs(userId?: string | null) {
 
   const setTheme = useCallback((theme: UiTheme) => {
     setPrefs((p) => ({ ...p, theme }));
+  }, []);
+
+  const setLocale = useCallback((locale: Locale) => {
+    writeStoredLocale(locale);
+    setPrefs((p) => ({ ...p, locale }));
   }, []);
 
   const cycleTheme = useCallback(() => {
@@ -163,6 +177,7 @@ export function useUiPrefs(userId?: string | null) {
       prefs,
       setPrefs,
       setTheme,
+      setLocale,
       cycleTheme,
       toggleWatchlist,
       toggleBookmark,
@@ -174,6 +189,7 @@ export function useUiPrefs(userId?: string | null) {
     [
       prefs,
       setTheme,
+      setLocale,
       cycleTheme,
       toggleWatchlist,
       toggleBookmark,

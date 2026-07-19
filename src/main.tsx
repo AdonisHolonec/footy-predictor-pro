@@ -1,6 +1,7 @@
 // src/main.tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { LocaleProvider } from "./context/LocaleContext";
 import RootRouter from "./RootRouter";
 import "./index.css";
 
@@ -11,6 +12,8 @@ if (!container) {
 
 createRoot(container).render(
   <React.StrictMode>
-    <RootRouter />
+    <LocaleProvider>
+      <RootRouter />
+    </LocaleProvider>
   </React.StrictMode>
 );

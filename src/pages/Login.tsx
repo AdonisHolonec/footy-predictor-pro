@@ -4,10 +4,12 @@ import BrandArtboard from "../components/BrandArtboard";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
+import { useLocale } from "../context/LocaleContext";
 import { useAuth } from "../hooks/useAuth";
 import { HistoryStats } from "../types";
 
 export default function Login() {
+  const { t } = useLocale();
   const { user, signup, login, sendPasswordResetEmail, updatePassword, lastAuthEvent, error } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -232,24 +234,22 @@ export default function Login() {
             <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-signal-panel/100 via-signal-mist/100 to-signal-panel/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-petrol/55 to-transparent" />
-                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-silver">Autentificare</span>
+                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-signal-silver">{t("auth.title")}</span>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-signal-sage/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrol">Acces securizat</p>
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-petrol">{t("auth.secure")}</p>
                 <h2 className="lab-heading mt-1 text-xl">
-                  {mode === "login" && "Login"}
-                  {mode === "signup" && "Create account"}
-                  {mode === "forgot" && "Forgot password"}
-                  {mode === "reset" && "Reset password"}
+                  {mode === "login" && t("auth.login")}
+                  {mode === "signup" && t("auth.signup")}
+                  {mode === "forgot" && t("auth.forgot")}
+                  {mode === "reset" && t("auth.reset")}
                 </h2>
-                <p className="mt-1 text-xs text-signal-silver">
-                  Continuă către workspace-ul tău Footy Predictor Intelligence Lab.
-                </p>
+                <p className="mt-1 text-xs text-signal-silver">{t("auth.continue")}</p>
 
                 <form onSubmit={(event) => void onSubmit(event)} className="mt-5 space-y-3">
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
-                    Email
+                    {t("auth.email")}
                     <input
                       type="email"
                       value={email}
@@ -260,7 +260,7 @@ export default function Login() {
                   </label>
                   {mode !== "forgot" && (
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-signal-inkMuted">
-                      Password
+                      {t("auth.password")}
                       <input
                         type="password"
                         value={password}
@@ -319,14 +319,14 @@ export default function Login() {
                     className="w-full rounded-xl border border-signal-petrol/70 bg-gradient-to-r from-signal-petrol/80 via-signal-petrol to-signal-sage/70 px-4 py-2.5 text-sm font-semibold text-signal-mist shadow-[0_0_24px_rgba(56,189,248,0.5)] transition hover:-translate-y-0.5 hover:from-signal-petrol hover:to-signal-sage hover:shadow-[0_0_34px_rgba(56,189,248,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting
-                      ? "Se proceseaza..."
+                      ? t("auth.processing")
                       : mode === "login"
-                        ? "Login"
+                        ? t("auth.login")
                         : mode === "signup"
-                          ? "Sign up"
+                          ? t("auth.signup")
                           : mode === "forgot"
-                            ? "Trimite email reset"
-                            : "Actualizeaza parola"}
+                            ? t("auth.sendReset")
+                            : t("auth.updatePassword")}
                   </button>
                 </form>
 

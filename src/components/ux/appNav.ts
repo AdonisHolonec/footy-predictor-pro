@@ -11,16 +11,17 @@ export type AppNavView =
 
 export type MatchesSubFilter = "all" | "live" | "favorites";
 
-export const APP_NAV_ITEMS: { id: AppNavView; label: string; short: string }[] = [
-  { id: "home", label: "Home", short: "Home" },
-  { id: "matches", label: "Matches", short: "Matches" },
-  { id: "predictions", label: "Predictions", short: "Picks" },
-  { id: "live", label: "Live", short: "Live" },
-  { id: "history", label: "History", short: "History" },
-  { id: "statistics", label: "Statistics", short: "Stats" },
-  { id: "notifications", label: "Notifications", short: "Alerts" },
-  { id: "profile", label: "Profile", short: "Profile" },
-  { id: "settings", label: "Settings", short: "Settings" }
+/** Nav items use i18n keys under `nav.*` — resolve labels via `t()`. */
+export const APP_NAV_ITEMS: { id: AppNavView; labelKey: string; shortKey: string }[] = [
+  { id: "home", labelKey: "nav.home", shortKey: "nav.home" },
+  { id: "matches", labelKey: "nav.matches", shortKey: "nav.matches" },
+  { id: "predictions", labelKey: "nav.predictions", shortKey: "nav.picks" },
+  { id: "live", labelKey: "nav.live", shortKey: "nav.live" },
+  { id: "history", labelKey: "nav.history", shortKey: "nav.history" },
+  { id: "statistics", labelKey: "nav.statistics", shortKey: "nav.stats" },
+  { id: "notifications", labelKey: "nav.notifications", shortKey: "nav.alerts" },
+  { id: "profile", labelKey: "nav.profile", shortKey: "nav.profile" },
+  { id: "settings", labelKey: "nav.settings", shortKey: "nav.settings" }
 ];
 
 /** Bottom bar: 5 primary destinations. Rest via sidebar / profile / ⌘K. */

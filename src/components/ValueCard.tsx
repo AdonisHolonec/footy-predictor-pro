@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import { PredictionRow } from "../types";
 
 type ValueEngineData = NonNullable<PredictionRow["valueEngine"]>;
@@ -13,27 +14,27 @@ type ValueCardProps = {
 
 const SIGNAL_STYLES: Record<
   NonNullable<ValueEngineData["signal"]>,
-  { border: string; bg: string; text: string; label: string; badge: string }
+  { border: string; bg: string; text: string; labelKey: string; badge: string }
 > = {
   positive: {
     border: "border-[var(--fp-success)]/40",
     bg: "bg-[var(--fp-success)]/10",
     text: "text-[var(--fp-success)]",
-    label: "Positive EV",
+    labelKey: "panels.positiveEv",
     badge: "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
   },
   neutral: {
     border: "border-[var(--fp-warning)]/40",
     bg: "bg-[var(--fp-warning)]/10",
     text: "text-[var(--fp-warning)]",
-    label: "Neutral",
+    labelKey: "panels.neutral",
     badge: "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
   },
   negative: {
     border: "border-[var(--fp-danger)]/40",
     bg: "bg-[var(--fp-danger)]/10",
     text: "text-[var(--fp-danger)]",
-    label: "Negative EV",
+    labelKey: "panels.negativeEv",
     badge: "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/15 text-[var(--fp-danger)]"
   }
 };
@@ -68,8 +69,10 @@ function marketSignal(m: MarketRow): keyof typeof SIGNAL_STYLES {
  * Best market is highlighted across 1X2 / DC / BTTS / O/U / Corners / Cards.
  */
 export default function ValueCard({ engine, bookmaker, compact = false, className = "" }: ValueCardProps) {
+  const { t } = useLocale();
   const signal = resolveSignal(engine);
   const tone = SIGNAL_STYLES[signal];
+  const toneLabel = t(tone.labelKey);
   const recommendable = Boolean(
     engine.recommendable && engine.detected && !engine.negativeEV && (engine.expectedValue ?? 0) > 0
   );
@@ -87,7 +90,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
     return (
       <div
         className={`inline-flex max-w-full items-center gap-1.5 rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider ${tone.badge} ${className}`}
-        title={`EV ${formatEv(ev)} · Kelly ${kelly}% · Score ${score} · ${selection} · ${tone.label}`}
+        title={`EV ${formatEv(ev)} · Kelly ${kelly}% · Score ${score} · ${selection} · ${toneLabel}`}
       >
         <span className={tone.text}>EV</span>
         <span className="tabular-nums">{formatEv(ev)}</span>
@@ -101,61 +104,61 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
 
   return (
     <section
-      className={`rounded-[var(--fp-radius)] border bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5 ${tone.border} ${className}`}
+      className={`rounded-[var(--fp-radius)] border bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)] ${tone.border} ${className}`}
     >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--fp-border)] pb-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
         <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Value Betting Engine</h3>
-          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">prediction probability × bookmaker odds</p>
-          {bookmaker ? <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">Operator · {bookmaker}</p> : null}
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.valueEngine")}</h3>
+          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.valueEngineSub")}</p>
+          {bookmaker ? <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">Operator · {bookmaker}</p> : null}
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <div className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${tone.badge}`}>
-            {tone.label}
+        <div className="flex flex-col items-end gap-1">
+          <div className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tone.badge}`}>
+            {toneLabel}
           </div>
           {recommendable ? (
             <div className="rounded-md border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-success)]">
-              Best market · {family ? `${family} · ` : ""}
+              {t("panels.bestMarket")} · {family ? `${family} · ` : ""}
               {selection}
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric label="Expected Value" value={formatEv(ev)} tone={tone.text} />
-        <Metric label="Kelly Stake" value={`${kelly.toFixed(2)}%`} tone="text-[var(--fp-text)]" />
-        <Metric label="Value Score" value={`${score}`} tone="text-[var(--fp-text)]" />
-        <Metric label="Selection" value={selection} tone="text-[var(--fp-text)]" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Metric label={t("panels.expectedValue")} value={formatEv(ev)} tone={tone.text} />
+        <Metric label={t("panels.kelly")} value={`${kelly.toFixed(2)}%`} tone="text-[var(--fp-text)]" />
+        <Metric label={t("panels.valueScore")} value={`${score}`} tone="text-[var(--fp-text)]" />
+        <Metric label={t("panels.selection")} value={selection} tone="text-[var(--fp-text)]" />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <Flag
           active={Boolean(engine.positiveEV)}
-          label="Positive EV"
+          label={t("panels.positiveEv")}
           activeClass="border-[var(--fp-success)]/35 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
         />
         <Flag
           active={signal === "neutral"}
-          label="Neutral"
+          label={t("panels.neutral")}
           activeClass="border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
         />
         <Flag
           active={Boolean(engine.negativeEV)}
-          label="Negative EV"
+          label={t("panels.negativeEv")}
           activeClass="border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/15 text-[var(--fp-danger)]"
         />
         <Flag
           active={recommendable}
-          label={recommendable ? "Recommendable" : "Not recommended"}
+          label={recommendable ? t("panels.recommendable") : t("panels.notRecommended")}
           activeClass="border-[var(--fp-success)]/35 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
           inactiveClass="border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"
         />
       </div>
 
       {engine.negativeEV || ev < 0 ? (
-        <p className="mt-4 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
-          Negative EV — never recommend this bet.
+        <p className="mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
+          {t("panels.negativeEvWarn")}
         </p>
       ) : null}
 

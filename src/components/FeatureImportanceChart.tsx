@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import type { FeatureImportance } from "../types";
 
 function barColor(index: number, total: number): string {
@@ -18,6 +19,7 @@ export default function FeatureImportanceChart({
   importance: FeatureImportance;
   compact?: boolean;
 }) {
+  const { t } = useLocale();
   const items = Array.isArray(importance.items)
     ? [...importance.items].sort((a, b) => b.contribution - a.contribution)
     : Object.entries(importance.contributions || {}).map(([key, contribution]) => ({
@@ -33,7 +35,7 @@ export default function FeatureImportanceChart({
     return (
       <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
         <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/75">
-          Key Factors
+          {t("panels.keyFactors")}
         </div>
         {top.map((item, i) => (
           <div key={item.key} className="flex items-center gap-2 font-mono text-[9px]">
@@ -52,13 +54,11 @@ export default function FeatureImportanceChart({
   }
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-3">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
         <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Key Factors</h3>
-          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">
-            Contribution to this prediction · stored for ML
-          </p>
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
+          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.keyFactorsSub")}</p>
         </div>
         <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
           {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%

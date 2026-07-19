@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { useLocale } from "../context/LocaleContext";
 import type { MonteCarloResult, PredictionRow } from "../types";
 
 const tip = {
@@ -57,14 +58,15 @@ function HistChart({
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2.5 shadow-[var(--fp-shadow-sm)]">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
-      <p className="mt-0.5 font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">{value}</p>
+    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2">
+      <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
+      <p className="mt-0.5 font-display text-base font-bold tabular-nums text-[var(--fp-text)]">{value}</p>
     </div>
   );
 }
 
 export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColor = "#f59e0b" }: Props) {
+  const { t } = useLocale();
   const mc = match.monteCarlo as MonteCarloResult | undefined;
   if (!mc || !mc.simulations) return null;
 
@@ -89,12 +91,12 @@ export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColo
   }));
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5 lg:p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">Monte Carlo Simulation</h3>
-          <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-            {mc.simulations.toLocaleString()} sims
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.monteCarlo")}</h3>
+          <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">
+            {mc.simulations.toLocaleString()} {t("panels.simulations")}
             {mc.adaptive?.enabled && mc.adaptive.score != null
               ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
               : ""}{" "}
@@ -107,12 +109,12 @@ export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColo
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
         <StatChip label="P(1)" value={`${pd.p1.toFixed(1)}%`} />
         <StatChip label="P(X)" value={`${pd.pX.toFixed(1)}%`} />
         <StatChip label="P(2)" value={`${pd.p2.toFixed(1)}%`} />
-        <StatChip label="BTTS" value={`${pd.pGG.toFixed(1)}%`} />
-        <StatChip label="Over 2.5" value={`${pd.pO25.toFixed(1)}%`} />
+        <StatChip label={t("panels.btts")} value={`${pd.pGG.toFixed(1)}%`} />
+        <StatChip label={t("panels.over25")} value={`${pd.pO25.toFixed(1)}%`} />
         <StatChip
           label="Most likely"
           value={`${mc.summary?.mostLikelyScore || mc.mostLikelyScores[0]?.score || "—"} · ${(

@@ -28,6 +28,7 @@ import Toast from "../design-system/Toast";
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import Tooltip from "../design-system/Tooltip";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
+import { useLocale } from "../context/LocaleContext";
 
 const PredictionLaboratoryPanel = lazy(() => import("../components/PredictionLaboratory"));
 const MonteCarloPanel = lazy(() => import("../components/MonteCarloPanel"));
@@ -192,14 +193,24 @@ export default function UserDashboard() {
   const [navView, setNavView] = useState<AppNavView>("home");
   const [commandOpen, setCommandOpen] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; requiredTier: UpgradeTier } | null>(null);
+  const { t, setLocale, locale } = useLocale();
   const {
     prefs,
+    setLocale: setPrefsLocale,
     cycleTheme,
     toggleWatchlist,
     pushRecent,
     updateFilters,
     isWatched
   } = useUiPrefs(user?.id);
+
+  useEffect(() => {
+    if (prefs.locale && prefs.locale !== locale) setLocale(prefs.locale);
+  }, [prefs.locale]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (locale !== prefs.locale) setPrefsLocale(locale);
+  }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
   const matchesFilter = prefs.matchesFilter;
   const matchSearch = prefs.matchSearch;
   const showSettledMarketsOnly = prefs.settledOnly;
@@ -413,7 +424,7 @@ export default function UserDashboard() {
           return { ...prev, [user.id]: merged };
         });
       }
-      setStatus(`Au fost generate ${deduped.length} predictii.`);
+      setStatus(t("dash.generated", { n: deduped.length }));
       await syncHistoryAfterPredict(token, 7);
       await loadHistory();
     }
@@ -484,7 +495,7 @@ export default function UserDashboard() {
     });
     setPreds(filtered);
     if (hasLegacyPredictionShape(localPredictions) && filtered.length) {
-      setRehydratedNotice("Showing saved picks. Advanced markets may refresh from history.");
+      setRehydratedNotice(t("dash.legacyNotice"));
     }
   }, [user?.id, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
@@ -684,8 +695,8 @@ export default function UserDashboard() {
           return { ...prev, [user.id]: merged };
         });
       }
-      setStatus(`Am restaurat ${hydrated.length} predictii din istoric.`);
-      setRehydratedNotice(`Restored ${hydrated.length} saved predictions — no new generation used.`);
+      setStatus(t("dash.restoredHistory", { n: hydrated.length }));
+      setRehydratedNotice(t("dash.restoredNotice", { n: hydrated.length }));
       return hydrated.length;
     } catch {
       return 0;
@@ -699,12 +710,12 @@ export default function UserDashboard() {
   }, [rehydratedNotice]);
 
   async function warm() {
-    if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
+    if (!selectedLeagueIds.length) return setStatus(t("dash.selectLeague"));
     await runWarm(activePredictDates);
   }
 
   async function predict() {
-    if (!selectedLeagueIds.length) return setStatus("Selecteaza o liga.");
+    if (!selectedLeagueIds.length) return setStatus(t("dash.selectLeague"));
     await runPredict(activePredictDates);
   }
 
@@ -785,7 +796,7 @@ export default function UserDashboard() {
   /** Prefer cache/history restore so Refresh does not burn quota when picks already exist. */
   async function restoreOrPredict() {
     if (!selectedLeagueIds.length) {
-      setStatus("Selecteaza o liga.");
+      setStatus(t("dash.selectLeague"));
       return;
     }
     const cached = user?.id ? predictionsByUser[user.id] || [] : [];
@@ -799,7 +810,7 @@ export default function UserDashboard() {
     });
     if (fromCache.length) {
       setPreds(fromCache);
-      setStatus(`Showing ${fromCache.length} saved predictions for this date.`);
+      setStatus(t("dash.showingSaved", { n: fromCache.length }));
       return;
     }
     const restoredCount = await rehydratePredictionsFromHistory();
@@ -884,39 +895,39 @@ export default function UserDashboard() {
       extraDates={
         <>
           {userTier === "premium" && (
-            <Tooltip label="Include tomorrow’s fixtures">
+            <Tooltip label={t("shell.includeTomorrow")}>
               <button
                 type="button"
-                title="Include tomorrow’s fixtures"
+                title={t("shell.includeTomorrow")}
                 onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
+                className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
               >
-                +1 day
+                {t("shell.plus1Day")}
               </button>
             </Tooltip>
           )}
           {userTier === "ultra" && (
             <>
-              <Tooltip label="Include tomorrow’s fixtures">
+              <Tooltip label={t("shell.includeTomorrow")}>
                 <button
                   type="button"
-                  title="Include tomorrow’s fixtures"
+                  title={t("shell.includeTomorrow")}
                   onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                  className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
+                  className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
                 >
-                  +1 day
+                  {t("shell.plus1Day")}
                 </button>
               </Tooltip>
-              <Tooltip label="Include next 2 days">
+              <Tooltip label={t("shell.includeNext2")}>
                 <button
                   type="button"
-                  title="Include next 2 days"
+                  title={t("shell.includeNext2")}
                   onClick={() =>
                     setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
                   }
-                  className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-3 text-xs font-bold text-[var(--fp-accent)]"
+                  className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
                 >
-                  +2 days
+                  {t("shell.plus2Days")}
                 </button>
               </Tooltip>
             </>
@@ -927,12 +938,12 @@ export default function UserDashboard() {
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
         <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-accent)] motion-reduce:animate-none" />
-          Loading
+          {t("dash.loading")}
         </span>
       )}
       {dateSyncBadgeUntil > Date.now() && (
         <span className="mb-3 ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-success)]">
-          Data sincronizată
+          {t("dash.dataSynced")}
         </span>
       )}
       {status && (
@@ -953,23 +964,21 @@ export default function UserDashboard() {
 
       {isMainBoard && (
         <div className="space-y-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="font-display text-[length:var(--fp-hero)] font-semibold tracking-tight text-[var(--fp-text)]">
-                Predictions
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-[length:var(--fp-hero)]">
+                {t("dash.predictions")}
               </h1>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-                Today’s match picks — tap a card for full analysis.
-              </p>
+              <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">{t("dash.predictionsSub")}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
               {(
                 [
-                  ["all", "All"],
-                  ["live", "Live"],
-                  ["favorites", "Favorites"]
+                  ["all", "dash.filterAll"],
+                  ["live", "dash.filterLive"],
+                  ["favorites", "dash.filterFavorites"]
                 ] as const
-              ).map(([id, label]) => (
+              ).map(([id, key]) => (
                 <button
                   key={id}
                   type="button"
@@ -980,21 +989,21 @@ export default function UserDashboard() {
                       updateFilters({ matchesFilter: id });
                     }
                   }}
-                  title={`Filter: ${label}`}
-                  className={`min-h-[var(--fp-touch)] rounded-full border px-3 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:px-4 ${
+                  title={t("dash.filterTitle", { label: t(key) })}
+                  className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                     (id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live")
-                      ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                      : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
+                      ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                      : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
                   }`}
                   aria-pressed={
                     id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live"
                   }
                 >
-                  {label}
+                  {t(key)}
                 </button>
               ))}
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 text-xs font-semibold text-[var(--fp-text-muted)]">
-                Value
+              <label className="flex h-9 items-center gap-1.5 border-l border-[var(--fp-border)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]">
+                {t("dash.filterValue")}
                 <input
                   type="checkbox"
                   checked={prefs.valueOnly}
@@ -1007,13 +1016,11 @@ export default function UserDashboard() {
 
           {!visiblePreds.length ? (
             <EmptyState
-              title={matchesFilter === "favorites" ? "No favorites yet" : "No predictions yet"}
+              title={matchesFilter === "favorites" ? t("dash.emptyFavoritesTitle") : t("dash.emptyPredsTitle")}
               description={
-                matchesFilter === "favorites"
-                  ? "Tap the star on a prediction card to save it here."
-                  : "Refresh restores saved picks first. New generation runs only if nothing is saved for this date."
+                matchesFilter === "favorites" ? t("dash.emptyFavoritesDesc") : t("dash.emptyPredsDesc")
               }
-              actionLabel={matchesFilter === "favorites" ? "Show all" : "Restore / Refresh"}
+              actionLabel={matchesFilter === "favorites" ? t("dash.showAll") : t("dash.restoreRefresh")}
               onAction={
                 matchesFilter === "favorites"
                   ? () => updateFilters({ matchesFilter: "all" })
@@ -1021,7 +1028,7 @@ export default function UserDashboard() {
               }
             />
           ) : (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {visiblePreds.map((row) => (
                 <PredictionFocusCard
                   key={row.id}
@@ -1034,44 +1041,43 @@ export default function UserDashboard() {
             </div>
           )}
 
-          {/* Today's Summary — four compact KPIs only */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-4 gap-1.5 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2 shadow-[var(--fp-shadow-sm)] sm:gap-2 sm:p-3">
             {[
-              { label: "Today’s predictions", value: String(visiblePreds.length) },
+              { label: t("dash.kpiToday"), value: String(visiblePreds.length) },
               {
-                label: "Accuracy",
+                label: t("dash.kpiAccuracy"),
                 value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
               },
               {
-                label: "ROI",
+                label: t("dash.kpiRoi"),
                 value: simpleRoi != null ? `${simpleRoi >= 0 ? "+" : ""}${simpleRoi.toFixed(1)}%` : "—"
               },
               {
-                label: "Win rate",
+                label: t("dash.kpiWinRate"),
                 value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
               }
             ].map((k) => (
-              <Card key={k.label} padding="sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-faint)]">{k.label}</p>
-                <p className="mt-1 font-display text-[length:var(--fp-num)] font-bold tabular-nums text-[var(--fp-text)]">
+              <div key={k.label} className="min-w-0 px-1 text-center">
+                <p className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{k.label}</p>
+                <p className="mt-0.5 font-display text-base font-bold tabular-nums text-[var(--fp-text)] sm:text-lg">
                   {k.value}
                 </p>
-              </Card>
+              </div>
             ))}
           </div>
 
-          <CollapsiblePanel title="Advanced analysis" subtitle="Monte Carlo, key factors, confidence, explanation">
+          <CollapsiblePanel title={t("dash.advancedTitle")} subtitle={t("dash.advancedSub")}>
             {!analysisMatch ? (
-              <p className="text-sm text-[var(--fp-text-muted)]">Run Refresh to load a match for analysis.</p>
+              <p className="text-sm text-[var(--fp-text-muted)]">{t("dash.advancedEmpty")}</p>
             ) : (
-              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading analysis…</p>}>
-                <div className="space-y-6">
+              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">{t("dash.advancedLoading")}</p>}>
+                <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[var(--fp-text)]">
-                      {analysisMatch.teams.home} vs {analysisMatch.teams.away}
+                      {analysisMatch.teams.home} {t("common.vs")} {analysisMatch.teams.away}
                     </p>
                     <Button size="sm" variant="secondary" onClick={() => openMatch(analysisMatch)}>
-                      Open focus mode
+                      {t("dash.openFocus")}
                     </Button>
                   </div>
                   <MonteCarloPanel
@@ -1096,7 +1102,7 @@ export default function UserDashboard() {
             )}
           </CollapsiblePanel>
 
-          <CollapsiblePanel title="Historical performance" subtitle="Your settled results and success rate">
+          <CollapsiblePanel title={t("dash.historyTitle")} subtitle={t("dash.historySub")}>
             <HistorySection
               history={history}
               trackerSlot={trackerSlot}
@@ -1108,18 +1114,18 @@ export default function UserDashboard() {
             />
           </CollapsiblePanel>
 
-          <CollapsiblePanel title="Prediction analysis" subtitle="Detailed model breakdown for the top pick">
+          <CollapsiblePanel title={t("dash.labTitle")} subtitle={t("dash.labSub")}>
             {!analysisMatch ? (
-              <p className="text-sm text-[var(--fp-text-muted)]">No match selected.</p>
+              <p className="text-sm text-[var(--fp-text-muted)]">{t("dash.labEmpty")}</p>
             ) : (
-              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading…</p>}>
+              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">{t("dash.labLoading")}</p>}>
                 <PredictionLaboratoryPanel match={analysisMatch} />
               </Suspense>
             )}
           </CollapsiblePanel>
 
-          <CollapsiblePanel title="Insights" subtitle="Public track record and deeper statistics">
-            <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading insights…</p>}>
+          <CollapsiblePanel title={t("dash.insightsTitle")} subtitle={t("dash.insightsSub")}>
+            <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">{t("dash.insightsLoading")}</p>}>
               <StatisticsSection
                 trackerSlot={trackerSlot}
                 winRate={trackerStats.winRate}
@@ -1524,9 +1530,9 @@ export default function UserDashboard() {
             aria-label="League filter"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">Leagues</h2>
+              <h2 className="font-display text-lg font-semibold">{t("dash.leaguesTitle")}</h2>
               <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
-                Close
+                {t("dash.close")}
               </Button>
             </div>
             <LeaguePanel

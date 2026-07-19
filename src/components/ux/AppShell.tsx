@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocale } from "../../context/LocaleContext";
 import { APP_NAV_ITEMS, MOBILE_TAB_ITEMS, type AppNavView } from "./appNav";
 import Button from "../../design-system/Button";
 import Badge from "../../design-system/Badge";
@@ -100,6 +101,8 @@ export default function AppShell({
   onLogout,
   children
 }: Props) {
+  const { t } = useLocale();
+
   return (
     <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] lg:flex">
@@ -112,7 +115,7 @@ export default function AppShell({
             Footy<span className="text-[var(--fp-accent)]">Predictor</span>
           </button>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-2" aria-label="Main navigation">
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-2" aria-label={t("nav.home")}>
           {APP_NAV_ITEMS.map((item) => {
             const isActive = active === item.id;
             return (
@@ -128,7 +131,7 @@ export default function AppShell({
                 aria-current={isActive ? "page" : undefined}
               >
                 <NavIcon id={item.id} />
-                {item.label}
+                {t(item.labelKey)}
                 {item.id === "live" && (
                   <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--fp-danger)]" aria-hidden />
                 )}
@@ -138,13 +141,13 @@ export default function AppShell({
         </nav>
         <div className="space-y-3 border-t border-[var(--fp-border)] p-4">
           {onOpenCommand && (
-            <Button variant="secondary" className="w-full" onClick={onOpenCommand} aria-label="Search">
-              Search ⌘K
+            <Button variant="secondary" className="w-full" onClick={onOpenCommand} aria-label={t("shell.search")}>
+              {t("shell.search")} ⌘K
             </Button>
           )}
           {onPredict && (
             <Button className="w-full" loading={predictBusy} onClick={onPredict} aria-busy={predictBusy || undefined}>
-              Predict
+              {t("shell.refresh")}
             </Button>
           )}
           <div className="flex items-center justify-between gap-2">
@@ -156,7 +159,7 @@ export default function AppShell({
               </div>
             </div>
             {onLogout && (
-              <Button variant="ghost" size="sm" onClick={onLogout} aria-label="Logout">
+              <Button variant="ghost" size="sm" onClick={onLogout}>
                 Log out
               </Button>
             )}
@@ -178,7 +181,7 @@ export default function AppShell({
               type="button"
               onClick={onOpenCommand}
               className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-              aria-label="Search"
+              aria-label={t("shell.search")}
             >
               ⌘K
             </button>
@@ -188,14 +191,14 @@ export default function AppShell({
               type="button"
               onClick={onOpenNotifications}
               className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-              aria-label="Notifications"
+              aria-label={t("shell.notifications")}
             >
               <NavIcon id="notifications" />
             </button>
           )}
           {onPredict && (
             <Button size="sm" loading={predictBusy} onClick={onPredict} aria-busy={predictBusy || undefined}>
-              Predict
+              {t("shell.refresh")}
             </Button>
           )}
         </div>
@@ -207,7 +210,7 @@ export default function AppShell({
 
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-[var(--fp-bg-elevated)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
-        aria-label="Mobile navigation"
+        aria-label={t("nav.home")}
       >
         {MOBILE_TAB_ITEMS.map((item) => {
           const isActive = active === item.id;
@@ -222,7 +225,7 @@ export default function AppShell({
               aria-current={isActive ? "page" : undefined}
             >
               <NavIcon id={item.id} />
-              {item.short}
+              {t(item.shortKey)}
             </button>
           );
         })}
