@@ -42,7 +42,9 @@ import {
   inferSeason,
   isFixtureInPlay,
   isoToday,
+  kickoffLocalDateKey,
   localCalendarDateKey,
+  mergePredictionRows,
   mergePredsWithHistory,
   normalizeSelectedDates,
   useLocalStorageState
@@ -401,7 +403,10 @@ export default function UserDashboard() {
     onPredictCompleted: async (deduped, token) => {
       setPreds(deduped);
       if (user?.id) {
-        setPredictionsByUser((prev) => ({ ...prev, [user.id]: deduped }));
+        setPredictionsByUser((prev) => ({
+          ...prev,
+          [user.id]: mergePredictionRows(prev[user.id] || [], deduped)
+        }));
         setUserPredictionMap((prev) => {
           const existing = prev[user.id] || [];
           const merged = Array.from(new Set([...existing, ...deduped.map((item) => Number(item.id))]));
@@ -466,23 +471,21 @@ export default function UserDashboard() {
       setPreds([]);
       return;
     }
-    if (hasLegacyPredictionShape(localPredictions)) {
-      // Force fresh server rehydrate for stale desktop cache.
-      setPreds([]);
-      setPredictionsByUser((prev) => ({ ...prev, [user.id]: [] }));
-      setRehydratedNotice("Cache local vechi detectat pe desktop. Reîncarc predictiile cu piețele noi.");
-      return;
-    }
 
     const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
     const selectedDateSet = new Set(effectiveDates);
     const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
     const filtered = localPredictions.filter((row) => {
-      if (!selectedLeagueSet.size) return false;
-      const kickoffDate = String(row.kickoff || "").slice(0, 10);
-      return selectedDateSet.has(kickoffDate) && selectedLeagueSet.has(Number(row.leagueId));
+      const kickoffDate = kickoffLocalDateKey(row.kickoff);
+      if (!selectedDateSet.has(kickoffDate)) return false;
+      /* Until favorite leagues hydrate, keep date-matched rows visible. */
+      if (!selectedLeagueSet.size) return true;
+      return selectedLeagueSet.has(Number(row.leagueId));
     });
     setPreds(filtered);
+    if (hasLegacyPredictionShape(localPredictions) && filtered.length) {
+      setRehydratedNotice("Showing saved picks. Advanced markets may refresh from history.");
+    }
   }, [user?.id, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
@@ -644,32 +647,37 @@ export default function UserDashboard() {
     }
   }
 
-  async function rehydratePredictionsFromHistory() {
+  async function rehydratePredictionsFromHistory(): Promise<number> {
     try {
-      if (!user?.id || !session?.access_token) return;
+      if (!user?.id || !session?.access_token) return 0;
       const response = await fetch("/api/history?days=14&limit=1000&mine=1", {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       const json = await response.json();
-      if (!response.ok || !json?.ok || !Array.isArray(json.items)) return;
+      if (!response.ok || !json?.ok || !Array.isArray(json.items)) return 0;
       /** Doar răspuns user-scoped (join user_prediction_fixtures); refuză istoric global dacă lipsește flag. */
-      if (json.mine !== true) return;
+      if (json.mine !== true) return 0;
 
       const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const selectedDateSet = new Set(effectiveDates);
       const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
       const hydrated = (json.items as PredictionRow[])
         .filter((row) => {
-          const kickoffDate = String(row.kickoff || "").slice(0, 10);
-          return selectedDateSet.has(kickoffDate) && selectedLeagueSet.has(Number(row.leagueId));
+          const kickoffDate = kickoffLocalDateKey(row.kickoff);
+          if (!selectedDateSet.has(kickoffDate)) return false;
+          if (!selectedLeagueSet.size) return true;
+          return selectedLeagueSet.has(Number(row.leagueId));
         })
-        .slice(0, 50);
+        .slice(0, 80);
 
-      if (!hydrated.length) return;
+      if (!hydrated.length) return 0;
 
       setPreds(hydrated);
       if (user?.id) {
-        setPredictionsByUser((prev) => ({ ...prev, [user.id]: hydrated }));
+        setPredictionsByUser((prev) => ({
+          ...prev,
+          [user.id]: mergePredictionRows(prev[user.id] || [], hydrated)
+        }));
         setUserPredictionMap((prev) => {
           const existing = prev[user.id] || [];
           const merged = Array.from(new Set([...existing, ...hydrated.map((item) => Number(item.id))]));
@@ -677,9 +685,10 @@ export default function UserDashboard() {
         });
       }
       setStatus(`Am restaurat ${hydrated.length} predictii din istoric.`);
-      setRehydratedNotice(`Date vechi actualizate: ${hydrated.length} predicții au fost reîncărcate.`);
+      setRehydratedNotice(`Restored ${hydrated.length} saved predictions — no new generation used.`);
+      return hydrated.length;
     } catch {
-      // silent fallback
+      return 0;
     }
   }
 
@@ -773,6 +782,31 @@ export default function UserDashboard() {
     }
   }
 
+  /** Prefer cache/history restore so Refresh does not burn quota when picks already exist. */
+  async function restoreOrPredict() {
+    if (!selectedLeagueIds.length) {
+      setStatus("Selecteaza o liga.");
+      return;
+    }
+    const cached = user?.id ? predictionsByUser[user.id] || [] : [];
+    const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
+    const selectedDateSet = new Set(effectiveDates);
+    const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
+    const fromCache = cached.filter((row) => {
+      const kickoffDate = kickoffLocalDateKey(row.kickoff);
+      if (!selectedDateSet.has(kickoffDate)) return false;
+      return selectedLeagueSet.has(Number(row.leagueId));
+    });
+    if (fromCache.length) {
+      setPreds(fromCache);
+      setStatus(`Showing ${fromCache.length} saved predictions for this date.`);
+      return;
+    }
+    const restoredCount = await rehydratePredictionsFromHistory();
+    if (restoredCount > 0) return;
+    await warmAndPredict();
+  }
+
   const openMatch = useCallback(
     (match: PredictionRow) => {
       pushRecent(Number(match.id));
@@ -835,7 +869,7 @@ export default function UserDashboard() {
       search={matchSearch}
       onSearchChange={(q) => updateFilters({ matchSearch: q })}
       onOpenLeagues={() => setIsLeaguesOpen(true)}
-      onRefresh={() => void warmAndPredict()}
+      onRefresh={() => void restoreOrPredict()}
       refreshBusy={warmPredictBusy}
       favoritesActive={matchesFilter === "favorites"}
       onToggleFavorites={() =>
@@ -977,13 +1011,13 @@ export default function UserDashboard() {
               description={
                 matchesFilter === "favorites"
                   ? "Tap the star on a prediction card to save it here."
-                  : "Choose leagues (header → Leagues), then press Refresh to load today’s picks."
+                  : "Refresh restores saved picks first. New generation runs only if nothing is saved for this date."
               }
-              actionLabel={matchesFilter === "favorites" ? "Show all" : "Refresh"}
+              actionLabel={matchesFilter === "favorites" ? "Show all" : "Restore / Refresh"}
               onAction={
                 matchesFilter === "favorites"
                   ? () => updateFilters({ matchesFilter: "all" })
-                  : () => void warmAndPredict()
+                  : () => void restoreOrPredict()
               }
             />
           ) : (

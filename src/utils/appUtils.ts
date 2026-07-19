@@ -19,6 +19,30 @@ export function localCalendarDateKey(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Kickoff → local calendar day (avoids UTC date mismatch emptying the board). */
+export function kickoffLocalDateKey(kickoff?: string | null): string {
+  if (!kickoff) return "";
+  const d = new Date(kickoff);
+  if (!Number.isFinite(d.getTime())) return String(kickoff).slice(0, 10);
+  return localCalendarDateKey(d);
+}
+
+/** Merge prediction rows by fixture id — never drop prior dates when a new batch arrives. */
+export function mergePredictionRows(existing: PredictionRow[], incoming: PredictionRow[]): PredictionRow[] {
+  const map = new Map<number, PredictionRow>();
+  for (const row of existing || []) {
+    const id = Number(row?.id);
+    if (Number.isFinite(id)) map.set(id, row);
+  }
+  for (const row of incoming || []) {
+    const id = Number(row?.id);
+    if (!Number.isFinite(id)) continue;
+    const prev = map.get(id);
+    map.set(id, prev ? { ...prev, ...row } : row);
+  }
+  return Array.from(map.values());
+}
+
 export function inferSeason(dateISO: string): number {
   const [y, m] = dateISO.split("-").map(Number);
   if (!y || !m) return new Date().getFullYear() - 1;

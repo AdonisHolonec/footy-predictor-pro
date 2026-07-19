@@ -20,33 +20,33 @@ const DIMENSION_LABELS: Array<{ key: keyof NonNullable<ConfidenceEngineData["sco
 function categoryTone(category?: string): string {
   switch (category) {
     case "Very High":
-      return "border-signal-sage/40 bg-signal-sage/15 text-signal-sage";
+      return "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]";
     case "High":
-      return "border-signal-petrol/40 bg-signal-petrol/12 text-signal-petrol";
+      return "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]";
     case "Medium":
-      return "border-white/15 bg-signal-mist/20 text-signal-ink";
+      return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
     case "Low":
-      return "border-signal-amberSoft/40 bg-signal-amberSoft/10 text-signal-amberSoft";
+      return "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
     case "Very Low":
-      return "border-signal-rose/40 bg-signal-rose/10 text-signal-rose";
+      return "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]";
     default:
-      return "border-white/10 bg-signal-void/30 text-signal-inkMuted";
+      return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
   }
 }
 
 function overallToneClass(overall: number): string {
-  if (overall >= 80) return "text-signal-sage";
-  if (overall >= 65) return "text-signal-petrol";
-  if (overall >= 50) return "text-signal-ink";
-  if (overall >= 35) return "text-signal-amberSoft";
-  return "text-signal-rose";
+  if (overall >= 80) return "text-[var(--fp-success)]";
+  if (overall >= 65) return "text-[var(--fp-accent)]";
+  if (overall >= 50) return "text-[var(--fp-text)]";
+  if (overall >= 35) return "text-[var(--fp-warning)]";
+  return "text-[var(--fp-danger)]";
 }
 
 function scoreToneClass(score: number, available: boolean): string {
-  if (!available) return "text-signal-inkMuted/70";
-  if (score >= 66) return "text-signal-sage";
-  if (score <= 34) return "text-signal-rose";
-  return "text-signal-petrol";
+  if (!available) return "text-[var(--fp-text-faint)]";
+  if (score >= 66) return "text-[var(--fp-success)]";
+  if (score <= 34) return "text-[var(--fp-danger)]";
+  return "text-[var(--fp-accent)]";
 }
 
 function barWidth(score: number): string {
@@ -78,26 +78,26 @@ export default function ConfidenceEnginePanel({
     : [];
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-white/5 pb-3">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--fp-border)] pb-3">
         <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Confidence</h3>
-          <p className="mt-1 max-w-md font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Confidence</h3>
+          <p className="mt-1 max-w-md text-xs font-medium text-[var(--fp-text-muted)]">
             Independent context reliability · does not change the prediction
           </p>
           {recommendationPick ? (
-            <p className="mt-2 font-mono text-[10px] text-signal-ink/80">
-              For recommendation <span className="font-semibold text-signal-ink">{recommendationPick}</span>
+            <p className="mt-2 text-sm font-medium text-[var(--fp-text)]">
+              For recommendation <span className="font-bold">{recommendationPick}</span>
             </p>
           ) : null}
         </div>
         <div className="text-right">
           <div
-            className={`inline-flex items-center rounded-md border px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${categoryTone(category)}`}
+            className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
           >
             {category}
           </div>
-          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Confidence</div>
+          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Confidence</div>
           <div className={`font-display text-3xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
         </div>
       </div>
@@ -109,27 +109,29 @@ export default function ConfidenceEnginePanel({
           return (
             <div
               key={key}
-              className={`rounded-xl border p-2.5 transition ${
-                isAvailable ? "border-white/10 bg-signal-mist/25" : "border-white/5 bg-signal-void/25 opacity-55"
+              className={`rounded-[var(--fp-radius-sm)] border p-2.5 transition ${
+                isAvailable
+                  ? "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]"
+                  : "border-[var(--fp-border)] bg-[var(--fp-bg)] opacity-60"
               }`}
               title={isAvailable ? undefined : "Insufficient data (neutral 50, dimmed)"}
             >
               <div className="flex items-center justify-between gap-1">
-                <div className="truncate font-mono text-[8px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+                <div className="truncate text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                   {label}
                 </div>
-                <div className={`font-mono text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
+                <div className={`text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
                   {isAvailable ? score : "—"}
                 </div>
               </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-signal-void/60">
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
                 <div
-                  className={`h-full rounded-full ${isAvailable ? "bg-signal-petrol/70" : "bg-signal-inkMuted/30"}`}
+                  className={`h-full rounded-full ${isAvailable ? "bg-[var(--fp-accent)]" : "bg-[var(--fp-text-faint)]"}`}
                   style={{ width: isAvailable ? barWidth(score) : "50%" }}
                 />
               </div>
               {!isAvailable && (
-                <div className="mt-0.5 font-mono text-[7.5px] uppercase tracking-wide text-signal-inkMuted/70">n/a</div>
+                <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">n/a</div>
               )}
             </div>
           );
@@ -137,14 +139,14 @@ export default function ConfidenceEnginePanel({
       </div>
 
       {(whyLines.length > 0 || engine.why) && (
-        <div className="mt-4 rounded-xl border border-signal-petrol/20 bg-signal-petrol/5 p-3">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-signal-petrol/90">
+        <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] p-3">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
             Why this recommendation got {category}
           </div>
-          <ul className="mt-2 space-y-1.5 font-mono text-[10px] leading-relaxed text-signal-ink/85">
+          <ul className="mt-2 space-y-1.5 text-sm font-medium leading-relaxed text-[var(--fp-text)]">
             {(whyLines.length > 0 ? whyLines : [engine.why || ""]).filter(Boolean).map((line, i) => (
               <li key={`why-${i}`} className="flex gap-2">
-                <span className="mt-0.5 text-signal-petrol">▸</span>
+                <span className="mt-0.5 text-[var(--fp-accent)]">▸</span>
                 <span>{line}</span>
               </li>
             ))}
@@ -153,17 +155,17 @@ export default function ConfidenceEnginePanel({
       )}
 
       {dimLines.length > 0 && (
-        <details className="group mt-3 border-t border-white/5 pt-3" open>
-          <summary className="cursor-pointer list-none font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
+        <details className="group mt-3 border-t border-[var(--fp-border)] pt-3" open>
+          <summary className="cursor-pointer list-none text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)] outline-none marker:content-none [&::-webkit-details-marker]:hidden">
             <span className="inline-flex items-center gap-1.5">
               Dimension breakdown
-              <span className="text-signal-inkMuted transition group-open:rotate-90">›</span>
+              <span className="text-[var(--fp-text-muted)] transition group-open:rotate-90">›</span>
             </span>
           </summary>
-          <ul className="mt-2 space-y-1 font-mono text-[10px] leading-relaxed text-signal-inkMuted">
+          <ul className="mt-2 space-y-1 text-xs font-medium leading-relaxed text-[var(--fp-text-muted)]">
             {dimLines.map((line, i) => (
               <li key={`${i}-${line.slice(0, 16)}`} className="flex gap-2">
-                <span className="text-signal-stone/70">•</span>
+                <span>•</span>
                 <span>{line}</span>
               </li>
             ))}

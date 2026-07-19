@@ -18,11 +18,11 @@ import type { PredictionRow } from "../types";
 import { buildPredictionLaboratory, type PredictionLaboratory } from "../utils/predictionLaboratory";
 
 const tip = {
-  background: "rgba(10, 16, 24, 0.96)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "#0f172a",
+  border: "1px solid #334155",
   borderRadius: 10,
-  fontSize: 11,
-  color: "#d5dee8"
+  fontSize: 12,
+  color: "#f8fafc"
 };
 
 type Props = {
@@ -32,18 +32,18 @@ type Props = {
 };
 
 function scoreTone(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "text-signal-inkMuted";
-  if (v >= 70) return "text-signal-sage";
-  if (v >= 55) return "text-signal-petrol";
-  if (v >= 40) return "text-signal-amberSoft";
-  return "text-signal-rose";
+  if (v == null || !Number.isFinite(v)) return "text-[var(--fp-text-muted)]";
+  if (v >= 70) return "text-[var(--fp-success)]";
+  if (v >= 55) return "text-[var(--fp-accent)]";
+  if (v >= 40) return "text-[var(--fp-warning)]";
+  return "text-[var(--fp-danger)]";
 }
 
 function edgeTone(edge: number | null): string {
-  if (edge == null || !Number.isFinite(edge)) return "text-signal-inkMuted";
-  if (edge > 0.05) return "text-signal-sage";
-  if (edge < -0.05) return "text-signal-rose";
-  return "text-signal-inkMuted";
+  if (edge == null || !Number.isFinite(edge)) return "text-[var(--fp-text-muted)]";
+  if (edge > 0.05) return "text-[var(--fp-success)]";
+  if (edge < -0.05) return "text-[var(--fp-danger)]";
+  return "text-[var(--fp-text-muted)]";
 }
 
 function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
@@ -51,15 +51,15 @@ function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
     <div className="h-64 w-full sm:h-72">
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="72%">
-          <PolarGrid stroke="rgba(255,255,255,0.12)" />
-          <PolarAngleAxis dataKey="metric" tick={{ fill: "#9aabba", fontSize: 10 }} />
-          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#7a8a9a", fontSize: 9 }} />
+          <PolarGrid stroke="#e2e8f0" />
+          <PolarAngleAxis dataKey="metric" tick={{ fill: "#334155", fontSize: 10 }} />
+          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#475569", fontSize: 9 }} />
           <Radar
             name="Prediction Analysis"
             dataKey="value"
-            stroke="#5ec4b6"
-            fill="#5ec4b6"
-            fillOpacity={0.32}
+            stroke="#2563eb"
+            fill="#2563eb"
+            fillOpacity={0.28}
             strokeWidth={1.5}
           />
           <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}`, "Score"]} />
@@ -75,14 +75,14 @@ function EvolutionChart({ data }: { data: PredictionLaboratory["evolution"] }) {
     <div className="h-48 w-full sm:h-56">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-          <XAxis dataKey="stage" tick={{ fill: "#8a9aaa", fontSize: 10 }} />
-          <YAxis domain={[0, 100]} tick={{ fill: "#7a8a9a", fontSize: 10 }} width={32} unit="%" />
+          <CartesianGrid stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="stage" tick={{ fill: "#475569", fontSize: 10 }} />
+          <YAxis domain={[0, 100]} tick={{ fill: "#475569", fontSize: 10 }} width={32} unit="%" />
           <Tooltip contentStyle={tip} />
-          <Legend wrapperStyle={{ fontSize: 10, color: "#9aabba" }} />
-          <Line type="monotone" dataKey="p1" name="Home %" stroke="#5ec4b6" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="pX" name="Draw %" stroke="#6a9bb8" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="p2" name="Away %" stroke="#e0b46a" strokeWidth={2} dot={{ r: 3 }} />
+          <Legend wrapperStyle={{ fontSize: 10, color: "#334155" }} />
+          <Line type="monotone" dataKey="p1" name="Home %" stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="pX" name="Draw %" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="p2" name="Away %" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -93,23 +93,23 @@ function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
   const cmp = lab.comparison;
   if (!cmp) return null;
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/5 bg-signal-void/35">
-      <table className="w-full min-w-[320px] border-collapse text-left font-mono text-[11px]">
+    <div className="overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]">
+      <table className="w-full min-w-[320px] border-collapse text-left text-[11px]">
         <thead>
-          <tr className="border-b border-white/8 text-[9px] uppercase tracking-wider text-signal-inkMuted">
-            <th className="px-3 py-2.5 font-medium">Metric</th>
-            <th className="px-3 py-2.5 font-medium text-right">{cmp.homeName}</th>
-            <th className="px-3 py-2.5 font-medium text-right">{cmp.awayName}</th>
-            <th className="px-3 py-2.5 font-medium text-right">Edge</th>
+          <tr className="border-b border-[var(--fp-border)] text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+            <th className="px-3 py-2.5">Metric</th>
+            <th className="px-3 py-2.5 text-right">{cmp.homeName}</th>
+            <th className="px-3 py-2.5 text-right">{cmp.awayName}</th>
+            <th className="px-3 py-2.5 text-right">Edge</th>
           </tr>
         </thead>
         <tbody>
           {cmp.rows.map((r) => (
-            <tr key={r.metric} className="border-b border-white/[0.04] last:border-0">
-              <td className="px-3 py-2 text-signal-silver">{r.metric}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-signal-ink">{r.homeDisplay}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-signal-ink">{r.awayDisplay}</td>
-              <td className={`px-3 py-2 text-right tabular-nums ${edgeTone(r.edge)}`}>
+            <tr key={r.metric} className="border-b border-[var(--fp-border)] last:border-0">
+              <td className="px-3 py-2 font-medium text-[var(--fp-text-muted)]">{r.metric}</td>
+              <td className="px-3 py-2 text-right font-semibold tabular-nums text-[var(--fp-text)]">{r.homeDisplay}</td>
+              <td className="px-3 py-2 text-right font-semibold tabular-nums text-[var(--fp-text)]">{r.awayDisplay}</td>
+              <td className={`px-3 py-2 text-right font-bold tabular-nums ${edgeTone(r.edge)}`}>
                 {r.edge == null ? "—" : `${r.edge > 0 ? "+" : ""}${r.edge}`}
               </td>
             </tr>
@@ -117,12 +117,12 @@ function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
         </tbody>
       </table>
       {cmp.drawOdd != null && (
-        <div className="border-t border-white/5 px-3 py-2 font-mono text-[10px] text-signal-inkMuted">
+        <div className="border-t border-[var(--fp-border)] px-3 py-2 text-[10px] font-medium text-[var(--fp-text-muted)]">
           Draw odd · {Number(cmp.drawOdd).toFixed(2)}
           {lab.bookmaker?.differencePp != null && (
             <span className="ml-3">
               Book Δ ·{" "}
-              <span className={edgeTone(lab.bookmaker.differencePp)}>
+              <span className={`font-bold ${edgeTone(lab.bookmaker.differencePp)}`}>
                 {lab.bookmaker.differencePp >= 0 ? "+" : ""}
                 {lab.bookmaker.differencePp.toFixed(1)} pp
               </span>
@@ -140,13 +140,11 @@ function MetricsStrip({ lab }: { lab: PredictionLaboratory }) {
       {lab.metrics.map((m) => (
         <div
           key={m.key}
-          className="rounded-lg border border-white/5 bg-signal-mist/25 px-2.5 py-2"
+          className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2"
           title={m.label}
         >
-          <div className="truncate font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">
-            {m.label}
-          </div>
-          <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${scoreTone(m.value)}`}>
+          <div className="truncate text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{m.label}</div>
+          <div className={`mt-0.5 text-sm font-bold tabular-nums ${scoreTone(m.value)}`}>
             {m.display ?? (m.value != null ? m.value.toFixed(0) : "—")}
           </div>
         </div>
@@ -156,17 +154,14 @@ function MetricsStrip({ lab }: { lab: PredictionLaboratory }) {
 }
 
 export default function PredictionLaboratoryPanel({ match, compact = false }: Props) {
-  // Recompute whenever any match field changes (predict refresh / live score sync).
   const lab = useMemo(() => buildPredictionLaboratory(match), [match]);
 
   if (!lab.available) {
     if (compact) return null;
     return (
-      <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6">
-        <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-          Prediction Analysis
-        </h3>
-        <p className="mt-2 text-[11px] text-signal-inkMuted">Insufficient data for laboratory diagnostics.</p>
+      <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-[var(--fp-shadow-sm)]">
+        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Prediction Analysis</h3>
+        <p className="mt-2 text-sm font-medium text-[var(--fp-text-muted)]">Insufficient data for laboratory diagnostics.</p>
       </section>
     );
   }
@@ -174,13 +169,11 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
   if (compact) {
     const top = lab.radar.slice(0, 6);
     return (
-      <div className="mt-1.5 rounded-xl border border-white/5 bg-signal-void/40 px-2.5 py-2">
+      <div className="mt-1.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/80">
-            Prediction Analysis
-          </span>
+          <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">Prediction Analysis</span>
           {lab.bookmaker?.differencePp != null && (
-            <span className={`font-mono text-[9px] tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
+            <span className={`text-[9px] font-bold tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
               Δ {lab.bookmaker.differencePp >= 0 ? "+" : ""}
               {lab.bookmaker.differencePp.toFixed(1)}pp
             </span>
@@ -190,10 +183,10 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
           {top.map((p) => (
             <div key={p.key} className="flex min-w-0 flex-1 flex-col items-center gap-0.5" title={`${p.metric}: ${p.value}`}>
               <div
-                className="w-full rounded-sm bg-signal-petrol/55"
+                className="w-full rounded-sm bg-[var(--fp-accent)]/70"
                 style={{ height: `${Math.max(8, (p.value / 100) * 40)}px` }}
               />
-              <span className="truncate font-mono text-[7px] text-signal-inkMuted">{p.metric.slice(0, 3)}</span>
+              <span className="truncate text-[7px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
             </div>
           ))}
         </div>
@@ -202,17 +195,15 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
   }
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5 sm:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Prediction Analysis
-          </h3>
-          <p className="mt-1 text-[11px] text-signal-inkMuted">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Prediction Analysis</h3>
+          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">
             Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
           </p>
         </div>
-        <div className="font-mono text-[9px] tabular-nums text-signal-inkMuted">
+        <div className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
           auto · {new Date(lab.updatedAt).toLocaleTimeString()}
           {lab.pick ? ` · pick ${lab.pick}` : ""}
         </div>
@@ -221,23 +212,19 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
       <MetricsStrip lab={lab} />
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Radar profile
-          </div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Radar profile</div>
           <LabRadar data={lab.radar} />
         </div>
-        <div className="rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
-            Comparison table
-          </div>
+        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Comparison table</div>
           <ComparisonTable lab={lab} />
         </div>
       </div>
 
       {lab.evolution.length > 0 && (
-        <div className="mt-5 rounded-xl border border-white/5 bg-signal-mist/15 p-3 sm:p-4">
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">
+        <div className="mt-5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
+          <div className="mb-2 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
             Prediction evolution · 1X2 %
           </div>
           <EvolutionChart data={lab.evolution} />

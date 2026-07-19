@@ -67,10 +67,11 @@ function readPrefs(userId?: string | null): UiPrefsV3 {
 
 function applyTheme(theme: UiTheme) {
   const root = document.documentElement;
-  /* Light is default :root — only add classes for dark / contrast. */
   root.classList.remove("theme-light", "theme-dark", "theme-contrast");
+  /* Always set an explicit theme class so legacy .lab-card / signal surfaces get light overrides. */
   if (theme === "dark") root.classList.add("theme-dark");
-  if (theme === "contrast") root.classList.add("theme-contrast");
+  else if (theme === "contrast") root.classList.add("theme-contrast");
+  else root.classList.add("theme-light");
   root.dataset.theme = theme;
 }
 

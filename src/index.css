@@ -94,8 +94,77 @@
   }
 
   html.theme-light .lab-card,
-  html.theme-light .lab-glass {
-    @apply border-slate-200/80 bg-white text-slate-900 shadow-sm;
+  html.theme-light .lab-glass,
+  html.theme-light .lab-glass-strong,
+  html.theme-light .lab-stat {
+    border-color: var(--fp-border) !important;
+    background-color: var(--fp-bg-card) !important;
+    color: var(--fp-text) !important;
+    box-shadow: var(--fp-shadow-sm) !important;
+  }
+
+  html.theme-light .lab-section-eyebrow,
+  html.theme-light .lab-stat-label {
+    color: var(--fp-accent) !important;
+  }
+
+  html.theme-light .lab-heading,
+  html.theme-light .lab-stat-value,
+  html.theme-light .lab-section-title {
+    color: var(--fp-text) !important;
+  }
+
+  html.theme-light .glass-input {
+    border-color: var(--fp-border) !important;
+    background-color: var(--fp-bg) !important;
+    color: var(--fp-text) !important;
+  }
+
+  html.theme-light .glass-input::placeholder {
+    color: var(--fp-text-faint) !important;
+  }
+
+  /* Legacy signal utility classes → readable on light surfaces */
+  html.theme-light [class*="text-signal-inkMuted"],
+  html.theme-light [class*="text-signal-silver"],
+  html.theme-light [class*="text-signal-stone"] {
+    color: var(--fp-text-muted) !important;
+  }
+  html.theme-light [class*="text-signal-ink"]:not([class*="text-signal-inkMuted"]) {
+    color: var(--fp-text) !important;
+  }
+  html.theme-light [class*="text-signal-petrol"] {
+    color: var(--fp-accent) !important;
+  }
+  html.theme-light [class*="text-signal-mint"],
+  html.theme-light [class*="text-signal-sage"] {
+    color: #15803d !important;
+  }
+  html.theme-light [class*="text-signal-amber"],
+  html.theme-light [class*="text-signal-amberSoft"] {
+    color: #b45309 !important;
+  }
+  html.theme-light [class*="text-signal-rose"] {
+    color: #be123c !important;
+  }
+  html.theme-light [class*="text-rose-300"] {
+    color: #e11d48 !important;
+  }
+  html.theme-light [class*="text-emerald-200"],
+  html.theme-light [class*="text-emerald-300"] {
+    color: #047857 !important;
+  }
+  html.theme-light [class*="text-amber-200"] {
+    color: #b45309 !important;
+  }
+  html.theme-light [class*="bg-signal-void"],
+  html.theme-light [class*="bg-signal-panel"],
+  html.theme-light [class*="bg-signal-mist"],
+  html.theme-light [class*="bg-signal-fog"] {
+    background-color: var(--fp-bg-muted) !important;
+  }
+  html.theme-light [class*="border-white/"] {
+    border-color: var(--fp-border) !important;
   }
 
   button {

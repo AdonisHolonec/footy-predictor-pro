@@ -2,10 +2,10 @@ import type { FeatureImportance } from "../types";
 
 function barColor(index: number, total: number): string {
   const t = total <= 1 ? 0 : index / (total - 1);
-  if (t < 0.25) return "bg-signal-sage/80";
-  if (t < 0.5) return "bg-signal-petrol/75";
-  if (t < 0.75) return "bg-signal-mint/60";
-  return "bg-signal-inkMuted/50";
+  if (t < 0.25) return "bg-[var(--fp-success)]";
+  if (t < 0.5) return "bg-[var(--fp-accent)]";
+  if (t < 0.75) return "bg-teal-500";
+  return "bg-[var(--fp-text-faint)]";
 }
 
 /**
@@ -52,35 +52,33 @@ export default function FeatureImportanceChart({
   }
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-white/5 pb-3">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-3">
         <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-            Key Factors
-          </h3>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">Key Factors</h3>
+          <p className="mt-1 text-xs font-medium text-[var(--fp-text-muted)]">
             Contribution to this prediction · stored for ML
           </p>
         </div>
-        <div className="font-mono text-[9px] text-signal-inkMuted">
+        <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
           {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
         </div>
       </div>
 
       <div className="space-y-2.5">
         {items.map((item, i) => (
-          <div key={item.key} className="grid grid-cols-[7rem_1fr_2.75rem] items-center gap-2 sm:grid-cols-[8.5rem_1fr_3rem]">
-            <div className="truncate font-mono text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+          <div key={item.key} className="grid grid-cols-[6.5rem_1fr_2.75rem] items-center gap-2 sm:grid-cols-[8.5rem_1fr_3rem]">
+            <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
               {item.label}
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-signal-void/70">
+            <div className="h-2.5 overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
               <div
                 className={`h-full rounded-full transition-[width] duration-500 ${barColor(i, items.length)}`}
                 style={{ width: `${Math.max(2, Math.min(100, item.contribution))}%` }}
                 title={`${item.label}: ${item.contribution}%`}
               />
             </div>
-            <div className="text-right font-mono text-sm font-bold tabular-nums text-signal-ink">
+            <div className="text-right text-sm font-bold tabular-nums text-[var(--fp-text)]">
               {Number(item.contribution).toFixed(Number(item.contribution) < 10 ? 1 : 0)}%
             </div>
           </div>
