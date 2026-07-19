@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type UiTheme = "dark" | "light" | "contrast";
+export type UiTheme = "light" | "dark" | "contrast";
 
 export type MatchesSubFilterPref = "all" | "live" | "favorites";
 
@@ -22,7 +22,7 @@ export type UiPrefsV3 = {
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
-  theme: "dark",
+  theme: "light",
   watchlistFixtureIds: [],
   bookmarkFixtureIds: [],
   favoriteTeamIds: [],
@@ -39,18 +39,27 @@ const DEFAULT_PREFS: UiPrefsV3 = {
 };
 
 function storageKey(userId?: string | null) {
-  return `footy:ui:v4:${userId || "anon"}`;
+  return `footy:ui:v5:${userId || "anon"}`;
 }
 
-function legacyKey(userId?: string | null) {
-  return `footy:ui:v3:${userId || "anon"}`;
+function legacyKeys(userId?: string | null) {
+  const id = userId || "anon";
+  return [`footy:ui:v4:${id}`, `footy:ui:v3:${id}`];
 }
 
 function readPrefs(userId?: string | null): UiPrefsV3 {
   try {
-    const raw = localStorage.getItem(storageKey(userId)) || localStorage.getItem(legacyKey(userId));
-    if (!raw) return { ...DEFAULT_PREFS };
-    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+    const raw = localStorage.getItem(storageKey(userId));
+    if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+    for (const key of legacyKeys(userId)) {
+      const legacy = localStorage.getItem(key);
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as Partial<UiPrefsV3>;
+        /* Enterprise UI V2: light-first — do not carry over dark as default. */
+        return { ...DEFAULT_PREFS, ...parsed, theme: "light" };
+      }
+    }
+    return { ...DEFAULT_PREFS };
   } catch {
     return { ...DEFAULT_PREFS };
   }
@@ -58,8 +67,9 @@ function readPrefs(userId?: string | null): UiPrefsV3 {
 
 function applyTheme(theme: UiTheme) {
   const root = document.documentElement;
-  root.classList.remove("theme-light", "theme-contrast");
-  if (theme === "light") root.classList.add("theme-light");
+  /* Light is default :root — only add classes for dark / contrast. */
+  root.classList.remove("theme-light", "theme-dark", "theme-contrast");
+  if (theme === "dark") root.classList.add("theme-dark");
   if (theme === "contrast") root.classList.add("theme-contrast");
   root.dataset.theme = theme;
 }
@@ -86,7 +96,7 @@ export function useUiPrefs(userId?: string | null) {
 
   const cycleTheme = useCallback(() => {
     setPrefs((p) => {
-      const order: UiTheme[] = ["dark", "light", "contrast"];
+      const order: UiTheme[] = ["light", "dark", "contrast"];
       const next = order[(order.indexOf(p.theme) + 1) % order.length];
       return { ...p, theme: next };
     });

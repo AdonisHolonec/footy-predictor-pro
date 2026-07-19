@@ -6,6 +6,19 @@
 
 @layer base {
   :root {
+    /* Enterprise UI V2 light defaults (bridged) */
+    --bg: #f8fafc;
+    --bg-elevated: #ffffff;
+    --bg-muted: #f1f5f9;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --text-faint: #94a3b8;
+    --accent: #2563eb;
+    --accent-2: #f59e0b;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --info: #2563eb;
     --lab-blur: 12px;
     --lab-blur-strong: 18px;
     --lab-radius: 0.875rem;
@@ -20,37 +33,24 @@
     --lab-space-8: 2rem;
     --lab-transition: 240ms cubic-bezier(0.33, 1, 0.68, 1);
     --lab-transition-fast: 150ms cubic-bezier(0.33, 1, 0.68, 1);
-    --lab-border-glow: rgba(62, 207, 191, 0.22);
-    --lab-border-subtle: rgba(255, 255, 255, 0.06);
-    --lab-shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04);
-    /* Bridged by design-system/tokens.css — keep fallbacks */
-    --bg: #0a0a0b;
-    --bg-elevated: #1a1a1e;
-    --bg-muted: #121214;
-    --border: rgba(255, 255, 255, 0.08);
-    --text: #f4f4f5;
-    --text-muted: #a1a1aa;
-    --text-faint: #71717a;
+    --lab-border-glow: rgba(37, 99, 235, 0.18);
+    --lab-border-subtle: rgba(15, 23, 42, 0.06);
+    --lab-shadow-elevated: 0 12px 36px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  }
+
+  html.theme-dark {
+    --bg: #0b1220;
+    --bg-elevated: #1e293b;
+    --bg-muted: #0f172a;
+    --border: rgba(148, 163, 184, 0.2);
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
     --accent: #2563eb;
     --accent-2: #f59e0b;
     --danger: #ef4444;
     --success: #22c55e;
     --info: #2563eb;
-  }
-
-  html.theme-light {
-    --bg: #f4f6f8;
-    --bg-elevated: #ffffff;
-    --bg-muted: #e8eef4;
-    --border: rgba(15, 23, 42, 0.1);
-    --text: #0f172a;
-    --text-muted: #64748b;
-    --text-faint: #94a3b8;
-    --accent: #0d9488;
-    --accent-2: #d97706;
-    --danger: #dc2626;
-    --success: #16a34a;
-    --info: #0284c7;
   }
 
   html.theme-contrast {
@@ -75,9 +75,9 @@
   }
 
   body {
-    @apply antialiased font-sans text-signal-ink bg-signal-mist;
-    background-color: var(--bg);
-    color: var(--text);
+    @apply antialiased font-sans;
+    background-color: var(--fp-bg, var(--bg));
+    color: var(--fp-text, var(--text));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

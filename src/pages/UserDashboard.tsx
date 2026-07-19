@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import LeaguePanel from "../components/LeaguePanel";
 import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
-import AppShell from "../components/ux/AppShell";
 import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
-import StickyFilterBar from "../components/ux/StickyFilterBar";
 import CommandPalette from "../components/ux/CommandPalette";
-import HomeSection from "../components/ux/HomeSection";
+import ConsumerShell from "../components/ux/ConsumerShell";
+import PredictionFocusCard from "../components/ux/PredictionFocusCard";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
-import VirtualizedMatchGrid from "../components/ux/VirtualizedMatchGrid";
 import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
 import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
@@ -22,12 +20,21 @@ import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
-import { AdminPerformanceObservatory } from "../components/admin/AdminObservatory";
 import Button from "../design-system/Button";
 import Card from "../design-system/Card";
 import Badge from "../design-system/Badge";
 import EmptyState from "../design-system/EmptyState";
 import Toast from "../design-system/Toast";
+import CollapsiblePanel from "../design-system/CollapsiblePanel";
+
+const PredictionLaboratoryPanel = lazy(() => import("../components/PredictionLaboratory"));
+const MonteCarloPanel = lazy(() => import("../components/MonteCarloPanel"));
+const FeatureImportanceChart = lazy(() => import("../components/FeatureImportanceChart"));
+const ConfidenceEnginePanel = lazy(() => import("../components/ConfidenceEnginePanel"));
+const PredictionContributionsChart = lazy(() => import("../components/PredictionContributionsChart"));
+const TrackRecordSection = lazy(() =>
+  import("../components/TrackRecordSection").then((m) => ({ default: m.default }))
+);
 import {
   hashColor,
   inferSeason,
@@ -101,6 +108,24 @@ function clampTierDates(baseDate: string, tier: string | undefined, dates: strin
   return filtered.length ? filtered : [baseDate];
 }
 
+/** Simple 1u ROI from settled history — display only, no engine change. */
+function computeSimpleRoi(rows: HistoryEntry[]): number | null {
+  let stake = 0;
+  let pnl = 0;
+  for (const h of rows) {
+    if (h.validation !== "win" && h.validation !== "loss") continue;
+    const odd = Number(h.recommended?.odd ?? h.valueBet?.odd);
+    if (!Number.isFinite(odd) || odd <= 1) continue;
+    stake += 1;
+    if (h.validation === "win") pnl += odd - 1;
+    else pnl -= 1;
+  }
+  if (!stake) return null;
+  return (pnl / stake) * 100;
+}
+
+const MAIN_VIEWS: AppNavView[] = ["home", "matches", "predictions", "live"];
+
 export default function UserDashboard() {
   const {
     user,
@@ -166,11 +191,9 @@ export default function UserDashboard() {
     prefs,
     cycleTheme,
     toggleWatchlist,
-    toggleBookmark,
     pushRecent,
     updateFilters,
-    isWatched,
-    isBookmarked
+    isWatched
   } = useUiPrefs(user?.id);
   const matchesFilter = prefs.matchesFilter;
   const matchSearch = prefs.matchSearch;
@@ -189,7 +212,13 @@ export default function UserDashboard() {
   const visiblePreds = useMemo(() => {
     let rows = preds;
     const listFilter: MatchesSubFilter | "predictions" =
-      navView === "live" ? "live" : navView === "predictions" ? "predictions" : navView === "matches" ? matchesFilter : "all";
+      navView === "live"
+        ? "live"
+        : navView === "predictions"
+          ? "predictions"
+          : matchesFilter === "favorites" || matchesFilter === "live"
+            ? matchesFilter
+            : "all";
     if (listFilter === "live") {
       rows = rows.filter((row) => isFixtureInPlay(row.status));
     } else if (listFilter === "favorites") {
@@ -268,7 +297,6 @@ export default function UserDashboard() {
     const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
     return clampTierDates(seedDate, userTier, selectedDates.length ? selectedDates : [seedDate]);
   }, [selectedDates, date, userTier]);
-  const isFreeDbOnlyMode = userTier === "free";
   const rollToDate = useCallback(
     (nextDate: string) => {
       setDate(nextDate);
@@ -767,46 +795,88 @@ export default function UserDashboard() {
     [history]
   );
 
-  const showMatchBoard = navView === "matches" || navView === "live" || navView === "predictions";
-
-  const matchBoardTitle =
-    navView === "live"
-      ? "Live"
-      : navView === "predictions"
-        ? "Predictions"
-        : matchesFilter === "favorites"
-          ? "Favorites"
-          : "All matches";
+  const isMainBoard = MAIN_VIEWS.includes(navView);
+  const simpleRoi = useMemo(() => computeSimpleRoi(history), [history]);
+  const analysisMatch = useMemo(() => {
+    const playable = preds.filter((p) => !p.insufficientData);
+    return (
+      [...playable].sort(
+        (a, b) => Number(b.recommended?.confidence || 0) - Number(a.recommended?.confidence || 0)
+      )[0] || preds[0] || null
+    );
+  }, [preds]);
 
   const trackerSlot = (
-    <AdminPerformanceObservatory className="mt-0">
-      <SuccessRateTracker
-        stats={trackerStats}
-        animatedWins={animatedWins}
-        animatedLosses={animatedLosses}
-        animatedWinRate={animatedWinRate}
-        isWinRatePulsing={isWinRatePulsing}
-        isHistorySyncing={isHistorySyncing}
-        pendingHistoryCount={pendingHistoryCount}
-        displayedPredsCount={visiblePreds.length}
-        pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
-        onBreakdownClick={() => setPerfCounterModalOpen(true)}
-      />
-    </AdminPerformanceObservatory>
+    <SuccessRateTracker
+      stats={trackerStats}
+      animatedWins={animatedWins}
+      animatedLosses={animatedLosses}
+      animatedWinRate={animatedWinRate}
+      isWinRatePulsing={isWinRatePulsing}
+      isHistorySyncing={isHistorySyncing}
+      pendingHistoryCount={pendingHistoryCount}
+      displayedPredsCount={visiblePreds.length}
+      pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
+      onBreakdownClick={() => setPerfCounterModalOpen(true)}
+    />
   );
 
   return (
-    <AppShell
-      active={navView}
-      onNavigate={handleNav}
+    <ConsumerShell
+      date={date}
+      onDateChange={(next) => {
+        setDate(next);
+        setSelectedDates(normalizeSelectedDates([next]));
+        void fetchDays([next]);
+      }}
+      search={matchSearch}
+      onSearchChange={(q) => updateFilters({ matchSearch: q })}
+      onOpenLeagues={() => setIsLeaguesOpen(true)}
+      onRefresh={() => void warmAndPredict()}
+      refreshBusy={warmPredictBusy}
+      favoritesActive={matchesFilter === "favorites"}
+      onToggleFavorites={() =>
+        updateFilters({ matchesFilter: matchesFilter === "favorites" ? "all" : "favorites" })
+      }
+      onOpenNotifications={() => setNavView("notifications")}
+      onOpenProfile={() => setNavView("profile")}
+      onOpenSettings={() => setNavView("settings")}
+      onOpenSearch={() => setCommandOpen(true)}
       email={user?.email}
       tier={userTier}
-      dbMode={isFreeDbOnlyMode}
-      onPredict={() => void warmAndPredict()}
-      predictBusy={warmPredictBusy}
-      onOpenCommand={() => setCommandOpen(true)}
-      onOpenNotifications={() => setNavView("notifications")}
-      onLogout={() => void logout()}
+      extraDates={
+        <>
+          {userTier === "premium" && (
+            <button
+              type="button"
+              onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+              className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-accent)]"
+            >
+              +1 day
+            </button>
+          )}
+          {userTier === "ultra" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
+                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-warning)]"
+              >
+                +1 day
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
+                }
+                className="min-h-11 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-xs font-semibold text-[var(--fp-warning)]"
+              >
+                +2 days
+              </button>
+            </>
+          )}
+        </>
+      }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
         <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
@@ -835,186 +905,204 @@ export default function UserDashboard() {
         </div>
       )}
 
-      {navView === "home" && (
-        <HomeSection
-          matches={preds}
-          onOpenMatch={openMatch}
-          onGoMatches={() => handleNav("matches")}
-          onGoLive={() => handleNav("live")}
-          onGoHistory={() => handleNav("history")}
-          onGoStatistics={() => handleNav("statistics")}
-          onPredict={() => void warmAndPredict()}
-          continueMatch={continueMatch}
-          winRate={trackerStats.winRate}
-          pendingCount={pendingHistoryCount}
-          settledCount={trackerStats.settled}
-          wins={trackerStats.wins}
-          losses={trackerStats.losses}
-          usageLabel={tierQuotaExempt ? "Unlimited" : userTier}
-        />
-      )}
-
-      {showMatchBoard && (
-        <>
-          <header className="mb-4">
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              {navView === "predictions" ? "Predictions" : navView === "live" ? "Live" : "Matches"}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{matchBoardTitle}</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">
-              {navView === "predictions"
-                ? "Top Picks ranked by confidence — same model, curated view."
-                : navView === "live"
-                  ? "In-play fixtures from your current prediction set."
-                  : "Browse fixtures, filter by league, confidence, and Best Value."}
-            </p>
-            {navView === "matches" && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  [
-                    ["all", "All"],
-                    ["live", "Live"],
-                    ["favorites", "Favorites"]
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => updateFilters({ matchesFilter: id })}
-                    className={`min-h-[var(--fp-touch)] rounded-full border px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                      matchesFilter === id
-                        ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                        : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
-                    }`}
-                    aria-pressed={matchesFilter === id}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </header>
-          <StickyFilterBar
-            date={date}
-            onDateChange={(next) => {
-              setDate(next);
-              setSelectedDates(normalizeSelectedDates([next]));
-              void fetchDays([next]);
-            }}
-            search={matchSearch}
-            onSearchChange={(q) => updateFilters({ matchSearch: q })}
-            minConfidence={prefs.minConfidence}
-            onMinConfidence={(n) => updateFilters({ minConfidence: n })}
-            minEv={prefs.minEv}
-            onMinEv={(n) => updateFilters({ minEv: n })}
-            valueOnly={prefs.valueOnly}
-            onValueOnly={(v) => updateFilters({ valueOnly: v })}
-            settledOnly={showSettledMarketsOnly}
-            onSettledOnly={(v) => updateFilters({ settledOnly: v })}
-            onOpenLeagues={() => setIsLeaguesOpen(true)}
-            extraDates={
-              <>
-                {userTier === "premium" && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                    className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-accent)]"
-                  >
-                    +1 day
-                  </button>
-                )}
-                {userTier === "ultra" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                      className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-warning)]"
-                    >
-                      +1 day
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
-                      }
-                      className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-[10px] font-semibold text-[var(--fp-warning)]"
-                    >
-                      +2 days
-                    </button>
-                  </>
-                )}
-                {tierQuotaExempt && <Badge tone="success">Unlimited</Badge>}
-              </>
-            }
-          />
-          <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
-            <div className="lg:col-span-4 xl:col-span-3">
-              <LeaguePanel
-                leaguesSorted={leaguesSorted}
-                selectedSet={new Set(selectedLeagueIds)}
-                selectedLeagueIds={selectedLeagueIds}
-                isLeaguesOpen={isLeaguesOpen}
-                searchLeague={searchLeague}
-                eliteLeagues={ELITE_LEAGUES}
-                setIsLeaguesOpen={setIsLeaguesOpen}
-                setSearchLeague={setSearchLeague}
-                setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-                selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
-                clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
-              />
+      {isMainBoard && (
+        <div className="space-y-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="font-display text-[length:var(--fp-hero)] font-semibold tracking-tight text-[var(--fp-text)]">
+                Predictions
+              </h1>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
+                Today’s match picks — tap a card for full analysis.
+              </p>
             </div>
-            <div className="lg:col-span-8 xl:col-span-9">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="font-display text-lg font-semibold">{matchBoardTitle}</h2>
-                <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">{visiblePreds.length}</span>
-              </div>
-              {!visiblePreds.length ? (
-                <EmptyState
-                  title={
-                    matchesFilter === "favorites" && navView === "matches"
-                      ? "No favorites yet"
-                      : navView === "live" || matchesFilter === "live"
-                        ? "No live matches"
-                        : showSettledMarketsOnly
-                          ? "No settled markets"
-                          : "No matches to show"
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "All"],
+                  ["live", "Live"],
+                  ["favorites", "Favorites"]
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    if (id === "live") handleNav("live");
+                    else {
+                      setNavView("home");
+                      updateFilters({ matchesFilter: id });
+                    }
+                  }}
+                  className={`min-h-[var(--fp-touch)] rounded-full border px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                    (id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live")
+                      ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                      : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
+                  }`}
+                  aria-pressed={
+                    id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live"
                   }
-                  description={
-                    matchesFilter === "favorites" && navView === "matches"
-                      ? "Tap the star on a match card to save it here."
-                      : navView === "live" || matchesFilter === "live"
-                        ? "Nothing is in play in your current leagues and date. Check Upcoming on Home or widen the date."
-                        : showSettledMarketsOnly
-                          ? "No finished fixtures with extra markets in this selection. Turn off Settled or run Predict again."
-                          : "Select leagues on the left, then run Predict to load today’s opportunities."
-                  }
-                  actionLabel={
-                    matchesFilter === "favorites" && navView === "matches"
-                      ? "Browse matches"
-                      : "Run Predict"
-                  }
-                  onAction={
-                    matchesFilter === "favorites" && navView === "matches"
-                      ? () => updateFilters({ matchesFilter: "all" })
-                      : () => void warmAndPredict()
-                  }
+                >
+                  {label}
+                </button>
+              ))}
+              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 text-xs font-semibold text-[var(--fp-text-muted)]">
+                Value
+                <input
+                  type="checkbox"
+                  checked={prefs.valueOnly}
+                  onChange={(e) => updateFilters({ valueOnly: e.target.checked })}
+                  className="accent-[var(--fp-accent)]"
                 />
-              ) : (
-                <VirtualizedMatchGrid
-                  matches={visiblePreds}
-                  hashColor={hashColor}
-                  isWatched={isWatched}
-                  onToggleWatch={toggleWatchlist}
-                  isBookmarked={isBookmarked}
-                  onToggleBookmark={toggleBookmark}
-                  onShare={setToast}
-                  onOpen={openMatch}
-                  canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
-                />
-              )}
+              </label>
             </div>
           </div>
-        </>
+
+          {!visiblePreds.length ? (
+            <EmptyState
+              title={matchesFilter === "favorites" ? "No favorites yet" : "No predictions yet"}
+              description={
+                matchesFilter === "favorites"
+                  ? "Tap the star on a prediction card to save it here."
+                  : "Choose leagues (header → Leagues), then press Refresh to load today’s picks."
+              }
+              actionLabel={matchesFilter === "favorites" ? "Show all" : "Refresh"}
+              onAction={
+                matchesFilter === "favorites"
+                  ? () => updateFilters({ matchesFilter: "all" })
+                  : () => void warmAndPredict()
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {visiblePreds.map((row) => (
+                <PredictionFocusCard
+                  key={row.id}
+                  row={row}
+                  watched={isWatched(Number(row.id))}
+                  onToggleWatch={() => toggleWatchlist(Number(row.id))}
+                  onOpen={() => openMatch(row)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Today's Summary — four compact KPIs only */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { label: "Today’s predictions", value: String(visiblePreds.length) },
+              {
+                label: "Accuracy",
+                value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
+              },
+              {
+                label: "ROI",
+                value: simpleRoi != null ? `${simpleRoi >= 0 ? "+" : ""}${simpleRoi.toFixed(1)}%` : "—"
+              },
+              {
+                label: "Win rate",
+                value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
+              }
+            ].map((k) => (
+              <Card key={k.label} padding="sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-faint)]">{k.label}</p>
+                <p className="mt-1 font-display text-[length:var(--fp-num)] font-bold tabular-nums text-[var(--fp-text)]">
+                  {k.value}
+                </p>
+              </Card>
+            ))}
+          </div>
+
+          <CollapsiblePanel title="Advanced analysis" subtitle="Monte Carlo, key factors, confidence, explanation">
+            {!analysisMatch ? (
+              <p className="text-sm text-[var(--fp-text-muted)]">Run Refresh to load a match for analysis.</p>
+            ) : (
+              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading analysis…</p>}>
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-[var(--fp-text)]">
+                      {analysisMatch.teams.home} vs {analysisMatch.teams.away}
+                    </p>
+                    <Button size="sm" variant="secondary" onClick={() => openMatch(analysisMatch)}>
+                      Open focus mode
+                    </Button>
+                  </div>
+                  <MonteCarloPanel
+                    match={analysisMatch}
+                    homeColor={hashColor(analysisMatch.teams.home)}
+                    awayColor={hashColor(analysisMatch.teams.away)}
+                  />
+                  {analysisMatch.featureImportance && (
+                    <FeatureImportanceChart importance={analysisMatch.featureImportance} />
+                  )}
+                  {analysisMatch.confidenceEngine && (
+                    <ConfidenceEnginePanel
+                      engine={analysisMatch.confidenceEngine}
+                      recommendationPick={analysisMatch.recommended?.pick || null}
+                    />
+                  )}
+                  {analysisMatch.predictionContributions && (
+                    <PredictionContributionsChart data={analysisMatch.predictionContributions} />
+                  )}
+                </div>
+              </Suspense>
+            )}
+          </CollapsiblePanel>
+
+          <CollapsiblePanel title="Historical performance" subtitle="Your settled results and success rate">
+            <HistorySection
+              history={history}
+              trackerSlot={trackerSlot}
+              pendingCount={pendingHistoryCount}
+              wins={trackerStats.wins}
+              losses={trackerStats.losses}
+              settled={trackerStats.settled}
+              winRate={trackerStats.winRate}
+            />
+          </CollapsiblePanel>
+
+          <CollapsiblePanel title="Prediction analysis" subtitle="Detailed model breakdown for the top pick">
+            {!analysisMatch ? (
+              <p className="text-sm text-[var(--fp-text-muted)]">No match selected.</p>
+            ) : (
+              <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading…</p>}>
+                <PredictionLaboratoryPanel match={analysisMatch} />
+              </Suspense>
+            )}
+          </CollapsiblePanel>
+
+          <CollapsiblePanel title="Insights" subtitle="Public track record and deeper statistics">
+            <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">Loading insights…</p>}>
+              <StatisticsSection
+                trackerSlot={trackerSlot}
+                winRate={trackerStats.winRate}
+                settled={trackerStats.settled}
+                wins={trackerStats.wins}
+                losses={trackerStats.losses}
+              />
+              <div className="mt-6">
+                <TrackRecordSection />
+              </div>
+            </Suspense>
+          </CollapsiblePanel>
+
+          {continueMatch && (
+            <button
+              type="button"
+              onClick={() => openMatch(continueMatch)}
+              className="flex w-full min-h-[var(--fp-touch)] items-center justify-between rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] px-4 py-3 text-left"
+            >
+              <span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Continue</span>
+                <br />
+                <span className="font-semibold">
+                  {continueMatch.teams.home} vs {continueMatch.teams.away}
+                </span>
+              </span>
+              <span className="text-[var(--fp-accent)]">Open →</span>
+            </button>
+          )}
+        </div>
       )}
 
       {navView === "history" && (
@@ -1341,7 +1429,7 @@ export default function UserDashboard() {
         days={30}
         globalByLeague={userPerformanceByLeague}
         accessToken={session?.access_token ?? null}
-        isAdmin={user?.role === "admin"}
+        isAdmin={false}
         leagueTableHeading="Predicțiile tale · pe ligă (ultimele 30 zile)"
       />
       {selectedMatch && (
@@ -1350,6 +1438,7 @@ export default function UserDashboard() {
           logoColors={{}}
           hashColor={hashColor}
           canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
+          presentation="focus"
           onClose={() => setSelectedMatch(null)}
         />
       )}
@@ -1364,6 +1453,37 @@ export default function UserDashboard() {
         onPredict={() => void warmAndPredict()}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} />
-    </AppShell>
+      {isLeaguesOpen && (
+        <div className="fixed inset-0 z-[70] flex justify-end bg-[var(--fp-navy)]/30 backdrop-blur-[1px]" onClick={() => setIsLeaguesOpen(false)}>
+          <div
+            className="h-full w-full max-w-md overflow-y-auto border-l border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-lg)]"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal
+            aria-label="League filter"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold">Leagues</h2>
+              <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <LeaguePanel
+              leaguesSorted={leaguesSorted}
+              selectedSet={new Set(selectedLeagueIds)}
+              selectedLeagueIds={selectedLeagueIds}
+              isLeaguesOpen
+              searchLeague={searchLeague}
+              eliteLeagues={ELITE_LEAGUES}
+              setIsLeaguesOpen={setIsLeaguesOpen}
+              setSearchLeague={setSearchLeague}
+              setSelectedLeagueIds={setSelectedLeagueIdsLimited}
+              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
+              clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
+            />
+          </div>
+        </div>
+      )}
+    </ConsumerShell>
   );
 }

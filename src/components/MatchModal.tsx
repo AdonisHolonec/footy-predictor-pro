@@ -359,6 +359,8 @@ type MatchModalProps = {
   onClose: () => void;
   hashColor: (seed: string) => string;
   canShowSpecialBet?: boolean;
+  /** Enterprise UI V2: right drawer (desktop) / bottom sheet (mobile). */
+  presentation?: "modal" | "focus";
 };
 
 function isFinalStatus(status?: string) {
@@ -535,7 +537,14 @@ const DETAIL_TABS = [
 
 type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
 
-export default function MatchModal({ match, logoColors, onClose, hashColor, canShowSpecialBet = false }: MatchModalProps) {
+export default function MatchModal({
+  match,
+  logoColors,
+  onClose,
+  hashColor,
+  canShowSpecialBet = false,
+  presentation = "focus"
+}: MatchModalProps) {
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const [detailTab, setDetailTab] = useState<DetailTabId>("overview");
   const tab = (ids: DetailTabId[]) => (ids.includes(detailTab) ? "" : "hidden");
@@ -784,31 +793,43 @@ export default function MatchModal({ match, logoColors, onClose, hashColor, canS
     return odds.reduce((acc, n) => acc * n, 1);
   })();
 
+  const isFocus = presentation === "focus";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/90 p-2.5 backdrop-blur-sm sm:p-4" onClick={onClose}>
+    <div
+      className={
+        isFocus
+          ? "fixed inset-0 z-50 flex items-end justify-end bg-[var(--fp-navy)]/40 backdrop-blur-[2px] sm:items-stretch"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/50 p-2.5 backdrop-blur-sm sm:p-4"
+      }
+      onClick={onClose}
+    >
       <div
         ref={modalRef}
-        className="lab-card relative max-h-[92vh] w-full max-w-lg overflow-y-auto border-white/[0.09] bg-signal-panel shadow-atelierLg lg:max-w-5xl"
+        className={
+          isFocus
+            ? "relative flex h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
+            : "relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-lg)] lg:max-w-5xl"
+        }
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="match-modal-title"
         aria-describedby="match-modal-desc"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-signal-petrol/40 to-transparent" />
         <button
           ref={closeBtnRef}
           onClick={onClose}
-          className="sticky top-3 z-10 ml-auto mr-3 mt-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-signal-void/80 text-signal-inkMuted transition hover:border-signal-petrol/40 hover:text-signal-petrol focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
+          className="sticky top-3 z-10 ml-auto mr-3 mt-3 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] transition hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
           type="button"
-          aria-label="Închide"
+          aria-label="Close"
         >
           ✕
         </button>
 
-        <div className="border-b border-white/5 px-5 pb-8 pt-2 sm:px-10">
-          <p id="match-modal-title" className="mb-6 text-center font-mono text-[10px] uppercase tracking-[0.28em] text-signal-petrol/80">
-            Analitică predictivă · Poisson / xG
+        <div className="border-b border-[var(--fp-border)] px-5 pb-8 pt-2 sm:px-10">
+          <p id="match-modal-title" className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+            Match analysis
           </p>
           <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-8 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:gap-6">
             <div className="flex w-[5.8rem] min-w-0 flex-col items-center gap-1.5 max-[380px]:w-[4.9rem] sm:w-full sm:gap-2">
