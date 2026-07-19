@@ -175,76 +175,109 @@ export default function LandingAccess() {
           {PRICING_CAMPAIGN.active ? <PricingCampaignBanner /> : null}
 
           <div className="grid gap-2 sm:grid-cols-3">
-            <Card padding="sm" className="flex h-full flex-col">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("landing.freeTitle")}</p>
-              <p className="mt-1 font-display text-2xl font-bold">{t("landing.freePrice")}</p>
-              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.freeDesc")}</p>
-              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
-                <li>{t("landing.freeM1")}</li>
-                <li>{t("landing.freeM2")}</li>
-                <li>{t("landing.freeM3")}</li>
-              </ul>
-              <div className="mt-auto pt-3">
-                <Link to={signup} className={`${linkSecondary} !min-h-9 w-full text-xs`}>
-                  {t("landing.freeCta")}
-                </Link>
-              </div>
-            </Card>
-
-            <Card
-              padding="sm"
-              className="relative flex h-full flex-col border-[var(--fp-warning)]/45 ring-1 ring-[var(--fp-warning)]/25"
-            >
-              {PRICING_CAMPAIGN.active ? (
-                <Badge tone="warning" className="absolute right-2 top-2">
-                  −{PRICING_CAMPAIGN.discountPercent}%
-                </Badge>
-              ) : null}
-              <p className="pr-14 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-                {t("landing.premiumTitle")}
-              </p>
-              <PlanCampaignPrice tier="premium" />
-              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.premiumDesc")}</p>
-              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
-                <li>{t("landing.premiumM1")}</li>
-                <li>{t("landing.premiumM2")}</li>
-                <li>{t("landing.premiumM3")}</li>
-              </ul>
-              <div className="mt-auto pt-3">
-                <Link
-                  to={`${login}?from=pricing&tier=premium`}
-                  className={`${linkPrimary} !min-h-9 w-full text-xs`}
+            {(
+              [
+                {
+                  key: "free",
+                  title: t("landing.freeTitle"),
+                  desc: t("landing.freeDesc"),
+                  features: [
+                    t("landing.freeM1"),
+                    t("landing.freeM2"),
+                    t("landing.freeM3"),
+                    t("landing.freeM4"),
+                    t("landing.freeM5")
+                  ],
+                  highlight: false,
+                  priceNode: <p className="mt-1 font-display text-2xl font-bold">{t("landing.freePrice")}</p>,
+                  cta: (
+                    <Link to={signup} className={`${linkSecondary} !min-h-9 w-full text-xs`}>
+                      {t("landing.freeCta")}
+                    </Link>
+                  )
+                },
+                {
+                  key: "premium",
+                  title: t("landing.premiumTitle"),
+                  desc: t("landing.premiumDesc"),
+                  features: [
+                    t("landing.premiumM1"),
+                    t("landing.premiumM2"),
+                    t("landing.premiumM3"),
+                    t("landing.premiumM4"),
+                    t("landing.premiumM5"),
+                    t("landing.premiumM6")
+                  ],
+                  highlight: true,
+                  priceNode: <PlanCampaignPrice tier="premium" />,
+                  cta: (
+                    <Link
+                      to={`${login}?from=pricing&tier=premium`}
+                      className={`${linkPrimary} !min-h-9 w-full text-xs`}
+                    >
+                      {PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : t("landing.premiumTitle")}
+                    </Link>
+                  )
+                },
+                {
+                  key: "ultra",
+                  title: t("landing.ultraTitle"),
+                  desc: t("landing.ultraDesc"),
+                  features: [
+                    t("landing.ultraM1"),
+                    t("landing.ultraM2"),
+                    t("landing.ultraM3"),
+                    t("landing.ultraM4"),
+                    t("landing.ultraM5"),
+                    t("landing.ultraM6")
+                  ],
+                  highlight: false,
+                  priceNode: <PlanCampaignPrice tier="ultra" />,
+                  cta: (
+                    <Link
+                      to={`${login}?from=pricing&tier=ultra`}
+                      className={`${linkSecondary} !min-h-9 w-full text-xs`}
+                    >
+                      {PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : t("landing.ultraTitle")}
+                    </Link>
+                  )
+                }
+              ] as const
+            ).map((plan) => (
+              <Card
+                key={plan.key}
+                padding="sm"
+                className={`relative flex h-full flex-col ${
+                  plan.highlight ? "border-[var(--fp-warning)]/45 ring-1 ring-[var(--fp-warning)]/25" : ""
+                }`}
+              >
+                {plan.key !== "free" && PRICING_CAMPAIGN.active ? (
+                  <Badge tone="warning" className="absolute right-2 top-2">
+                    −{PRICING_CAMPAIGN.discountPercent}%
+                  </Badge>
+                ) : null}
+                <p
+                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                    plan.key === "free" ? "text-[var(--fp-text-muted)]" : "pr-14 text-[var(--fp-accent)]"
+                  }`}
                 >
-                  {PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : t("landing.premiumTitle")}
-                </Link>
-              </div>
-            </Card>
-
-            <Card padding="sm" className="relative flex h-full flex-col">
-              {PRICING_CAMPAIGN.active ? (
-                <Badge tone="warning" className="absolute right-2 top-2">
-                  −{PRICING_CAMPAIGN.discountPercent}%
-                </Badge>
-              ) : null}
-              <p className="pr-14 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-                {t("landing.ultraTitle")}
-              </p>
-              <PlanCampaignPrice tier="ultra" />
-              <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("landing.ultraDesc")}</p>
-              <ul className="mt-3 space-y-1 text-xs font-medium text-[var(--fp-text)]">
-                <li>{t("landing.ultraM1")}</li>
-                <li>{t("landing.ultraM2")}</li>
-                <li>{t("landing.ultraM3")}</li>
-              </ul>
-              <div className="mt-auto pt-3">
-                <Link
-                  to={`${login}?from=pricing&tier=ultra`}
-                  className={`${linkSecondary} !min-h-9 w-full text-xs`}
-                >
-                  {PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : t("landing.ultraTitle")}
-                </Link>
-              </div>
-            </Card>
+                  {plan.title}
+                </p>
+                {plan.priceNode}
+                <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{plan.desc}</p>
+                <ul className="mt-3 space-y-1.5 text-xs font-medium text-[var(--fp-text)]">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex gap-2">
+                      <span className="mt-0.5 shrink-0 font-bold text-[var(--fp-accent)]" aria-hidden>
+                        ✓
+                      </span>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-auto pt-3">{plan.cta}</div>
+              </Card>
+            ))}
           </div>
         </section>
 
