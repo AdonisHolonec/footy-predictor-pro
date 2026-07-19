@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useId } from "react";
+import { useLocale } from "../context/LocaleContext";
 import type { PredictionRow } from "../types";
 
 /** Edge / value intensity 0–100 for UI (EV, spread, or conviction). */
@@ -18,12 +19,13 @@ type SignalLensProps = {
 };
 
 export function SignalLens({ confidence, edge, className = "" }: SignalLensProps) {
+  const { t } = useLocale();
   const c = Math.max(0, Math.min(100, confidence));
   const e = Math.max(0, Math.min(100, edge));
   return (
     <div className={`space-y-2 ${className}`}>
       <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">
-        <span className="font-semibold text-signal-petrol/90">Signal lens</span>
+        <span className="font-semibold text-signal-petrol/90">{t("panels.signalLens")}</span>
         <span className="font-mono text-signal-silver tabular-nums">
           C {Math.round(c)}% · E {Math.round(e)}%
         </span>
@@ -31,14 +33,14 @@ export function SignalLens({ confidence, edge, className = "" }: SignalLensProps
       <div className="space-y-1.5">
         <div
           className="h-1 w-full overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5"
-          title="Confidence"
+          title={t("panels.confidenceBar")}
         >
           <div
             className="h-full rounded-full bg-gradient-to-r from-signal-petrolDeep to-signal-petrol transition-[width] duration-700 ease-out"
             style={{ width: `${c}%` }}
           />
         </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5" title="Edge">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5" title={t("panels.edgeBar")}>
           <div
             className="h-full rounded-full bg-gradient-to-r from-signal-sage to-signal-mint transition-[width] duration-700 ease-out"
             style={{ width: `${e}%` }}
@@ -59,14 +61,15 @@ type FormRibbonProps = {
 };
 
 export function FormRibbon({ p1, pX, p2, homeTint, awayTint, className = "" }: FormRibbonProps) {
-  const t = p1 + pX + p2 || 1;
-  const w1 = (p1 / t) * 100;
-  const wX = (pX / t) * 100;
-  const w2 = (p2 / t) * 100;
+  const { t } = useLocale();
+  const sum = p1 + pX + p2 || 1;
+  const w1 = (p1 / sum) * 100;
+  const wX = (pX / sum) * 100;
+  const w2 = (p2 / sum) * 100;
   return (
     <div className={`space-y-1.5 ${className}`}>
       <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">
-        <span className="font-semibold text-signal-petrol/80">Form ribbon</span>
+        <span className="font-semibold text-signal-petrol/80">{t("panels.formRibbon")}</span>
         <span className="font-mono tabular-nums text-signal-silver">1 · X · 2</span>
       </div>
       <div className="flex h-2 w-full overflow-hidden rounded-md bg-signal-void ring-1 ring-white/5">
@@ -91,11 +94,18 @@ type EdgeCompassProps = {
 };
 
 export function EdgeCompass({ dataQuality, valueDetected, className = "" }: EdgeCompassProps) {
+  const { t } = useLocale();
   const gid = useId().replace(/:/g, "");
   const compassFillId = `compassFill-${gid}`;
   const dq = Math.max(0, Math.min(1, dataQuality));
   const angle = -90 + dq * 180;
-  const label = valueDetected ? "Value bias" : dq >= 0.65 ? "Balanced" : dq >= 0.4 ? "Thin data" : "Caution";
+  const label = valueDetected
+    ? t("panels.valueBias")
+    : dq >= 0.65
+      ? t("panels.balanced")
+      : dq >= 0.4
+        ? t("panels.thinData")
+        : t("panels.caution");
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
@@ -131,7 +141,7 @@ export function EdgeCompass({ dataQuality, valueDetected, className = "" }: Edge
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">Edge compass</div>
+        <div className="text-[8px] uppercase tracking-[0.18em] text-signal-inkMuted">{t("panels.edgeCompass")}</div>
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[10px]">
           <span className="font-mono tabular-nums text-signal-petrol">DQ {(dq * 100).toFixed(0)}%</span>
           <span

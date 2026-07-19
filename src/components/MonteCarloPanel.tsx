@@ -30,12 +30,14 @@ function HistChart({
   data,
   xKey,
   barColor = "#2563eb",
-  heightClass = "h-44"
+  heightClass = "h-44",
+  frequencyLabel
 }: {
   data: Array<Record<string, string | number>>;
   xKey: string;
   barColor?: string;
   heightClass?: string;
+  frequencyLabel: string;
 }) {
   if (!data.length) return null;
   return (
@@ -45,7 +47,7 @@ function HistChart({
           <CartesianGrid stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey={xKey} tick={{ fill: "#475569", fontSize: 11 }} interval={0} />
           <YAxis tick={{ fill: "#475569", fontSize: 11 }} width={36} unit="%" />
-          <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}%`, "Frequency"]} />
+          <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}%`, frequencyLabel]} />
           <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
             {data.map((_, i) => (
               <Cell key={i} fill={barColor} fillOpacity={0.85 + (i % 3) * 0.04} />
@@ -79,6 +81,7 @@ export default function MonteCarloPanel({
   const pd = mc.probabilityDistribution;
   const xg = mc.expectedGoalsDistribution;
   const ci = mc.confidenceInterval;
+  const freq = t("panels.frequency");
   const totalHist = (mc.histogram?.totalGoals || mc.goalDistribution || []).map((b) => ({
     goals: String(b.goals ?? 0),
     pct: b.pct
@@ -95,6 +98,7 @@ export default function MonteCarloPanel({
     label: b.label || (b as { score?: string }).score || "—",
     pct: b.pct
   }));
+  const ciPct = (ci.level * 100).toFixed(0);
 
   const body = (
     <>
@@ -107,7 +111,7 @@ export default function MonteCarloPanel({
               {mc.adaptive?.enabled && mc.adaptive.score != null
                 ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
                 : ""}{" "}
-              · bivariate Poisson + Dixon–Coles
+              · {t("panels.mcMethod")}
             </p>
           </div>
           <p className="text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
@@ -129,7 +133,7 @@ export default function MonteCarloPanel({
         <StatChip label={t("panels.btts")} value={`${pd.pGG.toFixed(1)}%`} />
         <StatChip label={t("panels.over25")} value={`${pd.pO25.toFixed(1)}%`} />
         <StatChip
-          label="Most likely"
+          label={t("panels.mostLikely")}
           value={`${mc.summary?.mostLikelyScore || mc.mostLikelyScores[0]?.score || "—"} · ${(
             mc.summary?.mostLikelyScorePct ??
             mc.mostLikelyScores[0]?.pct ??
@@ -140,35 +144,35 @@ export default function MonteCarloPanel({
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatChip
-          label="xG home (mean)"
+          label={t("panels.xgHomeMean")}
           value={`${xg.home.mean.toFixed(2)} · CI ${ci.homeGoals.low}–${ci.homeGoals.high}`}
         />
         <StatChip
-          label="xG away (mean)"
+          label={t("panels.xgAwayMean")}
           value={`${xg.away.mean.toFixed(2)} · CI ${ci.awayGoals.low}–${ci.awayGoals.high}`}
         />
         <StatChip
-          label={`Total goals · ${(ci.level * 100).toFixed(0)}% CI`}
+          label={t("panels.totalGoalsCi", { pct: ciPct })}
           value={`${xg.total.mean.toFixed(2)} · ${ci.totalGoals.low}–${ci.totalGoals.high}`}
         />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Goal distribution · total</p>
-          <HistChart data={totalHist} xKey="goals" barColor="#14b8a6" />
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">{t("panels.goalDistTotal")}</p>
+          <HistChart data={totalHist} xKey="goals" barColor="#14b8a6" frequencyLabel={freq} />
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Score distribution · top 10</p>
-          <HistChart data={scoreHist} xKey="label" barColor="#2563eb" heightClass="h-48" />
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">{t("panels.scoreDistTop")}</p>
+          <HistChart data={scoreHist} xKey="label" barColor="#2563eb" heightClass="h-48" frequencyLabel={freq} />
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Expected goals · home</p>
-          <HistChart data={homeHist} xKey="goals" barColor={homeColor} />
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">{t("panels.xgHomeHist")}</p>
+          <HistChart data={homeHist} xKey="goals" barColor={homeColor} frequencyLabel={freq} />
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 sm:p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">Expected goals · away</p>
-          <HistChart data={awayHist} xKey="goals" barColor={awayColor} />
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--fp-text)]">{t("panels.xgAwayHist")}</p>
+          <HistChart data={awayHist} xKey="goals" barColor={awayColor} frequencyLabel={freq} />
         </div>
       </div>
 
@@ -177,9 +181,9 @@ export default function MonteCarloPanel({
           <table className="w-full min-w-[360px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--fp-border)] text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
-                <th className="px-3 py-2">Most likely scores</th>
-                <th className="px-3 py-2 text-right">Count</th>
-                <th className="px-3 py-2 text-right">Pct</th>
+                <th className="px-3 py-2">{t("panels.mostLikelyScores")}</th>
+                <th className="px-3 py-2 text-right">{t("panels.count")}</th>
+                <th className="px-3 py-2 text-right">{t("panels.pct")}</th>
               </tr>
             </thead>
             <tbody>
@@ -196,7 +200,7 @@ export default function MonteCarloPanel({
           </table>
           {ci.markets && (
             <div className="border-t border-[var(--fp-border)] px-3 py-2 text-xs text-[var(--fp-text-muted)]">
-              {(ci.level * 100).toFixed(0)}% CI markets · 1 {ci.markets.p1?.low}–{ci.markets.p1?.high}% · X{" "}
+              {t("panels.ciMarkets", { pct: ciPct })} · 1 {ci.markets.p1?.low}–{ci.markets.p1?.high}% · X{" "}
               {ci.markets.pX?.low}–{ci.markets.pX?.high}% · 2 {ci.markets.p2?.low}–{ci.markets.p2?.high}% · O2.5{" "}
               {ci.markets.pO25?.low}–{ci.markets.pO25?.high}%
             </div>

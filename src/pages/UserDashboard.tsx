@@ -1191,21 +1191,21 @@ export default function UserDashboard() {
             <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
               Notificări
             </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Notifications</h1>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.notifications")}</h1>
             <p className="mt-2 text-sm text-[var(--fp-text-muted)]">Alerte Low Risk / Value și email (beta).</p>
           </header>
           <Card>
             <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
-              Preview: {alertsPreview.safe} low-risk · {alertsPreview.value} value
+              {t("dash.alertsPreview", { low: alertsPreview.safe, value: alertsPreview.value })}
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
                 <input type="checkbox" checked={notifySafe} onChange={(e) => setNotifySafe(e.target.checked)} />
-                Low Risk alerts
+                {t("dash.notifyLowRisk")}
               </label>
               <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
                 <input type="checkbox" checked={notifyValue} onChange={(e) => setNotifyValue(e.target.checked)} />
-                Value alerts
+                {t("dash.notifyValue")}
               </label>
               <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
                 <input
@@ -1217,7 +1217,7 @@ export default function UserDashboard() {
                     if (!next) setNotifyEmailConsent(false);
                   }}
                 />
-                Email (beta)
+                {t("dash.notifyEmail")}
               </label>
             </div>
             {notifyEmail && (
@@ -1258,10 +1258,8 @@ export default function UserDashboard() {
 
           {!tierQuotaExempt && (
             <Card id="upgrade" className="scroll-mt-28">
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Abonament</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-                Premium (25/zi) sau Ultra (50/zi). Poți plăti inclusiv în timpul unui trial.
-              </p>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.subscription")}</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.subscriptionSub")}</p>
               <PricingCampaignBanner className="mt-3" />
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
@@ -1319,21 +1317,19 @@ export default function UserDashboard() {
                     }
                   }}
                 >
-                  Manage billing
+                  {t("dash.manageBilling")}
                 </Button>
               </div>
               {!billingConfigured && (
-                <p className="mt-3 text-xs text-[var(--fp-text-muted)]">
-                  Stripe nu este configurat pe server. Trial-urile 24h rămân disponibile.
-                </p>
+                <p className="mt-3 text-xs text-[var(--fp-text-muted)]">{t("dash.stripeMissing")}</p>
               )}
             </Card>
           )}
 
           {!tierQuotaExempt && (
             <Card>
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Trial 24h</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Un singur trial activ. Nu blochează Subscribe.</p>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.trial24h")}</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.trial24hSub")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
@@ -1352,10 +1348,10 @@ export default function UserDashboard() {
                   }}
                 >
                   {user?.premium_trial_activated_at
-                    ? "Premium trial used"
+                    ? t("dash.trialPremiumUsed")
                     : trialRemainingTime.ultraMs > 0
-                      ? "Ultra trial activ"
-                      : "Activate Premium 24h"}
+                      ? t("dash.trialUltraActive")
+                      : t("dash.trialActivatePremium")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -1374,19 +1370,23 @@ export default function UserDashboard() {
                   }}
                 >
                   {user?.ultra_trial_activated_at
-                    ? "Ultra trial used"
+                    ? t("dash.trialUltraUsed")
                     : trialRemainingTime.premiumMs > 0
-                      ? "Premium trial activ"
-                      : "Activate Ultra 24h"}
+                      ? t("dash.trialPremiumActive")
+                      : t("dash.trialActivateUltra")}
                 </Button>
               </div>
               {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
                   {trialRemainingTime.premiumMs > 0 && (
-                    <Badge tone="accent">Trial Premium: {formatRemaining(trialRemainingTime.premiumMs)}</Badge>
+                    <Badge tone="accent">
+                      {t("dash.trialPremiumActive")}: {formatRemaining(trialRemainingTime.premiumMs)}
+                    </Badge>
                   )}
                   {trialRemainingTime.ultraMs > 0 && (
-                    <Badge tone="warning">Trial Ultra: {formatRemaining(trialRemainingTime.ultraMs)}</Badge>
+                    <Badge tone="warning">
+                      {t("dash.trialUltraActive")}: {formatRemaining(trialRemainingTime.ultraMs)}
+                    </Badge>
                   )}
                 </div>
               )}
@@ -1395,19 +1395,17 @@ export default function UserDashboard() {
 
           {!user?.onboardingCompleted && (
             <Card>
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Onboarding</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">Alege ligi favorite în Matches, apoi confirmă.</p>
+              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.onboarding")}</h2>
+              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.onboardingSub")}</p>
               <Button className="mt-3" onClick={() => void completeOnboarding()}>
-                Finalizează onboarding
+                {t("dash.finishOnboarding")}
               </Button>
             </Card>
           )}
 
           <Card>
             <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("nav.profile")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              {t("shell.notifications")} · {t("nav.settings")}
-            </p>
+            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.profileShortcuts")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => handleNav("notifications")}>
                 {t("nav.notifications")}
@@ -1418,7 +1416,7 @@ export default function UserDashboard() {
             </div>
             <div className="mt-4">
               <Button variant="danger" onClick={() => void logout()}>
-                Log out
+                {t("dash.logout")}
               </Button>
             </div>
           </Card>
@@ -1429,31 +1427,30 @@ export default function UserDashboard() {
         <section className="space-y-6">
           <header>
             <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              Settings
+              {t("dash.settingsTitle")}
             </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">Settings</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">Appearance, saved filters, and privacy.</p>
+            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("dash.settingsTitle")}</h1>
+            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">{t("dash.settingsSub")}</p>
           </header>
 
           <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Appearance</h2>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.appearance")}</h2>
             <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              Current theme: <strong className="text-[var(--fp-text)]">{prefs.theme}</strong>
+              {t("dash.currentTheme", { theme: prefs.theme })}
             </p>
             <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
-              Change theme
+              {t("dash.changeTheme")}
             </Button>
           </Card>
 
           <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Saved filters</h2>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.savedFilters")}</h2>
             <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
               Confidence ≥ {prefs.minConfidence}% · EV ≥ {prefs.minEv}% · Best Value only:{" "}
-              {prefs.valueOnly ? "on" : "off"} · Settled: {prefs.settledOnly ? "on" : "off"}
+              {prefs.valueOnly ? t("dash.on") : t("dash.off")} · Settled:{" "}
+              {prefs.settledOnly ? t("dash.on") : t("dash.off")}
             </p>
-            <p className="mt-2 text-xs text-[var(--fp-text-faint)]">
-              Filters persist across sessions. Adjust them on Matches / Predictions / Live.
-            </p>
+            <p className="mt-2 text-xs text-[var(--fp-text-faint)]">{t("dash.savedFiltersSub")}</p>
             <Button
               className="mt-3"
               variant="ghost"
@@ -1469,27 +1466,27 @@ export default function UserDashboard() {
                 })
               }
             >
-              Reset filters
+              {t("dash.resetFilters")}
             </Button>
           </Card>
 
           <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Personal data (GDPR)</h2>
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.gdprTitle")}</h2>
             <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              Download your export JSON — see the{" "}
+              {t("dash.gdprSub")} —{" "}
               <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                privacy policy
+                {t("dash.privacyPolicy")}
               </Link>
               .
             </p>
             <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
-              Download export JSON
+              {t("dash.downloadExport")}
             </Button>
           </Card>
 
           <Card>
             <Button variant="danger" onClick={() => void logout()}>
-              Log out
+              {t("dash.logout")}
             </Button>
           </Card>
         </section>

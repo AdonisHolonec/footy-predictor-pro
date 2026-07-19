@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useLocale } from "../context/LocaleContext";
+import type { TranslateFn } from "../i18n/types";
+import { translateConfidenceCategory } from "../i18n/labels";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -113,30 +116,31 @@ function statusChip(
   confPct: number,
   hasFinalScore: boolean,
   finalPickResult: boolean | null,
-  isLive: boolean
+  isLive: boolean,
+  t: TranslateFn
 ): { label: string; className: string } {
   if (isLive) {
     return {
-      label: "LIVE",
+      label: t("card.live").toUpperCase(),
       className: "border-red-400/35 bg-red-500/10 text-red-200"
     };
   }
   if (hasFinalScore) {
     if (finalPickResult === true) {
-      return { label: "WIN", className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
+      return { label: t("card.chipWin"), className: "border-signal-sage/35 bg-signal-sage/10 text-signal-mint" };
     }
     if (finalPickResult === false) {
-      return { label: "LOSE", className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
+      return { label: t("card.chipLose"), className: "border-signal-rose/30 bg-signal-rose/10 text-signal-rose" };
     }
-    return { label: "FINAL", className: "border-white/10 bg-signal-void/50 text-signal-silver" };
+    return { label: t("card.chipFinal"), className: "border-white/10 bg-signal-void/50 text-signal-silver" };
   }
   if (row.valueBet?.detected) {
-    return { label: "VALUE", className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
+    return { label: t("card.chipValue"), className: "border-signal-amber/35 bg-signal-amber/10 text-signal-amberSoft" };
   }
   if (confPct >= 70) {
-    return { label: "LOW RISK", className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
+    return { label: t("card.chipLowRisk"), className: "border-signal-sage/25 bg-signal-sage/8 text-signal-sage" };
   }
-  return { label: "OPEN", className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
+  return { label: t("card.chipOpen"), className: "border-white/8 bg-signal-void/40 text-signal-inkMuted" };
 }
 
 /**
@@ -183,6 +187,7 @@ export default function MatchCard({
   onToggleBookmark,
   onShare
 }: MatchCardProps) {
+  const { t } = useLocale();
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const homeColor = logoColors[row.logos?.home || ""] || hashColor(row.teams.home);
   const awayColor = logoColors[row.logos?.away || ""] || hashColor(row.teams.away);
@@ -212,7 +217,7 @@ export default function MatchCard({
     !hasFinalScore &&
     (isLive || (pastKickoffPollWindow && !isFinalStatus(row.status)));
   const kickoffDate = new Date(row.kickoff);
-  const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive);
+  const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive, t);
   const tier = modelTierBadge(row);
   const recommendedOdd = deriveRecommendedOdd(row);
   const isPickHot = hasExactConfidence && confPct >= 85;
@@ -226,34 +231,34 @@ export default function MatchCard({
       : null;
   const marketPulseWinnerLabel = (() => {
     const candidates = [
-      { label: "Corners", probability: Number(cornersPick?.probability || 0) },
-      { label: "Shots", probability: Number(shotsPick?.probability || 0) },
-      { label: "HT", probability: Number(firstHalfPick?.probability || 0) }
+      { label: t("match.featCorners"), probability: Number(cornersPick?.probability || 0) },
+      { label: t("match.featShots"), probability: Number(shotsPick?.probability || 0) },
+      { label: t("match.featHt"), probability: Number(firstHalfPick?.probability || 0) }
     ];
     const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
     return winner.probability >= 85 ? winner.label : null;
   })();
   const specialBetCandidates = [
       {
-        label: "Main",
+        label: t("match.featMain"),
         pick: row.recommended.pick,
         probability: Number(confPct || 0),
         odd: recommendedOdd
       },
       {
-        label: "Corners",
+        label: t("match.featCorners"),
         pick: cornersPick?.pick || "",
         probability: Number(cornersPick?.probability || 0),
         odd: Number(row.marketOdds?.corners?.odd)
       },
       {
-        label: "Shots",
+        label: t("match.featShots"),
         pick: shotsPick?.pick || "",
         probability: Number(shotsPick?.probability || 0),
         odd: Number(row.marketOdds?.shotsOnTarget?.odd)
       },
       {
-        label: "HT",
+        label: t("match.featHt"),
         pick: firstHalfPick?.pick || "",
         probability: Number(firstHalfPick?.probability || 0),
         odd: Number(row.marketOdds?.firstHalfGoals?.odd)
@@ -324,9 +329,9 @@ export default function MatchCard({
                   ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
-              aria-label={watched ? "Remove from favorites" : "Add to favorites"}
+              aria-label={watched ? t("card.removeFavorite") : t("card.addFavorite")}
               aria-pressed={watched}
-              title="Favorite"
+              title={t("card.favorite")}
             >
               ★
             </button>
@@ -343,9 +348,9 @@ export default function MatchCard({
                   ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
-              aria-label={bookmarked ? "Remove bookmark" : "Bookmark match"}
+              aria-label={bookmarked ? t("card.removeBookmark") : t("card.addBookmark")}
               aria-pressed={bookmarked}
-              title="Bookmark"
+              title={t("card.bookmark")}
             >
               🔖
             </button>
@@ -354,18 +359,18 @@ export default function MatchCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const text = `${row.teams.home} vs ${row.teams.away} · Top Pick ${row.recommended?.pick || "—"} · ${Math.round(Number(row.recommended?.confidence) || 0)}%`;
+              const text = `${row.teams.home} ${t("common.vs")} ${row.teams.away} · ${t("card.topPick")} ${row.recommended?.pick || "—"} · ${Math.round(Number(row.recommended?.confidence) || 0)}%`;
               if (navigator.share) {
                 void navigator.share({ title: "Footy Predictor", text }).catch(() => undefined);
               } else if (navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(text).then(() => onShare?.("Link copied"));
+                void navigator.clipboard.writeText(text).then(() => onShare?.(t("card.linkCopied")));
               } else {
                 onShare?.(text);
               }
             }}
             className="flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[11px] text-[var(--fp-text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-            aria-label="Share prediction"
-            title="Share"
+            aria-label={t("card.sharePrediction")}
+            title={t("card.share")}
           >
             ↗
           </button>
@@ -389,10 +394,10 @@ export default function MatchCard({
           {row.confidenceEngine ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-signal-petrol/30 bg-signal-petrol/8 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide text-signal-petrol"
-              title={`Confidence · ${row.confidenceEngine.category || "context"} · independent of pick probability`}
+              title={t("card.confidenceCtxTip")}
             >
               {row.confidenceEngine.category
-                ? `${row.confidenceEngine.category.replace("Very ", "V.")} ${Math.round(row.confidenceEngine.confidence ?? row.confidenceEngine.overall)}%`
+                ? `${translateConfidenceCategory(t, row.confidenceEngine.category)} ${Math.round(row.confidenceEngine.confidence ?? row.confidenceEngine.overall)}%`
                 : `CTX ${Math.round(row.confidenceEngine.overall)}%`}
             </span>
           ) : null}
@@ -492,7 +497,7 @@ export default function MatchCard({
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
                 className="rounded-sm bg-signal-amber/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-signal-amber"
-                title="Încredere scăzută — modelul nu are direcţie clară"
+                title={t("card.lowConfTip")}
               >
                 Nesigur
               </span>
@@ -500,7 +505,7 @@ export default function MatchCard({
             {isPickHot ? (
               <span
                 className="rounded-sm bg-emerald-400/20 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-emerald-200 animate-pulse motion-reduce:animate-none"
-                title="Semnal puternic (>85%)"
+                title={t("card.strongSignalTip")}
               >
                 HOT
               </span>
@@ -573,7 +578,10 @@ export default function MatchCard({
             )}
             {hasExactConfidence && confPct > 0 && (
               <span className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[8px] text-signal-inkMuted">
-                Risk {confPct >= 70 ? "Low" : confPct >= 55 ? "Med" : "High"}
+                {t("card.riskLabel", {
+                  level:
+                    confPct >= 70 ? t("card.riskLow") : confPct >= 55 ? t("card.riskMed") : t("card.riskHigh")
+                })}
               </span>
             )}
           </div>
@@ -602,11 +610,14 @@ export default function MatchCard({
 
       {(isPremiumLike || isFreeLike) && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {(isFreeLike ? ["Corners", "Shots", "HT", "Edge"] : ["Shots", "HT", "Edge"]).map((label) => (
+          {(isFreeLike
+            ? [t("match.featCorners"), t("match.featShots"), t("match.featHt"), t("match.featEdge")]
+            : [t("match.featShots"), t("match.featHt"), t("match.featEdge")]
+          ).map((label) => (
             <span
               key={label}
               className="inline-flex items-center rounded-md border border-white/10 bg-signal-void/45 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wide text-signal-inkMuted"
-              title="Deblochează în tier superior"
+              title={t("card.unlockHigher")}
             >
               🔒 {label}
             </span>
@@ -618,7 +629,7 @@ export default function MatchCard({
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {[
             {
-              label: "Corners",
+              label: t("match.featCorners"),
               data: cornersPick,
               odd: row.marketOdds?.corners?.odd,
               source: row.marketOdds?.corners?.bookmaker,
@@ -629,7 +640,7 @@ export default function MatchCard({
               oddClass: "text-cyan-200/90"
             },
             {
-              label: "Shots",
+              label: t("match.featShots"),
               data: shotsPick,
               odd: row.marketOdds?.shotsOnTarget?.odd,
               source: row.marketOdds?.shotsOnTarget?.bookmaker,
@@ -640,7 +651,7 @@ export default function MatchCard({
               oddClass: "text-fuchsia-200/90"
             },
             {
-              label: "HT",
+              label: t("match.featHt"),
               data: firstHalfPick,
               odd: row.marketOdds?.firstHalfGoals?.odd,
               source: row.marketOdds?.firstHalfGoals?.bookmaker,
@@ -663,9 +674,11 @@ export default function MatchCard({
                 {item.data ? `${Math.round(item.data.probability)}%` : "—"}
               </div>
               <div className={`font-mono text-[8px] font-semibold tabular-nums ${item.oddClass}`}>
-                odd {Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : "N/A"}
+                {t("card.oddLabel", {
+                  odd: Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : t("card.na")
+                })}
               </div>
-              <div className="font-mono text-[7px] text-white/65">{item.source || "sursă:N/A"}</div>
+              <div className="font-mono text-[7px] text-white/65">{item.source || t("card.sourceNa")}</div>
             </div>
           )})}
         </div>
@@ -675,7 +688,7 @@ export default function MatchCard({
         <div className="mt-2 min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">
-              Special Bet · Top signals
+              {t("card.specialBet")}
             </div>
             {specialBetCandidates.length >= 3 ? (
               <div className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/10 p-[1px]">
@@ -691,7 +704,7 @@ export default function MatchCard({
                       specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
                     }`}
                   >
-                    {n} legs
+                    {t("card.legs", { n })}
                   </button>
                 ))}
               </div>
@@ -706,13 +719,17 @@ export default function MatchCard({
             ))}
           </div>
           <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-emerald-200">
-            combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
+            {t("card.combinedOdd", {
+              odd: Number.isFinite(Number(specialBetCombinedOdd))
+                ? Number(specialBetCombinedOdd).toFixed(2)
+                : t("card.na")
+            })}
           </div>
         </div>
       )}
 
       <p className="relative mt-3 font-mono text-[9px] text-signal-inkMuted/90">
-        {compact ? "Detalii predicție →" : "Deschide detalii"}
+        {compact ? t("card.detailsArrow") : t("card.openDetails")}
       </p>
     </div>
   );

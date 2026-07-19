@@ -1,3 +1,4 @@
+import { useLocale } from "../context/LocaleContext";
 import type { PredictionExplanation, PredictionReason } from "../types";
 
 function polarityClass(polarity?: PredictionReason["polarity"]): string {
@@ -28,6 +29,7 @@ export default function ExplanationCard({
   compact?: boolean;
   framed?: boolean;
 }) {
+  const { t } = useLocale();
   const pick = explanation.pick || "—";
   const confidence = explanation.confidence;
   const reasons = Array.isArray(explanation.reasons) ? explanation.reasons : [];
@@ -51,7 +53,7 @@ export default function ExplanationCard({
     if (top.length === 0 && formReasons.length === 0) return null;
     return (
       <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
-        <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/75">Reasoning</div>
+        <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/75">{t("panels.reasoning")}</div>
         <ul className="space-y-0.5 font-mono text-[9px] leading-snug text-signal-inkMuted">
           {top.map((r) => (
             <li key={`${r.code}-${r.label}`} className="truncate" title={r.label}>
@@ -73,28 +75,30 @@ export default function ExplanationCard({
       <div className={`mb-4 flex flex-wrap items-end justify-between gap-3 ${framed ? "border-b border-white/5 pb-3" : ""}`}>
         {framed ? (
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Prediction Explanation</h3>
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
+              {t("panels.predictionExplanation")}
+            </h3>
             <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-              From real match data · no generic copy
+              {t("panels.explanationSub")}
             </p>
           </div>
         ) : (
           <div />
         )}
         <div className="text-right">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Prediction</div>
+          <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{t("card.prediction")}</div>
           <div className="font-display text-2xl font-bold text-signal-ink">{pick}</div>
           {confidence != null && Number.isFinite(confidence) ? (
             <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-signal-petrol">
-              Confidence {Math.round(confidence)}%
+              {t("panels.confidence")} {Math.round(confidence)}%
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="mb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-signal-petrol/80">Reasoning</div>
+      <div className="mb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-signal-petrol/80">{t("panels.reasoning")}</div>
       {otherReasons.length === 0 && formReasons.length === 0 ? (
-        <p className="font-mono text-[11px] text-signal-inkMuted">Insufficient structured signals for this pick.</p>
+        <p className="font-mono text-[11px] text-signal-inkMuted">{t("panels.explanationEmpty")}</p>
       ) : (
         <ul className="space-y-2">
           {otherReasons.map((r) => (
@@ -112,7 +116,7 @@ export default function ExplanationCard({
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(explanation.formHome || formReasons.find((r) => r.code === "home_form")) && (
             <div className="rounded-xl border border-white/10 bg-signal-mist/20 px-3 py-2">
-              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">Home Form</div>
+              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">{t("panels.homeForm")}</div>
               <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-signal-ink">
                 {explanation.formHome || formReasons.find((r) => r.code === "home_form")?.label.replace(/^Home Form\s+/i, "")}
               </div>
@@ -120,7 +124,7 @@ export default function ExplanationCard({
           )}
           {(explanation.formAway || formReasons.find((r) => r.code === "away_form")) && (
             <div className="rounded-xl border border-white/10 bg-signal-mist/20 px-3 py-2">
-              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">Away Form</div>
+              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">{t("panels.awayForm")}</div>
               <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-signal-ink">
                 {explanation.formAway || formReasons.find((r) => r.code === "away_form")?.label.replace(/^Away Form\s+/i, "")}
               </div>
@@ -131,7 +135,7 @@ export default function ExplanationCard({
 
       {explanation.expectedGoals != null && Number.isFinite(explanation.expectedGoals) && (
         <div className="mt-3 font-mono text-[10px] text-signal-inkMuted">
-          Σ λ = <span className="text-signal-ink">{explanation.expectedGoals.toFixed(2)}</span> expected goals
+          Σ λ = <span className="text-signal-ink">{explanation.expectedGoals.toFixed(2)}</span> {t("panels.expectedGoals")}
         </div>
       )}
     </>

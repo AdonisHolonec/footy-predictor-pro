@@ -42,18 +42,18 @@ function tierToneClass(tier: MarketTier | undefined): string {
   }
 }
 
-function tierBadgeLabel(tier: MarketTier | undefined): string {
+function tierBadgeLabel(tier: MarketTier | undefined, tr: (key: string) => string): string {
   switch (tier) {
     case "strong":
-      return "Clar";
+      return tr("match.tierStrong");
     case "lean":
-      return "Moderat";
+      return tr("match.tierLean");
     case "toss":
-      return "Nesigur";
+      return tr("match.tierToss");
     case "lean_off":
-      return "Contra";
+      return tr("match.tierLeanOff");
     case "strong_off":
-      return "Opus clar";
+      return tr("match.tierStrongOff");
     default:
       return "";
   }
@@ -191,6 +191,7 @@ function PoissonMarketSection({
   badgeTone?: "corners" | "shots" | "ht" | "neutral";
   framed?: boolean;
 }) {
+  const { t: tr } = useLocale();
   const totalKeys = Object.keys(data.total || {});
   const homeKeys = Object.keys(data.home || {});
   const awayKeys = Object.keys(data.away || {});
@@ -246,7 +247,7 @@ function PoissonMarketSection({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* TOTAL */}
         <div>
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Total (Over/Under)</div>
+          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.poissonTotal")}</div>
           <table className="w-full font-mono text-[10px] tabular-nums">
             <tbody>
               {totalKeys.map((k) => {
@@ -259,7 +260,7 @@ function PoissonMarketSection({
                 );
               })}
               <tr className="border-t border-white/5">
-                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">Cel mai probabil</td>
+                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.mostLikely")}</td>
                 <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableTotal}</td>
               </tr>
             </tbody>
@@ -269,7 +270,7 @@ function PoissonMarketSection({
         {/* TEAM LINES */}
         {hasTeamLines ? (
           <div>
-            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Per echipă (Over)</div>
+            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.perTeamOver")}</div>
             <table className="w-full font-mono text-[10px] tabular-nums">
               <thead className="text-left text-[9px] uppercase tracking-wider text-signal-inkMuted">
                 <tr>
@@ -317,7 +318,9 @@ function PoissonMarketSection({
         <div className="mt-3 border-t border-white/5 pt-2">
           {marketResultBadge(bestPick.pick, bestPick.probability, settled, quotedOdd, quoteSource, badgeTone)}
           {actualTotal != null && (
-            <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">Final total: {actualTotal}</span>
+            <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
+              {tr("match.finalTotal")} {actualTotal}
+            </span>
           )}
         </div>
       )}
@@ -333,8 +336,9 @@ function MarketPickCard({
   label: string;
   info: MarketTierInfo | undefined;
 }) {
+  const { t: tr } = useLocale();
   const tone = tierToneClass(info?.tier);
-  const badge = tierBadgeLabel(info?.tier);
+  const badge = tierBadgeLabel(info?.tier, tr);
   const isToss = info?.tier === "toss";
   return (
     <div className={`rounded-xl border p-3 text-center ${tone}`}>
@@ -947,7 +951,9 @@ export default function MatchModal({
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-emerald-300/50 bg-gradient-to-b from-emerald-400/22 via-emerald-300/10 to-signal-void/55 px-3.5 py-2.5 text-center shadow-[0_0_22px_rgba(16,185,129,0.3)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
                 <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
                 <div className="flex min-h-[1.55rem] flex-wrap items-center justify-between gap-1.5">
-                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-100 max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">Special Bet · Top signals</div>
+                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-100 max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">
+                    {tr("match.specialBet")}
+                  </div>
                   {specialBetCandidates.length >= 3 ? (
                     <div className="inline-flex rounded-md border border-emerald-300/45 bg-emerald-500/15 p-[1px]">
                       {[2, 3].map((n) => (
@@ -959,7 +965,7 @@ export default function MatchModal({
                             specialLegCount === n ? "bg-emerald-300/30 text-emerald-50" : "text-emerald-200/80"
                           }`}
                         >
-                          {n} legs
+                          {tr("match.specialBetLegs", { n })}
                         </button>
                       ))}
                     </div>
@@ -974,7 +980,11 @@ export default function MatchModal({
                   ))}
                 </div>
                 <div className="mt-2 border-t border-emerald-300/20 pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-emerald-100 max-[380px]:text-[9px]">
-                  combined odd {Number.isFinite(Number(specialBetCombinedOdd)) ? Number(specialBetCombinedOdd).toFixed(2) : "N/A"}
+                  {tr("match.combinedOdd", {
+                    odd: Number.isFinite(Number(specialBetCombinedOdd))
+                      ? Number(specialBetCombinedOdd).toFixed(2)
+                      : tr("common.na")
+                  })}
                 </div>
               </div>
             </div>
@@ -1108,7 +1118,7 @@ export default function MatchModal({
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
             <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["xg", "overview"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">01 — xG & luck</h3>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.xgLuck")}</h3>
               <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -1116,11 +1126,13 @@ export default function MatchModal({
                   <LuckBadge goals={match.luckStats.aG} xg={xgData?.awayXG ?? match.luckStats.aXG} />
                 </div>
               )}
-              {!match.luckStats && <p className="text-center text-[10px] text-signal-inkMuted">Luck factor indisponibil</p>}
+              {!match.luckStats && (
+                <p className="text-center text-[10px] text-signal-inkMuted">{tr("match.luckUnavailable")}</p>
+              )}
             </section>
 
             <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["odds", "value", "overview"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">02 — Cote & value</h3>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-white/5 bg-signal-mist/50 p-3">
                   <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">1</div>
@@ -1146,7 +1158,7 @@ export default function MatchModal({
               )}
               {match.valueBet?.detected && match.valueBet.stakePlan && (
                 <div className="mt-3 rounded-xl border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                  <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Stake plan</div>
+                  <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.stakePlan")}</div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 tabular-nums">
                     <span>{match.valueBet.type}</span>
                     <span>EV +{match.valueBet.ev ?? 0}%</span>
@@ -1164,7 +1176,7 @@ export default function MatchModal({
                 </div>
               )}
               {!match.valueEngine && !match.valueBet?.detected && (
-                <p className="mt-4 text-[10px] text-signal-inkMuted">Value bet · nu detectat</p>
+                <p className="mt-4 text-[10px] text-signal-inkMuted">{tr("match.valueNotDetected")}</p>
               )}
             </section>
           </div>
@@ -1250,23 +1262,21 @@ export default function MatchModal({
                   <>
                     {tossCount > 0 && (
                       <div className="mb-3 rounded-lg border border-signal-amber/25 bg-signal-amber/5 px-3 py-2 text-[10px] leading-snug text-signal-amberSoft">
-                        <span className="font-semibold">Atenţie:</span> {tossCount}{" "}
-                        {tossCount === 1 ? "piaţă e" : "pieţe sunt"} practic 50/50 — modelul nu are direcţie clară.
-                        Etichetele sunt orientative, nu sunt pariuri recomandate.
+                        {tr("match.tossWarn", { n: tossCount })}
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                      <MarketPickCard label="1X2" info={oneXtwoInfo} />
-                      <MarketPickCard label="GG / NGG" info={ggInfo} />
-                      <MarketPickCard label="Over / Under 2.5" info={over25Info} />
+                      <MarketPickCard label={tr("match.market1x2")} info={oneXtwoInfo} />
+                      <MarketPickCard label={tr("match.marketGgNgg")} info={ggInfo} />
+                      <MarketPickCard label={tr("match.marketOu25")} info={over25Info} />
                       <div className={`rounded-xl border p-3 text-center ${tierToneClass(correctScoreInfo.tier)}`}>
                         <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
-                          <span>Correct score</span>
+                          <span>{tr("match.correctScore")}</span>
                           <span
                             className="rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider"
-                            title="Probabilitate tipică pentru un scor exact: ~10-20%. Este scorul cel mai probabil, NU scorul sigur."
+                            title={tr("match.correctScoreTip")}
                           >
-                            cel mai probabil
+                            {tr("match.mostLikelyTag")}
                           </span>
                         </div>
                         <div className="mt-1 flex items-baseline justify-center gap-1.5">
@@ -1285,7 +1295,7 @@ export default function MatchModal({
                       </div>
                       {match.predictions.cards && (
                         <div className="col-span-2 rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                          <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">Cartonașe</div>
+                          <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">{tr("match.cards")}</div>
                           <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.cards}</div>
                         </div>
                       )}
@@ -1298,28 +1308,28 @@ export default function MatchModal({
 
           <div className="grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3">
             <CollapsiblePanel compact title={tr("panels.model1x2")}>
-              <ProbBar label="Victorie gazde" val={match.probs.p1} color={homeColor} />
-              <ProbBar label="Egalitate" val={match.probs.pX} color="#94a3b8" />
-              <ProbBar label="Victorie oaspeți" val={match.probs.p2} color={awayColor} />
+              <ProbBar label={tr("panels.homeWin")} val={match.probs.p1} color={homeColor} />
+              <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#94a3b8" />
+              <ProbBar label={tr("panels.awayWin")} val={match.probs.p2} color={awayColor} />
             </CollapsiblePanel>
             <CollapsiblePanel
               compact
               title={tr("panels.doubleChance")}
-              subtitle="Sume din 1X2 (nu sunt calibrate separat față de piață)."
+              subtitle={tr("match.dcSubtitle")}
             >
-              <ProbBar label="1 sau X" val={ext.pDC1X} color={homeColor} />
-              <ProbBar label="1 sau 2" val={ext.pDC12} color="#a78bfa" />
-              <ProbBar label="X sau 2" val={ext.pDCX2} color={awayColor} />
+              <ProbBar label={tr("match.dc1x")} val={ext.pDC1X} color={homeColor} />
+              <ProbBar label={tr("match.dc12")} val={ext.pDC12} color="#a78bfa" />
+              <ProbBar label={tr("match.dcx2")} val={ext.pDCX2} color={awayColor} />
             </CollapsiblePanel>
             <CollapsiblePanel compact title={tr("panels.goalsMarkets")}>
-              <ProbBar label="Peste 1.5" val={match.probs.pO15} color="#22d3ee" />
-              <ProbBar label="Sub 1.5" val={ext.pU15} color="#64748b" />
-              <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#38bdf8" />
-              <ProbBar label="Sub 2.5" val={ext.pU25} color="#0ea5e9" />
-              <ProbBar label="Peste 3.5" val={clamp100(100 - match.probs.pU35)} color="#14b8a6" />
-              <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#34d399" />
-              <ProbBar label="Ambele marchează (GG)" val={match.probs.pGG} color="#fbbf24" />
-              <ProbBar label="Nu ambele (NGG)" val={ext.pNGG} color="#94a3b8" />
+              <ProbBar label={tr("match.over15")} val={match.probs.pO15} color="#22d3ee" />
+              <ProbBar label={tr("match.under15")} val={ext.pU15} color="#64748b" />
+              <ProbBar label={tr("match.over25")} val={match.probs.pO25} color="#38bdf8" />
+              <ProbBar label={tr("match.under25")} val={ext.pU25} color="#0ea5e9" />
+              <ProbBar label={tr("match.over35")} val={clamp100(100 - match.probs.pU35)} color="#14b8a6" />
+              <ProbBar label={tr("match.under35")} val={match.probs.pU35} color="#34d399" />
+              <ProbBar label={tr("match.bttsYes")} val={match.probs.pGG} color="#fbbf24" />
+              <ProbBar label={tr("match.bttsNo")} val={ext.pNGG} color="#94a3b8" />
             </CollapsiblePanel>
           </div>
 
@@ -1328,7 +1338,7 @@ export default function MatchModal({
             <CollapsiblePanel
               compact
               title={tr("panels.firstHalf")}
-              subtitle="derivată din distribuţia goluri pe minute (fără call API suplimentar)"
+              subtitle={tr("match.htSubtitle")}
             >
               {match.modelMeta?.firstHalf && (
                 <div className="mb-3 text-right font-mono text-[10px] text-signal-silver tabular-nums">
@@ -1346,7 +1356,7 @@ export default function MatchModal({
               <div className="grid gap-5 lg:grid-cols-2">
                 <div>
                   <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                    Rezultat la pauză (1X2 FH)
+                    {tr("match.htResult")}
                   </div>
                   <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
                   <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#94a3b8" />
@@ -1354,17 +1364,17 @@ export default function MatchModal({
                 </div>
                 <div>
                   <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                    Goluri în prima repriză
+                    {tr("match.htGoals")}
                   </div>
-                  <ProbBar label="Peste 0.5 goluri FH" val={match.probs.firstHalf.pO05} color="#22d3ee" />
-                  <ProbBar label="Peste 1.5 goluri FH" val={match.probs.firstHalf.pO15} color="#38bdf8" />
-                  <ProbBar label="Peste 2.5 goluri FH" val={match.probs.firstHalf.pO25} color="#0ea5e9" />
-                  <ProbBar label="Ambele marchează FH" val={match.probs.firstHalf.pGG} color="#fbbf24" />
+                  <ProbBar label={tr("match.htOver05")} val={match.probs.firstHalf.pO05} color="#22d3ee" />
+                  <ProbBar label={tr("match.htOver15")} val={match.probs.firstHalf.pO15} color="#38bdf8" />
+                  <ProbBar label={tr("match.htOver25")} val={match.probs.firstHalf.pO25} color="#0ea5e9" />
+                  <ProbBar label={tr("match.htBtts")} val={match.probs.firstHalf.pGG} color="#fbbf24" />
                 </div>
               </div>
               {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
                 <div className="mt-4 rounded-lg border border-white/5 bg-signal-void/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                  <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Scor pauză cel mai probabil</span>
+                  <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.htBestScore")}</span>
                   <span className="ml-2 text-signal-amberSoft tabular-nums">
                     {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
                   </span>
@@ -1382,7 +1392,7 @@ export default function MatchModal({
                   )}
                   {xgData?.marketResults?.firstHalfGoals != null && (
                     <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
-                      Goluri HT: {xgData.marketResults.firstHalfGoals}
+                      {tr("match.htGoalsLabel", { n: xgData.marketResults.firstHalfGoals })}
                     </span>
                   )}
                 </div>
@@ -1405,10 +1415,10 @@ export default function MatchModal({
           {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal) && (
             <div className="space-y-2">
               {match.probs.corners && (
-                <CollapsiblePanel compact title={tr("match.featCorners")} subtitle="rolling averages · Poisson">
+                <CollapsiblePanel compact title={tr("match.featCorners")} subtitle={tr("match.cornersSub")}>
                   <PoissonMarketSection
-                    title="Cornere"
-                    subtitle="derivate din ultimele ~15 meciuri / echipă"
+                    title={tr("match.featCorners")}
+                    subtitle={tr("match.cornersSub")}
                     accent="#5eead4"
                     icon="⚑"
                     data={match.probs.corners}
@@ -1423,10 +1433,10 @@ export default function MatchModal({
                 </CollapsiblePanel>
               )}
               {match.probs.shotsOnTarget && (
-                <CollapsiblePanel compact title={tr("match.featShots")} subtitle="Shots on Goal">
+                <CollapsiblePanel compact title={tr("match.featShots")} subtitle={tr("match.shotsSub")}>
                   <PoissonMarketSection
-                    title="Şuturi la poartă"
-                    subtitle="pe uşa porţii (Shots on Goal din API-Football)"
+                    title={tr("match.featShots")}
+                    subtitle={tr("match.shotsSub")}
                     accent="#38bdf8"
                     icon="◎"
                     data={match.probs.shotsOnTarget}
@@ -1441,10 +1451,10 @@ export default function MatchModal({
                 </CollapsiblePanel>
               )}
               {match.probs.shotsTotal && (
-                <CollapsiblePanel compact title="Total șuturi" subtitle="on + off target">
+                <CollapsiblePanel compact title={tr("match.shotsTotalTitle")} subtitle={tr("match.shotsTotalSub")}>
                   <PoissonMarketSection
-                    title="Total şuturi"
-                    subtitle="semnal secundar (toate tentativele, on + off target)"
+                    title={tr("match.shotsTotalTitle")}
+                    subtitle={tr("match.shotsTotalSub")}
                     accent="#a78bfa"
                     icon="⌖"
                     data={match.probs.shotsTotal}
@@ -1503,14 +1513,14 @@ export default function MatchModal({
               <details className={`group rounded-2xl border border-white/[0.07] bg-signal-void/25 p-4 sm:p-5 ${tab(["prediction", "why"])}`}>
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
-                    Model audit
+                    {tr("match.modelAudit")}
                     <span className="text-signal-inkMuted transition group-open:rotate-90">›</span>
                   </span>
                 </summary>
                 <div className="mt-4 space-y-4 border-t border-white/5 pt-4 text-[11px] text-signal-inkMuted">
                   {/* === Pipeline summary: indicator clar pentru ce strat e activ === */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">Pipeline:</span>
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-signal-silver">{tr("match.pipeline")}</span>
                     <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-signal-void/50 px-2 py-0.5 font-mono text-[9px] text-signal-silver">
                       Poisson+DC
                     </span>
@@ -1530,7 +1540,7 @@ export default function MatchModal({
                   {/* === Probabilităţile la fiecare strat (doar dacă avem raw) === */}
                   {match.evaluation?.rawPoissonProbs1x2Pct && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3">
-                      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">Probabilities pipeline</div>
+                      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">{tr("match.probsPipeline")}</div>
                       <table className="w-full text-[10px]">
                         <thead>
                           <tr className="text-left font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
@@ -1581,7 +1591,7 @@ export default function MatchModal({
                     (match.modelMeta.topPickAlternates && match.modelMeta.topPickAlternates.length > 0)) && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
                       <div className="mb-1 flex items-center justify-between text-[9px] uppercase tracking-wider">
-                        <span className="text-signal-petrol/80">De ce acest pick?</span>
+                        <span className="text-signal-petrol/80">{tr("match.whyThisPick")}</span>
                         {match.modelMeta.topPickLift != null && (
                           <span
                             className={
@@ -1681,7 +1691,7 @@ export default function MatchModal({
                   {/* === Shin info (market) === */}
                   {match.odds?.marginMethod && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">Market debiasing</div>
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">{tr("match.marketDebiasing")}</div>
                       <div className="flex flex-wrap gap-x-3 tabular-nums">
                         <span>method · {match.odds.marginMethod}</span>
                         {match.odds.shinZ != null && <span>z · {match.odds.shinZ.toFixed(4)}</span>}
@@ -1693,7 +1703,7 @@ export default function MatchModal({
                   {/* === Strength ratings (atk/def shrinkage) === */}
                   {match.modelMeta.strengthMeta && (
                     <div className="rounded-lg border border-white/5 bg-signal-mist/20 p-3 font-mono text-[10px] text-signal-silver">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">Strength ratings (post-shrinkage)</div>
+                      <div className="mb-1 text-[9px] uppercase tracking-wider text-signal-petrol/80">{tr("match.strengthRatings")}</div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
                         {match.modelMeta.strengthMeta.atkH != null && <span>atk H {match.modelMeta.strengthMeta.atkH.toFixed(2)}</span>}
                         {match.modelMeta.strengthMeta.defH != null && <span>def H {match.modelMeta.strengthMeta.defH.toFixed(2)}</span>}
@@ -1738,7 +1748,7 @@ export default function MatchModal({
                   )}
                   {Array.isArray(match.modelMeta.reasonCodes) && match.modelMeta.reasonCodes.length > 0 && (
                     <div>
-                      <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-signal-silver">Reason codes</div>
+                      <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-signal-silver">{tr("match.reasonCodes")}</div>
                       <ul className="list-inside list-disc space-y-0.5 font-mono text-[10px] text-signal-silver">
                         {match.modelMeta.reasonCodes.map((code) => (
                           <li key={code}>{code}</li>

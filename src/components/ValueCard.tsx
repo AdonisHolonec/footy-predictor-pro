@@ -97,7 +97,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
         {recommendable && selection !== "—" ? (
           <span className="truncate opacity-90">· {selection}</span>
         ) : null}
-        {!recommendable && signal === "negative" ? <span className="opacity-80">· skip</span> : null}
+        {!recommendable && signal === "negative" ? <span className="opacity-80">· {t("panels.skip")}</span> : null}
       </div>
     );
   }
@@ -110,7 +110,11 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
         <div>
           <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.valueEngine")}</h3>
           <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.valueEngineSub")}</p>
-          {bookmaker ? <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">Operator · {bookmaker}</p> : null}
+          {bookmaker ? (
+            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
+              {t("panels.operator", { bookmaker })}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">
           <div className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tone.badge}`}>
@@ -163,15 +167,11 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
       ) : null}
 
       {!recommendable && !engine.negativeEV && ev >= 0 ? (
-        <p className="mt-4 text-xs font-medium text-[var(--fp-text-muted)]">
-          No value recommendation — no Positive EV market cleared Kelly / edge guards.
-        </p>
+        <p className="mt-4 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.noValueRec")}</p>
       ) : null}
 
       {recommendable ? (
-        <p className="mt-4 text-xs font-semibold text-[var(--fp-success)]">
-          Best market highlighted · stake guide {kelly.toFixed(2)}% bankroll (fractional Kelly).
-        </p>
+        <p className="mt-4 text-xs font-semibold text-[var(--fp-success)]">{t("panels.bestMarketGuide")}</p>
       ) : null}
 
       {ranked.length > 0 ? (
@@ -179,12 +179,12 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
           <table className="w-full min-w-[420px] border-collapse text-left text-[10px]">
             <thead>
               <tr className="border-b border-[var(--fp-border)] text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
-                <th className="px-2.5 py-2">Market</th>
-                <th className="px-2.5 py-2">Family</th>
-                <th className="px-2.5 py-2 text-right">EV</th>
-                <th className="px-2.5 py-2 text-right">Kelly</th>
-                <th className="px-2.5 py-2 text-right">Score</th>
-                <th className="px-2.5 py-2 text-right">Flag</th>
+                <th className="px-2.5 py-2">{t("panels.colMarket")}</th>
+                <th className="px-2.5 py-2">{t("panels.colFamily")}</th>
+                <th className="px-2.5 py-2 text-right">{t("panels.colEv")}</th>
+                <th className="px-2.5 py-2 text-right">{t("panels.colKelly")}</th>
+                <th className="px-2.5 py-2 text-right">{t("panels.colScore")}</th>
+                <th className="px-2.5 py-2 text-right">{t("panels.colFlag")}</th>
               </tr>
             </thead>
             <tbody>
@@ -214,7 +214,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
                     </td>
                     <td className="px-2.5 py-1.5 text-right">
                       <span className={`rounded border px-1 py-0.5 text-[8px] font-bold uppercase ${SIGNAL_STYLES[ms].badge}`}>
-                        {m.negativeEV ? "Neg" : m.positiveEV ? "Pos" : "—"}
+                        {m.negativeEV ? t("panels.flagNeg") : m.positiveEV ? t("panels.flagPos") : "—"}
                       </span>
                     </td>
                   </tr>
@@ -223,7 +223,11 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
             </tbody>
           </table>
           <div className="border-t border-[var(--fp-border)] px-2.5 py-1.5 text-[9px] font-medium text-[var(--fp-text-muted)]">
-            Supported · {(engine.familiesSupported || ["1X2", "Double Chance", "BTTS", "Over/Under", "Corners", "Cards"]).join(" · ")}
+            {t("panels.supportedFamilies", {
+              list: (engine.familiesSupported || ["1X2", "Double Chance", "BTTS", "Over/Under", "Corners", "Cards"]).join(
+                " · "
+              )
+            })}
             {engine.positiveEvCount != null ? ` · +EV ${engine.positiveEvCount}` : ""}
             {engine.negativeEvCount != null ? ` · −EV ${engine.negativeEvCount}` : ""}
           </div>

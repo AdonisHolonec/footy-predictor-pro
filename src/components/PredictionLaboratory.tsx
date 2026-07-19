@@ -48,6 +48,7 @@ function edgeTone(edge: number | null): string {
 }
 
 function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
+  const { t } = useLocale();
   return (
     <div className="h-64 w-full sm:h-72">
       <ResponsiveContainer width="100%" height="100%">
@@ -56,14 +57,14 @@ function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
           <PolarAngleAxis dataKey="metric" tick={{ fill: "#334155", fontSize: 10 }} />
           <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#475569", fontSize: 9 }} />
           <Radar
-            name="Prediction Analysis"
+            name={t("panels.predictionAnalysis")}
             dataKey="value"
             stroke="#2563eb"
             fill="#2563eb"
             fillOpacity={0.28}
             strokeWidth={1.5}
           />
-          <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}`, "Score"]} />
+          <Tooltip contentStyle={tip} formatter={(v: number) => [`${Number(v).toFixed(1)}`, t("panels.score")]} />
         </RadarChart>
       </ResponsiveContainer>
     </div>
@@ -71,6 +72,7 @@ function LabRadar({ data }: { data: PredictionLaboratory["radar"] }) {
 }
 
 function EvolutionChart({ data }: { data: PredictionLaboratory["evolution"] }) {
+  const { t } = useLocale();
   if (!data.length) return null;
   return (
     <div className="h-48 w-full sm:h-56">
@@ -81,9 +83,9 @@ function EvolutionChart({ data }: { data: PredictionLaboratory["evolution"] }) {
           <YAxis domain={[0, 100]} tick={{ fill: "#475569", fontSize: 10 }} width={32} unit="%" />
           <Tooltip contentStyle={tip} />
           <Legend wrapperStyle={{ fontSize: 10, color: "#334155" }} />
-          <Line type="monotone" dataKey="p1" name="Home %" stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="pX" name="Draw %" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="p2" name="Away %" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="p1" name={t("panels.homePct")} stroke="#14b8a6" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="pX" name={t("panels.drawPct")} stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="p2" name={t("panels.awayPct")} stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -91,6 +93,7 @@ function EvolutionChart({ data }: { data: PredictionLaboratory["evolution"] }) {
 }
 
 function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
+  const { t } = useLocale();
   const cmp = lab.comparison;
   if (!cmp) return null;
   return (
@@ -98,10 +101,10 @@ function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
       <table className="w-full min-w-[320px] border-collapse text-left text-[11px]">
         <thead>
           <tr className="border-b border-[var(--fp-border)] text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
-            <th className="px-3 py-2.5">Metric</th>
+            <th className="px-3 py-2.5">{t("panels.metric")}</th>
             <th className="px-3 py-2.5 text-right">{cmp.homeName}</th>
             <th className="px-3 py-2.5 text-right">{cmp.awayName}</th>
-            <th className="px-3 py-2.5 text-right">Edge</th>
+            <th className="px-3 py-2.5 text-right">{t("panels.edge")}</th>
           </tr>
         </thead>
         <tbody>
@@ -119,10 +122,10 @@ function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
       </table>
       {cmp.drawOdd != null && (
         <div className="border-t border-[var(--fp-border)] px-3 py-2 text-[10px] font-medium text-[var(--fp-text-muted)]">
-          Draw odd · {Number(cmp.drawOdd).toFixed(2)}
+          {t("panels.drawOdd")} · {Number(cmp.drawOdd).toFixed(2)}
           {lab.bookmaker?.differencePp != null && (
             <span className="ml-3">
-              Book Δ ·{" "}
+              {t("panels.bookDelta")} ·{" "}
               <span className={`font-bold ${edgeTone(lab.bookmaker.differencePp)}`}>
                 {lab.bookmaker.differencePp >= 0 ? "+" : ""}
                 {lab.bookmaker.differencePp.toFixed(1)} pp
@@ -212,18 +215,16 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
-            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
-              Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
-            </p>
+            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.labSubtitle")}</p>
           </div>
           <div className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
-            auto · {new Date(lab.updatedAt).toLocaleTimeString()}
+            {t("panels.labAuto", { time: new Date(lab.updatedAt).toLocaleTimeString() })}
             {lab.pick ? ` · pick ${lab.pick}` : ""}
           </div>
         </div>
       ) : (
         <div className="mb-2 text-right text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
-          auto · {new Date(lab.updatedAt).toLocaleTimeString()}
+          {t("panels.labAuto", { time: new Date(lab.updatedAt).toLocaleTimeString() })}
           {lab.pick ? ` · pick ${lab.pick}` : ""}
         </div>
       )}

@@ -1,22 +1,23 @@
 import { useLocale } from "../context/LocaleContext";
+import { translateConfidenceCategory, translateDimensionLabel } from "../i18n/labels";
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import { PredictionRow } from "../types";
 
 type ConfidenceEngineData = NonNullable<PredictionRow["confidenceEngine"]>;
 
-const DIMENSION_LABELS: Array<{ key: keyof NonNullable<ConfidenceEngineData["scores"]>; label: string }> = [
-  { key: "attack", label: "Attack" },
-  { key: "defense", label: "Defense" },
-  { key: "form", label: "Form" },
-  { key: "recentMatches", label: "Recent Matches" },
-  { key: "standings", label: "Standings" },
-  { key: "referee", label: "Referee" },
-  { key: "injuries", label: "Injuries" },
-  { key: "lineups", label: "Lineups" },
-  { key: "restDays", label: "Rest Days" },
-  { key: "homeAdvantage", label: "Home Advantage" },
-  { key: "oddsConsensus", label: "Odds Consensus" },
-  { key: "h2h", label: "H2H" }
+const DIMENSION_KEYS: Array<keyof NonNullable<ConfidenceEngineData["scores"]>> = [
+  "attack",
+  "defense",
+  "form",
+  "recentMatches",
+  "standings",
+  "referee",
+  "injuries",
+  "lineups",
+  "restDays",
+  "homeAdvantage",
+  "oddsConsensus",
+  "h2h"
 ];
 
 function categoryTone(category?: string): string {
@@ -70,6 +71,7 @@ export default function ConfidenceEnginePanel({
   const { t } = useLocale();
   const overall = Math.round(engine.confidence ?? engine.overall ?? 0);
   const category = engine.category || "Medium";
+  const categoryLabel = translateConfidenceCategory(t, category);
   const available = engine.available || {};
   const whyLines =
     Array.isArray(engine.recommendationWhy) && engine.recommendationWhy.length > 0
@@ -83,7 +85,7 @@ export default function ConfidenceEnginePanel({
 
   const scoreGrid = (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-      {DIMENSION_LABELS.map(({ key, label }) => {
+      {DIMENSION_KEYS.map((key) => {
         const score = Math.round(Number(engine.scores?.[key]) || 0);
         const isAvailable = available[key] !== false;
         return (
@@ -94,11 +96,11 @@ export default function ConfidenceEnginePanel({
                 ? "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]"
                 : "border-[var(--fp-border)] bg-[var(--fp-bg)] opacity-60"
             }`}
-            title={isAvailable ? undefined : "Insufficient data (neutral 50, dimmed)"}
+            title={isAvailable ? undefined : t("panels.dimUnavailable")}
           >
             <div className="flex items-center justify-between gap-1">
               <div className="truncate text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
-                {label}
+                {translateDimensionLabel(t, key)}
               </div>
               <div className={`text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
                 {isAvailable ? score : "—"}
@@ -111,7 +113,9 @@ export default function ConfidenceEnginePanel({
               />
             </div>
             {!isAvailable && (
-              <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">n/a</div>
+              <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+                {t("common.na")}
+              </div>
             )}
           </div>
         );
@@ -133,7 +137,7 @@ export default function ConfidenceEnginePanel({
           <span
             className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
           >
-            {category} · {overall}%
+            {categoryLabel} · {overall}%
           </span>
         }
       >
@@ -150,7 +154,7 @@ export default function ConfidenceEnginePanel({
       </CollapsiblePanel>
 
       {(whyLines.length > 0 || engine.why) && (
-        <CollapsiblePanel compact title={t("panels.whyRec", { category })}>
+        <CollapsiblePanel compact title={t("panels.whyRec", { category: categoryLabel })}>
           <ul className="space-y-1.5 text-sm font-medium leading-relaxed text-[var(--fp-text)]">
             {(whyLines.length > 0 ? whyLines : [engine.why || ""]).filter(Boolean).map((line, i) => (
               <li key={`why-${i}`} className="flex gap-2">

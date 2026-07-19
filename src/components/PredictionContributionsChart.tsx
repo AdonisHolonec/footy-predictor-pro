@@ -95,7 +95,7 @@ export default function PredictionContributionsChart({
 
       {data.net != null ? (
         <div className="mt-3 flex items-center justify-between border-t border-[var(--fp-border)] pt-2 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
-          <span>Net lean</span>
+          <span>{t("panels.netLean")}</span>
           <span className={data.net >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}>{fmt(data.net)}</span>
         </div>
       ) : null}
