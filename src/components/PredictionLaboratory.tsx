@@ -154,16 +154,26 @@ function MetricsStrip({ lab }: { lab: PredictionLaboratory }) {
   );
 }
 
-export default function PredictionLaboratoryPanel({ match, compact = false }: Props) {
+type LabProps = Props & { framed?: boolean };
+
+export default function PredictionLaboratoryPanel({ match, compact = false, framed = true }: LabProps) {
   const { t } = useLocale();
   const lab = useMemo(() => buildPredictionLaboratory(match), [match]);
 
   if (!lab.available) {
     if (compact) return null;
+    const empty = (
+      <>
+        {framed && (
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+        )}
+        <p className={`${framed ? "mt-1.5" : ""} text-sm font-medium text-[var(--fp-text-muted)]`}>{t("match.insufficientTitle")}</p>
+      </>
+    );
+    if (!framed) return <div>{empty}</div>;
     return (
       <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
-        <p className="mt-1.5 text-sm font-medium text-[var(--fp-text-muted)]">{t("match.insufficientTitle")}</p>
+        {empty}
       </section>
     );
   }
@@ -196,20 +206,27 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
     );
   }
 
-  return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
-          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
-            Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
-          </p>
+  const body = (
+    <>
+      {framed ? (
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
+              Poisson · xG · standings · attack · defense · odds · confidence · EV · book Δ · evolution
+            </p>
+          </div>
+          <div className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
+            auto · {new Date(lab.updatedAt).toLocaleTimeString()}
+            {lab.pick ? ` · pick ${lab.pick}` : ""}
+          </div>
         </div>
-        <div className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
+      ) : (
+        <div className="mb-2 text-right text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
           auto · {new Date(lab.updatedAt).toLocaleTimeString()}
           {lab.pick ? ` · pick ${lab.pick}` : ""}
         </div>
-      </div>
+      )}
 
       <MetricsStrip lab={lab} />
 
@@ -232,6 +249,14 @@ export default function PredictionLaboratoryPanel({ match, compact = false }: Pr
           <EvolutionChart data={lab.evolution} />
         </div>
       )}
+    </>
+  );
+
+  if (!framed) return <div>{body}</div>;
+
+  return (
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      {body}
     </section>
   );
 }

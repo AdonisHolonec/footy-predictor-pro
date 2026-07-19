@@ -21,10 +21,12 @@ function isFormReason(code: string): boolean {
  */
 export default function ExplanationCard({
   explanation,
-  compact = false
+  compact = false,
+  framed = true
 }: {
   explanation: PredictionExplanation;
   compact?: boolean;
+  framed?: boolean;
 }) {
   const pick = explanation.pick || "—";
   const confidence = explanation.confidence;
@@ -66,15 +68,19 @@ export default function ExplanationCard({
     );
   }
 
-  return (
-    <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-white/5 pb-3">
-        <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Prediction Explanation</h3>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-            From real match data · no generic copy
-          </p>
-        </div>
+  const body = (
+    <>
+      <div className={`mb-4 flex flex-wrap items-end justify-between gap-3 ${framed ? "border-b border-white/5 pb-3" : ""}`}>
+        {framed ? (
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Prediction Explanation</h3>
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+              From real match data · no generic copy
+            </p>
+          </div>
+        ) : (
+          <div />
+        )}
         <div className="text-right">
           <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Prediction</div>
           <div className="font-display text-2xl font-bold text-signal-ink">{pick}</div>
@@ -128,6 +134,10 @@ export default function ExplanationCard({
           Σ λ = <span className="text-signal-ink">{explanation.expectedGoals.toFixed(2)}</span> expected goals
         </div>
       )}
-    </section>
+    </>
   );
+
+  if (!framed) return <div>{body}</div>;
+
+  return <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">{body}</section>;
 }

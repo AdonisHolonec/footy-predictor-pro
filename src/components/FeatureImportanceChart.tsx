@@ -14,10 +14,13 @@ function barColor(index: number, total: number): string {
  */
 export default function FeatureImportanceChart({
   importance,
-  compact = false
+  compact = false,
+  framed = true
 }: {
   importance: FeatureImportance;
   compact?: boolean;
+  /** When false, omit outer card chrome (for CollapsiblePanel). */
+  framed?: boolean;
 }) {
   const { t } = useLocale();
   const items = Array.isArray(importance.items)
@@ -53,17 +56,23 @@ export default function FeatureImportanceChart({
     );
   }
 
-  return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
-          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.keyFactorsSub")}</p>
+  const body = (
+    <>
+      {framed ? (
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
+            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.keyFactorsSub")}</p>
+          </div>
+          <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
+            {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
+          </div>
         </div>
-        <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
+      ) : (
+        <div className="mb-2 text-right text-[10px] font-semibold text-[var(--fp-text-muted)]">
           {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
         </div>
-      </div>
+      )}
 
       <div className="space-y-2.5">
         {items.map((item, i) => (
@@ -84,6 +93,14 @@ export default function FeatureImportanceChart({
           </div>
         ))}
       </div>
+    </>
+  );
+
+  if (!framed) return <div>{body}</div>;
+
+  return (
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      {body}
     </section>
   );
 }

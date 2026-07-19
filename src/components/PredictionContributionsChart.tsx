@@ -7,10 +7,12 @@ import type { PredictionContributions } from "../types";
  */
 export default function PredictionContributionsChart({
   data,
-  compact = false
+  compact = false,
+  framed = true
 }: {
   data: PredictionContributions;
   compact?: boolean;
+  framed?: boolean;
 }) {
   const { t } = useLocale();
   const items = Array.isArray(data?.items)
@@ -23,25 +25,31 @@ export default function PredictionContributionsChart({
 
   const shown = compact ? items.slice(0, 5) : items;
 
-  return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.whyPrediction")}</h3>
-          <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
-            {t("panels.whyPredictionSub", {
-              pick: data.pick ? `· ${data.pick}` : "",
-              schema: data.schemaVersion || "contrib-v1"
-            })}
-          </p>
-        </div>
-        {data.confidence != null ? (
-          <div className="flex flex-col items-end">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</span>
-            <span className="text-lg font-bold tabular-nums text-[var(--fp-success)]">{Math.round(data.confidence)}%</span>
+  const body = (
+    <>
+      {framed ? (
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.whyPrediction")}</h3>
+            <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
+              {t("panels.whyPredictionSub", {
+                pick: data.pick ? `· ${data.pick}` : "",
+                schema: data.schemaVersion || "contrib-v1"
+              })}
+            </p>
           </div>
-        ) : null}
-      </div>
+          {data.confidence != null ? (
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</span>
+              <span className="text-lg font-bold tabular-nums text-[var(--fp-success)]">{Math.round(data.confidence)}%</span>
+            </div>
+          ) : null}
+        </div>
+      ) : data.confidence != null ? (
+        <div className="mb-2 flex justify-end">
+          <span className="text-sm font-bold tabular-nums text-[var(--fp-success)]">{Math.round(data.confidence)}%</span>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         {shown.map((item) => {
@@ -91,6 +99,14 @@ export default function PredictionContributionsChart({
           <span className={data.net >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}>{fmt(data.net)}</span>
         </div>
       ) : null}
+    </>
+  );
+
+  if (!framed) return <div>{body}</div>;
+
+  return (
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      {body}
     </section>
   );
 }

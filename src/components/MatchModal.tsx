@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
+import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import LuckBadge from "./LuckBadge";
 import XGPerformanceBar from "./XGPerformanceBar";
 import ConfidenceEnginePanel from "./ConfidenceEnginePanel";
@@ -174,7 +175,8 @@ function PoissonMarketSection({
   actualTotal,
   quotedOdd,
   quoteSource,
-  badgeTone = "neutral"
+  badgeTone = "neutral",
+  framed = true
 }: {
   title: string;
   subtitle: string;
@@ -187,6 +189,7 @@ function PoissonMarketSection({
   quotedOdd?: number | null;
   quoteSource?: string | null;
   badgeTone?: "corners" | "shots" | "ht" | "neutral";
+  framed?: boolean;
 }) {
   const totalKeys = Object.keys(data.total || {});
   const homeKeys = Object.keys(data.home || {});
@@ -208,26 +211,37 @@ function PoissonMarketSection({
 
   return (
     <section
-      className="rounded-2xl border p-4 shadow-inner sm:p-5"
-      style={{ borderColor: `${accent}40`, background: `linear-gradient(180deg, ${accent}0d, transparent)` }}
+      className={framed ? "rounded-2xl border p-4 shadow-inner sm:p-5" : "p-0"}
+      style={
+        framed
+          ? { borderColor: `${accent}40`, background: `linear-gradient(180deg, ${accent}0d, transparent)` }
+          : undefined
+      }
     >
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/5 pb-2">
-        <div>
-          <h3 className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: accent }}>
-            {icon} {title}
-          </h3>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{subtitle}</p>
-        </div>
-        <div className="text-right font-mono text-[10px] tabular-nums">
-          <div className="text-signal-silver">
-            λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
+      {framed ? (
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/5 pb-2">
+          <div>
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: accent }}>
+              {icon} {title}
+            </h3>
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{subtitle}</p>
           </div>
-          <div className="text-[9px] text-signal-inkMuted">
-            total aşteptat ≈ {data.expectedTotal.toFixed(1)}
-            {data.usedFallback ? " · fallback" : ""}
+          <div className="text-right font-mono text-[10px] tabular-nums">
+            <div className="text-signal-silver">
+              λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
+            </div>
+            <div className="text-[9px] text-signal-inkMuted">
+              total aşteptat ≈ {data.expectedTotal.toFixed(1)}
+              {data.usedFallback ? " · fallback" : ""}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-3 text-right font-mono text-[10px] tabular-nums text-signal-silver">
+          λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)} · ≈ {data.expectedTotal.toFixed(1)}
+          {data.usedFallback ? " · fallback" : ""}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* TOTAL */}
@@ -966,17 +980,23 @@ export default function MatchModal({
             </div>
           )}
 
-          <div className="mx-auto hidden max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-5 sm:block">
+          <div className="mx-auto hidden max-w-2xl sm:block">
             {hasExactConfidence ? (
-              <>
-                <SignalLens confidence={confPct} edge={edgeScore} />
-                <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                  <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
-                  <EdgeCompass dataQuality={dq} valueDetected={Boolean(match.valueBet?.detected)} />
+              <CollapsiblePanel compact title={tr("panels.advancedSignals")} lazy={false}>
+                <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4">
+                  <SignalLens confidence={confPct} edge={edgeScore} />
+                  <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                    <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
+                    <EdgeCompass dataQuality={dq} valueDetected={Boolean(match.valueBet?.detected)} />
+                  </div>
                 </div>
-              </>
+              </CollapsiblePanel>
             ) : (
-              <>
+              <CollapsiblePanel
+                compact
+                title={tr("panels.advancedSignals")}
+                badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
+              >
                 <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center text-sm font-medium text-[var(--fp-text)]">
                   {isPremiumLike ? tr("match.advancedNeedUltra") : tr("match.advancedHigher")}
                 </div>
@@ -1006,7 +1026,7 @@ export default function MatchModal({
                 <div className="mt-4">
                   <FormRibbon p1={match.probs.p1} pX={match.probs.pX} p2={match.probs.p2} homeTint={homeColor} awayTint={awayColor} />
                 </div>
-              </>
+              </CollapsiblePanel>
             )}
           </div>
 
@@ -1071,14 +1091,20 @@ export default function MatchModal({
           </div>
         </div>
 
-        <div className="space-y-5 p-3 sm:p-5">
+        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5">
           <div className={tab(["prediction"])}>
-            <PredictionLaboratoryPanel match={match} />
+            <CollapsiblePanel compact title={tr("panels.predictionAnalysis")}>
+              <PredictionLaboratoryPanel match={match} framed={false} />
+            </CollapsiblePanel>
           </div>
 
-          <div className={tab(["montecarlo"])}>
-            <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} />
-          </div>
+          {match.monteCarlo?.simulations ? (
+            <div className={tab(["montecarlo"])}>
+              <CollapsiblePanel compact title={tr("panels.monteCarlo")}>
+                <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} framed={false} />
+              </CollapsiblePanel>
+            </div>
+          ) : null}
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
             <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["xg", "overview"])}`}>
@@ -1144,25 +1170,31 @@ export default function MatchModal({
           </div>
 
           {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["prediction", "overview"])}`}>
-              <ExplanationCard explanation={match.explanation} />
+            <div className={tab(["prediction", "overview"])}>
+              <CollapsiblePanel compact title={tr("panels.predictionExplanation")}>
+                <ExplanationCard explanation={match.explanation} framed={false} />
+              </CollapsiblePanel>
             </div>
           ) : null}
 
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "prediction"])}`}>
-              <FeatureImportanceChart importance={match.featureImportance} />
+            <div className={tab(["why", "prediction"])}>
+              <CollapsiblePanel compact title={tr("panels.keyFactors")} subtitle={tr("panels.keyFactorsSub")}>
+                <FeatureImportanceChart importance={match.featureImportance} framed={false} />
+              </CollapsiblePanel>
             </div>
           ) : null}
 
           {match.predictionContributions?.items?.length ? (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "prediction"])}`}>
-              <PredictionContributionsChart data={match.predictionContributions} />
+            <div className={tab(["why", "prediction"])}>
+              <CollapsiblePanel compact title={tr("panels.whyPrediction")}>
+                <PredictionContributionsChart data={match.predictionContributions} framed={false} />
+              </CollapsiblePanel>
             </div>
           ) : null}
 
           {match.confidenceEngine && (
-            <div className={`grid grid-cols-1 gap-6 ${tab(["why", "overview"])}`}>
+            <div className={tab(["why", "overview"])}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
                 recommendationPick={match.recommended?.pick || null}
@@ -1264,22 +1296,22 @@ export default function MatchModal({
             </section>
           </div>
 
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-            <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5">
-              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">1X2 (model)</h3>
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3">
+            <CollapsiblePanel compact title={tr("panels.model1x2")}>
               <ProbBar label="Victorie gazde" val={match.probs.p1} color={homeColor} />
               <ProbBar label="Egalitate" val={match.probs.pX} color="#94a3b8" />
               <ProbBar label="Victorie oaspeți" val={match.probs.p2} color={awayColor} />
-            </div>
-            <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5">
-              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Șansă dublă</h3>
-              <p className="mb-3 text-[10px] leading-relaxed text-signal-inkMuted">Sume din 1X2 (nu sunt calibrate separat față de piață).</p>
+            </CollapsiblePanel>
+            <CollapsiblePanel
+              compact
+              title={tr("panels.doubleChance")}
+              subtitle="Sume din 1X2 (nu sunt calibrate separat față de piață)."
+            >
               <ProbBar label="1 sau X" val={ext.pDC1X} color={homeColor} />
               <ProbBar label="1 sau 2" val={ext.pDC12} color="#a78bfa" />
               <ProbBar label="X sau 2" val={ext.pDCX2} color={awayColor} />
-            </div>
-            <div className="rounded-2xl border border-dashed border-signal-line/40 bg-signal-void/20 p-4 sm:p-5 xl:col-span-1">
-              <h3 className="mb-4 border-b border-white/5 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">Goluri & piețe derivate</h3>
+            </CollapsiblePanel>
+            <CollapsiblePanel compact title={tr("panels.goalsMarkets")}>
               <ProbBar label="Peste 1.5" val={match.probs.pO15} color="#22d3ee" />
               <ProbBar label="Sub 1.5" val={ext.pU15} color="#64748b" />
               <ProbBar label="Peste 2.5" val={match.probs.pO25} color="#38bdf8" />
@@ -1288,156 +1320,153 @@ export default function MatchModal({
               <ProbBar label="Sub 3.5" val={match.probs.pU35} color="#34d399" />
               <ProbBar label="Ambele marchează (GG)" val={match.probs.pGG} color="#fbbf24" />
               <ProbBar label="Nu ambele (NGG)" val={ext.pNGG} color="#94a3b8" />
-            </div>
+            </CollapsiblePanel>
           </div>
 
           {/* === PRIMA REPRIZĂ — derivată din distribuţia goluri pe minute (/teams/statistics) === */}
           {match.probs.firstHalf && (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <section className="rounded-2xl border border-signal-amber/20 bg-signal-amber/5 p-4 sm:p-5 lg:col-span-2">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+            <CollapsiblePanel
+              compact
+              title={tr("panels.firstHalf")}
+              subtitle="derivată din distribuţia goluri pe minute (fără call API suplimentar)"
+            >
+              {match.modelMeta?.firstHalf && (
+                <div className="mb-3 text-right font-mono text-[10px] text-signal-silver tabular-nums">
                   <div>
-                    <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-amber/90">
-                      Prima repriză · prognoză
-                    </h3>
-                    <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                      derivată din distribuţia goluri pe minute (fără call API suplimentar)
-                    </p>
+                    λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
+                    {match.modelMeta.firstHalf.lambdaAway.toFixed(2)}
                   </div>
-                  {match.modelMeta?.firstHalf && (
-                    <div className="text-right font-mono text-[10px] text-signal-silver tabular-nums">
-                      <div>
-                        λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
-                        {match.modelMeta.firstHalf.lambdaAway.toFixed(2)}
-                      </div>
-                      <div className="text-[9px] text-signal-inkMuted">
-                        scale · {(match.modelMeta.firstHalf.scaleHome * 100).toFixed(0)}% /{" "}
-                        {(match.modelMeta.firstHalf.scaleAway * 100).toFixed(0)}%
-                        {match.modelMeta.firstHalf.baselineUsed ? " · baseline" : ""}
-                      </div>
-                    </div>
+                  <div className="text-[9px] text-signal-inkMuted">
+                    scale · {(match.modelMeta.firstHalf.scaleHome * 100).toFixed(0)}% /{" "}
+                    {(match.modelMeta.firstHalf.scaleAway * 100).toFixed(0)}%
+                    {match.modelMeta.firstHalf.baselineUsed ? " · baseline" : ""}
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div>
+                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                    Rezultat la pauză (1X2 FH)
+                  </div>
+                  <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
+                  <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#94a3b8" />
+                  <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
+                </div>
+                <div>
+                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                    Goluri în prima repriză
+                  </div>
+                  <ProbBar label="Peste 0.5 goluri FH" val={match.probs.firstHalf.pO05} color="#22d3ee" />
+                  <ProbBar label="Peste 1.5 goluri FH" val={match.probs.firstHalf.pO15} color="#38bdf8" />
+                  <ProbBar label="Peste 2.5 goluri FH" val={match.probs.firstHalf.pO25} color="#0ea5e9" />
+                  <ProbBar label="Ambele marchează FH" val={match.probs.firstHalf.pGG} color="#fbbf24" />
+                </div>
+              </div>
+              {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
+                <div className="mt-4 rounded-lg border border-white/5 bg-signal-void/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
+                  <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Scor pauză cel mai probabil</span>
+                  <span className="ml-2 text-signal-amberSoft tabular-nums">
+                    {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
+                  </span>
+                </div>
+              ) : null}
+              {firstHalfPick && (
+                <div className="mt-3 border-t border-white/5 pt-2">
+                  {marketResultBadge(
+                    firstHalfPick.pick,
+                    firstHalfPick.probability,
+                    firstHalfVerdict,
+                    match.marketOdds?.firstHalfGoals?.odd,
+                    match.marketOdds?.firstHalfGoals?.bookmaker,
+                    "ht"
+                  )}
+                  {xgData?.marketResults?.firstHalfGoals != null && (
+                    <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
+                      Goluri HT: {xgData.marketResults.firstHalfGoals}
+                    </span>
                   )}
                 </div>
-                <div className="grid gap-5 lg:grid-cols-2">
-                  {/* Coloana stângă: 1X2 FH */}
-                  <div>
-                    <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                      Rezultat la pauză (1X2 FH)
-                    </div>
-                    <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
-                    <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#94a3b8" />
-                    <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
-                  </div>
-                  {/* Coloana dreaptă: goluri FH */}
-                  <div>
-                    <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                      Goluri în prima repriză
-                    </div>
-                    <ProbBar label="Peste 0.5 goluri FH" val={match.probs.firstHalf.pO05} color="#22d3ee" />
-                    <ProbBar label="Peste 1.5 goluri FH" val={match.probs.firstHalf.pO15} color="#38bdf8" />
-                    <ProbBar label="Peste 2.5 goluri FH" val={match.probs.firstHalf.pO25} color="#0ea5e9" />
-                    <ProbBar label="Ambele marchează FH" val={match.probs.firstHalf.pGG} color="#fbbf24" />
-                  </div>
-                </div>
-                {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
-                  <div className="mt-4 rounded-lg border border-white/5 bg-signal-void/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                    <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">Scor pauză cel mai probabil</span>
-                    <span className="ml-2 text-signal-amberSoft tabular-nums">
-                      {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
-                    </span>
-                  </div>
-                ) : null}
-                {firstHalfPick && (
-                  <div className="mt-3 border-t border-white/5 pt-2">
-                    {marketResultBadge(
-                      firstHalfPick.pick,
-                      firstHalfPick.probability,
-                      firstHalfVerdict,
-                      match.marketOdds?.firstHalfGoals?.odd,
-                      match.marketOdds?.firstHalfGoals?.bookmaker,
-                      "ht"
-                    )}
-                    {xgData?.marketResults?.firstHalfGoals != null && (
-                      <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
-                        Goluri HT: {xgData.marketResults.firstHalfGoals}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </section>
-            </div>
+              )}
+            </CollapsiblePanel>
           )}
           {!match.probs.firstHalf && !hasExactConfidence && (
-            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{tr("match.htLockedTitle")}</h3>
-              <p className="mt-1.5 text-sm text-[var(--fp-text-muted)]">
+            <CollapsiblePanel
+              compact
+              title={tr("match.htLockedTitle")}
+              badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
+            >
+              <p className="text-sm text-[var(--fp-text-muted)]">
                 {isPremiumLike ? tr("match.htLockedUltra") : tr("match.htLocked")}
               </p>
-            </section>
+            </CollapsiblePanel>
           )}
 
           {/* === CORNERE + ŞUTURI LA POARTĂ (Poisson pe rolling stats) === */}
           {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal) && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
-                  Cornere & şuturi — pieţe derivate
-                </h3>
-                <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
-                  rolling averages · Poisson
-                </span>
-              </div>
+            <div className="space-y-2">
               {match.probs.corners && (
-                <PoissonMarketSection
-                  title="Cornere"
-                  subtitle="derivate din ultimele ~15 meciuri / echipă"
-                  accent="#5eead4"
-                  icon="⚑"
-                  data={match.probs.corners}
-                  homeLabel={match.teams.home}
-                  awayLabel={match.teams.away}
-                  actualTotal={xgData?.marketResults?.cornersTotal ?? null}
-                  quotedOdd={match.marketOdds?.corners?.odd ?? null}
-                  quoteSource={match.marketOdds?.corners?.bookmaker ?? null}
-                  badgeTone="corners"
-                />
+                <CollapsiblePanel compact title={tr("match.featCorners")} subtitle="rolling averages · Poisson">
+                  <PoissonMarketSection
+                    title="Cornere"
+                    subtitle="derivate din ultimele ~15 meciuri / echipă"
+                    accent="#5eead4"
+                    icon="⚑"
+                    data={match.probs.corners}
+                    homeLabel={match.teams.home}
+                    awayLabel={match.teams.away}
+                    actualTotal={xgData?.marketResults?.cornersTotal ?? null}
+                    quotedOdd={match.marketOdds?.corners?.odd ?? null}
+                    quoteSource={match.marketOdds?.corners?.bookmaker ?? null}
+                    badgeTone="corners"
+                    framed={false}
+                  />
+                </CollapsiblePanel>
               )}
               {match.probs.shotsOnTarget && (
-                <PoissonMarketSection
-                  title="Şuturi la poartă"
-                  subtitle="pe uşa porţii (Shots on Goal din API-Football)"
-                  accent="#38bdf8"
-                  icon="◎"
-                  data={match.probs.shotsOnTarget}
-                  homeLabel={match.teams.home}
-                  awayLabel={match.teams.away}
-                  actualTotal={xgData?.marketResults?.shotsOnTargetTotal ?? null}
-                  quotedOdd={match.marketOdds?.shotsOnTarget?.odd ?? null}
-                  quoteSource={match.marketOdds?.shotsOnTarget?.bookmaker ?? null}
-                  badgeTone="shots"
-                />
+                <CollapsiblePanel compact title={tr("match.featShots")} subtitle="Shots on Goal">
+                  <PoissonMarketSection
+                    title="Şuturi la poartă"
+                    subtitle="pe uşa porţii (Shots on Goal din API-Football)"
+                    accent="#38bdf8"
+                    icon="◎"
+                    data={match.probs.shotsOnTarget}
+                    homeLabel={match.teams.home}
+                    awayLabel={match.teams.away}
+                    actualTotal={xgData?.marketResults?.shotsOnTargetTotal ?? null}
+                    quotedOdd={match.marketOdds?.shotsOnTarget?.odd ?? null}
+                    quoteSource={match.marketOdds?.shotsOnTarget?.bookmaker ?? null}
+                    badgeTone="shots"
+                    framed={false}
+                  />
+                </CollapsiblePanel>
               )}
               {match.probs.shotsTotal && (
-                <PoissonMarketSection
-                  title="Total şuturi"
-                  subtitle="semnal secundar (toate tentativele, on + off target)"
-                  accent="#a78bfa"
-                  icon="⌖"
-                  data={match.probs.shotsTotal}
-                  homeLabel={match.teams.home}
-                  awayLabel={match.teams.away}
-                  actualTotal={xgData?.marketResults?.shotsTotal ?? null}
-                  quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
-                  quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
-                  badgeTone="shots"
-                />
+                <CollapsiblePanel compact title="Total șuturi" subtitle="on + off target">
+                  <PoissonMarketSection
+                    title="Total şuturi"
+                    subtitle="semnal secundar (toate tentativele, on + off target)"
+                    accent="#a78bfa"
+                    icon="⌖"
+                    data={match.probs.shotsTotal}
+                    homeLabel={match.teams.home}
+                    awayLabel={match.teams.away}
+                    actualTotal={xgData?.marketResults?.shotsTotal ?? null}
+                    quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
+                    quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
+                    badgeTone="shots"
+                    framed={false}
+                  />
+                </CollapsiblePanel>
               )}
             </div>
           )}
           {!match.probs.corners && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence && (
-            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{tr("match.lockedMarkets")}</h3>
-              <p className="mt-1.5 text-sm font-medium text-[var(--fp-text)]">
+            <CollapsiblePanel
+              compact
+              title={tr("match.lockedMarkets")}
+              badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
+            >
+              <p className="text-sm font-medium text-[var(--fp-text)]">
                 {isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
               </p>
               <div className="mt-2 flex flex-wrap gap-1">
@@ -1463,7 +1492,7 @@ export default function MatchModal({
                   </button>
                 ))}
               </div>
-            </section>
+            </CollapsiblePanel>
           )}
 
           {match.modelMeta &&

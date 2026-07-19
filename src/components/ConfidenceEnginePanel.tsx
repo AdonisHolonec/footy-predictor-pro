@@ -1,4 +1,5 @@
 import { useLocale } from "../context/LocaleContext";
+import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import { PredictionRow } from "../types";
 
 type ConfidenceEngineData = NonNullable<PredictionRow["confidenceEngine"]>;
@@ -57,6 +58,7 @@ function barWidth(score: number): string {
 /**
  * Independent Confidence Engine UI — context reliability breakdown.
  * Never replaces recommended.confidence (model pick probability).
+ * Sections start collapsed (title only) for progressive disclosure.
  */
 export default function ConfidenceEnginePanel({
   engine,
@@ -79,71 +81,77 @@ export default function ConfidenceEnginePanel({
     ? engine.explanation.filter((l) => !whyLines.includes(l))
     : [];
 
-  return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.confidence")}</h3>
-          <p className="mt-0.5 max-w-md text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.confidenceSub")}</p>
-          {recommendationPick ? (
-            <p className="mt-1.5 text-sm font-medium text-[var(--fp-text)]">
-              {t("panels.forRec", { pick: recommendationPick })}
-            </p>
-          ) : null}
-        </div>
-        <div className="text-right">
+  const scoreGrid = (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      {DIMENSION_LABELS.map(({ key, label }) => {
+        const score = Math.round(Number(engine.scores?.[key]) || 0);
+        const isAvailable = available[key] !== false;
+        return (
           <div
-            className={`inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
+            key={key}
+            className={`rounded-[var(--fp-radius-sm)] border p-2.5 transition ${
+              isAvailable
+                ? "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]"
+                : "border-[var(--fp-border)] bg-[var(--fp-bg)] opacity-60"
+            }`}
+            title={isAvailable ? undefined : "Insufficient data (neutral 50, dimmed)"}
           >
-            {category}
-          </div>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</div>
-          <div className={`font-display text-2xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {DIMENSION_LABELS.map(({ key, label }) => {
-          const score = Math.round(Number(engine.scores?.[key]) || 0);
-          const isAvailable = available[key] !== false;
-          return (
-            <div
-              key={key}
-              className={`rounded-[var(--fp-radius-sm)] border p-2.5 transition ${
-                isAvailable
-                  ? "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]"
-                  : "border-[var(--fp-border)] bg-[var(--fp-bg)] opacity-60"
-              }`}
-              title={isAvailable ? undefined : "Insufficient data (neutral 50, dimmed)"}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <div className="truncate text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
-                  {label}
-                </div>
-                <div className={`text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
-                  {isAvailable ? score : "—"}
-                </div>
+            <div className="flex items-center justify-between gap-1">
+              <div className="truncate text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+                {label}
               </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
-                <div
-                  className={`h-full rounded-full ${isAvailable ? "bg-[var(--fp-accent)]" : "bg-[var(--fp-text-faint)]"}`}
-                  style={{ width: isAvailable ? barWidth(score) : "50%" }}
-                />
+              <div className={`text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
+                {isAvailable ? score : "—"}
               </div>
-              {!isAvailable && (
-                <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">n/a</div>
-              )}
             </div>
-          );
-        })}
-      </div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
+              <div
+                className={`h-full rounded-full ${isAvailable ? "bg-[var(--fp-accent)]" : "bg-[var(--fp-text-faint)]"}`}
+                style={{ width: isAvailable ? barWidth(score) : "50%" }}
+              />
+            </div>
+            {!isAvailable && (
+              <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">n/a</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <CollapsiblePanel
+        compact
+        title={t("panels.confidence")}
+        subtitle={
+          recommendationPick
+            ? `${t("panels.confidenceSub")} · ${t("panels.forRec", { pick: recommendationPick })}`
+            : t("panels.confidenceSub")
+        }
+        badge={
+          <span
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
+          >
+            {category} · {overall}%
+          </span>
+        }
+      >
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <p className="text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.confidenceSub")}</p>
+          <div className="text-right">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+              {t("panels.confidence")}
+            </div>
+            <div className={`font-display text-2xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
+          </div>
+        </div>
+        {scoreGrid}
+      </CollapsiblePanel>
 
       {(whyLines.length > 0 || engine.why) && (
-        <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] p-3">
-          <div className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-            {t("panels.whyRec", { category })}
-          </div>
-          <ul className="mt-2 space-y-1.5 text-sm font-medium leading-relaxed text-[var(--fp-text)]">
+        <CollapsiblePanel compact title={t("panels.whyRec", { category })}>
+          <ul className="space-y-1.5 text-sm font-medium leading-relaxed text-[var(--fp-text)]">
             {(whyLines.length > 0 ? whyLines : [engine.why || ""]).filter(Boolean).map((line, i) => (
               <li key={`why-${i}`} className="flex gap-2">
                 <span className="mt-0.5 text-[var(--fp-accent)]">▸</span>
@@ -151,18 +159,12 @@ export default function ConfidenceEnginePanel({
               </li>
             ))}
           </ul>
-        </div>
+        </CollapsiblePanel>
       )}
 
       {dimLines.length > 0 && (
-        <details className="group mt-3 border-t border-[var(--fp-border)] pt-3" open>
-          <summary className="cursor-pointer list-none text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)] outline-none marker:content-none [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex items-center gap-1.5">
-              Dimension breakdown
-              <span className="text-[var(--fp-text-muted)] transition group-open:rotate-90">›</span>
-            </span>
-          </summary>
-          <ul className="mt-2 space-y-1 text-xs font-medium leading-relaxed text-[var(--fp-text-muted)]">
+        <CollapsiblePanel compact title={t("panels.dimensionBreakdown")}>
+          <ul className="space-y-1 text-xs font-medium leading-relaxed text-[var(--fp-text-muted)]">
             {dimLines.map((line, i) => (
               <li key={`${i}-${line.slice(0, 16)}`} className="flex gap-2">
                 <span>•</span>
@@ -170,8 +172,8 @@ export default function ConfidenceEnginePanel({
               </li>
             ))}
           </ul>
-        </details>
+        </CollapsiblePanel>
       )}
-    </section>
+    </div>
   );
 }

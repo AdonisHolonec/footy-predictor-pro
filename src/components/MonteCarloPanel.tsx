@@ -23,6 +23,7 @@ type Props = {
   match: PredictionRow;
   homeColor?: string;
   awayColor?: string;
+  framed?: boolean;
 };
 
 function HistChart({
@@ -65,7 +66,12 @@ function StatChip({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColor = "#f59e0b" }: Props) {
+export default function MonteCarloPanel({
+  match,
+  homeColor = "#2563eb",
+  awayColor = "#f59e0b",
+  framed = true
+}: Props) {
   const { t } = useLocale();
   const mc = match.monteCarlo as MonteCarloResult | undefined;
   if (!mc || !mc.simulations) return null;
@@ -90,24 +96,31 @@ export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColo
     pct: b.pct
   }));
 
-  return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.monteCarlo")}</h3>
-          <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">
-            {mc.simulations.toLocaleString()} {t("panels.simulations")}
-            {mc.adaptive?.enabled && mc.adaptive.score != null
-              ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
-              : ""}{" "}
-            · bivariate Poisson + Dixon–Coles
+  const body = (
+    <>
+      {framed ? (
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.monteCarlo")}</h3>
+            <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">
+              {mc.simulations.toLocaleString()} {t("panels.simulations")}
+              {mc.adaptive?.enabled && mc.adaptive.score != null
+                ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
+                : ""}{" "}
+              · bivariate Poisson + Dixon–Coles
+            </p>
+          </div>
+          <p className="text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
+            λ {mc.lambdas?.home?.toFixed(2)} / {mc.lambdas?.away?.toFixed(2)}
+            {mc.seed != null ? ` · seed ${mc.seed}` : ""}
           </p>
         </div>
-        <p className="text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
+      ) : (
+        <p className="mb-2 text-right text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
           λ {mc.lambdas?.home?.toFixed(2)} / {mc.lambdas?.away?.toFixed(2)}
           {mc.seed != null ? ` · seed ${mc.seed}` : ""}
         </p>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
         <StatChip label="P(1)" value={`${pd.p1.toFixed(1)}%`} />
@@ -190,6 +203,14 @@ export default function MonteCarloPanel({ match, homeColor = "#2563eb", awayColo
           )}
         </div>
       ) : null}
+    </>
+  );
+
+  if (!framed) return <div>{body}</div>;
+
+  return (
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      {body}
     </section>
   );
 }
