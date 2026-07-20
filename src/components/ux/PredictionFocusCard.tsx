@@ -50,6 +50,23 @@ function sidePickLabel(
   return side === "over" ? t("match.overLine", { line: line.toFixed(1) }) : t("match.underLine", { line: line.toFixed(1) });
 }
 
+function RankChip({
+  text,
+  label
+}: {
+  text: string;
+  label: string;
+}) {
+  return (
+    <span
+      className="inline-flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-md bg-[var(--fp-bg-muted)] px-1 text-[10px] font-bold tabular-nums leading-none text-[var(--fp-text-muted)]"
+      title={label}
+    >
+      {text}
+    </span>
+  );
+}
+
 /** Consumer prediction card — markets table + rank / referee / weather. */
 export default function PredictionFocusCard({
   row,
@@ -171,6 +188,9 @@ export default function PredictionFocusCard({
       ? t("card.weatherLoading")
       : t("card.weatherUnavailable");
 
+  const marketGrid =
+    "grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_2.35rem_2.15rem_2.55rem] items-center gap-x-1";
+
   if (row.insufficientData) {
     return (
       <article
@@ -183,13 +203,13 @@ export default function PredictionFocusCard({
             onOpen();
           }
         }}
-        className="cursor-pointer rounded-[var(--fp-radius)] border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]"
+        className="cursor-pointer rounded-[var(--fp-radius)] border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)]"
       >
         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-warning)]">{t("card.limitedData")}</p>
-        <p className="mt-1 font-display text-base font-semibold text-[var(--fp-text)]">
+        <p className="mt-1 font-display text-sm font-semibold text-[var(--fp-text)]">
           {row.teams.home} {t("common.vs")} {row.teams.away}
         </p>
-        <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("card.openForDetails")}</p>
+        <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">{t("card.openForDetails")}</p>
       </article>
     );
   }
@@ -205,34 +225,30 @@ export default function PredictionFocusCard({
           onOpen();
         }
       }}
-      className="group cursor-pointer rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)] transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+      className="group cursor-pointer rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)] transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {row.logos?.league ? <img src={row.logos.league} alt="" className="h-4 w-4 object-contain" /> : null}
-            <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
-              {row.league}
-            </p>
-            {live && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--fp-danger)]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-danger)]">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
-                {t("card.live")}
-              </span>
-            )}
-            {hasValueBadge && (
-              <span className="rounded-full bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-warning)]">
-                {t("card.value")}
-              </span>
-            )}
-            <span className="font-mono text-[11px] tabular-nums text-[var(--fp-text-faint)]">{time}</span>
-          </div>
-          <p className="mt-1 truncate text-[10px] font-medium text-[var(--fp-text-muted)]">
-            <span title={t("card.referee")}>{row.referee?.trim() || t("card.refereeUnavailable")}</span>
-            <span className="mx-1.5 text-[var(--fp-text-faint)]">·</span>
-            <span title={t("card.weather")}>{weatherText}</span>
+      {/* Header: league · meta | time + favorite */}
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          {row.logos?.league ? (
+            <img src={row.logos.league} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
+          ) : null}
+          <p className="min-w-0 truncate text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+            {row.league}
           </p>
+          {live && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--fp-danger)]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-danger)]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
+              {t("card.live")}
+            </span>
+          )}
+          {hasValueBadge && (
+            <span className="shrink-0 rounded-full bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-warning)]">
+              {t("card.value")}
+            </span>
+          )}
         </div>
+        <span className="shrink-0 font-mono text-[11px] tabular-nums text-[var(--fp-text-faint)]">{time}</span>
         {onToggleWatch && (
           <button
             type="button"
@@ -240,7 +256,7 @@ export default function PredictionFocusCard({
               e.stopPropagation();
               onToggleWatch();
             }}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
               watched
                 ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
                 : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
@@ -254,101 +270,109 @@ export default function PredictionFocusCard({
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2">
-        {/* Home: rank left of crest (lateral), name under crest */}
-        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
-          <span
-            className="shrink-0 rounded-md bg-[var(--fp-bg-muted)] px-1.5 py-1 text-center text-[10px] font-bold tabular-nums leading-tight text-[var(--fp-text-muted)] sm:text-[11px]"
-            title={t("card.positionLabel")}
-          >
-            {homeRank != null && Number.isFinite(Number(homeRank))
-              ? t("card.positionShort", { n: Number(homeRank) })
-              : t("card.positionNaShort")}
+      <p className="mt-1 truncate text-[10px] leading-tight text-[var(--fp-text-muted)]">
+        <span title={t("card.referee")}>{row.referee?.trim() || t("card.refereeUnavailable")}</span>
+        <span className="mx-1 text-[var(--fp-text-faint)]">·</span>
+        <span title={t("card.weather")}>{weatherText}</span>
+      </p>
+
+      {/* Teams: symmetric rank · crest · name */}
+      <div className="mt-2.5 grid grid-cols-[1fr_auto_1fr] items-start gap-1">
+        <div className="flex min-w-0 flex-col items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
+            <RankChip
+              text={
+                homeRank != null && Number.isFinite(Number(homeRank))
+                  ? t("card.positionShort", { n: Number(homeRank) })
+                  : t("card.positionNaShort")
+              }
+              label={t("card.positionLabel")}
+            />
+            <img src={row.logos?.home} alt="" className="h-9 w-9 object-contain sm:h-10 sm:w-10" />
+          </div>
+          <span className="line-clamp-2 w-full px-0.5 text-center text-[11px] font-semibold leading-tight text-[var(--fp-text)] sm:text-xs">
+            {row.teams.home}
           </span>
-          <div className="flex min-w-0 flex-col items-center gap-1">
-            <img src={row.logos?.home} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
-            <span className="line-clamp-2 max-w-[7.5rem] text-center text-xs font-semibold text-[var(--fp-text)] sm:max-w-none sm:text-sm">
-              {row.teams.home}
-            </span>
-          </div>
         </div>
-        <span className="text-[10px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
-        {/* Away: crest then rank on the right */}
-        <div className="flex min-w-0 items-center justify-start gap-1.5 sm:gap-2">
-          <div className="flex min-w-0 flex-col items-center gap-1">
-            <img src={row.logos?.away} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
-            <span className="line-clamp-2 max-w-[7.5rem] text-center text-xs font-semibold text-[var(--fp-text)] sm:max-w-none sm:text-sm">
-              {row.teams.away}
-            </span>
+
+        <span className="mt-2.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+          {t("common.vs")}
+        </span>
+
+        <div className="flex min-w-0 flex-col items-center gap-1">
+          <div className="flex items-center justify-center gap-1">
+            <img src={row.logos?.away} alt="" className="h-9 w-9 object-contain sm:h-10 sm:w-10" />
+            <RankChip
+              text={
+                awayRank != null && Number.isFinite(Number(awayRank))
+                  ? t("card.positionShort", { n: Number(awayRank) })
+                  : t("card.positionNaShort")
+              }
+              label={t("card.positionLabel")}
+            />
           </div>
-          <span
-            className="shrink-0 rounded-md bg-[var(--fp-bg-muted)] px-1.5 py-1 text-center text-[10px] font-bold tabular-nums leading-tight text-[var(--fp-text-muted)] sm:text-[11px]"
-            title={t("card.positionLabel")}
-          >
-            {awayRank != null && Number.isFinite(Number(awayRank))
-              ? t("card.positionShort", { n: Number(awayRank) })
-              : t("card.positionNaShort")}
+          <span className="line-clamp-2 w-full px-0.5 text-center text-[11px] font-semibold leading-tight text-[var(--fp-text)] sm:text-xs">
+            {row.teams.away}
           </span>
         </div>
       </div>
 
-      <div className="mt-3 overflow-x-auto border-t border-[var(--fp-border)] pt-2">
-        <table className="w-full min-w-[280px] border-collapse text-left">
-          <thead>
-            <tr className="text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
-              <th className="pb-1.5 pr-1 font-bold">{t("card.colMarket")}</th>
-              <th className="pb-1.5 pr-1 font-bold">{t("card.colPrediction")}</th>
-              <th className="pb-1.5 pr-1 text-right font-bold">{t("card.colConfidence")}</th>
-              <th className="pb-1.5 pr-1 text-right font-bold">{t("card.colOdds")}</th>
-              <th className="pb-1.5 text-right font-bold">{t("card.colValue")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {marketRows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--fp-border)]/70 text-[11px]">
-                <td className="py-1.5 pr-1 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
-                  {r.marketLabel}
-                </td>
-                <td className="py-1.5 pr-1">
-                  {r.locked ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-                      title={t("match.upgradeTo", { label: r.lockFeature, tier: r.lockTier })}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpgradeRequired?.(r.lockFeature, r.lockTier);
-                      }}
-                    >
-                      🔒 {t("card.unlock")}
-                    </button>
-                  ) : (
-                    <span
-                      className={`font-display text-sm font-bold tabular-nums ${
-                        r.accent ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
-                      }`}
-                    >
-                      {r.pick}
-                    </span>
-                  )}
-                </td>
-                <td className="py-1.5 pr-1 text-right font-semibold tabular-nums text-[var(--fp-text)]">
-                  {r.locked ? "—" : r.confidence}
-                </td>
-                <td className="py-1.5 pr-1 text-right font-semibold tabular-nums text-[var(--fp-text)]">
-                  {r.locked ? "—" : r.odd}
-                </td>
-                <td className="py-1.5 text-right font-semibold tabular-nums text-[var(--fp-text)]">
-                  {r.locked ? "—" : r.value}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Markets: fixed columns, no horizontal scroll */}
+      <div className="mt-2.5 border-t border-[var(--fp-border)] pt-1.5">
+        <div
+          className={`${marketGrid} pb-1 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]`}
+        >
+          <span className="truncate">{t("card.colMarket")}</span>
+          <span className="truncate">{t("card.colPrediction")}</span>
+          <span className="text-right">{t("card.colConfidence")}</span>
+          <span className="text-right">{t("card.colOdds")}</span>
+          <span className="text-right">{t("card.colValue")}</span>
+        </div>
+        <div className="divide-y divide-[var(--fp-border)]/70">
+          {marketRows.map((r) => (
+            <div key={r.id} className={`${marketGrid} py-1.5 text-[11px]`}>
+              <span className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+                {r.marketLabel}
+              </span>
+              <div className="min-w-0">
+                {r.locked ? (
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full items-center gap-0.5 truncate rounded border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-1 py-0.5 text-[9px] font-bold text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                    title={t("match.upgradeTo", { label: r.lockFeature, tier: r.lockTier })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpgradeRequired?.(r.lockFeature, r.lockTier);
+                    }}
+                  >
+                    🔒 {t("card.unlock")}
+                  </button>
+                ) : (
+                  <span
+                    className={`block truncate font-display text-[12px] font-bold leading-tight tabular-nums ${
+                      r.accent ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
+                    }`}
+                  >
+                    {r.pick}
+                  </span>
+                )}
+              </div>
+              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
+                {r.locked ? "—" : r.confidence}
+              </span>
+              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
+                {r.locked ? "—" : r.odd}
+              </span>
+              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
+                {r.locked ? "—" : r.value}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {((tier === "free" && isFreeLike) || (tier === "premium" && (isPremiumLike || isFreeLike))) && (
-        <p className="mt-2 text-[9px] font-medium text-[var(--fp-text-faint)]">{t("card.tierHint")}</p>
+        <p className="mt-1.5 text-[9px] font-medium text-[var(--fp-text-faint)]">{t("card.tierHint")}</p>
       )}
     </article>
   );
