@@ -62,7 +62,7 @@ export function buildSpecialBetLegs(
 
   const candidates: SpecialBetLeg[] = [
     {
-      id: "recommended",
+      id: "recommended" as const,
       label: labels.main,
       pick: row.recommended?.pick || "",
       probability: confPct,
@@ -70,7 +70,7 @@ export function buildSpecialBetLegs(
       outcome: resolveCardMarketOutcome("recommended", enrichedRow, stored)
     },
     {
-      id: "corners",
+      id: "corners" as const,
       label: labels.corners,
       pick: cornersPick
         ? `${cornersPick.side === "over" ? "Over" : "Under"} ${cornersPick.line.toFixed(1)}`
@@ -86,7 +86,7 @@ export function buildSpecialBetLegs(
       outcome: resolveCardMarketOutcome("corners", enrichedRow, stored)
     },
     {
-      id: "shots",
+      id: "shots" as const,
       label: labels.shots,
       pick: shotsPick
         ? `${shotsPick.side === "over" ? "Over" : "Under"} ${shotsPick.line.toFixed(1)}`
@@ -102,7 +102,7 @@ export function buildSpecialBetLegs(
       outcome: resolveCardMarketOutcome("shots", enrichedRow, stored)
     },
     {
-      id: "ht",
+      id: "ht" as const,
       label: labels.ht,
       pick: firstHalfPick?.pick || "",
       probability: Number(firstHalfPick?.probability || 0),
@@ -113,7 +113,7 @@ export function buildSpecialBetLegs(
               NaN
           )
         : NaN,
-      outcome: (() => {
+      outcome: ((): MarketOutcome => {
         if (!firstHalfPick) return null;
         if (!["FT", "AET", "PEN"].includes(String(row.status || "").toUpperCase())) return null;
         const ht = enrichedRow.marketResults?.firstHalfGoals;

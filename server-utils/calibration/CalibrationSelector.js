@@ -10,6 +10,13 @@
 
 import { fitIsotonicPav, applyIsotonicMap } from "../isotonicCalibration.js";
 import { CALIBRATION_METHODS, curveToPoints, clamp01 } from "./methods.js";
+import { timeOrderedExpandingFolds } from "../validation/WalkForward.js";
+
+function resolveCvMode(explicit) {
+  if (explicit === "random" || explicit === "time") return explicit;
+  const env = String(process.env.CALIB_CV_MODE || "time").toLowerCase();
+  return env === "random" ? "random" : "time";
+}
 
 function binLabel(s) {
   return s.y >= 0.5 ? 1 : 0;
@@ -95,45 +102,57 @@ function scorePairs(pairs) {
 }
 
 /**
- * Cross-validated evaluation of all methods on per-outcome samples ({x, y}).
- * Baseline (uncalibrated) is scored on the same validation folds for a fair compare.
- * @returns {{ ranking: Array, best: string, baseline: object, n: number }}
+ * Cross-validated evaluation of all methods on per-outcome samples ({x, y[, kickoffAt]}).
+ * Default cvMode=time (expanding chronological folds). Set CALIB_CV_MODE=random for legacy.
+ * @returns {{ ranking: Array, best: string, baseline: object, n: number, cvMode: string }}
  */
-export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42 } = {}) {
+export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42, cvMode } = {}) {
   const s = (Array.isArray(samples) ? samples : []).filter(
     (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)
   );
   const n = s.length;
   const results = {};
+  let mode = resolveCvMode(cvMode);
+  const hasKickoff = s.some((p) => p?.kickoffAt != null || p?.kickoff_at != null || p?.kickoff != null);
+  if (mode === "time" && !hasKickoff) mode = "random";
 
-  const usableFolds = Math.max(2, Math.min(folds, Math.floor(n / 20) || 2));
-  const foldIdx = kFolds(n, usableFolds, seed);
-
-  // Uncalibrated baseline on the same CV folds.
-  const baselinePairs = [];
-  for (let f = 0; f < usableFolds; f++) {
-    for (const i of foldIdx[f]) {
-      baselinePairs.push({ p: clamp01(s[i].x), y: binLabel(s[i]) });
+  /** @type {Array<{ train: any[], test: any[] }>} */
+  let windows = [];
+  if (mode === "time") {
+    windows = timeOrderedExpandingFolds(s, folds).map((w) => ({ train: w.train, test: w.test }));
+  }
+  if (!windows.length) {
+    mode = "random";
+    const usableFolds = Math.max(2, Math.min(folds, Math.floor(n / 20) || 2));
+    const foldIdx = kFolds(n, usableFolds, seed);
+    for (let f = 0; f < usableFolds; f++) {
+      const valSet = new Set(foldIdx[f]);
+      windows.push({
+        train: s.filter((_, i) => !valSet.has(i)),
+        test: foldIdx[f].map((i) => s[i])
+      });
     }
+  }
+
+  const baselinePairs = [];
+  for (const w of windows) {
+    for (const p of w.test) baselinePairs.push({ p: clamp01(p.x), y: binLabel(p) });
   }
   const baseline = scorePairs(baselinePairs);
 
   for (const method of METHODS) {
     const valPairs = [];
     let failed = false;
-    for (let f = 0; f < usableFolds; f++) {
-      const valSet = new Set(foldIdx[f]);
-      const train = s.filter((_, i) => !valSet.has(i));
-      const val = foldIdx[f].map((i) => s[i]);
-      if (train.length < 10 || val.length === 0) continue;
+    for (const w of windows) {
+      if (w.train.length < 10 || w.test.length === 0) continue;
       let applyFn;
       try {
-        applyFn = fitMethod(method, train);
+        applyFn = fitMethod(method, w.train);
       } catch {
         failed = true;
         break;
       }
-      for (const p of val) valPairs.push({ p: clamp01(applyFn(p.x)), y: binLabel(p) });
+      for (const p of w.test) valPairs.push({ p: clamp01(applyFn(p.x)), y: binLabel(p) });
     }
     if (failed || valPairs.length === 0) {
       results[method] = { method, logLoss: Infinity, ece: Infinity, brier: Infinity, valN: 0 };
@@ -146,7 +165,7 @@ export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42 } = {
     (a, b) => a.logLoss - b.logLoss || a.ece - b.ece || a.brier - b.brier
   );
   const best = ranking[0]?.method || "isotonic";
-  return { ranking, best, baseline, n };
+  return { ranking, best, baseline, n, cvMode: mode };
 }
 
 /**
@@ -165,7 +184,7 @@ function identityCurve() {
  * CV log-loss, else falls back to identity (`none`).
  * @returns {{ method, xPoints, yPoints, ranking, baseline, n, reason? }}
  */
-export function selectBestCalibration(samples, { minSamples = 40, folds = 4, seed = 42 } = {}) {
+export function selectBestCalibration(samples, { minSamples = 40, folds = 4, seed = 42, cvMode } = {}) {
   const s = (Array.isArray(samples) ? samples : []).filter(
     (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)
   );
@@ -182,7 +201,7 @@ export function selectBestCalibration(samples, { minSamples = 40, folds = 4, see
     };
   }
 
-  const evalResult = evaluateCalibrationMethods(s, { folds, seed });
+  const evalResult = evaluateCalibrationMethods(s, { folds, seed, cvMode });
   const baselineLL = evalResult.baseline?.logLoss ?? Infinity;
 
   // Prefer the best method that beats (or ties) the uncalibrated baseline.

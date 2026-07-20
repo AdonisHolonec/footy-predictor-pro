@@ -22,5 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run full test suite
+      - name: Unit / security / validation / golden tests
         run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint (typecheck stand-in until ESLint lands)
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { PredictionRow } from "../types";
 import { isFinalMatchStatus, resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 type SetPreds = Dispatch<SetStateAction<PredictionRow[]>>;
 
@@ -55,7 +56,7 @@ export function useMarketTotalsHydrate(
         if (!Number.isFinite(id) || inFlight.current.has(id)) continue;
         inFlight.current.add(id);
         try {
-          const res = await fetch(`/api/fixtures?view=xg&fixtureId=${id}`);
+          const res = await fetchWithAuth(`/api/fixtures?view=xg&fixtureId=${id}`);
           const json = (await res.json()) as {
             marketResults?: PredictionRow["marketResults"];
           };

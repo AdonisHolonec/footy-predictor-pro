@@ -35,7 +35,7 @@ function envNum(key, fallback) {
 }
 
 function minSamples() {
-  return Math.max(5, envNum("MODEL_SELECT_MIN_SAMPLES", 20));
+  return Math.max(5, envNum("MODEL_SELECT_MIN_SAMPLES", 100));
 }
 
 function sliceRowsByDays(rows, days) {

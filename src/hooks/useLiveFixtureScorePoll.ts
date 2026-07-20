@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import type { PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 /** Interval between live score polls — keep ≥ server LIVE_SCORES_CACHE_TTL_SEC for cache hits. */
 export const LIVE_SCORE_POLL_MS = 75_000;
@@ -65,7 +66,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
     const fetchAndMerge = async () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
-        const res = await fetch(`/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}`);
+        const res = await fetchWithAuth(`/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}`);
         const json = (await res.json()) as {
           ok?: boolean;
           fixtures?: Array<{

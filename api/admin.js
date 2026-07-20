@@ -14,6 +14,7 @@ import {
 } from "../server-utils/calibration/overlayStore.js";
 import { clearRuntimeOverlays } from "../server-utils/calibration/overlayRuntime.js";
 import { locksForKind } from "../server-utils/calibration/manualLocks.js";
+import { resolveTrustedAppOrigin } from "../server-utils/publicBaseUrl.js";
 
 /**
  * Unified admin endpoint (consolidează fostele /api/admin/profiles și /api/admin/ml).
@@ -34,14 +35,11 @@ export default async function handler(req, res) {
   return handleProfiles(req, res);
 }
 
-function resolvePublicBaseUrl(req) {
-  const explicit = String(process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || "").trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
-  if (!host) return "http://localhost:3000";
-  const proto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
-  const protocol = proto === "http" ? "http" : "https";
-  return `${protocol}://${host}`.replace(/\/+$/, "");
+/** Trusted origin only — never request Host / X-Forwarded-Host (SSRF). */
+function resolvePublicBaseUrl() {
+  const resolved = resolveTrustedAppOrigin(null, { purpose: "admin_internal_fetch" });
+  if (!resolved.ok) return null;
+  return resolved.origin;
 }
 
 function inferSeason(dateISO) {
@@ -339,7 +337,13 @@ async function handleMl(req, res) {
       });
     }
     try {
-      const base = resolvePublicBaseUrl(req);
+      const base = resolvePublicBaseUrl();
+      if (!base) {
+        return res.status(503).json({
+          ok: false,
+          error: "PUBLIC_BASE_URL / APP_BASE_URL / VERCEL_URL required for admin internal train-now."
+        });
+      }
       const qs = new URLSearchParams({
         mode,
         modelVersion
@@ -391,7 +395,13 @@ async function handleMl(req, res) {
     try {
       const days = Number(req.query.days || 30);
       const safeDays = Number.isFinite(days) && days > 0 ? Math.min(90, Math.floor(days)) : 30;
-      const base = resolvePublicBaseUrl(req);
+      const base = resolvePublicBaseUrl();
+      if (!base) {
+        return res.status(503).json({
+          ok: false,
+          error: "PUBLIC_BASE_URL / APP_BASE_URL / VERCEL_URL required for admin history-sync-now."
+        });
+      }
       const run = await fetch(`${base}/api/history?sync=1&days=${safeDays}`, {
         method: "POST",
         headers: {

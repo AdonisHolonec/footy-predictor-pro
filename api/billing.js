@@ -22,6 +22,7 @@ import {
   priceIdForTier,
   publicBillingConfig
 } from "../server-utils/stripeBilling.js";
+import { resolveTrustedAppOrigin } from "../server-utils/publicBaseUrl.js";
 
 export const config = {
   api: {
@@ -64,12 +65,10 @@ function parseBody(req) {
   return body && typeof body === "object" ? body : {};
 }
 
-function appOrigin(req) {
-  const fromEnv = String(process.env.APP_BASE_URL || process.env.VITE_APP_URL || "").replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  const proto = String(req.headers["x-forwarded-proto"] || "https");
-  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
-  if (host) return `${proto}://${host}`;
+function appOrigin(_req) {
+  const resolved = resolveTrustedAppOrigin(null, { purpose: "billing_redirect" });
+  if (resolved.ok) return resolved.origin;
+  // Last-resort documented production hostname (never request Host).
   return "https://footy-predictor-pro.vercel.app";
 }
 

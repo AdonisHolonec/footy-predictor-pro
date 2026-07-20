@@ -26,6 +26,7 @@ import {
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
 } from "../utils/specialBet";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 /**
  * Stil vizual pentru un pick în funcţie de nivelul de încredere.
@@ -661,7 +662,7 @@ export default function MatchModal({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/fixtures?view=xg&fixtureId=${match.id}`)
+    fetchWithAuth(`/api/fixtures?view=xg&fixtureId=${match.id}`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && !data?.error) setXgData(data);

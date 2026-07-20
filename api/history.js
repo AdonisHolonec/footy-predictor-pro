@@ -10,6 +10,7 @@ import {
   deriveCardMarketPicks,
   needsMarketTotalsForSettlement
 } from "../server-utils/cardMarketSettlement.js";
+import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
@@ -292,6 +293,15 @@ async function handleHistoryRead(req, res) {
     }
   }
 
+  const rl = await checkAnonymousRateLimit(req, {
+    namespace: "history-public",
+    maxPerHour: Math.max(30, Math.min(Number(process.env.ANON_RATE_HISTORY_PUBLIC || 90), 300))
+  });
+  if (!rl.ok) {
+    if (rl.retryAfterSec) res.setHeader("Retry-After", String(rl.retryAfterSec));
+    return res.status(429).json({ ok: false, error: "Prea multe cereri." });
+  }
+
   try {
     const { stats } = await readPredictionsHistoryAggregateStats(safeDays, safeLimit);
     return res.status(200).json({
@@ -313,7 +323,11 @@ async function handleHistorySync(req, res) {
   }
 
   if (!(await isAuthorizedHistorySync(req))) {
-    return res.status(401).json({ ok: false, error: "Cerere de sincronizare neautorizată." });
+    return res.status(403).json({
+      ok: false,
+      error: "History sync este permis doar pentru cron sau admin.",
+      code: "history_sync_forbidden_for_user"
+    });
   }
 
   const supabaseConfig = assertSupabaseConfigured();
@@ -707,7 +721,11 @@ async function handleClosingOdds(req, res) {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
   if (!(await isAuthorizedHistorySync(req))) {
-    return res.status(401).json({ ok: false, error: "Cerere de closing odds neautorizată." });
+    return res.status(403).json({
+      ok: false,
+      error: "Closing odds capture este permis doar pentru cron sau admin.",
+      code: "history_closing_forbidden_for_user"
+    });
   }
 
   const supabaseConfig = assertSupabaseConfigured();

@@ -38,6 +38,8 @@ export type EnsembleStakeBreakdown = {
 export type ValueBet = {
   detected: boolean;
   type: string;
+  /** Bookmaker odds when available (history ROI / display). */
+  odd?: number;
   ev?: number;
   kelly?: number;
   stakePlan?: string;

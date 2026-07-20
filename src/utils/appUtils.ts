@@ -52,7 +52,12 @@ export function mergePredictionRows(existing: PredictionRow[], incoming: Predict
           : row.probs,
       recommended:
         prev.recommended || row.recommended
-          ? { ...(prev.recommended || {}), ...(row.recommended || {}) }
+          ? ({
+              pick: "",
+              confidence: 0,
+              ...(prev.recommended || {}),
+              ...(row.recommended || {})
+            } as PredictionRow["recommended"])
           : row.recommended,
       marketOdds:
         prev.marketOdds || row.marketOdds

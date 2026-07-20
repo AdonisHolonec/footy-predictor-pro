@@ -2,8 +2,8 @@
 //
 // Dispatch prin ?view=:
 //   /api/fixtures                   → day (default, backward compat)
-//   /api/fixtures?view=day          → day listing + usage
-//   /api/fixtures?view=day&usageOnly=1   → usage only
+//   /api/fixtures?view=day          → day listing (no provider usage in public JSON)
+//   /api/fixtures?view=day&usageOnly=1   → usage only (admin)
 //   /api/fixtures?view=day&syncBootstrapAdmin=1
 //   /api/fixtures?view=day&warmPredictUsage=1
 //   /api/fixtures?view=day&gdprExport=1
@@ -35,6 +35,32 @@ import {
   resolveEffectiveTierFromProfile,
   tierDailyLimit
 } from "../server-utils/accessTier.js";
+import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
+import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
+import { corsOriginIfAllowed } from "../server-utils/publicBaseUrl.js";
+
+async function requireUserOrCron(req, res) {
+  if (isAuthorizedCronOrInternalRequest(req)) return { ok: true, cron: true };
+  const requester = await getRequester(req);
+  if (!requester.ok) {
+    res.status(requester.status || 401).json({
+      ok: false,
+      error: requester.error || "Autentificare necesară."
+    });
+    return { ok: false };
+  }
+  return { ok: true, cron: false, user: requester.user };
+}
+
+async function enforceAnonRateLimit(req, res, namespace, maxPerHour) {
+  const rl = await checkAnonymousRateLimit(req, { namespace, maxPerHour });
+  if (!rl.ok) {
+    if (rl.retryAfterSec) res.setHeader("Retry-After", String(rl.retryAfterSec));
+    res.status(429).json({ ok: false, error: "Prea multe cereri. Încearcă din nou mai târziu." });
+    return false;
+  }
+  return true;
+}
 
 // -------------------- Shared / default (day) handler --------------------
 
@@ -43,6 +69,16 @@ async function handleDay(req, res) {
   const usageOnly = String(req.query.usageOnly || "") === "1";
   const usageDays = Math.max(1, Math.min(Number(req.query.usageDays) || 7, 60));
   const syncBootstrapAdmin = String(req.query.syncBootstrapAdmin || "") === "1";
+  // Public day listing is allowlisted but rate-limited (no ops fields in response).
+  if (!usageOnly && !syncBootstrapAdmin) {
+    const okRl = await enforceAnonRateLimit(
+      req,
+      res,
+      "fixtures-day",
+      Math.max(30, Math.min(Number(process.env.ANON_RATE_FIXTURES_DAY || 120), 600))
+    );
+    if (!okRl) return;
+  }
   const warmPredictUsage = String(req.query.warmPredictUsage || "") === "1";
   const gdprExport = String(req.query.gdprExport || "") === "1";
   const tierStatusOnly = String(req.query.tierStatus || "") === "1";
@@ -244,8 +280,6 @@ async function handleDay(req, res) {
     const fixturesReq = await getWithCache("/fixtures", { date }, 21600);
     const allFixtures = fixturesReq.data?.response || fixturesReq.data || [];
 
-    const usage = await getApiUsage();
-
     const leaguesMap = new Map();
     for (const fx of allFixtures) {
       const lId = fx.league?.id;
@@ -320,7 +354,8 @@ async function handleDay(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, date, totalFixtures: allFixtures.length, leagues, usage, tierStatus });
+    // P0: never expose provider usage / cache / diagnostics on the public day view.
+    return res.status(200).json({ ok: true, date, totalFixtures: allFixtures.length, leagues, tierStatus });
   } catch (error) {
     return res.status(500).json({ ok: false, error: "Eroare internă." });
   }
@@ -360,9 +395,14 @@ async function handleLive(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
+  const gate = await requireUserOrCron(req, res);
+  if (!gate.ok) return;
   const ids = parseIds(req.query.ids);
   if (!ids.length) {
     return res.status(400).json({ ok: false, error: "Parametrul ids lipsește sau e invalid (ex: ?ids=123,456)." });
+  }
+  if (ids.length > 40) {
+    return res.status(400).json({ ok: false, error: "Prea multe ids (max 40)." });
   }
   const idsParam = ids.join("-");
   try {
@@ -382,9 +422,7 @@ async function handleLive(req, res) {
     }));
     return res.status(200).json({
       ok: true,
-      fixtures,
-      cacheTtlSec: LIVE_SCORES_CACHE_TTL_SEC,
-      fromCache: Boolean(r.fromCache)
+      fixtures
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || "Eroare internă." });
@@ -394,12 +432,20 @@ async function handleLive(req, res) {
 // -------------------- xG handler --------------------
 
 async function handleXg(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const allowedOrigin = corsOriginIfAllowed(req);
+  if (allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Vary", "Origin");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
+  const gate = await requireUserOrCron(req, res);
+  if (!gate.ok) return;
+
   const { fixtureId } = req.query;
-  if (!fixtureId) {
-    return res.status(400).json({ error: "Lipsește fixtureId." });
+  const fid = Number(fixtureId);
+  if (!fixtureId || !Number.isFinite(fid) || fid <= 0) {
+    return res.status(400).json({ error: "Lipsește fixtureId valid." });
   }
 
   try {
@@ -421,11 +467,10 @@ async function handleXg(req, res) {
 
     // `getWithCache` foloseşte Vercel KV + auto-detectează providerul (apisports direct sau RapidAPI)
     // şi partajează cache-ul cu restul pipeline-ului (nu mai avem cache separat pe xG).
-    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
+    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fid }, 900);
     if (!statsReq.ok) {
       return res.status(502).json({
-        error: "Eroare upstream la fixtures/statistics",
-        message: typeof statsReq.error === "string" ? statsReq.error : JSON.stringify(statsReq.error)
+        error: "Eroare upstream la fixtures/statistics"
       });
     }
     const result = statsReq.data;
@@ -445,7 +490,7 @@ async function handleXg(req, res) {
     const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
 
     let firstHalfGoals = null;
-    const fxReq = await getWithCache("/fixtures", { ids: fixtureId }, 86400);
+    const fxReq = await getWithCache("/fixtures", { ids: String(fid) }, 86400);
     if (fxReq.ok) {
       const fx = fxReq.data?.response?.[0];
       const htHome = fx?.score?.halftime?.home;
@@ -456,7 +501,7 @@ async function handleXg(req, res) {
     }
 
     return res.status(200).json({
-      fixtureId,
+      fixtureId: fid,
       homeXG: xGHome,
       awayXG: xGAway,
       marketResults: {
@@ -465,12 +510,11 @@ async function handleXg(req, res) {
         shotsTotal: shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
         firstHalfGoals
       },
-      fromCache: Boolean(statsReq.fromCache),
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
     console.error("🔴 eroare handler xG:", error.message);
-    return res.status(500).json({ error: "Eroare internă de server", message: error.message });
+    return res.status(500).json({ error: "Eroare internă de server" });
   }
 }
 

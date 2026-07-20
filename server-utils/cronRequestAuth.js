@@ -20,10 +20,15 @@ export function isAuthorizedCronOrInternalRequest(req) {
   if (secret && provided === secret) return true;
 
   if (isProd) {
+    // P0: UA fallback is explicitly disabled in production unless BOTH flags are set
+    // AND CRON_SECRET is missing (emergency only). Prefer always setting CRON_SECRET.
     const onVercel = String(process.env.VERCEL || "") === "1";
     const allowUaFallback = String(process.env.ALLOW_VERCEL_CRON_UA_FALLBACK || "") === "1";
+    const allowUaEmergency = String(process.env.ALLOW_VERCEL_CRON_UA_EMERGENCY || "") === "1";
     const ua = String(req.headers["user-agent"] || "").toLowerCase();
-    if (allowUaFallback && onVercel && !secret && ua.includes("vercel-cron")) return true;
+    if (allowUaFallback && allowUaEmergency && onVercel && !secret && ua.includes("vercel-cron")) {
+      return true;
+    }
     return false;
   }
 

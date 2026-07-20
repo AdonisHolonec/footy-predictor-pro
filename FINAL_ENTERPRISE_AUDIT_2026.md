@@ -1,781 +1,766 @@
-# FINAL ENTERPRISE AUDIT 2026  
+# FINAL ENTERPRISE AUDIT 2026
 ## Footy Predictor Pro — Production Certification Panel
 
 | Field | Value |
 |-------|-------|
 | **Document** | `FINAL_ENTERPRISE_AUDIT_2026.md` |
-| **Date** | 2026-07-18 |
-| **Repository** | `footy-predictor-starter` |
-| **Branch inspected** | `refactor/frontend-app-architecture` @ `c307434` |
+| **Inspection date** | 2026-07-20 |
+| **Repository** | `footy-predictor-starter` → remote `AdonisHolonec/footy-predictor-pro` |
+| **Branch / tip** | `main` @ `0efe7acc` (post Special Bet UI; shots-odds fuzzy match; UEFA domestic stats fallback) |
 | **Production URL** | https://footy-predictor-pro.vercel.app |
 | **Panel** | CTO · Principal AI Engineer · Quant Researcher · Senior Data Scientist · DevOps Architect · Security Engineer · Product Director · SaaS Consultant |
-| **Mandate** | Determine whether this repository deserves production deployment. Assume competitor ownership. Reject theater. |
+| **Mandate** | Certify whether this repository deserves production deployment. Assume competitor ownership. Reject theater. Evidence over narrative. |
+| **Supersedes** | Prior `FINAL_ENTERPRISE_AUDIT_2026.md` dated 2026-07-18 (many P0s therein are **closed**; this document re-scores current code) |
 
-> **This is not a celebration document.** Prior reports (`ENTERPRISE_REPORT.md`, activation/xG/calibration notes) describe engineering ambition. This certification asks only: *would a competent enterprise CTO ship this to paying strangers tomorrow?*
+> **This is not a celebration document.** Engineering ambition is real. Certification asks only: *would a competent enterprise CTO ship this to paying strangers tomorrow without material brand, legal, or capital risk?*
 
 ---
 
-# CTO FINAL VERDICT (PREVIEW)
+# 27. CTO FINAL VERDICT (PREVIEW)
 
 | Decision | Result |
 |----------|--------|
-| **Public paid production SaaS** | **REJECT** |
-| **Open anonymous traffic** | **REJECT** |
-| **Closed private beta (known users)** | **CONDITIONAL** — only after P0 security + monetization locks |
+| **Public paid production SaaS (unrestricted marketing)** | **REJECT** |
+| **Open anonymous heavy traffic** | **REJECT** |
+| **Closed paid / trial beta (known cohorts)** | **CONDITIONAL PASS** — after P0 security + settlement reliability |
 | **Internal research / paper-trading lab** | **ACCEPT** |
 
-**Weighted overall score: 5.4 / 10 (Grade: D+ / C−)**
+| Metric | Value |
+|--------|-------|
+| **Weighted overall score** | **6.3 / 10** |
+| **Letter grade** | **C+** |
+| **Enterprise SaaS readiness** | **~58%** |
+| **Paid niche beta readiness (post-P0)** | **~78%** |
+| **Research / demo readiness** | **~88%** |
 
-**Readiness:**
-- Enterprise SaaS: **~42%**
-- Paid niche beta after P0 fixes: **~65%**
-- Research demo: **~80%**
+### Why not green
+The product now has a **credible commercial skeleton** (Stripe, tier masks, JWT-gated predict/warm, RLS crown jewels, cron ML/history). It still fails enterprise certification because:
 
-The product has a **real probabilistic brain** (Dixon–Coles / bivariate Poisson, Shin, EV/Kelly arithmetic, adaptive Monte Carlo sampling, multi-method calibration *code*). It does **not** have production-grade security, commercial armor, or statistically trustworthy offline→online ML. Shipping as “Enterprise” today would be a due-diligence failure.
+1. **Unauthenticated upstream burn** on `/api/fixtures` (day / live / xg) + API usage disclosure.
+2. **Settlement reliability gap** — corners/shots validation depends on sparse crons; client history sync is auth-mismatched (user JWT → 401).
+3. **Edge not scientifically certified** — no walk-forward promotion gate; CLV plumbing exists but coverage/reporting is not a release criterion.
+4. **Ops fragility** — Hobby 12-function ceiling, predict/history without elevated `maxDuration`, KV module-load hard dependency, thin CI (tests only).
+
+### What changed since 2026-07-18 audit (credit where due)
+| Prior P0 claim | Status now |
+|----------------|------------|
+| Anonymous predict/warm | **Closed** — JWT or cron (`Stage00Ingress`, `api/warm.js`) |
+| Missing Stripe | **Closed** — `api/billing.js`, `stripeBilling.js`, portal/checkout/webhook |
+| Missing RLS on crown jewels | **Closed** — `026_rls_crown_jewels.sql` (+ privilege/Stripe guards 027/029) |
+| Train/serve skew on final probs | **Mostly closed** — `extractRawTriple` prefers `rawPoissonProbs1x2Pct` |
+| Closing odds absent | **Plumbing shipped** — `closingOddsCapture.js`, migration 030; adoption still incomplete |
+| Premium limit &lt; Free | **Addressed in product logic** — verify env caps in deploy; code path uses `accessTier.js` |
 
 ---
 
 # 1. Executive Summary
 
-### What this is
-A Vite/React SPA + Vercel serverless API (`api/*`) + Supabase Auth/Postgres + KV/Redis cache + API-Football upstream, with a deep prediction stack under `server-utils/` (~269 source files in `api/`, `server-utils/`, `src/`, `supabase/migrations/`, `tests/`).
+### What this system is
+A Vite/React SPA + **12** Vercel serverless handlers under `api/` + Supabase Auth/Postgres (30 migrations) + `@vercel/kv` cache + API-Football upstream, with Predictor V3 staged pipeline (`Stage00`–`Stage12`) and a deep modeling stack under `server-utils/` (~172 files) and consumer UI under `src/` (~136 files).
 
-### What is genuinely strong
-1. Core match model: attack/defense/form/home-advantage λ → bivariate Poisson + Dixon–Coles (`server-utils/math.js`, `PredictionEngine/combine.js`).
-2. Market plumbing: Shin de-vig, professional multi-market ValueEngine, quarter-Kelly (`advancedMath.js`, `value/ValueEngine.js`).
-3. Offline ML scaffolding: isotonic PAV + Platt/Temperature/Beta selector (`calibration/*`), multinomial stacker (`mlStacker.js`), daily cron (`api/cron/daily-ml.js`).
-4. Adaptive Monte Carlo from analytical uncertainty (`monteCarlo/MonteCarloEngine.js`).
-5. Predictor V2 contract + pipeline audit trail (`pipeline/PredictorV2.js`, `modelMeta.pipeline` in `api/predict.js`).
-6. Modular engine activation: `modularBlend: 1`, `expectedGoals: 0.2` (`PredictionEngine/weights.js`) — **updates prior audits that claimed blend=0**.
+### Inventory (inspected surface)
+| Surface | Count / notes |
+|---------|----------------|
+| Tracked-ish source files (excl. `node_modules`/`dist`/`backups`) | ~451 |
+| API entrypoints | 12 (Hobby function ceiling) |
+| Supabase migrations | 30 |
+| Test files under `tests/` | 8 (+ Vitest under `src/`) |
+| CI | `.github/workflows/tests.yml` → `npm test` only |
+| Crons in `vercel.json` | 12 schedules |
+| Live tests (this inspection) | 84 node + 14 vitest = **98 passing** |
 
-### What kills production certification
-1. **Security P0s still open:** anonymous predict/warm, unauthenticated analytics/alerts/health, missing RLS on crown-jewel tables, profiles tier self-escalation, fail-open rate limits.
-2. **Train/serve skew:** calibration/stacker fit prefers `evaluation.modelProbs1x2Pct` (final probs); live apply uses raw Poisson (`daily-ml.js` `extractRawTriple` vs `predict.js`).
-3. **No walk-forward / CLV proof:** random CV; stacker metrics in-sample; closing odds not captured.
-4. **Monetization theater:** no Stripe; Premium daily limit &lt; Free; `incrementPredictCount*` unused; tier mask does not strip Monte Carlo / laboratory / FI.
-5. **CI is not a release gate:** `.github/workflows/tests.yml` runs `npm test` only — no build, typecheck, lint, E2E, security audit.
+### Genuinely strong
+1. **Real goals model** — modular λ → bivariate Poisson + Dixon–Coles (`server-utils/math.js`, `PredictionEngine/`).
+2. **Productized enrichment** — rolling xG, corners/SOT Poisson blocks, Shin de-vig, Value/Kelly, adaptive Monte Carlo, isotonic + parametric calibration, multinomial stacker, Elo parallel signal.
+3. **Commercial path** — Stripe webhook-signed billing, tier masking (`Stage11Masking`), warm/predict quotas, GDPR export hooks.
+4. **Ops intent** — warm-predict cron chain, daily-ml, history sync + closing capture, health bundle / metrics store.
+5. **Security progress** — admin emails server-only, RLS deny-by-default on history/snapshots, profile privilege triggers.
 
-### Scorecard (all dimensions)
+### Certification killers (remain)
+1. Public fixtures/live/xg burn + `usage` leak (`api/fixtures.js`).
+2. History sync policy vs client (`isAuthorizedHistorySync` cron/admin only; `useHistorySync` still user JWT).
+3. Admin internal fetch Host-header SSRF risk (`api/admin.js` `resolvePublicBaseUrl`).
+4. No temporal OOS gate for calib/stacker/Model Lab promotion.
+5. CI is not a release gate (no build/tsc/E2E/security audit).
+
+### Scorecard (all sections)
 
 | # | Section | Score | Grade | Risk | Priority | Business impact | Technical impact | Effort |
-|---|---------||:-----:|:----:|:--------:|:--------:|:---------------:|:----------------:|:------:|
-| 2 | Architecture | 6.0 | C+ | Med | P1 | Med | High | L |
-| 3 | AI & Prediction Engine | 6.5 | B− | High | P0 | High | High | L |
-| 4 | Quantitative Validation | 3.5 | D+ | High | P0 | High | High | XL |
-| 5 | Statistical Validation | 3.0 | D | High | P0 | High | High | XL |
-| 6 | Explainability | 5.5 | C | Med | P2 | Med | Low | M |
-| 7 | Feature Importance | 4.0 | D | Med | P2 | Low | Med | M |
-| 8 | Monte Carlo | 6.5 | B− | Low | P2 | Low | Med | S |
-| 9 | Calibration | 5.0 | C | High | P0 | High | High | L |
-| 10 | Ensemble | 4.5 | D+ | High | P1 | Med | High | L |
-| 11 | API | 4.5 | D+ | Critical | P0 | High | High | M |
-| 12 | Database | 4.0 | D | Critical | P0 | High | High | M |
-| 13 | Security | **3.0** | **D** | **Critical** | **P0** | **Critical** | **High** | **M** |
+|---|---| ---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 2 | Architecture | 7.0 | B− | Med | P1 | Med | High | L |
+| 3 | AI & Prediction Engine | 7.0 | B− | High | P0 | High | High | L |
+| 4 | Quantitative Validation | 4.0 | D+ | High | P0 | High | High | XL |
+| 5 | Statistical Validation | 3.5 | D+ | High | P0 | High | High | XL |
+| 6 | Explainability | 6.0 | C+ | Med | P2 | Med | Low | M |
+| 7 | Feature Importance | 4.5 | D+ | Med | P2 | Low | Med | M |
+| 8 | Monte Carlo | 7.0 | B− | Low | P2 | Low | Med | S |
+| 9 | Calibration | 5.5 | C | High | P0 | High | High | L |
+| 10 | Ensemble | 5.5 | C | High | P1 | Med | High | L |
+| 11 | API | 5.5 | C | Critical | P0 | High | High | M |
+| 12 | Database | 7.0 | B− | Med | P1 | High | High | M |
+| 13 | Security | 5.5 | C | Critical | P0 | Critical | High | M |
 | 14 | Performance | 6.0 | C+ | Med | P1 | Med | Med | M |
 | 15 | Cache | 6.5 | B− | High | P0 | High | Med | S |
-| 16 | Frontend | 5.0 | C | Med | P1 | High | Med | L |
-| 17 | UX | 4.5 | D+ | Med | P1 | High | Low | L |
-| 18 | DevOps | 3.5 | D+ | High | P0 | High | High | M |
-| 19 | Monitoring | 5.0 | C | Med | P1 | Med | Med | M |
-| 20 | CI/CD | 2.5 | F | High | P0 | High | High | M |
-| 21 | Test Coverage | 4.0 | D | High | P0 | Med | High | L |
-| 22 | Competitive Benchmark | 3.5 | D+ | High | P0 | Critical | Med | XL |
-| 23 | Technical Debt | 4.5 | D+ | High | P1 | Med | High | XL |
+| 16 | Frontend | 6.0 | C+ | Med | P1 | High | Med | L |
+| 17 | UX | 6.0 | C+ | Med | P1 | High | Low | M |
+| 18 | DevOps | 5.0 | C | High | P0 | High | High | M |
+| 19 | Monitoring | 5.5 | C | Med | P1 | Med | Med | M |
+| 20 | CI/CD | 3.5 | D+ | High | P0 | High | High | M |
+| 21 | Test Coverage | 5.0 | C | High | P0 | Med | High | L |
+| 22 | Competitive Benchmark | 6.0 | C+ | Med | P2 | High | Low | — |
+| 23 | Technical Debt | 4.5 | D+ | Med | P1 | Med | High | L |
 | 24 | Production Risks | — | — | Critical | P0 | Critical | High | — |
+| **Overall (weighted)** | | **6.3** | **C+** | | | | | |
 
-**Weighted overall: 5.4 / 10.**
+Weighting emphasis: Security ×1.4, Quant/Stats ×1.3, API/DevOps ×1.2, AI engine ×1.1, UX/FE ×0.9, Explainability/MC ×0.7.
 
 ---
 
 # 2. Architecture Review
 
-**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P1**  
-**Business impact: Medium · Technical impact: High · Effort: L**
+**Score: 7.0 · Grade: B− · Risk: Medium · Priority: P1 · Business: Med · Tech: High · Effort: L**
 
-### Findings
-- **Sound topology:** SPA → Vercel serverless → Supabase + KV + API-Football. Appropriate for early SaaS.
-- **Hobby constraint shapes design:** ~12 serverless entrypoints; health/model-lab folded into `api/backtest.js` (`vercel.json` + comments in handlers). Pragmatic, but overloads files.
-- **God-handler:** `api/predict.js` still owns fetch → enrich → engine → Poisson → MC → xG → calib → Elo → stacker → Model Lab → confidence → value → FI → persist (~2.3k+ LOC). `PredictorV2.js` is a **contract + helpers**, not a real orchestrator.
-- **Dual trees:** canonical `PredictionEngine/` vs thin `prediction/` facade; engine-internal Confidence/Recommendation vs live `confidence/` + `ValueEngine` — dual stacks confuse audits.
-- **Pipeline narrative vs physics:** documented order (Elo/xG after Poisson; injuries after Poisson) does not match λ construction (modules + early xG *before* Poisson).
+### Topology
+```
+Client (Vite/React)
+  → api/*.js (Vercel serverless, 12 functions)
+    → server-utils (PredictorV3 Stage00–12, fetcher, billing, ML)
+      → @vercel/kv (Upstash)
+      → supabaseAdmin (service_role)
+      → API-Football / RapidAPI
+Cron (vercel.json) → same API surface
+```
+
+### Strengths
+- Clear orchestrator: `api/predict.js` → `PredictorV3.handle` → `Stage00Ingress`…`Stage12Response`.
+- Fixture loop isolation: `runFixtureStageLoop.js` + per-fixture abort on insufficient data.
+- Separation of warm (cache fill) vs predict (compute) vs history sync (settle).
+- League profiles JSON-driven (`leagueProfiles.config.json`) — not hard-coded magic only.
+
+### Weaknesses
+- **Dual prediction trees**: `server-utils/prediction/` + `server-utils/PredictionEngine/` (+ frozen `backups/`). Cognitive load and drift risk.
+- **Hobby 12-function hard ceiling** — any new route requires consolidation.
+- Broken `npm run api` (`server/` directory missing).
+- Untracked one-shot slice scripts and `App.tsx.backup-pre-refactor` pollute workspace hygiene.
 
 ### Evidence
-- `server-utils/pipeline/PredictorV2.js` — stage list + blend helpers  
-- `api/predict.js` — physical order  
-- `vercel.json` — crons + `maxDuration: 300`
-
-### Verdict
-Architecturally coherent for a research product; not modular enough for enterprise ownership or safe iteration.
+- `server-utils/pipeline/PredictorV3.js`, `STAGE_ORDER`, `PREDICTOR_V3_VERSION`
+- `vercel.json` rewrites + crons + headers
+- `package.json` scripts
 
 ---
 
 # 3. AI & Prediction Engine Review
 
-**Score: 6.5 · Grade: B− · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: L**
+**Score: 7.0 · Grade: B− · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: L**
 
-### What’s real
-| Component | Assessment | Evidence |
-|-----------|------------|----------|
-| Core λ (atk/def/form/HA) | Real Dixon–Coles-style multiplicative | `PredictionEngine/combine.js` |
-| Optional modules | **Live** (`modularBlend: 1`) | `weights.js`, `moduleInputs.js` |
-| Poisson + DC | Real | `math.js` `computeMatchProbs` |
-| Rolling xG → λ blend | Semi-real (hand weights; `expectedGoals: 0.2`) | `xg/RollingXgModel.js`, `combine.js` |
-| Elo | Parallel signal, not in λ | `teamElo.js` |
-| Shin + ValueEngine | Real arithmetic | `advancedMath.js`, `value/ValueEngine.js` |
-| ConfidenceEngine | Heuristic dashboard, not calibrated P(correct) | `confidence/ConfidenceEngine.js` |
+### Core path (live)
+`Stage02` features → `Stage03` `PredictionEngine.build` / `strengthRatingsLambdas` → `Stage04` `computeMatchProbs` → `Stage05` MC + side markets → `Stage06` calibration → `Stage07` Elo/Shin/stacker/ModelLab → `Stage08` Value/Kelly → `Stage09` explain.
 
-### Theater / weak signal
-- **Motivation:** standings rank-gap heuristic; can scale both sides similarly.  
-- **Weather:** rarely present on API-Football fixtures → usually neutral.  
-- **Referee:** name present; tendency stats not populated → near-neutral.  
-- **Lineups:** `missingKeyPlayers` hard-wired `0` in collector.  
-- **Injuries:** headcount proxy, not player quality.  
-- **Odds in λ + market blend:** double-counting risk when `odds` weight &gt; 0 and post-λ market blend also runs.
+### Modules
+`AttackStrength`, `DefenseStrength`, `FormEngine`, `HomeAdvantage`, `AwayStrength`, `RecentMatches`, `StandingsEngine`, `H2HEngine`, `RefereeEngine`, `InjuriesEngine`, `LineupEngine`, `OddsEngine`, `RestDaysEngine`, `MotivationEngine`, `WeatherEngine`, `PoissonEngine`, `ExpectedGoals`, `ConfidenceEngine`, `RecommendationEngine` — wired via `MODULES` + `combineLambdas` (`PredictionEngine/index.js`, `combine.js`).
 
-### Critical accuracy defect
-**Train/serve skew** (see §5 / §9): offline fit uses final `modelProbs`; online calib/stacker apply on raw Poisson.
+### Strengths
+- Bivariate Poisson + Dixon–Coles τ is a legitimate football scoring model.
+- Bayesian shrinkage on strengths; λ clamps; league ρ from draw frequency.
+- UEFA / empty-cup stats fallback (domestic league + recent FT fixtures) — `predictHelpers.fetchTeamStatisticsWithSeasonFallback` — reduces “Date limitate” false negatives.
+- Fuzzy + nearest-line shots odds matching — `marketOdds.consensusOverUnderOddsAtLine`.
+
+### Weaknesses
+- Optional modules (motivation/weather/lineup) often near-neutral → marketing “AI modules” overstates signal.
+- Odds influence both λ (`weights.odds`) and post-hoc market blend → double-count risk.
+- Side markets (corners/shots) use independent Poisson — no bivariate structure; independence untested.
+- Insufficient-data abort is correct but still visible to users on thin competitions when all fallbacks fail.
 
 ### Verdict
-Competent sports-modeling core with productized enrichment glue. Not “AI excellence” until fit targets, walk-forward, and CLV exist.
+**Research-grade core, product-grade packaging.** Not yet a certified edge engine.
 
 ---
 
 # 4. Quantitative Validation
 
-**Score: 3.5 · Grade: D+ · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: XL**
+**Score: 4.0 · Grade: D+ · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: XL**
 
-### Findings
-- Backtest analytics compute ROI, yield, log-loss, Brier, Kelly growth, Sharpe, drawdown (`BacktestAnalytics.js`) — **arithmetic is real**.
-- **CLV is mostly empty:** closing odds not systematically captured at kickoff (`BACKTEST_ENGINE.md` admits this). Without CLV, ROI claims are not edge claims.
-- Model Lab / Auto Selection compete on stored history with overlapping windows; promotion floor can be as low as ~20 samples (`AutoModelSelection.js`).
-- No published public track record; no independent holdout season.
+### Present
+- Backtest analytics: ROI, log-loss, Brier, Kelly growth, Sharpe, drawdown (`BacktestAnalytics.js`).
+- Public track endpoint (sanitized aggregates).
+- Closing-odds capture window (`closingOddsCapture.js`) + columns (migration 030).
+- Model Lab metrics across registry A–E.
 
-### Missing for quant certification
-1. Kickoff closing line store + CLV report  
-2. Walk-forward backtest (train ≤ t, test t+1)  
-3. Bankroll simulation with costs/limits  
-4. League-stratified OOS tables  
-5. Ablation of modular λ factors (not only source remix)
+### Missing for certification
+| Requirement | Status |
+|-------------|--------|
+| Systematic **CLV** report as ship gate | Plumbing only; coverage not proven |
+| Walk-forward / purged CV for calib & stacker | Random folds in `CalibrationSelector` |
+| Execution model (limits, latency, vig) | Absent |
+| Side-market calibration | Absent |
+| Bankroll simulation under stress | Partial (Kelly curve) only |
 
-### Verdict
-You can compute scores. You cannot yet prove edge.
+### Quant Researcher verdict
+**Do not market as “+EV verified.”** Arithmetic is correct; edge is unproven.
 
 ---
 
 # 5. Statistical Validation
 
-**Score: 3.0 · Grade: D · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: XL**
+**Score: 3.5 · Grade: D+ · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: XL**
 
-| Concern | Status | Evidence |
-|---------|--------|----------|
-| Random k-fold on time series | Leakage risk | `CalibrationSelector.js` shuffle folds |
-| Stacker metrics in-sample | Optimistic bias | `daily-ml.js` `trainSoftmax` → `computeStackerMetrics` same data |
-| Fit on final probs / apply on raw | Train/serve skew | `extractRawTriple` prefers `evaluation.modelProbs1x2Pct` |
-| Per-outcome calib + renorm | Implemented but multinomial-weak | `applyCalibratedTriple` |
-| Auto-calibration overlays | No OOS gate | `AutoCalibrationEngine.js` |
-| Unit tests as “validation” | Synthetic only | `tests/math.test.js` |
+### Gaps
+1. **Time leakage risk in selection** — `shuffleIndices` + k-fold for calibration method choice.
+2. **Auto Model Selection** min samples ~20 — too low for promotion.
+3. **In-sample stacker metrics** historically accepted as fitness.
+4. **League heterogeneity** — global `league_id=-1` maps hide thin-league bias.
+5. **No formal multiple-testing control** across markets (1X2 + O/U + corners + SOT + special bet).
 
-### Verdict
-Statistical process is **not** production-grade. Any investor deck citing “calibrated ML accuracy” from current dashboards would be misleading.
+### Present positives
+- `assignTimeSplits` / `stripLeakage` in ML scaffolding (`FeatureEngineering.js`).
+- Train/serve preference for raw Poisson triples (`ml/extractRawTriple.js`).
+- Unit tests for core math identities (98 automated tests green at inspection).
+
+### Data Scientist verdict
+**Hypothesis engine, not validated estimator.** Ship only with explicit “model probabilities, not guarantees” legal copy (already partially present in UX).
 
 ---
 
 # 6. Explainability Review
 
-**Score: 5.5 · Grade: C · Risk: Medium · Priority: P2**  
-**Business impact: Medium · Technical impact: Low · Effort: M**
+**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P2 · Business: Med · Tech: Low · Effort: M**
 
-### Findings
-- `PredictionExplanation.js` produces human-readable WHY text.  
-- `modelMeta.pipeline` / `predictorVersion` improve auditability (Predictor V2).  
-- Confidence engine is explicitly independent of pick — good for honesty, bad if UI implies it is P(win).  
-- Dual recommendation stacks (engine Recommendation vs ValueEngine) can disagree with explanations.
+### Present
+- `PredictionExplanation.js` narrative reasons.
+- `FeatureImportanceEngine.js` activation × prior bars.
+- `PredictionContributions.js` signed module impact toward pick.
+- UI: `ExplanationCard`, `FeatureImportanceChart`, `PredictionContributionsChart`, Prediction Laboratory radar.
 
-### Verdict
-Adequate for power users; not regulatory-grade model cards.
+### Limits
+- FI is **not** SHAP/causal; keys omit stacker/MC/xG as first-class drivers.
+- Dual confidence languages (engine vs card %) confuse power users.
+- Laboratory scores are diagnostic UX, not Model Lab OOS metrics.
 
 ---
 
 # 7. Feature Importance Validation
 
-**Score: 4.0 · Grade: D · Risk: Medium · Priority: P2**  
-**Business impact: Low · Technical impact: Medium · Effort: M**
+**Score: 4.5 · Grade: D+ · Risk: Medium · Priority: P2 · Business: Low · Tech: Med · Effort: M**
 
-### Findings
-- `FeatureImportanceEngine.js`: prior × activation → renormalize to 100%. **Not SHAP, not permutation importance, not ablation.**  
-- `PredictionContributions.js`: signed linearization around modular factors — useful UI, **not causal**.  
-- Persisted importance rows exist (`023_prediction_feature_importance.sql`) but do not validate module value.
-
-### Verdict
-Explainability charts. Do not market as “AI feature importance science.”
+Priors in `featureImportanceWeights.js` are hand-set / env-overridable. Auto overlays adjust weights from history reliability (`AutoCalibrationEngine`) but attribution UI remains heuristic. **Do not claim scientific feature discovery.**
 
 ---
 
 # 8. Monte Carlo Validation
 
-**Score: 6.5 · Grade: B− · Risk: Low · Priority: P2**  
-**Business impact: Low · Technical impact: Medium · Effort: S**
+**Score: 7.0 · Grade: B− · Risk: Low · Priority: P2 · Business: Low · Tech: Med · Effort: S**
 
-### Findings
-- Samples correct bivariate Poisson + DC PMF; seeded `mulberry32`; Wilson + percentile CIs.  
-- Adaptive tiers 1k/3k/5k/10k/25k from entropy/competitiveness/goal-var/O-U closeness (`MonteCarloEngine.js`, `MONTECARLO_REPORT.md`).  
-- **Does not feed pick, EV, λ, or calibration.** Display/CI quality only.  
-- UI shows adaptive uncertainty (`MonteCarloPanel.tsx`).
+### Strengths
+- Samples the **same** bivariate+DC PMF as analytic markets (`MonteCarloEngine.js`).
+- Adaptive sim tiers from uncertainty (`selectAdaptiveSimulations`).
+- Seeded PRNG for reproducibility per fixture.
+- Explicitly does **not** override the pick — correct product stance.
 
-### Verdict
-Solid engineering for distribution visualization. Not an accuracy upgrade.
+### Risks
+- Marketing can oversell MC as “AI search for the true score.”
+- Adaptive 1k sims on uncertain matches increases CI noise in UI.
 
 ---
 
 # 9. Calibration Validation
 
-**Score: 5.0 · Grade: C · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: L**
+**Score: 5.5 · Grade: C · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: L**
 
-### What’s good
-- Methods: Isotonic PAV, Platt, Temperature, Beta (`calibration/methods.js`).  
-- CV selector with baseline guard + identity fallback (`CalibrationSelector.js`).  
-- Global map fallback `league_id=-1` fixed (`isotonicCalibration.js`).  
-- Apply path renormalizes 1X2 (`applyCalibratedTriple`).  
-- Migration `025_calibration_method.sql` for method audit (must be applied).
+### Stack
+| Layer | Path |
+|-------|------|
+| Isotonic PAV | `isotonicCalibration.js` |
+| Platt / Temp / Beta | `calibration/methods.js` |
+| Method selector | `CalibrationSelector.js` |
+| Apply live | `Stage06Calibration.js` on `pRaw` |
+| Auto weight overlays | `AutoCalibrationEngine.js` |
+| Cron | `api/cron/daily-ml.js` |
 
-### What’s broken for production trust
-1. **Fit target skew** — `extractRawTriple` prefers final `modelProbs1x2Pct`.  
-2. **Stacker bypasses calibration** when weights exist (`predict.js`).  
-3. **Random CV** on serial football data.  
-4. Upsert Brier is post-refit in-sample.  
-5. Side markets (O/U, BTTS) used in `selectTopPick` remain on uncalibrated Poisson `p`.
-
-### Verdict
-Machinery is real; deployment contract is not trustworthy until fit≡apply and walk-forward gates exist.
+### Issues
+- Random CV ≠ temporal validation.
+- Side markets uncalibrated.
+- Overlay + stacker + Shin can **over-correct** on small samples.
+- Maps stored in Supabase; cold-start leagues fall back to global.
 
 ---
 
 # 10. Ensemble Validation
 
-**Score: 4.5 · Grade: D+ · Risk: High · Priority: P1**  
-**Business impact: Medium · Technical impact: High · Effort: L**
+**Score: 5.5 · Grade: C · Risk: High · Priority: P1 · Business: Med · Tech: High · Effort: L**
 
-### Findings
-- Stacker: multinomial softmax SGD — real code, in-sample metrics.  
-- Model Lab A–E: source blends on reconstructed history; live A–D override can **discard** calibration+stacker path; E = no-op.  
-- Auto promotion via KV (`AutoModelSelection.js`, cron `mode=model-selection`).  
-- Equal-weight source average is not a fitted ensemble.
+### Components
+- Multinomial stacker (`mlStacker.js`) — feature-rich, softmax 3-way.
+- Model Lab A–E + AutoModelSelection (KV `footy_active_model`).
+- Elo as parallel probability source (`teamElo.js`).
+- Market blend / Shin consensus.
 
-### Verdict
-Ensemble story is productized; statistical ensemble discipline is not.
+### Issues
+- Promotion threshold too weak (~20 settled).
+- Equal-weight source averaging when all present is naive.
+- External trainers (`ModelInterface`) largely stubbed (`ML_READY.md`).
+- Odds double-count with modular odds weight.
 
 ---
 
 # 11. API Review
 
-**Score: 4.5 · Grade: D+ · Risk: Critical · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: M**
+**Score: 5.5 · Grade: C · Risk: Critical · Priority: P0 · Business: High · Tech: High · Effort: M**
 
-### Endpoint auth scorecard
+### Endpoint matrix (condensed)
 
-| Route | Auth | Severity |
-|-------|------|----------|
-| `/api/predict`, `/api/warm` | Anonymous OK; fail-open RL | **P0** |
-| `/api/backtest?view=kpi\|analytics\|health\|model-lab` | Open | **P0** |
-| `/api/backtest?view=model-select` (read) | Open | **P0** |
-| `/api/alerts` | **None** (service-role reads) | **P0** |
-| `/api/fixtures?usageOnly=1` | Open ops leak | **P0** |
-| `/api/history?sync=1` | Cron **or any JWT** | **P0** |
-| `/api/admin` | Admin JWT | OK |
-| `/api/cron/*`, prewarm, notify | `CRON_SECRET` (also `?secret=`) | P1 query leak |
-| `/api/activate-trial` | JWT | OK endpoint; RLS undermines |
+| Route | Auth | Notes |
+|-------|------|-------|
+| `/api/predict` | JWT or cron | Quotas; free → DB-only path |
+| `/api/warm` | JWT or cron | Budget soft/hard skips |
+| `/api/fixtures` day | **Public** | Returns `usage` (quota intel) |
+| `/api/fixtures?view=live` | **Public** | Upstream burn |
+| `/api/fixtures?view=xg` | **Public** + CORS `*` | Stats burn |
+| `/api/history` read | Anon aggregates / JWT mine / admin full | OK design |
+| `/api/history?sync=1` | Cron or **admin only** | Client mismatch |
+| `/api/billing` | Stripe sig / JWT | Solid |
+| `/api/admin` | `assertAdmin` | Host SSRF risk on internal fetch |
+| `/api/backtest?view=public-track` | Public | Sanitized; fallback scan cost |
+| Crons warm-predict / daily-ml | Cron secret | `maxDuration` 300 |
 
-### Other API defects
-- No schema validation (zod/joi) — clamps only.  
-- Anonymous predict returns **unmasked** Ultra-grade payload (`maskPredictionForTier` only when tier context applies).  
-- Tier quota counters exist but are **not incremented** from predict path.
-
-### Verdict
-API surface is a competitive-intelligence and cost-abuse risk.
+### Critical API defects
+1. No live use of `checkAnonymousRateLimit` on public fixtures.
+2. Predict/history lack elevated `maxDuration` (timeout mid-job).
+3. Persist soft-fail can return 200 with `X-Persist-Warning` → UI/DB drift.
 
 ---
 
 # 12. Database Review
 
-**Score: 4.0 · Grade: D · Risk: Critical · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: M**
+**Score: 7.0 · Grade: B− · Risk: Medium · Priority: P1 · Business: High · Tech: High · Effort: M**
 
-### Missing RLS (migrations never enable)
-| Table | Migration |
-|-------|-----------|
-| `predictions_history` | `001_predictions_history.sql` |
-| `backtest_snapshots` | `002_backtest_snapshots.sql` |
-| `notification_dispatch_log` | `007_notifications_log.sql` |
+### Strengths
+- 30 migrations; RLS deny-all on `predictions_history`, `backtest_snapshots`, notification logs.
+- Privilege / Stripe column guards on `profiles`.
+- Service-role server path is intentional and consistent.
+- Card market validations + closing odds columns for settlement/CLV.
 
-If PostgREST grants default `anon`/`authenticated` SELECT, crown jewels are dumpable via `VITE_SUPABASE_ANON_KEY`.
-
-### Profiles privilege escalation
-`008_profiles_rls_no_recursion.sql` `users_update_own_profile` forces `role='user'` but does **not** column-restrict `tier` / `subscription_expires_at` / trial fields (`016_user_tiers_and_trials.sql`). Client can self-upgrade paid tier.
-
-### Positive
-Many ML tables use deny-all `using (false)` (`014`, `015`, `022`, `023`, …). Sensitive RPCs revoked from `public`.
-
-### Verdict
-Database security is incomplete. Do not expose anon key to hostile internet until RLS is closed.
+### Weaknesses
+- `cleanup_operational_logs` not cron-wired → log growth.
+- Open-ended paid tiers when `subscription_expires_at` is null (admin-grant footgun — partially mitigated in product flows).
+- Heavy history sync scans without progressive backpressure guarantees under Hobby limits.
 
 ---
 
 # 13. Security Review
 
-**Score: 3.0 · Grade: D · Risk: Critical · Priority: P0**  
-**Business impact: Critical · Technical impact: High · Effort: M**
+**Score: 5.5 · Grade: C · Risk: Critical · Priority: P0 · Business: Critical · Tech: High · Effort: M**
 
-### P0 blockers (must fix before any public traffic)
-1. Close or DB-only anonymous `/api/predict` + `/api/warm`; fail-**closed** rate limit; shared KV env.  
-2. Column-allowlist profiles UPDATE (block tier/subscription/trials/role).  
-3. Enable RLS + deny-all on `predictions_history`, `backtest_snapshots`, `notification_dispatch_log`.  
-4. Auth-gate backtest kpi/analytics/health/model-lab/model-select-read, `/api/alerts`, fixtures `usageOnly`.  
-5. History sync = cron/admin only.  
-6. Never return unmasked predictions to anonymous.  
-7. Wire or delete tier quota counters; fix Premium &lt; Free limits.  
-8. Remove cron `?secret=` query auth; header-only.  
-9. Security headers (CSP, HSTS, X-Frame-Options) absent from `vercel.json`.  
-10. Patch high npm advisories (`react-router`, `ws` at time of audit).
+### Closed since prior audit
+- Predict/warm anonymous abuse path.
+- Client-writable privilege escalation on profiles (triggers).
+- Admin via `VITE_ADMIN_EMAILS` (server `ADMIN_EMAILS` only; tested in `securityP0.test.js`).
+- Stripe webhook signature verification.
 
-### P1
-- `VITE_ADMIN_EMAILS` client exposure  
-- CORS `*` on some fixtures views  
-- Three Redis client libraries (`@vercel/kv` deprecated)  
-- No secret scanning / dependency gate in CI  
+### Open P0 / High
+| Sev | Finding | Path |
+|-----|---------|------|
+| Critical | Public fixtures/live/xg + usage leak | `api/fixtures.js` |
+| High | Admin internal URL from `x-forwarded-host` + cron Bearer | `api/admin.js` |
+| High | Client sync JWT vs server cron/admin | `useHistorySync.ts`, `api/history.js` |
+| Medium | `UPSTREAM_BASE_URL` unconstrained | `fetcher.js` |
+| Medium | Optional cron UA fallback | `cronRequestAuth.js` |
+| Medium | No CSP header | `vercel.json` |
+| Low | Dead anon rate limiter | `anonymousRateLimit.js` |
 
-### Verdict
-**Hard reject** for production. Security posture is the primary certification failure.
+### Security Engineer verdict
+**Improved to “serious indie SaaS,” not “enterprise hardened.”** Do not open marketing floodgates until public upstream endpoints are gated.
 
 ---
 
 # 14. Performance Review
 
-**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P1**  
-**Business impact: Medium · Technical impact: Medium · Effort: M**
+**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P1 · Business: Med · Tech: Med · Effort: M**
 
-### Findings
-- Odds date prefetch, warm crons, in-flight dedupe, adaptive MC reduce waste.  
-- Predict fixture cap ≤15/request.  
-- Budget guard can force DB-only for authenticated users (`PREDICT_USAGE_RESERVE_CALLS` default 2000 is economically inverted vs typical API-Football daily limits) while **anonymous bypasses** it.  
-- Main JS bundle &gt;1 MB gzipped ~310 KB after recent builds — admin Recharts stack is heavy; lazy panels help but not enough.  
-- Hobby cron ±59 min precision can desync gates.
+### Strengths
+- KV cache with sorted param keys (`req:v2:…`).
+- Inflight dedupe; budget circuit breaker.
+- League-level Elo/rolling load once per loop.
+- Predict fixture cap (`limit` ≤ 15 in ingress).
 
-### Verdict
-Acceptable for beta volumes; not tuned for Saturday traffic + scrape resistance.
+### Weaknesses
+- Per-fixture module input collection + odds + MC can blow serverless budgets on dense days.
+- History sync 45d × stats fetch capped (`HISTORY_SYNC_CARD_STATS_MAX`) → backlog.
+- Client hydrate for market totals max 8 fixtures and does not persist.
+- Dual UI stacks (FocusCard + MatchCard + MatchModal) increase FE bundle cognitive cost (not necessarily bytes).
 
 ---
 
 # 15. Cache Review
 
-**Score: 6.5 · Grade: B− · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: Medium · Effort: S**
+**Score: 6.5 · Grade: B− · Risk: High · Priority: P0 · Business: High · Tech: Med · Effort: S**
 
-### Findings
-- `getWithCache` (`fetcher.js`): provider-agnostic keys, in-flight Map, TTL.  
-- **Fail-open** on KV read/write errors → availability over cost control.  
-- Anon rate limit uses different env aliases than cache (`STORAGEE_KV_*` vs `KV_REST_API_*`) → silent skip (`anonymousRateLimit.js`).  
-- Warm path can amplify upstream spend when open.
+### Design
+- Canonical + legacy keys for mixed deploys.
+- TTLs: live ~75s, xG 900s, fixtures 6h, standings/teamstats up to 24h–30d.
+- Fail-open on KV read errors (continues to network); fail-closed on quota counters for non-exempt users.
 
-### Verdict
-Cache design is good; fail-open + open anon = bill runaway under attack.
+### Risks
+- Module-level `createClient` in `fetcher.js` / `accessTier.js` / `metricsStore.js` can break cold start if KV env missing.
+- Dual-write legacy keys doubles Redis ops.
+- Prewarm endpoint not scheduled in `vercel.json` (Bucharest `00:01` gate unused unless manually hit).
 
 ---
 
 # 16. Frontend Review
 
-**Score: 5.0 · Grade: C · Risk: Medium · Priority: P1**  
-**Business impact: High · Technical impact: Medium · Effort: L**
+**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P1 · Business: High · Tech: Med · Effort: L**
 
-### Findings
-- Thin route table (`RootRouter.tsx`: `/`, `/privacy`, `/login`, `/workspace`).  
-- Admin observatory stacks Enterprise / Health / Model Lab / Backtest in one scroll (`PerformancePanel`).  
-- User workspace is a separate monolith (`UserDashboard.tsx`) without enterprise labs.  
-- No ErrorBoundary; no eslint at root; RO/EN copy mix.  
-- Tier mask incomplete (Monte Carlo, laboratory, FI survive).
+### Architecture
+- Routes: `/`, `/track-record`, `/privacy`, `/login`, `/workspace` (`RootRouter.tsx`).
+- Consumer: `UserDashboard.tsx` + `PredictionFocusCard` + `ConsumerShell`.
+- Admin: `AdminDashboard` → `App` observatory.
+- i18n RO/EN.
 
-### Verdict
-Research console UI. Not a productized consumer SaaS frontend.
+### Strengths
+- Tier-aware locks; FocusCard market WIN/LOSS coloring; live score/referee poll; special bet; FH goals in modal card 04.
+- Design tokens via CSS variables.
+
+### Weaknesses
+- God components: `UserDashboard` ~72KB, `MatchModal` ~94KB, `MatchCard` ~34KB.
+- Dual presentation paths (FocusCard vs MatchCard) increase inconsistency risk.
+- Heavy localStorage prediction caches — rehydrate edge cases.
 
 ---
 
 # 17. UX Review
 
-**Score: 4.5 · Grade: D+ · Risk: Medium · Priority: P1**  
-**Business impact: High · Technical impact: Low · Effort: L**
+**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P1 · Business: High · Tech: Low · Effort: M**
 
-### Findings
-- Landing can look premium; workspace feels like an internal tool.  
-- Pricing psychology broken (Premium daily matches &lt; Free).  
-- No billing UX, no onboarding journey, no mobile match-center parity with tip apps.  
-- “Enterprise” labels on dashboards that sit on open APIs undermine trust when discovered.
+### Strengths
+- Clear monetization story (free / premium / ultra).
+- Mobile shell + command palette patterns.
+- Public track record page for trust.
+- Recent UX fixes: Special Bet readability + toggle highlight; settled market colors; FH goals replace correct score.
 
-### Verdict
-UX does not support a paid public launch narrative.
+### Weaknesses
+- “Date limitate” still possible on exotic cups despite fallbacks.
+- Corners/shots pending for hours undermines trust in WIN/LOSS counters.
+- Labs / Monte Carlo / FI can overwhelm free-tier users.
+- Sync failures are silent from user POV (401).
+
+### Product Director verdict
+**Good niche SaaS UX trajectory.** Trust depends on settlement reliability more than more charts.
 
 ---
 
 # 18. DevOps Review
 
-**Score: 3.5 · Grade: D+ · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: M**
+**Score: 5.0 · Grade: C · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: M**
 
-### Findings
-- Deploy: `vercel --prod` / git push; works.  
-- Crons defined in `vercel.json` (history ×3, warm ×3, daily-ml, snapshot, ops-report, model-selection).  
-- README cron schedule **stale** vs `vercel.json`.  
-- `dist/` committed historically — release hygiene smell.  
-- No staging promotion policy, no rollback runbook in-repo, no pinned Node beyond CI’s 20.  
-- `engines: ">=18"` too loose.
+### Present
+- Vercel deploy from `main`.
+- 12 crons covering sync, warm-predict, daily-ml, backtest snapshot.
+- Security headers (nosniff, DENY frame, HSTS, Referrer-Policy) — **no CSP**.
+- `.env.example` for core keys (Stripe vars still under-documented relative to code).
 
-### Verdict
-Can deploy. Cannot operate as enterprise DevOps.
+### Gaps
+- No staging project discipline documented in-repo.
+- `maxDuration` only on two cron handlers.
+- Prewarm not cron’d.
+- Retention SQL not scheduled.
+- Hobby function count = hard product constraint.
 
 ---
 
 # 19. Monitoring Review
 
-**Score: 5.0 · Grade: C · Risk: Medium · Priority: P1**  
-**Business impact: Medium · Technical impact: Medium · Effort: M**
+**Score: 5.5 · Grade: C · Risk: Medium · Priority: P1 · Business: Med · Tech: Med · Effort: M**
 
-### Findings
-- DIY: structured logger, request monitor, metrics store, health bundle, ops alerts.  
-- Health UI via `/api/backtest?view=health` — **unauthenticated**.  
-- `/api/alerts` unauthenticated.  
-- No Sentry/Datadog/OTel; serverless amnesia for process-local counters.  
-- `tests/observability.test.js` **not** in `npm test`.
+### Present
+- `observability/logger.js`, `requestMonitor.js`, `metricsStore.js`, `healthBundle.js`.
+- Health via `/api/backtest?view=health` + `HealthDashboard.tsx`.
+- API budget circuit; history sync status tables.
 
-### Verdict
-Observability *ideas* shipped; production ops not closed.
+### Missing
+- No Sentry / OTel / Datadog.
+- No client error telemetry.
+- `tests/observability.test.js` not in `npm test`.
+- No paging / on-call runbooks in-repo.
 
 ---
 
 # 20. CI/CD Review
 
-**Score: 2.5 · Grade: F · Risk: High · Priority: P0**  
-**Business impact: High · Technical impact: High · Effort: M**
+**Score: 3.5 · Grade: D+ · Risk: High · Priority: P0 · Business: High · Tech: High · Effort: M**
 
-### Evidence
-`.github/workflows/tests.yml`:
-```yaml
-- run: npm test   # only
-```
-Missing: `vite build`, `tsc --noEmit`, lint, `npm audit`, E2E, preview deploy gate, migration checks.
+### Current gate
+`.github/workflows/tests.yml`: checkout → Node 22 → `npm ci` → `npm test`.
 
-### Verdict
-Green CI ≠ shippable artifact.
+### Missing for production certification
+- `vite build`
+- Typecheck (`tsc --noEmit`)
+- Lint
+- `npm audit` / secret scan
+- E2E (Playwright/Cypress)
+- Migration dry-run
+- Preview deploy smoke
+
+**DevOps Architect verdict:** CI proves math unit tests, not shippability.
 
 ---
 
 # 21. Test Coverage Review
 
-**Score: 4.0 · Grade: D · Risk: High · Priority: P0**  
-**Business impact: Medium · Technical impact: High · Effort: L**
+**Score: 5.0 · Grade: C · Risk: High · Priority: P0 · Business: Med · Tech: High · Effort: L**
 
-| Suite | Present | In CI |
-|-------|---------|-------|
-| Math / calib / MC / value / Model Lab | ~70 tests (`tests/math.test.js`) | Yes |
-| Vitest hooks/utils | Few under `src/` | Yes |
-| Observability | 4 tests | **No** |
-| API auth / RLS / mask | **0** | No |
-| E2E | **0** | No |
-| Security regression | **0** | No |
+| Suite | In CI | Role |
+|-------|-------|------|
+| `tests/math.test.js` (~74) | Yes | Core math / calib / value / MC |
+| `tests/securityP0.test.js` (~10) | Yes | Admin emails, trial vs paid |
+| `tests/pipeline/goldenFixture.test.js` | Yes | Pipeline golden |
+| `src/**/*.test.tsx` | Yes | Hooks / utils |
+| Observability tests | **No** | Orphaned |
 
-### Verdict
-Strong unit math. Zero production-contract tests.
+### Coverage holes
+- No E2E for predict → mask → settle.
+- No API integration tests against mocked upstream.
+- No RLS policy smoke tests.
+- No Stripe webhook fixture tests.
+- MatchModal / UserDashboard untested.
+- Sync unit expectations may still assume user JWT sync success (stale).
+
+**Inspection run:** 84 node + 14 vitest tests passed (2026-07-20).
 
 ---
 
 # 22. Competitive Benchmark
 
-**Score: 3.5 · Grade: D+ · Risk: High · Priority: P0**  
-**Business impact: Critical · Technical impact: Medium · Effort: XL**
+**Score: 6.0 · Grade: C+ · Risk: Medium · Priority: P2 · Business: High · Tech: Low · Effort: —**
 
-| Capability | Typical tip SaaS / data API | Footy Predictor Pro |
-|------------|----------------------------|---------------------|
-| Stripe / App Store billing | Yes | **No** |
-| Public verified track record | Yes | Private only |
-| Mobile live center | Yes | Weak |
-| Odds comparison UX | Yes | Thin |
-| Closing-line proof | Serious desks | Missing |
-| Auth’d analytics | Behind paywall | **Often open** |
-| Support / status / SLA | Yes | DIY health |
-| Gambling compliance (geo/age) | Required for ads | Privacy page only |
-| Deep Poisson + calib + value | Rare | **Your moat** |
+| Competitor class | Footy Predictor Pro vs |
+|------------------|------------------------|
+| Tipster Telegram channels | **Superior** transparency / model narrative |
+| Odds-screen scrapers | Weaker on CLV / line shopping |
+| Established model SaaS (e.g. niche Poisson apps) | Comparable core math; weaker certification & settlement UX |
+| Full sportsbooks / trading desks | Not competitive (no execution, no inventory) |
 
-**Moat is technical depth. Market loses on distribution, trust, and security.** Depth is scrapable via open backtest/predict today.
+**Positioning that survives diligence:** “Model-assisted football insights with transparent probabilities,” **not** “guaranteed edge AI.”
 
 ---
 
 # 23. Technical Debt
 
-**Score: 4.5 · Grade: D+ · Risk: High · Priority: P1**  
-**Business impact: Medium · Technical impact: High · Effort: XL**
+**Score: 4.5 · Grade: D+ · Risk: Medium · Priority: P1 · Business: Med · Tech: High · Effort: L**
 
-### Removed / improved since mid-audit cycle
-- `modularBlend` default 0 → **1**  
-- λ-as-xG → rolling xG + blend  
-- Fixed 10k MC → adaptive  
-- Global calib `-1` fallback  
-- Predictor V2 pipeline meta  
-
-### Still open
-1. `api/predict.js` god-handler  
-2. Dual confidence/recommendation stacks  
-3. Train/serve skew  
-4. Dead `incrementPredictCount*`  
-5. Incomplete tier mask  
-6. Doc sprawl / stale README  
-7. Triple Redis clients + deprecated `@vercel/kv`  
-8. `ENGINE_EXECUTION_REPORT.md` / parts of `ENTERPRISE_REPORT.md` **stale** on blend=0 / λ-as-xG  
+1. Dual PredictionEngine trees + `backups/` snapshot.
+2. God components (Dashboard / MatchModal / AdminObservatory).
+3. Untracked slice scripts (`scripts/build-predictor-v3.mjs`, etc.).
+4. Dead `anonymousRateLimit` on live path; unused `redis` / `@upstash/redis` deps.
+5. Stale README claims (history sync “any JWT”).
+6. Prior audit docs contradict current migrations — this file supersedes.
+7. `npm run api` broken.
+8. FocusCard vs MatchCard feature parity drift.
 
 ---
 
 # 24. Production Risks
 
-| ID | Risk | Likelihood | Impact | Mitigation |
-|----|------|------------|--------|------------|
-| R1 | API-Football bill runaway via anon warm/predict | High | Critical | Close anon; fail-closed RL |
-| R2 | IP theft via open analytics/model-lab | High | Critical | Auth-gate |
-| R3 | Tier theft via profiles RLS | High | Critical | Column allowlist |
-| R4 | History dump via missing RLS | Med–High | Critical | Enable RLS deny-all |
-| R5 | Misleading accuracy / ROI claims | High | High (legal/trust) | Walk-forward + CLV |
-| R6 | Auto model promote degrades prod | Med | High | Freeze A–D; score E honestly |
-| R7 | Cron secret leakage via query string | Med | High | Header-only |
-| R8 | Hobby cron drift breaks warm/sync | Med | Med | Pro plan or soften gates |
-| R9 | Stacker+calib skew silently hurts picks | High | High | Fix extractRawTriple |
-| R10 | No billing → fake SaaS economics | Certain | Critical | Stripe or stop selling tiers |
+| ID | Risk | Sev | Likelihood | Mitigation |
+|----|------|-----|------------|------------|
+| R1 | API-Football quota exhaustion via public fixtures/xg | Critical | High | Auth + rate limit + remove usage from public JSON |
+| R2 | Corners/shots counters stuck pending | High | High | Persist hydrate; denser sync; user-safe settle endpoint |
+| R3 | CRON_SECRET misconfig → silent ops death | Critical | Med | Deploy checklist + alerts on sync staleness |
+| R4 | KV cold-start crash | High | Med | Lazy client; fail-soft |
+| R5 | Serverless timeout mid predict/sync | High | Med | Raise `maxDuration`; chunk sync |
+| R6 | Overconfident Kelly stakes | High | Med | Cap + calibrate side markets; legal copy |
+| R7 | Admin Host SSRF | High | Low–Med | Env-only base URL |
+| R8 | Billing open-ended ultra grant | Med | Med | Always set expiry |
+| R9 | Model Lab promotes overfit model | Med | Med | Walk-forward gate |
+| R10 | GDPR/export gaps under load | Med | Low | Load-test export path |
+| R11 | Function limit blocks features | Med | High | Consolidate handlers |
+| R12 | Reputation hit from “AI sure bets” perception | High | Med | Tone down marketing; track-record honesty |
 
 ---
 
 # 25. Top 100 Remaining Improvements
 
-### P0 — Security & money (1–20)
-1. Disable anonymous live predict (DB-only or auth-required).  
-2. Disable anonymous warm.  
-3. Fail-closed anon rate limit.  
-4. Unify KV env vars for RL + cache.  
-5. Auth-gate `/api/alerts`.  
-6. Auth-gate backtest kpi/analytics/health/model-lab.  
-7. Auth-gate model-select read.  
-8. Auth-gate fixtures `usageOnly`.  
-9. History sync cron/admin only.  
-10. RLS on `predictions_history`.  
-11. RLS on `backtest_snapshots`.  
-12. RLS on `notification_dispatch_log`.  
-13. Profiles UPDATE column allowlist.  
-14. Mask Monte Carlo for Free/Premium.  
-15. Mask laboratory / FI / contributions by tier.  
-16. Never unmask anonymous responses.  
-17. Wire `incrementPredictCount*` or remove quotas.  
-18. Fix Premium daily limit ≥ Free.  
-19. Remove `?secret=` cron auth.  
-20. Add security headers in `vercel.json`.
+### P0 — Security & trust (1–20)
+1. Auth-gate `/api/fixtures` day listing for non-public fields.
+2. Auth-gate `view=live` and `view=xg` (or signed short-TTL tokens).
+3. Remove `usage` from anonymous fixtures responses.
+4. Wire `checkAnonymousRateLimit` (or edge middleware) on remaining public GETs.
+5. Fix admin internal fetch to `PUBLIC_BASE_URL` / `VERCEL_URL` only.
+6. Align `useHistorySync` with server policy (cron-only **or** scoped user settle).
+7. Persist market totals from client hydrate into history (authorized).
+8. Elevate `maxDuration` for `api/predict.js` and `api/history.js`.
+9. Add CSP header in `vercel.json`.
+10. Document + verify `CRON_SECRET` in every environment.
+11. Alert when `history_sync_status` stale &gt; N hours.
+12. Fail deploy if KV/Supabase env missing (build-time check).
+13. Lock open-ended paid grants (require expiry).
+14. Rate-limit `/api/backtest?view=public-track` fallback scans.
+15. Disallow `ALLOW_VERCEL_CRON_UA_FALLBACK` in prod by default (assert).
+16. Allowlist `UPSTREAM_BASE_URL` hosts.
+17. Rotate keys runbook.
+18. Dependency audit in CI.
+19. Secret scanning (gitleaks) in CI.
+20. Remove CORS `*` on xG or restrict origins.
 
-### P0 — Model integrity (21–35)
-21. Fit calibration on `rawPoissonProbs1x2Pct`.  
-22. Fit stacker on raw Poisson features consistently.  
-23. Walk-forward calibration.  
-24. Holdout stacker metrics before activate.  
-25. Embargo/purge around kickoff in CV.  
-26. Capture closing odds at kickoff.  
-27. Publish CLV dashboard.  
-28. As-of Elo at prediction time.  
-29. Single probability object for pick+EV+persist.  
-30. Stop using uncalibrated O/U for top pick when 1X2 calibrated.  
-31. Freeze AutoSelect A–D until live≡lab.  
-32. Score production E as true baseline in selection.  
-33. Apply migration 025 in prod Supabase.  
-34. Document train/serve contract in one model card.  
-35. Kill early ValueEngine or align with final probs.
+### P0 — Settlement & quant honesty (21–35)
+21. Increase history sync frequency for FT windows (or event-driven).
+22. Prioritize pending corners/shots in sync budget.
+23. Raise / dynamic `HISTORY_SYNC_CARD_STATS_MAX`.
+24. CLV coverage dashboard as ship gate.
+25. Walk-forward calibration fit.
+26. Purged CV for stacker.
+27. Raise AutoModelSelection sample floor (e.g. 200+).
+28. Side-market calibration maps.
+29. Publish ECE/Brier by league weekly.
+30. Ban Model Lab promotion without OOS improvement.
+31. Separate odds-in-λ vs market blend (ablation).
+32. Stress-test Kelly under miscalibration.
+33. Legal/compliance review of EV language.
+34. Golden tests for card market settlement.
+35. UEFA fallback telemetry (source: domestic vs recent_fixtures).
 
-### P1 — Product & ops (36–60)
-36. Stripe Checkout + webhooks → `profiles.tier`.  
-37. Entitlement matrix module (single source).  
-38. CI: `npm run build`.  
-39. CI: `tsc --noEmit`.  
-40. CI: include observability tests.  
-41. CI: `npm audit --omit=dev` gate.  
-42. Playwright smoke: login → predict → mask.  
-43. API integration tests for cron/admin/anon.  
-44. Sentry (or equivalent) on API + SPA.  
-45. Uptime check on authenticated health.  
-46. Pager/Slack on high ops alerts.  
-47. Pin Node 20 in `engines`.  
-48. Stop committing `dist/` (or automate only).  
-49. Sync README crons to `vercel.json`.  
-50. Staging project + promote policy.  
-51. ErrorBoundary in React tree.  
-52. Route-split dashboards (`/admin/health`, etc.).  
-53. Mobile match center pass.  
-54. Onboarding checklist.  
-55. Public track-record page (post-auth-fix).  
-56. GDPR export/delete runbook.  
-57. Age/geo gambling disclaimer flow.  
-58. Rate-limit authenticated predict too.  
-59. Idempotency keys on sync/cron.  
-60. Secret rotation runbook.
+### P1 — Platform (36–60)
+36. Consolidate API functions under Hobby limit (router pattern).
+37. Lazy KV clients everywhere.
+38. Cron `cleanup_operational_logs`.
+39. Schedule `/api/cache/prewarm` or delete it.
+40. Stripe vars in `.env.example`.
+41. Staging Vercel project + migrate workflow.
+42. `vite build` + `tsc` in CI.
+43. E2E smoke: login → predict → card settle.
+44. Observability tests into `npm test`.
+45. Sentry (server + client).
+46. Structured log sampling.
+47. Split `UserDashboard.tsx`.
+48. Split `MatchModal.tsx`.
+49. Unify FocusCard / MatchCard market row component.
+50. Delete or quarantine `backups/` from deploy context.
+51. Remove unused redis packages.
+52. Fix or remove `npm run api`.
+53. Update README sync auth docs.
+54. Single PredictionEngine tree (delete façade duplication).
+55. Bundle analysis budget.
+56. Image/logo CDN caching policy.
+57. Prefetch odds coverage report by market.
+58. Nearest-line odds already shipped — add bookmaker diversity metric.
+59. Weather/injury module quality gates (disable if null).
+60. Referee engine coverage report.
 
-### P1 — Engine (61–80)
-61. Fit shot-xG coefficients on data (not hand constants).  
-62. Referee stats table + backfill.  
-63. External weather provider or drop weight.  
-64. Real missing-key-player lineup model.  
-65. Injuries with player strength weights.  
-66. Remove odds from λ *or* from post-blend (one path).  
-67. Motivation from schedule/title race features.  
-68. Multinomial calibration (not 3 binaries).  
-69. Module ablation study with sequential testing.  
-70. Split `predict.js` into pipeline stages.  
-71. Delete or merge dead `prediction/` duplicates.  
-72. Unify Confidence engines.  
-73. Monte Carlo optional feed into uncertainty→stake cap.  
-74. League-specific stacker activation thresholds.  
-75. Feature store from `ml_training_examples` actually trained.  
-76. Model registry promotion with human approval.  
-77. Shadow mode for new weights.  
-78. Canary predict cohort.  
-79. Drift monitors on 1X2 vs market.  
-80. Reliability diagrams in Health UI (auth’d).
+### P2 — Model science (61–80)
+61. Joint goals model with corners (copula / bivariate).
+62. Fit xG weights by MLE on history.
+63. Elo–goals joint calibration.
+64. Hierarchical league partial pooling.
+65. In-play model (separate from pre-match).
+66. Player-level lineup model (real data).
+67. Weather as continuous feature with verified source.
+68. Motivation proxy from table/math only (document).
+69. Market efficiency tests by league tier.
+70. Dixon–Coles ρ league-year specific.
+71. Scoreline sharpness metrics.
+72. Probability reliability diagrams in admin.
+73. Conformal prediction intervals.
+74. Bayesian model averaging vs stacker.
+75. Adversarial bookmaker latency simulation.
+76. Closing line value by market family.
+77. Segregate cup vs league models.
+78. Domestic-league stats blending weight for UEFA.
+79. Backtest transaction costs.
+80. Paper-trading ledger per user (optional).
 
-### P2 — Polish (81–100)
-81. ESLint + Prettier.  
-82. Bundle `manualChunks` for Recharts.  
-83. Replace deprecated `@vercel/kv` path.  
-84. One Redis client only.  
-85. i18n framework (RO/EN).  
-86. Accessibility pass on dashboards.  
-87. Empty states for no fixtures.  
-88. Preferential SEO tip pages (if go-to-market).  
-89. Public API product tier.  
-90. Webhooks for settled tips.  
-91. CSV export auth’d.  
-92. Dark-label white-label config.  
-93. Per-league kill switches.  
-94. Chaos test: KV down.  
-95. Chaos test: Supabase down.  
-96. Load test Saturday 12:00 UTC.  
-97. Cost dashboard ($/1k predicts).  
-98. Investor-facing model card PDF from CI.  
-99. Retire stale reports or mark superseded.  
-100. Rename “Enterprise” UI until security passes.
+### P3 — Product / growth (81–100)
+81. Onboarding checklist for first Predict.
+82. Explain “pending corners” in UI with ETA.
+83. Reduce laboratory noise for free tier.
+84. Accessibility audit (a11y).
+85. Performance budgets for LCP.
+86. Offline/empty states polish.
+87. Referral / affiliate (compliance-aware).
+88. Club follow notifications reliability.
+89. Multi-language beyond RO/EN.
+90. Native PWA install path.
+91. Admin “force settle fixture” tool.
+92. User-visible model version changelog.
+93. Export picks CSV.
+94. Dark/light contrast QA (corners/shots already touched).
+95. Special Bet stake calculator.
+96. Educative tooltips for FH O/U.
+97. Track-record methodology page.
+98. Status page (external).
+99. SOC2-oriented access logs (long-term).
+100. Independent third-party model audit before Series A narrative.
 
 ---
 
 # 26. Roadmap v3.0
 
-### Phase 0 — Stop the bleeding (1–2 weeks) — **gate to any public traffic**
-- All Security P0s (auth, RLS, anon, profiles, headers).  
-- Fix `extractRawTriple` train/serve.  
-- CI build + typecheck.  
-- Apply migration 025.
+### Theme: **Trust before theater**
 
-**Exit criterion:** External pen-tester cannot dump history or self-upgrade tier; anonymous cannot burn quota for full model JSON.
+| Phase | Window | Outcomes | Exit criteria |
+|-------|--------|----------|---------------|
+| **3.0.0 — Harden** | 1–2 weeks | Gate fixtures/live/xg; fix admin base URL; sync auth alignment; CSP; maxDuration; KV lazy init | No unauthenticated upstream burn; sync settles corners/shots &lt; 60 min p95 |
+| **3.0.1 — Prove** | 2–4 weeks | Walk-forward calib; CLV weekly report; raise promotion floors; side-market ECE | CLV report published internally for 4 weeks |
+| **3.0.2 — Scale ops** | 2–3 weeks | API consolidation; staging; Sentry; CI build+E2E; log retention cron | CI blocks broken builds; on-call alert for sync lag |
+| **3.1 — Model** | 4–8 weeks | Ablate odds double-count; cup-specific models; joint corners; xG fit | OOS log-loss improvement vs frozen baseline |
+| **3.2 — Product** | parallel | Dashboard split; unified market row; settlement UX ETA; methodology page | Support tickets on “pending” ↓ 50% |
 
-### Phase 1 — Honest quant (3–6 weeks)
-- Closing odds + CLV.  
-- Walk-forward calib/stacker.  
-- Freeze unsafe AutoSelect.  
-- Single prob pipeline for pick/EV.  
-- Public (or private shared) track record.
-
-**Exit criterion:** OOS log-loss/Brier/CLV report signed by quant owner.
-
-### Phase 2 — Commercial SaaS (4–8 weeks)
-- Stripe + entitlement matrix.  
-- Fix tier UX.  
-- Masking completeness.  
-- Mobile-ready match UX.  
-- Support/status basics.
-
-**Exit criterion:** Money changes hands without admin SQL; Free≠Ultra payload.
-
-### Phase 3 — Predictor v3 platform (ongoing)
-- Split predict orchestrator.  
-- Fitted xG / referee / weather.  
-- Multinomial calibration.  
-- Shadow/canary promotions.  
-- Optional B2B API.
-
-**Exit criterion:** Modular releases without god-handler edits; model registry with approval.
+### Non-goals for v3.0
+- Claiming guaranteed ROI.
+- Player-prop marketplace.
+- Live trading bot.
 
 ---
 
 # 27. CTO Final Verdict
 
-### Certification decision
+### Decision
+**REJECT** for unrestricted public production marketing.  
+**CONDITIONAL PASS** for closed paid/trial beta **after** section-25 items 1–8 and 21–23.  
+**ACCEPT** for internal research use as-is (with legal copy).
 
-| Use case | Decision | Conditions |
-|----------|----------|------------|
-| **Public production SaaS (paid strangers)** | **REJECT** | Fail security + commercial + statistical integrity |
-| **Open anonymous marketing demo with live model** | **REJECT** | Cost + IP leakage |
-| **Closed beta (≤N known users, auth required)** | **CONDITIONAL PASS** | Complete Phase 0 security P0s first |
-| **Internal quant lab / paper trading** | **PASS** | Do not market as “enterprise calibrated AI” |
+### One-paragraph diligence statement
+Footy Predictor Pro is a **serious, unusually deep indie sports-modeling SaaS**: the core Dixon–Coles / bivariate Poisson engine, calibration/stacker plumbing, Stripe monetization, and RLS posture are real. It is **not** yet enterprise-certifiable because public API surfaces can still burn upstream quota, settlement of corners/shots is operationally fragile, statistical promotion gates are not temporal, and CI/CD does not protect releases. A competitor CTO would **buy time**, not the narrative — fund the harden/prove phases, then reconsider a public launch.
 
-### Why reject production
-A competitor diligence team would conclude:
+### Signature block
 
-1. **You cannot protect the product** (open analytics, anon predict, missing RLS, tier escalation).  
-2. **You cannot charge for the product** (no Stripe; tiers inverted; mask incomplete; quotas unwired).  
-3. **You cannot defend the accuracy story** (train/serve skew; in-sample stacker; no CLV; random CV).  
-4. **You cannot operate the product** (CI without build; unauth health; no APM; stale runbooks).
-
-### What would change the verdict to PASS
-Minimum bar for **paid production**:
-- [ ] All §13 P0 security items closed and regression-tested  
-- [ ] Train/serve skew fixed + walk-forward report  
-- [ ] Closing-odds CLV ≥ one full season window (or honest “no edge proven” disclaimer)  
-- [ ] Stripe live + entitlement tests green  
-- [ ] CI: test + build + typecheck + audit gate  
-- [ ] Anonymous cannot obtain Ultra payloads or burn upstream  
-
-Until then, the honest label is:
-
-> **Advanced football probability research application with production *hosting*, not production *certification*.**
-
-### Panel signatures (role positions)
-
-| Role | Position |
-|------|----------|
-| **CTO** | Reject public prod; conditional private beta after P0 |
-| **Principal AI Engineer** | Core math ships; ML ops contract fails |
-| **Quant Researcher** | No CLV / walk-forward → no edge claim |
-| **Senior Data Scientist** | Calibration selector real; fit target wrong |
-| **DevOps Architect** | Deploy works; release engineering does not |
-| **Security Engineer** | Hard fail — multiple critical findings |
-| **Product Director** | Kitchen-sink admin UI ≠ SaaS product |
-| **SaaS Consultant** | Do not sell “Enterprise” until money + trust + security align |
+| Role | Vote | Note |
+|------|------|------|
+| CTO | **REJECT / Conditional beta** | Ship only behind cohort controls |
+| Principal AI Engineer | **Conditional** | Core sound; promotion science weak |
+| Quant Researcher | **Reject edge claims** | CLV/walk-forward required |
+| Senior Data Scientist | **Reject certification** | Random CV disqualifies |
+| DevOps Architect | **Conditional** | Hobby limits + thin CI |
+| Security Engineer | **Reject open prod** | Public fixtures/xg first |
+| Product Director | **Conditional beta** | UX improving; trust = settlement |
+| SaaS Consultant | **Niche GTM OK** | Position as insights, not oracle |
 
 ---
 
-## Appendix A — Evidence index
+### Appendix A — Key evidence paths
 
 | Area | Paths |
 |------|-------|
-| Predict path | `api/predict.js` |
-| Cron ML | `api/cron/daily-ml.js` |
-| Open analytics | `api/backtest.js`, `api/alerts.js` |
-| Weights | `server-utils/PredictionEngine/weights.js` |
-| Combine / xG blend | `server-utils/PredictionEngine/combine.js` |
-| Calibration | `server-utils/calibration/*`, `isotonicCalibration.js` |
-| Monte Carlo | `server-utils/monteCarlo/MonteCarloEngine.js` |
-| Pipeline contract | `server-utils/pipeline/PredictorV2.js` |
-| Tier mask | `server-utils/accessTier.js` |
-| Anon RL fail-open | `server-utils/anonymousRateLimit.js` |
-| Profiles RLS | `supabase/migrations/008_profiles_rls_no_recursion.sql`, `016_user_tiers_and_trials.sql` |
-| Missing RLS | `001_predictions_history.sql`, `002_backtest_snapshots.sql`, `007_notifications_log.sql` |
+| Predict orchestration | `api/predict.js`, `server-utils/pipeline/PredictorV3.js`, `runFixtureStageLoop.js` |
+| Math core | `server-utils/math.js`, `PredictionEngine/*` |
+| Calibration / stacker | `isotonicCalibration.js`, `calibration/*`, `mlStacker.js`, `api/cron/daily-ml.js` |
+| Value / Kelly | `value/ValueEngine.js`, `Stage08Decision.js` |
+| Monte Carlo | `monteCarlo/MonteCarloEngine.js`, `Stage05Simulation.js` |
+| Odds / shots | `marketOdds.js`, `Stage07ModelFusion.js` |
+| Auth / tiers | `authAdmin.js`, `accessTier.js`, `Stage00Ingress.js`, `Stage11Masking.js` |
+| Billing | `api/billing.js`, `stripeBilling.js` |
+| History / settle | `api/history.js`, `cardMarketSettlement.js`, `closingOddsCapture.js` |
+| Fixtures public | `api/fixtures.js` |
+| Cache | `fetcher.js` |
+| RLS | `supabase/migrations/026_*.sql`, `027_*.sql`, `029_*.sql` |
 | CI | `.github/workflows/tests.yml` |
-| Crons | `vercel.json` |
-| Prior (partially stale) | `ENTERPRISE_REPORT.md` (blend=0 / λ-as-xG claims outdated) |
+| Deploy | `vercel.json` |
 
-## Appendix B — Supersession
-
-This document **supersedes** `ENTERPRISE_REPORT.md` and `ENTERPRISE_AUDIT.md` for certification decisions as of 2026-07-18. Engineering capability reports (`PREDICTOR_V2_REPORT.md`, `CALIBRATION_REPORT.md`, `MONTECARLO_REPORT.md`, `XG_ENGINE_REPORT.md`) remain useful for *what was built*; they are **not** production certificates.
+### Appendix B — Inspection method
+- Parallel expert agents on Architecture/API/DB/Cache, AI stack, Security/DevOps/FE/Tests.
+- Direct inventory of `api/`, `server-utils/`, `src/`, `supabase/migrations/`, `tests/`, `vercel.json`.
+- Live test execution: **98 passing** (2026-07-20).
+- Adversarial stance: treat as competitor due diligence, not founder self-review.
 
 ---
 
-**END OF CERTIFICATION AUDIT**  
-**Overall: 5.4 / 10 — REJECT public production deployment.**
+*End of FINAL_ENTERPRISE_AUDIT_2026.md — Certification panel, 2026-07-20.*

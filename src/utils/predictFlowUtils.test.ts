@@ -19,15 +19,12 @@ describe("predictFlowUtils", () => {
     ]);
   });
 
-  it("syncHistoryAfterPredict posts with auth header", async () => {
+  it("syncHistoryAfterPredict is a no-op for users (P0)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     await syncHistoryAfterPredict("tok-1");
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/history?sync=1&days=7", {
-      method: "POST",
-      headers: { Authorization: "Bearer tok-1" }
-    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -4,9 +4,12 @@ export function buildAuthHeaders(accessToken?: string | null) {
   return headers;
 }
 
-export async function syncHistoryAfterPredict(accessToken?: string | null, days = 7) {
-  const headers = buildAuthHeaders(accessToken);
-  await fetch(`/api/history?sync=1&days=${days}`, { method: "POST", headers }).catch(() => null);
+/**
+ * P0: users must not trigger global history sync.
+ * Kept as a no-op for backward-compatible call sites; settlement relies on cron + local hydrate.
+ */
+export async function syncHistoryAfterPredict(_accessToken?: string | null, _days = 7) {
+  return;
 }
 
 export function dedupePredictionsById<T extends { id?: string | number }>(rows: T[]) {
