@@ -20,6 +20,12 @@ import {
 } from "./SignalLab";
 import { LeagueStandingEntry, MarketTier, MarketTierInfo, MatchScore, PoissonMarketProbs, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
+import {
+  buildSpecialBetLegs,
+  outcomeTextClass,
+  specialBetCombinedOdd as specialBetCombinedOddValue,
+  specialBetCombinedOutcome
+} from "../utils/specialBet";
 
 /**
  * Stil vizual pentru un pick în funcţie de nivelul de încredere.
@@ -821,25 +827,22 @@ export default function MatchModal({
         : xgData.marketResults.firstHalfGoals < firstHalfPick.line
       : null;
   const recommendedOdd = deriveRecommendedOdd(match);
-  const specialBetCandidates = (() => {
-    const cornersPick = match.probs?.corners ? deriveBestOverUnderPick(match.probs.corners.total) : null;
-    const shotsPick = match.probs?.shotsOnTarget ? deriveBestOverUnderPick(match.probs.shotsOnTarget.total) : null;
-    return [
-      { label: "Main", pick: match.recommended.pick, probability: Number(confPct || 0), odd: Number(recommendedOdd) },
-      { label: "Corners", pick: cornersPick?.pick || "", probability: Number(cornersPick?.probability || 0), odd: Number(match.marketOdds?.corners?.odd) },
-      { label: "Shots", pick: shotsPick?.pick || "", probability: Number(shotsPick?.probability || 0), odd: Number(match.marketOdds?.shotsOnTarget?.odd) },
-      { label: "HT", pick: firstHalfPick?.pick || "", probability: Number(firstHalfPick?.probability || 0), odd: Number(match.marketOdds?.firstHalfGoals?.odd) }
-    ]
-      .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0)
-      .sort((a, b) => b.probability - a.probability);
-  })();
-  const specialBetLegs = specialBetCandidates.slice(0, specialLegCount);
-  const specialBetCombinedOdd = (() => {
-    if (specialBetLegs.length < 2) return null;
-    const odds = specialBetLegs.map((x) => Number(x.odd)).filter((n) => Number.isFinite(n) && n > 1);
-    if (odds.length < 2) return null;
-    return odds.reduce((acc, n) => acc * n, 1);
-  })();
+  const specialBetPool = buildSpecialBetLegs(
+    match,
+    {
+      main: tr("match.featMain"),
+      corners: tr("match.featCorners"),
+      shots: tr("match.featShots"),
+      ht: tr("match.featHt")
+    },
+    3,
+    match.cardMarketValidations,
+    xgData?.marketResults
+  );
+  const specialBetLegs = specialBetPool.slice(0, specialLegCount);
+  const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
+  const specialCombinedTone = outcomeTextClass(specialBetCombinedOutcome(specialBetLegs));
+  const specialBetCandidatesLen = specialBetPool.length;
 
   const isFocus = presentation === "focus";
 
@@ -966,7 +969,7 @@ export default function MatchModal({
                   <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[var(--fp-success)] max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">
                     {tr("match.specialBet")}
                   </div>
-                  {specialBetCandidates.length >= 3 ? (
+                  {specialBetCandidatesLen >= 3 ? (
                     <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
                       {[2, 3].map((n) => (
                         <button
@@ -986,18 +989,26 @@ export default function MatchModal({
                   ) : null}
                 </div>
                 <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1.5 max-[380px]:px-3">
-                  {specialBetLegs.map((leg) => (
-                    <div key={`${leg.label}-${leg.pick}`} className="flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px]">
-                      <span className="min-w-0 flex-1 truncate text-left font-semibold text-[var(--fp-text)]">
-                        {leg.label}: {leg.pick}
-                      </span>
-                      <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] tabular-nums text-right font-bold text-[var(--fp-text)]">
-                        {Math.round(leg.probability)}%
-                      </span>
-                    </div>
-                  ))}
+                  {specialBetLegs.map((leg) => {
+                    const tone = outcomeTextClass(leg.outcome);
+                    return (
+                      <div
+                        key={`${leg.label}-${leg.pick}`}
+                        className={`flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px] ${tone}`}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-left font-semibold">
+                          {leg.label}: {leg.pick}
+                        </span>
+                        <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] tabular-nums text-right font-bold">
+                          {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="mt-2 border-t border-[var(--fp-border)] pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-[var(--fp-text)] max-[380px]:text-[9px]">
+                <div
+                  className={`mt-2 border-t border-[var(--fp-border)] pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums max-[380px]:text-[9px] ${specialCombinedTone}`}
+                >
                   {tr("match.combinedOdd", {
                     odd: Number.isFinite(Number(specialBetCombinedOdd))
                       ? Number(specialBetCombinedOdd).toFixed(2)

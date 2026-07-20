@@ -14,6 +14,12 @@ import FeatureImportanceChart from "./FeatureImportanceChart";
 import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import { MatchScore, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
+import {
+  buildSpecialBetLegs,
+  outcomeTextClass,
+  specialBetCombinedOdd as specialBetCombinedOddValue,
+  specialBetCombinedOutcome
+} from "../utils/specialBet";
 
 type MatchCardProps = {
   row: PredictionRow;
@@ -238,41 +244,21 @@ export default function MatchCard({
     const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
     return winner.probability >= 85 ? winner.label : null;
   })();
-  const specialBetCandidates = [
-      {
-        label: t("match.featMain"),
-        pick: row.recommended.pick,
-        probability: Number(confPct || 0),
-        odd: recommendedOdd
-      },
-      {
-        label: t("match.featCorners"),
-        pick: cornersPick?.pick || "",
-        probability: Number(cornersPick?.probability || 0),
-        odd: Number(row.marketOdds?.corners?.odd)
-      },
-      {
-        label: t("match.featShots"),
-        pick: shotsPick?.pick || "",
-        probability: Number(shotsPick?.probability || 0),
-        odd: Number(row.marketOdds?.shotsOnTarget?.odd)
-      },
-      {
-        label: t("match.featHt"),
-        pick: firstHalfPick?.pick || "",
-        probability: Number(firstHalfPick?.probability || 0),
-        odd: Number(row.marketOdds?.firstHalfGoals?.odd)
-      }
-    ]
-    .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0)
-    .sort((a, b) => b.probability - a.probability);
-  const specialBetLegs = specialBetCandidates.slice(0, specialLegCount);
-  const specialBetCombinedOdd = (() => {
-    if (specialBetLegs.length < 2) return null;
-    const validOdds = specialBetLegs.map((l) => Number(l.odd)).filter((n) => Number.isFinite(n) && n > 1);
-    if (validOdds.length < 2) return null;
-    return validOdds.reduce((acc, v) => acc * v, 1);
-  })();
+  const specialBetPool = buildSpecialBetLegs(
+    row,
+    {
+      main: t("match.featMain"),
+      corners: t("match.featCorners"),
+      shots: t("match.featShots"),
+      ht: t("match.featHt")
+    },
+    3,
+    row.cardMarketValidations
+  );
+  const specialBetLegs = specialBetPool.slice(0, specialLegCount);
+  const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
+  const specialCombinedTone = outcomeTextClass(specialBetCombinedOutcome(specialBetLegs));
+  const specialBetCandidatesLen = specialBetPool.length;
 
   if (row.insufficientData) {
     return (
@@ -678,7 +664,7 @@ export default function MatchCard({
             <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-[var(--fp-success)] sm:text-[8px] sm:tracking-[0.14em]">
               {t("card.specialBet")}
             </div>
-            {specialBetCandidates.length >= 3 ? (
+            {specialBetCandidatesLen >= 3 ? (
               <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
                 {[2, 3].map((n) => (
                   <button
@@ -701,16 +687,24 @@ export default function MatchCard({
             ) : null}
           </div>
           <div className="mt-0.5 space-y-0.5">
-            {specialBetLegs.map((leg) => (
-              <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px]">
-                <span className="min-w-0 flex-1 truncate font-semibold text-[var(--fp-text)]">
-                  {leg.label}: {leg.pick}
-                </span>
-                <span className="shrink-0 tabular-nums font-bold text-[var(--fp-text)]">{Math.round(leg.probability)}%</span>
-              </div>
-            ))}
+            {specialBetLegs.map((leg) => {
+              const tone = outcomeTextClass(leg.outcome);
+              return (
+                <div
+                  key={`${leg.label}-${leg.pick}`}
+                  className={`flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px] ${tone}`}
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold">
+                    {leg.label}: {leg.pick}
+                  </span>
+                  <span className="shrink-0 tabular-nums font-bold">
+                    {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text)]">
+          <div className={`mt-1 font-mono text-[8px] font-semibold tabular-nums ${specialCombinedTone}`}>
             {t("card.combinedOdd", {
               odd: Number.isFinite(Number(specialBetCombinedOdd))
                 ? Number(specialBetCombinedOdd).toFixed(2)

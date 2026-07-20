@@ -554,6 +554,13 @@ export type PredictionRow = {
     };
     cards?: MarketOddQuote & { over?: number | null; under?: number | null };
   };
+  /** Post-match totals (corners / shots) — used to settle FocusCard markets client-side. */
+  marketResults?: {
+    cornersTotal?: number | null;
+    shotsOnTargetTotal?: number | null;
+    shotsTotal?: number | null;
+    firstHalfGoals?: number | null;
+  };
   predictions: {
     oneXtwo: string;
     gg: string;

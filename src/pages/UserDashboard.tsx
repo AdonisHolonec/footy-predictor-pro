@@ -19,8 +19,10 @@ import { useHistorySync } from "../hooks/useHistorySync";
 import { isCompactViewport, useLeaguePanelState } from "../hooks/useLeaguePanelState";
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
+import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
+import { isFinalMatchStatus } from "../utils/cardMarketOutcome";
 import Button from "../design-system/Button";
 import Card from "../design-system/Card";
 import Badge from "../design-system/Badge";
@@ -159,6 +161,11 @@ export default function UserDashboard() {
   const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
   const [preds, setPreds] = useState<PredictionRow[]>([]);
   useLiveFixtureScorePoll(preds, setPreds, { enabled: Boolean(user) });
+  useMarketTotalsHydrate(preds, setPreds, {
+    enabled: Boolean(user),
+    userId: user?.id ?? null,
+    setPredictionsByUser
+  });
 
   useEffect(() => {
     setSelectedMatch((cur) => {
@@ -227,10 +234,18 @@ export default function UserDashboard() {
     }
     return map;
   }, [history]);
-  const pendingHistoryCount = useMemo(
-    () => history.filter((item) => item.validation === "pending").length,
-    [history]
-  );
+  const pendingHistoryCount = useMemo(() => {
+    return history.filter((item) => {
+      if (item.validation === "pending") return true;
+      if (!isFinalMatchStatus(item.status)) return false;
+      const v = item.cardMarketValidations;
+      if (!v) return Boolean(item.probs?.corners || item.probs?.shotsOnTarget);
+      return (["corners", "shots"] as const).some((k) => {
+        if (!item.probs?.[k === "shots" ? "shotsOnTarget" : k]) return false;
+        return v[k] !== "win" && v[k] !== "loss";
+      });
+    }).length;
+  }, [history]);
   const predIdSet = useMemo(() => new Set(preds.map((p) => p.id)), [preds]);
   const pendingAmongDisplayedPreds = useMemo(
     () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,

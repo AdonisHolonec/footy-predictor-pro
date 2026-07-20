@@ -4,6 +4,7 @@ import { useLocale } from "../../context/LocaleContext";
 import { useKickoffWeather, weatherCodeKey } from "../../hooks/useKickoffWeather";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import {
+  outcomeTextClass,
   resolveCardMarketOutcome,
   type CardMarketId,
   type MarketOutcome
@@ -65,33 +66,7 @@ function RankChip({ text, label }: { text: string; label: string }) {
   );
 }
 
-function OutcomeBadge({
-  outcome,
-  winLabel,
-  lossLabel
-}: {
-  outcome: MarketOutcome;
-  winLabel: string;
-  lossLabel: string;
-}) {
-  if (outcome === "win") {
-    return (
-      <span className="inline-flex justify-end rounded border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)]">
-        {winLabel}
-      </span>
-    );
-  }
-  if (outcome === "loss") {
-    return (
-      <span className="inline-flex justify-end rounded border border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)]">
-        {lossLabel}
-      </span>
-    );
-  }
-  return <span className="text-[var(--fp-text-faint)]">—</span>;
-}
-
-/** Consumer prediction card — markets + WIN/LOSS (no Value column). */
+/** Consumer prediction card — markets tinted by win/loss/pending (no Result column). */
 export default function PredictionFocusCard({
   row,
   accessTier = "free",
@@ -199,7 +174,7 @@ export default function PredictionFocusCard({
       : t("card.weatherUnavailable");
 
   const marketGrid =
-    "grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)_2.35rem_2.15rem_2.7rem] items-center gap-x-1";
+    "grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_2.5rem_2.35rem] items-center gap-x-1";
 
   if (row.insufficientData) {
     return (
@@ -328,12 +303,13 @@ export default function PredictionFocusCard({
           <span className="truncate">{t("card.colPrediction")}</span>
           <span className="text-right">{t("card.colConfidence")}</span>
           <span className="text-right">{t("card.colOdds")}</span>
-          <span className="text-right">{t("card.colResult")}</span>
         </div>
         <div className="divide-y divide-[var(--fp-border)]/70">
-          {marketRows.map((r) => (
-            <div key={r.id} className={`${marketGrid} py-1.5 text-[11px]`}>
-              <span className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+          {marketRows.map((r) => {
+            const tone = r.locked ? "text-[var(--fp-text-muted)]" : outcomeTextClass(r.outcome);
+            return (
+            <div key={r.id} className={`${marketGrid} py-1.5 text-[11px] ${tone}`}>
+              <span className="truncate text-[9px] font-bold uppercase tracking-wide opacity-90">
                 {r.marketLabel}
               </span>
               <div className="min-w-0">
@@ -352,32 +328,22 @@ export default function PredictionFocusCard({
                 ) : (
                   <span
                     className={`block truncate font-display text-[12px] font-bold leading-tight tabular-nums ${
-                      r.accent ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
+                      r.accent && r.outcome == null ? "text-[var(--fp-accent)]" : ""
                     }`}
                   >
                     {r.pick}
                   </span>
                 )}
               </div>
-              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
+              <span className="text-right font-semibold tabular-nums">
                 {r.locked ? "—" : r.confidence}
               </span>
-              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
+              <span className="text-right font-semibold tabular-nums">
                 {r.locked ? "—" : r.odd}
               </span>
-              <span className="flex justify-end">
-                {r.locked ? (
-                  <span className="text-[var(--fp-text-faint)]">—</span>
-                ) : (
-                  <OutcomeBadge
-                    outcome={r.outcome}
-                    winLabel={t("history.win")}
-                    lossLabel={t("history.loss")}
-                  />
-                )}
-              </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

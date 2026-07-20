@@ -421,7 +421,7 @@ async function handleXg(req, res) {
 
     // `getWithCache` foloseşte Vercel KV + auto-detectează providerul (apisports direct sau RapidAPI)
     // şi partajează cache-ul cu restul pipeline-ului (nu mai avem cache separat pe xG).
-    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
+    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
     if (!statsReq.ok) {
       return res.status(502).json({
         error: "Eroare upstream la fixtures/statistics",

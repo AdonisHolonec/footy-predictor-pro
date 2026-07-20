@@ -35,7 +35,7 @@ function parseNumericStat(statistics, candidates) {
 }
 
 async function fetchFixtureMarketTotals(fixtureId) {
-  const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 86400);
+  const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
   if (!statsReq.ok || !statsReq.data?.response || statsReq.data.response.length < 2) {
     return { cornersTotal: null, shotsOnTargetTotal: null, ok: false };
   }
@@ -531,7 +531,7 @@ async function handleHistorySync(req, res) {
     // Corners & shots need /fixtures/statistics — capped per sync.
     const statsFetchCap = Math.max(
       0,
-      Math.min(Number(process.env.HISTORY_SYNC_CARD_STATS_MAX || 40), 120)
+      Math.min(Number(process.env.HISTORY_SYNC_CARD_STATS_MAX || 80), 150)
     );
     let cardResettled = 0;
     let statsFetchCalls = 0;

@@ -165,13 +165,19 @@ export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEn
     const nextScore = hasServerScore ? { home: nhN, away: naN } : p.score;
     const nextValidations = h.cardMarketValidations ?? p.cardMarketValidations ?? null;
     const nextReferee = String(h.referee || "").trim() || p.referee;
+    const nextMarketResults = h.marketResults
+      ? { ...(p.marketResults || {}), ...h.marketResults }
+      : p.marketResults;
     const sameValidations =
       JSON.stringify(nextValidations || null) === JSON.stringify(p.cardMarketValidations || null);
+    const sameMarketResults =
+      JSON.stringify(nextMarketResults || null) === JSON.stringify(p.marketResults || null);
     if (
       nextStatus === p.status &&
       nextScore?.home === oh &&
       nextScore?.away === oa &&
       sameValidations &&
+      sameMarketResults &&
       nextReferee === p.referee
     ) {
       return p;
@@ -182,7 +188,8 @@ export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEn
       status: nextStatus,
       score: nextScore,
       referee: nextReferee,
-      cardMarketValidations: nextValidations
+      cardMarketValidations: nextValidations,
+      marketResults: nextMarketResults
     };
   });
   return touched ? out : preds;

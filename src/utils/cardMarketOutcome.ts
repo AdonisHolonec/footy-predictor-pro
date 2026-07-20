@@ -1,5 +1,5 @@
 import type { CardMarketValidations, PredictionRow } from "../types";
-import { deriveCardGoalsPick } from "./marketPicks";
+import { deriveBestOverUnderPick, deriveCardGoalsPick } from "./marketPicks";
 
 export type CardMarketId = "recommended" | "goals" | "corners" | "shots";
 export type MarketOutcome = "win" | "loss" | "pending" | null;
@@ -42,10 +42,18 @@ function gradeOu(side: "over" | "under", line: number, total: number | null): Ma
   return ok ? "win" : "loss";
 }
 
+/** Tailwind text color for settled / pending market lines. */
+export function outcomeTextClass(outcome: MarketOutcome): string {
+  if (outcome === "win") return "text-[var(--fp-success)]";
+  if (outcome === "loss") return "text-[var(--fp-danger)]";
+  if (outcome === "pending") return "text-[var(--fp-text-muted)]";
+  return "text-[var(--fp-text)]";
+}
+
 /**
  * Resolve WIN/LOSS for a FocusCard market row.
  * Prefers history `cardMarketValidations` (source of truth for the global counter);
- * falls back to live score for recommended/goals after FT.
+ * falls back to live score / marketResults after FT.
  */
 export function resolveCardMarketOutcome(
   marketId: CardMarketId,
@@ -77,7 +85,22 @@ export function resolveCardMarketOutcome(
     return gradeOu(goals.side, goals.line, total);
   }
 
-  // Corners / shots need post-match totals from history sync.
+  if (marketId === "corners") {
+    const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
+    if (!corners) return null;
+    const total = row.marketResults?.cornersTotal;
+    if (total == null || !Number.isFinite(Number(total))) return fromStore === "pending" ? "pending" : "pending";
+    return gradeOu(corners.side, corners.line, Number(total));
+  }
+
+  if (marketId === "shots") {
+    const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+    if (!shots) return null;
+    const total = row.marketResults?.shotsOnTargetTotal;
+    if (total == null || !Number.isFinite(Number(total))) return "pending";
+    return gradeOu(shots.side, shots.line, Number(total));
+  }
+
   return fromStore === "pending" ? "pending" : null;
 }
 
