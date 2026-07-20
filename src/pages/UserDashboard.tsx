@@ -689,16 +689,16 @@ export default function UserDashboard() {
     }
   }
 
-  async function rehydratePredictionsFromHistory(): Promise<number> {
+  async function rehydratePredictionsFromHistory(): Promise<PredictionRow[]> {
     try {
-      if (!user?.id || !session?.access_token) return 0;
+      if (!user?.id || !session?.access_token) return [];
       const response = await fetch("/api/history?days=14&limit=1000&mine=1", {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       const json = await response.json();
-      if (!response.ok || !json?.ok || !Array.isArray(json.items)) return 0;
+      if (!response.ok || !json?.ok || !Array.isArray(json.items)) return [];
       /** Doar răspuns user-scoped (join user_prediction_fixtures); refuză istoric global dacă lipsește flag. */
-      if (json.mine !== true) return 0;
+      if (json.mine !== true) return [];
 
       const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const selectedDateSet = new Set(effectiveDates);
@@ -712,7 +712,7 @@ export default function UserDashboard() {
         })
         .slice(0, 80);
 
-      if (!hydrated.length) return 0;
+      if (!hydrated.length) return [];
 
       setPreds(hydrated);
       if (user?.id) {
@@ -728,9 +728,9 @@ export default function UserDashboard() {
       }
       setStatus(t("dash.restoredHistory", { n: hydrated.length }));
       setRehydratedNotice(t("dash.restoredNotice", { n: hydrated.length }));
-      return hydrated.length;
+      return hydrated;
     } catch {
-      return 0;
+      return [];
     }
   }
 
@@ -824,7 +824,7 @@ export default function UserDashboard() {
     }
   }
 
-  /** Prefer cache/history restore so Refresh does not burn quota when picks already exist. */
+  /** Refresh: reload saved picks. Runs Predict when saved rows are under-masked for the plan. */
   async function restoreOrPredict() {
     if (!selectedLeagueIds.length) {
       setStatus(t("dash.selectLeague"));
@@ -839,13 +839,21 @@ export default function UserDashboard() {
       if (!selectedDateSet.has(kickoffDate)) return false;
       return selectedLeagueSet.has(Number(row.leagueId));
     });
-    if (fromCache.length) {
+
+    if (fromCache.length && !hasLegacyPredictionShape(fromCache, userTier)) {
       setPreds(fromCache);
       setStatus(t("dash.showingSaved", { n: fromCache.length }));
       return;
     }
-    const restoredCount = await rehydratePredictionsFromHistory();
-    if (restoredCount > 0) return;
+
+    const hydrated = await rehydratePredictionsFromHistory();
+    if (hydrated.length && !hasLegacyPredictionShape(hydrated, userTier)) return;
+
+    if (fromCache.length || hydrated.length) {
+      setStatus(t("dash.needPredictForMarkets"));
+      await warmAndPredict();
+      return;
+    }
     await warmAndPredict();
   }
 
@@ -915,6 +923,8 @@ export default function UserDashboard() {
       onOpenLeagues={() => setIsLeaguesOpen(true)}
       onRefresh={() => void restoreOrPredict()}
       refreshBusy={warmPredictBusy}
+      onPredict={() => void warmAndPredict()}
+      predictBusy={warmPredictBusy}
       favoritesActive={matchesFilter === "favorites"}
       onToggleFavorites={() =>
         updateFilters({ matchesFilter: matchesFilter === "favorites" ? "all" : "favorites" })
@@ -927,44 +937,61 @@ export default function UserDashboard() {
       tier={userTier}
       extraDates={
         <>
-          {userTier === "premium" && (
-            <Tooltip label={t("shell.includeTomorrow")}>
-              <button
-                type="button"
-                title={t("shell.includeTomorrow")}
-                onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
-              >
-                {t("shell.plus1Day")}
-              </button>
-            </Tooltip>
-          )}
-          {userTier === "ultra" && (
-            <>
-              <Tooltip label={t("shell.includeTomorrow")}>
-                <button
-                  type="button"
-                  title={t("shell.includeTomorrow")}
-                  onClick={() => setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1)]))}
-                  className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
-                >
-                  {t("shell.plus1Day")}
-                </button>
-              </Tooltip>
-              <Tooltip label={t("shell.includeNext2")}>
-                <button
-                  type="button"
-                  title={t("shell.includeNext2")}
-                  onClick={() =>
-                    setSelectedDates(clampTierDates(date, userTier, [date, addIsoDay(date, 1), addIsoDay(date, 2)]))
-                  }
-                  className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] px-2.5 text-xs font-bold text-[var(--fp-accent)]"
-                >
-                  {t("shell.plus2Days")}
-                </button>
-              </Tooltip>
-            </>
-          )}
+          {(userTier === "premium" || userTier === "ultra") &&
+            (() => {
+              const tomorrow = addIsoDay(date, 1);
+              const dayAfter = addIsoDay(date, 2);
+              const plus1On = activePredictDates.includes(tomorrow);
+              const plus2On = activePredictDates.includes(dayAfter);
+              const chipOn =
+                "h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)] bg-[var(--fp-accent)] px-2.5 text-xs font-bold text-white shadow-[var(--fp-shadow-sm)] ring-2 ring-[var(--fp-accent)]/35";
+              const chipOff =
+                "h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]";
+              return (
+                <>
+                  <Tooltip label={`${t("shell.includeTomorrow")} · ${plus1On ? t("shell.dayRangeOn") : t("shell.dayRangeOff")}`}>
+                    <button
+                      type="button"
+                      title={t("shell.includeTomorrow")}
+                      aria-pressed={plus1On}
+                      onClick={() => {
+                        if (plus1On) {
+                          setSelectedDates(clampTierDates(date, userTier, [date]));
+                        } else {
+                          setSelectedDates(clampTierDates(date, userTier, [date, tomorrow]));
+                          setStatus(t("dash.needPredictForDates"));
+                        }
+                      }}
+                      className={plus1On ? chipOn : chipOff}
+                    >
+                      {t("shell.plus1Day")}
+                    </button>
+                  </Tooltip>
+                  {userTier === "ultra" ? (
+                    <Tooltip label={`${t("shell.includeNext2")} · ${plus2On ? t("shell.dayRangeOn") : t("shell.dayRangeOff")}`}>
+                      <button
+                        type="button"
+                        title={t("shell.includeNext2")}
+                        aria-pressed={plus2On}
+                        onClick={() => {
+                          if (plus2On) {
+                            setSelectedDates(clampTierDates(date, userTier, [date, tomorrow]));
+                          } else {
+                            setSelectedDates(
+                              clampTierDates(date, userTier, [date, tomorrow, dayAfter])
+                            );
+                            setStatus(t("dash.needPredictForDates"));
+                          }
+                        }}
+                        className={plus2On ? chipOn : chipOff}
+                      >
+                        {t("shell.plus2Days")}
+                      </button>
+                    </Tooltip>
+                  ) : null}
+                </>
+              );
+            })()}
         </>
       }
     >
@@ -992,6 +1019,14 @@ export default function UserDashboard() {
         <div className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-3 py-2 text-xs">
           <span className="font-semibold text-[var(--fp-accent)]">Date vechi actualizate.</span>{" "}
           <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
+        </div>
+      )}
+      {userTier !== "free" && preds.length > 0 && hasLegacyPredictionShape(preds, userTier) && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-2.5 text-sm">
+          <p className="min-w-0 flex-1 font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</p>
+          <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
+            {t("shell.predict")}
+          </Button>
         </div>
       )}
 
@@ -1055,11 +1090,11 @@ export default function UserDashboard() {
               description={
                 matchesFilter === "favorites" ? t("dash.emptyFavoritesDesc") : t("dash.emptyPredsDesc")
               }
-              actionLabel={matchesFilter === "favorites" ? t("dash.showAll") : t("dash.restoreRefresh")}
+              actionLabel={matchesFilter === "favorites" ? t("dash.showAll") : t("shell.predict")}
               onAction={
                 matchesFilter === "favorites"
                   ? () => updateFilters({ matchesFilter: "all" })
-                  : () => void restoreOrPredict()
+                  : () => void warmAndPredict()
               }
             />
           ) : (

@@ -56,7 +56,7 @@ export default function CommandPalette({
       run: () => onNavigate(item.id)
     }));
     if (onPredict) {
-      list.push({ id: "act-predict", label: t("shell.refreshPredictions"), run: () => onPredict() });
+      list.push({ id: "act-predict", label: t("shell.predictTip"), run: () => onPredict() });
     }
     const qq = q.trim().toLowerCase();
     const matchHits = matches

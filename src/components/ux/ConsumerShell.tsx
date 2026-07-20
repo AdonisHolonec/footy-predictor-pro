@@ -16,6 +16,9 @@ type Props = {
   onOpenLeagues: () => void;
   onRefresh: () => void;
   refreshBusy?: boolean;
+  /** Generate new predictions (quota). Distinct from Refresh (reload saved). */
+  onPredict?: () => void;
+  predictBusy?: boolean;
   favoritesActive?: boolean;
   onToggleFavorites: () => void;
   onOpenNotifications: () => void;
@@ -43,6 +46,8 @@ export default function ConsumerShell({
   onOpenLeagues,
   onRefresh,
   refreshBusy,
+  onPredict,
+  predictBusy,
   favoritesActive,
   onToggleFavorites,
   onOpenNotifications,
@@ -184,15 +189,34 @@ export default function ConsumerShell({
               className="h-9 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2.5 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-[14rem]"
             />
 
+            {onPredict ? (
+              <Tooltip label={t("shell.predictTip")}>
+                <span className="inline-flex">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={predictBusy}
+                    onClick={onPredict}
+                    className="h-9 shrink-0 font-bold"
+                    aria-label={t("shell.predictTip")}
+                    aria-busy={predictBusy}
+                  >
+                    {t("shell.predict")}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
+
             <Tooltip label={t("shell.refreshPredictions")}>
               <span className="inline-flex">
                 <Button
                   size="sm"
-                  loading={refreshBusy}
+                  variant="secondary"
+                  loading={refreshBusy && !predictBusy}
                   onClick={onRefresh}
-                  className="h-9"
+                  className="h-9 shrink-0"
                   aria-label={t("shell.refreshPredictions")}
-                  aria-busy={refreshBusy}
+                  aria-busy={refreshBusy && !predictBusy}
                 >
                   {t("shell.refresh")}
                 </Button>
