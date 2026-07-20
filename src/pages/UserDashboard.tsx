@@ -951,9 +951,9 @@ export default function UserDashboard() {
               const plus1On = activePredictDates.includes(tomorrow);
               const plus2On = activePredictDates.includes(dayAfter);
               const chipOn =
-                "h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)] bg-[var(--fp-accent)] px-2.5 text-xs font-bold text-white shadow-[var(--fp-shadow-sm)] ring-2 ring-[var(--fp-accent)]/35";
+                "h-8 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)] bg-[var(--fp-accent)] px-1.5 text-[10px] font-bold text-white shadow-[var(--fp-shadow-sm)] ring-1 ring-[var(--fp-accent)]/35 sm:h-9 sm:px-2 sm:text-xs sm:ring-2";
               const chipOff =
-                "h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]";
+                "h-8 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-1.5 text-[10px] font-bold text-[var(--fp-text-muted)] sm:h-9 sm:px-2 sm:text-xs";
               return (
                 <>
                   <Tooltip label={`${t("shell.includeTomorrow")} · ${plus1On ? t("shell.dayRangeOn") : t("shell.dayRangeOff")}`}>

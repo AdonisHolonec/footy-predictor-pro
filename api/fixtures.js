@@ -346,6 +346,16 @@ function parseIds(raw) {
   return [...new Set(nums)].slice(0, 24);
 }
 
+function parseRefereeName(raw) {
+  if (!raw) return "";
+  if (typeof raw === "string") return raw.trim();
+  if (typeof raw === "object") {
+    const name = raw.name || raw.full_name || raw.last_name || "";
+    return String(name || "").trim();
+  }
+  return "";
+}
+
 async function handleLive(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -364,6 +374,7 @@ async function handleLive(req, res) {
     const fixtures = rows.map((fx) => ({
       id: fx?.fixture?.id,
       status: fx?.fixture?.status?.short || "",
+      referee: parseRefereeName(fx?.fixture?.referee) || null,
       score: {
         home: typeof fx?.goals?.home === "number" ? fx.goals.home : null,
         away: typeof fx?.goals?.away === "number" ? fx.goals.away : null

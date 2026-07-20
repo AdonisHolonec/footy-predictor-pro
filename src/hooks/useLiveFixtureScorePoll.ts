@@ -40,8 +40,8 @@ type Options = {
 };
 
 /**
- * Periodically merges `status` + `score` from `/api/fixtures?view=live` for rows currently in play.
- * Does not re-run the full model — only fixture state from the upstream API.
+ * Periodically merges `status` + `score` (+ referee when available) from `/api/fixtures?view=live`
+ * for rows currently in play. Does not re-run the full model — only fixture state from upstream.
  */
 export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPreds, options?: Options) {
   const enabled = options?.enabled !== false;
@@ -68,7 +68,12 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
         const res = await fetch(`/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}`);
         const json = (await res.json()) as {
           ok?: boolean;
-          fixtures?: Array<{ id: number; status: string; score: { home: number | null; away: number | null } }>;
+          fixtures?: Array<{
+            id: number;
+            status: string;
+            referee?: string | null;
+            score: { home: number | null; away: number | null };
+          }>;
         };
         if (!json?.ok || !Array.isArray(json.fixtures)) return;
         const map = new Map(json.fixtures.map((f) => [Number(f.id), f]));
@@ -77,9 +82,12 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
           prev.map((p) => {
             const u = map.get(Number(p.id));
             if (!u) return p;
+            const nextReferee = String(u.referee || "").trim();
             return {
               ...p,
               status: u.status || p.status,
+              // Prefer fresh referee once API-Football publishes it (often empty at predict time).
+              referee: nextReferee || p.referee,
               score: {
                 home: u.score?.home ?? p.score?.home ?? null,
                 away: u.score?.away ?? p.score?.away ?? null

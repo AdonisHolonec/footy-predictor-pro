@@ -150,85 +150,90 @@ export default function ConsumerShell({
             <div className="flex shrink-0 items-center gap-1 sm:order-last sm:ml-auto">{actionIcons}</div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:flex-1 sm:gap-2">
-            <label className="sr-only" htmlFor="consumer-date">
-              {t("shell.date")}
-            </label>
-            <input
-              id="consumer-date"
-              type="date"
-              title={t("shell.selectDate")}
-              value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="h-9 w-[7.25rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1.5 text-sm font-medium text-[var(--fp-text)] sm:w-[8rem] sm:px-2"
-            />
-            {extraDates}
+          <div className="flex w-full flex-col gap-1.5 sm:flex-1 sm:gap-2">
+            {/* Row 1: date range + leagues — always one line */}
+            <div className="flex w-full min-w-0 flex-nowrap items-center gap-1">
+              <label className="sr-only" htmlFor="consumer-date">
+                {t("shell.date")}
+              </label>
+              <input
+                id="consumer-date"
+                type="date"
+                title={t("shell.selectDate")}
+                value={date}
+                onChange={(e) => onDateChange(e.target.value)}
+                className="h-8 w-[6.4rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[11px] font-medium text-[var(--fp-text)] sm:h-9 sm:w-[7.5rem] sm:px-1.5 sm:text-sm"
+              />
+              {extraDates}
+              <Tooltip label={t("shell.filterLeagues")}>
+                <button
+                  type="button"
+                  onClick={onOpenLeagues}
+                  className="h-8 min-w-0 flex-1 truncate rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 text-[10px] font-bold leading-tight text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:h-9 sm:flex-none sm:px-2.5 sm:text-xs"
+                  aria-label={t("shell.filterLeagues")}
+                >
+                  {t("shell.leagues")}
+                </button>
+              </Tooltip>
+            </div>
 
-            <Tooltip label={t("shell.filterLeagues")}>
-              <button
-                type="button"
-                onClick={onOpenLeagues}
-                className="h-9 min-w-[9.5rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3.5 text-xs font-bold text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:min-w-[11rem] sm:px-4"
-                aria-label={t("shell.filterLeagues")}
-              >
-                {t("shell.leagues")}
-              </button>
-            </Tooltip>
+            {/* Row 2: search + actions */}
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+              <label className="sr-only" htmlFor="consumer-search">
+                {t("shell.search")}
+              </label>
+              <input
+                id="consumer-search"
+                type="search"
+                title={t("shell.searchTeams")}
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onFocus={() => onOpenSearch?.()}
+                placeholder={t("shell.searchTeams")}
+                className="h-8 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:h-9 sm:max-w-[14rem] sm:px-2.5"
+              />
 
-            <label className="sr-only" htmlFor="consumer-search">
-              {t("shell.search")}
-            </label>
-            <input
-              id="consumer-search"
-              type="search"
-              title={t("shell.searchTeams")}
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onFocus={() => onOpenSearch?.()}
-              placeholder={t("shell.searchTeams")}
-              className="h-9 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2.5 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-[14rem]"
-            />
+              {onPredict ? (
+                <Tooltip label={t("shell.predictTip")}>
+                  <span className="inline-flex">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      loading={predictBusy}
+                      onClick={onPredict}
+                      className="h-8 shrink-0 font-bold sm:h-9"
+                      aria-label={t("shell.predictTip")}
+                      aria-busy={predictBusy}
+                    >
+                      {t("shell.predict")}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
 
-            {onPredict ? (
-              <Tooltip label={t("shell.predictTip")}>
+              <Tooltip label={t("shell.refreshPredictions")}>
                 <span className="inline-flex">
                   <Button
                     size="sm"
-                    variant="primary"
-                    loading={predictBusy}
-                    onClick={onPredict}
-                    className="h-9 shrink-0 font-bold"
-                    aria-label={t("shell.predictTip")}
-                    aria-busy={predictBusy}
+                    variant="secondary"
+                    loading={refreshBusy && !predictBusy}
+                    onClick={onRefresh}
+                    className="h-8 shrink-0 sm:h-9"
+                    aria-label={t("shell.refreshPredictions")}
+                    aria-busy={refreshBusy && !predictBusy}
                   >
-                    {t("shell.predict")}
+                    {t("shell.refresh")}
                   </Button>
                 </span>
               </Tooltip>
-            ) : null}
 
-            <Tooltip label={t("shell.refreshPredictions")}>
-              <span className="inline-flex">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  loading={refreshBusy && !predictBusy}
-                  onClick={onRefresh}
-                  className="h-9 shrink-0"
-                  aria-label={t("shell.refreshPredictions")}
-                  aria-busy={refreshBusy && !predictBusy}
-                >
-                  {t("shell.refresh")}
-                </Button>
+              <span
+                className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--fp-text-muted)] md:inline"
+                title={email || undefined}
+              >
+                {email}
               </span>
-            </Tooltip>
-
-            <span
-              className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--fp-text-muted)] md:inline"
-              title={email || undefined}
-            >
-              {email}
-            </span>
+            </div>
           </div>
         </div>
       </header>
