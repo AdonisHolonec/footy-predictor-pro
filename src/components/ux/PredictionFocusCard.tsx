@@ -16,6 +16,8 @@ import {
 
 type Props = {
   row: PredictionRow;
+  /** Effective access tier (free / premium / ultra) — drives lock vs missing-data UI. */
+  accessTier?: UpgradeTier | "free" | string;
   watched?: boolean;
   onToggleWatch?: () => void;
   onOpen: () => void;
@@ -51,6 +53,7 @@ function sidePickLabel(
 /** Consumer prediction card — markets table + rank / referee / weather. */
 export default function PredictionFocusCard({
   row,
+  accessTier = "free",
   watched,
   onToggleWatch,
   onOpen,
@@ -58,6 +61,10 @@ export default function PredictionFocusCard({
 }: Props) {
   const { t } = useLocale();
   const { weather, loading: weatherLoading } = useKickoffWeather(row.venue, row.kickoff);
+
+  const tier = String(accessTier || "free").toLowerCase();
+  const canSeeCorners = tier === "premium" || tier === "ultra";
+  const canSeeShots = tier === "ultra";
 
   const conf = Number(row.recommended?.confidence);
   const hasExactConfidence = Number.isFinite(conf);
@@ -82,8 +89,10 @@ export default function PredictionFocusCard({
   const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
 
-  const cornersLocked = !row.probs?.corners;
-  const shotsLocked = !row.probs?.shotsOnTarget;
+  // Lock = upgrade CTA only when the user's tier cannot access the market.
+  // Missing probs for a paid tier = unavailable ("—"), not "blocked".
+  const cornersLocked = !canSeeCorners && !row.probs?.corners;
+  const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
 
   const confLabel = hasExactConfidence
     ? `${Math.round(conf)}%`
@@ -338,7 +347,7 @@ export default function PredictionFocusCard({
         </table>
       </div>
 
-      {(isPremiumLike || isFreeLike) && (
+      {((tier === "free" && isFreeLike) || (tier === "premium" && (isPremiumLike || isFreeLike))) && (
         <p className="mt-2 text-[9px] font-medium text-[var(--fp-text-faint)]">{t("card.tierHint")}</p>
       )}
     </article>

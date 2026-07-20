@@ -56,15 +56,24 @@ import { historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historySta
 import { loadBillingConfig, openBillingPortal, startCheckout } from "../services/billingService";
 
 
-function hasLegacyPredictionShape(rows: PredictionRow[]): boolean {
+/** True when cached rows are older than the UI expects, or under-masked for the user's effective tier. */
+function hasLegacyPredictionShape(rows: PredictionRow[], accessTier?: string): boolean {
+  const tier = String(accessTier || "free").toLowerCase();
   return rows.some((row) => {
-    // Rows produced by current backend always include modelVersion; do not treat masked tier rows as stale.
-    if (row?.modelVersion) return false;
+    if (row?.insufficientData) return false;
     const probs = row?.probs;
-    // Older cached rows (localStorage) can miss newer model fields used by updated cards/modals.
-    const hasExactConfidence = row?.recommended?.confidence != null && Number.isFinite(Number(row?.recommended?.confidence));
+    // Paid tiers must not keep free/premium-masked localStorage rows (common on mobile).
+    if (tier === "ultra") {
+      return !probs?.corners || !probs?.shotsOnTarget;
+    }
+    if (tier === "premium") {
+      return !probs?.corners;
+    }
+    // Free: only treat truly ancient shapes (no modelVersion) as stale.
+    if (row?.modelVersion) return false;
+    const hasExactConfidence =
+      row?.recommended?.confidence != null && Number.isFinite(Number(row?.recommended?.confidence));
     if (hasExactConfidence) {
-      // Ultra/admin rows should include advanced markets; missing one indicates stale desktop cache.
       return !probs?.firstHalf || !probs?.corners || !probs?.shotsOnTarget;
     }
     return !probs?.firstHalf && !probs?.corners && !probs?.shotsOnTarget && !probs?.shotsTotal;
@@ -490,10 +499,10 @@ export default function UserDashboard() {
       return selectedLeagueSet.has(Number(row.leagueId));
     });
     setPreds(filtered);
-    if (hasLegacyPredictionShape(localPredictions) && filtered.length) {
+    if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
-  }, [user?.id, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
+  }, [user?.id, userTier, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     setNotifySafe(user?.notificationPrefs?.safe ?? true);
@@ -533,14 +542,20 @@ export default function UserDashboard() {
     });
   }, [history, user?.id, setPredictionsByUser]);
 
+  const tierShapeRehydrateKeyRef = useRef("");
   useEffect(() => {
     if (!user?.id) return;
     if (!session?.access_token) return;
     if (!selectedLeagueIds.length) return;
-    // Rehydrate even when cached predictions exist if their shape is legacy (desktop stale localStorage case).
-    if (preds.length > 0 && !hasLegacyPredictionShape(preds)) return;
+    // Rehydrate when cache is empty or under-masked for the current effective tier (mobile free→ultra case).
+    if (preds.length > 0 && !hasLegacyPredictionShape(preds, userTier)) return;
+    const shapeKey = `${user.id}|${userTier}|${normalizeSelectedDates(selectedDates.length ? selectedDates : [date]).join(",")}|${selectedLeagueIds.join(",")}`;
+    if (preds.length > 0 && hasLegacyPredictionShape(preds, userTier)) {
+      if (tierShapeRehydrateKeyRef.current === shapeKey) return;
+      tierShapeRehydrateKeyRef.current = shapeKey;
+    }
     void rehydratePredictionsFromHistory();
-  }, [user?.id, session?.access_token, preds, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
+  }, [user?.id, session?.access_token, preds, userTier, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -1053,6 +1068,7 @@ export default function UserDashboard() {
                 <PredictionFocusCard
                   key={row.id}
                   row={row}
+                  accessTier={userTier}
                   watched={isWatched(Number(row.id))}
                   onToggleWatch={() => toggleWatchlist(Number(row.id))}
                   onOpen={() => openMatch(row)}
@@ -1522,7 +1538,8 @@ export default function UserDashboard() {
           match={selectedMatch}
           logoColors={{}}
           hashColor={hashColor}
-          canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
+          canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+          accessTier={userTier}
           presentation="focus"
           onClose={() => setSelectedMatch(null)}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}

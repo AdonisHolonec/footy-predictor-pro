@@ -38,7 +38,27 @@ export function mergePredictionRows(existing: PredictionRow[], incoming: Predict
     const id = Number(row?.id);
     if (!Number.isFinite(id)) continue;
     const prev = map.get(id);
-    map.set(id, prev ? { ...prev, ...row } : row);
+    if (!prev) {
+      map.set(id, row);
+      continue;
+    }
+    // Deep-merge probs/marketOdds so full history rows restore corners/shots over free-masked cache.
+    map.set(id, {
+      ...prev,
+      ...row,
+      probs:
+        prev.probs || row.probs
+          ? ({ ...(prev.probs || {}), ...(row.probs || {}) } as PredictionRow["probs"])
+          : row.probs,
+      recommended:
+        prev.recommended || row.recommended
+          ? { ...(prev.recommended || {}), ...(row.recommended || {}) }
+          : row.recommended,
+      marketOdds:
+        prev.marketOdds || row.marketOdds
+          ? ({ ...(prev.marketOdds || {}), ...(row.marketOdds || {}) } as PredictionRow["marketOdds"])
+          : row.marketOdds
+    });
   }
   return Array.from(map.values());
 }

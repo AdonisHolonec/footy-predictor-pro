@@ -139,6 +139,7 @@ export default function App() {
           logoColors={c.predictions.logoColors}
           hashColor={hashColor}
           canShowSpecialBet={c.user?.role === "admin" || c.user?.tier === "ultra"}
+          accessTier={c.user?.tier || "free"}
           onClose={() => c.predictions.setSelectedMatch(null)}
         />
       )}

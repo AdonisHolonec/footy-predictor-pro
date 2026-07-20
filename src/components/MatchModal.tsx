@@ -386,6 +386,8 @@ type MatchModalProps = {
   onClose: () => void;
   hashColor: (seed: string) => string;
   canShowSpecialBet?: boolean;
+  /** Effective access tier — avoids false upgrade locks for premium/ultra. */
+  accessTier?: "free" | "premium" | "ultra" | string;
   /** Enterprise UI V2: right drawer (desktop) / bottom sheet (mobile). */
   presentation?: "modal" | "focus";
   /** Called when user clicks a plan-locked control. */
@@ -584,6 +586,7 @@ export default function MatchModal({
   onClose,
   hashColor,
   canShowSpecialBet = false,
+  accessTier = "free",
   presentation = "focus",
   onUpgradeRequired
 }: MatchModalProps) {
@@ -770,6 +773,8 @@ export default function MatchModal({
   const confidenceCategory = match.recommended?.confidenceCategory || null;
   const isPremiumLike = !hasExactConfidence && Boolean(confidenceCategory);
   const isFreeLike = !hasExactConfidence && !confidenceCategory;
+  const effectiveAccessTier = String(accessTier || "free").toLowerCase();
+  const showTierUpgradeLocks = effectiveAccessTier === "free" || effectiveAccessTier === "premium";
   const edgeScore = deriveSignalEdge(match);
   const dq = deriveDataQuality(match);
 
@@ -1483,17 +1488,21 @@ export default function MatchModal({
               )}
             </div>
           )}
-          {!match.probs.corners && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence && (
+          {showTierUpgradeLocks &&
+            !match.probs.corners &&
+            !match.probs.shotsOnTarget &&
+            !match.probs.shotsTotal &&
+            !hasExactConfidence && (
             <CollapsiblePanel
               compact
               title={tr("match.lockedMarkets")}
               badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
             >
               <p className="text-sm font-medium text-[var(--fp-text)]">
-                {isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
+                {effectiveAccessTier === "free" || isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
               </p>
               <div className="mt-2 flex flex-wrap gap-1">
-                {(isFreeLike
+                {(effectiveAccessTier === "free" || isFreeLike
                   ? [
                       { label: tr("match.featCorners"), tier: "premium" as const },
                       { label: tr("match.featShots"), tier: "ultra" as const },
