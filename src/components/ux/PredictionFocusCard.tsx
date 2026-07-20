@@ -57,7 +57,7 @@ export default function PredictionFocusCard({
   onUpgradeRequired
 }: Props) {
   const { t } = useLocale();
-  const { weather } = useKickoffWeather(row.venue, row.kickoff);
+  const { weather, loading: weatherLoading } = useKickoffWeather(row.venue, row.kickoff);
 
   const conf = Number(row.recommended?.confidence);
   const hasExactConfidence = Number.isFinite(conf);
@@ -158,7 +158,9 @@ export default function PredictionFocusCard({
 
   const weatherText = weather
     ? `${weather.tempC}°C · ${t(weatherCodeKey(weather.code))}`
-    : t("card.weatherUnavailable");
+    : weatherLoading
+      ? t("card.weatherLoading")
+      : t("card.weatherUnavailable");
 
   if (row.insufficientData) {
     return (
@@ -243,28 +245,40 @@ export default function PredictionFocusCard({
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <div className="flex min-w-0 flex-col items-center gap-1">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2">
+        {/* Home: rank left of crest (lateral), name under crest */}
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
+          <span
+            className="shrink-0 rounded-md bg-[var(--fp-bg-muted)] px-1.5 py-1 text-center text-[10px] font-bold tabular-nums leading-tight text-[var(--fp-text-muted)] sm:text-[11px]"
+            title={t("card.positionLabel")}
+          >
             {homeRank != null && Number.isFinite(Number(homeRank))
-              ? t("card.position", { n: Number(homeRank) })
-              : t("card.positionNa")}
-          </p>
-          <img src={row.logos?.home} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
-          <span className="line-clamp-2 text-center text-xs font-semibold text-[var(--fp-text)] sm:text-sm">
-            {row.teams.home}
+              ? t("card.positionShort", { n: Number(homeRank) })
+              : t("card.positionNaShort")}
           </span>
+          <div className="flex min-w-0 flex-col items-center gap-1">
+            <img src={row.logos?.home} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
+            <span className="line-clamp-2 max-w-[7.5rem] text-center text-xs font-semibold text-[var(--fp-text)] sm:max-w-none sm:text-sm">
+              {row.teams.home}
+            </span>
+          </div>
         </div>
         <span className="text-[10px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
-        <div className="flex min-w-0 flex-col items-center gap-1">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+        {/* Away: crest then rank on the right */}
+        <div className="flex min-w-0 items-center justify-start gap-1.5 sm:gap-2">
+          <div className="flex min-w-0 flex-col items-center gap-1">
+            <img src={row.logos?.away} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
+            <span className="line-clamp-2 max-w-[7.5rem] text-center text-xs font-semibold text-[var(--fp-text)] sm:max-w-none sm:text-sm">
+              {row.teams.away}
+            </span>
+          </div>
+          <span
+            className="shrink-0 rounded-md bg-[var(--fp-bg-muted)] px-1.5 py-1 text-center text-[10px] font-bold tabular-nums leading-tight text-[var(--fp-text-muted)] sm:text-[11px]"
+            title={t("card.positionLabel")}
+          >
             {awayRank != null && Number.isFinite(Number(awayRank))
-              ? t("card.position", { n: Number(awayRank) })
-              : t("card.positionNa")}
-          </p>
-          <img src={row.logos?.away} alt="" className="h-10 w-10 object-contain sm:h-11 sm:w-11" />
-          <span className="line-clamp-2 text-center text-xs font-semibold text-[var(--fp-text)] sm:text-sm">
-            {row.teams.away}
+              ? t("card.positionShort", { n: Number(awayRank) })
+              : t("card.positionNaShort")}
           </span>
         </div>
       </div>

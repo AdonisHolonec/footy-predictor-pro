@@ -9,14 +9,20 @@ import { beginFixture } from "../PipelineContext.js";
 
 /**
  * Extract venue from API-Football fixture payload for weather / display.
+ * API-Football rarely includes lat/lon on fixtures — city (+ league country) is the usual path.
  * @param {object} fx
- * @returns {{ name?: string, city?: string, lat?: number, lon?: number } | undefined}
+ * @returns {{ name?: string, city?: string, country?: string, lat?: number, lon?: number } | undefined}
  */
 export function extractVenueFromFixture(fx) {
   const v = fx?.fixture?.venue || fx?.venue;
   if (!v || typeof v !== "object") return undefined;
   const name = typeof v.name === "string" && v.name.trim() ? v.name.trim() : undefined;
   const city = typeof v.city === "string" && v.city.trim() ? v.city.trim() : undefined;
+  const countryRaw = fx?.league?.country || fx?.country;
+  const country =
+    typeof countryRaw === "string" && countryRaw.trim() && countryRaw.trim().toLowerCase() !== "world"
+      ? countryRaw.trim()
+      : undefined;
   const latRaw = v.lat ?? v.latitude;
   const lonRaw = v.lon ?? v.longitude ?? v.lng;
   const lat = Number(latRaw);
@@ -24,6 +30,7 @@ export function extractVenueFromFixture(fx) {
   const out = {};
   if (name) out.name = name;
   if (city) out.city = city;
+  if (country) out.country = country;
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
     out.lat = lat;
     out.lon = lon;

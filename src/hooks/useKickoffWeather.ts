@@ -23,6 +23,7 @@ export function weatherCodeKey(code: number): string {
 
 type CacheEntry = { at: number; data: KickoffWeather | null };
 const memoryCache = new Map<string, CacheEntry>();
+const geoCache = new Map<string, { lat: number; lon: number } | null>();
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 function cacheKey(lat: number, lon: number, kickoffIso: string): string {
@@ -30,39 +31,15 @@ function cacheKey(lat: number, lon: number, kickoffIso: string): string {
   return `${lat.toFixed(2)},${lon.toFixed(2)}@${hour}`;
 }
 
-async function geocodeCity(city: string): Promise<{ lat: number; lon: number } | null> {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const json = (await res.json()) as { results?: Array<{ latitude: number; longitude: number }> };
-  const hit = json.results?.[0];
-  if (!hit || !Number.isFinite(hit.latitude) || !Number.isFinite(hit.longitude)) return null;
-  return { lat: hit.latitude, lon: hit.longitude };
-}
-
-async function fetchHourlyTemp(
-  lat: number,
-  lon: number,
+function pickClosestHour(
+  times: string[],
+  temps: number[],
+  codes: number[],
   kickoffIso: string
-): Promise<KickoffWeather | null> {
-  const kick = new Date(kickoffIso);
-  if (!Number.isFinite(kick.getTime())) return null;
-  const start = kick.toISOString().slice(0, 10);
-  const endDate = new Date(kick.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&hourly=temperature_2m,weathercode&start_date=${start}&end_date=${endDate}&timezone=UTC`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const json = (await res.json()) as {
-    hourly?: { time?: string[]; temperature_2m?: number[]; weathercode?: number[] };
-  };
-  const times = json.hourly?.time || [];
-  const temps = json.hourly?.temperature_2m || [];
-  const codes = json.hourly?.weathercode || [];
+): KickoffWeather | null {
   if (!times.length || !temps.length) return null;
-
-  const targetMs = kick.getTime();
+  const targetMs = new Date(kickoffIso).getTime();
+  if (!Number.isFinite(targetMs)) return null;
   let bestIdx = 0;
   let bestDiff = Infinity;
   for (let i = 0; i < times.length; i++) {
@@ -72,6 +49,8 @@ async function fetchHourlyTemp(
       bestIdx = i;
     }
   }
+  // Reject if closest hour is > 3h away (bad match / out of range).
+  if (bestDiff > 3 * 60 * 60 * 1000) return null;
   const tempC = Number(temps[bestIdx]);
   if (!Number.isFinite(tempC)) return null;
   const code = Number(codes[bestIdx]);
@@ -81,28 +60,123 @@ async function fetchHourlyTemp(
   };
 }
 
+async function geocodeQuery(query: string): Promise<{ lat: number; lon: number } | null> {
+  const q = query.trim();
+  if (!q) return null;
+  if (geoCache.has(q)) return geoCache.get(q) || null;
+  try {
+    const url =
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}` +
+      `&count=1&language=en&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      geoCache.set(q, null);
+      return null;
+    }
+    const json = (await res.json()) as { results?: Array<{ latitude: number; longitude: number }> };
+    const hit = json.results?.[0];
+    if (!hit || !Number.isFinite(hit.latitude) || !Number.isFinite(hit.longitude)) {
+      geoCache.set(q, null);
+      return null;
+    }
+    const coords = { lat: hit.latitude, lon: hit.longitude };
+    geoCache.set(q, coords);
+    return coords;
+  } catch {
+    geoCache.set(q, null);
+    return null;
+  }
+}
+
+async function resolveCoords(venue: MatchVenue | undefined): Promise<{ lat: number; lon: number } | null> {
+  const lat = Number(venue?.lat);
+  const lon = Number(venue?.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+
+  const city = venue?.city?.trim() || "";
+  const country = venue?.country?.trim() || "";
+  const name = venue?.name?.trim() || "";
+
+  const queries = [
+    city && country ? `${city}, ${country}` : "",
+    city,
+    name && country ? `${name}, ${country}` : "",
+    name,
+    name && city ? `${name}, ${city}` : ""
+  ].filter(Boolean);
+
+  for (const q of queries) {
+    const geo = await geocodeQuery(q);
+    if (geo) return geo;
+  }
+  return null;
+}
+
+async function fetchHourlyTemp(
+  lat: number,
+  lon: number,
+  kickoffIso: string
+): Promise<KickoffWeather | null> {
+  const kick = new Date(kickoffIso);
+  if (!Number.isFinite(kick.getTime())) return null;
+  const now = Date.now();
+  const msAhead = kick.getTime() - now;
+  const daysAhead = msAhead / (24 * 60 * 60 * 1000);
+
+  const parsePayload = async (url: string): Promise<KickoffWeather | null> => {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      hourly?: { time?: string[]; temperature_2m?: number[]; weathercode?: number[] };
+    };
+    return pickClosestHour(
+      json.hourly?.time || [],
+      json.hourly?.temperature_2m || [],
+      json.hourly?.weathercode || [],
+      kickoffIso
+    );
+  };
+
+  // Past kickoffs → archive API; upcoming → 16-day forecast (covers +2 days selection).
+  if (daysAhead < -1) {
+    const day = kick.toISOString().slice(0, 10);
+    const archiveUrl =
+      `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}` +
+      `&hourly=temperature_2m,weathercode&start_date=${day}&end_date=${day}&timezone=auto`;
+    return parsePayload(archiveUrl);
+  }
+
+  if (daysAhead > 16) return null;
+
+  const forecastUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&hourly=temperature_2m,weathercode&forecast_days=16&timezone=auto`;
+  const fromForecast = await parsePayload(forecastUrl);
+  if (fromForecast) return fromForecast;
+
+  // Fallback: explicit UTC window window (older clients / edge cases).
+  const start = kick.toISOString().slice(0, 10);
+  const endDate = new Date(kick.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rangedUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&hourly=temperature_2m,weathercode&start_date=${start}&end_date=${endDate}&timezone=UTC`;
+  return parsePayload(rangedUrl);
+}
+
 async function resolveWeather(
   venue: MatchVenue | undefined,
   kickoffIso: string
 ): Promise<KickoffWeather | null> {
   if (!kickoffIso) return null;
-  let lat = Number(venue?.lat);
-  let lon = Number(venue?.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    const city = venue?.city?.trim();
-    if (!city) return null;
-    const geo = await geocodeCity(city);
-    if (!geo) return null;
-    lat = geo.lat;
-    lon = geo.lon;
-  }
+  const coords = await resolveCoords(venue);
+  if (!coords) return null;
 
-  const key = cacheKey(lat, lon, kickoffIso);
+  const key = cacheKey(coords.lat, coords.lon, kickoffIso);
   const cached = memoryCache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.data;
 
   try {
-    const data = await fetchHourlyTemp(lat, lon, kickoffIso);
+    const data = await fetchHourlyTemp(coords.lat, coords.lon, kickoffIso);
     memoryCache.set(key, { at: Date.now(), data });
     return data;
   } catch {
@@ -113,7 +187,7 @@ async function resolveWeather(
 
 /**
  * Kickoff-hour weather via Open-Meteo (no API key).
- * Uses venue lat/lon, or geocodes venue.city when coords are missing.
+ * Uses venue lat/lon, or geocodes city / stadium name (+ country).
  */
 export function useKickoffWeather(
   venue: MatchVenue | undefined,
@@ -125,11 +199,17 @@ export function useKickoffWeather(
   const lat = venue?.lat;
   const lon = venue?.lon;
   const city = venue?.city;
+  const country = venue?.country;
+  const name = venue?.name;
   const ko = kickoffIso || "";
 
   useEffect(() => {
     let cancelled = false;
-    if (!ko || (!Number.isFinite(Number(lat)) && !Number.isFinite(Number(lon)) && !city?.trim())) {
+    const hasPlace =
+      (Number.isFinite(Number(lat)) && Number.isFinite(Number(lon))) ||
+      Boolean(city?.trim()) ||
+      Boolean(name?.trim());
+    if (!ko || !hasPlace) {
       setWeather(null);
       setLoading(false);
       return;
@@ -147,7 +227,7 @@ export function useKickoffWeather(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional deps on primitives
-  }, [lat, lon, city, ko]);
+  }, [lat, lon, city, country, name, ko]);
 
   return { weather, loading };
 }

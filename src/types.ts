@@ -401,6 +401,8 @@ export type MarketTierInfo = {
 export type MatchVenue = {
   name?: string;
   city?: string;
+  /** Country name from API-Football league (helps geocode weather). */
+  country?: string;
   lat?: number;
   lon?: number;
 };
