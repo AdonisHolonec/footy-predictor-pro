@@ -1,23 +1,27 @@
-import type { PredictionRow } from "../../types";
+import type { CardMarketValidations, PredictionRow } from "../../types";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { useLocale } from "../../context/LocaleContext";
 import { useKickoffWeather, weatherCodeKey } from "../../hooks/useKickoffWeather";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import {
+  resolveCardMarketOutcome,
+  type CardMarketId,
+  type MarketOutcome
+} from "../../utils/cardMarketOutcome";
+import {
   deriveCardGoalsPick,
   deriveBestOverUnderPick,
   goalsOddForLine,
-  goalsPickValueEv,
   matchingMarketOdd,
-  modelValueEv,
-  recommendedOdd,
-  recommendedPickValueEv
+  recommendedOdd
 } from "../../utils/marketPicks";
 
 type Props = {
   row: PredictionRow;
   /** Effective access tier (free / premium / ultra) — drives lock vs missing-data UI. */
   accessTier?: UpgradeTier | "free" | string;
+  /** History settlement for this fixture (global counter source of truth). */
+  marketValidations?: CardMarketValidations | null;
   watched?: boolean;
   onToggleWatch?: () => void;
   onOpen: () => void;
@@ -25,7 +29,7 @@ type Props = {
 };
 
 type MarketRow = {
-  id: string;
+  id: CardMarketId;
   marketLabel: string;
   locked: boolean;
   lockTier: UpgradeTier;
@@ -33,7 +37,7 @@ type MarketRow = {
   pick: string;
   confidence: string;
   odd: string;
-  value: string;
+  outcome: MarketOutcome;
   accent?: boolean;
 };
 
@@ -50,13 +54,7 @@ function sidePickLabel(
   return side === "over" ? t("match.overLine", { line: line.toFixed(1) }) : t("match.underLine", { line: line.toFixed(1) });
 }
 
-function RankChip({
-  text,
-  label
-}: {
-  text: string;
-  label: string;
-}) {
+function RankChip({ text, label }: { text: string; label: string }) {
   return (
     <span
       className="inline-flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-md bg-[var(--fp-bg-muted)] px-1 text-[10px] font-bold tabular-nums leading-none text-[var(--fp-text-muted)]"
@@ -67,10 +65,37 @@ function RankChip({
   );
 }
 
-/** Consumer prediction card — markets table + rank / referee / weather. */
+function OutcomeBadge({
+  outcome,
+  winLabel,
+  lossLabel
+}: {
+  outcome: MarketOutcome;
+  winLabel: string;
+  lossLabel: string;
+}) {
+  if (outcome === "win") {
+    return (
+      <span className="inline-flex justify-end rounded border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)]">
+        {winLabel}
+      </span>
+    );
+  }
+  if (outcome === "loss") {
+    return (
+      <span className="inline-flex justify-end rounded border border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)]">
+        {lossLabel}
+      </span>
+    );
+  }
+  return <span className="text-[var(--fp-text-faint)]">—</span>;
+}
+
+/** Consumer prediction card — markets + WIN/LOSS (no Value column). */
 export default function PredictionFocusCard({
   row,
   accessTier = "free",
+  marketValidations = null,
   watched,
   onToggleWatch,
   onOpen,
@@ -89,9 +114,6 @@ export default function PredictionFocusCard({
   const isPremiumLike = !hasExactConfidence && Boolean(confidenceCategory);
   const isFreeLike = !hasExactConfidence && !confidenceCategory;
 
-  const valueBetEv = Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue);
-  const hasValueBadge =
-    row.valueBet?.detected || (Number.isFinite(valueBetEv) && valueBetEv > 0);
   const live = isFixtureInPlay(row.status);
   const kickoff = new Date(row.kickoff);
   const time = Number.isFinite(kickoff.getTime())
@@ -101,13 +123,10 @@ export default function PredictionFocusCard({
   const homeRank = row.teamContext?.home?.rank;
   const awayRank = row.teamContext?.away?.rank;
 
-  // Avoid duplicating recommended when it is already a goals O/U pick.
   const goals = deriveCardGoalsPick(row);
   const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
 
-  // Lock = upgrade CTA only when the user's tier cannot access the market.
-  // Missing probs for a paid tier = unavailable ("—"), not "blocked".
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
 
@@ -117,22 +136,13 @@ export default function PredictionFocusCard({
       ? String(confidenceCategory)
       : "—";
 
-  const fmtEv = (ev: number | null) =>
-    ev != null && Number.isFinite(ev) ? `${ev > 0 ? "+" : ""}${ev.toFixed(1)}%` : "—";
-
-  // Value column = EV of that row's pick (model % × bookmaker odd), not a different value-bet market.
-  const recommendedEv = recommendedPickValueEv(row);
-  const goalsEv =
-    goals != null ? goalsPickValueEv(row, goals.side, goals.line, goals.probability) : null;
+  const stored = marketValidations ?? row.cardMarketValidations ?? null;
   const cornersOdd = corners
     ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
     : null;
   const shotsOdd = shots
     ? matchingMarketOdd(row.marketOdds?.shotsOnTarget, shots.side, shots.line)
     : null;
-  const cornersEv =
-    corners != null ? modelValueEv(corners.probability, cornersOdd) : null;
-  const shotsEv = shots != null ? modelValueEv(shots.probability, shotsOdd) : null;
 
   const marketRows: MarketRow[] = [
     {
@@ -144,7 +154,7 @@ export default function PredictionFocusCard({
       pick: row.recommended?.pick || "—",
       confidence: confLabel,
       odd: fmtOdd(recommendedOdd(row)),
-      value: fmtEv(recommendedEv),
+      outcome: resolveCardMarketOutcome("recommended", row, stored),
       accent: true
     },
     {
@@ -156,7 +166,7 @@ export default function PredictionFocusCard({
       pick: goals ? sidePickLabel(t, goals.side, goals.line) : "—",
       confidence: goals ? `${Math.round(goals.probability)}%` : "—",
       odd: goals ? fmtOdd(goalsOddForLine(row, goals.line, goals.side)) : "—",
-      value: fmtEv(goalsEv)
+      outcome: resolveCardMarketOutcome("goals", row, stored)
     },
     {
       id: "corners",
@@ -167,7 +177,7 @@ export default function PredictionFocusCard({
       pick: corners ? sidePickLabel(t, corners.side, corners.line) : "—",
       confidence: corners ? `${Math.round(corners.probability)}%` : "—",
       odd: fmtOdd(cornersOdd),
-      value: cornersLocked ? "—" : fmtEv(cornersEv)
+      outcome: cornersLocked ? null : resolveCardMarketOutcome("corners", row, stored)
     },
     {
       id: "shots",
@@ -178,7 +188,7 @@ export default function PredictionFocusCard({
       pick: shots ? sidePickLabel(t, shots.side, shots.line) : "—",
       confidence: shots ? `${Math.round(shots.probability)}%` : "—",
       odd: fmtOdd(shotsOdd),
-      value: shotsLocked ? "—" : fmtEv(shotsEv)
+      outcome: shotsLocked ? null : resolveCardMarketOutcome("shots", row, stored)
     }
   ];
 
@@ -189,7 +199,7 @@ export default function PredictionFocusCard({
       : t("card.weatherUnavailable");
 
   const marketGrid =
-    "grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_2.35rem_2.15rem_2.55rem] items-center gap-x-1";
+    "grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)_2.35rem_2.15rem_2.7rem] items-center gap-x-1";
 
   if (row.insufficientData) {
     return (
@@ -227,7 +237,6 @@ export default function PredictionFocusCard({
       }}
       className="group cursor-pointer rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)] transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
     >
-      {/* Header: league · meta | time + favorite */}
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {row.logos?.league ? (
@@ -240,11 +249,6 @@ export default function PredictionFocusCard({
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--fp-danger)]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-danger)]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
               {t("card.live")}
-            </span>
-          )}
-          {hasValueBadge && (
-            <span className="shrink-0 rounded-full bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-warning)]">
-              {t("card.value")}
             </span>
           )}
         </div>
@@ -276,7 +280,6 @@ export default function PredictionFocusCard({
         <span title={t("card.weather")}>{weatherText}</span>
       </p>
 
-      {/* Teams: symmetric rank · crest · name */}
       <div className="mt-2.5 grid grid-cols-[1fr_auto_1fr] items-start gap-1">
         <div className="flex min-w-0 flex-col items-center gap-1">
           <div className="flex items-center justify-center gap-1">
@@ -317,7 +320,6 @@ export default function PredictionFocusCard({
         </div>
       </div>
 
-      {/* Markets: fixed columns, no horizontal scroll */}
       <div className="mt-2.5 border-t border-[var(--fp-border)] pt-1.5">
         <div
           className={`${marketGrid} pb-1 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]`}
@@ -326,7 +328,7 @@ export default function PredictionFocusCard({
           <span className="truncate">{t("card.colPrediction")}</span>
           <span className="text-right">{t("card.colConfidence")}</span>
           <span className="text-right">{t("card.colOdds")}</span>
-          <span className="text-right">{t("card.colValue")}</span>
+          <span className="text-right">{t("card.colResult")}</span>
         </div>
         <div className="divide-y divide-[var(--fp-border)]/70">
           {marketRows.map((r) => (
@@ -363,8 +365,16 @@ export default function PredictionFocusCard({
               <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
                 {r.locked ? "—" : r.odd}
               </span>
-              <span className="text-right font-semibold tabular-nums text-[var(--fp-text)]">
-                {r.locked ? "—" : r.value}
+              <span className="flex justify-end">
+                {r.locked ? (
+                  <span className="text-[var(--fp-text-faint)]">—</span>
+                ) : (
+                  <OutcomeBadge
+                    outcome={r.outcome}
+                    winLabel={t("history.win")}
+                    lossLabel={t("history.loss")}
+                  />
+                )}
               </span>
             </div>
           ))}

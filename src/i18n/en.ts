@@ -183,6 +183,7 @@ export const en: Dict = {
     colPrediction: "Prediction",
     colConfidence: "Confidence",
     colOdds: "Odds",
+    colResult: "Result",
     colValue: "Value",
     marketRecommended: "Recommended",
     marketGoals: "Goals",

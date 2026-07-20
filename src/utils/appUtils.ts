@@ -163,9 +163,24 @@ export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEn
     const naN = Number(na);
     const hasServerScore = Number.isFinite(nhN) && Number.isFinite(naN);
     const nextScore = hasServerScore ? { home: nhN, away: naN } : p.score;
-    if (nextStatus === p.status && nextScore?.home === oh && nextScore?.away === oa) return p;
+    const nextValidations = h.cardMarketValidations ?? p.cardMarketValidations ?? null;
+    const sameValidations =
+      JSON.stringify(nextValidations || null) === JSON.stringify(p.cardMarketValidations || null);
+    if (
+      nextStatus === p.status &&
+      nextScore?.home === oh &&
+      nextScore?.away === oa &&
+      sameValidations
+    ) {
+      return p;
+    }
     touched = true;
-    return { ...p, status: nextStatus, score: nextScore };
+    return {
+      ...p,
+      status: nextStatus,
+      score: nextScore,
+      cardMarketValidations: nextValidations
+    };
   });
   return touched ? out : preds;
 }

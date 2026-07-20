@@ -183,6 +183,7 @@ export const ro: Dict = {
     colPrediction: "Predicție",
     colConfidence: "Încredere",
     colOdds: "Cotă",
+    colResult: "Rezultat",
     colValue: "Value",
     marketRecommended: "Recomandat",
     marketGoals: "Goluri",

@@ -407,6 +407,14 @@ export type MatchVenue = {
   lon?: number;
 };
 
+/** Settled outcomes for FocusCard markets (recommended / goals / corners / shots). */
+export type CardMarketValidations = {
+  recommended?: "pending" | "win" | "loss" | null;
+  goals?: "pending" | "win" | "loss" | null;
+  corners?: "pending" | "win" | "loss" | null;
+  shots?: "pending" | "win" | "loss" | null;
+};
+
 export type PredictionRow = {
   id: number;
   leagueId: number;
@@ -418,6 +426,8 @@ export type PredictionRow = {
   kickoff: string;
   status: string;
   score?: MatchScore;
+  /** Merged from history when available — drives WIN/LOSS on the card. */
+  cardMarketValidations?: CardMarketValidations | null;
   referee?: string;
   /** Venue from API-Football fixture (coords/city for weather). */
   venue?: MatchVenue;
@@ -649,18 +659,9 @@ export type PredictionRow = {
   };
 };
 
-export type CardMarketValidations = {
-  recommended?: "pending" | "win" | "loss" | null;
-  goals?: "pending" | "win" | "loss" | null;
-  corners?: "pending" | "win" | "loss" | null;
-  shots?: "pending" | "win" | "loss" | null;
-};
-
 export type HistoryEntry = PredictionRow & {
   savedAt: string;
   validation: "pending" | "win" | "loss";
-  /** Settled outcomes for FocusCard markets (recommended / goals / corners / shots). */
-  cardMarketValidations?: CardMarketValidations | null;
 };
 
 export type HistoryStats = {

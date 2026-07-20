@@ -220,6 +220,13 @@ export default function UserDashboard() {
   const showSettledMarketsOnly = prefs.settledOnly;
   const todayKey = localCalendarDateKey();
   const trackerStats = useMemo(() => historyStats, [historyStats]);
+  const marketValidationsByFixtureId = useMemo(() => {
+    const map = new Map<number, NonNullable<HistoryEntry["cardMarketValidations"]>>();
+    for (const h of history) {
+      if (h.cardMarketValidations) map.set(Number(h.id), h.cardMarketValidations);
+    }
+    return map;
+  }, [history]);
   const pendingHistoryCount = useMemo(
     () => history.filter((item) => item.validation === "pending").length,
     [history]
@@ -1104,6 +1111,9 @@ export default function UserDashboard() {
                   key={row.id}
                   row={row}
                   accessTier={userTier}
+                  marketValidations={
+                    marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null
+                  }
                   watched={isWatched(Number(row.id))}
                   onToggleWatch={() => toggleWatchlist(Number(row.id))}
                   onOpen={() => openMatch(row)}
