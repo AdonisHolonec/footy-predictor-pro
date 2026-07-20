@@ -145,7 +145,7 @@ export default function AdminUsersTable({
                 </button>
                 {isExpiredSubscription(profile.subscriptionExpiresAt) && (
                   <div className="mt-1 inline-flex rounded-md border border-signal-rose/30 bg-signal-rose/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-rose">
-                    Expired
+                    Expired — Save Plan clears it for paid tiers
                   </div>
                 )}
               </td>

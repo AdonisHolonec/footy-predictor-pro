@@ -121,10 +121,21 @@ export function useAppAuthActions(
     try {
       const tier = (adminTierDraftByUser[userId] || fallbackTier) as UserTier;
       const expiryRaw = adminExpiryDraftByUser[userId];
-      const subscriptionExpiresAt =
+      let subscriptionExpiresAt =
         expiryRaw !== undefined ? localDatetimeInputToIso(expiryRaw) : (fallbackExpiry ?? null);
+      // Open-ended paid grant when expiry is missing or already past (otherwise effectiveTier stays free).
+      if (tier === "premium" || tier === "ultra") {
+        const expiryMs = subscriptionExpiresAt ? new Date(subscriptionExpiresAt).getTime() : NaN;
+        if (!subscriptionExpiresAt || !Number.isFinite(expiryMs) || expiryMs <= Date.now()) {
+          subscriptionExpiresAt = null;
+        }
+      }
       await api.updateProfileMonetization(userId, { tier, subscriptionExpiresAt });
-      setStatus(`Subscription updated for ${userId}.`);
+      setStatus(
+        subscriptionExpiresAt
+          ? `Subscription updated for ${userId}.`
+          : `Subscription updated for ${userId} (open-ended ${tier}).`
+      );
     } catch (e: any) {
       setStatus(e?.message || "Nu am putut actualiza abonamentul.");
     } finally {

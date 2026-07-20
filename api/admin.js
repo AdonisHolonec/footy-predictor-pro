@@ -192,6 +192,25 @@ async function handleProfiles(req, res) {
     }
     if (subscriptionExpiry.provided) nextUpdate.subscription_expires_at = subscriptionExpiry.value;
 
+    // Paid admin grants need an active (or open-ended) subscription. Saving premium/ultra while
+    // leaving a past subscription_expires_at makes resolveEffectiveTierFromProfile treat them as free.
+    if (tier === "premium" || tier === "ultra") {
+      let expiryIso = subscriptionExpiry.provided ? subscriptionExpiry.value : undefined;
+      if (expiryIso === undefined) {
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("subscription_expires_at")
+          .eq("user_id", userId)
+          .maybeSingle();
+        expiryIso = currentProfile?.subscription_expires_at ?? null;
+      }
+      const expiryMs = expiryIso ? new Date(expiryIso).getTime() : NaN;
+      const expired = Number.isFinite(expiryMs) && expiryMs <= Date.now();
+      if (!expiryIso || expired) {
+        nextUpdate.subscription_expires_at = null;
+      }
+    }
+
     if (!Object.keys(nextUpdate).length) {
       return res.status(400).json({ ok: false, error: "Nu există câmpuri valide pentru actualizare." });
     }

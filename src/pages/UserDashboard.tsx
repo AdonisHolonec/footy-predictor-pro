@@ -583,6 +583,26 @@ export default function UserDashboard() {
     return () => clearInterval(tm);
   }, [session?.access_token, refreshTierStatus]);
 
+  // Drop free-masked localStorage rows when the user is promoted (tierStatus / admin grant).
+  const prevEffectiveTierRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!user?.id) return;
+    const nextTier = String(userTier || user.tier || "free").toLowerCase();
+    const prevTier = prevEffectiveTierRef.current;
+    prevEffectiveTierRef.current = nextTier;
+    if (!prevTier || prevTier === nextTier) return;
+    const rank: Record<string, number> = { free: 0, premium: 1, ultra: 2 };
+    if ((rank[nextTier] ?? 0) <= (rank[prevTier] ?? 0)) return;
+    setPredictionsByUser((prev) => {
+      if (!prev[user.id]?.length) return prev;
+      const copy = { ...prev };
+      delete copy[user.id];
+      return copy;
+    });
+    setPreds((prev) => (prev.length ? [] : prev));
+    setStatus("Plan upgraded — run Predict again for full markets.");
+  }, [user?.id, userTier, user?.tier, setPredictionsByUser]);
+
   useEffect(() => {
     const prev = prevWinRateRef.current;
     if (Math.abs(prev - trackerStats.winRate) > 0.01) {
