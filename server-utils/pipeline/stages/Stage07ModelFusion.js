@@ -491,6 +491,8 @@ export async function run(context) {
               pick: "Over 1.5",
               line: 1.5,
               odd: goals15Quote.over,
+              over: goals15Quote.over ?? null,
+              under: goals15Quote.under ?? null,
               bookmaker: `median(${goals15Quote.bookmakersUsed})`,
               bookmakersUsed: goals15Quote.bookmakersUsed || 0
             }
@@ -500,6 +502,8 @@ export async function run(context) {
               pick: "Over 2.5",
               line: 2.5,
               odd: goals25Quote.over,
+              over: goals25Quote.over ?? null,
+              under: goals25Quote.under ?? null,
               bookmaker: `median(${goals25Quote.bookmakersUsed})`,
               bookmakersUsed: goals25Quote.bookmakersUsed || 0
             }
@@ -509,6 +513,8 @@ export async function run(context) {
               pick: "Over 3.5",
               line: 3.5,
               odd: goals35Quote.over,
+              over: goals35Quote.over ?? null,
+              under: goals35Quote.under ?? null,
               bookmaker: `median(${goals35Quote.bookmakersUsed})`,
               bookmakersUsed: goals35Quote.bookmakersUsed || 0
             }

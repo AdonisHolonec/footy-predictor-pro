@@ -1,9 +1,43 @@
 import type { PredictionRow } from "../types";
 
+export type GoalsOuPick = {
+  pickKey: "over15" | "under15" | "over25" | "under25" | "over35" | "under35";
+  line: number;
+  side: "over" | "under";
+  probability: number;
+};
+
 function parseLineThreshold(key: string): number | null {
   const m = key.match(/^o(\d+)_(\d+)$/);
   if (!m) return null;
   return Number(`${m[1]}.${m[2]}`);
+}
+
+function sameOuPick(
+  a: { side: "over" | "under"; line: number },
+  b: { side: "over" | "under"; line: number }
+): boolean {
+  return a.side === b.side && Math.abs(a.line - b.line) < 1e-6;
+}
+
+/** Parse recommended labels like "Peste 2.5" / "Over 2.5" / "Sub 1.5". */
+export function parseGoalsOuPick(pick: string | null | undefined): {
+  side: "over" | "under";
+  line: number;
+} | null {
+  const n = String(pick || "").trim().toLowerCase();
+  if (!n) return null;
+  const over = n.match(/^(?:peste|over)\s*(\d+(?:[.,]\d+)?)/);
+  if (over) {
+    const line = Number(over[1].replace(",", "."));
+    return Number.isFinite(line) ? { side: "over", line } : null;
+  }
+  const under = n.match(/^(?:sub|under)\s*(\d+(?:[.,]\d+)?)/);
+  if (under) {
+    const line = Number(under[1].replace(",", "."));
+    return Number.isFinite(line) ? { side: "under", line } : null;
+  }
+  return null;
 }
 
 /** Best Over/Under from Poisson total lines (keys like o9_5 → 9.5). */
@@ -24,36 +58,94 @@ export function deriveBestOverUnderPick(
   return best;
 }
 
-/** Best goals O/U among 1.5 / 2.5 / 3.5 from model probs. */
-export function deriveBestGoalsPick(row: PredictionRow): {
-  pickKey: "over15" | "under15" | "over25" | "under25" | "over35" | "under35";
-  line: number;
-  side: "over" | "under";
-  probability: number;
-} | null {
+export function listGoalsPickCandidates(row: PredictionRow): GoalsOuPick[] {
   const p = row.probs;
-  if (!p) return null;
-  const candidates = [
+  if (!p) return [];
+  return [
     { pickKey: "over15" as const, line: 1.5, side: "over" as const, probability: Number(p.pO15) },
-    { pickKey: "under15" as const, line: 1.5, side: "under" as const, probability: Number(p.pU15 ?? 100 - Number(p.pO15)) },
+    {
+      pickKey: "under15" as const,
+      line: 1.5,
+      side: "under" as const,
+      probability: Number(p.pU15 ?? 100 - Number(p.pO15))
+    },
     { pickKey: "over25" as const, line: 2.5, side: "over" as const, probability: Number(p.pO25) },
-    { pickKey: "under25" as const, line: 2.5, side: "under" as const, probability: Number(p.pU25 ?? 100 - Number(p.pO25)) },
-    { pickKey: "over35" as const, line: 3.5, side: "over" as const, probability: Number.isFinite(Number(p.pU35)) ? 100 - Number(p.pU35) : NaN },
+    {
+      pickKey: "under25" as const,
+      line: 2.5,
+      side: "under" as const,
+      probability: Number(p.pU25 ?? 100 - Number(p.pO25))
+    },
+    {
+      pickKey: "over35" as const,
+      line: 3.5,
+      side: "over" as const,
+      probability: Number.isFinite(Number(p.pU35)) ? 100 - Number(p.pU35) : NaN
+    },
     { pickKey: "under35" as const, line: 3.5, side: "under" as const, probability: Number(p.pU35) }
-  ].filter((c) => Number.isFinite(c.probability) && c.probability > 0);
-
-  if (!candidates.length) return null;
-  return candidates.reduce((a, b) => (b.probability > a.probability ? b : a));
+  ]
+    .filter((c) => Number.isFinite(c.probability) && c.probability > 0)
+    .sort((a, b) => b.probability - a.probability);
 }
 
+/** Best goals O/U among 1.5 / 2.5 / 3.5 from model probs. */
+export function deriveBestGoalsPick(
+  row: PredictionRow,
+  options?: { exclude?: { side: "over" | "under"; line: number } | null }
+): GoalsOuPick | null {
+  const candidates = listGoalsPickCandidates(row);
+  const exclude = options?.exclude || null;
+  const filtered = exclude ? candidates.filter((c) => !sameOuPick(c, exclude)) : candidates;
+  return filtered[0] || null;
+}
+
+/**
+ * Goals row for the FocusCard: if recommended is already a goals O/U pick,
+ * show the next-best goals line by probability.
+ */
+export function deriveCardGoalsPick(row: PredictionRow): GoalsOuPick | null {
+  const recommendedGoals = parseGoalsOuPick(row.recommended?.pick);
+  return deriveBestGoalsPick(row, { exclude: recommendedGoals });
+}
+
+/** Model EV% = (p * odd - 1) * 100; null when inputs are incomplete. */
+export function modelValueEv(probabilityPct: number, odd: number | null | undefined): number | null {
+  const p = Number(probabilityPct);
+  const o = Number(odd);
+  if (!Number.isFinite(p) || p <= 0 || !Number.isFinite(o) || o <= 1) return null;
+  return (p / 100) * o * 100 - 100;
+}
+
+/** Model EV% for a goals O/U pick vs quoted odds (null when odd missing). */
+export function goalsPickValueEv(
+  row: PredictionRow,
+  side: "over" | "under",
+  line: number,
+  probability: number
+): number | null {
+  return modelValueEv(probability, goalsOddForLine(row, line, side));
+}
+
+/**
+ * Bookmaker consensus odd for a goals line/side.
+ * Never invents Under from Over — only real quote sides.
+ */
 export function goalsOddForLine(row: PredictionRow, line: number, side: "over" | "under"): number | null {
   const quote =
-    line === 1.5 ? row.marketOdds?.goals15 : line === 2.5 ? row.marketOdds?.goals25 : row.marketOdds?.goals35;
-  const overOdd = Number(quote?.odd);
-  if (!Number.isFinite(overOdd) || overOdd <= 1) return null;
-  if (side === "over") return overOdd;
-  const underOdd = overOdd / (overOdd - 1);
-  return Number.isFinite(underOdd) ? underOdd : null;
+    line === 1.5
+      ? row.marketOdds?.goals15
+      : line === 2.5
+        ? row.marketOdds?.goals25
+        : line === 3.5
+          ? row.marketOdds?.goals35
+          : undefined;
+  if (!quote) return null;
+  if (side === "over") {
+    const over = Number(quote.over ?? quote.odd);
+    return Number.isFinite(over) && over > 1 ? over : null;
+  }
+  const under = Number(quote.under);
+  return Number.isFinite(under) && under > 1 ? under : null;
 }
 
 export function recommendedOdd(row: PredictionRow): number | null {
@@ -63,5 +155,32 @@ export function recommendedOdd(row: PredictionRow): number | null {
   if (pick === "1" && Number.isFinite(Number(row.odds?.home))) return Number(row.odds?.home);
   if (pick === "x" && Number.isFinite(Number(row.odds?.draw))) return Number(row.odds?.draw);
   if (pick === "2" && Number.isFinite(Number(row.odds?.away))) return Number(row.odds?.away);
+  if (pick === "gg" && Number.isFinite(Number(row.marketOdds?.btts?.odd))) {
+    return Number(row.marketOdds?.btts?.odd);
+  }
+  const goals = parseGoalsOuPick(row.recommended?.pick);
+  if (goals) return goalsOddForLine(row, goals.line, goals.side);
   return null;
+}
+
+/** EV% for the recommended pick only (not the separate value-bet market). */
+export function recommendedPickValueEv(row: PredictionRow): number | null {
+  const conf = Number(row.recommended?.confidence);
+  return modelValueEv(conf, recommendedOdd(row));
+}
+
+/** Odd for corners/shots row only when quote matches the displayed pick. */
+export function matchingMarketOdd(
+  quote: { pick?: string; line?: number | null; odd?: number | null } | null | undefined,
+  side: "over" | "under",
+  line: number
+): number | null {
+  if (!quote) return null;
+  const qLine = Number(quote.line);
+  if (Number.isFinite(qLine) && Math.abs(qLine - line) > 1e-6) return null;
+  const qPick = String(quote.pick || "").toLowerCase();
+  const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : null;
+  if (qSide && qSide !== side) return null;
+  const odd = Number(quote.odd);
+  return Number.isFinite(odd) && odd > 1 ? odd : null;
 }

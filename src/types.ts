@@ -310,7 +310,11 @@ export type MatchScore = { home: number | null; away: number | null };
 export type MarketOddQuote = {
   pick: string;
   line?: number | null;
+  /** Consensus odd for the stored `pick` side (over or under). */
   odd: number | null;
+  /** Raw consensus sides when available (goals O/U). */
+  over?: number | null;
+  under?: number | null;
   bookmaker?: string | null;
   bookmakersUsed?: number;
 };

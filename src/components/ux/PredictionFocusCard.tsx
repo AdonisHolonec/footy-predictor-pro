@@ -4,10 +4,14 @@ import { useLocale } from "../../context/LocaleContext";
 import { useKickoffWeather, weatherCodeKey } from "../../hooks/useKickoffWeather";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import {
-  deriveBestGoalsPick,
+  deriveCardGoalsPick,
   deriveBestOverUnderPick,
   goalsOddForLine,
-  recommendedOdd
+  goalsPickValueEv,
+  matchingMarketOdd,
+  modelValueEv,
+  recommendedOdd,
+  recommendedPickValueEv
 } from "../../utils/marketPicks";
 
 type Props = {
@@ -61,8 +65,9 @@ export default function PredictionFocusCard({
   const isPremiumLike = !hasExactConfidence && Boolean(confidenceCategory);
   const isFreeLike = !hasExactConfidence && !confidenceCategory;
 
-  const ev = Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue);
-  const hasValue = row.valueBet?.detected || (Number.isFinite(ev) && ev > 0);
+  const valueBetEv = Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue);
+  const hasValueBadge =
+    row.valueBet?.detected || (Number.isFinite(valueBetEv) && valueBetEv > 0);
   const live = isFixtureInPlay(row.status);
   const kickoff = new Date(row.kickoff);
   const time = Number.isFinite(kickoff.getTime())
@@ -72,7 +77,8 @@ export default function PredictionFocusCard({
   const homeRank = row.teamContext?.home?.rank;
   const awayRank = row.teamContext?.away?.rank;
 
-  const goals = deriveBestGoalsPick(row);
+  // Avoid duplicating recommended when it is already a goals O/U pick.
+  const goals = deriveCardGoalsPick(row);
   const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
 
@@ -85,12 +91,22 @@ export default function PredictionFocusCard({
       ? String(confidenceCategory)
       : "—";
 
-  const valueLabel =
-    Number.isFinite(ev) && ev !== 0
-      ? `${ev > 0 ? "+" : ""}${ev.toFixed(1)}%`
-      : hasValue
-        ? t("common.yes")
-        : "—";
+  const fmtEv = (ev: number | null) =>
+    ev != null && Number.isFinite(ev) ? `${ev > 0 ? "+" : ""}${ev.toFixed(1)}%` : "—";
+
+  // Value column = EV of that row's pick (model % × bookmaker odd), not a different value-bet market.
+  const recommendedEv = recommendedPickValueEv(row);
+  const goalsEv =
+    goals != null ? goalsPickValueEv(row, goals.side, goals.line, goals.probability) : null;
+  const cornersOdd = corners
+    ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
+    : null;
+  const shotsOdd = shots
+    ? matchingMarketOdd(row.marketOdds?.shotsOnTarget, shots.side, shots.line)
+    : null;
+  const cornersEv =
+    corners != null ? modelValueEv(corners.probability, cornersOdd) : null;
+  const shotsEv = shots != null ? modelValueEv(shots.probability, shotsOdd) : null;
 
   const marketRows: MarketRow[] = [
     {
@@ -102,7 +118,7 @@ export default function PredictionFocusCard({
       pick: row.recommended?.pick || "—",
       confidence: confLabel,
       odd: fmtOdd(recommendedOdd(row)),
-      value: isFreeLike ? "—" : valueLabel,
+      value: fmtEv(recommendedEv),
       accent: true
     },
     {
@@ -111,10 +127,10 @@ export default function PredictionFocusCard({
       locked: false,
       lockTier: "premium",
       lockFeature: t("card.marketGoals"),
-      pick: goals ? sidePickLabel(t, goals.side, goals.line) : row.predictions?.over25 || "—",
+      pick: goals ? sidePickLabel(t, goals.side, goals.line) : "—",
       confidence: goals ? `${Math.round(goals.probability)}%` : "—",
       odd: goals ? fmtOdd(goalsOddForLine(row, goals.line, goals.side)) : "—",
-      value: "—"
+      value: fmtEv(goalsEv)
     },
     {
       id: "corners",
@@ -124,8 +140,8 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featCorners"),
       pick: corners ? sidePickLabel(t, corners.side, corners.line) : "—",
       confidence: corners ? `${Math.round(corners.probability)}%` : "—",
-      odd: fmtOdd(Number(row.marketOdds?.corners?.odd)),
-      value: "—"
+      odd: fmtOdd(cornersOdd),
+      value: cornersLocked ? "—" : fmtEv(cornersEv)
     },
     {
       id: "shots",
@@ -135,8 +151,8 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featShots"),
       pick: shots ? sidePickLabel(t, shots.side, shots.line) : "—",
       confidence: shots ? `${Math.round(shots.probability)}%` : "—",
-      odd: fmtOdd(Number(row.marketOdds?.shotsOnTarget?.odd)),
-      value: "—"
+      odd: fmtOdd(shotsOdd),
+      value: shotsLocked ? "—" : fmtEv(shotsEv)
     }
   ];
 
@@ -193,7 +209,7 @@ export default function PredictionFocusCard({
                 {t("card.live")}
               </span>
             )}
-            {hasValue && !isFreeLike && (
+            {hasValueBadge && (
               <span className="rounded-full bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-warning)]">
                 {t("card.value")}
               </span>

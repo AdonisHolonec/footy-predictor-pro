@@ -186,14 +186,16 @@ export function maskPredictionForTier(row, tier) {
     delete next.probs.shotsOnTarget;
     delete next.probs.shotsTotal;
     delete next.probs.firstHalf;
-    next.recommended = {
-      ...next.recommended,
-      confidence: null,
-      confidenceCategory: null
-    };
-    // Hide edge-rich analytics for Free.
+    // Keep recommended confidence + value EV for FocusCard (recomandat / goluri).
+    // Still hide Kelly / stake plan and advanced model internals.
     if (next.valueBet) {
-      next.valueBet = { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "" };
+      next.valueBet = {
+        detected: Boolean(next.valueBet.detected),
+        type: next.valueBet.type || "",
+        ev: Number.isFinite(Number(next.valueBet.ev)) ? Number(next.valueBet.ev) : 0,
+        kelly: 0,
+        stakePlan: ""
+      };
     }
     if (next.modelMeta) {
       delete next.modelMeta.topPickLift;

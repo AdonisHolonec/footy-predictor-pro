@@ -68,7 +68,23 @@ function deriveBestOverUnderPick(totalLines) {
   return best;
 }
 
-function deriveBestGoalsPick(row) {
+function parseGoalsOuPick(pick) {
+  const n = String(pick || "").trim().toLowerCase();
+  if (!n) return null;
+  const over = n.match(/^(?:peste|over)\s*(\d+(?:[.,]\d+)?)/);
+  if (over) {
+    const line = Number(over[1].replace(",", "."));
+    return Number.isFinite(line) ? { side: "over", line } : null;
+  }
+  const under = n.match(/^(?:sub|under)\s*(\d+(?:[.,]\d+)?)/);
+  if (under) {
+    const line = Number(under[1].replace(",", "."));
+    return Number.isFinite(line) ? { side: "under", line } : null;
+  }
+  return null;
+}
+
+function deriveBestGoalsPick(row, exclude = null) {
   const p = row?.probs;
   if (!p) return null;
   const candidates = [
@@ -82,10 +98,15 @@ function deriveBestGoalsPick(row) {
       probability: Number.isFinite(Number(p.pU35)) ? 100 - Number(p.pU35) : NaN
     },
     { line: 3.5, side: "under", probability: Number(p.pU35) }
-  ].filter((c) => Number.isFinite(c.probability) && c.probability > 0);
+  ]
+    .filter((c) => Number.isFinite(c.probability) && c.probability > 0)
+    .filter((c) => {
+      if (!exclude) return true;
+      return !(c.side === exclude.side && Math.abs(c.line - exclude.line) < 1e-6);
+    })
+    .sort((a, b) => b.probability - a.probability);
 
-  if (!candidates.length) return null;
-  return candidates.reduce((a, b) => (b.probability > a.probability ? b : a));
+  return candidates[0] || null;
 }
 
 function ouPickLabel(side, line) {
@@ -117,7 +138,8 @@ export function deriveCardMarketPicks(prediction) {
   const row = prediction && typeof prediction === "object" ? prediction : {};
   const recommendedPick = String(row.recommended?.pick || "").trim() || null;
 
-  const goalsBest = deriveBestGoalsPick(row);
+  // If recommended is already goals O/U, card goals row uses the next-best line.
+  const goalsBest = deriveBestGoalsPick(row, parseGoalsOuPick(recommendedPick));
   const goals = goalsBest
     ? {
         pick: ouPickLabel(goalsBest.side, goalsBest.line),
