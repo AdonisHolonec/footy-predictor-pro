@@ -659,40 +659,48 @@ export default function MatchCard({
       )}
 
       {!compact && canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-        <div className="mt-2 min-w-0 rounded-lg border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10 px-2 py-1.5 shadow-[var(--fp-shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-[var(--fp-success)] sm:text-[8px] sm:tracking-[0.14em]">
+        <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
               {t("card.specialBet")}
             </div>
             {specialBetCandidatesLen >= 3 ? (
-              <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
-                {[2, 3].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSpecialLegCount(n as 2 | 3);
-                    }}
-                    className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
-                      specialLegCount === n
-                        ? "rounded bg-[var(--fp-success)]/20 text-[var(--fp-text)]"
-                        : "text-[var(--fp-text-muted)]"
-                    }`}
-                  >
-                    {t("card.legs", { n })}
-                  </button>
-                ))}
+              <div
+                className="inline-flex rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-0.5"
+                role="group"
+                aria-label={t("card.specialBet")}
+              >
+                {[2, 3].map((n) => {
+                  const active = specialLegCount === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSpecialLegCount(n as 2 | 3);
+                      }}
+                      className={`rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors sm:text-[11px] ${
+                        active
+                          ? "bg-[var(--fp-success)] text-white shadow-sm ring-1 ring-[var(--fp-success)]"
+                          : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+                      }`}
+                    >
+                      {t("card.legs", { n })}
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
           </div>
-          <div className="mt-0.5 space-y-0.5">
+          <div className="mt-1.5 space-y-1">
             {specialBetLegs.map((leg) => {
               const tone = outcomeTextClass(leg.outcome);
               return (
                 <div
                   key={`${leg.label}-${leg.pick}`}
-                  className={`flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px] ${tone}`}
+                  className={`flex items-center justify-between gap-2 text-[11px] sm:text-xs ${tone}`}
                 >
                   <span className="min-w-0 flex-1 truncate font-semibold">
                     {leg.label}: {leg.pick}
@@ -704,7 +712,7 @@ export default function MatchCard({
               );
             })}
           </div>
-          <div className={`mt-1 font-mono text-[8px] font-semibold tabular-nums ${specialCombinedTone}`}>
+          <div className={`mt-1.5 text-[11px] font-bold tabular-nums sm:text-xs ${specialCombinedTone}`}>
             {t("card.combinedOdd", {
               odd: Number.isFinite(Number(specialBetCombinedOdd))
                 ? Number(specialBetCombinedOdd).toFixed(2)

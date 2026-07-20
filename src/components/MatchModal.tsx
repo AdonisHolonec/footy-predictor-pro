@@ -987,42 +987,50 @@ export default function MatchModal({
           </div>
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
             <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
-              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10 px-3.5 py-2.5 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
-                <div className="flex min-h-[1.55rem] flex-wrap items-center justify-between gap-1.5">
-                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[var(--fp-success)] max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
+                <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
                     {tr("match.specialBet")}
                   </div>
                   {specialBetCandidatesLen >= 3 ? (
-                    <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
-                      {[2, 3].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setSpecialLegCount(n as 2 | 3)}
-                          className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
-                            specialLegCount === n
-                              ? "rounded bg-[var(--fp-success)]/20 text-[var(--fp-text)]"
-                              : "text-[var(--fp-text-muted)]"
-                          }`}
-                        >
-                          {tr("match.specialBetLegs", { n })}
-                        </button>
-                      ))}
+                    <div
+                      className="inline-flex rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-0.5"
+                      role="group"
+                      aria-label={tr("match.specialBet")}
+                    >
+                      {[2, 3].map((n) => {
+                        const active = specialLegCount === n;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setSpecialLegCount(n as 2 | 3)}
+                            className={`rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors sm:text-[11px] ${
+                              active
+                                ? "bg-[var(--fp-success)] text-white shadow-sm ring-1 ring-[var(--fp-success)]"
+                                : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+                            }`}
+                          >
+                            {tr("match.specialBetLegs", { n })}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1.5 max-[380px]:px-3">
+                <div className="mt-2.5 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-2 max-[380px]:px-3">
                   {specialBetLegs.map((leg) => {
                     const tone = outcomeTextClass(leg.outcome);
                     return (
                       <div
                         key={`${leg.label}-${leg.pick}`}
-                        className={`flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px] ${tone}`}
+                        className={`flex min-h-[1.4rem] items-center justify-between gap-2 text-[11px] sm:text-xs ${tone}`}
                       >
                         <span className="min-w-0 flex-1 truncate text-left font-semibold">
                           {leg.label}: {leg.pick}
                         </span>
-                        <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] tabular-nums text-right font-bold">
+                        <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-0.5 tabular-nums text-right font-bold">
                           {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
                         </span>
                       </div>
@@ -1030,7 +1038,7 @@ export default function MatchModal({
                   })}
                 </div>
                 <div
-                  className={`mt-2 border-t border-[var(--fp-border)] pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums max-[380px]:text-[9px] ${specialCombinedTone}`}
+                  className={`mt-2.5 border-t border-[var(--fp-border)] pt-2 text-[11px] font-bold tabular-nums sm:text-xs ${specialCombinedTone}`}
                 >
                   {tr("match.combinedOdd", {
                     odd: Number.isFinite(Number(specialBetCombinedOdd))
