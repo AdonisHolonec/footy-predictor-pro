@@ -345,15 +345,26 @@ function PoissonMarketSection({
 /** Mini-card pentru un pick în secţiunea „Pieţe & scor" — afişează probabilitatea + badge încredere. */
 function MarketPickCard({
   label,
-  info
+  info,
+  outcome = null
 }: {
   label: string;
   info: MarketTierInfo | undefined;
+  /** After FT: true = win (green), false = loss (red). */
+  outcome?: boolean | null;
 }) {
   const { t: tr } = useLocale();
-  const tone = tierToneClass(info?.tier);
-  const badge = tierBadgeLabel(info?.tier, tr);
-  const isToss = info?.tier === "toss";
+  const settledTone =
+    outcome === true
+      ? "border-signal-sage/45 bg-signal-sage/10"
+      : outcome === false
+        ? "border-signal-rose/45 bg-signal-rose/10"
+        : null;
+  const valueTone =
+    outcome === true ? "text-signal-sage" : outcome === false ? "text-signal-rose" : "";
+  const tone = settledTone || tierToneClass(info?.tier);
+  const badge = outcome == null ? tierBadgeLabel(info?.tier, tr) : "";
+  const isToss = outcome == null && info?.tier === "toss";
   return (
     <div className={`rounded-xl border p-3 text-center ${tone}`}>
       <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
@@ -374,9 +385,9 @@ function MarketPickCard({
         ) : null}
       </div>
       <div className="mt-1 flex items-baseline justify-center gap-1.5">
-        <span className="font-mono text-sm font-semibold">{info?.pick ?? "—"}</span>
+        <span className={`font-mono text-sm font-semibold ${valueTone}`}>{info?.pick ?? "—"}</span>
         {info?.prob != null && Number.isFinite(info.prob) ? (
-          <span className="font-mono text-[10px] tabular-nums opacity-80">
+          <span className={`font-mono text-[10px] tabular-nums ${valueTone || "opacity-80"}`}>
             {isToss ? "≈ " : ""}
             {info.prob.toFixed(0)}%
           </span>
@@ -816,15 +827,27 @@ export default function MatchModal({
         const pOver = match.probs.firstHalf.pO15;
         if (!Number.isFinite(pOver)) return null;
         return pOver >= 50
-          ? { pick: "Over 1.5 FH", probability: pOver, line: 1.5 }
-          : { pick: "Under 1.5 FH", probability: 100 - pOver, line: 1.5 };
+          ? {
+              pick: `${tr("match.overLine", { line: "1.5" })} FH`,
+              probability: pOver,
+              line: 1.5,
+              side: "over" as const
+            }
+          : {
+              pick: `${tr("match.underLine", { line: "1.5" })} FH`,
+              probability: 100 - pOver,
+              line: 1.5,
+              side: "under" as const
+            };
       })()
     : null;
+  const htGoalsActual =
+    xgData?.marketResults?.firstHalfGoals ?? match.marketResults?.firstHalfGoals ?? null;
   const firstHalfVerdict =
-    firstHalfPick && xgData?.marketResults?.firstHalfGoals != null
-      ? firstHalfPick.pick.startsWith("Over")
-        ? xgData.marketResults.firstHalfGoals > firstHalfPick.line
-        : xgData.marketResults.firstHalfGoals < firstHalfPick.line
+    firstHalfPick && htGoalsActual != null && Number.isFinite(Number(htGoalsActual))
+      ? firstHalfPick.side === "over"
+        ? Number(htGoalsActual) > firstHalfPick.line
+        : Number(htGoalsActual) < firstHalfPick.line
       : null;
   const recommendedOdd = deriveRecommendedOdd(match);
   const specialBetPool = buildSpecialBetLegs(
@@ -1276,16 +1299,24 @@ export default function MatchModal({
                     match.predictions.over25,
                     match.predictions.over25 === "Peste 2.5" ? match.probs.pO25 : 100 - match.probs.pO25
                   );
-                const correctScoreInfo = tiers?.correctScore || {
-                  pick: match.predictions.correctScore || "—",
-                  prob: 0,
-                  tier: "lean_off" as MarketTier
-                };
+                const fhInfo = firstHalfPick
+                  ? fallbackTierFromProb(firstHalfPick.pick, firstHalfPick.probability)
+                  : undefined;
 
                 // Detect când mai multe pieţe sunt "toss" — afişăm un hint general.
-                const tossCount = [oneXtwoInfo, ggInfo, over25Info].filter(
+                const tossCount = [oneXtwoInfo, ggInfo, over25Info, fhInfo].filter(
                   (i) => i?.tier === "toss"
                 ).length;
+
+                const oneXtwoOutcome = hasFinalScore
+                  ? evaluateTopPick(oneXtwoPick, match.score)
+                  : null;
+                const ggOutcome = hasFinalScore
+                  ? evaluateTopPick(match.predictions.gg, match.score)
+                  : null;
+                const over25Outcome = hasFinalScore
+                  ? evaluateTopPick(match.predictions.over25, match.score)
+                  : null;
 
                 return (
                   <>
@@ -1295,33 +1326,26 @@ export default function MatchModal({
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                      <MarketPickCard label={tr("match.market1x2")} info={oneXtwoInfo} />
-                      <MarketPickCard label={tr("match.marketGgNgg")} info={ggInfo} />
-                      <MarketPickCard label={tr("match.marketOu25")} info={over25Info} />
-                      <div className={`rounded-xl border p-3 text-center ${tierToneClass(correctScoreInfo.tier)}`}>
-                        <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
-                          <span>{tr("match.correctScore")}</span>
-                          <span
-                            className="rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider"
-                            title={tr("match.correctScoreTip")}
-                          >
-                            {tr("match.mostLikelyTag")}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-baseline justify-center gap-1.5">
-                          <span className="font-mono text-sm font-semibold">{correctScoreInfo.pick || "—"}</span>
-                          {correctScoreInfo.prob > 0 ? (
-                            <span className="font-mono text-[10px] tabular-nums opacity-80">
-                              {correctScoreInfo.prob.toFixed(0)}%
-                            </span>
-                          ) : null}
-                        </div>
-                        {hasFinalScore && (
-                          <div className="mt-1 font-mono text-[10px] text-signal-inkMuted">
-                            FINAL · {match.score?.home}-{match.score?.away}
-                          </div>
-                        )}
-                      </div>
+                      <MarketPickCard
+                        label={tr("match.market1x2")}
+                        info={oneXtwoInfo}
+                        outcome={oneXtwoOutcome}
+                      />
+                      <MarketPickCard
+                        label={tr("match.marketGgNgg")}
+                        info={ggInfo}
+                        outcome={ggOutcome}
+                      />
+                      <MarketPickCard
+                        label={tr("match.marketOu25")}
+                        info={over25Info}
+                        outcome={over25Outcome}
+                      />
+                      <MarketPickCard
+                        label={tr("match.marketFhGoals")}
+                        info={fhInfo}
+                        outcome={firstHalfVerdict}
+                      />
                       {match.predictions.cards && (
                         <div className="col-span-2 rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
                           <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">{tr("match.cards")}</div>

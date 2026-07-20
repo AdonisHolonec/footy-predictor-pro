@@ -276,6 +276,7 @@ export const en: Dict = {
     marketGgNgg: "BTTS / No BTTS",
     marketOu25: "Over / Under 2.5",
     market1x2: "1X2",
+    marketFhGoals: "FH goals",
     correctScore: "Correct score",
     mostLikelyTag: "most likely",
     cards: "Cards",

@@ -276,6 +276,7 @@ export const ro: Dict = {
     marketGgNgg: "GG / NGG",
     marketOu25: "Peste / Sub 2.5",
     market1x2: "1X2",
+    marketFhGoals: "Goluri FH",
     correctScore: "Scor corect",
     mostLikelyTag: "cel mai probabil",
     cards: "Cartonașe",
