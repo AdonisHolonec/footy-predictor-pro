@@ -160,7 +160,7 @@ export default function ConsumerShell({
               title={t("shell.selectDate")}
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="h-9 min-w-0 flex-[1_1_8.5rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2 text-sm font-medium text-[var(--fp-text)] sm:flex-none sm:px-2.5"
+              className="h-9 w-[7.25rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1.5 text-sm font-medium text-[var(--fp-text)] sm:w-[8rem] sm:px-2"
             />
             {extraDates}
 
@@ -168,7 +168,7 @@ export default function ConsumerShell({
               <button
                 type="button"
                 onClick={onOpenLeagues}
-                className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 text-xs font-bold text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                className="h-9 min-w-[9.5rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3.5 text-xs font-bold text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:min-w-[11rem] sm:px-4"
                 aria-label={t("shell.filterLeagues")}
               >
                 {t("shell.leagues")}
