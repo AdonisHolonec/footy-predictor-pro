@@ -205,17 +205,65 @@ export function recommendedPickValueEv(row: PredictionRow): number | null {
 
 /** Odd for corners/shots row when quote side matches and line is within tolerance. */
 export function matchingMarketOdd(
-  quote: { pick?: string; line?: number | null; odd?: number | null } | null | undefined,
+  quote: {
+    pick?: string;
+    line?: number | null;
+    odd?: number | null;
+    oddSource?: string | null;
+  } | null | undefined,
   side: "over" | "under",
   line: number,
   maxLineDelta = 1.5
 ): number | null {
   if (!quote) return null;
+  const src = String(quote.oddSource || "");
+  const crossMarket = src === "shots_total" || src === "team_home" || src === "team_away";
   const qLine = Number(quote.line);
-  if (Number.isFinite(qLine) && Math.abs(qLine - line) > maxLineDelta + 1e-9) return null;
+  if (
+    !crossMarket &&
+    Number.isFinite(qLine) &&
+    Math.abs(qLine - line) > maxLineDelta + 1e-9
+  ) {
+    return null;
+  }
   const qPick = String(quote.pick || "").toLowerCase();
   const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : null;
   if (qSide && qSide !== side) return null;
   const odd = Number(quote.odd);
   return Number.isFinite(odd) && odd > 1 ? odd : null;
+}
+
+/** Display odd for shots card: SOT quote, else total-shots quote on the same side. */
+export function shotsDisplayOdd(
+  row: PredictionRow,
+  side: "over" | "under",
+  line: number
+): number | null {
+  const sot = matchingMarketOdd(row.marketOdds?.shotsOnTarget, side, line);
+  if (sot != null) return sot;
+  const fromSotFallback = Number(row.marketOdds?.shotsOnTarget?.odd);
+  if (Number.isFinite(fromSotFallback) && fromSotFallback > 1) return fromSotFallback;
+  return matchingMarketOdd(row.marketOdds?.shotsTotal, side, line, 4);
+}
+
+/** HT goals total from marketResults or score.halftime. */
+export function resolveFirstHalfGoalsActual(row: {
+  marketResults?: { firstHalfGoals?: number | null } | null;
+  score?: { halftime?: { home?: number | null; away?: number | null } | null } | null;
+}): number | null {
+  const fromMr = Number(row.marketResults?.firstHalfGoals);
+  if (Number.isFinite(fromMr)) return fromMr;
+  const h = Number(row.score?.halftime?.home);
+  const a = Number(row.score?.halftime?.away);
+  if (Number.isFinite(h) && Number.isFinite(a)) return h + a;
+  return null;
+}
+
+/** Format book odd or honest empty label. */
+export function formatBookOdd(
+  n: number | null | undefined,
+  emptyLabel = "—"
+): string {
+  if (n == null || !Number.isFinite(n) || n <= 1) return emptyLabel;
+  return n.toFixed(2);
 }

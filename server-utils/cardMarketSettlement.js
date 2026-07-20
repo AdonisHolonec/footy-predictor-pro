@@ -259,12 +259,17 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
   const totals = {
     cornersTotal: marketTotals?.cornersTotal ?? base.marketResults?.cornersTotal ?? null,
     shotsOnTargetTotal:
-      marketTotals?.shotsOnTargetTotal ?? base.marketResults?.shotsOnTargetTotal ?? null
+      marketTotals?.shotsOnTargetTotal ?? base.marketResults?.shotsOnTargetTotal ?? null,
+    firstHalfGoals: marketTotals?.firstHalfGoals ?? base.marketResults?.firstHalfGoals ?? null
   };
   const validations = settleCardMarkets({ status: st, score: sc, picks, marketTotals: totals });
   base.cardMarkets = picks;
   base.cardMarketValidations = validations;
-  if (totals.cornersTotal != null || totals.shotsOnTargetTotal != null) {
+  if (
+    totals.cornersTotal != null ||
+    totals.shotsOnTargetTotal != null ||
+    totals.firstHalfGoals != null
+  ) {
     base.marketResults = {
       ...(base.marketResults && typeof base.marketResults === "object" ? base.marketResults : {}),
       ...totals

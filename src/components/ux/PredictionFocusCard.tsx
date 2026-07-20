@@ -12,9 +12,11 @@ import {
 import {
   deriveCardGoalsPick,
   deriveAlignedOuPick,
+  formatBookOdd,
   goalsOddForLine,
   matchingMarketOdd,
-  recommendedOdd
+  recommendedOdd,
+  shotsDisplayOdd
 } from "../../utils/marketPicks";
 
 type Props = {
@@ -42,9 +44,8 @@ type MarketRow = {
   accent?: boolean;
 };
 
-function fmtOdd(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n) || n <= 1) return "—";
-  return n.toFixed(2);
+function fmtOdd(n: number | null | undefined, empty = "—"): string {
+  return formatBookOdd(n, empty);
 }
 
 function sidePickLabel(
@@ -116,12 +117,11 @@ export default function PredictionFocusCard({
       : "—";
 
   const stored = marketValidations ?? row.cardMarketValidations ?? null;
+  const noBook = t("card.noBookOdd");
   const cornersOdd = corners
     ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
     : null;
-  const shotsOdd = shots
-    ? matchingMarketOdd(row.marketOdds?.shotsOnTarget, shots.side, shots.line)
-    : null;
+  const shotsOdd = shots ? shotsDisplayOdd(row, shots.side, shots.line) : null;
 
   const marketRows: MarketRow[] = [
     {
@@ -132,7 +132,7 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featMain"),
       pick: row.recommended?.pick || "—",
       confidence: confLabel,
-      odd: fmtOdd(recommendedOdd(row)),
+      odd: fmtOdd(recommendedOdd(row), noBook),
       outcome: resolveCardMarketOutcome("recommended", row, stored),
       accent: true
     },
@@ -144,7 +144,7 @@ export default function PredictionFocusCard({
       lockFeature: t("card.marketGoals"),
       pick: goals ? sidePickLabel(t, goals.side, goals.line) : "—",
       confidence: goals ? `${Math.round(goals.probability)}%` : "—",
-      odd: goals ? fmtOdd(goalsOddForLine(row, goals.line, goals.side)) : "—",
+      odd: goals ? fmtOdd(goalsOddForLine(row, goals.line, goals.side), noBook) : "—",
       outcome: resolveCardMarketOutcome("goals", row, stored)
     },
     {
@@ -155,7 +155,7 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featCorners"),
       pick: corners ? sidePickLabel(t, corners.side, corners.line) : "—",
       confidence: corners ? `${Math.round(corners.probability)}%` : "—",
-      odd: fmtOdd(cornersOdd),
+      odd: fmtOdd(cornersOdd, noBook),
       outcome: cornersLocked ? null : resolveCardMarketOutcome("corners", row, stored)
     },
     {
@@ -166,7 +166,7 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featShots"),
       pick: shots ? sidePickLabel(t, shots.side, shots.line) : "—",
       confidence: shots ? `${Math.round(shots.probability)}%` : "—",
-      odd: fmtOdd(shotsOdd),
+      odd: fmtOdd(shotsOdd, noBook),
       outcome: shotsLocked ? null : resolveCardMarketOutcome("shots", row, stored)
     }
   ];

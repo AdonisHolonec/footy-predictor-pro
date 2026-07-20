@@ -110,25 +110,114 @@ function normalizeMarketName(name) {
     .trim();
 }
 
+/** Bookmakers that more often list specialty shot markets — tried first. */
+export const PREFERRED_SHOTS_BOOKMAKERS = [
+  "bet365",
+  "unibet",
+  "pinnacle",
+  "william hill",
+  "1xbet",
+  "bwin",
+  "betfair",
+  "marathonbet"
+];
+
+export const SHOTS_SOT_MARKET_NAMES = [
+  "Shots On Target - Over/Under",
+  "Shots on Target Over/Under",
+  "Shots on Goal Over/Under",
+  "Total Shots on Target Over/Under",
+  "Total Shots On Target",
+  "Shots On Target",
+  "Shots on Goal",
+  "Total Shots on Goal",
+  "Match Shots on Target",
+  "Total Match Shots on Target",
+  "Shots On Target Over Under"
+];
+
+export const SHOTS_TOTAL_MARKET_NAMES = [
+  "Total Shots Over/Under",
+  "Shots Over/Under",
+  "Total Shots",
+  "Match Shots Over/Under",
+  "Shots",
+  "Total Match Shots",
+  "Match Total Shots",
+  "Shots Over Under"
+];
+
+export const SHOTS_SOT_HOME_MARKET_NAMES = [
+  "Home Team Total Shots On Target",
+  "Home Team Shots On Target",
+  "Home Shots On Target",
+  "Home Total Shots On Target",
+  "Team Shots On Target Home"
+];
+
+export const SHOTS_SOT_AWAY_MARKET_NAMES = [
+  "Away Team Total Shots On Target",
+  "Away Team Shots On Target",
+  "Away Shots On Target",
+  "Away Total Shots On Target",
+  "Team Shots On Target Away"
+];
+
+export const FIRST_HALF_GOALS_MARKET_NAMES = [
+  "First Half Goals",
+  "1st Half Goals Over/Under",
+  "Goals Over/Under First Half",
+  "First Half Goals Over/Under",
+  "Total Goals First Half",
+  "Total Goals - First Half",
+  "Goals First Half",
+  "1st Half Goals",
+  "First Half Total Goals",
+  "HT Goals Over/Under",
+  "Half Time Goals Over/Under"
+];
+
+function isPreferredBookmaker(name, preferredList) {
+  if (!preferredList?.length) return false;
+  const n = String(name || "").toLowerCase();
+  return preferredList.some((p) => n.includes(String(p).toLowerCase()));
+}
+
 /**
  * Score how well an API market name matches candidate labels.
- * Skips player / single-team props. Optional kind narrows shots SOT vs total.
+ * Skips player props. Team props only for *_home / *_away kinds.
  */
 function scoreMarketName(apiName, candidates, kind = "generic") {
   const n = normalizeMarketName(apiName);
   if (!n) return 0;
   if (/\bplayer\b/.test(n)) return 0;
-  if (/\bhome team\b/.test(n) || /\baway team\b/.test(n)) return 0;
 
-  if (kind === "shots_on_target") {
-    if (!/(on target|on goal|shots on|sot)/.test(n)) return 0;
+  const teamKind = kind === "shots_on_target_home" || kind === "shots_on_target_away";
+  if (!teamKind && (/\bhome team\b/.test(n) || /\baway team\b/.test(n))) return 0;
+
+  if (kind === "shots_on_target" || kind === "shots_on_target_home" || kind === "shots_on_target_away") {
+    if (!/(on target|on goal|shots on|\bsot\b)/.test(n)) return 0;
+  }
+  if (kind === "shots_on_target_home") {
+    if (!/\bhome\b/.test(n)) return 0;
+    if (/\baway\b/.test(n)) return 0;
+  }
+  if (kind === "shots_on_target_away") {
+    if (!/\baway\b/.test(n)) return 0;
+    if (/\bhome\b/.test(n)) return 0;
   }
   if (kind === "shots_total") {
     if (/(on target|on goal)/.test(n)) return 0;
     if (!/\bshots?\b/.test(n)) return 0;
+    if (/\bhome\b/.test(n) || /\baway\b/.test(n)) return 0;
   }
   if (kind === "corners") {
     if (!/\bcorners?\b/.test(n)) return 0;
+  }
+  if (kind === "first_half_goals") {
+    if (/\bsecond\b/.test(n) || /\b2nd\b/.test(n)) return 0;
+    if (!/(first half|1st half|\bht\b|half time|halftime)/.test(n)) return 0;
+    if (!/\bgoals?\b/.test(n)) return 0;
   }
 
   let best = 0;
@@ -228,9 +317,10 @@ export function consensusDoubleChanceOdds(oddsApiResponse) {
  * @param {object} oddsApiResponse
  * @param {string[]} marketNames candidate market labels
  * @param {number} targetLine
- * @param {{ maxLineDelta?: number, kind?: string }} [options]
+ * @param {{ maxLineDelta?: number, kind?: string, preferredBookmakers?: string[] }} [options]
  *   maxLineDelta — allow nearest line within this distance (default 0 = exact only)
- *   kind — "shots_on_target" | "shots_total" | "corners" | "generic"
+ *   kind — "shots_on_target" | "shots_on_target_home" | "shots_on_target_away" | "shots_total" | "corners" | "first_half_goals" | "generic"
+ *   preferredBookmakers — if any preferred book has quotes, median only those
  */
 export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targetLine, options = {}) {
   const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
@@ -240,43 +330,53 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
   const maxLineDelta = Number(options?.maxLineDelta);
   const delta = Number.isFinite(maxLineDelta) && maxLineDelta >= 0 ? maxLineDelta : 0;
   const kind = String(options?.kind || "generic");
+  const preferred = Array.isArray(options?.preferredBookmakers) ? options.preferredBookmakers : [];
 
-  /** @type {Map<number, { over: number[], under: number[], names: string[] }>} */
-  const byLine = new Map();
+  const collect = (books) => {
+    /** @type {Map<number, { over: number[], under: number[], names: string[] }>} */
+    const byLine = new Map();
+    for (const b of books) {
+      const bets = Array.isArray(b?.bets) ? b.bets : [];
+      const market = pickBestMarket(bets, marketNames, kind);
+      if (!market?.values || !Array.isArray(market.values)) continue;
 
-  for (const b of bookmakers) {
-    const bets = Array.isArray(b?.bets) ? b.bets : [];
-    const market = pickBestMarket(bets, marketNames, kind);
-    if (!market?.values || !Array.isArray(market.values)) continue;
-
-    /** @type {Map<number, { over?: number, under?: number }>} */
-    const bookLines = new Map();
-    for (const v of market.values) {
-      const parsed = parseLineFromValueLabel(v?.value);
-      if (parsed == null) continue;
-      const kindOu = valueKind(v?.value);
-      if (!kindOu) continue;
-      const odd = Number.parseFloat(String(v?.odd ?? ""));
-      if (!Number.isFinite(odd) || odd <= 1) continue;
-      const slot = bookLines.get(parsed) || {};
-      slot[kindOu] = odd;
-      bookLines.set(parsed, slot);
-    }
-
-    for (const [lineKey, slot] of bookLines.entries()) {
-      if (Math.abs(lineKey - requestedLine) > delta + 1e-9) continue;
-      let bucket = byLine.get(lineKey);
-      if (!bucket) {
-        bucket = { over: [], under: [], names: [] };
-        byLine.set(lineKey, bucket);
+      /** @type {Map<number, { over?: number, under?: number }>} */
+      const bookLines = new Map();
+      for (const v of market.values) {
+        const parsed = parseLineFromValueLabel(v?.value);
+        if (parsed == null) continue;
+        const kindOu = valueKind(v?.value);
+        if (!kindOu) continue;
+        const odd = Number.parseFloat(String(v?.odd ?? ""));
+        if (!Number.isFinite(odd) || odd <= 1) continue;
+        const slot = bookLines.get(parsed) || {};
+        slot[kindOu] = odd;
+        bookLines.set(parsed, slot);
       }
-      if (Number.isFinite(slot.over)) bucket.over.push(slot.over);
-      if (Number.isFinite(slot.under)) bucket.under.push(slot.under);
-      if (Number.isFinite(slot.over) || Number.isFinite(slot.under)) {
-        bucket.names.push(b.name || "?");
+
+      for (const [lineKey, slot] of bookLines.entries()) {
+        if (Math.abs(lineKey - requestedLine) > delta + 1e-9) continue;
+        let bucket = byLine.get(lineKey);
+        if (!bucket) {
+          bucket = { over: [], under: [], names: [] };
+          byLine.set(lineKey, bucket);
+        }
+        if (Number.isFinite(slot.over)) bucket.over.push(slot.over);
+        if (Number.isFinite(slot.under)) bucket.under.push(slot.under);
+        if (Number.isFinite(slot.over) || Number.isFinite(slot.under)) {
+          bucket.names.push(b.name || "?");
+        }
       }
     }
+    return byLine;
+  };
+
+  let byLine = new Map();
+  if (preferred.length) {
+    const prefBooks = bookmakers.filter((b) => isPreferredBookmaker(b?.name, preferred));
+    if (prefBooks.length) byLine = collect(prefBooks);
   }
+  if (!byLine.size) byLine = collect(bookmakers);
 
   if (!byLine.size) return null;
 
@@ -330,4 +430,58 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
     bookmakersUsed: Math.max(chosenBucket.over.length, chosenBucket.under.length),
     bookmakerNames: chosenBucket.names.slice(0, 8)
   };
+}
+
+/**
+ * Best available shots quote for the card SOT row.
+ * Order: match SOT → match total shots → home team SOT → away team SOT.
+ */
+export function resolveShotsOnTargetMarketQuote(
+  oddsApiResponse,
+  {
+    matchLine,
+    homeLine = null,
+    awayLine = null,
+    preferredBookmakers = PREFERRED_SHOTS_BOOKMAKERS
+  } = {}
+) {
+  const line = Number(matchLine);
+  if (!Number.isFinite(line)) return null;
+  const pref = { preferredBookmakers };
+
+  const sot = consensusOverUnderOddsAtLine(oddsApiResponse, SHOTS_SOT_MARKET_NAMES, line, {
+    maxLineDelta: 1.5,
+    kind: "shots_on_target",
+    ...pref
+  });
+  if (sot) return { ...sot, sourceKind: "sot" };
+
+  const total = consensusOverUnderOddsAtLine(oddsApiResponse, SHOTS_TOTAL_MARKET_NAMES, line, {
+    maxLineDelta: 2,
+    kind: "shots_total",
+    ...pref
+  });
+  if (total) return { ...total, sourceKind: "shots_total" };
+
+  const hLine = Number(homeLine);
+  if (Number.isFinite(hLine)) {
+    const home = consensusOverUnderOddsAtLine(oddsApiResponse, SHOTS_SOT_HOME_MARKET_NAMES, hLine, {
+      maxLineDelta: 1.5,
+      kind: "shots_on_target_home",
+      ...pref
+    });
+    if (home) return { ...home, sourceKind: "team_home" };
+  }
+
+  const aLine = Number(awayLine);
+  if (Number.isFinite(aLine)) {
+    const away = consensusOverUnderOddsAtLine(oddsApiResponse, SHOTS_SOT_AWAY_MARKET_NAMES, aLine, {
+      maxLineDelta: 1.5,
+      kind: "shots_on_target_away",
+      ...pref
+    });
+    if (away) return { ...away, sourceKind: "team_away" };
+  }
+
+  return null;
 }

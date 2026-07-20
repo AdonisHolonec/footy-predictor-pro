@@ -42,7 +42,10 @@ import {
   consensusMatchWinnerOdds,
   consensusOverUnderOddsAtLine,
   consensusBttsOdds,
-  consensusDoubleChanceOdds
+  consensusDoubleChanceOdds,
+  resolveShotsOnTargetMarketQuote,
+  FIRST_HALF_GOALS_MARKET_NAMES,
+  SHOTS_TOTAL_MARKET_NAMES
 } from "../../marketOdds.js";
 import { getOddsForFixture } from "../../oddsPrefetch.js";
 import {
@@ -412,6 +415,12 @@ export async function run(context) {
       try {
       cornersPick = cornersBlock ? deriveBestOverUnderPick(cornersBlock.total) : null;
       const shotsOnTargetPick = shotsOnTargetBlock ? deriveBestOverUnderPick(shotsOnTargetBlock.total) : null;
+      const shotsOnTargetHomePick = shotsOnTargetBlock?.home
+        ? deriveBestOverUnderPick(shotsOnTargetBlock.home)
+        : null;
+      const shotsOnTargetAwayPick = shotsOnTargetBlock?.away
+        ? deriveBestOverUnderPick(shotsOnTargetBlock.away)
+        : null;
       const shotsTotalPick = shotsTotalBlock ? deriveBestOverUnderPick(shotsTotalBlock.total) : null;
       const firstHalfPick = firstHalfProbs
         ? (Number(firstHalfProbs.pO15) || 0) >= 50
@@ -425,22 +434,40 @@ export async function run(context) {
         return isOver ? quote.over : quote.under;
       };
 
+      const shotsSourceLabel = (sourceKind) => {
+        if (sourceKind === "shots_total") return "total shots";
+        if (sourceKind === "team_home") return "home SOT";
+        if (sourceKind === "team_away") return "away SOT";
+        return "SOT";
+      };
+
       /** Align stored pick/line to the quoted book line when nearest-line fallback was used. */
-      const buildOuQuotePayload = (pick, quote) => {
+      const buildOuQuotePayload = (pick, quote, sourceKind = null) => {
         if (!pick) return undefined;
         const side = String(pick.pick || "").toLowerCase().includes("under") ? "under" : "over";
+        const src = sourceKind || quote?.sourceKind || null;
+        // Cross-market fallbacks keep the model SOT line; only true SOT quotes may snap line.
+        const allowSnap = !src || src === "sot";
         const matchedLine = Number(quote?.line);
-        const line = Number.isFinite(matchedLine) ? matchedLine : pick.line;
+        const line =
+          allowSnap && Number.isFinite(matchedLine) ? matchedLine : pick.line;
         const pickLabel = `${side === "over" ? "Over" : "Under"} ${Number(line).toFixed(1)}`;
-        const odd = selectOddByPick(quote, pickLabel);
+        const odd = selectOddByPick(quote, side === "over" ? "Over" : "Under");
+        const bookLabel = quote
+          ? src && src !== "sot"
+            ? `${shotsSourceLabel(src)} · median(${quote.bookmakersUsed})`
+            : `median(${quote.bookmakersUsed})`
+          : null;
         return {
           pick: pickLabel,
           line,
           odd: odd ?? null,
           requestedLine: pick.line,
+          bookLine: Number.isFinite(matchedLine) ? matchedLine : null,
           lineExact: quote ? Boolean(quote.lineExact) : null,
-          bookmaker: quote ? `median(${quote.bookmakersUsed})` : null,
-          bookmakersUsed: quote?.bookmakersUsed || 0
+          bookmaker: bookLabel,
+          bookmakersUsed: quote?.bookmakersUsed || 0,
+          oddSource: src
         };
       };
     
@@ -460,32 +487,16 @@ export async function run(context) {
           )
         : null;
       const shotsOnTargetQuote = shotsOnTargetPick
-        ? consensusOverUnderOddsAtLine(
-            oddsReq.data,
-            [
-              "Shots On Target - Over/Under",
-              "Shots on Target Over/Under",
-              "Shots on Goal Over/Under",
-              "Total Shots on Target Over/Under",
-              "Total Shots On Target",
-              "Shots On Target",
-              "Shots on Goal",
-              "Total Shots on Goal"
-            ],
-            shotsOnTargetPick.line,
-            { maxLineDelta: 1.5, kind: "shots_on_target" }
-          )
+        ? resolveShotsOnTargetMarketQuote(oddsReq.data, {
+            matchLine: shotsOnTargetPick.line,
+            homeLine: shotsOnTargetHomePick?.line ?? null,
+            awayLine: shotsOnTargetAwayPick?.line ?? null
+          })
         : null;
       const shotsTotalQuote = shotsTotalPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            [
-              "Total Shots Over/Under",
-              "Shots Over/Under",
-              "Total Shots",
-              "Match Shots Over/Under",
-              "Shots"
-            ],
+            SHOTS_TOTAL_MARKET_NAMES,
             shotsTotalPick.line,
             { maxLineDelta: 2, kind: "shots_total" }
           )
@@ -493,9 +504,9 @@ export async function run(context) {
       const firstHalfQuote = firstHalfPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            ["First Half Goals", "1st Half Goals Over/Under", "Goals Over/Under First Half"],
+            FIRST_HALF_GOALS_MARKET_NAMES,
             firstHalfPick.line,
-            { maxLineDelta: 0 }
+            { maxLineDelta: 0.5, kind: "first_half_goals" }
           )
         : null;
       goals15Quote = consensusOverUnderOddsAtLine(
@@ -573,12 +584,18 @@ export async function run(context) {
             }
           : undefined,
         corners: buildOuQuotePayload(cornersPick, cornersQuote),
-        shotsOnTarget: buildOuQuotePayload(shotsOnTargetPick, shotsOnTargetQuote),
-        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote),
+        shotsOnTarget: buildOuQuotePayload(
+          shotsOnTargetPick,
+          shotsOnTargetQuote,
+          shotsOnTargetQuote?.sourceKind || null
+        ),
+        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote, "shots_total"),
         firstHalfGoals: firstHalfPick
           ? {
               pick: firstHalfPick.pick,
-              line: firstHalfPick.line,
+              line: Number.isFinite(Number(firstHalfQuote?.line))
+                ? Number(firstHalfQuote.line)
+                : firstHalfPick.line,
               odd: selectOddByPick(firstHalfQuote, firstHalfPick.pick),
               bookmaker: firstHalfQuote ? `median(${firstHalfQuote.bookmakersUsed})` : null,
               bookmakersUsed: firstHalfQuote?.bookmakersUsed || 0

@@ -38,7 +38,7 @@ function parseNumericStat(statistics, candidates) {
 async function fetchFixtureMarketTotals(fixtureId) {
   const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
   if (!statsReq.ok || !statsReq.data?.response || statsReq.data.response.length < 2) {
-    return { cornersTotal: null, shotsOnTargetTotal: null, ok: false };
+    return { cornersTotal: null, shotsOnTargetTotal: null, firstHalfGoals: null, ok: false };
   }
   const homeStats = statsReq.data.response[0].statistics;
   const awayStats = statsReq.data.response[1].statistics;
@@ -46,13 +46,28 @@ async function fetchFixtureMarketTotals(fixtureId) {
   const cornersAway = parseNumericStat(awayStats, ["Corner Kicks"]);
   const shotsOnTargetHome = parseNumericStat(homeStats, ["Shots on Goal", "Shots on Target"]);
   const shotsOnTargetAway = parseNumericStat(awayStats, ["Shots on Goal", "Shots on Target"]);
+
+  let firstHalfGoals = null;
+  try {
+    const fxReq = await getWithCache("/fixtures", { ids: String(fixtureId) }, 86400);
+    if (fxReq.ok) {
+      const fx = fxReq.data?.response?.[0];
+      const htHome = Number(fx?.score?.halftime?.home);
+      const htAway = Number(fx?.score?.halftime?.away);
+      if (Number.isFinite(htHome) && Number.isFinite(htAway)) firstHalfGoals = htHome + htAway;
+    }
+  } catch {
+    // ignore — corners/shots still usable
+  }
+
   return {
     ok: true,
     cornersTotal: cornersHome != null && cornersAway != null ? cornersHome + cornersAway : null,
     shotsOnTargetTotal:
       shotsOnTargetHome != null && shotsOnTargetAway != null
         ? shotsOnTargetHome + shotsOnTargetAway
-        : null
+        : null,
+    firstHalfGoals
   };
 }
 
@@ -592,7 +607,8 @@ async function handleHistorySync(req, res) {
 
         let marketTotals = {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
-          shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null
+          shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
+          firstHalfGoals: raw.marketResults?.firstHalfGoals ?? null
         };
 
         const provisional = attachCardMarketsToPayload(
@@ -614,8 +630,9 @@ async function handleHistorySync(req, res) {
           statsFetchCalls += 1;
           if (totals.ok) {
             marketTotals = {
-              cornersTotal: totals.cornersTotal,
-              shotsOnTargetTotal: totals.shotsOnTargetTotal
+              cornersTotal: totals.cornersTotal ?? marketTotals.cornersTotal,
+              shotsOnTargetTotal: totals.shotsOnTargetTotal ?? marketTotals.shotsOnTargetTotal,
+              firstHalfGoals: totals.firstHalfGoals ?? marketTotals.firstHalfGoals
             };
           }
         }

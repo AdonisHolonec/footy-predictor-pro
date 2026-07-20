@@ -411,15 +411,26 @@ async function handleLive(req, res) {
       return res.status(502).json({ ok: false, error: typeof r.error === "string" ? r.error : "Eroare upstream la fixtures." });
     }
     const rows = r.data?.response || [];
-    const fixtures = rows.map((fx) => ({
-      id: fx?.fixture?.id,
-      status: fx?.fixture?.status?.short || "",
-      referee: parseRefereeName(fx?.fixture?.referee) || null,
-      score: {
-        home: typeof fx?.goals?.home === "number" ? fx.goals.home : null,
-        away: typeof fx?.goals?.away === "number" ? fx.goals.away : null
-      }
-    }));
+    const fixtures = rows.map((fx) => {
+      const htHome = Number(fx?.score?.halftime?.home);
+      const htAway = Number(fx?.score?.halftime?.away);
+      const firstHalfGoals =
+        Number.isFinite(htHome) && Number.isFinite(htAway) ? htHome + htAway : null;
+      return {
+        id: fx?.fixture?.id,
+        status: fx?.fixture?.status?.short || "",
+        referee: parseRefereeName(fx?.fixture?.referee) || null,
+        score: {
+          home: typeof fx?.goals?.home === "number" ? fx.goals.home : null,
+          away: typeof fx?.goals?.away === "number" ? fx.goals.away : null,
+          halftime:
+            Number.isFinite(htHome) && Number.isFinite(htAway)
+              ? { home: htHome, away: htAway }
+              : null
+        },
+        firstHalfGoals
+      };
+    });
     return res.status(200).json({
       ok: true,
       fixtures
@@ -493,9 +504,9 @@ async function handleXg(req, res) {
     const fxReq = await getWithCache("/fixtures", { ids: String(fid) }, 86400);
     if (fxReq.ok) {
       const fx = fxReq.data?.response?.[0];
-      const htHome = fx?.score?.halftime?.home;
-      const htAway = fx?.score?.halftime?.away;
-      if (typeof htHome === "number" && typeof htAway === "number") {
+      const htHome = Number(fx?.score?.halftime?.home);
+      const htAway = Number(fx?.score?.halftime?.away);
+      if (Number.isFinite(htHome) && Number.isFinite(htAway)) {
         firstHalfGoals = htHome + htAway;
       }
     }

@@ -140,10 +140,14 @@ function marketResultBadge(
   verdict: boolean | null,
   odd?: number | null,
   source?: string | null,
-  tone: "corners" | "shots" | "ht" | "neutral" = "neutral"
+  tone: "corners" | "shots" | "ht" | "neutral" = "neutral",
+  noBookOddLabel = "No book odd"
 ) {
   const base = "inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide";
-  const oddText = Number.isFinite(Number(odd)) ? ` · ${Number(odd).toFixed(2)}` : " · N/A";
+  const oddText =
+    Number.isFinite(Number(odd)) && Number(odd) > 1
+      ? ` · ${Number(odd).toFixed(2)}`
+      : ` · ${noBookOddLabel}`;
   const srcText = source ? ` · ${source}` : "";
   const pred = `${predicted} · ${Math.round(probability)}%${oddText}${srcText}`;
   const isHot = probability >= 85;
@@ -331,7 +335,15 @@ function PoissonMarketSection({
       )}
       {bestPick && (
         <div className="mt-3 border-t border-white/5 pt-2">
-          {marketResultBadge(bestPick.pick, bestPick.probability, settled, quotedOdd, quoteSource, badgeTone)}
+          {marketResultBadge(
+            bestPick.pick,
+            bestPick.probability,
+            settled,
+            quotedOdd,
+            quoteSource,
+            badgeTone,
+            tr("card.noBookOdd")
+          )}
           {actualTotal != null && (
             <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
               {tr("match.finalTotal")} {actualTotal}
@@ -842,8 +854,16 @@ export default function MatchModal({
             };
       })()
     : null;
-  const htGoalsActual =
-    xgData?.marketResults?.firstHalfGoals ?? match.marketResults?.firstHalfGoals ?? null;
+  const htGoalsActual = (() => {
+    const fromXg = Number(xgData?.marketResults?.firstHalfGoals);
+    if (Number.isFinite(fromXg)) return fromXg;
+    const fromMr = Number(match.marketResults?.firstHalfGoals);
+    if (Number.isFinite(fromMr)) return fromMr;
+    const h = Number(match.score?.halftime?.home);
+    const a = Number(match.score?.halftime?.away);
+    if (Number.isFinite(h) && Number.isFinite(a)) return h + a;
+    return null;
+  })();
   const firstHalfVerdict =
     firstHalfPick && htGoalsActual != null && Number.isFinite(Number(htGoalsActual))
       ? firstHalfPick.side === "over"
@@ -1450,11 +1470,12 @@ export default function MatchModal({
                     firstHalfVerdict,
                     match.marketOdds?.firstHalfGoals?.odd,
                     match.marketOdds?.firstHalfGoals?.bookmaker,
-                    "ht"
+                    "ht",
+                    tr("card.noBookOdd")
                   )}
-                  {xgData?.marketResults?.firstHalfGoals != null && (
+                  {htGoalsActual != null && (
                     <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
-                      {tr("match.htGoalsLabel", { n: xgData.marketResults.firstHalfGoals })}
+                      {tr("match.htGoalsLabel", { n: htGoalsActual })}
                     </span>
                   )}
                 </div>
@@ -1504,9 +1525,23 @@ export default function MatchModal({
                     data={match.probs.shotsOnTarget}
                     homeLabel={match.teams.home}
                     awayLabel={match.teams.away}
-                    actualTotal={xgData?.marketResults?.shotsOnTargetTotal ?? null}
-                    quotedOdd={match.marketOdds?.shotsOnTarget?.odd ?? null}
-                    quoteSource={match.marketOdds?.shotsOnTarget?.bookmaker ?? null}
+                    actualTotal={
+                      xgData?.marketResults?.shotsOnTargetTotal ??
+                      match.marketResults?.shotsOnTargetTotal ??
+                      null
+                    }
+                    quotedOdd={
+                      Number(match.marketOdds?.shotsOnTarget?.odd) > 1
+                        ? Number(match.marketOdds?.shotsOnTarget?.odd)
+                        : Number(match.marketOdds?.shotsTotal?.odd) > 1
+                          ? Number(match.marketOdds?.shotsTotal?.odd)
+                          : null
+                    }
+                    quoteSource={
+                      match.marketOdds?.shotsOnTarget?.bookmaker ||
+                      match.marketOdds?.shotsTotal?.bookmaker ||
+                      null
+                    }
                     badgeTone="shots"
                     framed={false}
                   />

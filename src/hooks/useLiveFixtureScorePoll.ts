@@ -73,7 +73,12 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             id: number;
             status: string;
             referee?: string | null;
-            score: { home: number | null; away: number | null };
+            firstHalfGoals?: number | null;
+            score: {
+              home: number | null;
+              away: number | null;
+              halftime?: { home: number; away: number } | null;
+            };
           }>;
         };
         if (!json?.ok || !Array.isArray(json.fixtures)) return;
@@ -84,6 +89,13 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             const u = map.get(Number(p.id));
             if (!u) return p;
             const nextReferee = String(u.referee || "").trim();
+            const ht = u.score?.halftime;
+            const htGoals =
+              u.firstHalfGoals != null && Number.isFinite(Number(u.firstHalfGoals))
+                ? Number(u.firstHalfGoals)
+                : ht && Number.isFinite(Number(ht.home)) && Number.isFinite(Number(ht.away))
+                  ? Number(ht.home) + Number(ht.away)
+                  : null;
             return {
               ...p,
               status: u.status || p.status,
@@ -91,8 +103,16 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
               referee: nextReferee || p.referee,
               score: {
                 home: u.score?.home ?? p.score?.home ?? null,
-                away: u.score?.away ?? p.score?.away ?? null
-              }
+                away: u.score?.away ?? p.score?.away ?? null,
+                ...(ht ? { halftime: ht } : p.score?.halftime ? { halftime: p.score.halftime } : {})
+              },
+              marketResults:
+                htGoals != null
+                  ? {
+                      ...(p.marketResults || {}),
+                      firstHalfGoals: htGoals
+                    }
+                  : p.marketResults
             };
           })
         );

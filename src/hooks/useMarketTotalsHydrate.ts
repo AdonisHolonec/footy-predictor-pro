@@ -6,26 +6,37 @@ import { fetchWithAuth } from "../utils/apiAuth";
 
 type SetPreds = Dispatch<SetStateAction<PredictionRow[]>>;
 
+function needsHtGoals(row: PredictionRow): boolean {
+  if (!row.probs?.firstHalf) return false;
+  if (row.marketResults?.firstHalfGoals != null && Number.isFinite(Number(row.marketResults.firstHalfGoals))) {
+    return false;
+  }
+  const ht = row.score?.halftime;
+  if (ht && Number.isFinite(Number(ht.home)) && Number.isFinite(Number(ht.away))) return false;
+  return true;
+}
+
 function needsMarketTotals(row: PredictionRow): boolean {
   if (!isFinalMatchStatus(row.status)) return false;
   if (row.insufficientData) return false;
   const hasCorners = Boolean(row.probs?.corners);
   const hasShots = Boolean(row.probs?.shotsOnTarget);
-  if (!hasCorners && !hasShots) return false;
   const cornersOut = resolveCardMarketOutcome("corners", row);
   const shotsOut = resolveCardMarketOutcome("shots", row);
   const cornersPending = hasCorners && cornersOut !== "win" && cornersOut !== "loss";
   const shotsPending = hasShots && shotsOut !== "win" && shotsOut !== "loss";
-  if (!cornersPending && !shotsPending) return false;
+  const htPending = needsHtGoals(row);
+  if (!cornersPending && !shotsPending && !htPending) return false;
   const missing =
     (cornersPending && row.marketResults?.cornersTotal == null) ||
-    (shotsPending && row.marketResults?.shotsOnTargetTotal == null);
+    (shotsPending && row.marketResults?.shotsOnTargetTotal == null) ||
+    htPending;
   return missing;
 }
 
 /**
- * For finished fixtures still pending corners/shots, fetch /fixtures?view=xg
- * and merge marketResults so the card can settle immediately (without waiting for cron).
+ * For finished fixtures still pending corners/shots/HT, fetch /fixtures?view=xg
+ * and merge marketResults so cards can settle immediately (without waiting for cron).
  */
 export function useMarketTotalsHydrate(
   preds: PredictionRow[],

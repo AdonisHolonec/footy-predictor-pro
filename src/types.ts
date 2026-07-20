@@ -307,7 +307,11 @@ export type LeagueStandingEntry = {
   form: string | null;
 };
 
-export type MatchScore = { home: number | null; away: number | null };
+export type MatchScore = {
+  home: number | null;
+  away: number | null;
+  halftime?: { home: number; away: number } | null;
+};
 
 export type MarketOddQuote = {
   pick: string;
@@ -319,6 +323,10 @@ export type MarketOddQuote = {
   under?: number | null;
   bookmaker?: string | null;
   bookmakersUsed?: number;
+  /** When odd comes from a fallback market (total shots / team SOT). */
+  oddSource?: "sot" | "shots_total" | "team_home" | "team_away" | string | null;
+  /** Actual book line when different from model `line` (cross-market fallback). */
+  bookLine?: number | null;
 };
 
 /** Single data-backed reason for a pick (from PredictionExplanation). */

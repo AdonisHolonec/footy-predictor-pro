@@ -1657,6 +1657,90 @@ test("consensusOverUnderOddsAtLine matches fuzzy shot markets and nearest line",
     { maxLineDelta: 0, kind: "shots_on_target" }
   );
   assert.equal(noPlayer, null);
+
+  const { resolveShotsOnTargetMarketQuote, FIRST_HALF_GOALS_MARKET_NAMES } = await import(
+    "../server-utils/marketOdds.js"
+  );
+
+  const totalOnlyPayload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "Bet365",
+            bets: [
+              {
+                name: "Total Shots Over/Under",
+                values: [
+                  { value: "Over 8.5", odd: "1.95" },
+                  { value: "Under 8.5", odd: "1.80" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  const viaTotal = resolveShotsOnTargetMarketQuote(totalOnlyPayload, { matchLine: 8.5 });
+  assert.ok(viaTotal);
+  assert.equal(viaTotal.sourceKind, "shots_total");
+  assert.ok(viaTotal.over > 1);
+
+  const teamPayload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "Unibet",
+            bets: [
+              {
+                name: "Home Team Total Shots On Target",
+                values: [
+                  { value: "Over 3.5", odd: "1.88" },
+                  { value: "Under 3.5", odd: "1.92" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  const viaHome = resolveShotsOnTargetMarketQuote(teamPayload, {
+    matchLine: 9.5,
+    homeLine: 3.5
+  });
+  assert.ok(viaHome);
+  assert.equal(viaHome.sourceKind, "team_home");
+
+  const htPayload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "Bet365",
+            bets: [
+              {
+                name: "Total Goals - First Half",
+                values: [
+                  { value: "Over 1.5", odd: "2.20" },
+                  { value: "Under 1.5", odd: "1.65" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  const ht = consensusOverUnderOddsAtLine(htPayload, FIRST_HALF_GOALS_MARKET_NAMES, 1.5, {
+    maxLineDelta: 0.5,
+    kind: "first_half_goals"
+  });
+  assert.ok(ht);
+  assert.equal(ht.line, 1.5);
+  assert.ok(ht.over > 1);
 });
 
 test("UEFA stats fallback helpers pick domestic league and build averages from FT fixtures", async () => {

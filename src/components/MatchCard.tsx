@@ -20,6 +20,7 @@ import {
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
 } from "../utils/specialBet";
+import { shotsDisplayOdd } from "../utils/marketPicks";
 
 type MatchCardProps = {
   row: PredictionRow;
@@ -102,15 +103,22 @@ function parseLineThreshold(key: string): number | null {
   return Number(`${m[1]}.${m[2]}`);
 }
 
-function deriveBestOverUnderPick(totalLines?: Record<string, number>): { pick: string; probability: number } | null {
+function deriveBestOverUnderPick(
+  totalLines?: Record<string, number>
+): { pick: string; probability: number; side: "over" | "under"; line: number } | null {
   if (!totalLines) return null;
-  let best: { pick: string; probability: number } | null = null;
+  let best: { pick: string; probability: number; side: "over" | "under"; line: number } | null = null;
   for (const [key, raw] of Object.entries(totalLines)) {
     const line = parseLineThreshold(key);
     const pOver = Number(raw);
     if (line == null || !Number.isFinite(pOver)) continue;
-    const over = { pick: `Over ${line.toFixed(1)}`, probability: pOver };
-    const under = { pick: `Under ${line.toFixed(1)}`, probability: 100 - pOver };
+    const over = { pick: `Over ${line.toFixed(1)}`, probability: pOver, side: "over" as const, line };
+    const under = {
+      pick: `Under ${line.toFixed(1)}`,
+      probability: 100 - pOver,
+      side: "under" as const,
+      line
+    };
     const current = over.probability >= under.probability ? over : under;
     if (!best || current.probability > best.probability) best = current;
   }
@@ -624,8 +632,11 @@ export default function MatchCard({
             {
               label: t("match.featShots"),
               data: shotsPick,
-              odd: row.marketOdds?.shotsOnTarget?.odd,
-              source: row.marketOdds?.shotsOnTarget?.bookmaker,
+              odd:
+                shotsPick != null
+                  ? shotsDisplayOdd(row, shotsPick.side, shotsPick.line)
+                  : row.marketOdds?.shotsOnTarget?.odd,
+              source: row.marketOdds?.shotsOnTarget?.bookmaker || row.marketOdds?.shotsTotal?.bookmaker,
               accentClass: "border-violet-500/35 bg-violet-500/10"
             },
             {
@@ -649,7 +660,7 @@ export default function MatchCard({
               </div>
               <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
                 {t("card.oddLabel", {
-                  odd: Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : t("card.na")
+                  odd: Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : t("card.noBookOdd")
                 })}
               </div>
               <div className="font-mono text-[7px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>

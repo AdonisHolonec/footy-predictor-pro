@@ -166,6 +166,7 @@ export const en: Dict = {
     combinedOdd: "combined odd {odd}",
     oddLabel: "odd {odd}",
     na: "N/A",
+    noBookOdd: "No book odd",
     sourceNa: "source:N/A",
     openAnalysis: "Open analysis",
     modelNoLambda: "The model could not estimate λ values.",

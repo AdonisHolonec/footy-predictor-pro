@@ -8,7 +8,9 @@ import {
 import {
   deriveAlignedOuPick,
   matchingMarketOdd,
-  recommendedOdd
+  recommendedOdd,
+  resolveFirstHalfGoalsActual,
+  shotsDisplayOdd
 } from "./marketPicks";
 
 export type SpecialBetLeg = {
@@ -92,13 +94,7 @@ export function buildSpecialBetLegs(
         ? `${shotsPick.side === "over" ? "Over" : "Under"} ${shotsPick.line.toFixed(1)}`
         : "",
       probability: Number(shotsPick?.probability || 0),
-      odd: shotsPick
-        ? Number(
-            matchingMarketOdd(row.marketOdds?.shotsOnTarget, shotsPick.side, shotsPick.line) ??
-              row.marketOdds?.shotsOnTarget?.odd ??
-              NaN
-          )
-        : NaN,
+      odd: shotsPick ? Number(shotsDisplayOdd(row, shotsPick.side, shotsPick.line) ?? NaN) : NaN,
       outcome: resolveCardMarketOutcome("shots", enrichedRow, stored)
     },
     {
@@ -116,7 +112,7 @@ export function buildSpecialBetLegs(
       outcome: ((): MarketOutcome => {
         if (!firstHalfPick) return null;
         if (!["FT", "AET", "PEN"].includes(String(row.status || "").toUpperCase())) return null;
-        const ht = enrichedRow.marketResults?.firstHalfGoals;
+        const ht = resolveFirstHalfGoalsActual(enrichedRow);
         if (ht == null || !Number.isFinite(Number(ht))) return "pending";
         const ok =
           firstHalfPick.side === "over"
