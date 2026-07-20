@@ -3,15 +3,12 @@
  * Algorithms unchanged; hands engineCtx to Stage03 via context.fixture.
  */
 
-import { getWithCache } from "../../fetcher.js";
 import {
   computeMatchProbs,
   clampLambda,
   extractFormMultiplier,
-  extractAdvancedGoalsAverages,
   extractFirstHalfFractions,
   deriveFirstHalfLambdas,
-  normalizeTeamStatisticsPayload,
   strengthRatingsLambdas,
   poissonOverLine
 } from "../../math.js";
@@ -88,7 +85,8 @@ import {
   deriveBestOverUnderPick,
   blendByPenalty,
   applyStakePolicyV2,
-  marketTier
+  marketTier,
+  fetchTeamStatisticsWithSeasonFallback
 } from "../predictHelpers.js";
 
 
@@ -109,7 +107,7 @@ export async function run(context) {
   const standingsMap = league.standingsMap;
   const leagueStandings = league.leagueStandings;
 
-  const season = context.season;
+  const season = Number(league.leagueSeason) || Number(context.season);
   const shrinkageK = context.shrinkageK;
   const oddsByFixtureId = context.oddsByFixtureId;
 
@@ -134,13 +132,23 @@ export async function run(context) {
   let aMulti = null;
 
   if (homeIdStr && awayIdStr) {
-    // Independent cache keys — fetch in parallel (same TTL / payloads as sequential).
+    // Current cup season often empty in July qualifying — fall back to season-1.
     const [tsH, tsA] = await Promise.all([
-      getWithCache("/teams/statistics", { league: lId, season, team: homeIdStr }, 86400),
-      getWithCache("/teams/statistics", { league: lId, season, team: awayIdStr }, 86400)
+      fetchTeamStatisticsWithSeasonFallback({
+        leagueId: lId,
+        season,
+        teamId: homeIdStr,
+        ttlSeconds: 86400
+      }),
+      fetchTeamStatisticsWithSeasonFallback({
+        leagueId: lId,
+        season,
+        teamId: awayIdStr,
+        ttlSeconds: 86400
+      })
     ]);
-    const tsHNorm = tsH.ok && tsH.data ? normalizeTeamStatisticsPayload(tsH.data) : null;
-    const tsANorm = tsA.ok && tsA.data ? normalizeTeamStatisticsPayload(tsA.data) : null;
+    const tsHNorm = tsH.ok ? tsH.norm : null;
+    const tsANorm = tsA.ok ? tsA.norm : null;
     if (tsHNorm) {
       formHomeStr = coerceFormFromTeamStats(tsHNorm);
       fhFractionsHome = extractFirstHalfFractions(tsHNorm);
@@ -149,78 +157,84 @@ export async function run(context) {
       formAwayStr = coerceFormFromTeamStats(tsANorm);
       fhFractionsAway = extractFirstHalfFractions(tsANorm);
     }
-    if (tsH.ok && tsA.ok && tsHNorm && tsANorm) {
-      hStats = extractAdvancedGoalsAverages(tsHNorm);
-      aStats = extractAdvancedGoalsAverages(tsANorm);
-      if (hStats && aStats) {
-        hMulti = extractFormMultiplier(tsHNorm.response?.form);
-        aMulti = extractFormMultiplier(tsANorm.response?.form);
-        const rowH = standingsMap.get(homeIdStr);
-        const rowA = standingsMap.get(awayIdStr);
-        const moduleInputs = await collectModuleInputs({
-          fixtureId,
-          homeTeamId: homeIdStr,
-          awayTeamId: awayIdStr,
-          leagueId: lId,
-          season,
-          fixtureDate: fx.fixture?.date,
-          oddsData: oddsByFixtureId.get(Number(fixtureId)),
-          fx
-        });
-        const earlyRollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
-        const earlyRollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
-        const earlyXg = resolveFixtureXg({
-          rollingHome: earlyRollingHome,
-          rollingAway: earlyRollingAway,
-          leagueAvg: leagueParams.leagueAvg,
-          homeAdv: leagueParams.homeAdv,
-          awayAdv: leagueParams.awayAdv
-        });
-        engineCtx = {
-          hStats,
-          aStats,
-          formHome: tsHNorm.response?.form,
-          formAway: tsANorm.response?.form,
-          hFormMulti: hMulti,
-          aFormMulti: aMulti,
-          leagueParams,
-          homeStandingsRow: rowH || null,
-          awayStandingsRow: rowA || null,
-          refereeName: refereeName || undefined,
-          fixtureId,
-          fixtureDate: fx.fixture?.date,
-          homeTeamId: homeIdStr,
-          awayTeamId: awayIdStr,
-          shrinkageK,
-          ...(earlyXg
-            ? {
-                xgHome: earlyXg.xgHome,
-                xgAway: earlyXg.xgAway,
-                xgSource: earlyXg.source
-              }
-            : {}),
-          ...moduleInputs
-        };
-        confidenceCtx = {
-          hStats,
-          aStats,
-          formHome: tsHNorm.response?.form,
-          formAway: tsANorm.response?.form,
-          hFormMulti: hMulti,
-          aFormMulti: aMulti,
-          leagueParams,
-          homeStandingsRow: rowH || null,
-          awayStandingsRow: rowA || null,
-          refereeName: refereeName || undefined,
-          homeTeamId: homeIdStr,
-          awayTeamId: awayIdStr,
-          fixtureDate: fx.fixture?.date,
-          ...moduleInputs,
-          ...(earlyXg
-            ? { xgHome: earlyXg.xgHome, xgAway: earlyXg.xgAway, xgSource: earlyXg.source }
-            : {})
-        };
-      }
+    hStats = tsH.ok ? tsH.stats : null;
+    aStats = tsA.ok ? tsA.stats : null;
+    if (hStats && aStats && tsHNorm && tsANorm) {
+      hMulti = extractFormMultiplier(tsHNorm.response?.form);
+      aMulti = extractFormMultiplier(tsANorm.response?.form);
+      const rowH = standingsMap.get(homeIdStr);
+      const rowA = standingsMap.get(awayIdStr);
+      const moduleInputs = await collectModuleInputs({
+        fixtureId,
+        homeTeamId: homeIdStr,
+        awayTeamId: awayIdStr,
+        leagueId: lId,
+        season,
+        fixtureDate: fx.fixture?.date,
+        oddsData: oddsByFixtureId.get(Number(fixtureId)),
+        fx
+      });
+      const earlyRollingHome = homeIdStr ? marketRollingMap.get(Number(homeIdStr)) : null;
+      const earlyRollingAway = awayIdStr ? marketRollingMap.get(Number(awayIdStr)) : null;
+      const earlyXg = resolveFixtureXg({
+        rollingHome: earlyRollingHome,
+        rollingAway: earlyRollingAway,
+        leagueAvg: leagueParams.leagueAvg,
+        homeAdv: leagueParams.homeAdv,
+        awayAdv: leagueParams.awayAdv
+      });
+      const statsSeasonMeta = {
+        homeStatsSeason: tsH.seasonUsed,
+        awayStatsSeason: tsA.seasonUsed,
+        homeStatsSource: tsH.source,
+        awayStatsSource: tsA.source
+      };
+      engineCtx = {
+        hStats,
+        aStats,
+        formHome: tsHNorm.response?.form,
+        formAway: tsANorm.response?.form,
+        hFormMulti: hMulti,
+        aFormMulti: aMulti,
+        leagueParams,
+        homeStandingsRow: rowH || null,
+        awayStandingsRow: rowA || null,
+        refereeName: refereeName || undefined,
+        fixtureId,
+        fixtureDate: fx.fixture?.date,
+        homeTeamId: homeIdStr,
+        awayTeamId: awayIdStr,
+        shrinkageK,
+        ...statsSeasonMeta,
+        ...(earlyXg
+          ? {
+              xgHome: earlyXg.xgHome,
+              xgAway: earlyXg.xgAway,
+              xgSource: earlyXg.source
+            }
+          : {}),
+        ...moduleInputs
+      };
+      confidenceCtx = {
+        hStats,
+        aStats,
+        formHome: tsHNorm.response?.form,
+        formAway: tsANorm.response?.form,
+        hFormMulti: hMulti,
+        aFormMulti: aMulti,
+        leagueParams,
+        homeStandingsRow: rowH || null,
+        awayStandingsRow: rowA || null,
+        refereeName: refereeName || undefined,
+        homeTeamId: homeIdStr,
+        awayTeamId: awayIdStr,
+        fixtureDate: fx.fixture?.date,
+        ...statsSeasonMeta,
+        ...moduleInputs,
+        ...(earlyXg
+          ? { xgHome: earlyXg.xgHome, xgAway: earlyXg.xgAway, xgSource: earlyXg.source }
+          : {})
+      };
     }
   }
 

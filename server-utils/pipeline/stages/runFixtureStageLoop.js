@@ -3,13 +3,13 @@
  * Not a stage; owned by PredictorV3 orchestrator.
  */
 
-import { getWithCache } from "../../fetcher.js";
 import { getLeagueParams, getLeagueProfile } from "../../modelConstants.js";
 import { loadTeamMarketRolling } from "../../teamMarketRolling.js";
 import { loadLeagueElo } from "../../teamElo.js";
 import { logError } from "../../observability/logger.js";
 import {
-  standingsRowsFromApi,
+  resolveLeagueSeasonFromFixtures,
+  loadStandingsMapWithSeasonFallback,
   buildLeagueStandingsTable
 } from "../predictHelpers.js";
 import { beginFixture, resetFixture } from "../PipelineContext.js";
@@ -57,28 +57,31 @@ export async function runFixtureStageLoop(context) {
 
     const leagueParams = getLeagueParams(lId);
     const leagueProfile = getLeagueProfile(lId);
+    // Prefer season stamped on fixtures (UEFA cups / calendar mismatches vs inferSeason(date)).
+    const leagueSeason = resolveLeagueSeasonFromFixtures(leagueFixtures, season);
     // Warm league caches once (Elo + market rolling) before the per-fixture Stage02–09 loop.
     const [marketRollingMap] = await Promise.all([
-      loadTeamMarketRolling(Number(lId), Number(season)).catch(() => new Map()),
+      loadTeamMarketRolling(Number(lId), Number(leagueSeason)).catch(() => new Map()),
       loadLeagueElo(lId).catch(() => new Map())
     ]);
 
-    const standingsReq = await getWithCache("/standings", { league: lId, season }, 86400);
-    const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
-    const standingsMap = new Map();
-    standingsRows.forEach((r) => {
-      if (r?.team?.id) standingsMap.set(String(r.team.id), r);
-    });
+    const {
+      standingsRows,
+      standingsMap,
+      prevSeasonUsed: standingsPrevSeason
+    } = await loadStandingsMapWithSeasonFallback(lId, leagueSeason, 86400);
     const leagueStandings = buildLeagueStandingsTable(standingsRows);
 
     context.league = {
       lId,
+      leagueSeason,
       leagueParams,
       leagueProfile,
       marketRollingMap,
       standingsMap,
       leagueStandings,
       standingsRows,
+      standingsPrevSeason,
       leagueFixtures
     };
 

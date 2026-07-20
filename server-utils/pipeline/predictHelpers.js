@@ -6,7 +6,7 @@
 import { getWithCache } from "../fetcher.js";
 import { extractFixtureMarketStats, aggregateRollingForTeam } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
-import { poissonOverLine } from "../math.js";
+import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
 
 /** Season inference used by predict/warm (European season boundary July). */
@@ -14,6 +14,96 @@ function inferSeason(dateISO) {
   const [y, m] = String(dateISO || "").split("-").map(Number);
   if (!y || !m) return new Date().getFullYear() - 1;
   return m >= 7 ? y : y - 1;
+}
+
+/** Prefer API-Football season stamped on fixtures for that league. */
+function resolveLeagueSeasonFromFixtures(leagueFixtures, fallbackSeason) {
+  for (const fx of leagueFixtures || []) {
+    const s = Number(fx?.league?.season);
+    if (Number.isFinite(s) && s >= 2000) return s;
+  }
+  const fb = Number(fallbackSeason);
+  if (Number.isFinite(fb) && fb >= 2000) return fb;
+  return inferSeason(new Date().toISOString().slice(0, 10));
+}
+
+/**
+ * Fetch /teams/statistics; if current season has no usable averages (common for
+ * UEFA qualifying / early league phase), retry season-1 for the same competition.
+ */
+async function fetchTeamStatisticsWithSeasonFallback({ leagueId, season, teamId, ttlSeconds = 86400 }) {
+  const lid = Number(leagueId);
+  const tid = String(teamId || "").trim();
+  const seasonNum = Number(season);
+  if (!Number.isFinite(lid) || !tid || !Number.isFinite(seasonNum)) {
+    return { ok: false, norm: null, stats: null, seasonUsed: seasonNum, source: null };
+  }
+
+  const trySeason = async (s, source) => {
+    const req = await getWithCache(
+      "/teams/statistics",
+      { league: lid, season: s, team: tid },
+      ttlSeconds
+    );
+    if (!req.ok || !req.data) return null;
+    const norm = normalizeTeamStatisticsPayload(req.data);
+    if (!norm) return null;
+    const stats = extractAdvancedGoalsAverages(norm);
+    if (!stats) return null;
+    return { ok: true, norm, stats, seasonUsed: s, source, fromCache: Boolean(req.fromCache) };
+  };
+
+  const current = await trySeason(seasonNum, "current");
+  if (current) return current;
+
+  const prevSeason = seasonNum - 1;
+  if (prevSeason >= 2000) {
+    const prev = await trySeason(prevSeason, "previous_season");
+    if (prev) return prev;
+  }
+
+  return { ok: false, norm: null, stats: null, seasonUsed: seasonNum, source: null };
+}
+
+/**
+ * Load standings for league season; fill missing teams from season-1
+ * (UEFA cups often have empty tables early in the campaign).
+ */
+async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds = 86400) {
+  const seasonNum = Number(season);
+  const lid = Number(leagueId);
+  const standingsReq = await getWithCache("/standings", { league: lid, season: seasonNum }, ttlSeconds);
+  const standingsRows = standingsReq.ok ? standingsRowsFromApi(standingsReq.data) : [];
+  const standingsMap = new Map();
+  for (const r of standingsRows) {
+    if (r?.team?.id) standingsMap.set(String(r.team.id), r);
+  }
+
+  let prevSeasonUsed = null;
+  const prevSeason = seasonNum - 1;
+  if (prevSeason >= 2000) {
+    const prevReq = await getWithCache("/standings", { league: lid, season: prevSeason }, ttlSeconds);
+    if (prevReq.ok) {
+      const prevRows = standingsRowsFromApi(prevReq.data);
+      let filled = 0;
+      for (const r of prevRows) {
+        const id = r?.team?.id != null ? String(r.team.id) : null;
+        if (!id || standingsMap.has(id)) continue;
+        standingsMap.set(id, r);
+        standingsRows.push(r);
+        filled += 1;
+      }
+      if (filled > 0) prevSeasonUsed = prevSeason;
+    }
+  }
+
+  return {
+    standingsRows,
+    standingsMap,
+    seasonUsed: seasonNum,
+    prevSeasonUsed,
+    fromCache: Boolean(standingsReq.fromCache)
+  };
 }
 
 function isGoodNum(val) {
@@ -511,6 +601,9 @@ async function loadRiskContext() {
 
 export {
   inferSeason,
+  resolveLeagueSeasonFromFixtures,
+  fetchTeamStatisticsWithSeasonFallback,
+  loadStandingsMapWithSeasonFallback,
   isGoodNum,
   roundDisplayRate,
   clampPct,

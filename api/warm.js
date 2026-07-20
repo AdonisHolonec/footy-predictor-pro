@@ -13,12 +13,12 @@ import {
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
-
-function inferSeason(dateISO) {
-  const [y, m] = String(dateISO || "").split("-").map(Number);
-  if (!y || !m) return new Date().getFullYear() - 1;
-  return m >= 7 ? y : y - 1;
-}
+import {
+  inferSeason,
+  resolveLeagueSeasonFromFixtures,
+  fetchTeamStatisticsWithSeasonFallback,
+  loadStandingsMapWithSeasonFallback
+} from "../server-utils/pipeline/predictHelpers.js";
 
 export default async function handler(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
@@ -145,14 +145,21 @@ export default async function handler(req, res) {
     if (fixtureSlots >= PREDICT_FIXTURE_CAP) break;
   }
 
+  const leagueSeasonById = new Map();
   for (const leagueId of leagueIds) {
     const leagueFixtures = allFixtures.filter((f) => f.league?.id === leagueId);
-    const summary = { leagueId, season, date, fixtures: leagueFixtures.length };
+    const leagueSeason = resolveLeagueSeasonFromFixtures(leagueFixtures, season);
+    leagueSeasonById.set(leagueId, leagueSeason);
+    const summary = { leagueId, season: leagueSeason, date, fixtures: leagueFixtures.length };
 
     if (wantStandings) {
-      const stReq = await getWithCache("/standings", { league: leagueId, season }, 86400);
-      if (!stReq.ok) errors.push({ leagueId, where: "standings", error: stReq.error });
-      else summary.standings = stReq.fromCache ? "cached" : "fetched";
+      try {
+        const st = await loadStandingsMapWithSeasonFallback(leagueId, leagueSeason, 86400);
+        summary.standings = st.fromCache ? "cached" : "fetched";
+        if (st.prevSeasonUsed) summary.standingsPrevSeason = st.prevSeasonUsed;
+      } catch (err) {
+        errors.push({ leagueId, where: "standings", error: err?.message || "standings_failed" });
+      }
     }
 
     warmed.push(summary);
@@ -161,10 +168,16 @@ export default async function handler(req, res) {
   if (wantTeamStats) {
     const uniqTeams = prioritizedTeams.slice(0, TEAMSTATS_WARM_LIMIT);
     for (const { leagueId, teamId } of uniqTeams) {
-      const tsReq = await getWithCache("/teams/statistics", { league: leagueId, season, team: teamId }, 86400);
-      if (!tsReq.ok) {
-        errors.push({ leagueId, teamId, where: "teamstats", error: tsReq.error });
-      } else if (tsReq.fromCache) {
+      const leagueSeason = leagueSeasonById.get(leagueId) || season;
+      const ts = await fetchTeamStatisticsWithSeasonFallback({
+        leagueId,
+        season: leagueSeason,
+        teamId,
+        ttlSeconds: 86400
+      });
+      if (!ts.ok) {
+        errors.push({ leagueId, teamId, where: "teamstats", error: "no_usable_team_stats" });
+      } else if (ts.fromCache) {
         teamStatsCached += 1;
       } else {
         teamStatsPrefetched += 1;
