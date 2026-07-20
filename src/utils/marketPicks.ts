@@ -58,6 +58,40 @@ export function deriveBestOverUnderPick(
   return best;
 }
 
+function lineToTotalKey(line: number): string {
+  const [a, b] = Number(line).toFixed(1).split(".");
+  return `o${a}_${b}`;
+}
+
+/**
+ * Prefer the book line when a quote exists within maxLineDelta of the model pick
+ * (keeps side; refreshes probability at the snapped line when available).
+ */
+export function deriveAlignedOuPick(
+  totalLines?: Record<string, number>,
+  quote?: { pick?: string; line?: number | null; odd?: number | null } | null,
+  maxLineDelta = 1.5
+): { line: number; side: "over" | "under"; probability: number } | null {
+  const best = deriveBestOverUnderPick(totalLines);
+  if (!best) return null;
+  const odd = Number(quote?.odd);
+  const qLine = Number(quote?.line);
+  if (!Number.isFinite(odd) || odd <= 1 || !Number.isFinite(qLine)) return best;
+  if (Math.abs(qLine - best.line) > maxLineDelta + 1e-9) return best;
+
+  const qPick = String(quote?.pick || "").toLowerCase();
+  const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : best.side;
+  const pOver = Number(totalLines?.[lineToTotalKey(qLine)]);
+  if (Number.isFinite(pOver)) {
+    return {
+      line: qLine,
+      side: qSide,
+      probability: qSide === "over" ? pOver : 100 - pOver
+    };
+  }
+  return { line: qLine, side: qSide, probability: best.probability };
+}
+
 export function listGoalsPickCandidates(row: PredictionRow): GoalsOuPick[] {
   const p = row.probs;
   if (!p) return [];
@@ -169,15 +203,16 @@ export function recommendedPickValueEv(row: PredictionRow): number | null {
   return modelValueEv(conf, recommendedOdd(row));
 }
 
-/** Odd for corners/shots row only when quote matches the displayed pick. */
+/** Odd for corners/shots row when quote side matches and line is within tolerance. */
 export function matchingMarketOdd(
   quote: { pick?: string; line?: number | null; odd?: number | null } | null | undefined,
   side: "over" | "under",
-  line: number
+  line: number,
+  maxLineDelta = 1.5
 ): number | null {
   if (!quote) return null;
   const qLine = Number(quote.line);
-  if (Number.isFinite(qLine) && Math.abs(qLine - line) > 1e-6) return null;
+  if (Number.isFinite(qLine) && Math.abs(qLine - line) > maxLineDelta + 1e-9) return null;
   const qPick = String(quote.pick || "").toLowerCase();
   const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : null;
   if (qSide && qSide !== side) return null;

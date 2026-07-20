@@ -68,6 +68,24 @@ function deriveBestOverUnderPick(totalLines) {
   return best;
 }
 
+/** Snap model O/U pick to book line when a usable quote is within maxLineDelta. */
+function deriveAlignedOuPick(totalLines, quote, maxLineDelta = 1.5) {
+  const best = deriveBestOverUnderPick(totalLines);
+  if (!best) return null;
+  const odd = Number(quote?.odd);
+  const qLine = Number(quote?.line);
+  if (!Number.isFinite(odd) || odd <= 1 || !Number.isFinite(qLine)) return best;
+  if (Math.abs(qLine - best.line) > maxLineDelta + 1e-9) return best;
+  const qPick = String(quote?.pick || "").toLowerCase();
+  const side = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : best.side;
+  const [a, b] = Number(qLine).toFixed(1).split(".");
+  const pOver = Number(totalLines?.[`o${a}_${b}`]);
+  if (Number.isFinite(pOver)) {
+    return { line: qLine, side, probability: side === "over" ? pOver : 100 - pOver };
+  }
+  return { line: qLine, side, probability: best.probability };
+}
+
 function parseGoalsOuPick(pick) {
   const n = String(pick || "").trim().toLowerCase();
   if (!n) return null;
@@ -149,7 +167,9 @@ export function deriveCardMarketPicks(prediction) {
       }
     : null;
 
-  const cornersBest = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
+  const cornersBest = row.probs?.corners
+    ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
+    : null;
   const corners = cornersBest
     ? {
         pick: ouPickLabel(cornersBest.side, cornersBest.line),
@@ -160,7 +180,7 @@ export function deriveCardMarketPicks(prediction) {
     : null;
 
   const shotsBest = row.probs?.shotsOnTarget
-    ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total)
+    ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
     : null;
   const shots = shotsBest
     ? {

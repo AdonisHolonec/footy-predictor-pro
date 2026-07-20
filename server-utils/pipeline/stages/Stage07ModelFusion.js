@@ -424,33 +424,78 @@ export async function run(context) {
         const isOver = String(pick).toLowerCase().includes("over");
         return isOver ? quote.over : quote.under;
       };
+
+      /** Align stored pick/line to the quoted book line when nearest-line fallback was used. */
+      const buildOuQuotePayload = (pick, quote) => {
+        if (!pick) return undefined;
+        const side = String(pick.pick || "").toLowerCase().includes("under") ? "under" : "over";
+        const matchedLine = Number(quote?.line);
+        const line = Number.isFinite(matchedLine) ? matchedLine : pick.line;
+        const pickLabel = `${side === "over" ? "Over" : "Under"} ${Number(line).toFixed(1)}`;
+        const odd = selectOddByPick(quote, pickLabel);
+        return {
+          pick: pickLabel,
+          line,
+          odd: odd ?? null,
+          requestedLine: pick.line,
+          lineExact: quote ? Boolean(quote.lineExact) : null,
+          bookmaker: quote ? `median(${quote.bookmakersUsed})` : null,
+          bookmakersUsed: quote?.bookmakersUsed || 0
+        };
+      };
     
       const cornersQuote = cornersPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            ["Corners Over Under", "Corners Over/Under", "Total Corners"],
-            cornersPick.line
+            [
+              "Corners Over Under",
+              "Corners Over/Under",
+              "Total Corners",
+              "Total Corners Over/Under",
+              "Corner Over/Under",
+              "Corners"
+            ],
+            cornersPick.line,
+            { maxLineDelta: 1, kind: "corners" }
           )
         : null;
       const shotsOnTargetQuote = shotsOnTargetPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            ["Shots On Target - Over/Under", "Shots on Target Over/Under", "Shots on Goal Over/Under"],
-            shotsOnTargetPick.line
+            [
+              "Shots On Target - Over/Under",
+              "Shots on Target Over/Under",
+              "Shots on Goal Over/Under",
+              "Total Shots on Target Over/Under",
+              "Total Shots On Target",
+              "Shots On Target",
+              "Shots on Goal",
+              "Total Shots on Goal"
+            ],
+            shotsOnTargetPick.line,
+            { maxLineDelta: 1.5, kind: "shots_on_target" }
           )
         : null;
       const shotsTotalQuote = shotsTotalPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            ["Total Shots Over/Under", "Shots Over/Under", "Total Shots"],
-            shotsTotalPick.line
+            [
+              "Total Shots Over/Under",
+              "Shots Over/Under",
+              "Total Shots",
+              "Match Shots Over/Under",
+              "Shots"
+            ],
+            shotsTotalPick.line,
+            { maxLineDelta: 2, kind: "shots_total" }
           )
         : null;
       const firstHalfQuote = firstHalfPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
             ["First Half Goals", "1st Half Goals Over/Under", "Goals Over/Under First Half"],
-            firstHalfPick.line
+            firstHalfPick.line,
+            { maxLineDelta: 0 }
           )
         : null;
       goals15Quote = consensusOverUnderOddsAtLine(
@@ -527,33 +572,9 @@ export async function run(context) {
               bookmakersUsed: bttsQuote.bookmakersUsed || 0
             }
           : undefined,
-        corners: cornersPick
-          ? {
-              pick: cornersPick.pick,
-              line: cornersPick.line,
-              odd: selectOddByPick(cornersQuote, cornersPick.pick),
-              bookmaker: cornersQuote ? `median(${cornersQuote.bookmakersUsed})` : null,
-              bookmakersUsed: cornersQuote?.bookmakersUsed || 0
-            }
-          : undefined,
-        shotsOnTarget: shotsOnTargetPick
-          ? {
-              pick: shotsOnTargetPick.pick,
-              line: shotsOnTargetPick.line,
-              odd: selectOddByPick(shotsOnTargetQuote, shotsOnTargetPick.pick),
-              bookmaker: shotsOnTargetQuote ? `median(${shotsOnTargetQuote.bookmakersUsed})` : null,
-              bookmakersUsed: shotsOnTargetQuote?.bookmakersUsed || 0
-            }
-          : undefined,
-        shotsTotal: shotsTotalPick
-          ? {
-              pick: shotsTotalPick.pick,
-              line: shotsTotalPick.line,
-              odd: selectOddByPick(shotsTotalQuote, shotsTotalPick.pick),
-              bookmaker: shotsTotalQuote ? `median(${shotsTotalQuote.bookmakersUsed})` : null,
-              bookmakersUsed: shotsTotalQuote?.bookmakersUsed || 0
-            }
-          : undefined,
+        corners: buildOuQuotePayload(cornersPick, cornersQuote),
+        shotsOnTarget: buildOuQuotePayload(shotsOnTargetPick, shotsOnTargetQuote),
+        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote),
         firstHalfGoals: firstHalfPick
           ? {
               pick: firstHalfPick.pick,

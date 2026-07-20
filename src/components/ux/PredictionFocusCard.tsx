@@ -11,7 +11,7 @@ import {
 } from "../../utils/cardMarketOutcome";
 import {
   deriveCardGoalsPick,
-  deriveBestOverUnderPick,
+  deriveAlignedOuPick,
   goalsOddForLine,
   matchingMarketOdd,
   recommendedOdd
@@ -99,8 +99,12 @@ export default function PredictionFocusCard({
   const awayRank = row.teamContext?.away?.rank;
 
   const goals = deriveCardGoalsPick(row);
-  const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
-  const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+  const corners = row.probs?.corners
+    ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
+    : null;
+  const shots = row.probs?.shotsOnTarget
+    ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
+    : null;
 
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;

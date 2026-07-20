@@ -1,5 +1,5 @@
 import type { CardMarketValidations, PredictionRow } from "../types";
-import { deriveBestOverUnderPick, deriveCardGoalsPick } from "./marketPicks";
+import { deriveAlignedOuPick, deriveCardGoalsPick } from "./marketPicks";
 
 export type CardMarketId = "recommended" | "goals" | "corners" | "shots";
 export type MarketOutcome = "win" | "loss" | "pending" | null;
@@ -86,7 +86,9 @@ export function resolveCardMarketOutcome(
   }
 
   if (marketId === "corners") {
-    const corners = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
+    const corners = row.probs?.corners
+      ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
+      : null;
     if (!corners) return null;
     const total = row.marketResults?.cornersTotal;
     if (total == null || !Number.isFinite(Number(total))) return fromStore === "pending" ? "pending" : "pending";
@@ -94,7 +96,9 @@ export function resolveCardMarketOutcome(
   }
 
   if (marketId === "shots") {
-    const shots = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+    const shots = row.probs?.shotsOnTarget
+      ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
+      : null;
     if (!shots) return null;
     const total = row.marketResults?.shotsOnTargetTotal;
     if (total == null || !Number.isFinite(Number(total))) return "pending";

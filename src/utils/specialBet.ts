@@ -6,7 +6,7 @@ import {
   type MarketOutcome
 } from "./cardMarketOutcome";
 import {
-  deriveBestOverUnderPick,
+  deriveAlignedOuPick,
   matchingMarketOdd,
   recommendedOdd
 } from "./marketPicks";
@@ -38,9 +38,11 @@ export function buildSpecialBetLegs(
 ): SpecialBetLeg[] {
   const conf = Number(row.recommended?.confidence);
   const confPct = Number.isFinite(conf) ? conf : 0;
-  const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
+  const cornersPick = row.probs?.corners
+    ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
+    : null;
   const shotsPick = row.probs?.shotsOnTarget
-    ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total)
+    ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
     : null;
   const firstHalfPick = row.probs?.firstHalf
     ? row.probs.firstHalf.pO15 >= 50

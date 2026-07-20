@@ -1596,6 +1596,69 @@ test("extractRawTriple prefers rawPoisson over final modelProbs (train/serve ali
   assert.ok(Math.abs(legacy.p1 - 0.7) < 1e-9);
 });
 
+test("consensusOverUnderOddsAtLine matches fuzzy shot markets and nearest line", async () => {
+  const { consensusOverUnderOddsAtLine } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "BetA",
+            bets: [
+              {
+                name: "Total Shots on Target Over/Under",
+                values: [
+                  { value: "Over 7.5", odd: "1.90" },
+                  { value: "Under 7.5", odd: "1.85" },
+                  { value: "Over 8.5", odd: "2.10" },
+                  { value: "Under 8.5", odd: "1.70" }
+                ]
+              },
+              {
+                name: "Player Shots on Target",
+                values: [
+                  { value: "Over 2.5", odd: "1.50" },
+                  { value: "Under 2.5", odd: "2.40" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  const exact = consensusOverUnderOddsAtLine(
+    payload,
+    ["Shots On Target - Over/Under"],
+    8.5,
+    { maxLineDelta: 1.5, kind: "shots_on_target" }
+  );
+  assert.ok(exact);
+  assert.equal(exact.line, 8.5);
+  assert.equal(exact.lineExact, true);
+  assert.ok(exact.over > 1);
+
+  const nearest = consensusOverUnderOddsAtLine(
+    payload,
+    ["Shots On Target"],
+    9.5,
+    { maxLineDelta: 1.5, kind: "shots_on_target" }
+  );
+  assert.ok(nearest);
+  assert.equal(nearest.line, 8.5);
+  assert.equal(nearest.lineExact, false);
+  assert.ok(nearest.over > 1);
+
+  const noPlayer = consensusOverUnderOddsAtLine(
+    payload,
+    ["Shots On Target"],
+    2.5,
+    { maxLineDelta: 0, kind: "shots_on_target" }
+  );
+  assert.equal(noPlayer, null);
+});
+
 test("UEFA stats fallback helpers pick domestic league and build averages from FT fixtures", async () => {
   const {
     pickDomesticLeagueId,
