@@ -504,7 +504,7 @@ export default function MatchCard({
             ) : null}
             {isPickHot ? (
               <span
-                className="rounded-sm bg-emerald-400/20 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-emerald-200 animate-pulse motion-reduce:animate-none"
+                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-[var(--fp-success)] animate-pulse motion-reduce:animate-none"
                 title={t("card.strongSignalTip")}
               >
                 HOT
@@ -514,7 +514,7 @@ export default function MatchCard({
           <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-signal-ink max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
             {row.recommended.pick}
           </div>
-          <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-emerald-300 animate-pulse motion-reduce:animate-none" : "text-signal-petrol"}`}>
+          <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)] animate-pulse motion-reduce:animate-none" : "text-[var(--fp-accent)]"}`}>
             odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
           </div>
           </div>
@@ -633,65 +633,53 @@ export default function MatchCard({
               data: cornersPick,
               odd: row.marketOdds?.corners?.odd,
               source: row.marketOdds?.corners?.bookmaker,
-              accentClass:
-                "border-cyan-300/45 bg-gradient-to-b from-cyan-400/20 via-cyan-300/8 to-signal-void/45 shadow-[0_0_14px_rgba(34,211,238,0.22)]",
-              pickClass: "text-cyan-100",
-              probClass: "text-cyan-300",
-              oddClass: "text-cyan-200/90"
+              accentClass: "border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)]"
             },
             {
               label: t("match.featShots"),
               data: shotsPick,
               odd: row.marketOdds?.shotsOnTarget?.odd,
               source: row.marketOdds?.shotsOnTarget?.bookmaker,
-              accentClass:
-                "border-fuchsia-300/45 bg-gradient-to-b from-fuchsia-400/20 via-fuchsia-300/8 to-signal-void/45 shadow-[0_0_14px_rgba(232,121,249,0.22)]",
-              pickClass: "text-fuchsia-100",
-              probClass: "text-fuchsia-300",
-              oddClass: "text-fuchsia-200/90"
+              accentClass: "border-violet-500/35 bg-violet-500/10"
             },
             {
               label: t("match.featHt"),
               data: firstHalfPick,
               odd: row.marketOdds?.firstHalfGoals?.odd,
               source: row.marketOdds?.firstHalfGoals?.bookmaker,
-              accentClass:
-                "border-amber-300/50 bg-gradient-to-b from-amber-400/25 via-amber-300/10 to-signal-void/45 shadow-[0_0_14px_rgba(251,191,36,0.24)]",
-              pickClass: "text-amber-100",
-              probClass: "text-amber-300",
-              oddClass: "text-amber-200/95"
+              accentClass: "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10"
             }
           ].map((item) => {
             const isHot = item.label === marketPulseWinnerLabel;
             return (
             <div
               key={item.label}
-              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-white/35 animate-pulse motion-reduce:animate-none" : ""}`}
+              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-[var(--fp-accent)]/40 animate-pulse motion-reduce:animate-none" : ""}`}
             >
-              <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-white/85">{item.label}</div>
-              <div className={`mt-0.5 font-mono text-[9px] font-semibold ${item.pickClass}`}>{item.data?.pick ?? "—"}</div>
-              <div className={`font-mono text-[8px] font-semibold tabular-nums ${item.probClass}`}>
+              <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{item.label}</div>
+              <div className="mt-0.5 font-mono text-[9px] font-bold text-[var(--fp-text)]">{item.data?.pick ?? "—"}</div>
+              <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text)]">
                 {item.data ? `${Math.round(item.data.probability)}%` : "—"}
               </div>
-              <div className={`font-mono text-[8px] font-semibold tabular-nums ${item.oddClass}`}>
+              <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
                 {t("card.oddLabel", {
                   odd: Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : t("card.na")
                 })}
               </div>
-              <div className="font-mono text-[7px] text-white/65">{item.source || t("card.sourceNa")}</div>
+              <div className="font-mono text-[7px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>
             </div>
           )})}
         </div>
       )}
 
       {!compact && canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-        <div className="mt-2 min-w-0 rounded-lg border border-emerald-300/45 bg-gradient-to-b from-emerald-400/18 via-emerald-300/8 to-signal-void/45 px-2 py-1.5 shadow-[0_0_14px_rgba(16,185,129,0.25)]">
+        <div className="mt-2 min-w-0 rounded-lg border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10 px-2 py-1.5 shadow-[var(--fp-shadow-sm)]">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-emerald-200 sm:text-[8px] sm:tracking-[0.14em]">
+            <div className="font-mono text-[7.5px] font-bold uppercase tracking-[0.12em] text-[var(--fp-success)] sm:text-[8px] sm:tracking-[0.14em]">
               {t("card.specialBet")}
             </div>
             {specialBetCandidates.length >= 3 ? (
-              <div className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/10 p-[1px]">
+              <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
                 {[2, 3].map((n) => (
                   <button
                     key={n}
@@ -701,7 +689,9 @@ export default function MatchCard({
                       setSpecialLegCount(n as 2 | 3);
                     }}
                     className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
-                      specialLegCount === n ? "bg-emerald-300/25 text-emerald-100" : "text-emerald-200/80"
+                      specialLegCount === n
+                        ? "rounded bg-[var(--fp-success)]/20 text-[var(--fp-text)]"
+                        : "text-[var(--fp-text-muted)]"
                     }`}
                   >
                     {t("card.legs", { n })}
@@ -713,12 +703,14 @@ export default function MatchCard({
           <div className="mt-0.5 space-y-0.5">
             {specialBetLegs.map((leg) => (
               <div key={`${leg.label}-${leg.pick}`} className="flex items-center justify-between gap-1.5 font-mono text-[7.5px] sm:text-[8px]">
-                <span className="min-w-0 flex-1 truncate text-emerald-100/90">{leg.label}: {leg.pick}</span>
-                <span className="shrink-0 tabular-nums text-emerald-200">{Math.round(leg.probability)}%</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-[var(--fp-text)]">
+                  {leg.label}: {leg.pick}
+                </span>
+                <span className="shrink-0 tabular-nums font-bold text-[var(--fp-text)]">{Math.round(leg.probability)}%</span>
               </div>
             ))}
           </div>
-          <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-emerald-200">
+          <div className="mt-1 font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text)]">
             {t("card.combinedOdd", {
               odd: Number.isFinite(Number(specialBetCombinedOdd))
                 ? Number(specialBetCombinedOdd).toFixed(2)

@@ -150,12 +150,30 @@
   html.theme-light [class*="text-rose-300"] {
     color: #e11d48 !important;
   }
+  /* Pale dark-theme market colors (special bet / corners / shots) → readable on light */
+  html.theme-light [class*="text-emerald-50"],
+  html.theme-light [class*="text-emerald-100"],
   html.theme-light [class*="text-emerald-200"],
   html.theme-light [class*="text-emerald-300"] {
     color: #047857 !important;
   }
-  html.theme-light [class*="text-amber-200"] {
+  html.theme-light [class*="text-cyan-100"],
+  html.theme-light [class*="text-cyan-200"],
+  html.theme-light [class*="text-cyan-300"] {
+    color: #0e7490 !important;
+  }
+  html.theme-light [class*="text-fuchsia-100"],
+  html.theme-light [class*="text-fuchsia-200"],
+  html.theme-light [class*="text-fuchsia-300"] {
+    color: #a21caf !important;
+  }
+  html.theme-light [class*="text-amber-100"],
+  html.theme-light [class*="text-amber-200"],
+  html.theme-light [class*="text-amber-300"] {
     color: #b45309 !important;
+  }
+  html.theme-light [class*="text-white/"] {
+    color: var(--fp-text-muted) !important;
   }
   html.theme-light [class*="bg-signal-void"],
   html.theme-light [class*="bg-signal-panel"],
@@ -165,6 +183,24 @@
   }
   html.theme-light [class*="border-white/"] {
     border-color: var(--fp-border) !important;
+  }
+  html.theme-light [class*="border-emerald-"],
+  html.theme-light [class*="border-cyan-"],
+  html.theme-light [class*="border-fuchsia-"] {
+    border-color: var(--fp-border) !important;
+  }
+  html.theme-light [class*="from-emerald-"],
+  html.theme-light [class*="via-emerald-"],
+  html.theme-light [class*="to-signal-void"],
+  html.theme-light [class*="from-cyan-"],
+  html.theme-light [class*="via-cyan-"],
+  html.theme-light [class*="from-fuchsia-"],
+  html.theme-light [class*="via-fuchsia-"],
+  html.theme-light [class*="from-amber-"],
+  html.theme-light [class*="via-amber-"] {
+    --tw-gradient-from: color-mix(in srgb, var(--fp-accent) 12%, transparent) !important;
+    --tw-gradient-via: color-mix(in srgb, var(--fp-bg-muted) 80%, transparent) !important;
+    --tw-gradient-to: var(--fp-bg-muted) !important;
   }
 
   button {

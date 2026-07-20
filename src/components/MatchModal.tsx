@@ -142,18 +142,26 @@ function marketResultBadge(
   const isHot = probability >= 85;
   const toneClass =
     tone === "corners"
-      ? "border-cyan-300/55 bg-cyan-400/15 text-cyan-100 shadow-[0_0_16px_rgba(34,211,238,0.3)]"
+      ? "border-[var(--fp-accent)]/45 bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
       : tone === "shots"
-        ? "border-fuchsia-300/55 bg-fuchsia-400/15 text-fuchsia-100 shadow-[0_0_16px_rgba(232,121,249,0.3)]"
+        ? "border-violet-500/40 bg-violet-500/10 text-[var(--fp-text)]"
         : tone === "ht"
-          ? "border-amber-300/55 bg-amber-400/20 text-amber-100 shadow-[0_0_16px_rgba(251,191,36,0.3)]"
-          : "border-white/10 bg-signal-void/45 text-signal-silver";
+          ? "border-[var(--fp-warning)]/45 bg-[var(--fp-warning)]/10 text-[var(--fp-text)]"
+          : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
   const pulseClass = isHot ? " animate-pulse motion-reduce:animate-none ring-1 ring-white/35" : "";
   if (verdict === true) {
-    return <span className={`${base} border-signal-sage/45 bg-signal-sage/20 text-signal-mint shadow-[0_0_12px_rgba(16,185,129,0.25)]${pulseClass}`}>{pred} · WIN</span>;
+    return (
+      <span className={`${base} border-[var(--fp-success)]/45 bg-[var(--fp-success)]/15 text-[var(--fp-text)]${pulseClass}`}>
+        {pred} · WIN
+      </span>
+    );
   }
   if (verdict === false) {
-    return <span className={`${base} border-signal-rose/45 bg-signal-rose/20 text-signal-rose shadow-[0_0_12px_rgba(244,63,94,0.25)]${pulseClass}`}>{pred} · LOSE</span>;
+    return (
+      <span className={`${base} border-[var(--fp-danger)]/45 bg-[var(--fp-danger)]/15 text-[var(--fp-text)]${pulseClass}`}>
+        {pred} · LOSE
+      </span>
+    );
   }
   return <span className={`${base} ${toneClass}${pulseClass}`}>{pred} · OPEN</span>;
 }
@@ -948,21 +956,22 @@ export default function MatchModal({
           </div>
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
             <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
-              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-emerald-300/50 bg-gradient-to-b from-emerald-400/22 via-emerald-300/10 to-signal-void/55 px-3.5 py-2.5 text-center shadow-[0_0_22px_rgba(16,185,129,0.3)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
-                <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-emerald-200/70 to-transparent" />
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10 px-3.5 py-2.5 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.55rem] flex-wrap items-center justify-between gap-1.5">
-                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-100 max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">
+                  <div className="font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-[var(--fp-success)] max-[380px]:text-[8.5px] sm:text-[8px] sm:tracking-[0.16em]">
                     {tr("match.specialBet")}
                   </div>
                   {specialBetCandidates.length >= 3 ? (
-                    <div className="inline-flex rounded-md border border-emerald-300/45 bg-emerald-500/15 p-[1px]">
+                    <div className="inline-flex rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-bg-card)] p-[1px]">
                       {[2, 3].map((n) => (
                         <button
                           key={n}
                           type="button"
                           onClick={() => setSpecialLegCount(n as 2 | 3)}
                           className={`px-1.5 py-0.5 font-mono text-[7px] font-semibold uppercase sm:text-[8px] ${
-                            specialLegCount === n ? "bg-emerald-300/30 text-emerald-50" : "text-emerald-200/80"
+                            specialLegCount === n
+                              ? "rounded bg-[var(--fp-success)]/20 text-[var(--fp-text)]"
+                              : "text-[var(--fp-text-muted)]"
                           }`}
                         >
                           {tr("match.specialBetLegs", { n })}
@@ -971,15 +980,19 @@ export default function MatchModal({
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-2 space-y-1.5 rounded-lg border border-emerald-300/25 bg-signal-void/35 px-2.5 py-1.5 max-[380px]:px-3">
+                <div className="mt-2 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1.5 max-[380px]:px-3">
                   {specialBetLegs.map((leg) => (
                     <div key={`${leg.label}-${leg.pick}`} className="flex min-h-[1.25rem] items-center justify-between gap-2 font-mono text-[8px] max-[380px]:text-[8.5px] sm:text-[8px]">
-                      <span className="min-w-0 flex-1 truncate text-left text-emerald-100">{leg.label}: {leg.pick}</span>
-                      <span className="shrink-0 rounded-sm border border-emerald-300/35 bg-emerald-400/12 px-1 py-[1px] tabular-nums text-right text-emerald-200">{Math.round(leg.probability)}%</span>
+                      <span className="min-w-0 flex-1 truncate text-left font-semibold text-[var(--fp-text)]">
+                        {leg.label}: {leg.pick}
+                      </span>
+                      <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] tabular-nums text-right font-bold text-[var(--fp-text)]">
+                        {Math.round(leg.probability)}%
+                      </span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 border-t border-emerald-300/20 pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-emerald-100 max-[380px]:text-[9px]">
+                <div className="mt-2 border-t border-[var(--fp-border)] pt-1.5 font-mono text-[8.5px] font-semibold tabular-nums text-[var(--fp-text)] max-[380px]:text-[9px]">
                   {tr("match.combinedOdd", {
                     odd: Number.isFinite(Number(specialBetCombinedOdd))
                       ? Number(specialBetCombinedOdd).toFixed(2)
@@ -1419,7 +1432,7 @@ export default function MatchModal({
                   <PoissonMarketSection
                     title={tr("match.featCorners")}
                     subtitle={tr("match.cornersSub")}
-                    accent="#5eead4"
+                    accent="var(--fp-accent)"
                     icon="⚑"
                     data={match.probs.corners}
                     homeLabel={match.teams.home}
@@ -1437,7 +1450,7 @@ export default function MatchModal({
                   <PoissonMarketSection
                     title={tr("match.featShots")}
                     subtitle={tr("match.shotsSub")}
-                    accent="#38bdf8"
+                    accent="var(--fp-accent)"
                     icon="◎"
                     data={match.probs.shotsOnTarget}
                     homeLabel={match.teams.home}
@@ -1455,7 +1468,7 @@ export default function MatchModal({
                   <PoissonMarketSection
                     title={tr("match.shotsTotalTitle")}
                     subtitle={tr("match.shotsTotalSub")}
-                    accent="#a78bfa"
+                    accent="var(--fp-warning)"
                     icon="⌖"
                     data={match.probs.shotsTotal}
                     homeLabel={match.teams.home}
