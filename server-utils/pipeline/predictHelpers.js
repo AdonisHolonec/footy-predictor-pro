@@ -27,11 +27,175 @@ function resolveLeagueSeasonFromFixtures(leagueFixtures, fallbackSeason) {
   return inferSeason(new Date().toISOString().slice(0, 10));
 }
 
+/** UEFA club competitions — cup /teams/statistics often empty in qualifying. */
+const UEFA_CLUB_LEAGUE_IDS = new Set([2, 3, 848]);
+
 /**
- * Fetch /teams/statistics; if current season has no usable averages (common for
- * UEFA qualifying / early league phase), retry season-1 for the same competition.
+ * Pick a club's primary domestic league from /leagues?team=&season=.
+ * Prefers type=League, non-World country; skips the fixture competition itself.
  */
-async function fetchTeamStatisticsWithSeasonFallback({ leagueId, season, teamId, ttlSeconds = 86400 }) {
+function pickDomesticLeagueId(leaguesPayload, { preferNotLeagueId, seasonNum } = {}) {
+  const rows = Array.isArray(leaguesPayload?.response) ? leaguesPayload.response : [];
+  const skip = Number(preferNotLeagueId);
+  let best = null;
+  let bestScore = -1;
+  for (const entry of rows) {
+    const league = entry?.league || {};
+    const country = entry?.country || {};
+    const id = Number(league.id);
+    if (!Number.isFinite(id) || id === skip) continue;
+    if (UEFA_CLUB_LEAGUE_IDS.has(id)) continue;
+    const type = String(league.type || "");
+    const countryName = String(country.name || "");
+    let score = 0;
+    if (type === "League") score += 100;
+    else if (type === "Cup") score += 15;
+    else score += 5;
+    if (countryName && countryName !== "World") score += 50;
+    const seasons = Array.isArray(entry?.seasons) ? entry.seasons : [];
+    const seasonRow =
+      seasons.find((s) => Number(s?.year) === Number(seasonNum)) ||
+      seasons.find((s) => s?.current) ||
+      null;
+    if (seasonRow?.coverage?.fixtures?.statistics_fixtures) score += 20;
+    if (seasonRow?.coverage?.standings) score += 10;
+    if (seasonRow?.coverage?.fixtures?.statistics_players) score += 5;
+    if (score > bestScore) {
+      bestScore = score;
+      best = id;
+    }
+  }
+  return bestScore >= 50 ? best : null;
+}
+
+async function resolveTeamDomesticLeagueId(teamId, season, preferNotLeagueId, ttlSeconds = 86400) {
+  const tid = String(teamId || "").trim();
+  const seasonNum = Number(season);
+  if (!tid || !Number.isFinite(seasonNum)) return null;
+
+  const trySeason = async (s) => {
+    const req = await getWithCache("/leagues", { team: tid, season: s }, ttlSeconds);
+    if (!req.ok || !req.data) return null;
+    return pickDomesticLeagueId(req.data, { preferNotLeagueId, seasonNum: s });
+  };
+
+  const current = await trySeason(seasonNum);
+  if (current) return current;
+  const prev = seasonNum - 1;
+  if (prev >= 2000) return trySeason(prev);
+  return null;
+}
+
+/**
+ * Build usable goal averages + a minimal /teams/statistics-shaped payload from
+ * recent finished fixtures (any competition). Last resort for UEFA qualifying clubs.
+ */
+function buildStatsFromFinishedFixtures(fixtures, teamId) {
+  const tid = Number(teamId);
+  if (!Number.isFinite(tid)) return null;
+  let gfH = 0;
+  let gaH = 0;
+  let nH = 0;
+  let gfA = 0;
+  let gaA = 0;
+  let nA = 0;
+  const formChars = [];
+  const list = Array.isArray(fixtures) ? fixtures : [];
+  for (const fx of list) {
+    const short = String(fx?.fixture?.status?.short || "");
+    if (!["FT", "AET", "PEN"].includes(short)) continue;
+    const homeId = Number(fx?.teams?.home?.id);
+    const awayId = Number(fx?.teams?.away?.id);
+    const gh = Number(fx?.goals?.home);
+    const ga = Number(fx?.goals?.away);
+    if (!Number.isFinite(gh) || !Number.isFinite(ga)) continue;
+    const isHome = homeId === tid;
+    const isAway = awayId === tid;
+    if (!isHome && !isAway) continue;
+    if (isHome) {
+      gfH += gh;
+      gaH += ga;
+      nH += 1;
+      formChars.push(gh > ga ? "W" : gh < ga ? "L" : "D");
+    } else {
+      gfA += ga;
+      gaA += gh;
+      nA += 1;
+      formChars.push(ga > gh ? "W" : ga < gh ? "L" : "D");
+    }
+  }
+  const played = nH + nA;
+  if (played < 3) return null;
+  const gfTotal = (gfH + gfA) / played;
+  const gaTotal = (gaH + gaA) / played;
+  const gfHome = nH > 0 ? gfH / nH : gfTotal;
+  const gaHome = nH > 0 ? gaH / nH : gaTotal;
+  const gfAway = nA > 0 ? gfA / nA : gfTotal;
+  const gaAway = nA > 0 ? gaA / nA : gaTotal;
+  if (gfTotal === 0 && gaTotal === 0) return null;
+  const stats = {
+    gfHome,
+    gaHome,
+    gfAway,
+    gaAway,
+    played,
+    playedHome: nH,
+    playedAway: nA
+  };
+  const avg = (n) => Number(n.toFixed(2));
+  const norm = {
+    response: {
+      form: formChars.slice(0, 10).join(""),
+      fixtures: {
+        played: { home: nH, away: nA, total: played }
+      },
+      goals: {
+        for: {
+          average: { home: avg(gfHome), away: avg(gfAway), total: avg(gfTotal) }
+        },
+        against: {
+          average: { home: avg(gaHome), away: avg(gaAway), total: avg(gaTotal) }
+        }
+      }
+    }
+  };
+  return { stats, norm };
+}
+
+async function fetchTeamStatisticsFromRecentFixtures(teamId, ttlSeconds = 21600) {
+  const tid = String(teamId || "").trim();
+  if (!tid) return null;
+  // No status filter: API last=N mixes NS/FT; we keep only finished below.
+  const req = await getWithCache("/fixtures", { team: tid, last: 20 }, ttlSeconds);
+  if (!req.ok || !req.data) return null;
+  const built = buildStatsFromFinishedFixtures(req.data?.response || [], tid);
+  if (!built) return null;
+  return {
+    ok: true,
+    norm: built.norm,
+    stats: built.stats,
+    seasonUsed: null,
+    source: "recent_fixtures",
+    fromCache: Boolean(req.fromCache),
+    statsLeagueId: null
+  };
+}
+
+/**
+ * Fetch /teams/statistics with progressive fallbacks:
+ * 1) fixture league + season
+ * 2) fixture league + season-1 (UEFA / early phase)
+ * 3) team's domestic league (+ season-1) when cup stats are empty
+ * 4) last finished fixtures across competitions (qualifying clubs with no cup history)
+ */
+async function fetchTeamStatisticsWithSeasonFallback({
+  leagueId,
+  season,
+  teamId,
+  ttlSeconds = 86400,
+  allowDomesticFallback = true,
+  allowRecentFixturesFallback = true
+}) {
   const lid = Number(leagueId);
   const tid = String(teamId || "").trim();
   const seasonNum = Number(season);
@@ -39,10 +203,10 @@ async function fetchTeamStatisticsWithSeasonFallback({ leagueId, season, teamId,
     return { ok: false, norm: null, stats: null, seasonUsed: seasonNum, source: null };
   }
 
-  const trySeason = async (s, source) => {
+  const tryLeagueSeason = async (statsLeagueId, s, source) => {
     const req = await getWithCache(
       "/teams/statistics",
-      { league: lid, season: s, team: tid },
+      { league: statsLeagueId, season: s, team: tid },
       ttlSeconds
     );
     if (!req.ok || !req.data) return null;
@@ -50,16 +214,41 @@ async function fetchTeamStatisticsWithSeasonFallback({ leagueId, season, teamId,
     if (!norm) return null;
     const stats = extractAdvancedGoalsAverages(norm);
     if (!stats) return null;
-    return { ok: true, norm, stats, seasonUsed: s, source, fromCache: Boolean(req.fromCache) };
+    return {
+      ok: true,
+      norm,
+      stats,
+      seasonUsed: s,
+      source,
+      fromCache: Boolean(req.fromCache),
+      statsLeagueId
+    };
   };
 
-  const current = await trySeason(seasonNum, "current");
+  const current = await tryLeagueSeason(lid, seasonNum, "current");
   if (current) return current;
 
   const prevSeason = seasonNum - 1;
   if (prevSeason >= 2000) {
-    const prev = await trySeason(prevSeason, "previous_season");
+    const prev = await tryLeagueSeason(lid, prevSeason, "previous_season");
     if (prev) return prev;
+  }
+
+  if (allowDomesticFallback) {
+    const domesticId = await resolveTeamDomesticLeagueId(tid, seasonNum, lid, ttlSeconds);
+    if (domesticId && domesticId !== lid) {
+      const domCurrent = await tryLeagueSeason(domesticId, seasonNum, "domestic_current");
+      if (domCurrent) return domCurrent;
+      if (prevSeason >= 2000) {
+        const domPrev = await tryLeagueSeason(domesticId, prevSeason, "domestic_previous_season");
+        if (domPrev) return domPrev;
+      }
+    }
+  }
+
+  if (allowRecentFixturesFallback) {
+    const fromFx = await fetchTeamStatisticsFromRecentFixtures(tid, Math.min(ttlSeconds, 21600));
+    if (fromFx) return fromFx;
   }
 
   return { ok: false, norm: null, stats: null, seasonUsed: seasonNum, source: null };
@@ -602,6 +791,8 @@ async function loadRiskContext() {
 export {
   inferSeason,
   resolveLeagueSeasonFromFixtures,
+  pickDomesticLeagueId,
+  buildStatsFromFinishedFixtures,
   fetchTeamStatisticsWithSeasonFallback,
   loadStandingsMapWithSeasonFallback,
   isGoodNum,

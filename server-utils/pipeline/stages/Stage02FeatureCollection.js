@@ -187,7 +187,9 @@ export async function run(context) {
         homeStatsSeason: tsH.seasonUsed,
         awayStatsSeason: tsA.seasonUsed,
         homeStatsSource: tsH.source,
-        awayStatsSource: tsA.source
+        awayStatsSource: tsA.source,
+        homeStatsLeagueId: tsH.statsLeagueId ?? null,
+        awayStatsLeagueId: tsA.statsLeagueId ?? null
       };
       engineCtx = {
         hStats,

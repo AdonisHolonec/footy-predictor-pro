@@ -1595,3 +1595,58 @@ test("extractRawTriple prefers rawPoisson over final modelProbs (train/serve ali
   assert.ok(legacy);
   assert.ok(Math.abs(legacy.p1 - 0.7) < 1e-9);
 });
+
+test("UEFA stats fallback helpers pick domestic league and build averages from FT fixtures", async () => {
+  const {
+    pickDomesticLeagueId,
+    buildStatsFromFinishedFixtures
+  } = await import("../server-utils/pipeline/predictHelpers.js");
+
+  const domestic = pickDomesticLeagueId(
+    {
+      response: [
+        { league: { id: 2, type: "Cup", name: "Champions League" }, country: { name: "World" } },
+        {
+          league: { id: 39, type: "League", name: "Premier League" },
+          country: { name: "England" },
+          seasons: [{ year: 2025, coverage: { fixtures: { statistics_fixtures: true }, standings: true } }]
+        },
+        { league: { id: 45, type: "Cup", name: "FA Cup" }, country: { name: "England" } }
+      ]
+    },
+    { preferNotLeagueId: 2, seasonNum: 2025 }
+  );
+  assert.equal(domestic, 39);
+
+  const built = buildStatsFromFinishedFixtures(
+    [
+      {
+        fixture: { status: { short: "FT" } },
+        teams: { home: { id: 33 }, away: { id: 34 } },
+        goals: { home: 2, away: 1 }
+      },
+      {
+        fixture: { status: { short: "FT" } },
+        teams: { home: { id: 40 }, away: { id: 33 } },
+        goals: { home: 0, away: 1 }
+      },
+      {
+        fixture: { status: { short: "AET" } },
+        teams: { home: { id: 33 }, away: { id: 50 } },
+        goals: { home: 1, away: 1 }
+      },
+      {
+        fixture: { status: { short: "NS" } },
+        teams: { home: { id: 33 }, away: { id: 42 } },
+        goals: { home: null, away: null }
+      }
+    ],
+    33
+  );
+  assert.ok(built);
+  assert.equal(built.stats.played, 3);
+  assert.equal(built.stats.playedHome, 2);
+  assert.equal(built.stats.playedAway, 1);
+  assert.ok(built.stats.gfHome > 0);
+  assert.equal(built.norm.response.form, "WWD");
+});
