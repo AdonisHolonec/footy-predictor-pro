@@ -1,8 +1,10 @@
+import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
+import HistorySpecialBetCard from "./HistorySpecialBetCard";
 
 type Props = {
   history: HistoryEntry[];
@@ -12,6 +14,8 @@ type Props = {
   losses: number;
   settled: number;
   winRate: number;
+  /** Open full match analysis (MatchModal). */
+  onOpenMatch?: (row: HistoryEntry) => void;
 };
 
 function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
@@ -21,6 +25,10 @@ function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
   return "neutral";
 }
 
+function rowKey(row: HistoryEntry): string {
+  return String(row.id ?? `${row.teams?.home}-${row.teams?.away}-${row.kickoff}`);
+}
+
 export default function HistorySection({
   history,
   trackerSlot,
@@ -28,10 +36,21 @@ export default function HistorySection({
   wins,
   losses,
   settled,
-  winRate
+  winRate,
+  onOpenMatch
 }: Props) {
   const { t } = useLocale();
-  const rows = [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || "")));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const rows = useMemo(
+    () => [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
+    [history]
+  );
+
+  const selected = useMemo(
+    () => (selectedId ? rows.find((r) => rowKey(r) === selectedId) || null : null),
+    [rows, selectedId]
+  );
 
   const labelFor = (v?: string) => {
     if (v === "win") return t("history.win");
@@ -68,34 +87,85 @@ export default function HistorySection({
         ))}
       </div>
 
+      {selected ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+              {t("history.selectedMatch")}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="text-xs font-semibold text-[var(--fp-accent)] hover:underline"
+            >
+              {t("history.clearSelection")}
+            </button>
+          </div>
+          <HistorySpecialBetCard row={selected} onOpenDetails={onOpenMatch} />
+        </div>
+      ) : null}
+
       {!rows.length ? (
         <Card>
           <p className="text-sm text-[var(--fp-text-muted)]">{t("history.empty")}</p>
         </Card>
       ) : (
         <ul className="space-y-2">
-          {rows.slice(0, 80).map((row) => (
-            <li key={String(row.id ?? `${row.teams?.home}-${row.teams?.away}-${row.kickoff}`)}>
-              <Card padding="sm" className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
-                    {row.league || "—"} · {row.kickoff ? String(row.kickoff).slice(0, 16).replace("T", " ") : "—"}
-                  </p>
-                  <p className="mt-0.5 truncate font-semibold">
-                    {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
-                  </p>
-                  <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
-                    {t("history.topPick")}{" "}
-                    <span className="text-[var(--fp-text)]">{row.recommended?.pick || "—"}</span>
-                    {row.score?.home != null && row.score?.away != null
-                      ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
-                      : ""}
-                  </p>
-                </div>
-                <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
-              </Card>
-            </li>
-          ))}
+          {rows.slice(0, 80).map((row) => {
+            const id = rowKey(row);
+            const active = selectedId === id;
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(active ? null : id)}
+                  aria-pressed={active}
+                  className={`w-full rounded-[var(--fp-radius)] text-left transition-[box-shadow,border-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
+                    active
+                      ? "ring-2 ring-[var(--fp-success)]/50"
+                      : "hover:ring-1 hover:ring-[var(--fp-border)]"
+                  }`}
+                >
+                  <Card
+                    padding="sm"
+                    className={`flex flex-wrap items-center justify-between gap-3 ${
+                      active ? "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/5" : ""
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {row.logos?.home || row.logos?.away ? (
+                        <div className="flex shrink-0 items-center -space-x-1.5">
+                          {row.logos?.home ? (
+                            <img src={row.logos.home} alt="" className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain" />
+                          ) : null}
+                          {row.logos?.away ? (
+                            <img src={row.logos.away} alt="" className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain" />
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="min-w-0">
+                        <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
+                          {row.league || "—"} ·{" "}
+                          {row.kickoff ? String(row.kickoff).slice(0, 16).replace("T", " ") : "—"}
+                        </p>
+                        <p className="mt-0.5 truncate font-semibold">
+                          {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
+                        </p>
+                        <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
+                          {t("history.topPick")}{" "}
+                          <span className="text-[var(--fp-text)]">{row.recommended?.pick || "—"}</span>
+                          {row.score?.home != null && row.score?.away != null
+                            ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
+                  </Card>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

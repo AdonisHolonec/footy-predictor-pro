@@ -443,7 +443,12 @@ export const ro: Dict = {
     pendingBadge: "ÎN AȘTEPTARE",
     topPick: "Top pick:",
     score: "Scor {home}-{away}",
-    empty: "Încă nu există predicții în istoric. Rulează Predict, apoi revino după sync."
+    empty: "Încă nu există predicții în istoric. Rulează Predict, apoi revino după sync.",
+    selectedMatch: "Pariu special · meci selectat",
+    clearSelection: "Închide",
+    confidence: "Încredere {value}",
+    specialBetNoLegs: "Nu există suficiente cote bookie pentru pariu special multi-leg pe acest meci.",
+    openFullAnalysis: "Deschide analiza completă"
   },
   panels: {
     keyFactors: "Factori cheie",

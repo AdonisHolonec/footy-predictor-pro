@@ -1208,6 +1208,7 @@ export default function UserDashboard() {
               losses={trackerStats.losses}
               settled={trackerStats.settled}
               winRate={trackerStats.winRate}
+              onOpenMatch={openMatch}
             />
           </CollapsiblePanel>
 
@@ -1264,6 +1265,7 @@ export default function UserDashboard() {
           losses={trackerStats.losses}
           settled={trackerStats.settled}
           winRate={trackerStats.winRate}
+          onOpenMatch={openMatch}
         />
       )}
 

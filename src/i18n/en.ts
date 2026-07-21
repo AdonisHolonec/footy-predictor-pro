@@ -443,7 +443,12 @@ export const en: Dict = {
     pendingBadge: "PENDING",
     topPick: "Top pick:",
     score: "Score {home}-{away}",
-    empty: "No predictions in history yet. Run Predict, then come back after sync."
+    empty: "No predictions in history yet. Run Predict, then come back after sync.",
+    selectedMatch: "Special bet · selected match",
+    clearSelection: "Close",
+    confidence: "Confidence {value}",
+    specialBetNoLegs: "Not enough bookmaker odds for a multi-leg special bet on this match.",
+    openFullAnalysis: "Open full analysis"
   },
   panels: {
     keyFactors: "Key factors",
