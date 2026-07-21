@@ -164,7 +164,7 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     listDailyReports(Math.min(historyDays, 7))
   ]);
 
-  const process = processResourceSnapshot();
+  const processSnapshot = processResourceSnapshot();
   const localCache = getLocalCacheStats();
   const checks = {
     kv: kvCheck,
@@ -184,7 +184,7 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     severity,
     generatedAt: new Date().toISOString(),
     checks,
-    process,
+    process: processSnapshot,
     usage: {
       count: usage.count,
       limit: usage.limit,
