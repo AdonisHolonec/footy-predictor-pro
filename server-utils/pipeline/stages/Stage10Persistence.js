@@ -5,7 +5,7 @@
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../../predictionsHistory.js";
 import { persistFeatureImportanceRows } from "../../importance/persistFeatureImportance.js";
-import { decrementPredictCountBy } from "../../accessTier.js";
+import { decrementPredictCountBy, rememberUniquePredictFixtures, USER_TIERS } from "../../accessTier.js";
 
 export const STAGE_ID = "Stage10Persistence";
 export const STAGE_DESCRIPTION = "History and feature-importance persistence.";
@@ -80,6 +80,25 @@ export async function run(context) {
     } catch (persistError) {
       console.error("[predict persist]", persistError?.message || persistError);
       res.setHeader("X-Persist-Warning", "predictions_history_upsert_failed");
+    }
+  }
+
+  // Ultra: remember unique fixture ids after a live run (idempotent SADD).
+  if (
+    usageCtx?.userId &&
+    tierContext &&
+    !tierContext.quotaExempt &&
+    tierContext.effectiveTier === USER_TIERS.ULTRA
+  ) {
+    const ids = out
+      .map((row) => row?.id ?? row?.fixtureId ?? row?.fixture_id)
+      .filter((id) => id != null && id !== "");
+    try {
+      const after = await rememberUniquePredictFixtures(usageCtx.userId, usageCtx.usageDay, ids);
+      tierContext = { ...tierContext, predictCountToday: after };
+      context.tierContext = tierContext;
+    } catch (e) {
+      console.error("[ultra unique remember]", e?.message || e);
     }
   }
 

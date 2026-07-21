@@ -89,6 +89,10 @@ export async function runFixtureStageLoop(context) {
       if (out.length >= effectiveLimit) break;
 
       const fixtureId = fx.fixture?.id;
+      if (context.allowedFixtureIds instanceof Set) {
+        const sid = fixtureId == null ? "" : String(fixtureId);
+        if (!sid || !context.allowedFixtureIds.has(sid)) continue;
+      }
       const homeName = fx.teams?.home?.name || "Home";
       const awayName = fx.teams?.away?.name || "Away";
       const homeIdStr = fx.teams?.home?.id ? String(fx.teams.home.id) : null;

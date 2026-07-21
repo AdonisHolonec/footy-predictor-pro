@@ -397,7 +397,7 @@ export const ro: Dict = {
     premiumM6: "10 acțiuni Predict / zi",
     ultraTitle: "Ultra",
     ultraDesc: "Acces complet la piețe avansate, încredere și edge.",
-    ultraM1: "50 meciuri / zi · 30 Predict / zi",
+    ultraM1: "50 meciuri unice / zi · 50 Predict / zi",
     ultraM2: "Tot din Premium + Shots + HT Goals",
     ultraM3: "Încredere % exactă",
     ultraM4: "Signal Lens + Edge Compass",

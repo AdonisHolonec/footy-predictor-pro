@@ -30,7 +30,7 @@ import {
 import { calculateSyntheticXG } from "../server-utils/advancedMath.js";
 import {
   USER_TIERS,
-  getPredictCountToday,
+  getTierPredictCountToday,
   isFreeWindowExpired,
   resolveEffectiveTierFromProfile,
   tierDailyLimit
@@ -229,7 +229,7 @@ async function handleDay(req, res) {
       const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
       const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
       const usageDay = String(req.query.usageDay || date).slice(0, 10);
-      const predictCount = await getPredictCountToday(requester.user.id, usageDay);
+      const predictCount = await getTierPredictCountToday(requester.user.id, usageDay, effectiveTier);
       const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTier);
       if (freeExpired) {
         return res.status(402).json({
@@ -341,7 +341,7 @@ async function handleDay(req, res) {
                 error: "Free Habit Trial (10 zile) a expirat. Activeaza Premium sau Ultra."
               });
             }
-            const predictCount = await getPredictCountToday(requester.user.id, date);
+            const predictCount = await getTierPredictCountToday(requester.user.id, date, effectiveTier);
             const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTier);
             tierStatus = {
               tier: effectiveTier,

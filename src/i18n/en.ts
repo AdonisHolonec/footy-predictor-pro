@@ -397,7 +397,7 @@ export const en: Dict = {
     premiumM6: "10 Predict actions / day",
     ultraTitle: "Ultra",
     ultraDesc: "Full access to advanced markets, confidence, and edge.",
-    ultraM1: "50 matches / day · 30 Predict / day",
+    ultraM1: "50 unique matches / day · 50 Predict / day",
     ultraM2: "Everything in Premium + Shots + HT Goals",
     ultraM3: "Exact confidence %",
     ultraM4: "Signal Lens + Edge Compass",

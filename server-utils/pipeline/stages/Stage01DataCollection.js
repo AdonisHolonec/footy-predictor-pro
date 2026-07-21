@@ -12,9 +12,11 @@ import {
 import { isAuthorizedCronOrInternalRequest } from "../../cronRequestAuth.js";
 import {
   USER_TIERS,
-  getPredictCountToday,
+  getTierPredictCountToday,
+  getUniquePredictFixtureIds,
   incrementPredictCountBy,
   maskPredictionForTier,
+  pickUltraUniqueAllowedFixtures,
   resolveEffectiveTierFromProfile,
   tierDailyActionLimit,
   tierDailyLimit
@@ -102,10 +104,11 @@ export async function run(context) {
     const role = String(profile?.role || "").toLowerCase();
     const quotaExempt =
       role === "admin" || (await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail));
-    const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(tierInfo.effectiveTier);
+    const resolvedTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
+    const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(resolvedTier);
     let predictCountToday = 0;
     try {
-      predictCountToday = await getPredictCountToday(usageCtx.userId, usageCtx.usageDay, {
+      predictCountToday = await getTierPredictCountToday(usageCtx.userId, usageCtx.usageDay, resolvedTier, {
         failClosed: !quotaExempt
       });
     } catch (e) {
@@ -119,7 +122,7 @@ export async function run(context) {
 
     tierContext = {
       ...tierInfo,
-      effectiveTier: quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier,
+      effectiveTier: resolvedTier,
       quotaExempt,
       predictCountToday,
       predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
@@ -158,12 +161,13 @@ export async function run(context) {
     };
 
     /**
-     * Premium: if admin/cron already predicted every fixture for the selected leagues/date,
+     * Premium + Ultra: if admin/cron already predicted every fixture for the selected leagues/date,
      * serve history (masked) with ~0 upstream burn — same idea as Free DB-only, but only when covered.
-     * Opt-out: PREMIUM_PREDICT_DB_CACHE=0 or ?forceLive=1 / ?live=1.
+     * Opt-out: PREMIUM_PREDICT_DB_CACHE=0 / PAID_PREDICT_DB_CACHE=0 or ?forceLive=1 / ?live=1.
      */
-    const tryPremiumDbCacheHit = async () => {
-      const cacheEnabled = String(process.env.PREMIUM_PREDICT_DB_CACHE || "1") !== "0";
+    const tryPaidDbCacheHit = async () => {
+      const cacheEnabled =
+        String(process.env.PAID_PREDICT_DB_CACHE || process.env.PREMIUM_PREDICT_DB_CACHE || "1") !== "0";
       if (!cacheEnabled) return false;
       const forceLive =
         String(req.query?.forceLive || req.query?.live || "") === "1" ||
@@ -183,7 +187,7 @@ export async function run(context) {
         .filter((fx) => leagueFilter.includes(Number(fx?.league?.id)))
         .slice(0, effectiveLimit);
       if (!selected.length) {
-        await readDbOnlyPredictions("db_only_premium_no_fixtures");
+        await readDbOnlyPredictions("db_only_paid_no_fixtures");
         return true;
       }
 
@@ -216,7 +220,7 @@ export async function run(context) {
         "X-Tier": String(tierContext.effectiveTier),
         "X-Predict-Count": String(tierContext.predictCountToday ?? 0),
         "X-Predict-Limit": String(limitHdr),
-        "X-Data-Source": "db_only_premium_cache"
+        "X-Data-Source": "db_only_paid_cache"
       };
       halt(context, 200, items);
       return true;
@@ -231,8 +235,9 @@ export async function run(context) {
 
     if (
       !tierContext.quotaExempt &&
-      tierContext.effectiveTier === USER_TIERS.PREMIUM &&
-      (await tryPremiumDbCacheHit())
+      (tierContext.effectiveTier === USER_TIERS.PREMIUM ||
+        tierContext.effectiveTier === USER_TIERS.ULTRA) &&
+      (await tryPaidDbCacheHit())
     ) {
       context.tierContext = tierContext;
       context.reservedTierUsage = reservedTierUsage;
@@ -272,29 +277,32 @@ export async function run(context) {
         });
       }
 
-      // Match-row KV quota: reserve up to remaining daily matches for this request.
-      const remainingMatches = Math.max(0, dailyLimit - predictCountToday);
-      if (remainingMatches <= 0) {
-        return halt(context, 429, {
-          ok: false,
-          error: `Ai atins limita zilnică de ${dailyLimit} meciuri predictate.`,
-          predictCountToday,
-          predictLimit: dailyLimit
-        });
-      }
-      const reserveAmount = Math.min(effectiveLimit, remainingMatches);
-      try {
-        const after = await incrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reserveAmount);
-        reservedTierUsage = reserveAmount;
-        effectiveLimit = reserveAmount;
-        tierContext.predictCountToday = after;
-        tierContext.predictLimit = dailyLimit;
-      } catch (e) {
-        console.error("[predict quota reserve]", e?.message || e);
-        return halt(context, 503, {
-          ok: false,
-          error: "Nu am putut rezerva cota de predicții. Încearcă din nou."
-        });
+      // Ultra: unique-fixture quota is applied after fixtures are loaded (below).
+      // Free/Premium: reserve match-row slots for this request (legacy counter).
+      if (tierContext.effectiveTier !== USER_TIERS.ULTRA) {
+        const remainingMatches = Math.max(0, dailyLimit - predictCountToday);
+        if (remainingMatches <= 0) {
+          return halt(context, 429, {
+            ok: false,
+            error: `Ai atins limita zilnică de ${dailyLimit} meciuri predictate.`,
+            predictCountToday,
+            predictLimit: dailyLimit
+          });
+        }
+        const reserveAmount = Math.min(effectiveLimit, remainingMatches);
+        try {
+          const after = await incrementPredictCountBy(usageCtx.userId, usageCtx.usageDay, reserveAmount);
+          reservedTierUsage = reserveAmount;
+          effectiveLimit = reserveAmount;
+          tierContext.predictCountToday = after;
+          tierContext.predictLimit = dailyLimit;
+        } catch (e) {
+          console.error("[predict quota reserve]", e?.message || e);
+          return halt(context, 503, {
+            ok: false,
+            error: "Nu am putut rezerva cota de predicții. Încearcă din nou."
+          });
+        }
       }
     }
   }
@@ -335,6 +343,58 @@ export async function run(context) {
     });
   }
   context.allFixtures = dayReq.data?.response || dayReq.data || [];
+
+  // Ultra: 50 unique fixtures/day — re-predict on already-seen ids does not consume quota.
+  if (
+    usageCtx?.userId &&
+    tierContext &&
+    !tierContext.quotaExempt &&
+    tierContext.effectiveTier === USER_TIERS.ULTRA
+  ) {
+    const matchLimit = Number.isFinite(Number(tierContext.predictLimit))
+      ? Number(tierContext.predictLimit)
+      : tierDailyLimit(USER_TIERS.ULTRA);
+    let knownIds;
+    try {
+      knownIds = await getUniquePredictFixtureIds(usageCtx.userId, usageCtx.usageDay, { failClosed: true });
+    } catch (e) {
+      console.error("[ultra unique peek]", e?.message || e);
+      return halt(context, 503, {
+        ok: false,
+        error: "Contorul zilnic de predicții unice nu este disponibil. Încearcă din nou."
+      });
+    }
+    const { allowed } = pickUltraUniqueAllowedFixtures({
+      leagueIds,
+      allFixtures: context.allFixtures,
+      knownIds,
+      dailyLimit: matchLimit,
+      requestLimit: effectiveLimit
+    });
+    if (allowed.size === 0) {
+      const hasCandidates = leagueIds.some((lId) =>
+        (context.allFixtures || []).some((f) => String(f?.league?.id) === String(lId) && f?.fixture?.id)
+      );
+      if (hasCandidates) {
+        const { rollbackPredictIncrement } = await import("../../userDailyWarmPredictUsage.js");
+        await rollbackPredictIncrement(usageCtx.userId, usageCtx.usageDay).catch(() => null);
+        return halt(context, 429, {
+          ok: false,
+          error: `Ai atins limita zilnică de ${matchLimit} meciuri unice predictate.`,
+          predictCountToday: knownIds.size,
+          predictLimit: matchLimit
+        });
+      }
+    }
+    context.allowedFixtureIds = allowed;
+    effectiveLimit = allowed.size > 0 ? Math.min(effectiveLimit, allowed.size) : effectiveLimit;
+    context.effectiveLimit = effectiveLimit;
+    tierContext.predictCountToday = knownIds.size;
+    tierContext.predictLimit = matchLimit;
+    context.tierContext = tierContext;
+    reservedTierUsage = 0;
+    context.reservedTierUsage = 0;
+  }
 
   const oddsPrefetch = await prefetchOddsByDate(date, {
     leagueIds: leagueIds.map(Number),

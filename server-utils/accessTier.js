@@ -1,5 +1,7 @@
 import { createClient } from "@vercel/kv";
 
+export { pickUltraUniqueAllowedFixtures } from "./ultraUniqueQuota.js";
+
 export const USER_TIERS = {
   FREE: "free",
   PREMIUM: "premium",
@@ -124,6 +126,10 @@ function keyForPredictCount(userId, usageDay) {
   return `footy_tier_predict_count:${String(userId)}:${String(usageDay)}`;
 }
 
+function keyForUniquePredictFixtures(userId, usageDay) {
+  return `footy_tier_predict_fixtures:${String(userId)}:${String(usageDay)}`;
+}
+
 export async function getPredictCountToday(userId, usageDay, options = {}) {
   if (!userId || !usageDay) return 0;
   const failClosed = options.failClosed === true;
@@ -134,6 +140,57 @@ export async function getPredictCountToday(userId, usageDay, options = {}) {
     if (failClosed) throw err;
     return 0;
   }
+}
+
+/** Ultra unique-fixture daily counter (Redis SET cardinality). */
+export async function getUniquePredictCountToday(userId, usageDay, options = {}) {
+  if (!userId || !usageDay) return 0;
+  const failClosed = options.failClosed === true;
+  try {
+    const n = await kv.scard(keyForUniquePredictFixtures(userId, usageDay));
+    return Math.max(0, Number(n) || 0);
+  } catch (err) {
+    if (failClosed) throw err;
+    return 0;
+  }
+}
+
+export async function getUniquePredictFixtureIds(userId, usageDay, options = {}) {
+  if (!userId || !usageDay) return new Set();
+  const failClosed = options.failClosed === true;
+  try {
+    const members = await kv.smembers(keyForUniquePredictFixtures(userId, usageDay));
+    return new Set((Array.isArray(members) ? members : []).map((m) => String(m)));
+  } catch (err) {
+    if (failClosed) throw err;
+    return new Set();
+  }
+}
+
+export async function rememberUniquePredictFixtures(userId, usageDay, fixtureIds) {
+  if (!userId || !usageDay) return 0;
+  const ids = [
+    ...new Set(
+      (Array.isArray(fixtureIds) ? fixtureIds : [])
+        .map((id) => String(id ?? "").trim())
+        .filter((id) => id && id !== "undefined" && id !== "null")
+    )
+  ];
+  const key = keyForUniquePredictFixtures(userId, usageDay);
+  if (ids.length > 0) {
+    // @vercel/kv / Upstash: SADD returns added count; ignore return for idempotent re-runs.
+    await kv.sadd(key, ...ids);
+    await kv.expire(key, 48 * 60 * 60);
+  }
+  return getUniquePredictCountToday(userId, usageDay);
+}
+
+/** Match-quota counter for UI/headers: Ultra = unique fixtures; others = slot counter. */
+export async function getTierPredictCountToday(userId, usageDay, tier, options = {}) {
+  if (String(tier || "").toLowerCase() === USER_TIERS.ULTRA) {
+    return getUniquePredictCountToday(userId, usageDay, options);
+  }
+  return getPredictCountToday(userId, usageDay, options);
 }
 
 export async function incrementPredictCountToday(userId, usageDay) {
