@@ -105,7 +105,8 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
   const legs = pickSpecialBetLegs(pool, legCount);
   const showLegs = legs.length >= 2;
   const combined = specialBetCombinedOddValue(legs);
-  const combinedTone = outcomeTextClass(specialBetCombinedOutcome(legs));
+  const combinedOutcome = specialBetCombinedOutcome(legs);
+  const combinedTone = outcomeTextClass(combinedOutcome);
   const htActual = resolveFirstHalfGoalsActual(enrichedRow);
 
   const homeLogo = row.logos?.home;
@@ -220,10 +221,23 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
               );
             })}
           </div>
-          <div className={`mt-2 text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${combinedTone}`}>
-            {t("card.combinedOdd", {
-              odd: Number.isFinite(Number(combined)) ? Number(combined).toFixed(2) : t("card.na")
-            })}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className={`text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${combinedTone}`}>
+              {t("card.combinedOdd", {
+                odd: Number.isFinite(Number(combined)) ? Number(combined).toFixed(2) : t("card.na")
+              })}
+            </span>
+            {combinedOutcome === "win" || combinedOutcome === "loss" ? (
+              <span
+                className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+                  combinedOutcome === "win"
+                    ? "bg-[var(--fp-success)] text-white"
+                    : "bg-[var(--fp-danger)] text-white"
+                }`}
+              >
+                {combinedOutcome === "win" ? t("card.chipWin") : t("card.chipLose")}
+              </span>
+            ) : null}
           </div>
         </>
       ) : (

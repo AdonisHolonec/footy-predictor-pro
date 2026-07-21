@@ -950,7 +950,8 @@ export default function MatchModal({
   );
   const specialBetLegs = pickSpecialBetLegs(specialBetPool, specialLegCount);
   const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
-  const specialCombinedTone = outcomeTextClass(specialBetCombinedOutcome(specialBetLegs));
+  const specialCombinedOutcome = specialBetCombinedOutcome(specialBetLegs);
+  const specialCombinedTone = outcomeTextClass(specialCombinedOutcome);
   const specialBetCandidatesLen = specialBetPool.length;
 
   const isFocus = presentation === "focus";
@@ -1123,14 +1124,25 @@ export default function MatchModal({
                     );
                   })}
                 </div>
-                <div
-                  className={`mt-2.5 border-t border-[var(--fp-border)] pt-2 text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${specialCombinedTone}`}
-                >
-                  {tr("match.combinedOdd", {
-                    odd: Number.isFinite(Number(specialBetCombinedOdd))
-                      ? Number(specialBetCombinedOdd).toFixed(2)
-                      : tr("common.na")
-                  })}
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[var(--fp-border)] pt-2">
+                  <span className={`text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${specialCombinedTone}`}>
+                    {tr("match.combinedOdd", {
+                      odd: Number.isFinite(Number(specialBetCombinedOdd))
+                        ? Number(specialBetCombinedOdd).toFixed(2)
+                        : tr("common.na")
+                    })}
+                  </span>
+                  {specialCombinedOutcome === "win" || specialCombinedOutcome === "loss" ? (
+                    <span
+                      className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+                        specialCombinedOutcome === "win"
+                          ? "bg-[var(--fp-success)] text-white"
+                          : "bg-[var(--fp-danger)] text-white"
+                      }`}
+                    >
+                      {specialCombinedOutcome === "win" ? tr("card.chipWin") : tr("card.chipLose")}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
