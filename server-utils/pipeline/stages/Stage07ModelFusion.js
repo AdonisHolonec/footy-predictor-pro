@@ -1,6 +1,6 @@
 /**
- * Stage07ModelFusion — Elo, odds/Shin, early value, market quotes, stacker, Model Lab.
- * Body moved from runFixtureComposite.js (bind/write-back; algorithms unchanged).
+ * Stage07ModelFusion — Elo, odds/Shin, market quotes, stacker (on calibrated 1X2), Model Lab.
+ * Professional value is deferred to Stage08 on final coherent pOut.
  */
 
 import { getWithCache } from "../../fetcher.js";
@@ -26,16 +26,7 @@ import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine
 import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
 import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
 import {
-  buildValueEngine,
-  buildProfessionalValueEngine,
-  evaluateValue
-} from "../../value/ValueEngine.js";
-import {
-  calculateEV,
-  calculateKellyQuarter as calculateKelly,
-  calculateEnsembleStake,
   blendModelWithMarket,
-  evaluateNoBetZone,
   shinImpliedProbs
 } from "../../advancedMath.js";
 import {
@@ -266,142 +257,7 @@ export async function run(context) {
         marginMethod: shin ? "shin" : "proportional",
         shinZ: shin && Number.isFinite(shin.z) ? Number(shin.z.toFixed(4)) : undefined
       };
-      const blended = blendModelWithMarket({
-        model: { p1: p.p1 / 100, pX: p.pX / 100, p2: p.p2 / 100 },
-        market: marketProbs,
-        modelWeight: blendW
-      });
-    
-      const candidates = [
-        { type: "1", prob: blended?.p1 ?? p.p1 / 100, odd: consensus.home, confidence: p.p1, marketProb: marketProbs?.p1 ?? null },
-        { type: "X", prob: blended?.pX ?? p.pX / 100, odd: consensus.draw, confidence: p.pX, marketProb: marketProbs?.pX ?? null },
-        { type: "2", prob: blended?.p2 ?? p.p2 / 100, odd: consensus.away, confidence: p.p2, marketProb: marketProbs?.p2 ?? null }
-      ].filter((c) => isGoodNum(c.odd) && c.odd >= 1.3);
-    
-      const dqEarly = dataQualityScore({
-        method,
-        hasOdds: !!odds,
-        hasLuckStats: !!luckStats,
-        hasTeamIds: !!homeIdStr && !!awayIdStr
-      });
-    
-      // === VALUE ENGINE (predicted probability + bookmaker odds) ===
-      // Hard rule: negative EV selections are never recommendable.
-      valueEngine = buildValueEngine(
-        candidates.map((c) => ({
-          probability: c.prob,
-          odds: c.odd,
-          type: c.type,
-          confidencePct: c.confidence
-        }))
-      );
-    
-      const scored = candidates
-        .map((c) => {
-          const ev = calculateEV(c.prob, c.odd);
-          const value = evaluateValue(c.prob, c.odd, {
-            type: c.type,
-            confidencePct: c.confidence
-          });
-          const rawEdge = c.prob * c.odd;
-          const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
-          const volatility = 1 - Math.abs(c.confidence - 50) / 50;
-          const ensembleStake = calculateEnsembleStake({
-            probability: c.prob,
-            odds: c.odd,
-            confidencePct: c.confidence,
-            marketVolatility: volatility,
-            marketGapPct,
-            dataQuality: dqEarly
-          });
-          const kelly = calculateKelly(c.prob, c.odd, c.confidence >= 65);
-          const noBet = evaluateNoBetZone({
-            edge: rawEdge,
-            evPct: ev,
-            confidencePct: c.confidence,
-            marketGapPct
-          });
-          const score = (rawEdge - 1) * 120 + ev * 0.35 + ensembleStake.stakePct * 2;
-          return { ...c, ev, rawEdge, score, ensembleStake, kelly, noBet, marketGapPct, value };
-        })
-        // HARD RULE: never recommend negative (or zero) EV — Value Engine gate + legacy no-bet zone.
-        .filter((c) => c.value.recommendable && c.ev > 0 && !c.value.negativeEV && c.noBet.allowBet)
-        .sort((a, b) => b.score - a.score);
-    
-      const dq = dqEarly;
-    
-      if (scored.length > 0) {
-        const best = scored[0];
-        valueDetected = true;
-        valueType = best.type;
-        finalEv = best.ev;
-        finalKelly = best.ensembleStake.stakePct || best.kelly;
-        stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
-        stakingBreakdown = best.ensembleStake.components;
-        reasonCodes = [`selected_${best.type}`, "market_calibrated", "ensemble_staking", "value_engine"];
-    
-        // Absolute safety net: never ship a negative-EV recommendation.
-        if (!(finalEv > 0) || best.value.negativeEV || !best.value.recommendable) {
-          valueDetected = false;
-          valueType = "";
-          finalEv = 0;
-          finalKelly = 0;
-          stakingCompact = "";
-          stakingBreakdown = undefined;
-          reasonCodes.push("negative_ev_rejected");
-        }
-    
-        if (dq < 0.55) {
-          valueDetected = false;
-          valueType = "";
-          finalEv = 0;
-          finalKelly = 0;
-          stakingCompact = "";
-          stakingBreakdown = undefined;
-          reasonCodes.push("min_sample_guardrail");
-        }
-      } else {
-        const analyzed = candidates
-          .map((c) => {
-            const ev = calculateEV(c.prob, c.odd);
-            const value = evaluateValue(c.prob, c.odd, {
-              type: c.type,
-              confidencePct: c.confidence
-            });
-            const rawEdge = c.prob * c.odd;
-            const marketGapPct = c.marketProb === null ? 0 : Math.abs(c.prob - c.marketProb) * 100;
-            const reasons = evaluateNoBetZone({
-              edge: rawEdge,
-              evPct: ev,
-              confidencePct: c.confidence,
-              marketGapPct
-            }).reasons;
-            if (value.negativeEV || ev <= 0) reasons.push("negative_ev");
-            else if (!value.recommendable) reasons.push("value_engine_below_threshold");
-            return reasons;
-          })
-          .flat();
-        reasonCodes = Array.from(new Set(analyzed)).slice(0, 4);
-      }
-    
-      // Keep valueEngine.detected aligned with the final recommendation gate.
-      if (valueEngine) {
-        valueEngine = {
-          ...valueEngine,
-          detected: Boolean(valueDetected && finalEv > 0),
-          ...(valueDetected
-            ? {
-                type: valueType,
-                expectedValue: finalEv,
-                kellyPct: finalKelly,
-                positiveEV: finalEv > 0,
-                negativeEV: false,
-                signal: finalEv >= 1.25 ? "positive" : finalEv > 0 ? "neutral" : "negative",
-                recommendable: Boolean(valueDetected && finalEv > 0)
-              }
-            : {})
-        };
-      }
+      // Value / EV deferred to Stage08 on final fused pOut (single source of truth).
     }
     
     goals15Quote = null;
@@ -641,8 +497,8 @@ export async function run(context) {
     }
     
     // --- Stage07ModelFusion: stacker / market / Model Lab ---
-    // === STACKER (ML) or calibrated+market blend ===
-    // Construim features şi aplicăm stacker dacă avem greutăţi active pentru liga aceasta.
+    // Stacker features use *calibrated* 1X2 (never raw Poisson alone). After stacker,
+    // still blend with Shin market so calibration is never bypassed.
     stackerEntry = pickStackerWeightsForLeague(stackerWeightsMap, lId);
     dataQualityEarly = dataQualityScore({
       method,
@@ -652,9 +508,18 @@ export async function run(context) {
     });
     pFinal = null;
     stackerApplied = false;
-    if (stackerEntry?.weights) {
+    const calibratedFrac = {
+      p1: Number(calTriple?.p1),
+      pX: Number(calTriple?.pX),
+      p2: Number(calTriple?.p2)
+    };
+    const hasCalibrated =
+      Number.isFinite(calibratedFrac.p1) &&
+      Number.isFinite(calibratedFrac.pX) &&
+      Number.isFinite(calibratedFrac.p2);
+    if (stackerEntry?.weights && hasCalibrated) {
       const feats = extractStackerFeatures({
-        poissonProbs: { p1: pRaw.p1 / 100, pX: pRaw.pX / 100, p2: pRaw.p2 / 100 },
+        poissonProbs: calibratedFrac,
         marketProbs,
         eloSpread: eloInfo?.eloSpread || 0,
         dataQuality: dataQualityEarly,
@@ -663,13 +528,17 @@ export async function run(context) {
       });
       const stacked = applyStacker(feats, stackerEntry.weights);
       if (stacked) {
-        pFinal = stacked;
+        pFinal = marketProbs
+          ? blendModelWithMarket({ model: stacked, market: marketProbs, modelWeight: blendW }) || stacked
+          : stacked;
         stackerApplied = true;
       }
     }
     if (!pFinal) {
       // Fallback: model calibrat + blend liniar cu piaţa + drift penalty.
-      const modelFrac = { p1: calTriple.p1, pX: calTriple.pX, p2: calTriple.p2 };
+      const modelFrac = hasCalibrated
+        ? calibratedFrac
+        : { p1: pRaw.p1 / 100, pX: pRaw.pX / 100, p2: pRaw.p2 / 100 };
       const blended = marketProbs
         ? blendModelWithMarket({ model: modelFrac, market: marketProbs, modelWeight: blendW })
         : modelFrac;

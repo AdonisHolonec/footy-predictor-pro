@@ -58,6 +58,100 @@ export function poissonOverLine(line, lambda) {
 }
 
 /**
+ * P(H+A > line) under bivariate Poisson (shared λ), for corners/SOT totals with correlation.
+ * Falls back to independent Poisson(λh+λa) when correlation ≤ 0.
+ */
+export function poissonOverLineCorrelated(line, lambdaHome, lambdaAway, correlation = 0.08) {
+  const l = Number(line);
+  const lh = Math.max(0.01, Number(lambdaHome) || 0);
+  const la = Math.max(0.01, Number(lambdaAway) || 0);
+  if (!Number.isFinite(l) || l < 0) return 0;
+  const corr = clamp(Number(correlation) || 0, 0, 0.4);
+  if (corr <= 0) return poissonOverLine(l, lh + la);
+
+  const maxN = Math.min(
+    40,
+    Math.max(8, Math.ceil(Math.max(lh, la, l) + 6 * Math.sqrt(Math.max(lh, la, 0.3)) + 2))
+  );
+  let mass = 0;
+  let pOver = 0;
+  for (let i = 0; i <= maxN; i++) {
+    for (let j = 0; j <= maxN; j++) {
+      const p = bivariatePoissonP(i, j, lh, la, corr);
+      mass += p;
+      if (i + j > l) pOver += p;
+    }
+  }
+  return mass > 0 ? pOver / mass : poissonOverLine(l, lh + la);
+}
+
+/**
+ * Reweight scoreline PMF so 1X2 margins match fused/calibrated targets, keeping
+ * relative mass within each outcome bucket. Used to rebuild coherent O/U + BTTS.
+ * @param {{ cells?: Array<{home:number,away:number,prob:number}>, cdf?: number[] }} pmf
+ * @param {{ p1: number, pX: number, p2: number }} target - fractions (0..1) or percent (0..100)
+ */
+export function reweightPmfTo1x2(pmf, target = {}) {
+  const cells = Array.isArray(pmf?.cells) ? pmf.cells : null;
+  if (!cells?.length) return pmf;
+
+  const toFrac = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n > 1 ? n / 100 : n;
+  };
+  let t1 = toFrac(target.p1);
+  let tX = toFrac(target.pX);
+  let t2 = toFrac(target.p2);
+  if (t1 == null || tX == null || t2 == null) return pmf;
+  const tSum = t1 + tX + t2;
+  if (!(tSum > 0)) return pmf;
+  t1 /= tSum;
+  tX /= tSum;
+  t2 /= tSum;
+
+  let m1 = 0;
+  let mX = 0;
+  let m2 = 0;
+  for (const c of cells) {
+    const p = Number(c.prob) || 0;
+    if (c.home > c.away) m1 += p;
+    else if (c.home === c.away) mX += p;
+    else m2 += p;
+  }
+  if (!(m1 > 0) || !(mX > 0) || !(m2 > 0)) return pmf;
+
+  const s1 = t1 / m1;
+  const sX = tX / mX;
+  const s2 = t2 / m2;
+  const next = cells.map((c) => {
+    const scale = c.home > c.away ? s1 : c.home === c.away ? sX : s2;
+    return { home: c.home, away: c.away, prob: (Number(c.prob) || 0) * scale };
+  });
+  let mass = 0;
+  for (const c of next) mass += c.prob;
+  if (!(mass > 0)) return pmf;
+  const inv = 1 / mass;
+  for (const c of next) c.prob *= inv;
+
+  const cdf = new Array(next.length);
+  let run = 0;
+  for (let i = 0; i < next.length; i++) {
+    run += next[i].prob;
+    cdf[i] = run;
+  }
+  cdf[cdf.length - 1] = 1;
+
+  return {
+    ...pmf,
+    cells: next,
+    cdf,
+    mass: 1,
+    reweightedTo1x2: true
+  };
+}
+
+/**
  * Bivariate Poisson (Karlis-Ntzoufras) pentru corelaţia goalurilor prin shared component.
  * Folosit în afara zonei low-score; acolo aplicăm şi corecţia Dixon-Coles τ.
  */
@@ -266,7 +360,7 @@ export function computeMatchProbs(lambdaHome, lambdaAway, _fixtureId = 0, option
     pU35: clamp(pU35 * 100, 0, 100),
     pmf,
     modelMeta: {
-      method: "bivariate-poisson-dc-analytic",
+      method: correlation > 0 ? "bivariate-poisson-dc-analytic" : "poisson-dc-analytic",
       correlation,
       rho,
       gridMax: maxN,

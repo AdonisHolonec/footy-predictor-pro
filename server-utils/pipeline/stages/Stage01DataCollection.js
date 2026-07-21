@@ -320,7 +320,7 @@ export async function run(context) {
   context.engineWeights = engineWeights;
   context.poissonCorrelation = Number.isFinite(Number(engineWeights.poissonCorrelation))
     ? Number(engineWeights.poissonCorrelation)
-    : 0.12;
+    : 0;
   context.shrinkageK = Math.max(1, Number(process.env.PREDICT_SHRINKAGE_K) || 6);
   context.activeModelId = await getActiveModelId().catch(() => "E");
   context.riskContext = await loadRiskContext();

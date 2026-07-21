@@ -251,7 +251,8 @@ export async function run(context) {
         lambdaHome: cornersLambdas.lambdaHome,
         lambdaAway: cornersLambdas.lambdaAway,
         lines: [7.5, 8.5, 9.5, 10.5, 11.5, 12.5],
-        teamLines: [3.5, 4.5, 5.5]
+        teamLines: [3.5, 4.5, 5.5],
+        correlation: 0.08
       }),
       sampleHome: cornersLambdas.sampleHome,
       sampleAway: cornersLambdas.sampleAway,
@@ -273,7 +274,8 @@ export async function run(context) {
         lambdaHome: sotLambdas.lambdaHome,
         lambdaAway: sotLambdas.lambdaAway,
         lines: [6.5, 7.5, 8.5, 9.5, 10.5],
-        teamLines: [2.5, 3.5, 4.5]
+        teamLines: [2.5, 3.5, 4.5],
+        correlation: 0.06
       }),
       sampleHome: sotLambdas.sampleHome,
       sampleAway: sotLambdas.sampleAway,
@@ -296,7 +298,8 @@ export async function run(context) {
         lambdaHome: shotsLambdas.lambdaHome,
         lambdaAway: shotsLambdas.lambdaAway,
         lines: [18.5, 20.5, 22.5, 24.5],
-        teamLines: []
+        teamLines: [],
+        correlation: 0.05
       }),
       sampleHome: shotsLambdas.sampleHome,
       sampleAway: shotsLambdas.sampleAway,
@@ -306,11 +309,12 @@ export async function run(context) {
     
     // === PRIMA REPRIZĂ ===
     // Derivăm λ FH din λ full match + fracţiile pe bucketele de minute (0 calls noi).
+    // Dacă bucketele lipsesc, deriveFirstHalfLambdas folosește FIRST_HALF_GOALS_BASELINE.
     // computeMatchProbs cu acele λ dă direct 1X2/GG/O0.5/O1.5/O2.5 pentru prima repriză.
     // Pentru FH aplicăm un ρ mai slab: low-scoring deja favorizează 0-0, overkill să mai adăugăm corecţie.
     firstHalfProbs = null;
     firstHalfMeta = null;
-    if (fhFractionsHome || fhFractionsAway) {
+    {
       const fh = deriveFirstHalfLambdas({
         lambdaHomeFull: lambdaHome,
         lambdaAwayFull: lambdaAway,
@@ -319,8 +323,8 @@ export async function run(context) {
       });
       if (fh && isGoodNum(fh.lambdaHomeFH) && isGoodNum(fh.lambdaAwayFH)) {
         const fhCalc = computeMatchProbs(fh.lambdaHomeFH, fh.lambdaAwayFH, fixtureId, {
-          correlation: 0.08,
-          rho: leagueParams.rho * 0.6
+          correlation: Math.min(0.08, Number(poissonCorrelation) || 0),
+          rho: (Number(leagueParams.rho) || -0.11) * 0.6
         });
         if (fhCalc?.probs) {
           const fp = fhCalc.probs;

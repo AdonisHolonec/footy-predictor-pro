@@ -20,7 +20,8 @@ export const DEFAULT_PREDICTION_WEIGHTS = Object.freeze({
   defense: 1.0,
   form: 1.0,
   homeAdvantage: 1.0,
-  awayStrength: 0.05,
+  /** Kept tiny — attack×defense already encode side strength. */
+  awayStrength: 0.02,
   standings: 0.15,
   h2h: 0.1,
   referee: 0.05,
@@ -28,12 +29,17 @@ export const DEFAULT_PREDICTION_WEIGHTS = Object.freeze({
   recentMatches: 0.12,
   injuries: 0.1,
   lineup: 0.08,
-  odds: 0.15,
+  /** Mild on λ — market fusion happens again in Stage07. */
+  odds: 0.05,
   motivation: 0.05,
   weather: 0.05,
   /** Blend strength λ toward rolling xG λ (0 = off, 1 = pure xG). */
   expectedGoals: 0.2,
-  poissonCorrelation: 0.12,
+  /**
+   * Shared bivariate λ. Default 0 → Dixon–Coles τ only (single dependence model).
+   * Set PREDICT_WEIGHT_POISSON_CORRELATION to re-enable BP+DC jointly.
+   */
+  poissonCorrelation: 0,
   modularBlend: 1
 });
 

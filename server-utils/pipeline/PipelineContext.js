@@ -24,7 +24,7 @@ export function createPipelineContext(req, res) {
     reservedTierUsage: 0,
     // request-scoped model assets
     engineWeights: null,
-    poissonCorrelation: 0.12,
+    poissonCorrelation: 0,
     shrinkageK: 6,
     activeModelId: "E",
     riskContext: null,

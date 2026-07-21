@@ -6,7 +6,7 @@
 import { getWithCache } from "../fetcher.js";
 import { extractFixtureMarketStats, aggregateRollingForTeam } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
-import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, clampLambda } from "../math.js";
+import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, poissonOverLineCorrelated, clampLambda } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
 
 /** Season inference used by predict/warm (European season boundary July). */
@@ -293,17 +293,51 @@ function syntheticLeagueAvgStats(leagueParams = {}) {
   };
 }
 
-/** Last-resort λ when UEFA has no team stats and no standings rows. */
+/** Last-resort λ when UEFA has no team stats and no standings rows.
+ * `leagueAvgHome` / `leagueAvgAway` are already venue-side rates — do not multiply homeAdv again.
+ * When only a single `leagueAvg` is available, apply home/away advantage once.
+ */
 function leaguePriorLambdas(leagueParams = {}) {
   const avg = Math.max(0.6, Number(leagueParams.leagueAvg) || 1.35);
-  const homeAvg = Math.max(0.6, Number(leagueParams.leagueAvgHome) || avg);
-  const awayAvg = Math.max(0.6, Number(leagueParams.leagueAvgAway) || avg);
-  const homeAdv = Number(leagueParams.homeAdv);
-  const awayAdv = Number(leagueParams.awayAdv);
+  const homeAdv = Number.isFinite(Number(leagueParams.homeAdv)) ? Number(leagueParams.homeAdv) : 1.06;
+  const awayAdv = Number.isFinite(Number(leagueParams.awayAdv)) ? Number(leagueParams.awayAdv) : 0.94;
+  const homeSplit = Number(leagueParams.leagueAvgHome);
+  const awaySplit = Number(leagueParams.leagueAvgAway);
+  const hasSplit = Number.isFinite(homeSplit) && homeSplit > 0 && Number.isFinite(awaySplit) && awaySplit > 0;
+  if (hasSplit) {
+    return {
+      lambdaHome: clampLambda(Math.max(0.6, homeSplit)),
+      lambdaAway: clampLambda(Math.max(0.6, awaySplit))
+    };
+  }
   return {
-    lambdaHome: clampLambda(homeAvg * (Number.isFinite(homeAdv) ? homeAdv : 1.06)),
-    lambdaAway: clampLambda(awayAvg * (Number.isFinite(awayAdv) ? awayAdv : 0.94))
+    lambdaHome: clampLambda(avg * homeAdv),
+    lambdaAway: clampLambda(avg * awayAdv)
   };
+}
+
+/**
+ * Team-aware cards λ: league prior × referee cards (or goals) factor × mild aggression from corners.
+ */
+function deriveCardsLambda({ leagueParams = {}, modularScores = null, cornersBlock = null } = {}) {
+  const base = Math.max(2, Number(leagueParams.cardsAvgTotal ?? leagueParams.cards) || 4.2);
+  const ref = modularScores?.referee?.detail || modularScores?.referee?.details || null;
+  let refFactor = 1;
+  if (ref && Number.isFinite(Number(ref.avgCards)) && Number(ref.avgCards) > 0) {
+    refFactor = Math.max(0.88, Math.min(1.12, Number(ref.avgCards) / base));
+  } else if (ref && Number.isFinite(Number(ref.cardsBoost))) {
+    refFactor = Math.max(0.88, Math.min(1.12, Number(ref.cardsBoost)));
+  } else if (ref && Number.isFinite(Number(ref.home)) && Number(ref.home) > 0) {
+    // Mild: goals-based referee boost is a weak cards prior
+    refFactor = Math.max(0.92, Math.min(1.08, 1 + (Number(ref.home) - 1) * 0.5));
+  }
+  let teamFactor = 1;
+  const cornersExp = Number(cornersBlock?.expectedTotal ?? cornersBlock?.lambdaTotal);
+  const cornersBase = Math.max(6, Number(leagueParams.cornersAvgTotal) || 10);
+  if (Number.isFinite(cornersExp) && cornersExp > 0) {
+    teamFactor = Math.max(0.9, Math.min(1.12, 0.75 + 0.25 * (cornersExp / cornersBase)));
+  }
+  return Math.max(2, Math.min(7.5, base * refFactor * teamFactor));
 }
 
 /**
@@ -394,14 +428,19 @@ function clampPct(n) {
  * Pentru o piaţă Poisson agregată (cornere total, şuturi la poartă total), construieşte
  * blocul de probabilităţi Over X.5 în format procentaj + probabilitatea scorului cel mai probabil.
  */
-function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = [] }) {
+function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = [], correlation = 0.08 }) {
   const lhT = Number(lambdaHome) || 0;
   const laT = Number(lambdaAway) || 0;
   const lambdaTotal = lhT + laT;
+  const corr = Math.max(0, Math.min(0.35, Number(correlation) || 0));
   const total = {};
   for (const line of lines) {
     const key = `o${String(line).replace(".", "_")}`;
-    total[key] = Number((poissonOverLine(line, lambdaTotal) * 100).toFixed(1));
+    const pOver =
+      corr > 0
+        ? poissonOverLineCorrelated(line, lhT, laT, corr)
+        : poissonOverLine(line, lambdaTotal);
+    total[key] = Number((pOver * 100).toFixed(1));
   }
   // scor modal Poisson (cel mai probabil număr pe echipă)
   const pickMode = (lam) => {
@@ -423,6 +462,7 @@ function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = []
     mostProbableTotal: Math.max(0, Math.round(lambdaTotal)),
     mostProbableHome: pickMode(lhT),
     mostProbableAway: pickMode(laT),
+    correlation: corr,
     total,
     home,
     away
@@ -880,6 +920,7 @@ export {
   loadStandingsMapWithSeasonFallback,
   syntheticLeagueAvgStats,
   leaguePriorLambdas,
+  deriveCardsLambda,
   isGoodNum,
   roundDisplayRate,
   clampPct,

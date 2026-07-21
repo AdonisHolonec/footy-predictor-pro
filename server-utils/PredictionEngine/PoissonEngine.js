@@ -16,7 +16,9 @@ export function calculate(ctx) {
   const weights = getPredictionWeights();
   const fixtureId = ctx.fixtureId ?? 0;
   const out = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, {
-    correlation: weights.poissonCorrelation,
+    correlation: Number.isFinite(Number(ctx.poissonCorrelation))
+      ? Number(ctx.poissonCorrelation)
+      : weights.poissonCorrelation,
     rho: ctx.leagueParams?.rho ?? -0.11
   });
 

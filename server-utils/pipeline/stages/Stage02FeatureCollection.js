@@ -207,6 +207,9 @@ export async function run(context) {
         homeTeamId: homeIdStr,
         awayTeamId: awayIdStr,
         shrinkageK,
+        poissonCorrelation: Number.isFinite(Number(context.poissonCorrelation))
+          ? Number(context.poissonCorrelation)
+          : undefined,
         ...statsSeasonMeta,
         ...(earlyXg
           ? {

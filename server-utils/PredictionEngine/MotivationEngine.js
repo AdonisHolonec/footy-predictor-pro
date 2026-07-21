@@ -3,6 +3,7 @@ import { clamp, result, neutral } from "./helpers.js";
 /**
  * Motivation / table pressure proxies.
  * Uses optional homeMotivation/awayMotivation (0..1) or standings rank gap.
+ * Rank path is directional: underdog slight boost, favourite slight damp when gap is large.
  */
 export function calculate(ctx) {
   if (ctx.homeMotivation != null || ctx.awayMotivation != null) {
@@ -24,14 +25,25 @@ export function calculate(ctx) {
     return neutral({ reason: "motivation_not_provided", extensionPoint: true });
   }
 
-  // Mid-table / relegation / title race heuristic: closer ranks → slight uptick
   const gap = Math.abs(rh - ra);
-  const pressure = gap <= 3 ? 1.02 : gap >= 10 ? 0.99 : 1.0;
-  return result(pressure, 0.3, {
-    home: pressure,
-    away: pressure,
+  // Closer ranks → mutual pressure; large gap → underdog lift / favourite damp.
+  let home = 1;
+  let away = 1;
+  if (gap <= 3) {
+    home = 1.02;
+    away = 1.02;
+  } else if (gap >= 8) {
+    const homeUnderdog = rh > ra;
+    home = homeUnderdog ? 1.025 : 0.985;
+    away = homeUnderdog ? 0.985 : 1.025;
+  }
+
+  return result((home + away) / 2, 0.3, {
+    home,
+    away,
     rankHome: rh,
     rankAway: ra,
+    gap,
     source: "standings_rank",
     available: true
   });

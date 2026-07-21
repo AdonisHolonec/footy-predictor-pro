@@ -87,7 +87,12 @@ async function buildInjuries(fixtureId) {
     if (!req.ok) return undefined;
     const rows = Array.isArray(req.data?.response) ? req.data.response : [];
     const list = rows
-      .map((r) => ({ teamId: r?.team?.id != null ? String(r.team.id) : null }))
+      .map((r) => ({
+        teamId: r?.team?.id != null ? String(r.team.id) : null,
+        player: r?.player?.name || null,
+        type: r?.player?.type || r?.player?.reason || r?.type || null,
+        reason: r?.player?.reason || r?.reason || null
+      }))
       .filter((r) => r.teamId);
     return list.length ? list : undefined;
   } catch (err) {

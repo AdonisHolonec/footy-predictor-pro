@@ -113,7 +113,7 @@ export function buildGoldenContext(goldenCase) {
   context.effectiveLimit = 15;
   context.engineWeights = getPredictionWeights();
   context.poissonCorrelation = Number(
-    goldenCase.poissonCorrelation ?? context.engineWeights.poissonCorrelation ?? 0.12
+    goldenCase.poissonCorrelation ?? context.engineWeights.poissonCorrelation ?? 0
   );
   context.shrinkageK = 6;
   context.activeModelId = goldenCase.activeModelId || "E";

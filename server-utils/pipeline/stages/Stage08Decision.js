@@ -13,7 +13,8 @@ import {
   deriveFirstHalfLambdas,
   normalizeTeamStatisticsPayload,
   strengthRatingsLambdas,
-  poissonOverLine
+  poissonOverLine,
+  reweightPmfTo1x2
 } from "../../math.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
@@ -88,7 +89,8 @@ import {
   deriveBestOverUnderPick,
   blendByPenalty,
   applyStakePolicyV2,
-  marketTier
+  marketTier,
+  deriveCardsLambda
 } from "../predictHelpers.js";
 
 
@@ -226,14 +228,32 @@ export async function run(context) {
     });
     
     finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X";
+    // Rebuild O/U + BTTS from score PMF reweighted to fused 1X2 so tip markets stay coherent.
+    let marketProbsAligned = p;
+    const scorePmf = f.scorePmf;
+    if (scorePmf?.cells?.length) {
+      try {
+        const alignedPmf = reweightPmfTo1x2(scorePmf, {
+          p1: p1Adj,
+          pX: pXAdj,
+          p2: p2Adj
+        });
+        const calcAligned = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, { pmf: alignedPmf });
+        if (calcAligned?.probs) {
+          marketProbsAligned = applyLeagueMarketPriors(calcAligned.probs, leagueParams);
+        }
+      } catch {
+        marketProbsAligned = p;
+      }
+    }
     // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
     // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
     topSelection = selectTopPick(
       {
-        pO15: p.pO15,
-        pO25: p.pO25,
-        pU35: p.pU35,
-        pGG: p.pGG
+        pO15: marketProbsAligned.pO15,
+        pO25: marketProbsAligned.pO25,
+        pU35: marketProbsAligned.pU35,
+        pGG: marketProbsAligned.pGG
       },
       p1Adj,
       pXAdj,
@@ -307,7 +327,7 @@ export async function run(context) {
     reasonCodes = Array.from(new Set(reasonCodes)).slice(0, 8);
     
     pOut = extendProbsWithMarkets({
-      ...p,
+      ...marketProbsAligned,
       p1: clampPct(p1Adj),
       pX: clampPct(pXAdj),
       p2: clampPct(p2Adj)
@@ -319,12 +339,16 @@ export async function run(context) {
     if (shotsOnTargetBlock) pOut.shotsOnTarget = shotsOnTargetBlock;
     if (shotsTotalBlock) pOut.shotsTotal = shotsTotalBlock;
     
-    // === PROFESSIONAL VALUE BETTING ENGINE ===
+    // === PROFESSIONAL VALUE BETTING ENGINE (sole value path — Stage07 defers here) ===
     // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards
-    // using final calibrated probs. Never recommend negative EV.
+    // using final coherent probs. Never recommend negative EV.
     try {
       const cardsLine = Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5);
-      const cardsLambda = Number(leagueParams.cardsAvgTotal ?? leagueParams.cards) || 4.2;
+      const cardsLambda = deriveCardsLambda({
+        leagueParams,
+        modularScores,
+        cornersBlock
+      });
       const pCardsOver =
         Number.isFinite(cardsLine) && cardsLambda > 0
           ? clampPct(poissonOverLine(cardsLine, cardsLambda) * 100)

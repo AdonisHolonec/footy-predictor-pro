@@ -81,6 +81,7 @@ export interface InjuryEntry {
   teamId?: number | string;
   player?: string;
   type?: string;
+  reason?: string;
 }
 
 export interface LineupInfo {

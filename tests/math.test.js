@@ -1760,6 +1760,13 @@ test("UEFA stats fallback helpers pick domestic league and build averages from F
   assert.ok(prior.lambdaHome > 0.2);
   assert.ok(prior.lambdaAway > 0.2);
   assert.ok(prior.lambdaHome > prior.lambdaAway);
+  // Venue-side averages must not be multiplied by homeAdv again.
+  assert.ok(Math.abs(prior.lambdaHome - 1.5) < 0.01);
+  assert.ok(Math.abs(prior.lambdaAway - 1.2) < 0.01);
+
+  const priorFlat = leaguePriorLambdas({ leagueAvg: 1.4, homeAdv: 1.08, awayAdv: 0.95 });
+  assert.ok(Math.abs(priorFlat.lambdaHome - 1.4 * 1.08) < 0.01);
+  assert.ok(Math.abs(priorFlat.lambdaAway - 1.4 * 0.95) < 0.01);
 
   const domestic = pickDomesticLeagueId(
     {
@@ -1839,4 +1846,74 @@ test("UEFA stats fallback helpers pick domestic league and build averages from F
       goals: { home: 1, away: 1 }
     }
   ] : [], 33, { minPlayed: 3 }), null);
+});
+
+test("reweightPmfTo1x2 matches target 1X2 margins and keeps O/U mass coherent", async () => {
+  const { buildMatchScorePmf, reweightPmfTo1x2, computeMatchProbs } = await import("../server-utils/math.js");
+  const pmf = buildMatchScorePmf(1.7, 1.2, { correlation: 0, rho: -0.11 });
+  const target = { p1: 0.55, pX: 0.25, p2: 0.2 };
+  const rw = reweightPmfTo1x2(pmf, target);
+  const calc = computeMatchProbs(1.7, 1.2, 0, { pmf: rw });
+  assert.ok(Math.abs(calc.probs.p1 - 55) < 1.5, `p1=${calc.probs.p1}`);
+  assert.ok(Math.abs(calc.probs.pX - 25) < 1.5, `pX=${calc.probs.pX}`);
+  assert.ok(Math.abs(calc.probs.p2 - 20) < 1.5, `p2=${calc.probs.p2}`);
+  assert.ok(Number.isFinite(calc.probs.pO25) && calc.probs.pO25 > 0);
+  assert.ok(Number.isFinite(calc.probs.pGG) && calc.probs.pGG > 0);
+  assert.equal(rw.reweightedTo1x2, true);
+});
+
+test("poissonOverLineCorrelated differs from independent sum when corr > 0", async () => {
+  const { poissonOverLine, poissonOverLineCorrelated } = await import("../server-utils/math.js");
+  const indep = poissonOverLine(9.5, 5.2 + 4.8);
+  const corr = poissonOverLineCorrelated(9.5, 5.2, 4.8, 0.12);
+  assert.ok(Number.isFinite(corr) && corr > 0 && corr < 1);
+  assert.ok(Math.abs(corr - indep) > 1e-4, "correlated total should shift vs independent");
+});
+
+test("DC-only default (correlation 0) still produces valid 1X2 + draws via rho", () => {
+  const r = computeMatchProbs(1.5, 1.2, 0, { correlation: 0, rho: -0.11 });
+  assert.equal(r.modelMeta.method, "poisson-dc-analytic");
+  assert.equal(r.modelMeta.correlation, 0);
+  const sum = r.probs.p1 + r.probs.pX + r.probs.p2;
+  assert.ok(Math.abs(sum - 100) < 0.2);
+});
+
+test("deriveCardsLambda blends league + referee + corners aggression", async () => {
+  const { deriveCardsLambda } = await import("../server-utils/pipeline/predictHelpers.js");
+  const base = deriveCardsLambda({ leagueParams: { cardsAvgTotal: 4.2 } });
+  assert.ok(Math.abs(base - 4.2) < 0.05);
+  const withRef = deriveCardsLambda({
+    leagueParams: { cardsAvgTotal: 4.2 },
+    modularScores: { referee: { detail: { avgCards: 5.0, cardsBoost: 5.0 / 4.2 } } }
+  });
+  assert.ok(withRef > base);
+  const withCorners = deriveCardsLambda({
+    leagueParams: { cardsAvgTotal: 4.2, cornersAvgTotal: 10 },
+    cornersBlock: { expectedTotal: 13 }
+  });
+  assert.ok(withCorners > base);
+});
+
+test("MotivationEngine is directional on large rank gaps", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const out = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 18 },
+    awayStandingsRow: { rank: 2 }
+  });
+  assert.ok(out.details.home > out.details.away, "home underdog should get higher factor");
+});
+
+test("InjuriesEngine weights suspended players more than doubtful", async () => {
+  const { InjuriesEngine } = await import("../server-utils/PredictionEngine/InjuriesEngine.js");
+  const mild = InjuriesEngine.calculate({
+    homeTeamId: "1",
+    awayTeamId: "2",
+    injuries: [{ teamId: "1", type: "Doubtful" }]
+  });
+  const harsh = InjuriesEngine.calculate({
+    homeTeamId: "1",
+    awayTeamId: "2",
+    injuries: [{ teamId: "1", type: "Suspended" }]
+  });
+  assert.ok(harsh.details.home < mild.details.home);
 });
