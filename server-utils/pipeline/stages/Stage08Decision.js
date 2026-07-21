@@ -16,7 +16,6 @@ import {
   poissonOverLine,
   reweightPmfTo1x2
 } from "../../math.js";
-import { applySideMarketCalibration, pickCalibrationMapForLeague } from "../../isotonicCalibration.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
 import {
@@ -57,6 +56,7 @@ import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
 import { runMonteCarloSimulation } from "../../monteCarlo/MonteCarloEngine.js";
 import {
+  applySideMarketCalibration,
   pickCalibrationMapForLeague,
   applyCalibratedTriple
 } from "../../isotonicCalibration.js";
