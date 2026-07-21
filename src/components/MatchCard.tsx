@@ -15,7 +15,8 @@ import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import { MatchScore, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import {
-  buildSpecialBetLegs,
+  listSpecialBetCandidates,
+  pickSpecialBetLegs,
   outcomeTextClass,
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
@@ -252,18 +253,17 @@ export default function MatchCard({
     const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
     return winner.probability >= 85 ? winner.label : null;
   })();
-  const specialBetPool = buildSpecialBetLegs(
-    row,
-    {
-      main: t("match.featMain"),
-      corners: t("match.featCorners"),
-      shots: t("match.featShots"),
-      ht: t("match.featHt")
-    },
-    3,
-    row.cardMarketValidations
-  );
-  const specialBetLegs = specialBetPool.slice(0, specialLegCount);
+  const specialBetLabels = {
+    main: t("match.featMain"),
+    goals: t("card.marketGoals"),
+    corners: t("match.featCorners"),
+    shots: t("match.featShots"),
+    ht: t("match.featHt"),
+    gg: t("match.marketGgNgg"),
+    cards: t("match.cards")
+  };
+  const specialBetPool = listSpecialBetCandidates(row, specialBetLabels, row.cardMarketValidations);
+  const specialBetLegs = pickSpecialBetLegs(specialBetPool, specialLegCount);
   const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
   const specialCombinedTone = outcomeTextClass(specialBetCombinedOutcome(specialBetLegs));
   const specialBetCandidatesLen = specialBetPool.length;
@@ -509,7 +509,9 @@ export default function MatchCard({
             {row.recommended.pick}
           </div>
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)] animate-pulse motion-reduce:animate-none" : "text-[var(--fp-accent)]"}`}>
-            odd {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
+            {Number.isFinite(Number(recommendedOdd)) && Number(recommendedOdd) > 1
+              ? `odd ${Number(recommendedOdd).toFixed(2)}`
+              : "-"}
           </div>
           </div>
         <div className="sm:hidden self-center">
@@ -659,9 +661,9 @@ export default function MatchCard({
                 {item.data ? `${Math.round(item.data.probability)}%` : "—"}
               </div>
               <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
-                {t("card.oddLabel", {
-                  odd: Number.isFinite(Number(item.odd)) ? Number(item.odd).toFixed(2) : t("card.noBookOdd")
-                })}
+                {Number.isFinite(Number(item.odd)) && Number(item.odd) > 1
+                  ? t("card.oddLabel", { odd: Number(item.odd).toFixed(2) })
+                  : "-"}
               </div>
               <div className="font-mono text-[7px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>
             </div>
@@ -723,7 +725,7 @@ export default function MatchCard({
               );
             })}
           </div>
-          <div className={`mt-1.5 text-[11px] font-bold tabular-nums sm:text-xs ${specialCombinedTone}`}>
+          <div className={`mt-2 text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${specialCombinedTone}`}>
             {t("card.combinedOdd", {
               odd: Number.isFinite(Number(specialBetCombinedOdd))
                 ? Number(specialBetCombinedOdd).toFixed(2)

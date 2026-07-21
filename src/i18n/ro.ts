@@ -166,7 +166,7 @@ export const ro: Dict = {
     combinedOdd: "cotă combinată {odd}",
     oddLabel: "cotă {odd}",
     na: "N/A",
-    noBookOdd: "Fără cotă bookie",
+    noBookOdd: "-",
     sourceNa: "sursă:N/A",
     openAnalysis: "Deschide analiza",
     modelNoLambda: "Modelul nu a putut estima λ-uri.",

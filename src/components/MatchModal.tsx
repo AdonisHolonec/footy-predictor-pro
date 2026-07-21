@@ -21,7 +21,8 @@ import {
 import { LeagueStandingEntry, MarketTier, MarketTierInfo, MatchScore, PoissonMarketProbs, PredictionRow, TeamStandingsFormSnapshot, XGData } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import {
-  buildSpecialBetLegs,
+  listSpecialBetCandidates,
+  pickSpecialBetLegs,
   outcomeTextClass,
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
@@ -148,7 +149,7 @@ function marketResultBadge(
   const oddText =
     Number.isFinite(Number(odd)) && Number(odd) > 1
       ? ` · ${Number(odd).toFixed(2)}`
-      : ` · ${noBookOddLabel}`;
+      : " · -";
   const srcText = source ? ` · ${source}` : "";
   const pred = `${predicted} · ${Math.round(probability)}%${oddText}${srcText}`;
   const isHot = probability >= 85;
@@ -878,19 +879,22 @@ export default function MatchModal({
         : Number(htGoalsActual) < firstHalfPick.line
       : null;
   const recommendedOdd = deriveRecommendedOdd(match);
-  const specialBetPool = buildSpecialBetLegs(
+  const specialBetLabels = {
+    main: tr("match.featMain"),
+    goals: tr("card.marketGoals"),
+    corners: tr("match.featCorners"),
+    shots: tr("match.featShots"),
+    ht: tr("match.featHt"),
+    gg: tr("match.marketGgNgg"),
+    cards: tr("match.cards")
+  };
+  const specialBetPool = listSpecialBetCandidates(
     match,
-    {
-      main: tr("match.featMain"),
-      corners: tr("match.featCorners"),
-      shots: tr("match.featShots"),
-      ht: tr("match.featHt")
-    },
-    3,
+    specialBetLabels,
     match.cardMarketValidations,
     xgData?.marketResults
   );
-  const specialBetLegs = specialBetPool.slice(0, specialLegCount);
+  const specialBetLegs = pickSpecialBetLegs(specialBetPool, specialLegCount);
   const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
   const specialCombinedTone = outcomeTextClass(specialBetCombinedOutcome(specialBetLegs));
   const specialBetCandidatesLen = specialBetPool.length;
@@ -1066,7 +1070,7 @@ export default function MatchModal({
                   })}
                 </div>
                 <div
-                  className={`mt-2.5 border-t border-[var(--fp-border)] pt-2 text-[11px] font-bold tabular-nums sm:text-xs ${specialCombinedTone}`}
+                  className={`mt-2.5 border-t border-[var(--fp-border)] pt-2 text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${specialCombinedTone}`}
                 >
                   {tr("match.combinedOdd", {
                     odd: Number.isFinite(Number(specialBetCombinedOdd))

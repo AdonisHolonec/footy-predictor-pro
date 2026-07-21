@@ -1,0 +1,87 @@
+import { describe, expect, it } from "vitest";
+import {
+  listSpecialBetCandidates,
+  pickSpecialBetLegs,
+  SPECIAL_BET_STRONG_SIGNAL
+} from "./specialBet";
+import type { PredictionRow } from "../types";
+
+const labels = {
+  main: "Main",
+  goals: "Goals",
+  corners: "Corners",
+  shots: "Shots",
+  ht: "HT",
+  gg: "GG/NGG",
+  cards: "Cards"
+};
+
+function baseRow(over: Partial<PredictionRow> = {}): PredictionRow {
+  return {
+    id: 1,
+    leagueId: 39,
+    league: "PL",
+    teams: { home: "A", away: "B" },
+    kickoff: "2026-07-21T18:00:00Z",
+    status: "NS",
+    probs: {
+      p1: 40,
+      pX: 30,
+      p2: 30,
+      pGG: 88,
+      pNGG: 12,
+      pO25: 70,
+      pU25: 30,
+      pO15: 80,
+      pU15: 20,
+      pO35: 40,
+      pU35: 60,
+      pDC1X: 70,
+      pDC12: 70,
+      pDCX2: 60,
+      corners: { total: { o8_5: 86, o9_5: 70 } },
+      shotsOnTarget: { total: { o4_5: 60 } },
+      firstHalf: { pO15: 55, pGG: 40 }
+    },
+    predictions: { oneXtwo: "1", gg: "GG", over25: "Peste 2.5", correctScore: "1-0" },
+    recommended: { pick: "1", confidence: 90, odd: 1.85 },
+    odds: { home: 1.85, draw: 3.4, away: 4.2 },
+    marketOdds: {
+      btts: { pick: "GG", odd: 1.72 },
+      goals25: { pick: "Over 2.5", line: 2.5, odd: 1.9, over: 1.9, under: 1.95 },
+      corners: { pick: "Over 8.5", line: 8.5, odd: 1.8, over: 1.8, under: 2.0 },
+      shotsOnTarget: { pick: "Over 4.5", line: 4.5, odd: 1.75, over: 1.75, under: 2.05 },
+      firstHalfGoals: { pick: "Over 1.5 FH", line: 1.5, odd: 2.1, over: 2.1, under: 1.7 },
+      cards: { pick: "Cards", line: 3.5, odd: 1.9, over: 1.9, under: 1.95 }
+    },
+    ...over
+  } as PredictionRow;
+}
+
+describe("specialBet", () => {
+  it("includes GG when odds exist and appends strong extras beyond base count", () => {
+    const pool = listSpecialBetCandidates(baseRow(), labels);
+    expect(pool.some((l) => l.id === "gg")).toBe(true);
+    expect(pool.length).toBeGreaterThanOrEqual(3);
+
+    const legs2 = pickSpecialBetLegs(pool, 2);
+    expect(legs2.length).toBeGreaterThanOrEqual(2);
+    const strongOutsideBase = pool.slice(2).filter((c) => c.probability >= SPECIAL_BET_STRONG_SIGNAL);
+    if (strongOutsideBase.length > 0) {
+      expect(legs2.length).toBeGreaterThan(2);
+      expect(legs2.length).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("omits markets without book odds", () => {
+    const row = baseRow({
+      marketOdds: {
+        goals25: { pick: "Over 2.5", line: 2.5, odd: 1.9, over: 1.9, under: 1.95 }
+      },
+      recommended: { pick: "Peste 2.5", confidence: 70, odd: 1.9 }
+    });
+    const pool = listSpecialBetCandidates(row, labels);
+    expect(pool.every((l) => Number(l.odd) > 1)).toBe(true);
+    expect(pool.some((l) => l.id === "gg")).toBe(false);
+  });
+});

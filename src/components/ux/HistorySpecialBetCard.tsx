@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import {
-  buildSpecialBetLegs,
+  listSpecialBetCandidates,
+  pickSpecialBetLegs,
   outcomeTextClass,
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
@@ -87,19 +88,21 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
   const odd = recommendedOdd(row);
   const oddLabel = formatBookOdd(odd, t("card.noBookOdd"));
 
-  const pool = buildSpecialBetLegs(
+  const pool = listSpecialBetCandidates(
     enrichedRow,
     {
       main: t("match.featMain"),
+      goals: t("card.marketGoals"),
       corners: t("match.featCorners"),
       shots: t("match.featShots"),
-      ht: t("match.featHt")
+      ht: t("match.featHt"),
+      gg: t("match.marketGgNgg"),
+      cards: t("match.cards")
     },
-    3,
     enrichedRow.cardMarketValidations,
     enrichedRow.marketResults
   );
-  const legs = pool.slice(0, legCount);
+  const legs = pickSpecialBetLegs(pool, legCount);
   const showLegs = legs.length >= 2;
   const combined = specialBetCombinedOddValue(legs);
   const combinedTone = outcomeTextClass(specialBetCombinedOutcome(legs));
@@ -217,7 +220,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
               );
             })}
           </div>
-          <div className={`mt-1.5 text-[11px] font-bold tabular-nums sm:text-xs ${combinedTone}`}>
+          <div className={`mt-2 text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${combinedTone}`}>
             {t("card.combinedOdd", {
               odd: Number.isFinite(Number(combined)) ? Number(combined).toFixed(2) : t("card.na")
             })}
