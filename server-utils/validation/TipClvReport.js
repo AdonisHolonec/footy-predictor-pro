@@ -1,7 +1,9 @@
 /**
- * Walk-forward scoring of the Stage08 published tip (recommended + pOut).
- * Tips are frozen at publish time — fitFn is identity; folds only prevent lookahead
- * when aggregating chronological performance / CLV.
+ * Chronological CLV/hit-rate report for the Stage08 published tip (recommended + pOut).
+ * Tips are frozen at publish time — fitFn is identity, so this is execution-quality
+ * reporting (did we beat the closing line), not model validation. It reuses the
+ * WalkForward chronological-fold machinery only to prevent lookahead when
+ * aggregating performance over time, not to fit or validate a model.
  */
 
 import {
@@ -67,7 +69,7 @@ export function scoreTipFold(_model, testEvents) {
  * @param {object[]} historyRows - predictions_history rows
  * @param {object} [opts] - walk-forward window opts
  */
-export function evaluateTipWalkForward(historyRows, opts = {}) {
+export function evaluateTipClvReport(historyRows, opts = {}) {
   const tipEvents = extractTipEvents(historyRows, { requireSettled: true });
   const sorted = sortByKickoff(tipEvents);
   const wf = evaluateWalkForward(

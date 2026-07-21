@@ -431,9 +431,6 @@ export async function run(context) {
       predictionContributions,
       predictionRow
     });
-  
-    if (typeof row !== "undefined" && row) f.row = row;
-    if (typeof aborted !== "undefined" && aborted) f.aborted = true;
   }
 
   if (!context.stageMarks) context.stageMarks = {};

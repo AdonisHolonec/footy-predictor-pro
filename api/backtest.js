@@ -21,7 +21,7 @@ import {
 } from "../server-utils/backtest/BacktestAnalytics.js";
 import { buildClvReport, computeClvPct } from "../server-utils/backtest/ClvReport.js";
 import { resolvePublishedTip } from "../server-utils/backtest/TipEvent.js";
-import { evaluateTipWalkForward } from "../server-utils/validation/TipWalkForward.js";
+import { evaluateTipClvReport } from "../server-utils/validation/TipClvReport.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
 import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
@@ -31,7 +31,7 @@ import {
   runAutoSelection,
   runAndPromote,
   getActiveModel
-} from "../server-utils/modelLab/AutoModelSelection.js";
+} from "../server-utils/modelLab/BlendRecipeSelection.js";
 
 /**
  * Auto Model Selection — every model competes over 30/90/365-day windows.
@@ -775,7 +775,7 @@ async function handleWalkForwardTip(req, res) {
       .limit(8000);
     if (error) throw error;
 
-    const result = evaluateTipWalkForward(data || [], {
+    const result = evaluateTipClvReport(data || [], {
       minTrain: Math.max(20, Number(req.query.minTrain) || 40),
       testSize: Math.max(10, Number(req.query.testSize) || 20),
       step: Math.max(5, Number(req.query.step) || 20)

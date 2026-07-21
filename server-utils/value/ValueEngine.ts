@@ -33,7 +33,7 @@ export type ValueEngineResult = {
   explanation: string[];
 };
 
-export type ValueEnginePayload = ValueEngineResult & {
+export type ValueEnginePayload = Omit<ValueEngineResult, "bestMarket"> & {
   detected: boolean;
   highlighted?: boolean;
   bestMarket?: ValueEngineResult | null;
@@ -277,9 +277,7 @@ export function buildValueEngine(
   };
 }
 
-export {
-  VALUE_MARKET_FAMILIES,
-  classifyMarketFamily,
-  buildValueCandidates,
-  buildProfessionalValueEngine
-} from "./ValueEngine.js";
+// Not re-exported here: importing "./ValueEngine.js" from this same-named .ts
+// file resolves back to itself under `moduleResolution: bundler`, so runtime
+// consumers must import VALUE_MARKET_FAMILIES/classifyMarketFamily/
+// buildValueCandidates/buildProfessionalValueEngine directly from ValueEngine.js.

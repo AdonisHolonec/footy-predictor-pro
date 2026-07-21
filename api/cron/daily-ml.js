@@ -30,7 +30,7 @@ import { selectBestCalibration } from "../../server-utils/calibration/Calibratio
 import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
 import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
-import { runAndPromote } from "../../server-utils/modelLab/AutoModelSelection.js";
+import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));

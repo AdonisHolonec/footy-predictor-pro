@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto";
+
 /**
  * Authorizes cron / internal maintenance requests.
  * - Production: requires CRON_SECRET match via Bearer or x-cron-secret (no query ?secret=).
@@ -5,6 +7,13 @@
  * - Non-production: secret match OR same-origin browser (Origin/Referer) for local dev; if secret unset, allow dev.
  *   Query ?secret= is allowed only outside production for local scripts.
  */
+function timingSafeMatch(provided, secret) {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export function isAuthorizedCronOrInternalRequest(req) {
   const secret = String(process.env.CRON_SECRET || "");
   const isProd = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
@@ -17,7 +26,7 @@ export function isAuthorizedCronOrInternalRequest(req) {
       ""
   );
 
-  if (secret && provided === secret) return true;
+  if (secret && timingSafeMatch(provided, secret)) return true;
 
   if (isProd) {
     // P0: UA fallback is explicitly disabled in production unless BOTH flags are set

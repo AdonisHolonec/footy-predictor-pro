@@ -15,4 +15,5 @@ export interface PredictionExplanationResult {
   reasoning: string[];
 }
 
-export { buildPredictionExplanation, PredictionExplanation } from "./PredictionExplanation.js";
+export declare function buildPredictionExplanation(...args: any[]): PredictionExplanationResult;
+export declare const PredictionExplanation: any;

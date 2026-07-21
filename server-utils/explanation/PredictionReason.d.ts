@@ -14,4 +14,6 @@ export interface PredictionReason {
   meta?: Record<string, unknown>;
 }
 
-export { createReason, formatSignedPct, formatFixed } from "./PredictionReason.js";
+export declare function createReason(...args: any[]): PredictionReason;
+export declare function formatSignedPct(...args: any[]): string;
+export declare function formatFixed(...args: any[]): string;

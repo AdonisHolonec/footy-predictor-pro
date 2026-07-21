@@ -49,7 +49,7 @@ import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
 import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
 import { runModelLab, reconstructSources, blendModel, getModelById, MODEL_REGISTRY } from "../server-utils/modelLab/ModelLab.js";
-import { runAutoSelection } from "../server-utils/modelLab/AutoModelSelection.js";
+import { runAutoSelection } from "../server-utils/modelLab/BlendRecipeSelection.js";
 import { estimateMatchXg, computeRollingXg, deriveXgLambdas, rollingXgRates } from "../server-utils/xg/RollingXgModel.js";
 import {
   calculateExpectedValue,
@@ -1989,8 +1989,8 @@ test("resolvePublishedTip scores tip from pOut and closing", async () => {
   assert.ok(tip.clvPct != null && tip.clvPct > 0);
 });
 
-test("evaluateTipWalkForward aggregates tip ROI and CLV", async () => {
-  const { evaluateTipWalkForward } = await import("../server-utils/validation/TipWalkForward.js");
+test("evaluateTipClvReport aggregates tip ROI and CLV", async () => {
+  const { evaluateTipClvReport } = await import("../server-utils/validation/TipClvReport.js");
   const rows = [];
   for (let i = 0; i < 80; i++) {
     const won = i % 3 !== 0;
@@ -2007,7 +2007,7 @@ test("evaluateTipWalkForward aggregates tip ROI and CLV", async () => {
       }
     });
   }
-  const out = evaluateTipWalkForward(rows, { minTrain: 30, testSize: 10, step: 10 });
+  const out = evaluateTipClvReport(rows, { minTrain: 30, testSize: 10, step: 10 });
   assert.ok(out.tips >= 70);
   assert.ok(out.overall.accuracy != null);
   assert.ok(out.walkForward.windows >= 1);

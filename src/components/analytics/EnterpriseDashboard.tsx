@@ -339,13 +339,13 @@ export default function EnterpriseDashboard({
 
       {/* Charts: Line · Radar · Pie */}
       <div className="grid grid-cols-1 gap-3 px-4 pb-3 sm:px-5 lg:grid-cols-2 xl:grid-cols-3">
-        <ChartCard title="Line" subtitle="Equity + hit rate">
+        <ChartCard title="Equity Curve" subtitle="Equity + hit rate">
           <ProfitLineChart data={dash.profitLine} />
         </ChartCard>
-        <ChartCard title="Radar" subtitle="Multi-metric profile">
+        <ChartCard title="Model Profile" subtitle="Multi-metric profile">
           <PerformanceRadarChart data={dash.radar} />
         </ChartCard>
-        <ChartCard title="Pie" subtitle="Market settled share">
+        <ChartCard title="Settled Market Share" subtitle="Market settled share">
           <MarketPieChart data={dash.marketPerformance} />
         </ChartCard>
       </div>
@@ -401,7 +401,7 @@ export default function EnterpriseDashboard({
 
       {/* Heatmap + ranks */}
       <div className="grid grid-cols-1 gap-3 px-4 pb-4 sm:px-5 lg:grid-cols-2 xl:grid-cols-4">
-        <ChartCard title="Heatmap" subtitle="League × market" className="lg:col-span-2 xl:col-span-2">
+        <ChartCard title="League × Market Accuracy" subtitle="League × market" className="lg:col-span-2 xl:col-span-2">
           <LeagueMarketHeatmap data={dash.heatmap} />
         </ChartCard>
         <RankList title="Best Markets" rows={bestMarkets} mode="best" />

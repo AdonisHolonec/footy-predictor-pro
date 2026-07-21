@@ -1,6 +1,9 @@
 /**
- * Auto Model Selection — every model competes over 30/90/365-day windows and the
- * best one is promoted automatically (persisted to KV). No manual switching.
+ * Blend Recipe Selection — every fixed blend recipe (see MODEL_REGISTRY in
+ * ModelLab.js, currently 5 presets A-E) competes over 30/90/365-day windows and
+ * the best one is promoted automatically (persisted to KV). No manual switching.
+ * This selects among a small set of hand-defined recipes, not a general model
+ * search.
  *
  * Composite score per window (min-max normalized across models in that window):
  *   score = 0.50·ROI + 0.20·Accuracy + 0.20·(−LogLoss) + 0.10·Sharpe
@@ -180,7 +183,7 @@ export async function runAndPromote(rows) {
   return { ...selection, promoted };
 }
 
-export const AutoModelSelection = {
+export const BlendRecipeSelection = {
   runAutoSelection,
   runAndPromote,
   getActiveModel,
@@ -189,4 +192,4 @@ export const AutoModelSelection = {
   WINDOWS,
   DEFAULT_MODEL_ID
 };
-export default AutoModelSelection;
+export default BlendRecipeSelection;
