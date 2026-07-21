@@ -172,7 +172,7 @@ export function listSpecialBetCandidates(
     marketResults: marketResults ?? row.marketResults
   };
 
-  const candidates: SpecialBetLeg[] = [
+  const pool: SpecialBetLeg[] = [
     {
       id: "recommended",
       label: labels.main,
@@ -259,11 +259,11 @@ export function listSpecialBetCandidates(
         : NaN,
       outcome: null
     }
-  ]
+  ];
+
+  return pool
     .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0 && hasValidOdd(x.odd))
     .sort((a, b) => b.probability - a.probability);
-
-  return candidates;
 }
 
 /** Top `legCount` plus up to 2 extra legs with probability ≥ 85%. */
