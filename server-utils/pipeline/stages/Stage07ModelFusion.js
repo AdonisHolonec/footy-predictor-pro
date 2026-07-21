@@ -430,8 +430,18 @@ export async function run(context) {
     
       const selectOddByPick = (quote, pick) => {
         if (!quote || !pick) return null;
-        const isOver = String(pick).toLowerCase().includes("over");
-        return isOver ? quote.over : quote.under;
+        const s = String(pick)
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+        // Under/sub first — never treat "under" as over via includes("over").
+        if (/(?:^|\s)(under|sub)\b/.test(s) || s.startsWith("under") || s.startsWith("sub")) {
+          return quote.under ?? null;
+        }
+        if (/(?:^|\s)(over|peste)\b/.test(s) || s.startsWith("over") || s.startsWith("peste")) {
+          return quote.over ?? null;
+        }
+        return null;
       };
 
       const shotsSourceLabel = (sourceKind) => {
@@ -597,6 +607,8 @@ export async function run(context) {
                 ? Number(firstHalfQuote.line)
                 : firstHalfPick.line,
               odd: selectOddByPick(firstHalfQuote, firstHalfPick.pick),
+              over: firstHalfQuote?.over ?? null,
+              under: firstHalfQuote?.under ?? null,
               bookmaker: firstHalfQuote ? `median(${firstHalfQuote.bookmakersUsed})` : null,
               bookmakersUsed: firstHalfQuote?.bookmakersUsed || 0
             }

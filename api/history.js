@@ -2,6 +2,7 @@ import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../server-utils/fetcher.js";
+import { resolveFixtureFirstHalfGoals } from "../server-utils/fixtureHalftimeGoals.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
@@ -49,17 +50,8 @@ async function fetchFixtureMarketTotals(fixtureId) {
 
   let firstHalfGoals = null;
   try {
-    const fxReq = await getWithCache("/fixtures", { ids: String(fixtureId) }, 86400);
-    if (fxReq.ok) {
-      const fx = fxReq.data?.response?.[0];
-      const htHomeRaw = fx?.score?.halftime?.home;
-      const htAwayRaw = fx?.score?.halftime?.away;
-      if (htHomeRaw != null && htAwayRaw != null) {
-        const htHome = Number(htHomeRaw);
-        const htAway = Number(htAwayRaw);
-        if (Number.isFinite(htHome) && Number.isFinite(htAway)) firstHalfGoals = htHome + htAway;
-      }
-    }
+    const ht = await resolveFixtureFirstHalfGoals(fixtureId, getWithCache);
+    firstHalfGoals = ht.firstHalfGoals;
   } catch {
     // ignore — corners/shots still usable
   }

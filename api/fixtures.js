@@ -38,6 +38,10 @@ import {
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { corsOriginIfAllowed } from "../server-utils/publicBaseUrl.js";
+import {
+  parseHalftimeGoalsFromFixture,
+  resolveFixtureFirstHalfGoals
+} from "../server-utils/fixtureHalftimeGoals.js";
 
 async function requireUserOrCron(req, res) {
   if (isAuthorizedCronOrInternalRequest(req)) return { ok: true, cron: true };
@@ -393,13 +397,7 @@ function parseRefereeName(raw) {
 
 /** Safe HT goals total — never treat null as 0 via Number(null). */
 function parseHalftimeGoals(fx) {
-  const htHomeRaw = fx?.score?.halftime?.home;
-  const htAwayRaw = fx?.score?.halftime?.away;
-  if (htHomeRaw == null || htAwayRaw == null) return null;
-  const htHome = Number(htHomeRaw);
-  const htAway = Number(htAwayRaw);
-  if (!Number.isFinite(htHome) || !Number.isFinite(htAway)) return null;
-  return htHome + htAway;
+  return parseHalftimeGoalsFromFixture(fx);
 }
 
 async function handleLive(req, res) {
@@ -488,12 +486,9 @@ async function handleXg(req, res) {
       return null;
     };
 
-    // Always try fixture HT score first — usable even when statistics lag.
-    let firstHalfGoals = null;
-    const fxReq = await getWithCache("/fixtures", { ids: String(fid) }, 86400);
-    if (fxReq.ok) {
-      firstHalfGoals = parseHalftimeGoals(fxReq.data?.response?.[0]);
-    }
+    // Short TTL + events fallback — avoid 24h cache stuck without HT score.
+    const htResolved = await resolveFixtureFirstHalfGoals(fid, getWithCache);
+    const firstHalfGoals = htResolved.firstHalfGoals;
 
     const statsReq = await getWithCache("/fixtures/statistics", { fixture: fid }, 900);
     if (!statsReq.ok) {

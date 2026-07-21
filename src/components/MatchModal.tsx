@@ -26,6 +26,7 @@ import {
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
 } from "../utils/specialBet";
+import { matchingMarketOdd } from "../utils/marketPicks";
 import { fetchWithAuth } from "../utils/apiAuth";
 
 /**
@@ -841,13 +842,16 @@ export default function MatchModal({
         if (!Number.isFinite(pOver)) return null;
         return pOver >= 50
           ? {
-              pick: `${tr("match.overLine", { line: "1.5" })} FH`,
+              // Canonical EN pick for odds matching; display uses localized label below.
+              pick: "Over 1.5 FH",
+              displayPick: `${tr("match.overLine", { line: "1.5" })} FH`,
               probability: pOver,
               line: 1.5,
               side: "over" as const
             }
           : {
-              pick: `${tr("match.underLine", { line: "1.5" })} FH`,
+              pick: "Under 1.5 FH",
+              displayPick: `${tr("match.underLine", { line: "1.5" })} FH`,
               probability: 100 - pOver,
               line: 1.5,
               side: "under" as const
@@ -1332,7 +1336,10 @@ export default function MatchModal({
                     match.predictions.over25 === "Peste 2.5" ? match.probs.pO25 : 100 - match.probs.pO25
                   );
                 const fhInfo = firstHalfPick
-                  ? fallbackTierFromProb(firstHalfPick.pick, firstHalfPick.probability)
+                  ? fallbackTierFromProb(
+                      firstHalfPick.displayPick || firstHalfPick.pick,
+                      firstHalfPick.probability
+                    )
                   : undefined;
 
                 // Detect când mai multe pieţe sunt "toss" — afişăm un hint general.
@@ -1468,10 +1475,14 @@ export default function MatchModal({
               {firstHalfPick && (
                 <div className="mt-3 border-t border-white/5 pt-2">
                   {marketResultBadge(
-                    firstHalfPick.pick,
+                    firstHalfPick.displayPick || firstHalfPick.pick,
                     firstHalfPick.probability,
                     firstHalfVerdict,
-                    match.marketOdds?.firstHalfGoals?.odd,
+                    matchingMarketOdd(
+                      match.marketOdds?.firstHalfGoals,
+                      firstHalfPick.side,
+                      firstHalfPick.line
+                    ) ?? match.marketOdds?.firstHalfGoals?.odd,
                     match.marketOdds?.firstHalfGoals?.bookmaker,
                     "ht",
                     tr("card.noBookOdd")

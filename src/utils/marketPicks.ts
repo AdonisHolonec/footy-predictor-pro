@@ -203,12 +203,27 @@ export function recommendedPickValueEv(row: PredictionRow): number | null {
   return modelValueEv(conf, recommendedOdd(row));
 }
 
-/** Odd for corners/shots row when quote side matches and line is within tolerance. */
+/** Parse Over/Under side from pick labels (EN/RO, with optional FH suffix). */
+export function parseOuSide(pick: string | null | undefined): "over" | "under" | null {
+  const s = String(pick || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return null;
+  // Check under/sub first — never use naive includes("over") on "under".
+  if (/(?:^|\s)(under|sub)\b/.test(s) || s.startsWith("under") || s.startsWith("sub")) return "under";
+  if (/(?:^|\s)(over|peste)\b/.test(s) || s.startsWith("over") || s.startsWith("peste")) return "over";
+  return null;
+}
+
+/** Prefer side-specific over/under when present on the quote. */
 export function matchingMarketOdd(
   quote: {
     pick?: string;
     line?: number | null;
     odd?: number | null;
+    over?: number | null;
+    under?: number | null;
     oddSource?: string | null;
   } | null | undefined,
   side: "over" | "under",
@@ -226,9 +241,15 @@ export function matchingMarketOdd(
   ) {
     return null;
   }
-  const qPick = String(quote.pick || "").toLowerCase();
-  const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : null;
-  if (qSide && qSide !== side) return null;
+  const qSide = parseOuSide(quote.pick);
+  if (qSide && qSide !== side) {
+    // Stored pick side conflicts — still allow explicit over/under fields.
+    const sideOdd = side === "over" ? Number(quote.over) : Number(quote.under);
+    if (Number.isFinite(sideOdd) && sideOdd > 1) return sideOdd;
+    return null;
+  }
+  const sideOdd = side === "over" ? Number(quote.over) : Number(quote.under);
+  if (Number.isFinite(sideOdd) && sideOdd > 1) return sideOdd;
   const odd = Number(quote.odd);
   return Number.isFinite(odd) && odd > 1 ? odd : null;
 }
