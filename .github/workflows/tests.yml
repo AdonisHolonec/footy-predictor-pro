@@ -31,5 +31,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Dependency audit (block on critical)
+        run: npm audit --audit-level=critical
+
+      - name: Dependency audit (full report, non-blocking)
+        run: npm audit || true
+
       - name: Production build
         run: npm run build
