@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { brier1x2, logLoss1x2 } from "./probabilityMetrics.js";
 
 /**
  * Multinomial logistic regression stacker.
@@ -164,6 +165,128 @@ export function pickStackerWeightsForLeague(allWeights, leagueId) {
 
 export function invalidateStackerCache() {
   cached = { fetchedAt: 0, byKey: new Map(), version: null };
+}
+
+/**
+ * Shared trainer + in-sample scorer for the softmax stacker.
+ * Single source of truth for api/cron/daily-ml.js and scripts/fitStacker.js
+ * (previously two near-identical copies) — also what
+ * server-utils/validation/StackerWalkForward.js fits per fold, so a fold's
+ * evaluation always reflects the exact algorithm that trains production weights.
+ */
+
+function initWeights(nFeatures) {
+  return {
+    intercept: [0, 0, 0],
+    coef: Array.from({ length: nFeatures }, () => [0, 0, 0])
+  };
+}
+
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+/** Batch SGD for softmax regression with L2 on coef. `samples`: [{ x: number[], y: [0/1,0/1,0/1] }]. */
+export function trainSoftmax(samples, nFeatures, opts = {}) {
+  const epochs = Math.max(1, Number(opts.epochs) || 120);
+  const lr = Number(opts.lr) || 0.08;
+  const l2 = Number(opts.l2) || 1e-3;
+  const batch = Math.max(1, Number(opts.batch) || 64);
+
+  const w = initWeights(nFeatures);
+  const n = samples.length;
+  if (n === 0) return w;
+
+  for (let epoch = 0; epoch < epochs; epoch++) {
+    shuffleInPlace(samples);
+    for (let start = 0; start < n; start += batch) {
+      const end = Math.min(n, start + batch);
+      const bs = end - start;
+      const gradI = [0, 0, 0];
+      const gradC = Array.from({ length: nFeatures }, () => [0, 0, 0]);
+
+      for (let k = start; k < end; k++) {
+        const s = samples[k];
+        const x = s.x;
+        const y = s.y;
+        let l1 = w.intercept[0];
+        let lX = w.intercept[1];
+        let l2v = w.intercept[2];
+        for (let i = 0; i < nFeatures; i++) {
+          l1 += x[i] * w.coef[i][0];
+          lX += x[i] * w.coef[i][1];
+          l2v += x[i] * w.coef[i][2];
+        }
+        const p = softmax3(l1, lX, l2v);
+        const d0 = p.p1 - y[0];
+        const d1 = p.pX - y[1];
+        const d2 = p.p2 - y[2];
+        gradI[0] += d0;
+        gradI[1] += d1;
+        gradI[2] += d2;
+        for (let i = 0; i < nFeatures; i++) {
+          gradC[i][0] += d0 * x[i];
+          gradC[i][1] += d1 * x[i];
+          gradC[i][2] += d2 * x[i];
+        }
+      }
+
+      const scale = lr / bs;
+      w.intercept[0] -= scale * gradI[0];
+      w.intercept[1] -= scale * gradI[1];
+      w.intercept[2] -= scale * gradI[2];
+      for (let i = 0; i < nFeatures; i++) {
+        w.coef[i][0] -= scale * (gradC[i][0] + l2 * w.coef[i][0]);
+        w.coef[i][1] -= scale * (gradC[i][1] + l2 * w.coef[i][1]);
+        w.coef[i][2] -= scale * (gradC[i][2] + l2 * w.coef[i][2]);
+      }
+    }
+  }
+  return w;
+}
+
+export function argmax3(p) {
+  if (p.p1 >= p.pX && p.p1 >= p.p2) return "1";
+  if (p.pX >= p.p2) return "X";
+  return "2";
+}
+
+/**
+ * Score `weights` against `samples` (each needs .x, .actual, .poissonProbs).
+ * Callers decide whether `samples` was used to fit `weights` (in-sample) or
+ * held out (e.g. a walk-forward test fold) — this function itself is agnostic.
+ */
+export function computeStackerMetrics(samples, weights) {
+  let brierPoi = 0;
+  let brierStk = 0;
+  let llPoi = 0;
+  let llStk = 0;
+  let correctPoi = 0;
+  let correctStk = 0;
+  for (const s of samples) {
+    const p = applyStacker({ values: s.x }, weights);
+    brierPoi += brier1x2(s.poissonProbs.p1, s.poissonProbs.pX, s.poissonProbs.p2, s.actual);
+    llPoi += logLoss1x2(s.poissonProbs.p1, s.poissonProbs.pX, s.poissonProbs.p2, s.actual);
+    if (argmax3(s.poissonProbs) === s.actual) correctPoi += 1;
+    if (p) {
+      brierStk += brier1x2(p.p1, p.pX, p.p2, s.actual);
+      llStk += logLoss1x2(p.p1, p.pX, p.p2, s.actual);
+      if (argmax3(p) === s.actual) correctStk += 1;
+    }
+  }
+  const n = samples.length || 1;
+  return {
+    n,
+    brierPoi: Number((brierPoi / n).toFixed(5)),
+    brierStk: Number((brierStk / n).toFixed(5)),
+    logLossPoi: Number((llPoi / n).toFixed(5)),
+    logLossStk: Number((llStk / n).toFixed(5)),
+    accuracyPoi: Number(((correctPoi / n) * 100).toFixed(2)),
+    accuracyStk: Number(((correctStk / n) * 100).toFixed(2))
+  };
 }
 
 export { safeLog, softmax3 };

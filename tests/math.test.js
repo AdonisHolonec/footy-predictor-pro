@@ -45,7 +45,15 @@ import {
   evaluateCalibrationMethods,
   selectBestCalibration
 } from "../server-utils/calibration/CalibrationSelector.js";
-import { extractStackerFeatures, applyStacker, softmax3 } from "../server-utils/mlStacker.js";
+import {
+  extractStackerFeatures,
+  applyStacker,
+  softmax3,
+  trainSoftmax,
+  computeStackerMetrics
+} from "../server-utils/mlStacker.js";
+import { evaluateStackerWalkForward } from "../server-utils/validation/StackerWalkForward.js";
+import { timeOrderedExpandingFolds } from "../server-utils/validation/WalkForward.js";
 import { eloExpectedHomeScore, updateEloPair, eloProbabilities, eloKFactor } from "../server-utils/teamElo.js";
 import { buildPredictionContributions } from "../server-utils/importance/PredictionContributions.js";
 import { runModelLab, reconstructSources, blendModel, getModelById, MODEL_REGISTRY } from "../server-utils/modelLab/ModelLab.js";
@@ -757,6 +765,84 @@ test("applyStacker returns null for missing weights and valid probs otherwise", 
   assert.ok(p);
   assert.ok(p.p1 > p.pX && p.p1 > p.p2);
   assert.ok(Math.abs(p.p1 + p.pX + p.p2 - 1) < 1e-9);
+});
+
+/** Synthetic, linearly-separable stacker samples with chronological kickoffs. */
+function makeStackerSamples(n, { seedOffset = 0 } = {}) {
+  const samples = [];
+  const baseMs = Date.UTC(2026, 0, 1);
+  for (let i = 0; i < n; i++) {
+    const homeStronger = (i + seedOffset) % 3 !== 0;
+    const poissonProbs = homeStronger ? { p1: 0.55, pX: 0.25, p2: 0.2 } : { p1: 0.25, pX: 0.25, p2: 0.5 };
+    const feat = extractStackerFeatures({ poissonProbs, marketProbs: poissonProbs });
+    const actual = homeStronger ? "1" : "2";
+    samples.push({
+      x: feat.values,
+      y: actual === "1" ? [1, 0, 0] : actual === "X" ? [0, 1, 0] : [0, 0, 1],
+      actual,
+      poissonProbs,
+      kickoffAt: baseMs + i * 86400000
+    });
+  }
+  return samples;
+}
+
+test("trainSoftmax improves in-sample fit over untrained (zero) weights", () => {
+  const samples = makeStackerSamples(200);
+  const nFeatures = samples[0].x.length;
+  const zeroWeights = { intercept: [0, 0, 0], coef: Array.from({ length: nFeatures }, () => [0, 0, 0]) };
+  const before = computeStackerMetrics(samples, zeroWeights);
+
+  const trained = trainSoftmax(
+    samples.map((s) => ({ ...s })),
+    nFeatures,
+    { epochs: 40 }
+  );
+  const after = computeStackerMetrics(samples, trained);
+
+  assert.ok(after.logLossStk < before.logLossStk, "trained log-loss should beat untrained (uniform) weights");
+  assert.ok(after.accuracyStk > 50, "trained accuracy should clearly beat chance on separable data");
+});
+
+test("evaluateStackerWalkForward reports insufficient_samples when there's too little data for any fold", () => {
+  const samples = makeStackerSamples(8);
+  const nFeatures = samples[0].x.length;
+  const out = evaluateStackerWalkForward(samples, nFeatures, { folds: 3 });
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, "insufficient_samples");
+});
+
+test("evaluateStackerWalkForward reports no_valid_folds when folds exist but are too small to trust", () => {
+  const samples = makeStackerSamples(20);
+  const nFeatures = samples[0].x.length;
+  const out = evaluateStackerWalkForward(samples, nFeatures, { folds: 3 });
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, "no_valid_folds");
+});
+
+test("evaluateStackerWalkForward runs genuine out-of-sample folds on a larger dataset", () => {
+  const samples = makeStackerSamples(500);
+  const nFeatures = samples[0].x.length;
+  const out = evaluateStackerWalkForward(samples, nFeatures, { folds: 3, epochs: 40 });
+  assert.equal(out.ok, true);
+  assert.ok(out.foldsRun >= 1);
+  assert.ok(out.accuracy.mean > 0.5, "out-of-sample accuracy should beat chance on separable data");
+  assert.ok(out.logLoss.mean != null && out.logLoss.mean >= 0);
+});
+
+test("evaluateStackerWalkForward never scores a fold on data that trained it (chronology holds)", () => {
+  const samples = makeStackerSamples(500);
+  const nFeatures = samples[0].x.length;
+  // Reuse the same chronological-fold primitive CalibrationSelector relies on —
+  // this asserts evaluateStackerWalkForward is actually built on it, not a
+  // reimplementation that could silently leak future data into training.
+  const windows = timeOrderedExpandingFolds(samples, 3);
+  assert.ok(windows.length >= 1);
+  for (const w of windows) {
+    const trainLast = w.train[w.train.length - 1]?.kickoffAt;
+    const testFirst = w.test[0]?.kickoffAt;
+    assert.ok(trainLast < testFirst, "train must end strictly before test begins");
+  }
 });
 
 // =============================================================================

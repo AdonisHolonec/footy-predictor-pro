@@ -9,18 +9,18 @@ import {
 import {
   extractStackerFeatures,
   applyStacker,
-  softmax3,
+  trainSoftmax,
+  computeStackerMetrics,
   invalidateStackerCache
 } from "../../server-utils/mlStacker.js";
+import { evaluateStackerWalkForward } from "../../server-utils/validation/StackerWalkForward.js";
 import { shinImpliedProbs } from "../../server-utils/advancedMath.js";
 import {
   actual1x2FromScore,
   actualOverFromScore,
   actualUnderFromScore,
   actualBttsFromScore,
-  extractSideMarketProbs,
-  brier1x2,
-  logLoss1x2
+  extractSideMarketProbs
 } from "../../server-utils/probabilityMetrics.js";
 import { MODEL_VERSION } from "../../server-utils/modelConstants.js";
 import { invalidateEloCache } from "../../server-utils/teamElo.js";
@@ -44,6 +44,7 @@ const SGD_EPOCHS = Math.max(40, Math.min(Number(process.env.STACKER_EPOCHS || 12
 const SGD_LR = Number(process.env.STACKER_LR || 0.08);
 const SGD_L2 = Number(process.env.STACKER_L2 || 1e-3);
 const SGD_BATCH = Math.max(16, Math.min(Number(process.env.STACKER_BATCH || 64), 256));
+const STACKER_WF_FOLDS = Math.max(2, Math.min(Number(process.env.STACKER_WF_FOLDS || 3), 6));
 
 function buildCalibrationGroups(rows) {
   const out = { "1": [], X: [], "2": [], O15: [], O25: [], U35: [], GG: [] };
@@ -178,110 +179,11 @@ function buildStackerDataset(rows, allMaps = null) {
       leagueId,
       actual,
       poissonProbs,
-      marketProbs
+      marketProbs,
+      kickoffAt: row.kickoff_at
     });
   }
   return samples;
-}
-
-function initWeights(nFeatures) {
-  return {
-    intercept: [0, 0, 0],
-    coef: Array.from({ length: nFeatures }, () => [0, 0, 0])
-  };
-}
-
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
-
-function trainSoftmax(samples, nFeatures) {
-  const w = initWeights(nFeatures);
-  if (!samples.length) return w;
-
-  for (let epoch = 0; epoch < SGD_EPOCHS; epoch++) {
-    shuffleInPlace(samples);
-    for (let start = 0; start < samples.length; start += SGD_BATCH) {
-      const end = Math.min(samples.length, start + SGD_BATCH);
-      const bs = end - start;
-      let gradI = [0, 0, 0];
-      let gradC = Array.from({ length: nFeatures }, () => [0, 0, 0]);
-
-      for (let k = start; k < end; k++) {
-        const s = samples[k];
-        let l1 = w.intercept[0];
-        let lX = w.intercept[1];
-        let l2 = w.intercept[2];
-        for (let i = 0; i < nFeatures; i++) {
-          l1 += s.x[i] * w.coef[i][0];
-          lX += s.x[i] * w.coef[i][1];
-          l2 += s.x[i] * w.coef[i][2];
-        }
-        const p = softmax3(l1, lX, l2);
-        const d0 = p.p1 - s.y[0];
-        const d1 = p.pX - s.y[1];
-        const d2 = p.p2 - s.y[2];
-        gradI[0] += d0;
-        gradI[1] += d1;
-        gradI[2] += d2;
-        for (let i = 0; i < nFeatures; i++) {
-          gradC[i][0] += d0 * s.x[i];
-          gradC[i][1] += d1 * s.x[i];
-          gradC[i][2] += d2 * s.x[i];
-        }
-      }
-
-      const scale = SGD_LR / bs;
-      w.intercept[0] -= scale * gradI[0];
-      w.intercept[1] -= scale * gradI[1];
-      w.intercept[2] -= scale * gradI[2];
-      for (let i = 0; i < nFeatures; i++) {
-        w.coef[i][0] -= scale * (gradC[i][0] + SGD_L2 * w.coef[i][0]);
-        w.coef[i][1] -= scale * (gradC[i][1] + SGD_L2 * w.coef[i][1]);
-        w.coef[i][2] -= scale * (gradC[i][2] + SGD_L2 * w.coef[i][2]);
-      }
-    }
-  }
-  return w;
-}
-
-function argmax3(p) {
-  if (p.p1 >= p.pX && p.p1 >= p.p2) return "1";
-  if (p.pX >= p.p2) return "X";
-  return "2";
-}
-
-function computeStackerMetrics(samples, weights) {
-  let brierPoi = 0;
-  let brierStk = 0;
-  let llPoi = 0;
-  let llStk = 0;
-  let correctPoi = 0;
-  let correctStk = 0;
-  for (const s of samples) {
-    const p = applyStacker({ values: s.x }, weights);
-    brierPoi += brier1x2(s.poissonProbs.p1, s.poissonProbs.pX, s.poissonProbs.p2, s.actual);
-    llPoi += logLoss1x2(s.poissonProbs.p1, s.poissonProbs.pX, s.poissonProbs.p2, s.actual);
-    if (argmax3(s.poissonProbs) === s.actual) correctPoi += 1;
-    if (p) {
-      brierStk += brier1x2(p.p1, p.pX, p.p2, s.actual);
-      llStk += logLoss1x2(p.p1, p.pX, p.p2, s.actual);
-      if (argmax3(p) === s.actual) correctStk += 1;
-    }
-  }
-  const n = samples.length || 1;
-  return {
-    n,
-    brierPoi: Number((brierPoi / n).toFixed(5)),
-    brierStk: Number((brierStk / n).toFixed(5)),
-    logLossPoi: Number((llPoi / n).toFixed(5)),
-    logLossStk: Number((llStk / n).toFixed(5)),
-    accuracyPoi: Number(((correctPoi / n) * 100).toFixed(2)),
-    accuracyStk: Number(((correctStk / n) * 100).toFixed(2))
-  };
 }
 
 async function upsertStackerWeights(supabase, { leagueId, modelVersion, weights, metrics, sampleSize, featureNames }) {
@@ -385,10 +287,23 @@ async function runStacker(supabase, modelVersion) {
   });
   const nFeatures = featureTemplate.values.length;
   const trained = [];
+  const sgdOpts = { epochs: SGD_EPOCHS, lr: SGD_LR, l2: SGD_L2, batch: SGD_BATCH };
+
+  // Production weights are still fit on the FULL sample set — walk-forward only
+  // changes how we measure/report them, not what gets deployed. In-sample metrics
+  // are kept (renamed) as a fit-quality diagnostic, not a performance claim.
+  function scopeMetrics(scopeSamples) {
+    const w = trainSoftmax(scopeSamples.map((s) => ({ ...s })), nFeatures, sgdOpts);
+    const inSample = computeStackerMetrics(scopeSamples, w);
+    const walkForward = evaluateStackerWalkForward(scopeSamples, nFeatures, {
+      folds: STACKER_WF_FOLDS,
+      ...sgdOpts
+    });
+    return { weights: w, metrics: { inSample, walkForward } };
+  }
 
   if (samples.length >= STACKER_MIN_GLOBAL) {
-    const w = trainSoftmax(samples.map((s) => ({ ...s })), nFeatures);
-    const metrics = computeStackerMetrics(samples, w);
+    const { weights: w, metrics } = scopeMetrics(samples);
     await upsertStackerWeights(supabase, {
       leagueId: null,
       modelVersion,
@@ -408,8 +323,7 @@ async function runStacker(supabase, modelVersion) {
   }
   for (const [leagueId, group] of byLeague.entries()) {
     if (group.length < STACKER_MIN_LEAGUE) continue;
-    const w = trainSoftmax(group.map((s) => ({ ...s })), nFeatures);
-    const metrics = computeStackerMetrics(group, w);
+    const { weights: w, metrics } = scopeMetrics(group);
     await upsertStackerWeights(supabase, {
       leagueId,
       modelVersion,
@@ -504,7 +418,8 @@ export default async function handler(req, res) {
         stackerMinGlobal: STACKER_MIN_GLOBAL,
         stackerWindowDays: STACKER_WINDOW_DAYS,
         rowLimit: ROW_LIMIT,
-        sgd: { epochs: SGD_EPOCHS, lr: SGD_LR, l2: SGD_L2, batch: SGD_BATCH }
+        sgd: { epochs: SGD_EPOCHS, lr: SGD_LR, l2: SGD_L2, batch: SGD_BATCH },
+        stackerWalkForwardFolds: STACKER_WF_FOLDS
       },
       calibration,
       stacker,
