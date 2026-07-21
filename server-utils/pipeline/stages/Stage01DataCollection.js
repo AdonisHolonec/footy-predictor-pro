@@ -157,8 +157,83 @@ export async function run(context) {
       return halt(context, 200, items);
     };
 
+    /**
+     * Premium: if admin/cron already predicted every fixture for the selected leagues/date,
+     * serve history (masked) with ~0 upstream burn — same idea as Free DB-only, but only when covered.
+     * Opt-out: PREMIUM_PREDICT_DB_CACHE=0 or ?forceLive=1 / ?live=1.
+     */
+    const tryPremiumDbCacheHit = async () => {
+      const cacheEnabled = String(process.env.PREMIUM_PREDICT_DB_CACHE || "1") !== "0";
+      if (!cacheEnabled) return false;
+      const forceLive =
+        String(req.query?.forceLive || req.query?.live || "") === "1" ||
+        String(req.query?.forceLive || req.query?.live || "").toLowerCase() === "true";
+      if (forceLive) return false;
+
+      const leagueFilter = leagueIds.map((id) => Number(id)).filter((id) => Number.isFinite(id));
+      if (!leagueFilter.length) return false;
+
+      // Prefer warm KV (admin morning fill) — HIT costs 0 provider calls.
+      const dayReq = await getWithCache("/fixtures", { date }, 21600);
+      if (!dayReq.ok) return false;
+      const allFx = dayReq.data?.response || dayReq.data || [];
+      if (!Array.isArray(allFx) || !allFx.length) return false;
+
+      const selected = allFx
+        .filter((fx) => leagueFilter.includes(Number(fx?.league?.id)))
+        .slice(0, effectiveLimit);
+      if (!selected.length) {
+        await readDbOnlyPredictions("db_only_premium_no_fixtures");
+        return true;
+      }
+
+      const fixtureIds = selected
+        .map((fx) => Number(fx?.fixture?.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!fixtureIds.length) return false;
+
+      const sb = getSupabaseAdmin();
+      const { data, error } = await sb.from("predictions_history").select("*").in("fixture_id", fixtureIds);
+      if (error) return false;
+      const rows = Array.isArray(data) ? data : [];
+      const byId = new Map();
+      for (const row of rows) {
+        const id = Number(row?.fixture_id);
+        if (Number.isFinite(id)) byId.set(id, row);
+      }
+
+      // Full coverage required — otherwise fall through to live predict for missing leagues/fixtures.
+      const missing = fixtureIds.filter((id) => !byId.has(id));
+      if (missing.length > 0) return false;
+
+      const items = fixtureIds
+        .map((id) => mapDbRowToHistoryEntry(byId.get(id)))
+        .filter(Boolean)
+        .map((row) => maskPredictionForTier(row, tierContext.effectiveTier));
+
+      const limitHdr = Number.isFinite(dailyLimit) ? dailyLimit : tierDailyLimit(tierContext.effectiveTier);
+      context.responseHeaders = {
+        "X-Tier": String(tierContext.effectiveTier),
+        "X-Predict-Count": String(tierContext.predictCountToday ?? 0),
+        "X-Predict-Limit": String(limitHdr),
+        "X-Data-Source": "db_only_premium_cache"
+      };
+      halt(context, 200, items);
+      return true;
+    };
+
     if (!tierContext.quotaExempt && tierContext.effectiveTier === USER_TIERS.FREE) {
       await readDbOnlyPredictions("db_only_free");
+      context.tierContext = tierContext;
+      context.reservedTierUsage = reservedTierUsage;
+      return context;
+    }
+
+    if (
+      !tierContext.quotaExempt &&
+      tierContext.effectiveTier === USER_TIERS.PREMIUM &&
+      (await tryPremiumDbCacheHit())
+    ) {
       context.tierContext = tierContext;
       context.reservedTierUsage = reservedTierUsage;
       return context;
