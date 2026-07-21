@@ -186,7 +186,8 @@ export default function LandingAccess() {
                     t("landing.freeM2"),
                     t("landing.freeM3"),
                     t("landing.freeM4"),
-                    t("landing.freeM5")
+                    t("landing.freeM5"),
+                    t("landing.freeM6")
                   ],
                   highlight: false,
                   priceNode: <p className="mt-1 font-display text-2xl font-bold">{t("landing.freePrice")}</p>,
