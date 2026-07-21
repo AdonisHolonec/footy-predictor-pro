@@ -2013,3 +2013,60 @@ test("evaluateTipWalkForward aggregates tip ROI and CLV", async () => {
   assert.ok(out.walkForward.windows >= 1);
   assert.ok(out.walkForward.clv.mean != null || out.overall.clv != null);
 });
+
+test("extractBetEvent track=tip scores published recommendation", async () => {
+  const { extractBetEvent } = await import("../server-utils/backtest/BacktestAnalytics.js");
+  const row = {
+    recommended_pick: "GG",
+    validation: "win",
+    score_home: 2,
+    score_away: 1,
+    league_id: 39,
+    league_name: "EPL",
+    kickoff_at: "2026-07-01T12:00:00Z",
+    raw_payload: {
+      recommended: { pick: "GG", odd: 1.9, confidence: 58 },
+      probs: { pGG: 58, p1: 40, pX: 30, p2: 30 },
+      closingOdds: { gg: 1.8 }
+    }
+  };
+  const tip = extractBetEvent(row, { track: "tip" });
+  assert.ok(tip);
+  assert.equal(tip.track, "tip");
+  assert.equal(tip.market, "GG");
+  assert.equal(tip.won, true);
+  assert.ok(tip.clvPct > 0);
+
+  const value = extractBetEvent(row, { track: "value" });
+  assert.equal(value, null, "no valueBet → value track skips");
+});
+
+test("extractStackerVector uses calibrated triple when present", async () => {
+  const { extractStackerVector } = await import("../server-utils/ml/features/FeatureExtractor.js");
+  const { extractStackerFeatures } = await import("../server-utils/mlStacker.js");
+  const { shinImpliedProbs } = await import("../server-utils/advancedMath.js");
+  const odds = { home: 1.8, draw: 3.5, away: 4.5 };
+  const shin = shinImpliedProbs(odds.home, odds.draw, odds.away);
+  const row = {
+    league_id: 39,
+    raw_payload: {
+      evaluation: {
+        rawPoissonProbs1x2Pct: { p1: 40, pX: 30, p2: 30 },
+        calibratedProbs1x2Pct: { p1: 60, pX: 20, p2: 20 }
+      },
+      odds,
+      modelMeta: { dataQuality: 0.7, eloSpread: 40, leagueParams: { homeAdv: 1.06, rho: -0.1 } }
+    }
+  };
+  const vec = extractStackerVector(row);
+  const expected = extractStackerFeatures({
+    poissonProbs: { p1: 0.6, pX: 0.2, p2: 0.2 },
+    marketProbs: shin,
+    eloSpread: 40,
+    dataQuality: 0.7,
+    homeAdv: 1.06,
+    rho: -0.1
+  });
+  // First feature is poisson_log_ratio_1X — must match calibrated, not raw 40/30.
+  assert.ok(Math.abs(vec.values[0] - expected.values[0]) < 1e-9);
+});

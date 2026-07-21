@@ -1,5 +1,10 @@
 -- 031: Widen calibration_maps outcomes for side-market calibration (O/U + BTTS).
 -- Existing rows (1/X/2/O25/GG) remain valid; adds O15 and U35.
+--
+-- Apply on Supabase (SQL editor or CLI):
+--   supabase db push
+--   -- or paste this file into the SQL editor and run.
+-- After apply, retrain: GET /api/cron/daily-ml?mode=all (calibration then stacker).
 
 alter table public.calibration_maps
   drop constraint if exists calibration_maps_outcome_check;

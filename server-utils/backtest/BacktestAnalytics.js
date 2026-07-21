@@ -10,6 +10,8 @@
  */
 
 import { evaluateTopPick } from "../predictionsHistory.js";
+import { resolvePublishedTip } from "./TipEvent.js";
+import { selectionClosingOdd } from "./closingOddsResolve.js";
 
 function round(n, digits = 4) {
   const x = Number(n);
@@ -134,53 +136,54 @@ function selectionProbability(payload, valueBet, type, confidence) {
   return null;
 }
 
-/** Closing odds for the staked selection, when the payload stored them (else null). */
-export function selectionClosingOdd(payload, row, type) {
-  const closing =
-    payload.closingOdds ||
-    payload.oddsClosing ||
-    (payload.marketOdds && payload.marketOdds.closing) ||
-    null;
-  const t = String(type || "").trim().toUpperCase();
-  const pickKey = t === "1" ? "home" : t === "2" ? "away" : t === "X" ? "draw" : null;
-  if (closing && pickKey) {
-    const v = Number(closing[pickKey] ?? closing[t]);
-    if (Number.isFinite(v) && v > 1) return v;
-  }
-  if (closing) {
-    const aliases = {
-      GG: [closing.gg, closing.GG, closing.yes],
-      NGG: [closing.ngg, closing.NGG, closing.no],
-      "1X": [closing.dc1x, closing["1X"], closing.homeDraw],
-      "12": [closing.dc12, closing["12"], closing.homeAway],
-      X2: [closing.dcx2, closing.X2, closing.drawAway]
-    };
-    for (const v of aliases[t] || []) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n > 1) return n;
-    }
-    const over = t.match(/^(?:PESTE|OVER)\s*(\d+(?:[.,]\d+)?)/);
-    const under = t.match(/^(?:SUB|UNDER)\s*(\d+(?:[.,]\d+)?)/);
-    if (over) {
-      const line = over[1].replace(",", ".");
-      const key = `over${line.replace(".", "")}`;
-      const n = Number(closing[key] ?? closing[`o${line}`]);
-      if (Number.isFinite(n) && n > 1) return n;
-    }
-    if (under) {
-      const line = under[1].replace(",", ".");
-      const key = `under${line.replace(".", "")}`;
-      const n = Number(closing[key] ?? closing[`u${line}`]);
-      if (Number.isFinite(n) && n > 1) return n;
-    }
-  }
-  const col =
-    t === "1" ? row.closing_odds_home : t === "2" ? row.closing_odds_away : t === "X" ? row.closing_odds_draw : null;
-  const cv = Number(col);
-  return Number.isFinite(cv) && cv > 1 ? cv : null;
+/** Closing odds for the staked selection — re-exported for callers. */
+export { selectionClosingOdd } from "./closingOddsResolve.js";
+
+export function extractBetEvent(row, opts = {}) {
+  if (!row) return null;
+  const trackRaw = String(opts.track || "value").toLowerCase();
+  const track = ["tip", "published", "recommended"].includes(trackRaw) ? "tip" : "value";
+  if (track === "tip") return extractTipBetEvent(row);
+  return extractValueBetEvent(row);
 }
 
-export function extractBetEvent(row) {
+/** Stage08 published tip track — flat 1u stake on recommended / pOut. */
+function extractTipBetEvent(row) {
+  const tip = resolvePublishedTip(row);
+  if (!tip || !tip.settled) return null;
+  if (!Number.isFinite(tip.odd) || tip.odd <= 1) return null;
+
+  const stake = 1;
+  const pnl = tip.won ? stake * (tip.odd - 1) : -stake;
+  const pick = String(tip.pick || "");
+  const t = pick.trim().toUpperCase();
+
+  return {
+    track: "tip",
+    fixtureId: tip.fixtureId ?? row.fixture_id ?? null,
+    kickoffAt: tip.kickoffAt || row.kickoff_at || null,
+    leagueId: Number(tip.leagueId ?? row.league_id) || 0,
+    leagueName: String(row.league_name || ""),
+    homeTeam: String(row.home_team || ""),
+    awayTeam: String(row.away_team || ""),
+    market: pick || String(row.recommended_pick || ""),
+    side: t === "1" ? "home" : t === "2" ? "away" : t === "X" ? "draw" : "other",
+    odd: round(tip.odd, 3),
+    stake: round(stake, 6),
+    stakePct: 100,
+    ev: null,
+    confidence: tip.confidence != null ? round(tip.confidence, 2) : null,
+    prob: tip.prob != null ? round(tip.prob, 6) : null,
+    closingOdd: tip.closingOdd != null ? round(tip.closingOdd, 3) : null,
+    clvPct: tip.clvPct != null ? round(tip.clvPct, 3) : null,
+    won: Boolean(tip.won),
+    pnl: round(pnl, 6),
+    competition: String(row.league_name || "")
+  };
+}
+
+/** Value-bet track (legacy default for snapshots / Kelly book). */
+function extractValueBetEvent(row) {
   if (!row) return null;
   const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
   const valueBet = payload.valueBet && typeof payload.valueBet === "object" ? payload.valueBet : {};
@@ -208,6 +211,7 @@ export function extractBetEvent(row) {
   const clvPct = closingOdd && odd > 1 ? round((odd / closingOdd - 1) * 100, 3) : null;
 
   return {
+    track: "value",
     fixtureId: row.fixture_id ?? null,
     kickoffAt: row.kickoff_at || null,
     leagueId: Number(row.league_id) || 0,
@@ -354,7 +358,13 @@ export function parseFilters(query = {}) {
   const maxConfidence = query.maxConfidence != null && query.maxConfidence !== "" ? Number(query.maxConfidence) : null;
   const minOdds = query.minOdds != null && query.minOdds !== "" ? Number(query.minOdds) : null;
   const maxOdds = query.maxOdds != null && query.maxOdds !== "" ? Number(query.maxOdds) : null;
-  const requirePositiveEv = String(query.requirePositiveEv || "") === "1" || query.requirePositiveEv === true;
+  const trackRaw = String(query.track || "value").toLowerCase();
+  const track = ["tip", "published", "recommended"].includes(trackRaw) ? "tip" : "value";
+  // Tip track is not EV-gated (published recommendation, not value book).
+  const requirePositiveEv =
+    track === "tip"
+      ? false
+      : String(query.requirePositiveEv || "") === "1" || query.requirePositiveEv === true;
 
   return {
     period: period || (days === 7 ? "7d" : days === 30 ? "30d" : days == null ? "season" : `${days}d`),
@@ -367,7 +377,8 @@ export function parseFilters(query = {}) {
     maxConfidence: Number.isFinite(maxConfidence) ? maxConfidence : null,
     minOdds: Number.isFinite(minOdds) ? minOdds : null,
     maxOdds: Number.isFinite(maxOdds) ? maxOdds : null,
-    requirePositiveEv
+    requirePositiveEv,
+    track
   };
 }
 
@@ -722,7 +733,7 @@ export function buildBacktestReport(rows, query = {}) {
   const filters = parseFilters(query);
   const events = [];
   for (const row of rows || []) {
-    const ev = extractBetEvent(row);
+    const ev = extractBetEvent(row, { track: filters.track });
     if (ev) events.push(ev);
   }
   events.sort((a, b) => String(a.kickoffAt || "").localeCompare(String(b.kickoffAt || "")));

@@ -5,6 +5,7 @@
 
 import { FEATURE_SCHEMA_VERSION, availableFeatureNames } from "../featureCatalog.js";
 import { extractStackerFeatures } from "../../mlStacker.js";
+import { extractStackerModelTriple } from "../extractRawTriple.js";
 import { shinImpliedProbs } from "../../advancedMath.js";
 import { actual1x2FromScore } from "../../probabilityMetrics.js";
 
@@ -49,6 +50,7 @@ export function coerceHistoryRow(row = {}) {
     away: row.odds_away
   };
   const probs = raw.probs || {};
+  // Keep raw Poisson for audit; stacker path uses calibrated via extractStackerModelTriple.
   const modelPct = evaluation.rawPoissonProbs1x2Pct || evaluation.modelProbs1x2Pct || {};
   const lambdas = raw.lambdas || evaluation.lambdas || {};
   const scoreHome = row.score_home ?? raw.score?.home ?? null;
@@ -85,12 +87,22 @@ export function coerceHistoryRow(row = {}) {
         ? Number(scoreHome) > 0 && Number(scoreAway) > 0
         : row.label_gg ?? null,
     labelOver25: total != null ? total > 2.5 : row.label_over25 ?? null,
-    sourceRow: row
+    sourceRow: row,
+    payload: raw
   };
 }
 
-function resolvePoissonAndMarket(c) {
+/**
+ * Stacker feature inputs — calibrated 1X2 (matches Stage07 / daily-ml train).
+ */
+function resolvePoissonAndMarket(c, calibrationMaps = null) {
+  const calibrated = extractStackerModelTriple(
+    c.payload || { evaluation: c.evaluation, probs: c.probs },
+    calibrationMaps,
+    c.leagueId
+  );
   let poissonProbs =
+    calibrated ||
     pctToFrac(c.poissonPct.p1, c.poissonPct.pX, c.poissonPct.p2) ||
     pctToFrac(c.probs.p1, c.probs.pX, c.probs.p2);
 
@@ -117,11 +129,11 @@ function resolvePoissonAndMarket(c) {
 /**
  * Extract the current stacker feature vector (9 dims).
  * @param {object} row - history or predict-shaped object
- * @returns {{ names: string[], values: number[], vector: Record<string, number>, schemaVersion: string }}
+ * @param {{ calibrationMaps?: object|null }} [opts]
  */
-export function extractStackerVector(row) {
+export function extractStackerVector(row, opts = {}) {
   const c = coerceHistoryRow(row);
-  const ctx = resolvePoissonAndMarket(c);
+  const ctx = resolvePoissonAndMarket(c, opts.calibrationMaps || null);
   const feat = extractStackerFeatures({
     poissonProbs: ctx.poissonProbs || { p1: 1 / 3, pX: 1 / 3, p2: 1 / 3 },
     marketProbs: ctx.marketProbs,

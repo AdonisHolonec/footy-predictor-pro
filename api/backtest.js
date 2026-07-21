@@ -285,6 +285,7 @@ async function handleAnalytics(req, res) {
     const report = buildBacktestReport(data || [], req.query || {});
     const payload = {
       ok: true,
+      track: filters.track || "value",
       cutoff: cutoffIso,
       filters: report.filters,
       metrics: report.metrics,

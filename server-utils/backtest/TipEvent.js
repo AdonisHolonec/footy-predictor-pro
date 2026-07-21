@@ -3,7 +3,7 @@
  */
 
 import { evaluateTopPick } from "../predictionsHistory.js";
-import { selectionClosingOdd } from "./BacktestAnalytics.js";
+import { selectionClosingOdd } from "./closingOddsResolve.js";
 import { computeClvPct } from "./ClvReport.js";
 import { logLossBinary, brierBinary } from "../probabilityMetrics.js";
 
