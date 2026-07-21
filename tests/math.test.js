@@ -1217,6 +1217,18 @@ test("Auto Calibration compares predicted vs actual and respects manual locks", 
   assert.deepEqual(mergeWithAutoOverlay(base, null), { a: 1 });
 });
 
+test("runAutoCalibration resolves maxDelta/learningRate to their real defaults when unset", async () => {
+  // Regression: `Number(options.maxDelta) ?? DEFAULT` never falls through, because
+  // Number(undefined) is NaN, not null/undefined -- `??` only triggers on nullish,
+  // so the outer clamp() silently returned its lower bound (0.02 / 0.05) instead
+  // of the intended default (0.15 / 0.35) on every call that didn't pass these
+  // options explicitly, which is how production actually calls it (daily-ml.js
+  // passes no maxDelta/learningRate at all).
+  const run = await runAutoCalibration({ rows: [], persist: false, mode: "test" });
+  assert.equal(run.config.maxDelta, 0.15);
+  assert.equal(run.config.learningRate, 0.35);
+});
+
 test("Monte Carlo runs 10000 sims and returns distributions + CI", () => {
   const pmf = buildMatchScorePmf(1.6, 1.1, { correlation: 0.12, rho: -0.11 });
   assert.ok(pmf.cells.length > 10);

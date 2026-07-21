@@ -159,8 +159,8 @@ export function computeBrier1x2(samples) {
  * Positive residual (overconfident) with high contribution → shrink that feature.
  */
 export function fitFeatureWeightDeltas(samples, baseKeys, options = {}) {
-  const lr = clamp(Number(options.learningRate) ?? DEFAULT_LR, 0.05, 1);
-  const maxDelta = clamp(Number(options.maxDelta) ?? DEFAULT_MAX_DELTA, 0.02, 0.4);
+  const lr = clamp(Number(options.learningRate ?? DEFAULT_LR), 0.05, 1);
+  const maxDelta = clamp(Number(options.maxDelta ?? DEFAULT_MAX_DELTA), 0.02, 0.4);
   const locked = new Set(options.lockedKeys || []);
   const keys = baseKeys.filter((k) => !locked.has(k));
 
@@ -203,7 +203,7 @@ export function fitFeatureWeightDeltas(samples, baseKeys, options = {}) {
  * Global overconfidence → mild shrinkage of oddsConsensus / odds / modularBlend.
  */
 export function fitGlobalConfidenceDeltas(samples, options = {}) {
-  const maxDelta = clamp(Number(options.maxDelta) ?? DEFAULT_MAX_DELTA, 0.02, 0.4);
+  const maxDelta = clamp(Number(options.maxDelta ?? DEFAULT_MAX_DELTA), 0.02, 0.4);
   const locked = new Set(options.lockedKeys || []);
   if (!samples.length) {
     return { deltas: {}, overconfidence: null, lockedKeys: [...locked] };
@@ -290,8 +290,8 @@ async function loadSettledHistory({ days, limit }) {
  * Fit overlays from samples (pure — no IO).
  */
 export function fitAutoCalibrationOverlays(samples, options = {}) {
-  const maxDelta = clamp(Number(options.maxDelta) ?? DEFAULT_MAX_DELTA, 0.02, 0.4);
-  const learningRate = clamp(Number(options.learningRate) ?? DEFAULT_LR, 0.05, 1);
+  const maxDelta = clamp(Number(options.maxDelta ?? DEFAULT_MAX_DELTA), 0.02, 0.4);
+  const learningRate = clamp(Number(options.learningRate ?? DEFAULT_LR), 0.05, 1);
 
   const confLocks = locksForKind("confidence");
   const fiLocks = locksForKind("feature_importance");
@@ -371,8 +371,8 @@ export async function runAutoCalibration(options = {}) {
   const windowDays = Math.max(30, Math.min(Number(options.windowDays) || Number(process.env.AUTO_CALIB_WINDOW_DAYS) || DEFAULT_WINDOW_DAYS, 720));
   const minSamples = Math.max(20, Number(options.minSamples) || Number(process.env.AUTO_CALIB_MIN_SAMPLES) || DEFAULT_MIN_SAMPLES);
   const limit = Math.max(500, Math.min(Number(options.limit) || Number(process.env.AUTO_CALIB_ROW_LIMIT) || 20000, 50000));
-  const maxDelta = clamp(Number(options.maxDelta) ?? Number(process.env.AUTO_CALIB_MAX_DELTA) ?? DEFAULT_MAX_DELTA, 0.02, 0.4);
-  const learningRate = clamp(Number(options.learningRate) ?? Number(process.env.AUTO_CALIB_LR) ?? DEFAULT_LR, 0.05, 1);
+  const maxDelta = clamp(Number(options.maxDelta ?? process.env.AUTO_CALIB_MAX_DELTA ?? DEFAULT_MAX_DELTA), 0.02, 0.4);
+  const learningRate = clamp(Number(options.learningRate ?? process.env.AUTO_CALIB_LR ?? DEFAULT_LR), 0.05, 1);
   const persist = options.persist !== false;
   const mode = options.mode || "auto";
 
