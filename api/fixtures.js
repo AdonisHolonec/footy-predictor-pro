@@ -391,6 +391,17 @@ function parseRefereeName(raw) {
   return "";
 }
 
+/** Safe HT goals total — never treat null as 0 via Number(null). */
+function parseHalftimeGoals(fx) {
+  const htHomeRaw = fx?.score?.halftime?.home;
+  const htAwayRaw = fx?.score?.halftime?.away;
+  if (htHomeRaw == null || htAwayRaw == null) return null;
+  const htHome = Number(htHomeRaw);
+  const htAway = Number(htAwayRaw);
+  if (!Number.isFinite(htHome) || !Number.isFinite(htAway)) return null;
+  return htHome + htAway;
+}
+
 async function handleLive(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -412,10 +423,11 @@ async function handleLive(req, res) {
     }
     const rows = r.data?.response || [];
     const fixtures = rows.map((fx) => {
-      const htHome = Number(fx?.score?.halftime?.home);
-      const htAway = Number(fx?.score?.halftime?.away);
-      const firstHalfGoals =
-        Number.isFinite(htHome) && Number.isFinite(htAway) ? htHome + htAway : null;
+      const firstHalfGoals = parseHalftimeGoals(fx);
+      const htHomeRaw = fx?.score?.halftime?.home;
+      const htAwayRaw = fx?.score?.halftime?.away;
+      const htHome = htHomeRaw != null ? Number(htHomeRaw) : NaN;
+      const htAway = htAwayRaw != null ? Number(htAwayRaw) : NaN;
       return {
         id: fx?.fixture?.id,
         status: fx?.fixture?.status?.short || "",
@@ -476,16 +488,49 @@ async function handleXg(req, res) {
       return null;
     };
 
-    // `getWithCache` foloseşte Vercel KV + auto-detectează providerul (apisports direct sau RapidAPI)
-    // şi partajează cache-ul cu restul pipeline-ului (nu mai avem cache separat pe xG).
+    // Always try fixture HT score first — usable even when statistics lag.
+    let firstHalfGoals = null;
+    const fxReq = await getWithCache("/fixtures", { ids: String(fid) }, 86400);
+    if (fxReq.ok) {
+      firstHalfGoals = parseHalftimeGoals(fxReq.data?.response?.[0]);
+    }
+
     const statsReq = await getWithCache("/fixtures/statistics", { fixture: fid }, 900);
     if (!statsReq.ok) {
+      if (firstHalfGoals != null) {
+        return res.status(200).json({
+          fixtureId: fid,
+          homeXG: null,
+          awayXG: null,
+          marketResults: {
+            cornersTotal: null,
+            shotsOnTargetTotal: null,
+            shotsTotal: null,
+            firstHalfGoals
+          },
+          updatedAt: new Date().toISOString()
+        });
+      }
       return res.status(502).json({
         error: "Eroare upstream la fixtures/statistics"
       });
     }
     const result = statsReq.data;
     if (!result?.response || result.response.length < 2) {
+      if (firstHalfGoals != null) {
+        return res.status(200).json({
+          fixtureId: fid,
+          homeXG: null,
+          awayXG: null,
+          marketResults: {
+            cornersTotal: null,
+            shotsOnTargetTotal: null,
+            shotsTotal: null,
+            firstHalfGoals
+          },
+          updatedAt: new Date().toISOString()
+        });
+      }
       return res.status(404).json({ error: "Statisticile nu sunt încă disponibile pentru acest meci." });
     }
 
@@ -500,24 +545,16 @@ async function handleXg(req, res) {
     const shotsTotalHome = parseNumericStat(homeStats, ["Total Shots"]);
     const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
 
-    let firstHalfGoals = null;
-    const fxReq = await getWithCache("/fixtures", { ids: String(fid) }, 86400);
-    if (fxReq.ok) {
-      const fx = fxReq.data?.response?.[0];
-      const htHome = Number(fx?.score?.halftime?.home);
-      const htAway = Number(fx?.score?.halftime?.away);
-      if (Number.isFinite(htHome) && Number.isFinite(htAway)) {
-        firstHalfGoals = htHome + htAway;
-      }
-    }
-
     return res.status(200).json({
       fixtureId: fid,
       homeXG: xGHome,
       awayXG: xGAway,
       marketResults: {
         cornersTotal: cornersHome != null && cornersAway != null ? cornersHome + cornersAway : null,
-        shotsOnTargetTotal: shotsOnTargetHome != null && shotsOnTargetAway != null ? shotsOnTargetHome + shotsOnTargetAway : null,
+        shotsOnTargetTotal:
+          shotsOnTargetHome != null && shotsOnTargetAway != null
+            ? shotsOnTargetHome + shotsOnTargetAway
+            : null,
         shotsTotal: shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
         firstHalfGoals
       },

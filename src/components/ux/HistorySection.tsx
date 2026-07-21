@@ -47,11 +47,6 @@ export default function HistorySection({
     [history]
   );
 
-  const selected = useMemo(
-    () => (selectedId ? rows.find((r) => rowKey(r) === selectedId) || null : null),
-    [rows, selectedId]
-  );
-
   const labelFor = (v?: string) => {
     if (v === "win") return t("history.win");
     if (v === "loss") return t("history.loss");
@@ -87,24 +82,6 @@ export default function HistorySection({
         ))}
       </div>
 
-      {selected ? (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-              {t("history.selectedMatch")}
-            </p>
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="text-xs font-semibold text-[var(--fp-accent)] hover:underline"
-            >
-              {t("history.clearSelection")}
-            </button>
-          </div>
-          <HistorySpecialBetCard row={selected} onOpenDetails={onOpenMatch} />
-        </div>
-      ) : null}
-
       {!rows.length ? (
         <Card>
           <p className="text-sm text-[var(--fp-text-muted)]">{t("history.empty")}</p>
@@ -115,7 +92,7 @@ export default function HistorySection({
             const id = rowKey(row);
             const active = selectedId === id;
             return (
-              <li key={id}>
+              <li key={id} className="space-y-2">
                 <button
                   type="button"
                   onClick={() => setSelectedId(active ? null : id)}
@@ -136,10 +113,18 @@ export default function HistorySection({
                       {row.logos?.home || row.logos?.away ? (
                         <div className="flex shrink-0 items-center -space-x-1.5">
                           {row.logos?.home ? (
-                            <img src={row.logos.home} alt="" className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain" />
+                            <img
+                              src={row.logos.home}
+                              alt=""
+                              className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
+                            />
                           ) : null}
                           {row.logos?.away ? (
-                            <img src={row.logos.away} alt="" className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain" />
+                            <img
+                              src={row.logos.away}
+                              alt=""
+                              className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
+                            />
                           ) : null}
                         </div>
                       ) : null}
@@ -163,6 +148,24 @@ export default function HistorySection({
                     <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
                   </Card>
                 </button>
+
+                {active ? (
+                  <div className="pl-0 sm:pl-1">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+                        {t("history.selectedMatch")}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(null)}
+                        className="text-xs font-semibold text-[var(--fp-accent)] hover:underline"
+                      >
+                        {t("history.clearSelection")}
+                      </button>
+                    </div>
+                    <HistorySpecialBetCard row={row} onOpenDetails={onOpenMatch} />
+                  </div>
+                ) : null}
               </li>
             );
           })}

@@ -251,10 +251,14 @@ export function resolveFirstHalfGoalsActual(row: {
   marketResults?: { firstHalfGoals?: number | null } | null;
   score?: { halftime?: { home?: number | null; away?: number | null } | null } | null;
 }): number | null {
-  const fromMr = Number(row.marketResults?.firstHalfGoals);
-  if (Number.isFinite(fromMr)) return fromMr;
-  const h = Number(row.score?.halftime?.home);
-  const a = Number(row.score?.halftime?.away);
+  const rawMr = row.marketResults?.firstHalfGoals;
+  // Do not use Number(null) — it is 0 and falsely settles Under lines.
+  if (rawMr != null && Number.isFinite(Number(rawMr))) return Number(rawMr);
+  const hRaw = row.score?.halftime?.home;
+  const aRaw = row.score?.halftime?.away;
+  if (hRaw == null || aRaw == null) return null;
+  const h = Number(hRaw);
+  const a = Number(aRaw);
   if (Number.isFinite(h) && Number.isFinite(a)) return h + a;
   return null;
 }

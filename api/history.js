@@ -52,9 +52,13 @@ async function fetchFixtureMarketTotals(fixtureId) {
     const fxReq = await getWithCache("/fixtures", { ids: String(fixtureId) }, 86400);
     if (fxReq.ok) {
       const fx = fxReq.data?.response?.[0];
-      const htHome = Number(fx?.score?.halftime?.home);
-      const htAway = Number(fx?.score?.halftime?.away);
-      if (Number.isFinite(htHome) && Number.isFinite(htAway)) firstHalfGoals = htHome + htAway;
+      const htHomeRaw = fx?.score?.halftime?.home;
+      const htAwayRaw = fx?.score?.halftime?.away;
+      if (htHomeRaw != null && htAwayRaw != null) {
+        const htHome = Number(htHomeRaw);
+        const htAway = Number(htAwayRaw);
+        if (Number.isFinite(htHome) && Number.isFinite(htAway)) firstHalfGoals = htHome + htAway;
+      }
     }
   } catch {
     // ignore — corners/shots still usable
@@ -594,7 +598,12 @@ async function handleHistorySync(req, res) {
 
         const storedVals = raw.cardMarketValidations;
         const hasAnyPick = Boolean(picks.recommended || picks.goals || picks.corners || picks.shots);
-        if (!hasAnyPick) continue;
+        const hasFirstHalfPick = Boolean(raw.probs?.firstHalf);
+        const htKnown =
+          raw.marketResults?.firstHalfGoals != null &&
+          Number.isFinite(Number(raw.marketResults.firstHalfGoals));
+        const missingHt = hasFirstHalfPick && !htKnown;
+        if (!hasAnyPick && !missingHt) continue;
 
         const allSettled =
           storedVals &&
@@ -603,12 +612,12 @@ async function handleHistorySync(req, res) {
             if (!picks[key]) return true;
             return storedVals[key] === "win" || storedVals[key] === "loss";
           });
-        if (allSettled) continue;
+        if (allSettled && !missingHt) continue;
 
         let marketTotals = {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
           shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
-          firstHalfGoals: raw.marketResults?.firstHalfGoals ?? null
+          firstHalfGoals: htKnown ? Number(raw.marketResults.firstHalfGoals) : null
         };
 
         const provisional = attachCardMarketsToPayload(
@@ -622,10 +631,9 @@ async function handleHistorySync(req, res) {
           { status: row.match_status, score, marketTotals }
         );
 
-        if (
-          needsMarketTotalsForSettlement(provisional.cardMarketValidations, picks) &&
-          statsFetchCalls < statsFetchCap
-        ) {
+        const needsStats =
+          needsMarketTotalsForSettlement(provisional.cardMarketValidations, picks) || missingHt;
+        if (needsStats && statsFetchCalls < statsFetchCap) {
           const totals = await fetchFixtureMarketTotals(Number(row.fixture_id));
           statsFetchCalls += 1;
           if (totals.ok) {

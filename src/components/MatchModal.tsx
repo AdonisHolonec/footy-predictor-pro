@@ -855,12 +855,15 @@ export default function MatchModal({
       })()
     : null;
   const htGoalsActual = (() => {
-    const fromXg = Number(xgData?.marketResults?.firstHalfGoals);
-    if (Number.isFinite(fromXg)) return fromXg;
-    const fromMr = Number(match.marketResults?.firstHalfGoals);
-    if (Number.isFinite(fromMr)) return fromMr;
-    const h = Number(match.score?.halftime?.home);
-    const a = Number(match.score?.halftime?.away);
+    const fromXg = xgData?.marketResults?.firstHalfGoals;
+    if (fromXg != null && Number.isFinite(Number(fromXg))) return Number(fromXg);
+    const fromMr = match.marketResults?.firstHalfGoals;
+    if (fromMr != null && Number.isFinite(Number(fromMr))) return Number(fromMr);
+    const hRaw = match.score?.halftime?.home;
+    const aRaw = match.score?.halftime?.away;
+    if (hRaw == null || aRaw == null) return null;
+    const h = Number(hRaw);
+    const a = Number(aRaw);
     if (Number.isFinite(h) && Number.isFinite(a)) return h + a;
     return null;
   })();

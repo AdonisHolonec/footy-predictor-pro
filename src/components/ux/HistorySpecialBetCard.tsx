@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import {
@@ -7,7 +7,9 @@ import {
   specialBetCombinedOdd as specialBetCombinedOddValue,
   specialBetCombinedOutcome
 } from "../../utils/specialBet";
-import { formatBookOdd, recommendedOdd } from "../../utils/marketPicks";
+import { formatBookOdd, recommendedOdd, resolveFirstHalfGoalsActual } from "../../utils/marketPicks";
+import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
+import { fetchWithAuth } from "../../utils/apiAuth";
 
 type Props = {
   row: HistoryEntry;
@@ -17,10 +19,63 @@ type Props = {
 /**
  * History selection card: team logos + top pick / odd / confidence,
  * plus multi-leg Special Bet when book odds exist for ≥2 legs.
+ * Hydrates HT / market totals for finished matches so legs can settle.
  */
 export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
   const { t } = useLocale();
   const [legCount, setLegCount] = useState<2 | 3>(2);
+  const [hydratedResults, setHydratedResults] = useState<HistoryEntry["marketResults"] | null>(null);
+  const [hydrateAttempted, setHydrateAttempted] = useState(false);
+
+  const enrichedRow = useMemo((): HistoryEntry => {
+    if (!hydratedResults) return row;
+    return {
+      ...row,
+      marketResults: {
+        ...(row.marketResults || {}),
+        ...hydratedResults
+      }
+    };
+  }, [row, hydratedResults]);
+
+  useEffect(() => {
+    setHydratedResults(null);
+    setHydrateAttempted(false);
+  }, [row.id]);
+
+  useEffect(() => {
+    if (hydrateAttempted) return;
+    if (!isFinalMatchStatus(row.status)) return;
+    const hasHtPick = Boolean(row.probs?.firstHalf);
+    const htKnown = resolveFirstHalfGoalsActual(row) != null;
+    const needsHt = hasHtPick && !htKnown;
+    const needsCorners =
+      Boolean(row.probs?.corners) &&
+      (row.marketResults?.cornersTotal == null || !Number.isFinite(Number(row.marketResults.cornersTotal)));
+    const needsShots =
+      Boolean(row.probs?.shotsOnTarget) &&
+      (row.marketResults?.shotsOnTargetTotal == null ||
+        !Number.isFinite(Number(row.marketResults.shotsOnTargetTotal)));
+    if (!needsHt && !needsCorners && !needsShots) return;
+
+    const id = Number(row.id);
+    if (!Number.isFinite(id)) return;
+    let cancelled = false;
+    setHydrateAttempted(true);
+    void (async () => {
+      try {
+        const res = await fetchWithAuth(`/api/fixtures?view=xg&fixtureId=${id}`);
+        const json = (await res.json()) as { marketResults?: HistoryEntry["marketResults"] };
+        if (cancelled || !json?.marketResults) return;
+        setHydratedResults(json.marketResults);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [row, hydrateAttempted]);
 
   const conf = Number(row.recommended?.confidence);
   const hasExactConfidence = Number.isFinite(conf);
@@ -33,7 +88,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
   const oddLabel = formatBookOdd(odd, t("card.noBookOdd"));
 
   const pool = buildSpecialBetLegs(
-    row,
+    enrichedRow,
     {
       main: t("match.featMain"),
       corners: t("match.featCorners"),
@@ -41,13 +96,14 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
       ht: t("match.featHt")
     },
     3,
-    row.cardMarketValidations,
-    row.marketResults
+    enrichedRow.cardMarketValidations,
+    enrichedRow.marketResults
   );
   const legs = pool.slice(0, legCount);
   const showLegs = legs.length >= 2;
   const combined = specialBetCombinedOddValue(legs);
   const combinedTone = outcomeTextClass(specialBetCombinedOutcome(legs));
+  const htActual = resolveFirstHalfGoalsActual(enrichedRow);
 
   const homeLogo = row.logos?.home;
   const awayLogo = row.logos?.away;
@@ -136,6 +192,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
         {row.score?.home != null && row.score?.away != null ? (
           <p className="mt-1 font-mono text-[11px] text-[var(--fp-text-muted)]">
             {t("history.score", { home: row.score.home, away: row.score.away })}
+            {htActual != null ? ` · ${t("match.htGoalsLabel", { n: htActual })}` : ""}
           </p>
         ) : null}
       </div>
@@ -173,7 +230,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
       {onOpenDetails ? (
         <button
           type="button"
-          onClick={() => onOpenDetails(row)}
+          onClick={() => onOpenDetails(enrichedRow)}
           className="mt-3 w-full rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 text-xs font-semibold text-[var(--fp-text)] transition-colors hover:border-[var(--fp-accent)]/40"
         >
           {t("history.openFullAnalysis")}
