@@ -96,6 +96,85 @@ export function applyCalibratedTriple(pRaw, maps) {
 }
 
 /**
+ * Apply binary isotonic map when present; otherwise return rawProb unchanged.
+ */
+export function applyCalibratedBinary(rawProb, map) {
+  const x = Number(rawProb);
+  if (!Number.isFinite(x)) return rawProb;
+  if (!map?.xPoints?.length || !map?.yPoints?.length) return Math.max(0, Math.min(1, x));
+  return Math.max(0, Math.min(1, applyIsotonicMap(x, map.xPoints, map.yPoints)));
+}
+
+/**
+ * Calibrate side markets (O1.5 / O2.5 / U3.5 / GG) after 1X2 fusion.
+ * Complements are derived (not separately calibrated) to keep pairs coherent.
+ *
+ * @param {object} probsPct - percent fields (pO15, pO25, pU35, pGG, …)
+ * @param {object|null} maps - league calibration maps including O15/O25/U35/GG
+ */
+export function applySideMarketCalibration(probsPct, maps) {
+  const toFrac = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n > 1.5 ? n / 100 : n;
+  };
+  const toPct = (f) => Math.max(0, Math.min(100, f * 100));
+
+  const applied = {};
+  let any = false;
+
+  const o15 = toFrac(probsPct?.pO15);
+  const o25 = toFrac(probsPct?.pO25);
+  const u35 = toFrac(probsPct?.pU35);
+  const gg = toFrac(probsPct?.pGG);
+
+  let pO15 = o15;
+  let pO25 = o25;
+  let pU35 = u35;
+  let pGG = gg;
+
+  if (o15 != null && maps?.O15?.xPoints?.length) {
+    pO15 = applyCalibratedBinary(o15, maps.O15);
+    applied.O15 = true;
+    any = true;
+  }
+  if (o25 != null && maps?.O25?.xPoints?.length) {
+    pO25 = applyCalibratedBinary(o25, maps.O25);
+    applied.O25 = true;
+    any = true;
+  }
+  if (u35 != null && maps?.U35?.xPoints?.length) {
+    pU35 = applyCalibratedBinary(u35, maps.U35);
+    applied.U35 = true;
+    any = true;
+  }
+  if (gg != null && maps?.GG?.xPoints?.length) {
+    pGG = applyCalibratedBinary(gg, maps.GG);
+    applied.GG = true;
+    any = true;
+  }
+
+  const out = { ...probsPct, sideCalibrationApplied: applied, sideCalibrationAny: any };
+  if (pO15 != null) {
+    out.pO15 = toPct(pO15);
+    out.pU15 = toPct(1 - pO15);
+  }
+  if (pO25 != null) {
+    out.pO25 = toPct(pO25);
+    out.pU25 = toPct(1 - pO25);
+  }
+  if (pU35 != null) {
+    out.pU35 = toPct(pU35);
+    out.pO35 = toPct(1 - pU35);
+  }
+  if (pGG != null) {
+    out.pGG = toPct(pGG);
+    out.pNGG = toPct(1 - pGG);
+  }
+  return out;
+}
+
+/**
  * Încărcare single-flight cu cache in-memory. Returnează map { leagueId: { '1':{...}, 'X':{...}, '2':{...} } }.
  */
 export async function loadCalibrationMaps(modelVersion) {

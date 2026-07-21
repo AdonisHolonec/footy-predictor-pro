@@ -1917,3 +1917,99 @@ test("InjuriesEngine weights suspended players more than doubtful", async () => 
   });
   assert.ok(harsh.details.home < mild.details.home);
 });
+
+test("extractStackerModelTriple prefers calibrated probs over raw", async () => {
+  const { extractStackerModelTriple, extractRawTriple } = await import(
+    "../server-utils/ml/extractRawTriple.js"
+  );
+  const payload = {
+    evaluation: {
+      rawPoissonProbs1x2Pct: { p1: 40, pX: 30, p2: 30 },
+      calibratedProbs1x2Pct: { p1: 55, pX: 25, p2: 20 }
+    }
+  };
+  const raw = extractRawTriple(payload);
+  const stacked = extractStackerModelTriple(payload);
+  assert.ok(Math.abs(raw.p1 - 0.4) < 0.01);
+  assert.ok(Math.abs(stacked.p1 - 0.55) < 0.01);
+});
+
+test("extractStackerModelTriple replays maps when calibrated missing", async () => {
+  const { extractStackerModelTriple } = await import("../server-utils/ml/extractRawTriple.js");
+  const maps = {
+    "39": {
+      "1": { xPoints: [0.2, 0.8], yPoints: [0.3, 0.9] },
+      X: { xPoints: [0.2, 0.8], yPoints: [0.2, 0.5] },
+      "2": { xPoints: [0.2, 0.8], yPoints: [0.2, 0.6] }
+    }
+  };
+  const payload = {
+    evaluation: { rawPoissonProbs1x2Pct: { p1: 50, pX: 30, p2: 20 } }
+  };
+  const t = extractStackerModelTriple(payload, maps, 39);
+  assert.ok(t && t.p1 > 0.5, "calibrated home win should rise on overconfident map");
+});
+
+test("applySideMarketCalibration moves O25/GG and preserves 1X2", async () => {
+  const { applySideMarketCalibration } = await import("../server-utils/isotonicCalibration.js");
+  const maps = {
+    O25: { xPoints: [0.4, 0.7], yPoints: [0.35, 0.55] },
+    GG: { xPoints: [0.4, 0.7], yPoints: [0.45, 0.65] }
+  };
+  const out = applySideMarketCalibration(
+    { p1: 45, pX: 28, p2: 27, pO25: 60, pGG: 55, pO15: 80, pU35: 70 },
+    maps
+  );
+  assert.equal(out.p1, 45);
+  assert.ok(out.sideCalibrationAny);
+  assert.ok(out.pO25 < 60);
+  assert.ok(Number.isFinite(out.pU25));
+  assert.ok(Math.abs(out.pO25 + out.pU25 - 100) < 0.2);
+});
+
+test("resolvePublishedTip scores tip from pOut and closing", async () => {
+  const { resolvePublishedTip } = await import("../server-utils/backtest/TipEvent.js");
+  const tip = resolvePublishedTip({
+    recommended_pick: "Peste 2.5",
+    recommended_confidence: 62,
+    validation: "win",
+    score_home: 2,
+    score_away: 1,
+    closing_odds_home: null,
+    raw_payload: {
+      recommended: { pick: "Peste 2.5", odd: 1.85, confidence: 62 },
+      probs: { pO25: 62, p1: 40, pX: 30, p2: 30 },
+      closingOdds: { over25: 1.75, "o2.5": 1.75 }
+    }
+  });
+  assert.equal(tip.pick, "Peste 2.5");
+  assert.equal(tip.won, true);
+  assert.ok(tip.prob > 0.5);
+  assert.ok(tip.odd > 1);
+  assert.ok(tip.clvPct != null && tip.clvPct > 0);
+});
+
+test("evaluateTipWalkForward aggregates tip ROI and CLV", async () => {
+  const { evaluateTipWalkForward } = await import("../server-utils/validation/TipWalkForward.js");
+  const rows = [];
+  for (let i = 0; i < 80; i++) {
+    const won = i % 3 !== 0;
+    rows.push({
+      kickoff_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+      recommended_pick: "1",
+      validation: won ? "win" : "loss",
+      score_home: won ? 2 : 0,
+      score_away: won ? 0 : 1,
+      closing_odds_home: 1.9,
+      raw_payload: {
+        recommended: { pick: "1", odd: 2.05, confidence: 55 },
+        probs: { p1: 55, pX: 25, p2: 20 }
+      }
+    });
+  }
+  const out = evaluateTipWalkForward(rows, { minTrain: 30, testSize: 10, step: 10 });
+  assert.ok(out.tips >= 70);
+  assert.ok(out.overall.accuracy != null);
+  assert.ok(out.walkForward.windows >= 1);
+  assert.ok(out.walkForward.clv.mean != null || out.overall.clv != null);
+});

@@ -14,25 +14,46 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { fitIsotonicPav, applyIsotonicMap } from "../server-utils/isotonicCalibration.js";
-import { actual1x2FromScore, brier1x2 } from "../server-utils/probabilityMetrics.js";
+import {
+  actual1x2FromScore,
+  actualOverFromScore,
+  actualUnderFromScore,
+  actualBttsFromScore,
+  extractSideMarketProbs,
+  brier1x2
+} from "../server-utils/probabilityMetrics.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
 import { extractRawTriple } from "../server-utils/ml/extractRawTriple.js";
 
 const MIN_SAMPLES_PER_LEAGUE = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
 const FALLBACK_GLOBAL = true;
+const SIDE_OUTCOMES = ["O15", "O25", "U35", "GG"];
+const ALL_OUTCOMES = ["1", "X", "2", ...SIDE_OUTCOMES];
 
 function collect(rows) {
-  const out = { "1": [], X: [], "2": [] };
+  const out = { "1": [], X: [], "2": [], O15: [], O25: [], U35: [], GG: [] };
   for (const row of rows) {
-    const actual = actual1x2FromScore(row.score_home, row.score_away);
-    if (!actual) continue;
     const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-    const triple = extractRawTriple(payload);
-    if (!triple) continue;
-    out["1"].push({ x: triple.p1, y: actual === "1" ? 1 : 0 });
-    out["X"].push({ x: triple.pX, y: actual === "X" ? 1 : 0 });
-    out["2"].push({ x: triple.p2, y: actual === "2" ? 1 : 0 });
+    const actual = actual1x2FromScore(row.score_home, row.score_away);
+    if (actual) {
+      const triple = extractRawTriple(payload);
+      if (triple) {
+        out["1"].push({ x: triple.p1, y: actual === "1" ? 1 : 0 });
+        out["X"].push({ x: triple.pX, y: actual === "X" ? 1 : 0 });
+        out["2"].push({ x: triple.p2, y: actual === "2" ? 1 : 0 });
+      }
+    }
+    const sides = extractSideMarketProbs(payload);
+    if (!sides) continue;
+    const o15 = actualOverFromScore(row.score_home, row.score_away, 1.5);
+    const o25 = actualOverFromScore(row.score_home, row.score_away, 2.5);
+    const u35 = actualUnderFromScore(row.score_home, row.score_away, 3.5);
+    const gg = actualBttsFromScore(row.score_home, row.score_away);
+    if (o15 != null && sides.pO15 != null) out.O15.push({ x: sides.pO15, y: o15 });
+    if (o25 != null && sides.pO25 != null) out.O25.push({ x: sides.pO25, y: o25 });
+    if (u35 != null && sides.pU35 != null) out.U35.push({ x: sides.pU35, y: u35 });
+    if (gg != null && sides.pGG != null) out.GG.push({ x: sides.pGG, y: gg });
   }
   return out;
 }
@@ -117,8 +138,7 @@ async function run() {
       continue;
     }
     const groups = collect(lrows);
-    const outcomes = ["1", "X", "2"];
-    for (const outcome of outcomes) {
+    for (const outcome of ALL_OUTCOMES) {
       const samples = groups[outcome];
       if (samples.length < MIN_SAMPLES_PER_LEAGUE) continue;
       const fitted = fitIsotonicPav(samples);
@@ -135,7 +155,7 @@ async function run() {
 
   if (FALLBACK_GLOBAL) {
     const globalGroups = collect(rows);
-    for (const outcome of ["1", "X", "2"]) {
+    for (const outcome of ALL_OUTCOMES) {
       const samples = globalGroups[outcome];
       if (samples.length < MIN_SAMPLES_PER_LEAGUE) continue;
       const fitted = fitIsotonicPav(samples);

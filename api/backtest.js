@@ -16,9 +16,12 @@ import {
   extractBetEvent,
   parseFilters,
   resolveWindowDays,
-  seasonStartIso
+  seasonStartIso,
+  selectionClosingOdd
 } from "../server-utils/backtest/BacktestAnalytics.js";
 import { buildClvReport, computeClvPct } from "../server-utils/backtest/ClvReport.js";
+import { resolvePublishedTip } from "../server-utils/backtest/TipEvent.js";
+import { evaluateTipWalkForward } from "../server-utils/validation/TipWalkForward.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
 import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
@@ -703,7 +706,7 @@ async function handleClv(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, raw_payload"
+        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, raw_payload"
       )
       .gte("kickoff_at", cutoff)
       .in("match_status", ["FT", "AET", "PEN"])
@@ -712,33 +715,73 @@ async function handleClv(req, res) {
     if (error) throw error;
 
     const events = (data || []).map((row) => {
-      const pick = String(row.recommended_pick || "").trim().toLowerCase();
-      let closingOdd = null;
-      if (pick === "1") closingOdd = Number(row.closing_odds_home);
-      else if (pick === "x") closingOdd = Number(row.closing_odds_draw);
-      else if (pick === "2") closingOdd = Number(row.closing_odds_away);
-      const staked =
-        Number(row.recommended_odd) ||
-        Number(row.raw_payload?.recommended?.odd) ||
-        Number(row.raw_payload?.odds?.home && pick === "1" ? row.raw_payload.odds.home : NaN) ||
-        null;
-      const clvPct = computeClvPct(staked, closingOdd);
+      const tip = resolvePublishedTip(row);
+      if (!tip) {
+        return {
+          settled: true,
+          clvPct: null,
+          odd: null,
+          closingOdd: null,
+          leagueId: row.league_id,
+          market: "recommended",
+          modelVersion: row.model_version,
+          kickoffAt: row.kickoff_at
+        };
+      }
+      const closingOdd = tip.closingOdd ?? selectionClosingOdd(row.raw_payload || {}, row, tip.pick);
+      const clvPct = computeClvPct(tip.odd, closingOdd);
       return {
-        settled: true,
+        settled: tip.settled,
         clvPct,
-        odd: staked,
-        closingOdd: Number.isFinite(closingOdd) ? closingOdd : null,
-        leagueId: row.league_id,
-        market: "recommended",
-        modelVersion: row.model_version,
-        kickoffAt: row.kickoff_at
+        odd: tip.odd,
+        closingOdd,
+        leagueId: tip.leagueId,
+        market: tip.market || "recommended",
+        modelVersion: tip.modelVersion,
+        kickoffAt: tip.kickoffAt,
+        pick: tip.pick,
+        won: tip.won
       };
     });
 
     const report = buildClvReport(events);
-    return res.status(200).json({ ok: true, days, ...report });
+    return res.status(200).json({ ok: true, days, track: "published_tip", ...report });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err?.message || "CLV report failed" });
+  }
+}
+
+async function handleWalkForwardTip(req, res) {
+  if (req.method && req.method !== "GET") {
+    return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
+  }
+  const config = assertSupabaseConfigured();
+  if (!config.ok) return res.status(500).json({ ok: false, error: config.error || "Supabase nu este configurat" });
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil" });
+
+  const days = Math.max(30, Math.min(Number(req.query.days) || 180, 720));
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data, error } = await supabase
+      .from("predictions_history")
+      .select(
+        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, raw_payload"
+      )
+      .gte("kickoff_at", cutoff)
+      .in("match_status", ["FT", "AET", "PEN"])
+      .order("kickoff_at", { ascending: true })
+      .limit(8000);
+    if (error) throw error;
+
+    const result = evaluateTipWalkForward(data || [], {
+      minTrain: Math.max(20, Number(req.query.minTrain) || 40),
+      testSize: Math.max(10, Number(req.query.testSize) || 20),
+      step: Math.max(5, Number(req.query.step) || 20)
+    });
+    return res.status(200).json({ ok: true, days, ...result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err?.message || "Tip walk-forward failed" });
   }
 }
 
@@ -766,7 +809,10 @@ export default async function handler(req, res) {
     "model-select",
     "modelselect",
     "clv",
-    "metrics"
+    "metrics",
+    "walk-forward-tip",
+    "walkforwardtip",
+    "tip-wf"
   ]);
   if (gatedViews.has(view) && !(await isAuthorizedForMetrics(req))) {
     return res.status(401).json({ ok: false, error: "Neautorizat. Autentificare admin sau cron necesară." });
@@ -777,11 +823,14 @@ export default async function handler(req, res) {
   if (view === "metrics") return handleMetrics(req, res);
   if (view === "health") return handleHealth(req, res);
   if (view === "clv") return handleClv(req, res);
+  if (view === "walk-forward-tip" || view === "walkforwardtip" || view === "tip-wf") {
+    return handleWalkForwardTip(req, res);
+  }
   if (view === "model-lab" || view === "modellab") return handleModelLab(req, res);
   if (view === "model-select" || view === "modelselect") return handleModelSelect(req, res);
   return res.status(400).json({
     ok: false,
     error:
-      "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, public-track, snapshot, metrics, health, clv sau model-lab."
+      "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, public-track, snapshot, metrics, health, clv, walk-forward-tip sau model-lab."
   });
 }

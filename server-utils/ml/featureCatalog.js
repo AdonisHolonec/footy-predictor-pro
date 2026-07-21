@@ -11,8 +11,8 @@ export const FEATURE_SCHEMA_VERSION = "fs-v1";
 /** Features currently extractable (online stacker + extended history fields). */
 export const AVAILABLE_FEATURES = Object.freeze([
   // --- Current multinomial stacker (mlStacker.extractStackerFeatures) ---
-  { name: "poisson_log_ratio_1X", group: "model", dtype: "float", source: "evaluation.rawPoissonProbs1x2Pct" },
-  { name: "poisson_log_ratio_2X", group: "model", dtype: "float", source: "evaluation.rawPoissonProbs1x2Pct" },
+  { name: "poisson_log_ratio_1X", group: "model", dtype: "float", source: "evaluation.calibratedProbs1x2Pct (stacker; Stage07)" },
+  { name: "poisson_log_ratio_2X", group: "model", dtype: "float", source: "evaluation.calibratedProbs1x2Pct (stacker; Stage07)" },
   { name: "market_log_ratio_1X", group: "market", dtype: "float", source: "odds → Shin implied" },
   { name: "market_log_ratio_2X", group: "market", dtype: "float", source: "odds → Shin implied" },
   { name: "market_available", group: "market", dtype: "binary", source: "odds present" },

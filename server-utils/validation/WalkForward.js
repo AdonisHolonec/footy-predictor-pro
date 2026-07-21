@@ -73,7 +73,7 @@ function percentile(sorted, p) {
 
 /**
  * Aggregate walk-forward fold metrics + simple bootstrap CIs on fold means.
- * @param {Array<{ logLoss?: number, brier?: number, accuracy?: number, ece?: number, roi?: number }>} foldMetrics
+ * @param {Array<{ logLoss?: number, brier?: number, accuracy?: number, ece?: number, roi?: number, clv?: number, clvBeatRate?: number, sharpe?: number }>} foldMetrics
  */
 export function aggregateWalkForwardMetrics(foldMetrics) {
   const folds = Array.isArray(foldMetrics) ? foldMetrics : [];
@@ -93,7 +93,10 @@ export function aggregateWalkForwardMetrics(foldMetrics) {
     brier: summarize(pick("brier")),
     accuracy: summarize(pick("accuracy")),
     ece: summarize(pick("ece")),
-    roi: summarize(pick("roi"))
+    roi: summarize(pick("roi")),
+    clv: summarize(pick("clv")),
+    clvBeatRate: summarize(pick("clvBeatRate")),
+    sharpe: summarize(pick("sharpe"))
   };
 }
 

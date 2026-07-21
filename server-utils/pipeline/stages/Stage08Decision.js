@@ -16,6 +16,7 @@ import {
   poissonOverLine,
   reweightPmfTo1x2
 } from "../../math.js";
+import { applySideMarketCalibration, pickCalibrationMapForLeague } from "../../isotonicCalibration.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
 import {
@@ -246,6 +247,27 @@ export async function run(context) {
         marketProbsAligned = p;
       }
     }
+    // Persist pre-side-cal markets for train/serve lock on O/U + BTTS maps.
+    const rawSideMarketsPct = {
+      pO15: marketProbsAligned.pO15,
+      pO25: marketProbsAligned.pO25,
+      pU35: marketProbsAligned.pU35,
+      pGG: marketProbsAligned.pGG
+    };
+    const sideMaps = pickCalibrationMapForLeague(calibrationMaps, lId);
+    const sideCalEnabled = String(process.env.SIDE_MARKET_CALIBRATION || "1") !== "0";
+    let sideCalibrationAny = false;
+    if (sideCalEnabled && sideMaps) {
+      const calSides = applySideMarketCalibration(marketProbsAligned, sideMaps);
+      marketProbsAligned = calSides;
+      sideCalibrationAny = Boolean(calSides.sideCalibrationAny);
+    }
+    const calibratedSideMarketsPct = {
+      pO15: marketProbsAligned.pO15,
+      pO25: marketProbsAligned.pO25,
+      pU35: marketProbsAligned.pU35,
+      pGG: marketProbsAligned.pGG
+    };
     // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
     // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
     topSelection = selectTopPick(
@@ -486,6 +508,9 @@ export async function run(context) {
       calibratedProbs1x2Pct: calibrationApplied
         ? { p1: calTriple.p1 * 100, pX: calTriple.pX * 100, p2: calTriple.p2 * 100 }
         : undefined,
+      rawSideMarketsPct,
+      calibratedSideMarketsPct,
+      sideCalibrationApplied: sideCalibrationAny,
       stackerProbs1x2Pct: stackerApplied
         ? { p1: pFinal.p1 * 100, pX: pFinal.pX * 100, p2: pFinal.p2 * 100 }
         : undefined,

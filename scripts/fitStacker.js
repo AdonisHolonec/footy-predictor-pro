@@ -4,7 +4,7 @@
  * Rulează: `node --env-file=.env.local scripts/fitStacker.js`
  *
  * Antrenează o regresie logistică multinomială cu L2 pe features derivate din:
- * - Raw Poisson probs (`evaluation.rawPoissonProbs1x2Pct`, train/serve aligned)
+ * - Calibrated 1X2 probs (evaluation.calibratedProbs1x2Pct / Stage06 maps) — matches Stage07
  * - Market probs Shin (derivate din `odds` dacă există în payload)
  * - Elo spread (din `raw_payload.modelMeta.eloSpread` dacă disponibil)
  * - Data quality, home advantage, rho (din `raw_payload.modelMeta.leagueParams`)
@@ -20,7 +20,8 @@ import { extractStackerFeatures, applyStacker, safeLog, softmax3 } from "../serv
 import { shinImpliedProbs } from "../server-utils/advancedMath.js";
 import { actual1x2FromScore, brier1x2, logLoss1x2 } from "../server-utils/probabilityMetrics.js";
 import { MODEL_VERSION } from "../server-utils/modelConstants.js";
-import { extractRawTriple } from "../server-utils/ml/extractRawTriple.js";
+import { extractStackerModelTriple } from "../server-utils/ml/extractRawTriple.js";
+import { loadCalibrationMaps } from "../server-utils/isotonicCalibration.js";
 
 const MIN_SAMPLES_LEAGUE = Math.max(200, Number(process.env.STACKER_MIN_LEAGUE || 400));
 const MIN_SAMPLES_GLOBAL = Math.max(500, Number(process.env.STACKER_MIN_GLOBAL || 1200));
@@ -38,13 +39,14 @@ function oneHot(actual) {
   return null;
 }
 
-function buildDataset(rows) {
+function buildDataset(rows, allMaps = null) {
   const samples = [];
   for (const row of rows) {
     const actual = actual1x2FromScore(row.score_home, row.score_away);
     if (!actual) continue;
     const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-    const poissonProbs = extractRawTriple(payload);
+    const leagueId = Number(row.league_id) || null;
+    const poissonProbs = extractStackerModelTriple(payload, allMaps, leagueId);
     if (!poissonProbs) continue;
 
     let marketProbs = null;
@@ -67,7 +69,7 @@ function buildDataset(rows) {
     samples.push({
       x: feat.values,
       y: oneHot(actual),
-      leagueId: Number(row.league_id) || null,
+      leagueId,
       poissonProbs,
       marketProbs,
       actual
@@ -256,8 +258,11 @@ async function run() {
   }
 
   const settled = (data || []).filter((r) => r.score_home != null && r.score_away != null);
-  const samples = buildDataset(settled);
-  console.log(`Built dataset: ${samples.length} usable samples (out of ${settled.length} settled rows)`);
+  const allMaps = await loadCalibrationMaps(modelVersion).catch(() => ({}));
+  const samples = buildDataset(settled, allMaps);
+  console.log(
+    `Built dataset: ${samples.length} usable samples (out of ${settled.length} settled rows) [features=calibrated_1x2]`
+  );
 
   if (samples.length === 0) {
     console.log("No usable samples; exiting.");

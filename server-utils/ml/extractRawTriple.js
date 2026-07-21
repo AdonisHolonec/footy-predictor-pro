@@ -1,11 +1,16 @@
 /**
- * Train/serve-aligned 1X2 triple extractor (normalized fractions summing to 1).
+ * Train/serve-aligned 1X2 triple extractors (normalized fractions summing to 1).
  *
- * Serve applies calibration maps to raw Poisson `pRaw`. Training must therefore
- * prefer `evaluation.rawPoissonProbs1x2Pct` over final `modelProbs1x2Pct`.
+ * - extractRawTriple: raw Poisson for calibration fitting (Stage06 input).
+ * - extractStackerModelTriple: calibrated triple for stacker features (Stage07 input).
  *
  * Rollback (legacy skew): PREDICT_TRAIN_USE_FINAL_PROBS=1
  */
+
+import {
+  applyCalibratedTriple,
+  pickCalibrationMapForLeague
+} from "../isotonicCalibration.js";
 
 function tryTriple(t, scaleHint) {
   if (!t) return null;
@@ -46,7 +51,34 @@ export function extractRawTriple(payload) {
   );
 }
 
+/**
+ * Stacker train features must match Stage07 serve: calibrated 1X2 (not raw Poisson).
+ * Prefer stored calibratedProbs; else replay Stage06 maps on raw; else raw.
+ *
+ * @param {object} payload
+ * @param {object|null} allMaps - loadCalibrationMaps() result
+ * @param {number|string|null} leagueId
+ * @returns {{ p1: number, pX: number, p2: number } | null}
+ */
+export function extractStackerModelTriple(payload, allMaps = null, leagueId = null) {
+  const ev = payload?.evaluation || {};
+  const stored = tryTriple(ev.calibratedProbs1x2Pct, "pct");
+  if (stored) return stored;
+
+  const raw = extractRawTriple(payload);
+  if (!raw) return null;
+
+  const maps = pickCalibrationMapForLeague(allMaps, leagueId);
+  if (maps && (maps["1"] || maps["X"] || maps["2"])) {
+    const cal = applyCalibratedTriple(raw, maps);
+    if (cal && Number.isFinite(cal.p1)) {
+      return { p1: cal.p1, pX: cal.pX, p2: cal.p2 };
+    }
+  }
+  return raw;
+}
+
 /** @deprecated alias — AutoCalibrationEngine historical name */
 export const extractPredictedTriple = extractRawTriple;
 
-export default { extractRawTriple, extractPredictedTriple };
+export default { extractRawTriple, extractPredictedTriple, extractStackerModelTriple };
