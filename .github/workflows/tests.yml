@@ -28,7 +28,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Lint (typecheck stand-in until ESLint lands)
+      - name: Lint
         run: npm run lint
 
       - name: Production build
