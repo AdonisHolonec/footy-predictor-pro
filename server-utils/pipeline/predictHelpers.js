@@ -6,7 +6,7 @@
 import { getWithCache } from "../fetcher.js";
 import { extractFixtureMarketStats, aggregateRollingForTeam } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
-import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine } from "../math.js";
+import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, clampLambda } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
 
 /** Season inference used by predict/warm (European season boundary July). */
@@ -29,6 +29,10 @@ function resolveLeagueSeasonFromFixtures(leagueFixtures, fallbackSeason) {
 
 /** UEFA club competitions — cup /teams/statistics often empty in qualifying. */
 const UEFA_CLUB_LEAGUE_IDS = new Set([2, 3, 848]);
+
+function isUefaClubCompetition(leagueId) {
+  return UEFA_CLUB_LEAGUE_IDS.has(Number(leagueId));
+}
 
 /**
  * Pick a club's primary domestic league from /leagues?team=&season=.
@@ -65,32 +69,41 @@ function pickDomesticLeagueId(leaguesPayload, { preferNotLeagueId, seasonNum } =
       best = id;
     }
   }
+  // League-type alone scores 100; accept weaker Cup+country (65) for obscure calendars.
   return bestScore >= 50 ? best : null;
 }
 
 async function resolveTeamDomesticLeagueId(teamId, season, preferNotLeagueId, ttlSeconds = 86400) {
   const tid = String(teamId || "").trim();
   const seasonNum = Number(season);
-  if (!tid || !Number.isFinite(seasonNum)) return null;
+  if (!tid) return null;
 
   const trySeason = async (s) => {
-    const req = await getWithCache("/leagues", { team: tid, season: s }, ttlSeconds);
+    const params = Number.isFinite(s) ? { team: tid, season: s } : { team: tid };
+    const req = await getWithCache("/leagues", params, ttlSeconds);
     if (!req.ok || !req.data) return null;
-    return pickDomesticLeagueId(req.data, { preferNotLeagueId, seasonNum: s });
+    return pickDomesticLeagueId(req.data, {
+      preferNotLeagueId,
+      seasonNum: Number.isFinite(s) ? s : seasonNum
+    });
   };
 
-  const current = await trySeason(seasonNum);
-  if (current) return current;
-  const prev = seasonNum - 1;
-  if (prev >= 2000) return trySeason(prev);
-  return null;
+  if (Number.isFinite(seasonNum)) {
+    for (const s of [seasonNum, seasonNum - 1, seasonNum - 2]) {
+      if (s < 2000) continue;
+      const id = await trySeason(s);
+      if (id) return id;
+    }
+  }
+  // Season-agnostic — helps July UEFA season vs domestic calendar mismatch.
+  return trySeason(null);
 }
 
 /**
  * Build usable goal averages + a minimal /teams/statistics-shaped payload from
  * recent finished fixtures (any competition). Last resort for UEFA qualifying clubs.
  */
-function buildStatsFromFinishedFixtures(fixtures, teamId) {
+function buildStatsFromFinishedFixtures(fixtures, teamId, options = {}) {
   const tid = Number(teamId);
   if (!Number.isFinite(tid)) return null;
   let gfH = 0;
@@ -125,7 +138,8 @@ function buildStatsFromFinishedFixtures(fixtures, teamId) {
     }
   }
   const played = nH + nA;
-  if (played < 3) return null;
+  const minPlayed = Math.max(1, Math.floor(Number(options.minPlayed) || 3));
+  if (played < minPlayed) return null;
   const gfTotal = (gfH + gfA) / played;
   const gaTotal = (gaH + gaA) / played;
   const gfHome = nH > 0 ? gfH / nH : gfTotal;
@@ -162,13 +176,15 @@ function buildStatsFromFinishedFixtures(fixtures, teamId) {
   return { stats, norm };
 }
 
-async function fetchTeamStatisticsFromRecentFixtures(teamId, ttlSeconds = 21600) {
+async function fetchTeamStatisticsFromRecentFixtures(teamId, ttlSeconds = 21600, options = {}) {
   const tid = String(teamId || "").trim();
   if (!tid) return null;
+  const last = Math.max(10, Math.min(Number(options.last) || 20, 50));
+  const minPlayed = Math.max(1, Math.floor(Number(options.minPlayed) || 3));
   // No status filter: API last=N mixes NS/FT; we keep only finished below.
-  const req = await getWithCache("/fixtures", { team: tid, last: 20 }, ttlSeconds);
+  const req = await getWithCache("/fixtures", { team: tid, last }, ttlSeconds);
   if (!req.ok || !req.data) return null;
-  const built = buildStatsFromFinishedFixtures(req.data?.response || [], tid);
+  const built = buildStatsFromFinishedFixtures(req.data?.response || [], tid, { minPlayed });
   if (!built) return null;
   return {
     ok: true,
@@ -185,7 +201,7 @@ async function fetchTeamStatisticsFromRecentFixtures(teamId, ttlSeconds = 21600)
  * Fetch /teams/statistics with progressive fallbacks:
  * 1) fixture league + season
  * 2) fixture league + season-1 (UEFA / early phase)
- * 3) team's domestic league (+ season-1) when cup stats are empty
+ * 3) team's domestic league (+ season-1/-2) when cup stats are empty
  * 4) last finished fixtures across competitions (qualifying clubs with no cup history)
  */
 async function fetchTeamStatisticsWithSeasonFallback({
@@ -202,6 +218,8 @@ async function fetchTeamStatisticsWithSeasonFallback({
   if (!Number.isFinite(lid) || !tid || !Number.isFinite(seasonNum)) {
     return { ok: false, norm: null, stats: null, seasonUsed: seasonNum, source: null };
   }
+
+  const uefa = isUefaClubCompetition(lid);
 
   const tryLeagueSeason = async (statsLeagueId, s, source) => {
     const req = await getWithCache(
@@ -237,17 +255,20 @@ async function fetchTeamStatisticsWithSeasonFallback({
   if (allowDomesticFallback) {
     const domesticId = await resolveTeamDomesticLeagueId(tid, seasonNum, lid, ttlSeconds);
     if (domesticId && domesticId !== lid) {
-      const domCurrent = await tryLeagueSeason(domesticId, seasonNum, "domestic_current");
-      if (domCurrent) return domCurrent;
-      if (prevSeason >= 2000) {
-        const domPrev = await tryLeagueSeason(domesticId, prevSeason, "domestic_previous_season");
-        if (domPrev) return domPrev;
+      const domesticSeasons = [seasonNum, prevSeason, seasonNum - 2].filter((s) => s >= 2000);
+      const sources = ["domestic_current", "domestic_previous_season", "domestic_season_minus_2"];
+      for (let i = 0; i < domesticSeasons.length; i++) {
+        const hit = await tryLeagueSeason(domesticId, domesticSeasons[i], sources[i] || "domestic_fallback");
+        if (hit) return hit;
       }
     }
   }
 
   if (allowRecentFixturesFallback) {
-    const fromFx = await fetchTeamStatisticsFromRecentFixtures(tid, Math.min(ttlSeconds, 21600));
+    const fromFx = await fetchTeamStatisticsFromRecentFixtures(tid, Math.min(ttlSeconds, 21600), {
+      last: uefa ? 50 : 20,
+      minPlayed: uefa ? 2 : 3
+    });
     if (fromFx) return fromFx;
   }
 
@@ -255,10 +276,42 @@ async function fetchTeamStatisticsWithSeasonFallback({
 }
 
 /**
+ * Synthetic per-team rates at league average — fills a missing side for UEFA / sparse data.
+ */
+function syntheticLeagueAvgStats(leagueParams = {}) {
+  const avg = Math.max(0.6, Number(leagueParams.leagueAvg) || 1.35);
+  const home = Math.max(0.6, Number(leagueParams.leagueAvgHome) || avg);
+  const away = Math.max(0.6, Number(leagueParams.leagueAvgAway) || avg);
+  return {
+    gfHome: home,
+    gaHome: home,
+    gfAway: away,
+    gaAway: away,
+    played: 0,
+    playedHome: 0,
+    playedAway: 0
+  };
+}
+
+/** Last-resort λ when UEFA has no team stats and no standings rows. */
+function leaguePriorLambdas(leagueParams = {}) {
+  const avg = Math.max(0.6, Number(leagueParams.leagueAvg) || 1.35);
+  const homeAvg = Math.max(0.6, Number(leagueParams.leagueAvgHome) || avg);
+  const awayAvg = Math.max(0.6, Number(leagueParams.leagueAvgAway) || avg);
+  const homeAdv = Number(leagueParams.homeAdv);
+  const awayAdv = Number(leagueParams.awayAdv);
+  return {
+    lambdaHome: clampLambda(homeAvg * (Number.isFinite(homeAdv) ? homeAdv : 1.06)),
+    lambdaAway: clampLambda(awayAvg * (Number.isFinite(awayAdv) ? awayAdv : 0.94))
+  };
+}
+
+/**
  * Load standings for league season; fill missing teams from season-1
  * (UEFA cups often have empty tables early in the campaign).
+ * Optional fillTeamIds: for UEFA, pull missing clubs from their domestic tables.
  */
-async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds = 86400) {
+async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds = 86400, options = {}) {
   const seasonNum = Number(season);
   const lid = Number(leagueId);
   const standingsReq = await getWithCache("/standings", { league: lid, season: seasonNum }, ttlSeconds);
@@ -286,11 +339,38 @@ async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds =
     }
   }
 
+  let domesticFilled = 0;
+  const fillTeamIds = Array.isArray(options.fillTeamIds) ? options.fillTeamIds : [];
+  if (isUefaClubCompetition(lid) && fillTeamIds.length > 0) {
+    for (const rawId of fillTeamIds) {
+      const tid = String(rawId || "").trim();
+      if (!tid || standingsMap.has(tid)) continue;
+      const domesticId = await resolveTeamDomesticLeagueId(tid, seasonNum, lid, ttlSeconds);
+      if (!domesticId) continue;
+      const seasonsToTry = [seasonNum, prevSeason, seasonNum - 2].filter((s) => s >= 2000);
+      let placed = false;
+      for (const s of seasonsToTry) {
+        const domReq = await getWithCache("/standings", { league: domesticId, season: s }, ttlSeconds);
+        if (!domReq.ok) continue;
+        const domRows = standingsRowsFromApi(domReq.data);
+        const row = domRows.find((r) => String(r?.team?.id) === tid);
+        if (!row) continue;
+        standingsMap.set(tid, row);
+        standingsRows.push(row);
+        domesticFilled += 1;
+        placed = true;
+        break;
+      }
+      if (!placed) continue;
+    }
+  }
+
   return {
     standingsRows,
     standingsMap,
     seasonUsed: seasonNum,
     prevSeasonUsed,
+    domesticFilled,
     fromCache: Boolean(standingsReq.fromCache)
   };
 }
@@ -665,7 +745,9 @@ function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
   if (hasTeamIds) score += 0.15;
   if (hasOdds) score += 0.2;
   if (hasLuckStats) score += 0.2;
-  if (method === "strength-ratings" || method === "standings") score += 0.1;
+  if (method === "strength-ratings" || method === "standings" || method === "modular-engine") score += 0.1;
+  else if (method === "partial_stats_league_prior") score += 0.05;
+  else if (method === "uefa_league_prior") score -= 0.1;
   return Math.max(0, Math.min(1, score));
 }
 
@@ -791,10 +873,13 @@ async function loadRiskContext() {
 export {
   inferSeason,
   resolveLeagueSeasonFromFixtures,
+  isUefaClubCompetition,
   pickDomesticLeagueId,
   buildStatsFromFinishedFixtures,
   fetchTeamStatisticsWithSeasonFallback,
   loadStandingsMapWithSeasonFallback,
+  syntheticLeagueAvgStats,
+  leaguePriorLambdas,
   isGoodNum,
   roundDisplayRate,
   clampPct,

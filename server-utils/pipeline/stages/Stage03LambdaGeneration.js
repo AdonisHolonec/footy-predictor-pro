@@ -88,7 +88,10 @@ import {
   deriveBestOverUnderPick,
   blendByPenalty,
   applyStakePolicyV2,
-  marketTier
+  marketTier,
+  isUefaClubCompetition,
+  syntheticLeagueAvgStats,
+  leaguePriorLambdas
 } from "../predictHelpers.js";
 
 
@@ -195,6 +198,49 @@ export async function run(context) {
       lambdaHome = clampLambda((atkHs + defAs) / 2 * leagueParams.homeAdv);
       lambdaAway = clampLambda((atkAs + defHs) / 2 * leagueParams.awayAdv);
     }
+  }
+
+  // One side has real stats, the other does not — fill missing side with league-average rates.
+  if (!isGoodNum(lambdaHome) && (hStats || aStats)) {
+    const synth = syntheticLeagueAvgStats(leagueParams);
+    const sr = strengthRatingsLambdas(hStats || synth, aStats || synth, hMulti, aMulti, {
+      leagueAvgGoals: leagueParams.leagueAvg,
+      leagueAvgHome: leagueParams.leagueAvgHome,
+      leagueAvgAway: leagueParams.leagueAvgAway,
+      homeAdv: leagueParams.homeAdv,
+      awayAdv: leagueParams.awayAdv,
+      homePlayed: (hStats || synth).playedHome || (hStats || synth).played,
+      awayPlayed: (aStats || synth).playedAway || (aStats || synth).played,
+      shrinkageK
+    });
+    if (sr && isGoodNum(sr.lambdaHome) && isGoodNum(sr.lambdaAway)) {
+      method = hStats && aStats ? "strength-ratings" : "partial_stats_league_prior";
+      lambdaHome = sr.lambdaHome;
+      lambdaAway = sr.lambdaAway;
+      strengthMeta = sr.strengthMeta;
+      luckStats = {
+        hG: roundDisplayRate((hStats || synth).gfHome),
+        hXG: roundDisplayRate(sr.lambdaHome),
+        aG: roundDisplayRate((aStats || synth).gfAway),
+        aXG: roundDisplayRate(sr.lambdaAway),
+        intensityNote: method
+      };
+    }
+  }
+
+  // UEFA last resort: always produce a prediction from league priors (qualifying / empty cup tables).
+  if (!isGoodNum(lambdaHome) && isUefaClubCompetition(lId)) {
+    const prior = leaguePriorLambdas(leagueParams);
+    method = "uefa_league_prior";
+    lambdaHome = prior.lambdaHome;
+    lambdaAway = prior.lambdaAway;
+    luckStats = {
+      hG: roundDisplayRate(Number(leagueParams.leagueAvgHome) || Number(leagueParams.leagueAvg) || 1.35),
+      hXG: roundDisplayRate(prior.lambdaHome),
+      aG: roundDisplayRate(Number(leagueParams.leagueAvgAway) || Number(leagueParams.leagueAvg) || 1.35),
+      aXG: roundDisplayRate(prior.lambdaAway),
+      intensityNote: "uefa_league_prior"
+    };
   }
 
   Object.assign(f, {

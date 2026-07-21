@@ -1746,8 +1746,20 @@ test("consensusOverUnderOddsAtLine matches fuzzy shot markets and nearest line",
 test("UEFA stats fallback helpers pick domestic league and build averages from FT fixtures", async () => {
   const {
     pickDomesticLeagueId,
-    buildStatsFromFinishedFixtures
+    buildStatsFromFinishedFixtures,
+    isUefaClubCompetition,
+    leaguePriorLambdas
   } = await import("../server-utils/pipeline/predictHelpers.js");
+
+  assert.equal(isUefaClubCompetition(2), true);
+  assert.equal(isUefaClubCompetition(3), true);
+  assert.equal(isUefaClubCompetition(848), true);
+  assert.equal(isUefaClubCompetition(39), false);
+
+  const prior = leaguePriorLambdas({ leagueAvg: 1.4, leagueAvgHome: 1.5, leagueAvgAway: 1.2, homeAdv: 1.08, awayAdv: 0.95 });
+  assert.ok(prior.lambdaHome > 0.2);
+  assert.ok(prior.lambdaAway > 0.2);
+  assert.ok(prior.lambdaHome > prior.lambdaAway);
 
   const domestic = pickDomesticLeagueId(
     {
@@ -1796,4 +1808,35 @@ test("UEFA stats fallback helpers pick domestic league and build averages from F
   assert.equal(built.stats.playedAway, 1);
   assert.ok(built.stats.gfHome > 0);
   assert.equal(built.norm.response.form, "WWD");
+
+  const twoOnly = buildStatsFromFinishedFixtures(
+    [
+      {
+        fixture: { status: { short: "FT" } },
+        teams: { home: { id: 33 }, away: { id: 34 } },
+        goals: { home: 2, away: 0 }
+      },
+      {
+        fixture: { status: { short: "FT" } },
+        teams: { home: { id: 40 }, away: { id: 33 } },
+        goals: { home: 1, away: 1 }
+      }
+    ],
+    33,
+    { minPlayed: 2 }
+  );
+  assert.ok(twoOnly);
+  assert.equal(twoOnly.stats.played, 2);
+  assert.equal(buildStatsFromFinishedFixtures(twoOnly ? [
+    {
+      fixture: { status: { short: "FT" } },
+      teams: { home: { id: 33 }, away: { id: 34 } },
+      goals: { home: 2, away: 0 }
+    },
+    {
+      fixture: { status: { short: "FT" } },
+      teams: { home: { id: 40 }, away: { id: 33 } },
+      goals: { home: 1, away: 1 }
+    }
+  ] : [], 33, { minPlayed: 3 }), null);
 });
