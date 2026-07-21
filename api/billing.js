@@ -306,6 +306,23 @@ async function handleWebhook(req, res, rawBody) {
     return res.status(400).json({ ok: false, error: `Webhook Error: ${err?.message || "invalid"}` });
   }
 
+  // Idempotency: Stripe redelivers on timeout/retry. Claim the event id first —
+  // if another delivery already claimed it, ack without reprocessing. If the
+  // ledger itself is unavailable, fail open (process anyway) rather than drop
+  // a legitimate webhook Stripe expects a 200 for.
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error: dedupeError } = await supabase
+      .from("stripe_webhook_events")
+      .insert({ event_id: event.id, event_type: event.type });
+    if (dedupeError) {
+      if (dedupeError.code === "23505") {
+        return res.status(200).json({ ok: true, received: true, duplicate: true });
+      }
+      console.error("[billing:webhook] dedupe_insert_failed", dedupeError.message);
+    }
+  }
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
