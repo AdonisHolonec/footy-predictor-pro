@@ -37,9 +37,9 @@ const LIMIT_BY_TIER = buildMatchLimitByTier();
 
 /** Daily warm/predict *action* caps (Supabase RPC), separate from match-row KV quota. */
 function buildActionLimitByTier() {
-  const free = Math.max(1, Number(process.env.FREE_TIER_DAILY_ACTION_LIMIT || 3));
-  let premium = Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_ACTION_LIMIT || 10));
-  let ultra = Math.max(1, Number(process.env.ULTRA_TIER_DAILY_ACTION_LIMIT || 30));
+  const free = Math.max(1, Number(process.env.FREE_TIER_DAILY_ACTION_LIMIT || 5));
+  let premium = Math.max(1, Number(process.env.PREMIUM_TIER_DAILY_ACTION_LIMIT || 20));
+  let ultra = Math.max(1, Number(process.env.ULTRA_TIER_DAILY_ACTION_LIMIT || 50));
   if (premium < free) premium = free;
   if (ultra < premium) ultra = premium;
   return {
