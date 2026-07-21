@@ -145,7 +145,8 @@ function marketResultBadge(
   tone: "corners" | "shots" | "ht" | "neutral" = "neutral",
   noBookOddLabel = "No book odd"
 ) {
-  const base = "inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide";
+  const base =
+    "inline-flex max-w-full flex-wrap items-center rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]";
   const oddText =
     Number.isFinite(Number(odd)) && Number(odd) > 1
       ? ` · ${Number(odd).toFixed(2)}`
@@ -164,14 +165,18 @@ function marketResultBadge(
   const pulseClass = isHot ? " animate-pulse motion-reduce:animate-none ring-1 ring-white/35" : "";
   if (verdict === true) {
     return (
-      <span className={`${base} border-[var(--fp-success)]/45 bg-[var(--fp-success)]/15 text-[var(--fp-text)]${pulseClass}`}>
+      <span
+        className={`${base} border-[var(--fp-success)]/60 bg-[var(--fp-success)]/20 text-[var(--fp-success)]${pulseClass}`}
+      >
         {pred} · WIN
       </span>
     );
   }
   if (verdict === false) {
     return (
-      <span className={`${base} border-[var(--fp-danger)]/45 bg-[var(--fp-danger)]/15 text-[var(--fp-text)]${pulseClass}`}>
+      <span
+        className={`${base} border-[var(--fp-danger)]/60 bg-[var(--fp-danger)]/20 text-[var(--fp-danger)]${pulseClass}`}
+      >
         {pred} · LOSE
       </span>
     );
@@ -225,6 +230,13 @@ function PoissonMarketSection({
         : actualTotal < bestPick.line
       : null;
 
+  const settledShell =
+    settled === true
+      ? "ring-1 ring-[var(--fp-success)]/50 border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10"
+      : settled === false
+        ? "ring-1 ring-[var(--fp-danger)]/50 border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10"
+        : "border-white/5 bg-signal-void/20";
+
   const toneClass = (pct: number) => {
     if (pct >= 60) return "text-signal-sage";
     if (pct >= 40) return "text-signal-amberSoft";
@@ -233,13 +245,24 @@ function PoissonMarketSection({
 
   return (
     <section
-      className={framed ? "rounded-2xl border p-4 shadow-inner sm:p-5" : "p-0"}
+      className={`relative ${framed ? "rounded-2xl border p-4 shadow-inner sm:p-5" : "rounded-xl border p-3 sm:p-4"} ${settled != null ? settledShell : framed ? "" : "border-transparent"}`}
       style={
-        framed
+        framed && settled == null
           ? { borderColor: `${accent}40`, background: `linear-gradient(180deg, ${accent}0d, transparent)` }
           : undefined
       }
     >
+      {settled != null ? (
+        <span
+          className={`absolute -right-1 -top-2 z-10 rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+            settled
+              ? "bg-[var(--fp-success)] text-white"
+              : "bg-[var(--fp-danger)] text-white"
+          }`}
+        >
+          {settled ? tr("card.chipWin") : tr("card.chipLose")}
+        </span>
+      ) : null}
       {framed ? (
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/5 pb-2">
           <div>
@@ -336,7 +359,15 @@ function PoissonMarketSection({
         </div>
       )}
       {bestPick && (
-        <div className="mt-3 border-t border-white/5 pt-2">
+        <div
+          className={`mt-3 border-t pt-2 ${
+            settled === true
+              ? "border-[var(--fp-success)]/35"
+              : settled === false
+                ? "border-[var(--fp-danger)]/35"
+                : "border-white/5"
+          }`}
+        >
           {marketResultBadge(
             bestPick.pick,
             bestPick.probability,
@@ -347,7 +378,15 @@ function PoissonMarketSection({
             tr("card.noBookOdd")
           )}
           {actualTotal != null && (
-            <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
+            <span
+              className={`ml-2 font-mono text-[9px] font-semibold tabular-nums ${
+                settled === true
+                  ? "text-[var(--fp-success)]"
+                  : settled === false
+                    ? "text-[var(--fp-danger)]"
+                    : "text-signal-inkMuted"
+              }`}
+            >
               {tr("match.finalTotal")} {actualTotal}
             </span>
           )}
@@ -371,17 +410,32 @@ function MarketPickCard({
   const { t: tr } = useLocale();
   const settledTone =
     outcome === true
-      ? "border-signal-sage/45 bg-signal-sage/10"
+      ? "border-[var(--fp-success)]/50 bg-[var(--fp-success)]/10"
       : outcome === false
-        ? "border-signal-rose/45 bg-signal-rose/10"
+        ? "border-[var(--fp-danger)]/50 bg-[var(--fp-danger)]/10"
         : null;
   const valueTone =
-    outcome === true ? "text-signal-sage" : outcome === false ? "text-signal-rose" : "";
+    outcome === true
+      ? "text-[var(--fp-success)]"
+      : outcome === false
+        ? "text-[var(--fp-danger)]"
+        : "";
   const tone = settledTone || tierToneClass(info?.tier);
   const badge = outcome == null ? tierBadgeLabel(info?.tier, tr) : "";
   const isToss = outcome == null && info?.tier === "toss";
   return (
-    <div className={`rounded-xl border p-3 text-center ${tone}`}>
+    <div className={`relative rounded-xl border p-3 text-center ${tone}`}>
+      {outcome != null ? (
+        <span
+          className={`absolute -right-1.5 -top-2 z-10 rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+            outcome
+              ? "bg-[var(--fp-success)] text-white"
+              : "bg-[var(--fp-danger)] text-white"
+          }`}
+        >
+          {outcome ? tr("card.chipWin") : tr("card.chipLose")}
+        </span>
+      ) : null}
       <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
         <span>{label}</span>
         {badge ? (
@@ -1211,7 +1265,7 @@ export default function MatchModal({
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
             <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["xg", "overview"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.xgLuck")}</h3>
-              <div className="flex justify-center">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
+              <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
                   <LuckBadge goals={match.luckStats.hG} xg={xgData?.homeXG ?? match.luckStats.hXG} />

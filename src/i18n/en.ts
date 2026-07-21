@@ -439,7 +439,7 @@ export const en: Dict = {
     pending: "Pending",
     settled: "Settled",
     win: "WIN",
-    loss: "LOSS",
+    loss: "LOSE",
     pendingBadge: "PENDING",
     topPick: "Top pick:",
     score: "Score {home}-{away}",
