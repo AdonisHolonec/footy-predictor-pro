@@ -81,12 +81,8 @@ import {
 import { buildCacheKey } from "../server-utils/fetcher.js";
 import { buildPredictionLaboratory } from "../server-utils/predictionLaboratory/PredictionLaboratory.js";
 import {
-  runMonteCarloSimulation,
-  DEFAULT_MONTE_CARLO_SIMS,
-  ADAPTIVE_SIM_TIERS,
-  estimateMonteCarloUncertainty,
-  selectAdaptiveSimulations,
-  resolveMonteCarloSimulations
+  computeExactMatchDistribution,
+  computeExactMarketProbabilities
 } from "../server-utils/monteCarlo/MonteCarloEngine.js";
 import {
   PREDICTOR_V2_VERSION,
@@ -1229,43 +1225,53 @@ test("runAutoCalibration resolves maxDelta/learningRate to their real defaults w
   assert.equal(run.config.learningRate, 0.35);
 });
 
-test("Monte Carlo runs 10000 sims and returns distributions + CI", () => {
+test("computeExactMatchDistribution matches computeMatchProbs exactly (no sampling noise)", () => {
   const pmf = buildMatchScorePmf(1.6, 1.1, { correlation: 0.12, rho: -0.11 });
   assert.ok(pmf.cells.length > 10);
   assert.ok(Math.abs(pmf.cells.reduce((s, c) => s + c.prob, 0) - 1) < 1e-6);
 
-  const mc = runMonteCarloSimulation(1.6, 1.1, {
-    simulations: DEFAULT_MONTE_CARLO_SIMS,
-    fixtureId: 4242,
-    correlation: 0.12,
-    rho: -0.11
-  });
-  assert.equal(mc.simulations, 10_000);
-  assert.equal(mc.adaptive?.enabled, false);
-  assert.ok(mc.probabilityDistribution.p1 > 0);
-  assert.ok(mc.probabilityDistribution.pX > 0);
-  assert.ok(mc.probabilityDistribution.p2 > 0);
-  const sum1x2 =
-    mc.probabilityDistribution.p1 + mc.probabilityDistribution.pX + mc.probabilityDistribution.p2;
-  assert.ok(Math.abs(sum1x2 - 100) < 0.5);
-  assert.ok(mc.expectedGoalsDistribution.home.mean > 0);
-  assert.ok(mc.expectedGoalsDistribution.away.mean > 0);
-  assert.ok(mc.expectedGoalsDistribution.total.histogram.length >= 1);
-  assert.ok(mc.mostLikelyScores.length >= 5);
-  assert.ok(mc.goalDistribution.length >= 1);
-  assert.ok(mc.confidenceInterval.totalGoals.high >= mc.confidenceInterval.totalGoals.low);
-  assert.equal(mc.confidenceInterval.level, 0.95);
-  assert.ok(mc.histogram.scores.length >= 5);
-  assert.ok(mc.summary.mostLikelyScore);
+  const round2 = (n) => Math.round(Number(n) * 100) / 100;
+  const dist = computeExactMatchDistribution(1.6, 1.1, { correlation: 0.12, rho: -0.11 });
+  const closedForm = computeMatchProbs(1.6, 1.1, 0, { correlation: 0.12, rho: -0.11 });
 
-  const mc2 = runMonteCarloSimulation(1.6, 1.1, {
-    simulations: 10_000,
-    fixtureId: 4242,
-    correlation: 0.12,
-    rho: -0.11
-  });
-  assert.equal(mc.summary.mostLikelyScore, mc2.summary.mostLikelyScore);
-  assert.equal(mc.probabilityDistribution.p1, mc2.probabilityDistribution.p1);
+  // Same underlying PMF, same market math -- must agree exactly, not "close within noise".
+  assert.equal(dist.probabilityDistribution.p1, round2(closedForm.probs.p1));
+  assert.equal(dist.probabilityDistribution.pX, round2(closedForm.probs.pX));
+  assert.equal(dist.probabilityDistribution.p2, round2(closedForm.probs.p2));
+  assert.equal(dist.probabilityDistribution.pGG, round2(closedForm.probs.pGG));
+  assert.equal(dist.probabilityDistribution.pO25, round2(closedForm.probs.pO25));
+
+  const sum1x2 =
+    dist.probabilityDistribution.p1 + dist.probabilityDistribution.pX + dist.probabilityDistribution.p2;
+  assert.ok(Math.abs(sum1x2 - 100) < 0.01, "1X2 must sum to ~100%, not approximately within sampling error");
+
+  assert.ok(dist.expectedGoalsDistribution.home.mean > 0);
+  assert.ok(dist.expectedGoalsDistribution.away.mean > 0);
+  assert.ok(dist.expectedGoalsDistribution.total.histogram.length >= 1);
+  assert.ok(dist.mostLikelyScores.length >= 5);
+  assert.ok(dist.goalDistribution.length >= 1);
+  assert.ok(dist.range.totalGoals.high >= dist.range.totalGoals.low);
+  assert.equal(dist.range.level, 0.95);
+  assert.ok(dist.histogram.scores.length >= 5);
+  assert.ok(dist.summary.mostLikelyScore);
+
+  // Top score must be the actual max-probability cell in the PMF, not a sampling estimate of it.
+  const topCell = [...pmf.cells].sort((a, b) => b.prob - a.prob)[0];
+  assert.equal(dist.summary.mostLikelyScore, `${topCell.home}-${topCell.away}`);
+
+  // No RNG left at all -- identical inputs must produce bit-identical output.
+  const dist2 = computeExactMatchDistribution(1.6, 1.1, { correlation: 0.12, rho: -0.11 });
+  assert.deepEqual(dist, dist2);
+});
+
+test("computeExactMarketProbabilities sums 1X2 to 100 and matches per-market PMF mass", () => {
+  const pmf = buildMatchScorePmf(0.9, 2.4, { correlation: 0.12, rho: -0.11 });
+  const markets = computeExactMarketProbabilities(pmf);
+  assert.ok(Math.abs(markets.p1 + markets.pX + markets.p2 - 100) < 0.01);
+  assert.ok(Math.abs(markets.pO25 + markets.pU25 - 100) < 0.01);
+  assert.ok(Math.abs(markets.pGG + markets.pNGG - 100) < 0.01);
+  // Big away favorite: away win should clearly beat home win.
+  assert.ok(markets.p2 > markets.p1);
 });
 
 test("Predictor V2 pipeline contract and xG λ blend", () => {
@@ -1301,38 +1307,6 @@ test("Predictor V2 pipeline contract and xG λ blend", () => {
   assert.equal(trace.version, PREDICTOR_V2_VERSION);
   assert.equal(trace.stages.xg.status, "ok");
   assert.ok(trace.summary.includes("xg:ok"));
-});
-
-test("Adaptive Monte Carlo maps uncertainty into 1k/3k/5k/10k/25k tiers", () => {
-  assert.deepEqual([...ADAPTIVE_SIM_TIERS], [1000, 3000, 5000, 10000, 25000]);
-  assert.equal(selectAdaptiveSimulations(0.1), 1000);
-  assert.equal(selectAdaptiveSimulations(0.3), 3000);
-  assert.equal(selectAdaptiveSimulations(0.5), 5000);
-  assert.equal(selectAdaptiveSimulations(0.7), 10000);
-  assert.equal(selectAdaptiveSimulations(0.9), 25000);
-
-  // Blowout / low entropy → fewer sims
-  const blowout = estimateMonteCarloUncertainty(3.2, 0.4, { correlation: 0.12, rho: -0.11 });
-  const tight = estimateMonteCarloUncertainty(1.35, 1.3, { correlation: 0.12, rho: -0.11 });
-  assert.ok(blowout.score < tight.score, `blowout ${blowout.score} should be < tight ${tight.score}`);
-
-  const blowoutSims = resolveMonteCarloSimulations(3.2, 0.4, { correlation: 0.12, rho: -0.11 });
-  const tightSims = resolveMonteCarloSimulations(1.35, 1.3, { correlation: 0.12, rho: -0.11 });
-  assert.ok(blowoutSims.adaptive.enabled);
-  assert.ok(tightSims.adaptive.enabled);
-  assert.ok(blowoutSims.simulations <= tightSims.simulations);
-  assert.ok(ADAPTIVE_SIM_TIERS.includes(blowoutSims.simulations));
-  assert.ok(ADAPTIVE_SIM_TIERS.includes(tightSims.simulations));
-
-  const adaptiveRun = runMonteCarloSimulation(1.35, 1.3, {
-    fixtureId: 99,
-    correlation: 0.12,
-    rho: -0.11
-  });
-  assert.ok(adaptiveRun.adaptive?.enabled);
-  assert.equal(adaptiveRun.simulations, adaptiveRun.adaptive.tier);
-  assert.ok(ADAPTIVE_SIM_TIERS.includes(adaptiveRun.simulations));
-  assert.equal(adaptiveRun.version, "mc-v2-adaptive");
 });
 
 test("Prediction Laboratory builds radar, comparison, and evolution", () => {

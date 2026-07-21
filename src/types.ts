@@ -117,11 +117,10 @@ export type ValueEngine = {
   rule?: string;
 };
 
-/** Monte Carlo simulation payload (10k sims by default). */
+/** Exact match-distribution payload, computed directly from the score PMF (no sampling). */
 export type MonteCarloHistogramBin = {
   goals?: number;
   label?: string;
-  count: number;
   pct: number;
 };
 
@@ -133,27 +132,8 @@ export type MonteCarloGoalSide = {
   histogram: MonteCarloHistogramBin[];
 };
 
-export type MonteCarloAdaptiveMeta = {
-  enabled: boolean;
-  reason?: string;
-  score?: number | null;
-  tier?: number;
-  tiers?: number[];
-  components?: {
-    entropyNorm?: number;
-    competitiveness?: number;
-    goalVarNorm?: number;
-    ouCloseness?: number;
-  };
-  probs?: { p1?: number; pX?: number; p2?: number; pO25?: number };
-  totalLambda?: number;
-};
-
 export type MonteCarloResult = {
   version?: string;
-  simulations: number;
-  seed?: number;
-  adaptive?: MonteCarloAdaptiveMeta;
   lambdas?: { home: number; away: number };
   model?: {
     method?: string;
@@ -178,16 +158,15 @@ export type MonteCarloResult = {
     away: MonteCarloGoalSide;
     total: MonteCarloGoalSide;
   };
-  scoreDistribution: Array<{ score: string; count: number; pct: number }>;
-  mostLikelyScores: Array<{ score: string; count: number; pct: number }>;
+  scoreDistribution: Array<{ score: string; pct: number }>;
+  mostLikelyScores: Array<{ score: string; pct: number }>;
   goalDistribution: MonteCarloHistogramBin[];
-  confidenceInterval: {
+  /** Percentile range of the goals distribution itself (real spread, not sampling noise). */
+  range: {
     level: number;
-    method?: string;
     homeGoals: { low: number; high: number };
     awayGoals: { low: number; high: number };
     totalGoals: { low: number; high: number };
-    markets?: Record<string, { low: number; high: number }>;
   };
   histogram?: {
     totalGoals: MonteCarloHistogramBin[];
@@ -201,9 +180,7 @@ export type MonteCarloResult = {
     expectedGoalsHome?: number;
     expectedGoalsAway?: number;
     expectedGoalsTotal?: number;
-    ci95TotalGoals?: { low: number; high: number };
-    adaptiveSims?: number;
-    uncertaintyScore?: number | null;
+    totalGoalsRange?: { low: number; high: number };
   };
 };
 

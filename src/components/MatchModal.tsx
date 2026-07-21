@@ -1266,7 +1266,7 @@ export default function MatchModal({
             </CollapsiblePanel>
           </div>
 
-          {match.monteCarlo?.simulations ? (
+          {match.monteCarlo?.probabilityDistribution ? (
             <div className={tab(["montecarlo"])}>
               <CollapsiblePanel compact title={tr("panels.monteCarlo")}>
                 <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} framed={false} />

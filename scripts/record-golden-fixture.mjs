@@ -17,9 +17,7 @@ const filter = process.argv[2] ? process.argv[2].replace(/\.json$/, "") : "";
 
 const env = {
   ...process.env,
-  UPDATE_GOLDEN: "1",
-  MONTE_CARLO_ADAPTIVE: "0",
-  MONTE_CARLO_SIMS: "1000"
+  UPDATE_GOLDEN: "1"
 };
 
 const args = ["vitest", "run", "tests/pipeline/goldenFixture.test.js", "--reporter=dot"];

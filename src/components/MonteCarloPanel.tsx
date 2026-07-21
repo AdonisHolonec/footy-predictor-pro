@@ -76,11 +76,11 @@ export default function MonteCarloPanel({
 }: Props) {
   const { t } = useLocale();
   const mc = match.monteCarlo as MonteCarloResult | undefined;
-  if (!mc || !mc.simulations) return null;
+  if (!mc || !mc.probabilityDistribution) return null;
 
   const pd = mc.probabilityDistribution;
   const xg = mc.expectedGoalsDistribution;
-  const ci = mc.confidenceInterval;
+  const ci = mc.range;
   const freq = t("panels.frequency");
   const totalHist = (mc.histogram?.totalGoals || mc.goalDistribution || []).map((b) => ({
     goals: String(b.goals ?? 0),
@@ -106,23 +106,15 @@ export default function MonteCarloPanel({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.monteCarlo")}</h3>
-            <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">
-              {mc.simulations.toLocaleString()} {t("panels.simulations")}
-              {mc.adaptive?.enabled && mc.adaptive.score != null
-                ? ` · adaptive (u=${mc.adaptive.score.toFixed(2)})`
-                : ""}{" "}
-              · {t("panels.mcMethod")}
-            </p>
+            <p className="mt-0.5 text-xs text-[var(--fp-text-muted)]">{t("panels.mcMethod")}</p>
           </div>
           <p className="text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
             λ {mc.lambdas?.home?.toFixed(2)} / {mc.lambdas?.away?.toFixed(2)}
-            {mc.seed != null ? ` · seed ${mc.seed}` : ""}
           </p>
         </div>
       ) : (
         <p className="mb-2 text-right text-xs font-semibold tabular-nums text-[var(--fp-text-muted)]">
           λ {mc.lambdas?.home?.toFixed(2)} / {mc.lambdas?.away?.toFixed(2)}
-          {mc.seed != null ? ` · seed ${mc.seed}` : ""}
         </p>
       )}
 
@@ -182,7 +174,6 @@ export default function MonteCarloPanel({
             <thead>
               <tr className="border-b border-[var(--fp-border)] text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
                 <th className="px-3 py-2">{t("panels.mostLikelyScores")}</th>
-                <th className="px-3 py-2 text-right">{t("panels.count")}</th>
                 <th className="px-3 py-2 text-right">{t("panels.pct")}</th>
               </tr>
             </thead>
@@ -190,7 +181,6 @@ export default function MonteCarloPanel({
               {mc.mostLikelyScores.slice(0, 10).map((s) => (
                 <tr key={s.score} className="border-b border-[var(--fp-border)] last:border-0">
                   <td className="px-3 py-1.5 font-semibold text-[var(--fp-text)]">{s.score}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-[var(--fp-text-muted)]">{s.count}</td>
                   <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-[var(--fp-accent)]">
                     {s.pct.toFixed(1)}%
                   </td>
@@ -198,13 +188,6 @@ export default function MonteCarloPanel({
               ))}
             </tbody>
           </table>
-          {ci.markets && (
-            <div className="border-t border-[var(--fp-border)] px-3 py-2 text-xs text-[var(--fp-text-muted)]">
-              {t("panels.ciMarkets", { pct: ciPct })} · 1 {ci.markets.p1?.low}–{ci.markets.p1?.high}% · X{" "}
-              {ci.markets.pX?.low}–{ci.markets.pX?.high}% · 2 {ci.markets.p2?.low}–{ci.markets.p2?.high}% · O2.5{" "}
-              {ci.markets.pO25?.low}–{ci.markets.pO25?.high}%
-            </div>
-          )}
         </div>
       ) : null}
     </>

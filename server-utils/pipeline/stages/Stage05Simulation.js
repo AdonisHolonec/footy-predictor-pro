@@ -53,7 +53,7 @@ import {
 } from "../../modelConstants.js";
 import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
-import { runMonteCarloSimulation } from "../../monteCarlo/MonteCarloEngine.js";
+import { computeExactMatchDistribution } from "../../monteCarlo/MonteCarloEngine.js";
 import {
   pickCalibrationMapForLeague,
   applyCalibratedTriple
@@ -219,17 +219,16 @@ export async function run(context) {
     if (f.xgModelMeta) xgModelMeta = f.xgModelMeta;
     if (f.xgLambdasForSources) xgLambdasForSources = f.xgLambdasForSources;
 
-    // === MONTE CARLO once on final λ (reuse Stage04 score PMF when present) ===
+    // === Exact match-distribution stats on final λ (reuse Stage04 score PMF when present) ===
     monteCarlo = null;
     try {
-      monteCarlo = runMonteCarloSimulation(lambdaHome, lambdaAway, {
-        fixtureId,
+      monteCarlo = computeExactMatchDistribution(lambdaHome, lambdaAway, {
         correlation: poissonCorrelation,
         rho: leagueParams.rho,
         pmf: f.scorePmf || undefined
       });
     } catch (mcErr) {
-      console.warn("[monte-carlo]", fixtureId, mcErr?.message || mcErr);
+      console.warn("[match-distribution]", fixtureId, mcErr?.message || mcErr);
       monteCarlo = null;
     }
 

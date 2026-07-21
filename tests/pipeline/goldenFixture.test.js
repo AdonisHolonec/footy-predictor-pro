@@ -65,9 +65,6 @@ describe("Predictor V3 golden fixtures", () => {
   let assertGoldenSnapshot;
 
   beforeAll(async () => {
-    process.env.MONTE_CARLO_ADAPTIVE = "0";
-    process.env.MONTE_CARLO_SIMS = "1000";
-
     ({ buildGoldenContext } = await import("../../server-utils/pipeline/golden/buildGoldenContext.js"));
     ({ runGoldenPipeline } = await import("../../server-utils/pipeline/golden/runGoldenPipeline.js"));
     ({ extractGoldenSnapshot, assertGoldenSnapshot } = await import(
