@@ -5,16 +5,13 @@
 
 import { getWithCache } from "../../fetcher.js";
 import {
-  computeMatchProbs,
   clampLambda,
   extractFormMultiplier,
   extractAdvancedGoalsAverages,
   extractFirstHalfFractions,
   deriveFirstHalfLambdas,
   normalizeTeamStatisticsPayload,
-  strengthRatingsLambdas,
-  poissonOverLine,
-  reweightPmfTo1x2
+  strengthRatingsLambdas
 } from "../../math.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
@@ -26,11 +23,6 @@ import { buildPredictionExplanation } from "../../explanation/PredictionExplanat
 import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine.js";
 import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
 import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
-import {
-  buildValueEngine,
-  buildProfessionalValueEngine,
-  evaluateValue
-} from "../../value/ValueEngine.js";
 import {
   calculateEV,
   calculateKellyQuarter as calculateKelly,
@@ -52,13 +44,8 @@ import {
   getLeagueConfidenceMultiplier,
   getLeagueStakeCap
 } from "../../modelConstants.js";
-import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
-import {
-  applySideMarketCalibration,
-  pickCalibrationMapForLeague,
-  applyCalibratedTriple
-} from "../../isotonicCalibration.js";
+import { applyCalibratedTriple } from "../../isotonicCalibration.js";
 import {
   pickStackerWeightsForLeague,
   extractStackerFeatures,
@@ -81,7 +68,6 @@ import {
   buildPoissonMarketBlock,
   hasUsableRolling,
   buildLiveRollingForTeam,
-  selectTopPick,
   coerceFormFromTeamStats,
   buildTeamContext,
   extendProbsWithMarkets,
@@ -89,9 +75,11 @@ import {
   deriveBestOverUnderPick,
   blendByPenalty,
   applyStakePolicyV2,
-  marketTier,
-  deriveCardsLambda
+  marketTier
 } from "../predictHelpers.js";
+import { alignMarketProbsAndCalibrate } from "../decision/alignMarketProbsAndCalibrate.js";
+import { selectTopPickAndQuote } from "../decision/selectTopPickAndQuote.js";
+import { applyValueEngine } from "../decision/applyValueEngine.js";
 
 
 export const STAGE_ID = "Stage08Decision";
@@ -228,107 +216,43 @@ export async function run(context) {
     });
     
     finalPick1X2 = p1Adj >= pXAdj && p1Adj >= p2Adj ? "1" : p2Adj > p1Adj && p2Adj > pXAdj ? "2" : "X";
+
+    // === MARKET PROBS REALIGNMENT + SIDE-MARKET CALIBRATION ===
     // Rebuild O/U + BTTS from score PMF reweighted to fused 1X2 so tip markets stay coherent.
-    let marketProbsAligned = p;
-    const scorePmf = f.scorePmf;
-    if (scorePmf?.cells?.length) {
-      try {
-        const alignedPmf = reweightPmfTo1x2(scorePmf, {
-          p1: p1Adj,
-          pX: pXAdj,
-          p2: p2Adj
-        });
-        const calcAligned = computeMatchProbs(lambdaHome, lambdaAway, fixtureId, { pmf: alignedPmf });
-        if (calcAligned?.probs) {
-          marketProbsAligned = applyLeagueMarketPriors(calcAligned.probs, leagueParams);
-        }
-      } catch {
-        marketProbsAligned = p;
-      }
-    }
-    // Persist pre-side-cal markets for train/serve lock on O/U + BTTS maps.
-    const rawSideMarketsPct = {
-      pO15: marketProbsAligned.pO15,
-      pO25: marketProbsAligned.pO25,
-      pU35: marketProbsAligned.pU35,
-      pGG: marketProbsAligned.pGG
-    };
-    const sideMaps = pickCalibrationMapForLeague(calibrationMaps, lId);
-    const sideCalEnabled = String(process.env.SIDE_MARKET_CALIBRATION || "1") !== "0";
-    let sideCalibrationAny = false;
-    if (sideCalEnabled && sideMaps) {
-      const calSides = applySideMarketCalibration(marketProbsAligned, sideMaps);
-      marketProbsAligned = calSides;
-      sideCalibrationAny = Boolean(calSides.sideCalibrationAny);
-    }
-    const calibratedSideMarketsPct = {
-      pO15: marketProbsAligned.pO15,
-      pO25: marketProbsAligned.pO25,
-      pU35: marketProbsAligned.pU35,
-      pGG: marketProbsAligned.pGG
-    };
-    // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
-    // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
-    topSelection = selectTopPick(
-      {
-        pO15: marketProbsAligned.pO15,
-        pO25: marketProbsAligned.pO25,
-        pU35: marketProbsAligned.pU35,
-        pGG: marketProbsAligned.pGG
-      },
+    const aligned = alignMarketProbsAndCalibrate({
+      p,
+      scorePmf: f.scorePmf,
+      lambdaHome,
+      lambdaAway,
+      fixtureId,
       p1Adj,
       pXAdj,
-      p2Adj
-    );
-    topPick = topSelection.pick;
-    maxConf = topSelection.prob;
-    maxConf = clampPct(maxConf * leagueMultiplier * qualityPenalty);
-    const pickLc = String(topPick || "").trim().toLowerCase();
-    recommendedQuote = (() => {
-      if (!pickLc) return { odd: null, source: null, bookmakersUsed: 0 };
-      if (pickLc === "1") {
-        return {
-          odd: Number.isFinite(Number(odds?.home)) ? Number(odds.home) : null,
-          source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
-          bookmakersUsed: odds?.bookmakersUsed || 0
-        };
-      }
-      if (pickLc === "x") {
-        return {
-          odd: Number.isFinite(Number(odds?.draw)) ? Number(odds.draw) : null,
-          source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
-          bookmakersUsed: odds?.bookmakersUsed || 0
-        };
-      }
-      if (pickLc === "2") {
-        return {
-          odd: Number.isFinite(Number(odds?.away)) ? Number(odds.away) : null,
-          source: odds ? `median(${odds.bookmakersUsed || 0})` : null,
-          bookmakersUsed: odds?.bookmakersUsed || 0
-        };
-      }
-      if (pickLc === "gg" || pickLc === "ngg") {
-        const odd = pickLc === "gg" ? bttsQuote?.yes : bttsQuote?.no;
-        return {
-          odd: Number.isFinite(Number(odd)) ? Number(odd) : null,
-          source: bttsQuote ? `median(${bttsQuote.bookmakersUsed || 0})` : null,
-          bookmakersUsed: bttsQuote?.bookmakersUsed || 0
-        };
-      }
-      const ou = pickLc.match(/^(peste|sub)\s*(1[.,]5|2[.,]5|3[.,]5)$/);
-      if (ou) {
-        const side = ou[1] === "peste" ? "over" : "under";
-        const lineRaw = ou[2].replace(",", ".");
-        const quote = lineRaw === "1.5" ? goals15Quote : lineRaw === "2.5" ? goals25Quote : goals35Quote;
-        const odd = quote?.[side];
-        return {
-          odd: Number.isFinite(Number(odd)) ? Number(odd) : null,
-          source: quote ? `median(${quote.bookmakersUsed || 0})` : null,
-          bookmakersUsed: quote?.bookmakersUsed || 0
-        };
-      }
-      return { odd: null, source: null, bookmakersUsed: 0 };
-    })();
+      p2Adj,
+      leagueParams,
+      calibrationMaps,
+      lId
+    });
+    const marketProbsAligned = aligned.marketProbsAligned;
+    const rawSideMarketsPct = aligned.rawSideMarketsPct;
+    const calibratedSideMarketsPct = aligned.calibratedSideMarketsPct;
+    const sideCalibrationAny = aligned.sideCalibrationAny;
+
+    // === TOP PICK SELECTION + RECOMMENDED QUOTE ===
+    // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
+    // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
+    ({ topSelection, topPick, maxConf, recommendedQuote } = selectTopPickAndQuote({
+      marketProbsAligned,
+      p1Adj,
+      pXAdj,
+      p2Adj,
+      leagueMultiplier,
+      qualityPenalty,
+      odds,
+      bttsQuote,
+      goals15Quote,
+      goals25Quote,
+      goals35Quote
+    }));
     stakePolicy = applyStakePolicyV2({
       stakePct: finalKelly,
       confidencePct: maxConf,
@@ -363,114 +287,34 @@ export async function run(context) {
     // === PROFESSIONAL VALUE BETTING ENGINE (sole value path — Stage07 defers here) ===
     // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards
     // using final coherent probs. Never recommend negative EV.
-    try {
-      const cardsLine = Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5);
-      const cardsLambda = deriveCardsLambda({
-        leagueParams,
-        modularScores,
-        cornersBlock
-      });
-      const pCardsOver =
-        Number.isFinite(cardsLine) && cardsLambda > 0
-          ? clampPct(poissonOverLine(cardsLine, cardsLambda) * 100)
-          : null;
-      const pCardsUnder = pCardsOver != null ? clampPct(100 - pCardsOver) : null;
-    
-      valueEngine = buildProfessionalValueEngine({
-        probs: pOut,
-        matchWinnerOdds: odds
-          ? { home: odds.home, draw: odds.draw, away: odds.away }
-          : null,
-        doubleChanceOdds: doubleChanceQuote,
-        bttsOdds: bttsQuote,
-        goals15Odds: goals15Quote,
-        goals25Odds: goals25Quote,
-        goals35Odds: goals35Quote,
-        cornersQuote: marketOdds?.corners || null,
-        cornersProbPct: cornersPick?.probability ?? null,
-        cardsOdds: cardsQuote
-          ? { over: cardsQuote.over, under: cardsQuote.under, line: cardsLine }
-          : null,
-        cardsOverProbPct: pCardsOver,
-        cardsUnderProbPct: pCardsUnder
-      });
-    
-      const bestVe = valueEngine?.bestMarket;
-      if (
-        bestVe &&
-        valueEngine.detected &&
-        bestVe.recommendable !== false &&
-        Number(bestVe.expectedValue) > 0 &&
-        !bestVe.negativeEV &&
-        dataQuality >= 0.55
-      ) {
-        valueDetected = true;
-        valueType = bestVe.type;
-        finalEv = Number(bestVe.expectedValue) || 0;
-        finalKelly = Number(bestVe.kellyPct) || finalKelly;
-        const restaked = applyStakePolicyV2({
-          stakePct: finalKelly,
-          confidencePct: maxConf,
-          dataQuality,
-          leagueStakeCap,
-          cooldownCap: riskContext.cooldownCap
-        });
-        finalKelly = restaked.stakePct;
-        stakingCompact = `S:${finalKelly.toFixed(2)}% • E:${finalEv.toFixed(1)}%`;
-        reasonCodes = Array.from(
-          new Set([
-            ...reasonCodes,
-            "value_engine_pro",
-            `value_family_${String(bestVe.family || "other")
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "_")}`,
-            `selected_${String(bestVe.type || "").replace(/\s+/g, "_")}`
-          ])
-        ).slice(0, 10);
-      } else if (valueEngine && (!bestVe || Number(bestVe.expectedValue) <= 0)) {
-        // Absolute safety: never keep a negative/zero EV recommendation.
-        if (!(finalEv > 0)) {
-          valueDetected = false;
-          valueType = "";
-          stakingCompact = "";
-        }
-        valueEngine = {
-          ...valueEngine,
-          detected: false,
-          recommendable: false,
-          highlighted: false
-        };
-      }
-    
-      if (valueEngine) {
-        valueEngine = {
-          ...valueEngine,
-          detected: Boolean(valueDetected && finalEv > 0),
-          recommendable: Boolean(valueDetected && finalEv > 0 && !(finalEv <= 0)),
-          ...(valueDetected && valueEngine.bestMarket
-            ? {
-                type: valueEngine.bestMarket.type,
-                family: valueEngine.bestMarket.family,
-                expectedValue: finalEv,
-                kellyPct: finalKelly,
-                valueScore: valueEngine.bestMarket.valueScore,
-                positiveEV: finalEv > 0,
-                negativeEV: false,
-                signal: finalEv >= 1.25 ? "positive" : finalEv > 0 ? "neutral" : "negative",
-                bestMarket: {
-                  ...valueEngine.bestMarket,
-                  kellyPct: finalKelly,
-                  expectedValue: finalEv
-                }
-              }
-            : {})
-        };
-      }
-    } catch (veErr) {
-      console.warn("[value-engine]", fixtureId, veErr?.message || veErr);
-      if (!valueEngine) valueEngine = buildValueEngine([]);
-    }
-    
+    ({ valueEngine, valueDetected, valueType, finalEv, finalKelly, stakingCompact, reasonCodes } = applyValueEngine({
+      cardsQuote,
+      leagueParams,
+      modularScores,
+      cornersBlock,
+      pOut,
+      odds,
+      doubleChanceQuote,
+      bttsQuote,
+      goals15Quote,
+      goals25Quote,
+      goals35Quote,
+      marketOdds,
+      cornersPick,
+      dataQuality,
+      maxConf,
+      leagueStakeCap,
+      cooldownCap: riskContext.cooldownCap,
+      fixtureId,
+      valueEngine,
+      valueDetected,
+      valueType,
+      finalEv,
+      finalKelly,
+      stakingCompact,
+      reasonCodes
+    }));
+
     teamContext = buildTeamContext({
       homeIdStr,
       awayIdStr,
