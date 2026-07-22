@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { HealthDashboardBundle, OpsAlert } from "../../types";
 import { loadHealthDashboard } from "../../services/healthService";
+import { StatTile, Button } from "../../design-system";
 import {
   Bar,
   BarChart,
@@ -20,38 +21,17 @@ function fmtMs(n: number | null | undefined): string {
 }
 
 function statusTone(status: string): string {
-  if (status === "healthy") return "text-emerald-300";
-  if (status === "degraded") return "text-amber-200";
-  if (status === "critical") return "text-rose-300";
-  return "text-signal-silver";
+  if (status === "healthy") return "text-[var(--fp-success)]";
+  if (status === "degraded") return "text-[var(--fp-warning)]";
+  if (status === "critical") return "text-[var(--fp-danger)]";
+  return "text-[var(--fp-text-muted)]";
 }
 
-function Widget({
-  label,
-  value,
-  hint,
-  tone = "default"
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "default" | "good" | "bad" | "amber";
-}) {
-  const valueClass =
-    tone === "good"
-      ? "text-emerald-300"
-      : tone === "bad"
-        ? "text-rose-300"
-        : tone === "amber"
-          ? "text-amber-200"
-          : "text-signal-silver";
-  return (
-    <div className="lab-stat">
-      <div className="lab-stat-label">{label}</div>
-      <div className={`lab-stat-value text-lg sm:text-xl ${valueClass}`}>{value}</div>
-      {hint ? <div className="mt-1 text-[10px] text-signal-inkMuted/85">{hint}</div> : null}
-    </div>
-  );
+function widgetTone(tone: "default" | "good" | "bad" | "amber"): "neutral" | "success" | "danger" | "warning" {
+  if (tone === "good") return "success";
+  if (tone === "bad") return "danger";
+  if (tone === "amber") return "warning";
+  return "neutral";
 }
 
 function ChartCard({
@@ -66,10 +46,10 @@ function ChartCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-white/[0.07] bg-signal-void/35 p-3 sm:p-4 ${className}`}>
+    <div className={`rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4 ${className}`}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-silver">{title}</h4>
-        {subtitle ? <span className="font-mono text-[9px] text-signal-inkMuted">{subtitle}</span> : null}
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
+        {subtitle ? <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
       </div>
       {children}
     </div>
@@ -79,7 +59,7 @@ function ChartCard({
 function AlertList({ alerts }: { alerts: OpsAlert[] }) {
   if (!alerts.length) {
     return (
-      <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-3 font-mono text-[11px] text-emerald-200/90">
+      <div className="rounded-xl border border-[var(--fp-success)]/20 bg-[var(--fp-success)]/5 px-3 py-3 font-mono text-[11px] text-[var(--fp-success)]/90">
         No ops alerts — prediction / API / cache within thresholds.
       </div>
     );
@@ -91,8 +71,8 @@ function AlertList({ alerts }: { alerts: OpsAlert[] }) {
           key={a.id}
           className={`rounded-lg border px-2.5 py-2 font-mono text-[11px] ${
             a.level === "high"
-              ? "border-rose-400/30 bg-rose-500/10 text-rose-100"
-              : "border-amber-400/25 bg-amber-500/10 text-amber-100"
+              ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+              : "border-[var(--fp-warning)]/25 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
           }`}
         >
           <span className="mr-2 uppercase tracking-wide opacity-70">{a.level}</span>
@@ -104,11 +84,11 @@ function AlertList({ alerts }: { alerts: OpsAlert[] }) {
 }
 
 const tip = {
-  background: "rgba(10, 16, 24, 0.96)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  background: "var(--fp-bg-card)",
+  border: "1px solid var(--fp-border)",
   borderRadius: 10,
   fontSize: 11,
-  color: "#d5dee8"
+  color: "var(--fp-text)"
 };
 
 export default function HealthDashboard() {
@@ -159,11 +139,13 @@ export default function HealthDashboard() {
     : [];
 
   return (
-    <section className="lab-card mt-4 overflow-hidden sm:mt-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.06] px-3.5 py-3 sm:px-5">
+    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] sm:mt-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--fp-border)] px-3.5 py-3 sm:px-5">
         <div>
-          <h3 className="lab-section-eyebrow">Enterprise Monitoring</h3>
-          <p className="mt-1 font-display text-sm font-semibold text-signal-ink sm:text-base">
+          <h3 className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
+            Enterprise Monitoring
+          </h3>
+          <p className="mt-1 font-display text-sm font-semibold text-[var(--fp-text)] sm:text-base">
             Health Dashboard · latency · failures · daily reports
           </p>
         </div>
@@ -175,40 +157,35 @@ export default function HealthDashboard() {
               onClick={() => setDays(d)}
               className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${
                 days === d
-                  ? "border-signal-petrol/50 bg-signal-petrol/25 text-signal-mint"
-                  : "border-white/10 bg-signal-void/50 text-signal-inkMuted hover:text-signal-silver"
+                  ? "border-[var(--fp-accent)]/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
               }`}
             >
               {d}D
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-            className="rounded-lg bg-signal-petrol px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted disabled:opacity-50"
-          >
-            {loading ? "…" : "Refresh"}
-          </button>
+          <Button variant="primary" size="sm" loading={loading} onClick={() => void refresh()}>
+            Refresh
+          </Button>
         </div>
       </div>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-200 sm:mx-5">
+        <div className="mx-4 mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
           {error}
         </div>
       ) : null}
 
       {bundle ? (
         <>
-          <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.04] px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3 sm:px-5">
             <div className={`font-mono text-xs font-semibold uppercase tracking-[0.18em] ${statusTone(bundle.status)}`}>
               {bundle.status}
             </div>
-            <div className="font-mono text-[10px] text-signal-inkMuted">
+            <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">
               severity {bundle.severity} · {new Date(bundle.generatedAt).toLocaleString()}
             </div>
-            <div className="font-mono text-[10px] text-signal-inkMuted">
+            <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">
               KV {bundle.checks.kv.ok ? "ok" : "down"}
               {bundle.checks.kv.latencyMs != null ? ` ${bundle.checks.kv.latencyMs}ms` : ""}
               {" · "}
@@ -218,27 +195,27 @@ export default function HealthDashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-6">
-            <Widget
+            <StatTile
               label="Prediction Latency"
               value={fmtMs(perf?.predictionLatency.p95Ms ?? perf?.predictionLatency.avgMs)}
               hint={`avg ${fmtMs(perf?.predictionLatency.avgMs)} · n=${perf?.predictionLatency.count ?? 0}`}
             />
-            <Widget
+            <StatTile
               label="API Latency"
               value={fmtMs(perf?.apiLatency.p95Ms ?? perf?.apiLatency.avgMs)}
               hint={`avg ${fmtMs(perf?.apiLatency.avgMs)} · err ${(perf?.apiLatency.errorRate ?? 0) * 100}%`}
             />
-            <Widget
+            <StatTile
               label="Cache Latency"
               value={fmtMs(perf?.cacheLatency.p95Ms ?? perf?.cacheLatency.avgMs)}
               hint={`avg ${fmtMs(perf?.cacheLatency.avgMs)} · hits ${bundle.cache.hits}`}
             />
-            <Widget
+            <StatTile
               label="Memory"
               value={`${bundle.process.memory.heapUsedMb.toFixed(0)} MB`}
               hint={`RSS ${bundle.process.memory.rssMb.toFixed(0)} · heap ${bundle.process.memory.heapTotalMb.toFixed(0)}`}
             />
-            <Widget
+            <StatTile
               label="CPU"
               value={
                 bundle.process.cpu
@@ -251,50 +228,50 @@ export default function HealthDashboard() {
                   : "Snapshot per invoke"
               }
             />
-            <Widget
+            <StatTile
               label="Cache Hit Ratio"
               value={
                 bundle.cache.hitRatio != null ? `${(bundle.cache.hitRatio * 100).toFixed(1)}%` : "—"
               }
               hint={`${bundle.cache.hits} / ${bundle.cache.hits + bundle.cache.misses}`}
-              tone={
+              tone={widgetTone(
                 bundle.cache.hitRatio != null && bundle.cache.hitRatio >= 0.4
                   ? "good"
                   : bundle.cache.hitRatio != null && bundle.cache.hitRatio < 0.15
                     ? "amber"
                     : "default"
-              }
+              )}
             />
-            <Widget
+            <StatTile
               label="Prediction Failures"
               value={String(bundle.failures.prediction)}
-              tone={bundle.failures.prediction >= 3 ? "bad" : "default"}
+              tone={widgetTone(bundle.failures.prediction >= 3 ? "bad" : "default")}
               hint="Today"
             />
-            <Widget
+            <StatTile
               label="API Failures"
               value={String(bundle.failures.api)}
-              tone={bundle.failures.api >= 5 ? "bad" : "default"}
+              tone={widgetTone(bundle.failures.api >= 5 ? "bad" : "default")}
               hint="Today"
             />
-            <Widget
+            <StatTile
               label="Cache Failures"
               value={String(bundle.failures.cache)}
-              tone={bundle.failures.cache >= 3 ? "bad" : "default"}
+              tone={widgetTone(bundle.failures.cache >= 3 ? "bad" : "default")}
               hint="Today"
             />
-            <Widget
+            <StatTile
               label="API Remaining"
               value={String(bundle.usage.remaining)}
               hint={`${bundle.usage.count}/${bundle.usage.limit} · ${bundle.usage.pct}%`}
-              tone={bundle.usage.pct >= 90 ? "bad" : bundle.usage.pct >= 70 ? "amber" : "good"}
+              tone={widgetTone(bundle.usage.pct >= 90 ? "bad" : bundle.usage.pct >= 70 ? "amber" : "good")}
             />
-            <Widget
+            <StatTile
               label="Uptime"
               value={`${bundle.process.uptimeSec.toFixed(0)}s`}
               hint={bundle.process.node || "process"}
             />
-            <Widget
+            <StatTile
               label="Daily Report"
               value={bundle.dailyReport?.status || "—"}
               hint={bundle.dailyReport?.date || "Cron 00:05 UTC"}
@@ -306,12 +283,12 @@ export default function HealthDashboard() {
               <div className="h-52 w-full sm:h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={latencyBars} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="key" tick={{ fill: "#8a9aaa", fontSize: 10 }} />
-                    <YAxis tick={{ fill: "#7a8a9a", fontSize: 10 }} width={40} />
+                    <CartesianGrid stroke="var(--fp-border)" vertical={false} />
+                    <XAxis dataKey="key" tick={{ fill: "var(--fp-text-muted)", fontSize: 10 }} />
+                    <YAxis tick={{ fill: "var(--fp-text-muted)", fontSize: 10 }} width={40} />
                     <Tooltip contentStyle={tip} />
-                    <Bar dataKey="avg" name="Avg" fill="#6a9bb8" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="p95" name="P95" fill="#5ec4b6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="avg" name="Avg" fill="var(--fp-accent)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="p95" name="P95" fill="var(--fp-purple)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -320,13 +297,13 @@ export default function HealthDashboard() {
               <div className="h-52 w-full sm:h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={hist} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: "#7a8a9a", fontSize: 10 }} />
-                    <YAxis tick={{ fill: "#7a8a9a", fontSize: 10 }} width={28} allowDecimals={false} />
+                    <CartesianGrid stroke="var(--fp-border)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: "var(--fp-text-muted)", fontSize: 10 }} />
+                    <YAxis tick={{ fill: "var(--fp-text-muted)", fontSize: 10 }} width={28} allowDecimals={false} />
                     <Tooltip contentStyle={tip} />
-                    <Line type="monotone" dataKey="predFail" name="Predict" stroke="#e07a7a" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="apiFail" name="API" stroke="#e0b46a" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="cacheFail" name="Cache" stroke="#6a9bb8" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="predFail" name="Predict" stroke="var(--fp-danger)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="apiFail" name="API" stroke="var(--fp-warning)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="cacheFail" name="Cache" stroke="var(--fp-accent)" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -339,7 +316,7 @@ export default function HealthDashboard() {
             </ChartCard>
             <ChartCard title="Daily reports" subtitle="Recent digests">
               {(bundle.recentReports || []).length === 0 && !bundle.dailyReport ? (
-                <div className="font-mono text-[11px] text-signal-inkMuted">
+                <div className="font-mono text-[11px] text-[var(--fp-text-muted)]">
                   No reports yet — cron runs at 00:05 UTC.
                 </div>
               ) : (
@@ -348,11 +325,11 @@ export default function HealthDashboard() {
                     (r) => (
                       <li
                         key={r.date}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.04] bg-signal-mist/10 px-2.5 py-1.5 font-mono text-[11px]"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-1.5 font-mono text-[11px]"
                       >
-                        <span className="text-signal-silver">{r.date}</span>
+                        <span className="text-[var(--fp-text)]">{r.date}</span>
                         <span className={statusTone(r.status)}>{r.status}</span>
-                        <span className="text-signal-inkMuted">
+                        <span className="text-[var(--fp-text-muted)]">
                           alerts {r.alertCount ?? r.alerts?.length ?? 0}
                           {r.performance?.predictionP95 != null
                             ? ` · p95 ${fmtMs(r.performance.predictionP95)}`
@@ -367,8 +344,8 @@ export default function HealthDashboard() {
           </div>
         </>
       ) : !error && !loading ? (
-        <div className="px-4 py-8 text-center font-mono text-[11px] text-signal-inkMuted">No health data</div>
+        <div className="px-4 py-8 text-center font-mono text-[11px] text-[var(--fp-text-muted)]">No health data</div>
       ) : null}
-    </section>
+    </div>
   );
 }
