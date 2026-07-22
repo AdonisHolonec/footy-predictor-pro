@@ -2,36 +2,18 @@ import type { ReactNode } from "react";
 
 export type AdminSection =
   | "dashboard"
-  | "engine"
-  | "models"
+  | "model-lab"
   | "backtesting"
-  | "calibration"
-  | "feature-importance"
+  | "health"
   | "users"
-  | "subscriptions"
-  | "monitoring"
-  | "cache"
-  | "api-usage"
-  | "logs"
-  | "security"
-  | "settings"
   | "workspace";
 
 const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "engine", label: "Prediction Engine" },
-  { id: "models", label: "AI Models" },
+  { id: "model-lab", label: "Model Lab" },
   { id: "backtesting", label: "Backtesting" },
-  { id: "calibration", label: "Calibration" },
-  { id: "feature-importance", label: "Feature Importance" },
+  { id: "health", label: "Health" },
   { id: "users", label: "Users" },
-  { id: "subscriptions", label: "Subscriptions" },
-  { id: "monitoring", label: "Monitoring" },
-  { id: "cache", label: "Cache" },
-  { id: "api-usage", label: "API Usage" },
-  { id: "logs", label: "Logs" },
-  { id: "security", label: "Security" },
-  { id: "settings", label: "Settings" },
   { id: "workspace", label: "← Workspace" }
 ];
 

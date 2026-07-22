@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, type ComponentProps } from "react";
-import { AdminPerformanceObservatory } from "../admin/AdminObservatory";
+import { AdminModelMetricsPanel, AdminPerformanceObservatory } from "../admin/AdminObservatory";
+import AdminUsersPanel from "./AdminUsersPanel";
 import SuccessRateTracker from "../SuccessRateTracker";
 import StatisticsPanel, { type StatisticsPanelProps } from "./StatisticsPanel";
 import AdminShell, { type AdminSection } from "../ux/AdminShell";
@@ -27,15 +28,18 @@ type TrackerProps = {
   onBreakdownClick: () => void;
 };
 
+type AdminUsersPanelProps = ComponentProps<typeof AdminUsersPanel>;
+
 type PerformancePanelProps = {
   tracker: TrackerProps;
   statistics: StatisticsPanelProps;
   usageCount: number;
   usageLimit: number;
   usagePct: number;
-  usageSnapshot?: UsageSnapshot | null;
-  onLoadUsage?: () => void;
-};
+  usageSnapshot: UsageSnapshot | null;
+  onLoadUsage: () => void;
+  accessToken?: string | null;
+} & Omit<AdminUsersPanelProps, "usageSnapshot" | "onLoadUsage">;
 
 export type { TrackerProps };
 
@@ -54,7 +58,22 @@ export default function PerformancePanel({
   usageLimit,
   usagePct,
   usageSnapshot,
-  onLoadUsage
+  onLoadUsage,
+  accessToken,
+  managedProfiles,
+  isAdminWorking,
+  onRefreshProfiles,
+  usageLoading,
+  perfAdminSnapshot,
+  perfAdminLoading,
+  onLoadPerfAdmin,
+  adminTierDraftByUser,
+  setAdminTierDraftByUser,
+  adminExpiryDraftByUser,
+  setAdminExpiryDraftByUser,
+  onRoleChange,
+  onToggleBlock,
+  onMonetizationSave
 }: PerformancePanelProps) {
   const [section, setSection] = useState<AdminSection>("dashboard");
 
@@ -92,9 +111,10 @@ export default function PerformancePanel({
                 onLoadUsage={onLoadUsage}
               />
             </Suspense>
+            {accessToken && <AdminModelMetricsPanel accessToken={accessToken} days={45} />}
           </div>
         )}
-        {(section === "engine" || section === "models" || section === "calibration" || section === "feature-importance") && (
+        {section === "model-lab" && (
           <Suspense fallback={<LabFallback label="Model Laboratory" />}>
             <ModelLabPanel />
           </Suspense>
@@ -104,27 +124,30 @@ export default function PerformancePanel({
             <BacktestAnalyticsPanel />
           </Suspense>
         )}
-        {(section === "monitoring" || section === "api-usage" || section === "logs" || section === "cache") && (
+        {section === "health" && (
           <Suspense fallback={<LabFallback label="Health Dashboard" />}>
             <HealthDashboard />
           </Suspense>
         )}
-        {(section === "users" || section === "subscriptions" || section === "security" || section === "settings") && (
-          <div className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5">
-            <h2 className="font-display text-lg font-semibold text-[var(--text)]">
-              {section === "users"
-                ? "Users"
-                : section === "subscriptions"
-                  ? "Subscriptions"
-                  : section === "security"
-                    ? "Security"
-                    : "Settings"}
-            </h2>
-            <p className="text-sm text-[var(--text-muted)]">
-              Manage from the Admin Users panel above the observatory, or via Supabase / billing when configured.
-            </p>
-            {trackerBlock}
-          </div>
+        {section === "users" && (
+          <AdminUsersPanel
+            managedProfiles={managedProfiles}
+            isAdminWorking={isAdminWorking}
+            onRefreshProfiles={onRefreshProfiles}
+            usageSnapshot={usageSnapshot}
+            usageLoading={usageLoading}
+            onLoadUsage={onLoadUsage}
+            perfAdminSnapshot={perfAdminSnapshot}
+            perfAdminLoading={perfAdminLoading}
+            onLoadPerfAdmin={onLoadPerfAdmin}
+            adminTierDraftByUser={adminTierDraftByUser}
+            setAdminTierDraftByUser={setAdminTierDraftByUser}
+            adminExpiryDraftByUser={adminExpiryDraftByUser}
+            setAdminExpiryDraftByUser={setAdminExpiryDraftByUser}
+            onRoleChange={onRoleChange}
+            onToggleBlock={onToggleBlock}
+            onMonetizationSave={onMonetizationSave}
+          />
         )}
         {section === "workspace" && (
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5 text-sm text-[var(--text-muted)]">

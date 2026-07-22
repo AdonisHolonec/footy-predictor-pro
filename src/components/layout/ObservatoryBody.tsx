@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 import { AdminInsightColumn, type KickoffScope } from "../admin/AdminObservatory";
 import PredictionList from "../cards/PredictionList";
-import BacktestPanel from "../panels/BacktestPanel";
 import PerformancePanel from "../panels/PerformancePanel";
 import type { StatisticsPanelProps } from "../panels/StatisticsPanel";
 import Sidebar from "../sidebar/Sidebar";
@@ -9,6 +8,10 @@ import { FilterMode, SortBy } from "../../constants/appConstants";
 import { League, PredictionRow } from "../../types";
 
 type TrackerProps = ComponentProps<typeof PerformancePanel>["tracker"];
+type AdminUsersProps = Omit<
+  ComponentProps<typeof PerformancePanel>,
+  "tracker" | "statistics" | "usageCount" | "usageLimit" | "usagePct" | "usageSnapshot" | "onLoadUsage" | "accessToken"
+>;
 
 type ObservatoryBodyProps = {
   trackerProps: TrackerProps;
@@ -16,8 +19,8 @@ type ObservatoryBodyProps = {
   usageCount: number;
   usageLimit: number;
   usagePct: number;
-  usageSnapshot?: import("../../types/index").UsageSnapshot | null;
-  onLoadUsage?: () => void;
+  usageSnapshot: import("../../types/index").UsageSnapshot | null;
+  onLoadUsage: () => void;
   accessToken?: string | null;
   isAdmin: boolean;
   user: { email?: string | null; role?: string; tier?: string } | null;
@@ -48,7 +51,7 @@ type ObservatoryBodyProps = {
   hashColor: (seed: string) => string;
   onSelectMatch: (match: PredictionRow) => void;
   insightSample: PredictionRow | null;
-};
+} & AdminUsersProps;
 
 export default function ObservatoryBody({
   trackerProps,
@@ -59,9 +62,22 @@ export default function ObservatoryBody({
   usageSnapshot,
   onLoadUsage,
   accessToken,
-  isAdmin,
   insightSample,
   onOpenAuth,
+  managedProfiles,
+  isAdminWorking,
+  onRefreshProfiles,
+  usageLoading,
+  perfAdminSnapshot,
+  perfAdminLoading,
+  onLoadPerfAdmin,
+  adminTierDraftByUser,
+  setAdminTierDraftByUser,
+  adminExpiryDraftByUser,
+  setAdminExpiryDraftByUser,
+  onRoleChange,
+  onToggleBlock,
+  onMonetizationSave,
   ...rest
 }: ObservatoryBodyProps) {
   return (
@@ -74,8 +90,22 @@ export default function ObservatoryBody({
         usagePct={usagePct}
         usageSnapshot={usageSnapshot}
         onLoadUsage={onLoadUsage}
+        accessToken={accessToken}
+        managedProfiles={managedProfiles}
+        isAdminWorking={isAdminWorking}
+        onRefreshProfiles={onRefreshProfiles}
+        usageLoading={usageLoading}
+        perfAdminSnapshot={perfAdminSnapshot}
+        perfAdminLoading={perfAdminLoading}
+        onLoadPerfAdmin={onLoadPerfAdmin}
+        adminTierDraftByUser={adminTierDraftByUser}
+        setAdminTierDraftByUser={setAdminTierDraftByUser}
+        adminExpiryDraftByUser={adminExpiryDraftByUser}
+        setAdminExpiryDraftByUser={setAdminExpiryDraftByUser}
+        onRoleChange={onRoleChange}
+        onToggleBlock={onToggleBlock}
+        onMonetizationSave={onMonetizationSave}
       />
-      {isAdmin && accessToken ? <BacktestPanel accessToken={accessToken} days={45} /> : null}
       <Sidebar
         user={rest.user}
         leaguesSorted={rest.leaguesSorted}

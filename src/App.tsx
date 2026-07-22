@@ -5,7 +5,6 @@ import GuestBody from "./components/layout/GuestBody";
 import GuestHeaderControls from "./components/layout/GuestHeaderControls";
 import Header from "./components/layout/Header";
 import ObservatoryBody from "./components/layout/ObservatoryBody";
-import AdminUsersPanel from "./components/panels/AdminUsersPanel";
 import ApiStatus from "./components/panels/ApiStatus";
 import StatisticsPanel from "./components/panels/StatisticsPanel";
 import PerformanceCounterModal from "./components/PerformanceCounterModal";
@@ -83,27 +82,6 @@ export default function App() {
 
         <ApiStatus status={c.status} />
 
-        {c.user?.role === "admin" && (
-          <AdminUsersPanel
-            managedProfiles={c.managedProfiles}
-            isAdminWorking={c.actions.isAdminWorking}
-            onRefreshProfiles={() => void c.refreshManagedProfiles()}
-            usageSnapshot={c.calls.usageSnapshot}
-            usageLoading={c.calls.usageLoading}
-            onLoadUsage={() => void c.calls.loadUsageSnapshot()}
-            perfAdminSnapshot={c.perfAdminSnapshot}
-            perfAdminLoading={c.perfAdminLoading}
-            onLoadPerfAdmin={() => void c.loadPerfAdmin()}
-            adminTierDraftByUser={c.adminTierDraftByUser}
-            setAdminTierDraftByUser={c.setAdminTierDraftByUser}
-            adminExpiryDraftByUser={c.adminExpiryDraftByUser}
-            setAdminExpiryDraftByUser={c.setAdminExpiryDraftByUser}
-            onRoleChange={c.actions.handleAdminRoleChange}
-            onToggleBlock={c.actions.handleAdminToggleBlock}
-            onMonetizationSave={c.actions.handleAdminMonetizationSave}
-          />
-        )}
-
         {c.observatoryShell ? (
           <ObservatoryBody
             {...c.sharedListProps}
@@ -121,6 +99,20 @@ export default function App() {
             minXgSpread={c.predictions.minXgSpread}
             setMinXgSpread={c.predictions.setMinXgSpread}
             insightSample={c.predictions.insightSample}
+            managedProfiles={c.managedProfiles}
+            isAdminWorking={c.actions.isAdminWorking}
+            onRefreshProfiles={() => void c.refreshManagedProfiles()}
+            usageLoading={c.calls.usageLoading}
+            perfAdminSnapshot={c.perfAdminSnapshot}
+            perfAdminLoading={c.perfAdminLoading}
+            onLoadPerfAdmin={() => void c.loadPerfAdmin()}
+            adminTierDraftByUser={c.adminTierDraftByUser}
+            setAdminTierDraftByUser={c.setAdminTierDraftByUser}
+            adminExpiryDraftByUser={c.adminExpiryDraftByUser}
+            setAdminExpiryDraftByUser={c.setAdminExpiryDraftByUser}
+            onRoleChange={c.actions.handleAdminRoleChange}
+            onToggleBlock={c.actions.handleAdminToggleBlock}
+            onMonetizationSave={c.actions.handleAdminMonetizationSave}
           />
         ) : (
           <GuestBody {...c.sharedListProps} />
