@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { BacktestAnalyticsResponse, DashboardBundle } from "../../types";
 import type { UsageSnapshot } from "../../types/index";
 import { loadAnalytics } from "../../services/backtestService";
+import { StatTile, Button } from "../../design-system";
 import {
   ApiUsageBarChart,
   ConfidenceAreaChart,
@@ -47,40 +48,10 @@ const EMPTY_DASH: DashboardBundle = {
   profitLine: []
 };
 
-function pnlTone(n: number): "good" | "bad" | "default" {
-  if (n > 0) return "good";
-  if (n < 0) return "bad";
-  return "default";
-}
-
-function Widget({
-  label,
-  value,
-  hint,
-  tone = "default",
-  className = ""
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "default" | "good" | "bad" | "amber";
-  className?: string;
-}) {
-  const valueClass =
-    tone === "good"
-      ? "text-emerald-300"
-      : tone === "bad"
-        ? "text-rose-300"
-        : tone === "amber"
-          ? "text-amber-200"
-          : "text-signal-silver";
-  return (
-    <div className={`lab-stat ${className}`}>
-      <div className="lab-stat-label">{label}</div>
-      <div className={`lab-stat-value text-lg sm:text-xl ${valueClass}`}>{value}</div>
-      {hint ? <div className="mt-1 text-[10px] text-signal-inkMuted/85">{hint}</div> : null}
-    </div>
-  );
+function pnlTone(n: number): "success" | "danger" | "neutral" {
+  if (n > 0) return "success";
+  if (n < 0) return "danger";
+  return "neutral";
 }
 
 function ChartCard({
@@ -95,10 +66,10 @@ function ChartCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-white/[0.07] bg-signal-void/35 p-3 sm:p-4 ${className}`}>
+    <div className={`rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4 ${className}`}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-silver">{title}</h4>
-        {subtitle ? <span className="font-mono text-[9px] text-signal-inkMuted">{subtitle}</span> : null}
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
+        {subtitle ? <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
       </div>
       {children}
     </div>
@@ -115,24 +86,24 @@ function RankList({
   mode: "best" | "worst";
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-signal-void/35 p-3 sm:p-4">
-      <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-signal-silver">{title}</h4>
+    <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4">
+      <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
       <ul className="space-y-1.5">
         {(rows || []).length === 0 ? (
-          <li className="font-mono text-[11px] text-signal-inkMuted">Insufficient sample</li>
+          <li className="font-mono text-[11px] text-[var(--fp-text-muted)]">Insufficient sample</li>
         ) : (
           rows.map((r, i) => (
             <li
               key={`${r.key}-${i}`}
-              className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.04] bg-signal-mist/10 px-2.5 py-1.5"
+              className="flex items-center justify-between gap-2 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-1.5"
             >
-              <span className="truncate font-mono text-[11px] text-signal-silver">
-                <span className="mr-1.5 text-signal-inkMuted">{i + 1}.</span>
+              <span className="truncate font-mono text-[11px] text-[var(--fp-text)]">
+                <span className="mr-1.5 text-[var(--fp-text-muted)]">{i + 1}.</span>
                 {r.key}
               </span>
               <span
                 className={`shrink-0 font-mono text-[11px] tabular-nums ${
-                  mode === "best" ? "text-emerald-300" : "text-rose-300"
+                  mode === "best" ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"
                 }`}
               >
                 {r.roi >= 0 ? "+" : ""}
@@ -202,11 +173,13 @@ export default function EnterpriseDashboard({
   const predDist = dash.predictionDistribution || [];
 
   return (
-    <section className="lab-card mt-4 overflow-hidden sm:mt-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.06] px-3.5 py-3 sm:px-5">
+    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] sm:mt-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--fp-border)] px-3.5 py-3 sm:px-5">
         <div>
-          <h3 className="lab-section-eyebrow">Enterprise Dashboard</h3>
-          <p className="mt-1 font-display text-sm font-semibold text-signal-ink sm:text-base">
+          <h3 className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
+            Enterprise Dashboard
+          </h3>
+          <p className="mt-1 font-display text-sm font-semibold text-[var(--fp-text)] sm:text-base">
             Accuracy · value · markets · API &amp; cache
           </p>
         </div>
@@ -224,50 +197,45 @@ export default function EnterpriseDashboard({
               onClick={() => setPeriod(p.key)}
               className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${
                 period === p.key
-                  ? "border-signal-petrol/50 bg-signal-petrol/25 text-signal-mint"
-                  : "border-white/10 bg-signal-void/50 text-signal-inkMuted hover:text-signal-silver"
+                  ? "border-[var(--fp-accent)]/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
               }`}
             >
               {p.label}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-            className="rounded-lg bg-signal-petrol px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-signal-petrolMuted disabled:opacity-50"
-          >
-            {loading ? "…" : "Refresh"}
-          </button>
+          <Button variant="primary" size="sm" loading={loading} onClick={() => void refresh()}>
+            Refresh
+          </Button>
         </div>
       </div>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-200 sm:mx-5">
+        <div className="mx-4 mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
           {error}
         </div>
       ) : null}
 
       {/* Core KPI widgets — responsive 2 → 7 cols */}
       <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-        <Widget label="Prediction Accuracy" value={`${dash.predictionAccuracy.toFixed(1)}%`} hint="Settled picks" />
-        <Widget label="ROI" value={`${dash.roi.toFixed(2)}%`} tone={pnlTone(dash.roi)} />
-        <Widget label="Yield" value={`${dash.yield.toFixed(2)}%`} tone={pnlTone(dash.yield)} />
-        <Widget label="Hit Rate" value={`${hitRate.toFixed(1)}%`} hint={`${dash.settled ?? 0} settled`} />
-        <Widget label="Average Odds" value={avgOdds > 0 ? avgOdds.toFixed(2) : "—"} hint="Decimal" />
-        <Widget
+        <StatTile label="Prediction Accuracy" value={`${dash.predictionAccuracy.toFixed(1)}%`} hint="Settled picks" />
+        <StatTile label="ROI" value={`${dash.roi.toFixed(2)}%`} tone={pnlTone(dash.roi)} />
+        <StatTile label="Yield" value={`${dash.yield.toFixed(2)}%`} tone={pnlTone(dash.yield)} />
+        <StatTile label="Hit Rate" value={`${hitRate.toFixed(1)}%`} hint={`${dash.settled ?? 0} settled`} />
+        <StatTile label="Average Odds" value={avgOdds > 0 ? avgOdds.toFixed(2) : "—"} hint="Decimal" />
+        <StatTile
           label="Expected Value"
           value={ev !== 0 ? `${ev >= 0 ? "+" : ""}${ev.toFixed(2)}%` : "—"}
           tone={pnlTone(ev)}
           hint="Mean EV"
         />
-        <Widget
+        <StatTile
           label="Calls Remaining"
           value={String(callsRemaining)}
           hint={`${usageCount} / ${usageLimit} · ${usagePct.toFixed(0)}%`}
-          tone={callsRemaining <= Math.max(5, usageLimit * 0.1) ? "bad" : callsRemaining <= usageLimit * 0.3 ? "amber" : "good"}
+          tone={callsRemaining <= Math.max(5, usageLimit * 0.1) ? "danger" : callsRemaining <= usageLimit * 0.3 ? "warning" : "success"}
         />
-        <Widget
+        <StatTile
           label="Cache Hit Ratio"
           value={formatCacheRatio(cacheRatio)}
           hint={
@@ -277,9 +245,9 @@ export default function EnterpriseDashboard({
                 ? "Load usage to populate"
                 : "No cache stats"
           }
-          tone={cacheRatio != null && cacheRatio >= 0.5 ? "good" : cacheRatio != null && cacheRatio < 0.2 ? "amber" : "default"}
+          tone={cacheRatio != null && cacheRatio >= 0.5 ? "success" : cacheRatio != null && cacheRatio < 0.2 ? "warning" : "neutral"}
         />
-        <Widget
+        <StatTile
           label="League Performance"
           value={dash.leaguePerformance[0] ? dash.leaguePerformance[0].key : "—"}
           hint={
@@ -288,7 +256,7 @@ export default function EnterpriseDashboard({
               : "No leagues yet"
           }
         />
-        <Widget
+        <StatTile
           label="Market Performance"
           value={dash.marketPerformance[0] ? `Mkt ${dash.marketPerformance[0].key}` : "—"}
           hint={
@@ -297,7 +265,7 @@ export default function EnterpriseDashboard({
               : "No markets yet"
           }
         />
-        <Widget
+        <StatTile
           label="Confidence Distribution"
           value={
             dash.confidenceDistribution.length
@@ -310,12 +278,12 @@ export default function EnterpriseDashboard({
               : "No confidence data"
           }
         />
-        <Widget
+        <StatTile
           label="Prediction Distribution"
           value={predDist[0] ? predDist[0].key : "—"}
           hint={predDist[0] ? `${predDist[0].pct.toFixed(0)}% of picks · n=${predDist[0].count}` : "No pick mix yet"}
         />
-        <Widget
+        <StatTile
           label="Best Markets"
           value={bestMarkets[0] ? bestMarkets[0].key : "—"}
           hint={
@@ -323,9 +291,9 @@ export default function EnterpriseDashboard({
               ? `ROI ${bestMarkets[0].roi >= 0 ? "+" : ""}${bestMarkets[0].roi.toFixed(1)}%`
               : "Need ≥2 settled"
           }
-          tone={bestMarkets[0] ? pnlTone(bestMarkets[0].roi) : "default"}
+          tone={bestMarkets[0] ? pnlTone(bestMarkets[0].roi) : "neutral"}
         />
-        <Widget
+        <StatTile
           label="Worst Markets"
           value={worstMarkets[0] ? worstMarkets[0].key : "—"}
           hint={
@@ -333,7 +301,7 @@ export default function EnterpriseDashboard({
               ? `ROI ${worstMarkets[0].roi >= 0 ? "+" : ""}${worstMarkets[0].roi.toFixed(1)}%`
               : "Need ≥2 settled"
           }
-          tone={worstMarkets[0] ? pnlTone(worstMarkets[0].roi) : "default"}
+          tone={worstMarkets[0] ? pnlTone(worstMarkets[0].roi) : "neutral"}
         />
       </div>
 
@@ -374,7 +342,7 @@ export default function EnterpriseDashboard({
           {predDist.length ? (
             <PredictionDistributionPie data={predDist} />
           ) : (
-            <div className="flex h-52 items-center justify-center font-mono text-[11px] text-signal-inkMuted sm:h-60">
+            <div className="flex h-52 items-center justify-center font-mono text-[11px] text-[var(--fp-text-muted)] sm:h-60">
               No prediction mix yet
             </div>
           )}
@@ -383,13 +351,13 @@ export default function EnterpriseDashboard({
           {usageHistory.length ? (
             <ApiUsageBarChart history={usageHistory} />
           ) : (
-            <div className="flex h-52 flex-col items-center justify-center gap-2 font-mono text-[11px] text-signal-inkMuted sm:h-60">
+            <div className="flex h-52 flex-col items-center justify-center gap-2 font-mono text-[11px] text-[var(--fp-text-muted)] sm:h-60">
               <span>Usage history not loaded</span>
               {onLoadUsage ? (
                 <button
                   type="button"
                   onClick={() => onLoadUsage()}
-                  className="rounded-md border border-white/10 px-3 py-1 text-[10px] uppercase tracking-wide text-signal-silver hover:bg-signal-mist/20"
+                  className="rounded-md border border-[var(--fp-border)] px-3 py-1 text-[10px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                 >
                   Load API usage
                 </button>
@@ -409,6 +377,6 @@ export default function EnterpriseDashboard({
         <RankList title="Best leagues" rows={dash.bestLeagues} mode="best" />
         <RankList title="Worst leagues" rows={dash.worstLeagues} mode="worst" />
       </div>
-    </section>
+    </div>
   );
 }
