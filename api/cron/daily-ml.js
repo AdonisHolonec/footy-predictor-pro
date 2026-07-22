@@ -32,6 +32,13 @@ import { generateDailyReport } from "../../server-utils/observability/healthBund
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
+import { getLeagueProfile } from "../../server-utils/leagueProfiles/LeagueProfile.js";
+import { computeLeagueProfileRecalibration } from "../../server-utils/leagueProfiles/computeLeagueProfileRecalibration.js";
+import { saveLeagueProfileOverlay } from "../../server-utils/leagueProfiles/leagueProfileOverlayStore.js";
+import {
+  refreshLeagueProfileOverlays,
+  clearRuntimeLeagueOverlays
+} from "../../server-utils/leagueProfiles/leagueProfileOverlayRuntime.js";
 
 const CALIBRATION_MIN_SAMPLES = Math.max(40, Number(process.env.CALIBRATION_MIN_SAMPLES || 150));
 const CALIBRATION_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.CALIBRATION_WINDOW_DAYS || 180), 720));
@@ -45,6 +52,10 @@ const SGD_LR = Number(process.env.STACKER_LR || 0.08);
 const SGD_L2 = Number(process.env.STACKER_L2 || 1e-3);
 const SGD_BATCH = Math.max(16, Math.min(Number(process.env.STACKER_BATCH || 64), 256));
 const STACKER_WF_FOLDS = Math.max(2, Math.min(Number(process.env.STACKER_WF_FOLDS || 3), 6));
+
+const LEAGUE_PROFILE_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.LEAGUE_PROFILE_WINDOW_DAYS || 270), 720));
+const LEAGUE_PROFILE_MIN_SAMPLES = Math.max(20, Number(process.env.LEAGUE_PROFILE_MIN_SAMPLES || 60));
+const LEAGUE_PROFILE_SHRINKAGE_K = Math.max(1, Number(process.env.LEAGUE_PROFILE_SHRINKAGE_K || 80));
 
 function buildCalibrationGroups(rows) {
   const out = { "1": [], X: [], "2": [], O15: [], O25: [], U35: [], GG: [] };
@@ -338,6 +349,40 @@ async function runStacker(supabase, modelVersion) {
   return { rows: rows.length, samples: samples.length, trained, featureSource: "calibrated_1x2" };
 }
 
+async function runLeagueProfileRecalibration(supabase, modelVersion) {
+  const rows = await loadSettledRows(supabase, LEAGUE_PROFILE_WINDOW_DAYS, ROW_LIMIT);
+  const byLeague = new Map();
+  for (const r of rows) {
+    const id = Number(r.league_id);
+    if (!Number.isFinite(id)) continue;
+    if (!byLeague.has(id)) byLeague.set(id, []);
+    byLeague.get(id).push(r);
+  }
+
+  const summary = [];
+  for (const [leagueId, leagueRows] of byLeague.entries()) {
+    const staticProfile = getLeagueProfile(leagueId);
+    const result = computeLeagueProfileRecalibration(leagueRows, staticProfile, {
+      minSamples: LEAGUE_PROFILE_MIN_SAMPLES,
+      shrinkageK: LEAGUE_PROFILE_SHRINKAGE_K
+    });
+    if (!result) {
+      summary.push({ leagueId, skipped: true, reason: `n=${leagueRows.length}` });
+      continue;
+    }
+    await saveLeagueProfileOverlay({
+      leagueId,
+      modelVersion,
+      values: result.values,
+      sampleSize: result.sampleSize,
+      metrics: result.metrics
+    });
+    summary.push({ leagueId, n: result.sampleSize, values: result.values });
+  }
+
+  return { rows: rows.length, summary };
+}
+
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -392,12 +437,18 @@ export default async function handler(req, res) {
     let calibration = null;
     let stacker = null;
     let autoCalibration = null;
+    let leagueProfiles = null;
     if (mode === "all" || mode === "calibration") calibration = await runCalibration(supabase, modelVersion);
     if (mode === "all" || mode === "stacker") stacker = await runStacker(supabase, modelVersion);
     if (mode === "all" || mode === "auto-calibration" || mode === "auto_calibration") {
       autoCalibration = await runAutoCalibration({ modelVersion, mode: "auto" });
       clearRuntimeOverlays();
       await refreshAutoCalibrationOverlays(modelVersion).catch(() => ({}));
+    }
+    if (mode === "all" || mode === "league-profiles" || mode === "league_profiles") {
+      leagueProfiles = await runLeagueProfileRecalibration(supabase, modelVersion);
+      clearRuntimeLeagueOverlays();
+      await refreshLeagueProfileOverlays(modelVersion).catch(() => new Map());
     }
 
     invalidateCalibrationCache();
@@ -419,7 +470,10 @@ export default async function handler(req, res) {
         stackerWindowDays: STACKER_WINDOW_DAYS,
         rowLimit: ROW_LIMIT,
         sgd: { epochs: SGD_EPOCHS, lr: SGD_LR, l2: SGD_L2, batch: SGD_BATCH },
-        stackerWalkForwardFolds: STACKER_WF_FOLDS
+        stackerWalkForwardFolds: STACKER_WF_FOLDS,
+        leagueProfileWindowDays: LEAGUE_PROFILE_WINDOW_DAYS,
+        leagueProfileMinSamples: LEAGUE_PROFILE_MIN_SAMPLES,
+        leagueProfileShrinkageK: LEAGUE_PROFILE_SHRINKAGE_K
       },
       calibration,
       stacker,
@@ -432,7 +486,8 @@ export default async function handler(req, res) {
             report: autoCalibration.report || null
           }
         : null,
-      cacheInvalidated: ["calibration", "stacker", "elo", "market-rolling", "auto-calibration"]
+      leagueProfiles,
+      cacheInvalidated: ["calibration", "stacker", "elo", "market-rolling", "auto-calibration", "league-profiles"]
     });
   } catch (error) {
     return res.status(500).json({

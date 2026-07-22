@@ -7,6 +7,7 @@
 import { readFileSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { getRuntimeLeagueOverlay } from "./leagueProfileOverlayRuntime.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(__dirname, "leagueProfiles.config.json");
@@ -83,6 +84,28 @@ export function getLeagueProfile(leagueId) {
   const key = Number.isFinite(id) ? String(id) : null;
   const specific = key && config.leagues[key] ? config.leagues[key] : null;
   const profile = mergeProfile(config.default, specific);
+
+  // Recalibration overlay (fitted nightly from settled results, server-utils/leagueProfiles/
+  // computeLeagueProfileRecalibration.js) — blends toward the static baseline above within a
+  // hard max-delta budget. Read from the already-warmed process-local cache only; never
+  // touches Supabase here. The env override below still wins as the manual escape hatch.
+  const overlay = key ? getRuntimeLeagueOverlay(id) : null;
+  if (overlay?.values) {
+    const baseDelta = clamp(num(process.env?.LEAGUE_PROFILE_OVERLAY_MAX_DELTA, 0.06) ?? 0.06, 0, 0.25);
+    for (const field of ["overFrequency", "bttsRate", "drawFrequency", "homeAdvantage"]) {
+      const ov = num(overlay.values[field], null);
+      const staticValue = num(profile[field], null);
+      if (ov != null && staticValue != null) {
+        profile[field] = clamp(ov, staticValue - baseDelta, staticValue + baseDelta);
+      }
+    }
+    const ovGoal = num(overlay.values.goalFrequency, null);
+    const staticGoal = num(profile.goalFrequency, null);
+    if (ovGoal != null && staticGoal != null) {
+      const goalDelta = baseDelta * staticGoal;
+      profile.goalFrequency = clamp(ovGoal, staticGoal - goalDelta, staticGoal + goalDelta);
+    }
+  }
 
   // Optional per-league env overlay: LEAGUE_PROFILE_39_JSON='{"homeAdvantage":1.1}'
   if (key && typeof process !== "undefined") {

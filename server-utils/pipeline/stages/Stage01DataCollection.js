@@ -28,6 +28,7 @@ import { getActiveModelId } from "../../modelLab/BlendRecipeSelection.js";
 import { loadCalibrationMaps } from "../../isotonicCalibration.js";
 import { loadStackerWeights } from "../../mlStacker.js";
 import { refreshAutoCalibrationOverlays } from "../../calibration/overlayRuntime.js";
+import { refreshLeagueProfileOverlays } from "../../leagueProfiles/leagueProfileOverlayRuntime.js";
 import { prefetchOddsByDate } from "../../oddsPrefetch.js";
 import { MODEL_VERSION } from "../../modelConstants.js";
 import { LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS, loadRiskContext } from "../predictHelpers.js";
@@ -328,7 +329,8 @@ export async function run(context) {
   const [calibrationMaps, stackerWeightsMap] = await Promise.all([
     loadCalibrationMaps(MODEL_VERSION).catch(() => ({})),
     loadStackerWeights(MODEL_VERSION).catch(() => new Map()),
-    refreshAutoCalibrationOverlays(MODEL_VERSION).catch(() => ({}))
+    refreshAutoCalibrationOverlays(MODEL_VERSION).catch(() => ({})),
+    refreshLeagueProfileOverlays(MODEL_VERSION).catch(() => new Map())
   ]);
   context.calibrationMaps = calibrationMaps;
   context.stackerWeightsMap = stackerWeightsMap;
