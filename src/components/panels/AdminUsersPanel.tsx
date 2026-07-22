@@ -56,15 +56,15 @@ export default function AdminUsersPanel({
   onMonetizationSave
 }: AdminUsersPanelProps) {
   return (
-    <section className="mb-6 rounded-2xl border border-white/[0.08] bg-signal-panel/40 p-4 shadow-atelier backdrop-blur-xl">
+    <section className="mb-6 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Admin · utilizatori</h2>
-          <p className="text-xs text-signal-inkMuted">Roluri, blocare și preferințe.</p>
-          <p className="mt-1 text-[10px] text-signal-inkMuted">
-            Warm/Predict (calendar local): <span className="font-mono text-signal-petrol">{localCalendarDateKey()}</span>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Admin · utilizatori</h2>
+          <p className="text-xs text-[var(--fp-text-muted)]">Roluri, blocare și preferințe.</p>
+          <p className="mt-1 text-[10px] text-[var(--fp-text-muted)]">
+            Warm/Predict (calendar local): <span className="font-mono text-[var(--fp-accent)]">{localCalendarDateKey()}</span>
             {" · "}
-            <Link to="/privacy" className="font-medium text-signal-petrolMuted underline-offset-2 hover:underline">
+            <Link to="/privacy" className="font-medium text-[var(--fp-accent)] underline-offset-2 hover:underline">
               GDPR
             </Link>
           </p>
@@ -73,7 +73,7 @@ export default function AdminUsersPanel({
           type="button"
           onClick={() => void onRefreshProfiles()}
           disabled={isAdminWorking}
-          className="rounded-lg border border-white/10 bg-signal-fog px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel disabled:opacity-50"
+          className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-bg-card)] disabled:opacity-50"
         >
           Refresh
         </button>

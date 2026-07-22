@@ -33,9 +33,9 @@ function isoToLocalDatetimeInput(value?: string | null) {
 }
 
 function tierToneClass(tier: UserTier) {
-  if (tier === "ultra") return "border-signal-amber/35 bg-signal-amber/10 text-signal-amber";
-  if (tier === "premium") return "border-signal-petrol/35 bg-signal-petrol/10 text-signal-petrol";
-  return "border-white/10 bg-signal-void/40 text-signal-inkMuted";
+  if (tier === "ultra") return "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
+  if (tier === "premium") return "border-[var(--fp-accent)]/35 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]";
+  return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
 }
 
 function isExpiredSubscription(iso?: string | null) {
@@ -57,9 +57,9 @@ export default function AdminUsersTable({
   onMonetizationSave
 }: AdminUsersTableProps) {
   return (
-    <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/5 bg-signal-void/40">
-      <table className="min-w-full text-left text-[11px] text-signal-petrol">
-        <thead className="sticky top-0 bg-signal-fog/95 text-[10px] uppercase text-signal-inkMuted">
+    <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
+      <table className="min-w-full text-left text-[11px] text-[var(--fp-accent)]">
+        <thead className="sticky top-0 bg-[var(--fp-bg-muted)]/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
           <tr>
             <th className="px-3 py-2">Email</th>
             <th className="px-3 py-2">User ID</th>
@@ -74,14 +74,14 @@ export default function AdminUsersTable({
         </thead>
         <tbody>
           {managedProfiles.map((profile) => (
-            <tr key={profile.userId} className="border-t border-signal-line/40">
-              <td className="px-3 py-2 font-mono text-[10px] text-signal-ink">
+            <tr key={profile.userId} className="border-t border-[var(--fp-border)]">
+              <td className="px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
                 {profile.email ? (
                   profile.email
                 ) : (
                   <span className="inline-flex items-center gap-2">
                     <span>—</span>
-                    <span className="rounded-full border border-signal-amber/40 bg-signal-amber/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-amber">
+                    <span className="rounded-full border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
                       email missing
                     </span>
                   </span>
@@ -107,7 +107,7 @@ export default function AdminUsersTable({
                       [profile.userId]: e.target.value as UserTier
                     }))
                   }
-                  className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] font-semibold text-signal-petrol"
+                  className="rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--fp-accent)]"
                 >
                   <option value="free">free</option>
                   <option value="premium">premium</option>
@@ -128,7 +128,7 @@ export default function AdminUsersTable({
                       [profile.userId]: e.target.value
                     }))
                   }
-                  className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] text-signal-petrol"
+                  className="rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-1 text-[10px] text-[var(--fp-accent)]"
                 />
                 <button
                   type="button"
@@ -138,19 +138,19 @@ export default function AdminUsersTable({
                       [profile.userId]: ""
                     }))
                   }
-                  className="ml-1 rounded-md border border-white/10 bg-signal-void/40 px-1.5 py-1 text-[9px] text-signal-inkMuted"
+                  className="ml-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-1 text-[9px] text-[var(--fp-text-muted)]"
                   title="Clear expiry"
                 >
                   Clear
                 </button>
                 {isExpiredSubscription(profile.subscriptionExpiresAt) && (
-                  <div className="mt-1 inline-flex rounded-md border border-signal-rose/30 bg-signal-rose/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-signal-rose">
+                  <div className="mt-1 inline-flex rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
                     Expired — Save Plan clears it for paid tiers
                   </div>
                 )}
               </td>
               <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
-              <td className="px-3 py-2 font-mono text-[10px] text-signal-inkMuted">
+              <td className="px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
                 {profile.warmPredictUsage ? `${profile.warmPredictUsage.warm} / ${profile.warmPredictUsage.predict}` : "—"}
               </td>
               <td className="px-3 py-2">{profile.favoriteLeagues.length ? profile.favoriteLeagues.join(", ") : "-"}</td>
@@ -160,7 +160,7 @@ export default function AdminUsersTable({
                     type="button"
                     onClick={() => void onRoleChange(profile.userId, profile.role === "admin" ? "user" : "admin")}
                     disabled={isAdminWorking}
-                    className="rounded-md border border-signal-petrol/20 bg-signal-petrol/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol disabled:opacity-50"
+                    className="rounded-md border border-[var(--fp-accent)]/20 bg-[var(--fp-accent)]/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
                   >
                     Make {profile.role === "admin" ? "user" : "admin"}
                   </button>
@@ -168,7 +168,7 @@ export default function AdminUsersTable({
                     type="button"
                     onClick={() => void onToggleBlock(profile.userId, !profile.isBlocked)}
                     disabled={isAdminWorking}
-                    className="rounded-md border border-signal-rose/30 bg-signal-rose/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-rose disabled:opacity-50"
+                    className="rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] disabled:opacity-50"
                   >
                     {profile.isBlocked ? "Unblock" : "Block"}
                   </button>
@@ -182,7 +182,7 @@ export default function AdminUsersTable({
                       )
                     }
                     disabled={isAdminWorking}
-                    className="rounded-md border border-signal-sage/30 bg-signal-sage/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-sage disabled:opacity-50"
+                    className="rounded-md border border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] disabled:opacity-50"
                   >
                     Save Plan
                   </button>
@@ -192,7 +192,7 @@ export default function AdminUsersTable({
           ))}
           {!managedProfiles.length && (
             <tr>
-              <td colSpan={9} className="px-3 py-4 text-center text-signal-inkMuted">
+              <td colSpan={9} className="px-3 py-4 text-center text-[var(--fp-text-muted)]">
                 Nu exista profile disponibile.
               </td>
             </tr>
