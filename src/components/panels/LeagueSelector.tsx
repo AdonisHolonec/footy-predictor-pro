@@ -51,15 +51,15 @@ export default function LeagueSelector({
   }
 
   return (
-    <div className="rounded-3xl border border-signal-line/40 bg-signal-panel/45 p-5 shadow-atelier backdrop-blur-sm">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-signal-petrol">Personalizare blocată</h3>
-      <p className="mt-2 text-xs leading-relaxed text-signal-inkMuted">
+    <div className="rounded-3xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/45 p-5 shadow-[var(--fp-shadow-sm)] backdrop-blur-sm">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Personalizare blocată</h3>
+      <p className="mt-2 text-xs leading-relaxed text-[var(--fp-text-muted)]">
         Selecția ligilor și predicțiile personalizate sunt disponibile după autentificare.
       </p>
       <button
         type="button"
         onClick={onOpenAuth}
-        className="mt-4 w-full rounded-xl bg-signal-petrol px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-signal-petrolMuted"
+        className="mt-4 w-full rounded-xl bg-[var(--fp-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--fp-accent-hover)]"
       >
         Login / Signup
       </button>

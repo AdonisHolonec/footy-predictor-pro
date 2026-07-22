@@ -26,8 +26,8 @@ type Props = {
 export default function AdminShell({ section, onSection, children }: Props) {
   return (
     <div className="flex min-h-[70vh] flex-col gap-4 lg:flex-row">
-      <aside className="w-full shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 lg:w-56">
-        <div className="mb-3 px-2 font-display text-sm font-semibold text-[var(--text)]">Admin</div>
+      <aside className="w-full shrink-0 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 lg:w-56">
+        <div className="mb-3 px-2 font-display text-sm font-semibold text-[var(--fp-text)]">Admin</div>
         <nav className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible" aria-label="Admin">
           {SECTIONS.map((s) => (
             <button
@@ -36,8 +36,8 @@ export default function AdminShell({ section, onSection, children }: Props) {
               onClick={() => onSection(s.id)}
               className={`shrink-0 rounded-lg px-3 py-2 text-left text-xs font-semibold ${
                 section === s.id
-                  ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                  : "text-[var(--text-muted)] hover:bg-[var(--bg-muted)]"
+                  ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]"
+                  : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]"
               }`}
             >
               {s.label}
