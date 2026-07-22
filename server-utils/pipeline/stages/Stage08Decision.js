@@ -54,7 +54,6 @@ import {
 } from "../../modelConstants.js";
 import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
-import { runMonteCarloSimulation } from "../../monteCarlo/MonteCarloEngine.js";
 import {
   applySideMarketCalibration,
   pickCalibrationMapForLeague,

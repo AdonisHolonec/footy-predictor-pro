@@ -1,7 +1,6 @@
 /**
  * Shared helpers for per-fixture stages (no Stage*.js imports).
  */
-import { runMonteCarloSimulation } from "../../monteCarlo/MonteCarloEngine.js";
 import { buildValueEngine } from "../../value/ValueEngine.js";
 import { buildConfidenceEngine } from "../../confidence/ConfidenceEngine.js";
 import { MODEL_VERSION } from "../../modelConstants.js";
@@ -126,4 +125,4 @@ export function buildFixtureErrorRow(f, league) {
   };
 }
 
-export { beginFixture, runMonteCarloSimulation };
+export { beginFixture };
