@@ -9,6 +9,7 @@ import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
 import FeaturedPredictionCard from "../components/ux/FeaturedPredictionCard";
+import { StatTile } from "../design-system";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
@@ -1114,6 +1115,25 @@ export default function UserDashboard() {
             />
           )}
 
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+            <StatTile label={t("dash.kpiToday")} value={String(visiblePreds.length)} tone="neutral" />
+            <StatTile
+              label={t("dash.kpiAccuracy")}
+              value={trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"}
+              tone={!trackerStats.settled ? "neutral" : trackerStats.winRate >= 50 ? "success" : "warning"}
+            />
+            <StatTile
+              label={t("dash.kpiRoi")}
+              value={simpleRoi != null ? `${simpleRoi >= 0 ? "+" : ""}${simpleRoi.toFixed(1)}%` : "—"}
+              tone={simpleRoi == null ? "neutral" : simpleRoi >= 0 ? "success" : "danger"}
+            />
+            <StatTile
+              label={t("dash.kpiWinRate")}
+              value={trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"}
+              tone={!trackerStats.settled ? "neutral" : trackerStats.winRate >= 50 ? "success" : "warning"}
+            />
+          </div>
+
           {!visiblePreds.length ? (
             <EmptyState
               title={matchesFilter === "favorites" ? t("dash.emptyFavoritesTitle") : t("dash.emptyPredsTitle")}
@@ -1145,31 +1165,6 @@ export default function UserDashboard() {
               ))}
             </div>
           )}
-
-          <div className="grid grid-cols-4 gap-1.5 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2 shadow-[var(--fp-shadow-sm)] sm:gap-2 sm:p-3">
-            {[
-              { label: t("dash.kpiToday"), value: String(visiblePreds.length) },
-              {
-                label: t("dash.kpiAccuracy"),
-                value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
-              },
-              {
-                label: t("dash.kpiRoi"),
-                value: simpleRoi != null ? `${simpleRoi >= 0 ? "+" : ""}${simpleRoi.toFixed(1)}%` : "—"
-              },
-              {
-                label: t("dash.kpiWinRate"),
-                value: trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"
-              }
-            ].map((k) => (
-              <div key={k.label} className="min-w-0 px-1 text-center">
-                <p className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{k.label}</p>
-                <p className="mt-0.5 font-display text-base font-bold tabular-nums text-[var(--fp-text)] sm:text-lg">
-                  {k.value}
-                </p>
-              </div>
-            ))}
-          </div>
 
           <CollapsiblePanel title={t("dash.advancedTitle")} subtitle={t("dash.advancedSub")}>
             {!analysisMatch ? (
