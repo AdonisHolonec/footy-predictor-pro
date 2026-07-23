@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import type { FilterMode } from "../../constants/appConstants";
 import { BRAND_IMAGES } from "../../constants/brandAssets";
+import { StatTile } from "../../design-system";
 import type { ModelMetricsResponse, MlAdminStatus, PredictionRow } from "../../types";
 import {
   EdgeCompass,
@@ -431,38 +432,40 @@ type AdminModelMetricsPanelProps = {
   days?: number;
 };
 
-function healthTone(value: number | null | undefined, good: number, warn: number, lowerIsBetter = true) {
-  if (value == null || !Number.isFinite(value)) return "text-signal-inkMuted";
+type MetricTone = "neutral" | "accent" | "success" | "danger" | "warning";
+
+function healthTone(value: number | null | undefined, good: number, warn: number, lowerIsBetter = true): MetricTone {
+  if (value == null || !Number.isFinite(value)) return "neutral";
   const v = Number(value);
   const bad = lowerIsBetter ? v > warn : v < warn;
   const ok = lowerIsBetter ? v <= good : v >= good;
-  if (ok) return "text-signal-sage";
-  if (bad) return "text-signal-rose";
-  return "text-signal-amber";
+  if (ok) return "success";
+  if (bad) return "danger";
+  return "warning";
 }
 
 function syncHealthTone(health?: "ok" | "warn" | "fail") {
-  if (health === "ok") return "text-signal-sage";
-  if (health === "fail") return "text-signal-rose";
-  return "text-signal-amber";
+  if (health === "ok") return "text-[var(--fp-success)]";
+  if (health === "fail") return "text-[var(--fp-danger)]";
+  return "text-[var(--fp-warning)]";
 }
 
 function syncHintTone(level?: "ok" | "warn" | "fail") {
-  if (level === "ok") return "border-signal-sage/25 bg-signal-sage/5 text-signal-sage";
-  if (level === "fail") return "border-signal-rose/25 bg-signal-rose/5 text-signal-rose";
-  return "border-signal-amber/25 bg-signal-amber/5 text-signal-amber";
+  if (level === "ok") return "border-[var(--fp-success)]/25 bg-[var(--fp-success)]/5 text-[var(--fp-success)]";
+  if (level === "fail") return "border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 text-[var(--fp-danger)]";
+  return "border-[var(--fp-warning)]/25 bg-[var(--fp-warning)]/5 text-[var(--fp-warning)]";
 }
 
 function reliabilityTone(reliability?: string) {
-  if (reliability === "HEALTHY") return "border-signal-sage/30 bg-signal-sage/10 text-signal-sage";
-  if (reliability === "CRITICAL") return "border-signal-rose/35 bg-signal-rose/12 text-signal-rose";
-  return "border-signal-amber/30 bg-signal-amber/10 text-signal-amber";
+  if (reliability === "HEALTHY") return "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)]";
+  if (reliability === "CRITICAL") return "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/12 text-[var(--fp-danger)]";
+  return "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
 }
 
 function callsBudgetTone(level?: string) {
-  if (level === "critical") return "text-signal-rose";
-  if (level === "warn") return "text-signal-amber";
-  return "text-signal-sage";
+  if (level === "critical") return "text-[var(--fp-danger)]";
+  if (level === "warn") return "text-[var(--fp-warning)]";
+  return "text-[var(--fp-success)]";
 }
 
 export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMetricsPanelProps) {
@@ -645,17 +648,17 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     .filter((row) => (showOnlySyncFailures ? !row.ok : true));
 
   return (
-    <section className="rounded-[1.25rem] border border-signal-petrol/20 bg-signal-panel/25 p-4 shadow-[0_0_40px_rgba(94,234,212,0.06)] backdrop-blur-xl md:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] md:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
-          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-signal-petrolMuted">Model metrics</h2>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Model metrics</h2>
+          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             window {days}d · {metrics?.nProb ?? 0} settled cu probabilităţi
           </p>
         </div>
         <div className="flex items-center gap-2">
           {mlStatus && (
-            <div className="hidden font-mono text-[9px] uppercase tracking-wider text-signal-silver sm:block">
+            <div className="hidden font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text)] sm:block">
               cal · {mlStatus.calibrationMaps ?? 0} · stk · {mlStatus.activeStackerWeights ?? 0} · elo · {mlStatus.eloTeams ?? 0}
             </div>
           )}
@@ -663,7 +666,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={trainNow}
             disabled={training}
-            className="touch-manipulation rounded-lg border border-signal-mint/25 bg-signal-mintSoft px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-mint hover:bg-signal-mintSoft/80 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează acum agentul de antrenare ML (calibration + stacker) pe baza istoricului."
           >
             {training ? "Training…" : "Train now"}
@@ -672,7 +675,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={invalidate}
             disabled={refreshing}
-            className="touch-manipulation rounded-lg border border-white/10 bg-signal-panel/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
             title="Invalidează cache-ul de calibrare/stacker/elo (le reîncarcă la următorul predict)"
           >
             {refreshing ? "…" : "Refresh cache"}
@@ -681,7 +684,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={runHistorySyncNow}
             disabled={syncingHistoryNow}
-            className="touch-manipulation rounded-lg border border-signal-sage/25 bg-signal-sage/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-sage hover:bg-signal-sage/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează manual /api/history?sync=1 și reîncarcă monitorizarea."
           >
             {syncingHistoryNow ? "Syncing…" : "Run history sync"}
@@ -690,108 +693,108 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="touch-manipulation rounded-lg border border-white/10 bg-signal-panel/60 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-ink hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "…" : "Reload"}
           </button>
         </div>
       </div>
 
-      {err && <div className="mb-3 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 text-[11px] text-signal-rose">{err}</div>}
+      {err && <div className="mb-3 rounded-lg border border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 px-3 py-2 text-[11px] text-[var(--fp-danger)]">{err}</div>}
       {trainReport && (
-        <div className="mb-3 rounded-lg border border-signal-mint/35 bg-signal-mintSoft/60 px-3 py-2">
-          <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-signal-mint">Last training run</div>
-          <div className="mt-1 grid grid-cols-1 gap-1 font-mono text-[10px] text-signal-petrol sm:grid-cols-2">
-            <div>Mode: <span className="text-signal-ink">{trainReport.mode || "all"}</span></div>
-            <div>Model: <span className="text-signal-ink">{trainReport.modelVersion || "—"}</span></div>
-            <div>Calibration: <span className="text-signal-ink">{trainReport.calibrationRows || 0} rows · {trainReport.calibrationSummary || 0} maps</span></div>
-            <div>Stacker: <span className="text-signal-ink">{trainReport.stackerRows || 0} rows · {trainReport.stackerSamples || 0} samples · {trainReport.stackerTrained || 0} weights</span></div>
+        <div className="mb-3 rounded-lg border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-2">
+          <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-success)]">Last training run</div>
+          <div className="mt-1 grid grid-cols-1 gap-1 font-mono text-[10px] text-[var(--fp-accent)] sm:grid-cols-2">
+            <div>Mode: <span className="text-[var(--fp-text)]">{trainReport.mode || "all"}</span></div>
+            <div>Model: <span className="text-[var(--fp-text)]">{trainReport.modelVersion || "—"}</span></div>
+            <div>Calibration: <span className="text-[var(--fp-text)]">{trainReport.calibrationRows || 0} rows · {trainReport.calibrationSummary || 0} maps</span></div>
+            <div>Stacker: <span className="text-[var(--fp-text)]">{trainReport.stackerRows || 0} rows · {trainReport.stackerSamples || 0} samples · {trainReport.stackerTrained || 0} weights</span></div>
           </div>
-          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             finished {trainReport.finishedAt ? new Date(trainReport.finishedAt).toLocaleString() : "—"}
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricTile label="Brier 1X2" value={brier != null ? brier.toFixed(4) : "—"} subtitle="lower = better" toneClass={healthTone(brier, 0.185, 0.205)} />
-        <MetricTile label="LogLoss" value={logLoss != null ? logLoss.toFixed(4) : "—"} subtitle="multinomial CE" toneClass={healthTone(logLoss, 0.98, 1.05)} />
-        <MetricTile label="ECE 1X2" value={ece != null ? `${ece.toFixed(2)}%` : "—"} subtitle="calibration gap" toneClass={healthTone(ece, 3, 6)} />
-        <MetricTile
+        <StatTile label="Brier 1X2" value={brier != null ? brier.toFixed(4) : "—"} hint="lower = better" tone={healthTone(brier, 0.185, 0.205)} />
+        <StatTile label="LogLoss" value={logLoss != null ? logLoss.toFixed(4) : "—"} hint="multinomial CE" tone={healthTone(logLoss, 0.98, 1.05)} />
+        <StatTile label="ECE 1X2" value={ece != null ? `${ece.toFixed(2)}%` : "—"} hint="calibration gap" tone={healthTone(ece, 3, 6)} />
+        <StatTile
           label="Pipeline"
           value={(mlStatus?.calibrationMaps || 0) > 0 ? ((mlStatus?.activeStackerWeights || 0) > 0 ? "ML + CAL" : "CAL") : "DC only"}
-          subtitle={mlStatus?.modelVersion || "—"}
-          toneClass={(mlStatus?.activeStackerWeights || 0) > 0 ? "text-signal-mint" : (mlStatus?.calibrationMaps || 0) > 0 ? "text-signal-petrol" : "text-signal-silver"}
+          hint={mlStatus?.modelVersion || "—"}
+          tone={(mlStatus?.activeStackerWeights || 0) > 0 ? "success" : (mlStatus?.calibrationMaps || 0) > 0 ? "accent" : "neutral"}
         />
       </div>
 
       {mlStatus?.seasonInfo && (
-        <div className="mt-3 rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
-          <span className="mr-3">Effective season: <span className="text-signal-ink">{mlStatus.seasonInfo.effectiveSeason ?? "—"}</span></span>
-          <span className="mr-3">Inferred: <span className="text-signal-ink">{mlStatus.seasonInfo.inferredSeason ?? "—"}</span></span>
-          <span className={mlStatus.seasonInfo.overrideActive ? "text-signal-amber" : "text-signal-sage"}>
+        <div className="mt-3 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+          <span className="mr-3">Effective season: <span className="text-[var(--fp-text)]">{mlStatus.seasonInfo.effectiveSeason ?? "—"}</span></span>
+          <span className="mr-3">Inferred: <span className="text-[var(--fp-text)]">{mlStatus.seasonInfo.inferredSeason ?? "—"}</span></span>
+          <span className={mlStatus.seasonInfo.overrideActive ? "text-[var(--fp-warning)]" : "text-[var(--fp-success)]"}>
             {mlStatus.seasonInfo.overrideActive ? "Override active" : "Auto season"}
           </span>
         </div>
       )}
 
       {mlStatus?.historySync && (
-        <div className="mt-4 rounded-xl border border-white/5 bg-signal-void/30 p-3">
+        <div className="mt-4 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">History sync monitor</span>
+            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">History sync monitor</span>
             <span className={`font-mono text-[10px] uppercase tracking-wider ${syncHealthTone(mlStatus.historySync.health)}`}>
               {mlStatus.historySync.health || "warn"}
             </span>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Reliability</div>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Reliability</div>
               <div className="mt-1">
                 <span className={`inline-flex rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider ${reliabilityTone(mlStatus.historySync.summary?.reliability)}`}>
                   {mlStatus.historySync.summary?.reliability || "DEGRADED"}
                 </span>
               </div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last run</div>
-              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last run</div>
+              <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
                 {mlStatus.historySync.last?.ranAt ? new Date(mlStatus.historySync.last.ranAt).toLocaleString() : "—"}
               </div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last updated</div>
-              <div className="mt-1 font-mono text-[10px] text-signal-silver">{mlStatus.historySync.last?.updated ?? 0}</div>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last updated</div>
+              <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">{mlStatus.historySync.last?.updated ?? 0}</div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last est. calls</div>
-              <div className="mt-1 font-mono text-[10px] text-signal-silver">{mlStatus.historySync.last?.estimatedCalls ?? 0}</div>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last est. calls</div>
+              <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">{mlStatus.historySync.last?.estimatedCalls ?? 0}</div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Recent failures</div>
-              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Recent failures</div>
+              <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
                 {mlStatus.historySync.summary?.failures ?? 0} / {mlStatus.historySync.summary?.runs ?? 0}
               </div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Sync age (hours)</div>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Sync age (hours)</div>
               <div
                 className={`mt-1 font-mono text-[10px] ${
-                  (mlStatus.historySync.summary?.hoursSinceLastRun ?? 999) > 8 ? "text-signal-rose" : "text-signal-silver"
+                  (mlStatus.historySync.summary?.hoursSinceLastRun ?? 999) > 8 ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"
                 }`}
               >
                 {mlStatus.historySync.summary?.hoursSinceLastRun != null ? mlStatus.historySync.summary.hoursSinceLastRun.toFixed(2) : "—"}
               </div>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 p-2 sm:col-span-3">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Last successful run</div>
-              <div className="mt-1 font-mono text-[10px] text-signal-silver">
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
+              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last successful run</div>
+              <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
                 {mlStatus.historySync.lastSuccessfulRun?.ranAt
                   ? new Date(mlStatus.historySync.lastSuccessfulRun.ranAt).toLocaleString()
                   : "No successful run in recent window"}
               </div>
               <div
                 className={`mt-1 font-mono text-[9px] ${
-                  (mlStatus.historySync.summary?.hoursSinceLastSuccess ?? 999) > 8 ? "text-signal-rose" : "text-signal-inkMuted"
+                  (mlStatus.historySync.summary?.hoursSinceLastSuccess ?? 999) > 8 ? "text-[var(--fp-danger)]" : "text-[var(--fp-text-muted)]"
                 }`}
               >
                 age:{" "}
@@ -802,7 +805,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             </div>
           </div>
           {mlStatus.historySync.last?.error && (
-            <div className="mt-2 rounded-lg border border-signal-rose/25 bg-signal-rose/5 px-3 py-2 font-mono text-[10px] text-signal-rose">
+            <div className="mt-2 rounded-lg border border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 px-3 py-2 font-mono text-[10px] text-[var(--fp-danger)]">
               {mlStatus.historySync.last.error}
             </div>
           )}
@@ -819,7 +822,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   <button
                     type="button"
                     onClick={() => setSnoozedAlerts({})}
-                    className="rounded border border-white/20 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-signal-ink hover:bg-white/10"
+                    className="rounded border border-[var(--fp-border)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                     title="Reafișează toate alertele ascunse local."
                   >
                     Reset snoozed alerts
@@ -831,8 +834,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   key={`${alert.code || "alert"}-${idx}`}
                   className={`rounded-lg border px-3 py-2 font-mono text-[10px] ${
                     alert.level === "fail"
-                      ? "border-signal-rose/35 bg-signal-rose/10 text-signal-rose"
-                      : "border-signal-amber/30 bg-signal-amber/10 text-signal-amber"
+                      ? "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+                      : "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -840,7 +843,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                     <button
                       type="button"
                       onClick={() => snoozeAlert(String(alert.code || ""), 60)}
-                      className="rounded border border-white/20 px-2 py-0.5 text-[9px] uppercase tracking-wide text-signal-ink hover:bg-white/10"
+                      className="rounded border border-[var(--fp-border)] px-2 py-0.5 text-[9px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                       title="Ascunde alerta 60 minute (local)."
                     >
                       Snooze 60m
@@ -851,38 +854,38 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             </div>
           )}
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
-              24h runs: <span className="text-signal-ink">{mlStatus.historySync.summary?.runs24h ?? 0}</span>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+              24h runs: <span className="text-[var(--fp-text)]">{mlStatus.historySync.summary?.runs24h ?? 0}</span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
-              24h success: <span className={(mlStatus.historySync.summary?.successRate24h ?? 0) >= 90 ? "text-signal-sage" : "text-signal-amber"}>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+              24h success: <span className={(mlStatus.historySync.summary?.successRate24h ?? 0) >= 90 ? "text-[var(--fp-success)]" : "text-[var(--fp-warning)]"}>
                 {mlStatus.historySync.summary?.successRate24h != null ? `${mlStatus.historySync.summary.successRate24h.toFixed(1)}%` : "—"}
               </span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
-              24h updated: <span className="text-signal-ink">{mlStatus.historySync.summary?.updated24h ?? 0}</span>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+              24h updated: <span className="text-[var(--fp-text)]">{mlStatus.historySync.summary?.updated24h ?? 0}</span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-3">
-              24h scanned: <span className="text-signal-ink">{mlStatus.historySync.summary?.scanned24h ?? 0}</span>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)] sm:col-span-3">
+              24h scanned: <span className="text-[var(--fp-text)]">{mlStatus.historySync.summary?.scanned24h ?? 0}</span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver">
-              24h est. calls: <span className="text-signal-ink">{mlStatus.historySync.summary?.estimatedCalls24h ?? 0}</span>
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+              24h est. calls: <span className="text-[var(--fp-text)]">{mlStatus.historySync.summary?.estimatedCalls24h ?? 0}</span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-2">
-              Avg est. calls/run: <span className="text-signal-ink">
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)] sm:col-span-2">
+              Avg est. calls/run: <span className="text-[var(--fp-text)]">
                 {mlStatus.historySync.summary?.avgEstimatedCallsPerRun != null
                   ? mlStatus.historySync.summary.avgEstimatedCallsPerRun.toFixed(1)
                   : "—"}
               </span>
             </div>
-            <div className="rounded-lg border border-white/5 bg-signal-panel/20 px-3 py-2 font-mono text-[10px] text-signal-silver sm:col-span-3">
+            <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text)] sm:col-span-3">
               Calls budget:
               {" "}
               <span className={callsBudgetTone(mlStatus.historySync.summary?.callsBudgetLevel)}>
                 {String(mlStatus.historySync.summary?.callsBudgetLevel || "ok").toUpperCase()}
               </span>
               {" "}
-              <span className="text-signal-inkMuted">
+              <span className="text-[var(--fp-text-muted)]">
                 ({mlStatus.historySync.summary?.estimatedCalls24h ?? 0} / warn {mlStatus.historySync.summary?.callsBudgetWarn24h ?? 500} / critical {mlStatus.historySync.summary?.callsBudgetCritical24h ?? 1000})
               </span>
             </div>
@@ -895,8 +898,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   onClick={() => setShowOnlySyncFailures((prev) => !prev)}
                   className={`rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
                     showOnlySyncFailures
-                      ? "border-signal-rose/35 bg-signal-rose/10 text-signal-rose"
-                      : "border-white/20 text-signal-ink hover:bg-white/10"
+                      ? "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+                      : "border-[var(--fp-border)] text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                   }`}
                   title="Afișează doar rulările eșuate."
                 >
@@ -904,7 +907,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                 </button>
               </div>
               <table className="w-full min-w-[420px] font-mono text-[10px] tabular-nums">
-                <thead className="text-left text-signal-inkMuted">
+                <thead className="text-left text-[var(--fp-text-muted)]">
                   <tr>
                     <th className="py-1 pr-2">Ran at</th>
                     <th className="py-1 pr-2">Source</th>
@@ -913,14 +916,14 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                     <th className="py-1 pr-2 text-right">OK</th>
                   </tr>
                 </thead>
-                <tbody className="text-signal-silver">
+                <tbody className="text-[var(--fp-text)]">
                   {syncRecentRows.slice(0, 6).map((row, idx) => (
-                    <tr key={`${row.ranAt || "na"}-${idx}`} className="border-t border-white/5">
+                    <tr key={`${row.ranAt || "na"}-${idx}`} className="border-t border-[var(--fp-border)]">
                       <td className="py-1 pr-2">{row.ranAt ? new Date(row.ranAt).toLocaleString() : "—"}</td>
                       <td className="py-1 pr-2">{row.source || "—"}</td>
                       <td className="py-1 pr-2 text-right">{row.estimatedCalls ?? 0}</td>
                       <td className="py-1 pr-2 text-right">{row.updated ?? 0}</td>
-                      <td className={`py-1 pr-2 text-right ${row.ok ? "text-signal-sage" : "text-signal-rose"}`}>{row.ok ? "yes" : "no"}</td>
+                      <td className={`py-1 pr-2 text-right ${row.ok ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}`}>{row.ok ? "yes" : "no"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -928,9 +931,9 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             </div>
           )}
           {mlStatus.historySync.persist && (
-            <div className="mt-3 rounded-lg border border-white/5 bg-signal-panel/20 p-2">
-              <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">Predict persist telemetry</div>
-              <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-signal-silver sm:grid-cols-3">
+            <div className="mt-3 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
+              <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Predict persist telemetry</div>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-[var(--fp-text)] sm:grid-cols-3">
                 <div>runs: {mlStatus.historySync.persist.runs ?? 0}</div>
                 <div>inserted: {mlStatus.historySync.persist.inserted ?? 0}</div>
                 <div>updated: {mlStatus.historySync.persist.updated ?? 0}</div>
@@ -944,14 +947,14 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       )}
 
       {metrics?.calibration1x2 && metrics.calibration1x2.length > 0 && (
-        <div className="mt-5 rounded-xl border border-white/5 bg-signal-void/30 p-3">
+        <div className="mt-5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">Calibration buckets</span>
-            <span className="font-mono text-[9px] text-signal-inkMuted">confidence vs accuracy</span>
+            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">Calibration buckets</span>
+            <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">confidence vs accuracy</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[380px] font-mono text-[10px] tabular-nums">
-              <thead className="text-left text-signal-inkMuted">
+              <thead className="text-left text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="py-1 pr-2">Bucket</th>
                   <th className="py-1 pr-2 text-right">n</th>
@@ -960,12 +963,12 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
                   <th className="py-1 pr-2 text-right">Gap</th>
                 </tr>
               </thead>
-              <tbody className="text-signal-silver">
+              <tbody className="text-[var(--fp-text)]">
                 {metrics.calibration1x2.map((b) => {
                   const gap = b.avgConfidence - b.accuracy1x2;
-                  const tone = Math.abs(gap) <= 3 ? "text-signal-sage" : Math.abs(gap) <= 6 ? "text-signal-amber" : "text-signal-rose";
+                  const tone = Math.abs(gap) <= 3 ? "text-[var(--fp-success)]" : Math.abs(gap) <= 6 ? "text-[var(--fp-warning)]" : "text-[var(--fp-danger)]";
                   return (
-                    <tr key={b.bucket} className="border-t border-white/5">
+                    <tr key={b.bucket} className="border-t border-[var(--fp-border)]">
                       <td className="py-1 pr-2">{b.bucket}</td>
                       <td className="py-1 pr-2 text-right">{b.n}</td>
                       <td className="py-1 pr-2 text-right">{b.avgConfidence.toFixed(1)}%</td>
@@ -988,38 +991,18 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       )}
 
       {mlStatus?.helpers?.scripts && (
-        <details className="mt-5 rounded-xl border border-dashed border-white/10 bg-signal-void/20 p-3 font-mono text-[10px] text-signal-inkMuted">
-          <summary className="cursor-pointer text-signal-petrol/80">Refit scripts</summary>
+        <details className="mt-5 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg)] p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
+          <summary className="cursor-pointer text-[var(--fp-accent-hover)]">Refit scripts</summary>
           <ul className="mt-2 space-y-1 list-inside">
             {mlStatus.helpers.scripts.map((s) => (
               <li key={s} className="break-all">
-                <code className="text-signal-silver">{s}</code>
+                <code className="text-[var(--fp-text)]">{s}</code>
               </li>
             ))}
           </ul>
         </details>
       )}
     </section>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  subtitle,
-  toneClass
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  toneClass: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-signal-void/40 p-3 text-center shadow-inner">
-      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-signal-inkMuted">{label}</div>
-      <div className={`mt-1 font-display text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
-      {subtitle && <div className="mt-0.5 font-mono text-[8.5px] uppercase tracking-wider text-signal-inkMuted/70">{subtitle}</div>}
-    </div>
   );
 }
 
@@ -1031,10 +1014,10 @@ function BreakdownTable({
   rows: Array<{ key: string; n: number; brier: number; logLoss: number }>;
 }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-signal-void/30 p-3">
-      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-petrol/80">{title}</div>
+    <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
+      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">{title}</div>
       <table className="w-full font-mono text-[10px] tabular-nums">
-        <thead className="text-left text-signal-inkMuted">
+        <thead className="text-left text-[var(--fp-text-muted)]">
           <tr>
             <th className="py-1 pr-2">Key</th>
             <th className="py-1 pr-2 text-right">n</th>
@@ -1042,9 +1025,9 @@ function BreakdownTable({
             <th className="py-1 pr-2 text-right">LogLoss</th>
           </tr>
         </thead>
-        <tbody className="text-signal-silver">
+        <tbody className="text-[var(--fp-text)]">
           {rows.map((r) => (
-            <tr key={r.key} className="border-t border-white/5">
+            <tr key={r.key} className="border-t border-[var(--fp-border)]">
               <td className="py-1 pr-2 max-w-[140px] truncate" title={r.key}>{r.key}</td>
               <td className="py-1 pr-2 text-right">{r.n}</td>
               <td className="py-1 pr-2 text-right">{r.brier.toFixed(4)}</td>
