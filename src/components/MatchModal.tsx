@@ -506,9 +506,9 @@ function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
 }
 
 function finalScoreBadgeClass(result: boolean | null) {
-  if (result === true) return "text-signal-sage border-signal-sage/35 bg-signal-sage/10";
-  if (result === false) return "text-signal-rose border-signal-rose/30 bg-signal-rose/10";
-  return "text-signal-inkMuted border-white/10 bg-signal-void/50";
+  if (result === true) return "text-[var(--fp-success)] border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10";
+  if (result === false) return "text-[var(--fp-danger)] border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10";
+  return "text-[var(--fp-text-muted)] border-[var(--fp-border)] bg-[var(--fp-bg-muted)]";
 }
 
 function finalScoreLabel(result: boolean | null) {
@@ -753,20 +753,20 @@ export default function MatchModal({
     if (!hasRich) {
       return (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/85 p-3 backdrop-blur-md sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/85 p-3 backdrop-blur-md sm:p-4"
           onClick={onClose}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-signal-amber/25 bg-signal-panel/90 p-8 text-center shadow-atelierLg backdrop-blur-xl"
+            className="w-full max-w-md rounded-2xl border border-[var(--fp-warning)]/25 bg-[var(--fp-bg-card)]/90 p-8 text-center shadow-[var(--fp-shadow-lg)] backdrop-blur-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="font-display text-lg font-semibold text-signal-ink">{tr("match.insufficientTitle")}</p>
-            <p className="mt-2 text-sm leading-relaxed text-signal-inkMuted">{match.insufficientReason}</p>
+            <p className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
             <button
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="mt-6 rounded-xl border border-signal-line bg-signal-fog px-4 py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
+              className="mt-6 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-border)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
             >
               {tr("match.close")}
             </button>
@@ -777,11 +777,11 @@ export default function MatchModal({
 
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-signal-void/88 p-3 backdrop-blur-md sm:p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/88 p-3 backdrop-blur-md sm:p-4"
         onClick={onClose}
       >
         <div
-          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-signal-amber/25 bg-signal-panel/95 p-5 shadow-atelierLg backdrop-blur-xl sm:max-w-2xl sm:p-8"
+          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--fp-warning)]/25 bg-[var(--fp-bg-card)]/95 p-5 shadow-[var(--fp-shadow-lg)] backdrop-blur-xl sm:max-w-2xl sm:p-8"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -790,23 +790,23 @@ export default function MatchModal({
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-signal-ink">{tr("match.insufficientTitle")}</p>
-              <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-signal-inkMuted">{match.insufficientReason}</p>
+              <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
+              <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
             </div>
             <button
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-sm text-signal-inkMuted hover:border-signal-petrol/40 hover:text-signal-petrol focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
+              className="shrink-0 rounded-full border border-[var(--fp-border)] px-3 py-1.5 text-sm text-[var(--fp-text-muted)] hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
               aria-label={tr("match.close")}
             >
               ✕
             </button>
           </div>
-          <p className="mt-4 text-center font-display text-base font-semibold text-signal-ink">
-            {match.teams.home} <span className="text-signal-inkMuted">vs</span> {match.teams.away}
+          <p className="mt-4 text-center font-display text-base font-semibold text-[var(--fp-text)]">
+            {match.teams.home} <span className="text-[var(--fp-text-muted)]">vs</span> {match.teams.away}
           </p>
-          <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-wide text-signal-petrol/70">{match.league}</p>
+          <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]/70">{match.league}</p>
 
           {(ctx?.home || ctx?.away) && (
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -817,7 +817,7 @@ export default function MatchModal({
 
           {table && table.length > 0 ? (
             <div className="mt-6">
-              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.standings")}</h3>
+              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.standings")}</h3>
               <LeagueStandingsTable rows={table} highlightHomeId={hid} highlightAwayId={aid} />
             </div>
           ) : null}
@@ -825,7 +825,7 @@ export default function MatchModal({
           <button
             type="button"
             onClick={onClose}
-            className="mt-8 w-full rounded-xl border border-signal-line bg-signal-fog py-2.5 text-sm font-semibold text-signal-petrol hover:bg-signal-panel hover:text-signal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal-petrol/45"
+            className="mt-8 w-full rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] py-2.5 text-sm font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-border)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
           >
             {tr("match.close")}
           </button>
@@ -866,13 +866,13 @@ export default function MatchModal({
 
   const ProbBar = ({ label, val, color }: { label: string; val: number; color: string }) => (
     <div className="mb-4">
-      <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+      <div className="mb-1.5 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
         <span>{label}</span>
         <span className="font-mono tabular-nums" style={{ color }}>
           {pct(val)}%
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-signal-void ring-1 ring-white/5">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
         <div style={{ width: `${val}%`, backgroundColor: color }} className="h-full rounded-full" />
       </div>
     </div>
@@ -1008,7 +1008,7 @@ export default function MatchModal({
               <div className="mb-0.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wider text-[var(--fp-text-muted)] max-[380px]:text-[8px] sm:text-[10px]">
                 {match.league}
               </div>
-              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-signal-ink max-[380px]:text-2xl sm:text-5xl">
+              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-[var(--fp-text)] max-[380px]:text-2xl sm:text-5xl">
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
               <div className="mt-1.5 flex w-full items-center justify-center gap-1.5 sm:mt-2.5 sm:justify-start sm:gap-2.5">
@@ -1025,17 +1025,17 @@ export default function MatchModal({
                   )}
                 </div>
                 <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-signal-petrol/70 sm:text-[9px]">
+                  <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-[var(--fp-accent)]/70 sm:text-[9px]">
                     <span>{tr("match.pick")}</span>
-                    <span className="sm:hidden rounded-sm border border-white/15 bg-signal-void/45 px-1 py-[1px] text-[7px] font-bold tracking-wider text-signal-petrol">
+                    <span className="sm:hidden rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] text-[7px] font-bold tracking-wider text-[var(--fp-accent)]">
                       {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                     </span>
                   </div>
-                  <div className="line-clamp-2 break-words font-display text-lg font-bold leading-tight text-signal-petrol max-[380px]:text-base sm:text-3xl">{match.recommended.pick}</div>
-                  <div className="font-mono text-[10px] font-semibold tabular-nums text-signal-mint sm:text-[11px]">
+                  <div className="line-clamp-2 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] max-[380px]:text-base sm:text-3xl">{match.recommended.pick}</div>
+                  <div className="font-mono text-[10px] font-semibold tabular-nums text-[var(--fp-success)] sm:text-[11px]">
                     {tr("match.odd")} {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
                   </div>
-                  <div className="hidden font-mono text-[10px] font-semibold tabular-nums text-signal-inkMuted sm:block sm:text-[11px]">
+                  <div className="hidden font-mono text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)] sm:block sm:text-[11px]">
                     {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.tierLocked")}
                   </div>
                 </div>
@@ -1053,7 +1053,7 @@ export default function MatchModal({
                   {match.score?.home}-{match.score?.away}
                 </div>
               )}
-              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-signal-inkMuted sm:mt-3 sm:gap-x-3 sm:text-[10px]">
+              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-[var(--fp-text-muted)] sm:mt-3 sm:gap-x-3 sm:text-[10px]">
                 <span className="font-mono tabular-nums">{kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}</span>
                 <span>·</span>
                 <span className="font-mono tabular-nums">{new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -1218,7 +1218,7 @@ export default function MatchModal({
                 </div>
                 {standingsRows && standingsRows.length > 0 ? (
                   <div className="mt-4">
-                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                       {tr("match.fullStandings", { league: match.league })}
                     </h4>
                     <LeagueStandingsTable
@@ -1230,9 +1230,9 @@ export default function MatchModal({
                 ) : null}
               </>
             ) : (
-              <p className="text-[11px] leading-relaxed text-signal-inkMuted">
+              <p className="text-[11px] leading-relaxed text-[var(--fp-text-muted)]">
                 {tr("match.noStandingsBody")}
-                <span className="mt-2 block font-mono text-[10px] text-signal-petrol/90">{tr("match.noStandingsHint")}</span>
+                <span className="mt-2 block font-mono text-[10px] text-[var(--fp-accent)]/90">{tr("match.noStandingsHint")}</span>
               </p>
             )}
           </section>
@@ -1275,8 +1275,8 @@ export default function MatchModal({
           ) : null}
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
-            <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["xg", "overview"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.xgLuck")}</h3>
+            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["xg", "overview"])}`}>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.xgLuck")}</h3>
               <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -1285,25 +1285,25 @@ export default function MatchModal({
                 </div>
               )}
               {!match.luckStats && (
-                <p className="text-center text-[10px] text-signal-inkMuted">{tr("match.luckUnavailable")}</p>
+                <p className="text-center text-[10px] text-[var(--fp-text-muted)]">{tr("match.luckUnavailable")}</p>
               )}
             </section>
 
-            <section className={`rounded-2xl border border-white/5 bg-signal-void/30 p-6 ${tab(["odds", "value", "overview"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">{tr("match.oddsValue")}</h3>
+            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["odds", "value", "overview"])}`}>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-xl border border-white/5 bg-signal-mist/50 p-3">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">1</div>
+                <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
+                  <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">1</div>
                   <div className="mt-1 font-mono text-xl font-semibold tabular-nums lg:text-2xl" style={{ color: homeColor }}>
                     {match.odds?.home ?? "—"}
                   </div>
                 </div>
-                <div className="rounded-xl border border-white/5 bg-signal-mist/50 p-3">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">X</div>
-                  <div className="mt-1 font-mono text-xl font-semibold tabular-nums text-signal-petrol lg:text-2xl">{match.odds?.draw ?? "—"}</div>
+                <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
+                  <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">X</div>
+                  <div className="mt-1 font-mono text-xl font-semibold tabular-nums text-[var(--fp-accent)] lg:text-2xl">{match.odds?.draw ?? "—"}</div>
                 </div>
-                <div className="rounded-xl border border-white/5 bg-signal-mist/50 p-3">
-                  <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">2</div>
+                <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
+                  <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">2</div>
                   <div className="mt-1 font-mono text-xl font-semibold tabular-nums lg:text-2xl" style={{ color: awayColor }}>
                     {match.odds?.away ?? "—"}
                   </div>
@@ -1315,16 +1315,16 @@ export default function MatchModal({
                 </div>
               )}
               {match.valueBet?.detected && match.valueBet.stakePlan && (
-                <div className="mt-3 rounded-xl border border-white/5 bg-signal-void/40 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                  <div className="text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.stakePlan")}</div>
+                <div className="mt-3 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
+                  <div className="text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.stakePlan")}</div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 tabular-nums">
                     <span>{match.valueBet.type}</span>
                     <span>EV +{match.valueBet.ev ?? 0}%</span>
                     <span>Stake {match.valueBet.kelly ?? 0}%</span>
-                    <span className="text-signal-inkMuted">Plan · {match.valueBet.stakePlan}</span>
+                    <span className="text-[var(--fp-text-muted)]">Plan · {match.valueBet.stakePlan}</span>
                   </div>
                   {match.valueBet.ensemble && (
-                    <div className="mt-2 grid gap-1 text-signal-inkMuted sm:grid-cols-2">
+                    <div className="mt-2 grid gap-1 text-[var(--fp-text-muted)] sm:grid-cols-2">
                       <span>kelly base · {String(match.valueBet.ensemble.baseKelly ?? "—")}</span>
                       {match.valueBet.ensemble.adjustment != null ? (
                         <span>adj ×{match.valueBet.ensemble.adjustment.toFixed(3)}</span>
@@ -1334,7 +1334,7 @@ export default function MatchModal({
                 </div>
               )}
               {!match.valueEngine && !match.valueBet?.detected && (
-                <p className="mt-4 text-[10px] text-signal-inkMuted">{tr("match.valueNotDetected")}</p>
+                <p className="mt-4 text-[10px] text-[var(--fp-text-muted)]">{tr("match.valueNotDetected")}</p>
               )}
             </section>
           </div>
@@ -1373,10 +1373,10 @@ export default function MatchModal({
           )}
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["statistics", "overview", "timeline"])}`}>
-            <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-6 lg:col-span-2">
+            <section className="rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">04 — Piețe & scor</h3>
-                <span className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">04 — Piețe & scor</h3>
+                <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                   probabilitate · încredere
                 </span>
               </div>
@@ -1430,7 +1430,7 @@ export default function MatchModal({
                 return (
                   <>
                     {tossCount > 0 && (
-                      <div className="mb-3 rounded-lg border border-signal-amber/25 bg-signal-amber/5 px-3 py-2 text-[10px] leading-snug text-signal-amberSoft">
+                      <div className="mb-3 rounded-lg border border-[var(--fp-warning)]/25 bg-[var(--fp-warning)]/5 px-3 py-2 text-[10px] leading-snug text-[var(--fp-warning)]">
                         {tr("match.tossWarn", { n: tossCount })}
                       </div>
                     )}
@@ -1456,8 +1456,8 @@ export default function MatchModal({
                         outcome={firstHalfVerdict}
                       />
                       {match.predictions.cards && (
-                        <div className="col-span-2 rounded-xl border border-white/5 bg-signal-mist/40 p-3 text-center">
-                          <div className="text-[10px] font-semibold uppercase text-signal-inkMuted">{tr("match.cards")}</div>
+                        <div className="col-span-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center">
+                          <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">{tr("match.cards")}</div>
                           <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.cards}</div>
                         </div>
                       )}
@@ -1503,12 +1503,12 @@ export default function MatchModal({
               subtitle={tr("match.htSubtitle")}
             >
               {match.modelMeta?.firstHalf && (
-                <div className="mb-3 text-right font-mono text-[10px] text-signal-silver tabular-nums">
+                <div className="mb-3 text-right font-mono text-[10px] text-[var(--fp-text-muted)] tabular-nums">
                   <div>
                     λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
                     {match.modelMeta.firstHalf.lambdaAway.toFixed(2)}
                   </div>
-                  <div className="text-[9px] text-signal-inkMuted">
+                  <div className="text-[9px] text-[var(--fp-text-muted)]">
                     scale · {(match.modelMeta.firstHalf.scaleHome * 100).toFixed(0)}% /{" "}
                     {(match.modelMeta.firstHalf.scaleAway * 100).toFixed(0)}%
                     {match.modelMeta.firstHalf.baselineUsed ? " · baseline" : ""}
@@ -1517,7 +1517,7 @@ export default function MatchModal({
               )}
               <div className="grid gap-5 lg:grid-cols-2">
                 <div>
-                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {tr("match.htResult")}
                   </div>
                   <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
@@ -1525,7 +1525,7 @@ export default function MatchModal({
                   <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
                 </div>
                 <div>
-                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {tr("match.htGoals")}
                   </div>
                   <ProbBar label={tr("match.htOver05")} val={match.probs.firstHalf.pO05} color="#22d3ee" />
@@ -1535,15 +1535,15 @@ export default function MatchModal({
                 </div>
               </div>
               {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
-                <div className="mt-4 rounded-lg border border-white/5 bg-signal-void/30 px-3 py-2 font-mono text-[10px] text-signal-silver">
-                  <span className="text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.htBestScore")}</span>
-                  <span className="ml-2 text-signal-amberSoft tabular-nums">
+                <div className="mt-4 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
+                  <span className="text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.htBestScore")}</span>
+                  <span className="ml-2 text-[var(--fp-warning)] tabular-nums">
                     {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
                   </span>
                 </div>
               ) : null}
               {firstHalfPick && (
-                <div className="mt-3 border-t border-white/5 pt-2">
+                <div className="mt-3 border-t border-[var(--fp-border)] pt-2">
                   {marketResultBadge(
                     firstHalfPick.displayPick || firstHalfPick.pick,
                     firstHalfPick.probability,
@@ -1558,7 +1558,7 @@ export default function MatchModal({
                     tr("card.noBookOdd")
                   )}
                   {htGoalsActual != null && (
-                    <span className="ml-2 font-mono text-[9px] text-signal-inkMuted">
+                    <span className="ml-2 font-mono text-[9px] text-[var(--fp-text-muted)]">
                       {tr("match.htGoalsLabel", { n: htGoalsActual })}
                     </span>
                   )}
