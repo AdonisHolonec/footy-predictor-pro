@@ -8,6 +8,7 @@ import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
 import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
+import FeaturedPredictionCard from "../components/ux/FeaturedPredictionCard";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
@@ -1105,6 +1106,13 @@ export default function UserDashboard() {
               </label>
             </div>
           </div>
+
+          {navView === "home" && (
+            <FeaturedPredictionCard
+              match={analysisMatch}
+              onOpenAnalysis={() => analysisMatch && openMatch(analysisMatch)}
+            />
+          )}
 
           {!visiblePreds.length ? (
             <EmptyState
