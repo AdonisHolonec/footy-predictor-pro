@@ -370,6 +370,7 @@ export default function MatchCard({
             ↗
           </button>
           <span className="inline-flex items-center gap-1 truncate max-w-[9rem] rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:max-w-[12rem]">
+            {row.logos?.league ? <img src={row.logos.league} className="h-3.5 w-3.5 shrink-0 object-contain" alt="" /> : null}
             {row.league}
           </span>
           <span
@@ -407,12 +408,22 @@ export default function MatchCard({
       <div className="relative mt-4 sm:hidden">
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2 max-[380px]:gap-1.5 max-[380px]:px-2 max-[380px]:py-1.5">
           <div className="min-w-0 text-center">
-            <img src={row.logos?.home} className="mx-auto h-10 w-10 object-contain opacity-90 max-[380px]:h-8 max-[380px]:w-8" alt="" />
+            <div
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-[380px]:h-8 max-[380px]:w-8"
+              style={{ borderColor: homeColor }}
+            >
+              <img src={row.logos?.home} className="h-full w-full object-contain opacity-90" alt="" />
+            </div>
             <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px]">{row.teams.home}</div>
           </div>
           <div className="font-mono text-[10px] text-[var(--fp-text-faint)] max-[380px]:text-[9px]">vs</div>
           <div className="min-w-0 text-center">
-            <img src={row.logos?.away} className="mx-auto h-10 w-10 object-contain opacity-90 max-[380px]:h-8 max-[380px]:w-8" alt="" />
+            <div
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-[380px]:h-8 max-[380px]:w-8"
+              style={{ borderColor: awayColor }}
+            >
+              <img src={row.logos?.away} className="h-full w-full object-contain opacity-90" alt="" />
+            </div>
             <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px]">{row.teams.away}</div>
           </div>
         </div>
@@ -421,7 +432,12 @@ export default function MatchCard({
       <div className="relative mt-4 hidden grid-cols-[1fr_auto] items-center gap-3 sm:grid">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <img src={row.logos?.home} className="h-9 w-9 shrink-0 object-contain opacity-90" alt="" />
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1"
+              style={{ borderColor: homeColor }}
+            >
+              <img src={row.logos?.home} className="h-full w-full object-contain opacity-90" alt="" />
+            </div>
             <div className="min-w-0">
               <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)] sm:text-[13px]">{row.teams.home}</div>
               <div
@@ -432,7 +448,12 @@ export default function MatchCard({
           </div>
           <div className="my-2 font-mono text-[10px] text-[var(--fp-text-faint)]">vs</div>
           <div className="flex items-center gap-3">
-            <img src={row.logos?.away} className="h-9 w-9 shrink-0 object-contain opacity-90" alt="" />
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1"
+              style={{ borderColor: awayColor }}
+            >
+              <img src={row.logos?.away} className="h-full w-full object-contain opacity-90" alt="" />
+            </div>
             <div className="min-w-0">
               <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)] sm:text-[13px]">{row.teams.away}</div>
               <div
