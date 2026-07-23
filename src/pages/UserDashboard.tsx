@@ -252,7 +252,7 @@ export default function UserDashboard() {
     [history, predIdSet]
   );
   const visiblePreds = useMemo(() => {
-    let rows = preds;
+    let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
     const listFilter: MatchesSubFilter | "predictions" =
       navView === "live"
         ? "live"
