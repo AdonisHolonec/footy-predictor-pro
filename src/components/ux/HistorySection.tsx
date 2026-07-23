@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
+import { StatTile } from "../../design-system";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
 import HistorySpecialBetCard from "./HistorySpecialBetCard";
@@ -66,20 +67,19 @@ export default function HistorySection({
 
       {trackerSlot}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: t("history.successRate"), value: settled ? `${winRate.toFixed(1)}%` : "—" },
-          { label: "W / L", value: `${wins} / ${losses}` },
-          { label: t("history.pending"), value: String(pendingCount) },
-          { label: t("history.settled"), value: String(settled) }
-        ].map((k) => (
-          <Card key={k.label} padding="sm">
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-text-muted)]">
-              {k.label}
-            </p>
-            <p className="mt-1 font-display text-xl font-semibold tabular-nums">{k.value}</p>
-          </Card>
-        ))}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+        <StatTile
+          label={t("history.successRate")}
+          value={settled ? `${winRate.toFixed(1)}%` : "—"}
+          tone={!settled ? "neutral" : winRate >= 50 ? "success" : "warning"}
+        />
+        <StatTile label="W / L" value={`${wins} / ${losses}`} tone="neutral" />
+        <StatTile
+          label={t("history.pending")}
+          value={String(pendingCount)}
+          tone={pendingCount > 0 ? "warning" : "neutral"}
+        />
+        <StatTile label={t("history.settled")} value={String(settled)} tone="neutral" />
       </div>
 
       {!rows.length ? (
@@ -87,70 +87,62 @@ export default function HistorySection({
           <p className="text-sm text-[var(--fp-text-muted)]">{t("history.empty")}</p>
         </Card>
       ) : (
-        <ul className="space-y-2">
-          {rows.slice(0, 80).map((row) => {
+        <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
+          {rows.slice(0, 80).map((row, idx, visibleRows) => {
             const id = rowKey(row);
             const active = selectedId === id;
+            const isLast = idx === visibleRows.length - 1;
             return (
-              <li key={id} className="space-y-2">
+              <div key={id} className={!isLast || active ? "border-b border-[var(--fp-border)]" : ""}>
                 <button
                   type="button"
                   onClick={() => setSelectedId(active ? null : id)}
                   aria-pressed={active}
-                  className={`w-full rounded-[var(--fp-radius)] text-left transition-[box-shadow,border-color] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
-                    active
-                      ? "ring-2 ring-[var(--fp-success)]/50"
-                      : "hover:ring-1 hover:ring-[var(--fp-border)]"
+                  className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
+                    active ? "bg-[var(--fp-success)]/5" : "hover:bg-[var(--fp-bg-muted)]"
                   }`}
                 >
-                  <Card
-                    padding="sm"
-                    className={`flex flex-wrap items-center justify-between gap-3 ${
-                      active ? "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/5" : ""
-                    }`}
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      {row.logos?.home || row.logos?.away ? (
-                        <div className="flex shrink-0 items-center -space-x-1.5">
-                          {row.logos?.home ? (
-                            <img
-                              src={row.logos.home}
-                              alt=""
-                              className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
-                            />
-                          ) : null}
-                          {row.logos?.away ? (
-                            <img
-                              src={row.logos.away}
-                              alt=""
-                              className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
-                            />
-                          ) : null}
-                        </div>
-                      ) : null}
-                      <div className="min-w-0">
-                        <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
-                          {row.league || "—"} ·{" "}
-                          {row.kickoff ? String(row.kickoff).slice(0, 16).replace("T", " ") : "—"}
-                        </p>
-                        <p className="mt-0.5 truncate font-semibold">
-                          {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
-                        </p>
-                        <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
-                          {t("history.topPick")}{" "}
-                          <span className="text-[var(--fp-text)]">{row.recommended?.pick || "—"}</span>
-                          {row.score?.home != null && row.score?.away != null
-                            ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
-                            : ""}
-                        </p>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    {row.logos?.home || row.logos?.away ? (
+                      <div className="flex shrink-0 items-center -space-x-1.5">
+                        {row.logos?.home ? (
+                          <img
+                            src={row.logos.home}
+                            alt=""
+                            className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
+                          />
+                        ) : null}
+                        {row.logos?.away ? (
+                          <img
+                            src={row.logos.away}
+                            alt=""
+                            className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
+                          />
+                        ) : null}
                       </div>
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
+                        {row.league || "—"} ·{" "}
+                        {row.kickoff ? String(row.kickoff).slice(0, 16).replace("T", " ") : "—"}
+                      </p>
+                      <p className="mt-0.5 truncate font-semibold">
+                        {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
+                      </p>
+                      <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
+                        {t("history.topPick")}{" "}
+                        <span className="text-[var(--fp-text)]">{row.recommended?.pick || "—"}</span>
+                        {row.score?.home != null && row.score?.away != null
+                          ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
+                          : ""}
+                      </p>
                     </div>
-                    <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
-                  </Card>
+                  </div>
+                  <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
                 </button>
 
                 {active ? (
-                  <div className="pl-0 sm:pl-1">
+                  <div className="border-t border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-3">
                     <div className="mb-1.5 flex items-center justify-between gap-2">
                       <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
                         {t("history.selectedMatch")}
@@ -166,10 +158,10 @@ export default function HistorySection({
                     <HistorySpecialBetCard row={row} onOpenDetails={onOpenMatch} />
                   </div>
                 ) : null}
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
     </section>
   );
