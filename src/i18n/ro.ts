@@ -126,7 +126,8 @@ export const ro: Dict = {
     onboardingSub: "Alege ligi favorite în Matches, apoi confirmă.",
     finishOnboarding: "Finalizează onboarding",
     stripeMissing: "Stripe nu este configurat pe server. Trial-urile 24h rămân disponibile.",
-    profileShortcuts: "Notificări · Setări"
+    dailyQuota: "Cotă zilnică",
+    quotaCallsSuffix: "apeluri"
   },
   card: {
     limitedData: "Date limitate",

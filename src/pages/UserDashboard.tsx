@@ -145,6 +145,8 @@ export default function UserDashboard() {
     userTier,
     trialRemainingTime,
     tierQuotaExempt,
+    predictCountToday,
+    predictLimitToday,
     session,
     logout,
     activate24hTrial,
@@ -1348,10 +1350,35 @@ export default function UserDashboard() {
               {t("nav.profile")}
             </p>
             <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
-            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--fp-text-muted)]">
-              {user?.email} <Badge tone="accent">{userTier}</Badge>
-            </p>
           </header>
+
+          <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--fp-accent)] font-display text-xl font-bold text-white">
+              {(user?.email?.[0] || "?").toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-display text-base font-bold text-[var(--fp-text)]">{user?.email}</p>
+              <Badge tone="accent" className="mt-1.5">
+                {userTier}
+              </Badge>
+            </div>
+          </div>
+
+          {!tierQuotaExempt && predictLimitToday != null && (
+            <div className="rounded-[var(--fp-radius-lg)] bg-[var(--fp-accent)] p-4 text-white shadow-[var(--fp-shadow-sm)]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-85">{t("dash.dailyQuota")}</p>
+              <p className="mt-1.5 font-display text-3xl font-bold tracking-tight">
+                {predictCountToday}
+                <span className="text-base font-semibold opacity-70"> / {predictLimitToday} {t("dash.quotaCallsSuffix")}</span>
+              </p>
+              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/25">
+                <div
+                  className="h-full rounded-full bg-white"
+                  style={{ width: `${Math.max(0, Math.min(100, (predictCountToday / predictLimitToday) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {!tierQuotaExempt && (
             <Card id="upgrade" className="scroll-mt-28">
@@ -1500,23 +1527,69 @@ export default function UserDashboard() {
             </Card>
           )}
 
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("nav.profile")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.profileShortcuts")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => handleNav("notifications")}>
-                {t("nav.notifications")}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleNav("settings")}>
-                {t("nav.settings")}
-              </Button>
-            </div>
-            <div className="mt-4">
-              <Button variant="danger" onClick={() => void logout()}>
-                {t("dash.logout")}
-              </Button>
-            </div>
-          </Card>
+          <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
+            <button
+              type="button"
+              onClick={() => handleNav("notifications")}
+              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+            >
+              <span className="text-[var(--fp-accent)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.notifications")}</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="ml-auto text-[var(--fp-text-faint)]"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNav("settings")}
+              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+            >
+              <span className="text-[var(--fp-accent)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.settings")}</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="ml-auto text-[var(--fp-text-faint)]"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+            >
+              <span className="text-[var(--fp-danger)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <path d="M16 17l5-5-5-5M21 12H9" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-[var(--fp-danger)]">{t("dash.logout")}</span>
+            </button>
+          </div>
         </section>
       )}
 

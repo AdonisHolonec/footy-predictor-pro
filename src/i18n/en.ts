@@ -126,7 +126,8 @@ export const en: Dict = {
     onboardingSub: "Pick favorite leagues in Matches, then confirm.",
     finishOnboarding: "Finish onboarding",
     stripeMissing: "Stripe is not configured on the server. 24h trials remain available.",
-    profileShortcuts: "Notifications · Settings"
+    dailyQuota: "Daily quota",
+    quotaCallsSuffix: "calls"
   },
   card: {
     limitedData: "Limited data",
