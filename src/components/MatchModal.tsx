@@ -37,17 +37,17 @@ import { fetchWithAuth } from "../utils/apiAuth";
 function tierToneClass(tier: MarketTier | undefined): string {
   switch (tier) {
     case "strong":
-      return "border-signal-sage/35 bg-signal-sage/8 text-signal-sage";
+      return "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/8 text-[var(--fp-success)]";
     case "lean":
-      return "border-signal-petrol/35 bg-signal-petrol/8 text-signal-petrol";
+      return "border-[var(--fp-accent)]/35 bg-[var(--fp-accent)]/8 text-[var(--fp-accent)]";
     case "toss":
-      return "border-signal-amber/30 bg-signal-amber/8 text-signal-amberSoft";
+      return "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/8 text-[var(--fp-warning)]";
     case "lean_off":
-      return "border-signal-rose/25 bg-signal-rose/5 text-signal-rose/90";
+      return "border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 text-[var(--fp-danger)]/90";
     case "strong_off":
-      return "border-signal-rose/40 bg-signal-rose/10 text-signal-rose";
+      return "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]";
     default:
-      return "border-white/10 bg-signal-void/40 text-signal-silver";
+      return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
   }
 }
 
@@ -235,12 +235,12 @@ function PoissonMarketSection({
       ? "ring-1 ring-[var(--fp-success)]/50 border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10"
       : settled === false
         ? "ring-1 ring-[var(--fp-danger)]/50 border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10"
-        : "border-white/5 bg-signal-void/20";
+        : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]";
 
   const toneClass = (pct: number) => {
-    if (pct >= 60) return "text-signal-sage";
-    if (pct >= 40) return "text-signal-amberSoft";
-    return "text-signal-inkMuted";
+    if (pct >= 60) return "text-[var(--fp-success)]";
+    if (pct >= 40) return "text-[var(--fp-warning)]";
+    return "text-[var(--fp-text-muted)]";
   };
 
   return (
@@ -264,25 +264,25 @@ function PoissonMarketSection({
         </span>
       ) : null}
       {framed ? (
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/5 pb-2">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
           <div>
             <h3 className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: accent }}>
               {icon} {title}
             </h3>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{subtitle}</p>
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{subtitle}</p>
           </div>
           <div className="text-right font-mono text-[10px] tabular-nums">
-            <div className="text-signal-silver">
+            <div className="text-[var(--fp-text-muted)]">
               λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
             </div>
-            <div className="text-[9px] text-signal-inkMuted">
+            <div className="text-[9px] text-[var(--fp-text-muted)]">
               total aşteptat ≈ {data.expectedTotal.toFixed(1)}
               {data.usedFallback ? " · fallback" : ""}
             </div>
           </div>
         </div>
       ) : (
-        <div className="mb-3 text-right font-mono text-[10px] tabular-nums text-signal-silver">
+        <div className="mb-3 text-right font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)]">
           λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)} · ≈ {data.expectedTotal.toFixed(1)}
           {data.usedFallback ? " · fallback" : ""}
         </div>
@@ -291,21 +291,21 @@ function PoissonMarketSection({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* TOTAL */}
         <div>
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.poissonTotal")}</div>
+          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.poissonTotal")}</div>
           <table className="w-full font-mono text-[10px] tabular-nums">
             <tbody>
               {totalKeys.map((k) => {
                 const pct = data.total[k];
                 return (
-                  <tr key={k} className="border-t border-white/5">
-                    <td className="py-1 pr-2 text-signal-silver">{formatLineKey(k)}</td>
+                  <tr key={k} className="border-t border-[var(--fp-border)]">
+                    <td className="py-1 pr-2 text-[var(--fp-text-muted)]">{formatLineKey(k)}</td>
                     <td className={`py-1 pl-2 text-right ${toneClass(pct)}`}>{pct.toFixed(0)}%</td>
                   </tr>
                 );
               })}
-              <tr className="border-t border-white/5">
-                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.mostLikely")}</td>
-                <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableTotal}</td>
+              <tr className="border-t border-[var(--fp-border)]">
+                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.mostLikely")}</td>
+                <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableTotal}</td>
               </tr>
             </tbody>
           </table>
@@ -314,9 +314,9 @@ function PoissonMarketSection({
         {/* TEAM LINES */}
         {hasTeamLines ? (
           <div>
-            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{tr("match.perTeamOver")}</div>
+            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.perTeamOver")}</div>
             <table className="w-full font-mono text-[10px] tabular-nums">
-              <thead className="text-left text-[9px] uppercase tracking-wider text-signal-inkMuted">
+              <thead className="text-left text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="py-1"></th>
                   <th className="py-1 text-right" title={homeLabel}>
@@ -332,17 +332,17 @@ function PoissonMarketSection({
                   const hp = data.home[k];
                   const ap = data.away[k] ?? 0;
                   return (
-                    <tr key={k} className="border-t border-white/5">
-                      <td className="py-1 pr-2 text-signal-silver">{formatLineKey(k)}</td>
+                    <tr key={k} className="border-t border-[var(--fp-border)]">
+                      <td className="py-1 pr-2 text-[var(--fp-text-muted)]">{formatLineKey(k)}</td>
                       <td className={`py-1 pl-2 text-right ${toneClass(hp)}`}>{hp.toFixed(0)}%</td>
                       <td className={`py-1 pl-2 text-right ${toneClass(ap)}`}>{ap.toFixed(0)}%</td>
                     </tr>
                   );
                 })}
-                <tr className="border-t border-white/5">
-                  <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-signal-inkMuted">Modal</td>
-                  <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableHome}</td>
-                  <td className="py-1 pl-2 text-right text-signal-amberSoft">{data.mostProbableAway}</td>
+                <tr className="border-t border-[var(--fp-border)]">
+                  <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Modal</td>
+                  <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableHome}</td>
+                  <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableAway}</td>
                 </tr>
               </tbody>
             </table>
@@ -351,11 +351,11 @@ function PoissonMarketSection({
       </div>
 
       {(data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/5 pt-2 font-mono text-[9px] text-signal-inkMuted">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--fp-border)] pt-2 font-mono text-[9px] text-[var(--fp-text-muted)]">
           {data.sampleHome != null && <span>n gazde · {data.sampleHome}</span>}
           {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
           {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
-          {data.usedFallback && <span className="text-signal-amber">⚠ fallback (rolling stats incomplete)</span>}
+          {data.usedFallback && <span className="text-[var(--fp-warning)]">⚠ fallback (rolling stats incomplete)</span>}
         </div>
       )}
       {bestPick && (
@@ -365,7 +365,7 @@ function PoissonMarketSection({
               ? "border-[var(--fp-success)]/35"
               : settled === false
                 ? "border-[var(--fp-danger)]/35"
-                : "border-white/5"
+                : "border-[var(--fp-border)]"
           }`}
         >
           {marketResultBadge(
@@ -384,7 +384,7 @@ function PoissonMarketSection({
                   ? "text-[var(--fp-success)]"
                   : settled === false
                     ? "text-[var(--fp-danger)]"
-                    : "text-signal-inkMuted"
+                    : "text-[var(--fp-text-muted)]"
               }`}
             >
               {tr("match.finalTotal")} {actualTotal}
@@ -436,12 +436,12 @@ function MarketPickCard({
           {outcome ? tr("card.chipWin") : tr("card.chipLose")}
         </span>
       ) : null}
-      <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-signal-inkMuted">
+      <div className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
         <span>{label}</span>
         {badge ? (
           <span
             className={`rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider ${
-              isToss ? "bg-signal-amber/20 text-signal-amber" : ""
+              isToss ? "bg-[var(--fp-warning)]/20 text-[var(--fp-warning)]" : ""
             }`}
             title={
               info?.tier === "toss"
