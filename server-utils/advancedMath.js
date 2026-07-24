@@ -113,9 +113,6 @@ export function expectedIntensityFromGoalRates({
   return Number((intensity * fm * vb).toFixed(3));
 }
 
-/** @deprecated Use expectedIntensityFromGoalRates */
-export const calculateDynamicXG = expectedIntensityFromGoalRates;
-
 /**
  * Margin removal PROPORTIONAL (fallback / comparaţie). Amplifică long-shot bias.
  * Preferă {@link shinImpliedProbs} când ai 3-way clar.

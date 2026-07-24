@@ -5,7 +5,7 @@
 
 import { getPredictionWeights } from "../prediction/PredictionEngine.js";
 import { deriveXgLambdas } from "../xg/RollingXgModel.js";
-import { blendLambdasWithXg } from "./PredictorV2.js";
+import { blendLambdasWithXg } from "./xgLambdaBlend.js";
 import { hasUsableRolling, buildLiveRollingForTeam, roundDisplayRate } from "./predictHelpers.js";
 
 /**

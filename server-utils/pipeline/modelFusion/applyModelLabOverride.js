@@ -7,7 +7,7 @@
  */
 
 import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
-import { buildXgSourceProbs } from "../PredictorV2.js";
+import { buildXgSourceProbs } from "../xgLambdaBlend.js";
 
 /**
  * @param {{ activeModelId: string|null, xgLambdasForSources: object|null, fixtureId: number,

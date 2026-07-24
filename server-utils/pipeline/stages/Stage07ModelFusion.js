@@ -59,13 +59,8 @@ import {
 import { lookupEloPair, eloProbabilities } from "../../teamElo.js";
 import { deriveMarketLambdas } from "../../teamMarketRolling.js";
 import { deriveXgLambdas } from "../../xg/RollingXgModel.js";
-import {
-  PREDICTOR_V2_VERSION,
-  blendLambdasWithXg,
-  resolveFixtureXg,
-  buildXgSourceProbs,
-  buildPipelineTrace
-} from "../PredictorV2.js";
+import { blendLambdasWithXg, resolveFixtureXg, buildXgSourceProbs } from "../xgLambdaBlend.js";
+import { PIPELINE_TRACE_VERSION, buildPipelineTrace } from "../pipelineTrace.js";
 import {
   isGoodNum,
   roundDisplayRate,

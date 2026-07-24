@@ -84,13 +84,12 @@ import {
   computeExactMatchDistribution,
   computeExactMarketProbabilities
 } from "../server-utils/monteCarlo/MonteCarloEngine.js";
+import { blendLambdasWithXg, buildXgSourceProbs } from "../server-utils/pipeline/xgLambdaBlend.js";
 import {
-  PREDICTOR_V2_VERSION,
-  PIPELINE_STAGES,
-  blendLambdasWithXg,
-  buildXgSourceProbs,
+  PIPELINE_TRACE_VERSION,
+  LAMBDA_TRACE_STAGE_IDS,
   buildPipelineTrace
-} from "../server-utils/pipeline/PredictorV2.js";
+} from "../server-utils/pipeline/pipelineTrace.js";
 import { getPredictionWeights } from "../server-utils/PredictionEngine/weights.js";
 import { buildMatchScorePmf } from "../server-utils/math.js";
 import {
@@ -1274,14 +1273,14 @@ test("computeExactMarketProbabilities sums 1X2 to 100 and matches per-market PMF
   assert.ok(markets.p2 > markets.p1);
 });
 
-test("Predictor V2 pipeline contract and xG λ blend", () => {
-  assert.ok(PREDICTOR_V2_VERSION.startsWith("predictor-v2"));
-  assert.ok(PIPELINE_STAGES.includes("fetch"));
-  assert.ok(PIPELINE_STAGES.includes("predictionEngine"));
-  assert.ok(PIPELINE_STAGES.includes("xg"));
-  assert.ok(PIPELINE_STAGES.includes("calibration"));
-  assert.ok(PIPELINE_STAGES.includes("featureImportance"));
-  assert.equal(PIPELINE_STAGES[PIPELINE_STAGES.length - 1], "prediction");
+test("λ pipeline trace contract and xG λ blend", () => {
+  assert.ok(PIPELINE_TRACE_VERSION.startsWith("predictor-v2"));
+  assert.ok(LAMBDA_TRACE_STAGE_IDS.includes("fetch"));
+  assert.ok(LAMBDA_TRACE_STAGE_IDS.includes("predictionEngine"));
+  assert.ok(LAMBDA_TRACE_STAGE_IDS.includes("xg"));
+  assert.ok(LAMBDA_TRACE_STAGE_IDS.includes("calibration"));
+  assert.ok(LAMBDA_TRACE_STAGE_IDS.includes("featureImportance"));
+  assert.equal(LAMBDA_TRACE_STAGE_IDS[LAMBDA_TRACE_STAGE_IDS.length - 1], "prediction");
 
   const blended = blendLambdasWithXg(1.5, 1.2, 2.0, 0.8, 0.5);
   assert.equal(blended.applied, true);
@@ -1304,7 +1303,7 @@ test("Predictor V2 pipeline contract and xG λ blend", () => {
     xg: { ok: true, detail: "blended" },
     prediction: { ok: true }
   });
-  assert.equal(trace.version, PREDICTOR_V2_VERSION);
+  assert.equal(trace.version, PIPELINE_TRACE_VERSION);
   assert.equal(trace.stages.xg.status, "ok");
   assert.ok(trace.summary.includes("xg:ok"));
 });

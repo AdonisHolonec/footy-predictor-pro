@@ -5,8 +5,8 @@
     "semantic_hash": "13d552e9d6e18a8c558c5ad407e91708"
   },
   ".claude/settings.local.json": {
-    "mtime": 1784887243.329309,
-    "ast_hash": "b97e4c913d349854faccc268575d465a",
+    "mtime": 1784886404.7332432,
+    "ast_hash": "ee730b447e3cab2f7292a9ca3a59761f",
     "semantic_hash": ""
   },
   "api/admin.js": {
@@ -734,6 +734,11 @@
     "ast_hash": "18bbbe5d7e14f7bd6ddeebfaaad1c9ba",
     "semantic_hash": "18bbbe5d7e14f7bd6ddeebfaaad1c9ba"
   },
+  "server-utils/pipeline/PredictorV2.js": {
+    "mtime": 1784397559.342265,
+    "ast_hash": "621180a2d2b82c7a796eb3561667ab8d",
+    "semantic_hash": "621180a2d2b82c7a796eb3561667ab8d"
+  },
   "server-utils/pipeline/PredictorV3.js": {
     "mtime": 1784397559.3437703,
     "ast_hash": "27d39139fa20e549051e452273360fb4",
@@ -755,9 +760,9 @@
     "semantic_hash": "17a242ea8589c048a10a4bb360a717bd"
   },
   "server-utils/pipeline/fixtureFinalizeLambdas.js": {
-    "mtime": 1784887136.510383,
-    "ast_hash": "ba4e4262a4a8a3cee51ad141ddce03a4",
-    "semantic_hash": ""
+    "mtime": 1784397559.3447797,
+    "ast_hash": "2e1c9bedb7dac054694b6b99d3da290a",
+    "semantic_hash": "2e1c9bedb7dac054694b6b99d3da290a"
   },
   "server-utils/pipeline/golden/buildGoldenContext.js": {
     "mtime": 1784650035.295133,
@@ -775,9 +780,9 @@
     "semantic_hash": "3f701a9b7b5fbdcf50ce59f997b42c04"
   },
   "server-utils/pipeline/modelFusion/applyModelLabOverride.js": {
-    "mtime": 1784887139.4165528,
-    "ast_hash": "f1678833479d2109b28a2b44f62cccfe",
-    "semantic_hash": ""
+    "mtime": 1784694900.767859,
+    "ast_hash": "9637539d9b2cfb0ea768a145eca3de22",
+    "semantic_hash": "9637539d9b2cfb0ea768a145eca3de22"
   },
   "server-utils/pipeline/modelFusion/applyStackerBlend.js": {
     "mtime": 1784694868.3859246,
@@ -820,44 +825,44 @@
     "semantic_hash": "64e0284336146515de60b9d786d7965b"
   },
   "server-utils/pipeline/stages/Stage02FeatureCollection.js": {
-    "mtime": 1784887144.2606688,
-    "ast_hash": "01280f67b4873d591397f273fccc5b93",
-    "semantic_hash": ""
+    "mtime": 1784881600.4076161,
+    "ast_hash": "eb365f7c53367b31166ee5b765d327ea",
+    "semantic_hash": "eb365f7c53367b31166ee5b765d327ea"
   },
   "server-utils/pipeline/stages/Stage03LambdaGeneration.js": {
-    "mtime": 1784887146.0983255,
-    "ast_hash": "223b4aa5c1d8088d57a9b1283a747d3f",
-    "semantic_hash": ""
+    "mtime": 1784878807.3764012,
+    "ast_hash": "07305a8c45d4fce4d5177fe3b8ffe7c8",
+    "semantic_hash": "07305a8c45d4fce4d5177fe3b8ffe7c8"
   },
   "server-utils/pipeline/stages/Stage04ProbabilityGeneration.js": {
-    "mtime": 1784887148.037807,
-    "ast_hash": "5d4f5e8a5eaa8827f0170bade50bc863",
-    "semantic_hash": ""
+    "mtime": 1784692985.667705,
+    "ast_hash": "6da956c54c1e728079f5c93dcd4f9c1a",
+    "semantic_hash": "6da956c54c1e728079f5c93dcd4f9c1a"
   },
   "server-utils/pipeline/stages/Stage05Simulation.js": {
-    "mtime": 1784887149.871341,
-    "ast_hash": "5122716c7f016c9cbf044341993c9bfb",
-    "semantic_hash": ""
+    "mtime": 1784666237.6160302,
+    "ast_hash": "ac6d07f8acb7bb64ec9eaa1efa63b613",
+    "semantic_hash": "ac6d07f8acb7bb64ec9eaa1efa63b613"
   },
   "server-utils/pipeline/stages/Stage06Calibration.js": {
-    "mtime": 1784887151.5914502,
-    "ast_hash": "31607cc4d1acc2ad4a022128d1420677",
-    "semantic_hash": ""
+    "mtime": 1784692990.7014415,
+    "ast_hash": "0210f815dd1e8e2825e2896e21d154a3",
+    "semantic_hash": "0210f815dd1e8e2825e2896e21d154a3"
   },
   "server-utils/pipeline/stages/Stage07ModelFusion.js": {
-    "mtime": 1784887153.5411644,
-    "ast_hash": "d3c0ea80c382efcb486c1e02a88d73f1",
-    "semantic_hash": ""
+    "mtime": 1784695011.0114758,
+    "ast_hash": "d7707004880da80337ea3320b5a3e0bb",
+    "semantic_hash": "d7707004880da80337ea3320b5a3e0bb"
   },
   "server-utils/pipeline/stages/Stage08Decision.js": {
-    "mtime": 1784887155.5691414,
-    "ast_hash": "e32853aa8fb27e02eeead5bfe93cd410",
-    "semantic_hash": ""
+    "mtime": 1784696466.979328,
+    "ast_hash": "9e3a1b87a0bdeaf704b7d49eb02f9445",
+    "semantic_hash": "9e3a1b87a0bdeaf704b7d49eb02f9445"
   },
   "server-utils/pipeline/stages/Stage09Explainability.js": {
-    "mtime": 1784887160.9917738,
-    "ast_hash": "be8b0d156078312c459a2f13438dc5a8",
-    "semantic_hash": ""
+    "mtime": 1784881658.7625494,
+    "ast_hash": "e619b9de5bb13e59e60f73013334fab5",
+    "semantic_hash": "e619b9de5bb13e59e60f73013334fab5"
   },
   "server-utils/pipeline/stages/Stage10Persistence.js": {
     "mtime": 1784881688.2493286,
@@ -1905,9 +1910,9 @@
     "semantic_hash": "f684cdb80b9212f5e27e00f20ca92b04"
   },
   "tests/math.test.js": {
-    "mtime": 1784887177.363779,
-    "ast_hash": "52429556419e545be9e5031ddaa8bca3",
-    "semantic_hash": ""
+    "mtime": 1784666445.8300588,
+    "ast_hash": "d5c19a310f34dc14a1caf3dbfce1f342",
+    "semantic_hash": "d5c19a310f34dc14a1caf3dbfce1f342"
   },
   "tests/observability.test.js": {
     "mtime": 1784397559.5527825,
@@ -2307,16 +2312,6 @@
   "public/brand/ref-dossier.png": {
     "mtime": 1776589995.7862277,
     "ast_hash": "c2852d90fe3e4295bb3468d8c36eb212",
-    "semantic_hash": ""
-  },
-  "server-utils/pipeline/pipelineTrace.js": {
-    "mtime": 1784887131.3232307,
-    "ast_hash": "9700322e9592508ed73a287f05a97eb3",
-    "semantic_hash": ""
-  },
-  "server-utils/pipeline/xgLambdaBlend.js": {
-    "mtime": 1784887124.364786,
-    "ast_hash": "8d8855bbdfee75acec41d2e437157d6b",
     "semantic_hash": ""
   }
 }
