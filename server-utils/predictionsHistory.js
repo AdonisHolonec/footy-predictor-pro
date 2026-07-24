@@ -101,6 +101,7 @@ function mapPredictionToDbRow(prediction) {
     odds_draw: asNum(prediction.odds?.draw),
     odds_away: asNum(prediction.odds?.away),
     bookmaker: prediction.odds?.bookmaker || null,
+    referee_name: prediction.referee || null,
     luck_hg: asNum(prediction.luckStats?.hG),
     luck_hxg: asNum(prediction.luckStats?.hXG),
     luck_ag: asNum(prediction.luckStats?.aG),

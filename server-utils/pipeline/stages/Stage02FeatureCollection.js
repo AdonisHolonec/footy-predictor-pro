@@ -14,6 +14,8 @@ import {
 } from "../../math.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
+import { computeRefereeStatsFromHistory } from "../../context/refereeStatsFromHistory.js";
+import { buildContextSnapshot } from "../../context/captureContextSnapshot.js";
 import {
   buildConfidenceEngine,
   attachRecommendationExplanation
@@ -219,6 +221,22 @@ export async function run(context) {
           : {}),
         ...moduleInputs
       };
+
+      const refereeStats = refereeName
+        ? await computeRefereeStatsFromHistory(refereeName, { excludeFixtureId: fixtureId })
+        : null;
+      if (refereeStats) engineCtx.refereeStats = refereeStats;
+
+      f.contextSnapshot = buildContextSnapshot({
+        fixtureId,
+        leagueId: lId,
+        kickoff: fx.fixture?.date,
+        refereeName,
+        modelVersion: MODEL_VERSION,
+        moduleInputs,
+        refereeStats
+      });
+
       confidenceCtx = {
         hStats,
         aStats,
@@ -239,6 +257,7 @@ export async function run(context) {
           ? { xgHome: earlyXg.xgHome, xgAway: earlyXg.xgAway, xgSource: earlyXg.source }
           : {})
       };
+      if (refereeStats) confidenceCtx.refereeStats = refereeStats;
     }
   }
 

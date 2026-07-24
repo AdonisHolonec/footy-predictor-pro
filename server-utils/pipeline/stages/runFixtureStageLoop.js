@@ -50,6 +50,7 @@ export async function runFixtureStageLoop(context) {
   const effectiveLimit = context.effectiveLimit;
   const allFixtures = context.allFixtures || [];
   const out = context.out || (context.out = []);
+  const contextSnapshots = context.contextSnapshots || (context.contextSnapshots = []);
 
   for (const lId of leagueIds) {
     if (out.length >= effectiveLimit) break;
@@ -141,6 +142,10 @@ export async function runFixtureStageLoop(context) {
           // legacy: !calc → no row
         } else if (context.fixture?.row) {
           out.push(context.fixture.row);
+          // Kept out of `row` deliberately — it must never ride along in the
+          // public predict response or get spread into raw_payload; Stage10
+          // persists it to its own table instead.
+          if (context.fixture.contextSnapshot) contextSnapshots.push(context.fixture.contextSnapshot);
         }
       } catch (fixtureError) {
         logError("predict.fixture_failed", {

@@ -17,6 +17,7 @@ import {
 } from "../../math.js";
 import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
+import { applyContextToLambdas } from "../../context/ContextEngine.js";
 import {
   buildConfidenceEngine,
   attachRecommendationExplanation
@@ -129,6 +130,7 @@ export async function run(context) {
   let luckStats = f.luckStats;
   let strengthMeta = f.strengthMeta;
   let modularScores = f.modularScores;
+  let contextEngineResult = f.contextEngine ?? null;
   const formHomeStr = f.formHomeStr;
   const formAwayStr = f.formAwayStr;
   const engineCtx = f.engineCtx;
@@ -242,13 +244,23 @@ export async function run(context) {
     };
   }
 
+  if (engineCtx && isGoodNum(lambdaHome) && isGoodNum(lambdaAway)) {
+    const nudged = applyContextToLambdas(engineCtx, lambdaHome, lambdaAway);
+    contextEngineResult = nudged.contextResult;
+    if (nudged.contextResult.appliedToLambda) {
+      lambdaHome = clampLambda(nudged.lambdaHome);
+      lambdaAway = clampLambda(nudged.lambdaAway);
+    }
+  }
+
   Object.assign(f, {
     method,
     lambdaHome,
     lambdaAway,
     luckStats,
     strengthMeta,
-    modularScores
+    modularScores,
+    contextEngine: contextEngineResult
   });
 
   if (!isGoodNum(lambdaHome)) {

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLocale } from "../context/LocaleContext";
+import { StatTile } from "../design-system";
 import { loadPublicTrackRecord, type PublicTrackRecord } from "../services/trackRecordService";
+
+const RANGE_OPTIONS = [30, 45, 90] as const;
 
 function fmtPct(n: number | null | undefined, digits = 1) {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -47,6 +50,7 @@ type Props = {
 
 export default function TrackRecordSection({ days = 45, showLinkToFull = true, compact = false }: Props) {
   const { t } = useLocale();
+  const [selectedDays, setSelectedDays] = useState<30 | 45 | 90>(days);
   const [data, setData] = useState<PublicTrackRecord | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
     let alive = true;
     setLoading(true);
     setError("");
-    void loadPublicTrackRecord(days)
+    void loadPublicTrackRecord(selectedDays)
       .then((json) => {
         if (alive) setData(json);
       })
@@ -68,7 +72,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
     return () => {
       alive = false;
     };
-  }, [days]);
+  }, [selectedDays]);
 
   const s = data?.summary;
 
@@ -78,19 +82,37 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">{t("track.verified")}</p>
           <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
-            {t("track.settledPerf", { days })}
+            {t("track.settledPerf", { days: selectedDays })}
           </h2>
           <p className="mt-1.5 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">{t("track.metricsNote")}</p>
         </div>
-        {showLinkToFull && (
-          <Link
-            to="/track-record"
-            title={t("track.openPage")}
-            className="text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent)] hover:underline"
-          >
-            {t("track.openPage")}
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-1">
+            {RANGE_OPTIONS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelectedDays(d)}
+                className={`rounded-md px-2.5 py-1 font-display text-[11px] font-bold ${
+                  selectedDays === d
+                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                    : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+                }`}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+          {showLinkToFull && (
+            <Link
+              to="/track-record"
+              title={t("track.openPage")}
+              className="text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent)] hover:underline"
+            >
+              {t("track.openPage")}
+            </Link>
+          )}
+        </div>
       </div>
 
       {loading && (
@@ -104,42 +126,23 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
 
       {!loading && !error && s && (
         <>
-          <div className={`mt-8 grid gap-3 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
-            {[
-              { label: t("stats.settled"), value: String(s.settled), tone: "text-[var(--fp-text)]" },
-              { label: t("tracker.hitRate"), value: fmtPct(s.hitRate), tone: "text-[var(--fp-success)]" },
-              {
-                label: "ROI",
-                value: fmtPct(s.roi),
-                tone: s.roi >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"
-              },
-              {
-                label: "PnL",
-                value: fmtUnits(s.pnlUnits),
-                tone: s.pnlUnits >= 0 ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"
-              },
-              { label: "Max DD", value: fmtUnits(s.drawdown), tone: "text-[var(--fp-warning)]" },
-              {
-                label: "CLV",
-                value: s.clvAvailable ? fmtPct(s.clv) : "—",
-                tone:
-                  s.clvAvailable && s.clv != null
-                    ? s.clv >= 0
-                      ? "text-[var(--fp-success)]"
-                      : "text-[var(--fp-danger)]"
-                    : "text-[var(--fp-text-muted)]"
-              }
-            ]
+          <div className={`mt-8 grid gap-2 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
+            {(
+              [
+                { label: t("stats.settled"), value: String(s.settled), tone: "neutral" },
+                { label: t("tracker.hitRate"), value: fmtPct(s.hitRate), tone: "success" },
+                { label: "ROI", value: fmtPct(s.roi), tone: s.roi >= 0 ? "success" : "danger" },
+                { label: "PnL", value: fmtUnits(s.pnlUnits), tone: s.pnlUnits >= 0 ? "success" : "danger" },
+                { label: "Max DD", value: fmtUnits(s.drawdown), tone: "warning" },
+                {
+                  label: "CLV",
+                  value: s.clvAvailable ? fmtPct(s.clv) : "—",
+                  tone: s.clvAvailable && s.clv != null ? (s.clv >= 0 ? "success" : "danger") : "neutral"
+                }
+              ] as const
+            )
               .slice(0, compact ? 4 : 6)
-              .map((tile) => (
-                <div
-                  key={tile.label}
-                  className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]"
-                >
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{tile.label}</p>
-                  <p className={`mt-2 font-display text-2xl font-bold ${tile.tone}`}>{tile.value}</p>
-                </div>
-              ))}
+              .map((tile) => <StatTile key={tile.label} label={tile.label} value={tile.value} tone={tile.tone} />)}
           </div>
 
           {(data?.trend?.length || 0) > 1 && (

@@ -5,6 +5,7 @@
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../supabaseAdmin.js";
 import { upsertPredictionsHistory } from "../../predictionsHistory.js";
 import { persistFeatureImportanceRows } from "../../importance/persistFeatureImportance.js";
+import { persistContextSnapshots } from "../../context/persistContextSnapshots.js";
 import { decrementPredictCountBy, rememberUniquePredictFixtures, USER_TIERS } from "../../accessTier.js";
 
 export const STAGE_ID = "Stage10Persistence";
@@ -39,6 +40,11 @@ export async function run(context) {
         await persistFeatureImportanceRows(persistable);
       } catch (fiErr) {
         console.error("[predict featureImportance]", fiErr?.message || fiErr);
+      }
+      try {
+        await persistContextSnapshots(context.contextSnapshots);
+      } catch (ctxErr) {
+        console.error("[predict contextSnapshot]", ctxErr?.message || ctxErr);
       }
       if (usageCtx?.userId) {
         const supabase = getSupabaseAdmin();

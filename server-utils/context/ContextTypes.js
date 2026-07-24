@@ -67,6 +67,7 @@ export function clamp(n, lo, hi) {
 }
 
 export function isNum(n) {
+  if (n === null || n === undefined || n === "") return false;
   return Number.isFinite(Number(n));
 }
 

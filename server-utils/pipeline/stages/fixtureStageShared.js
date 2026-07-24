@@ -45,6 +45,8 @@ export function initFixtureWorkingState(f) {
     luckStats: null,
     strengthMeta: null,
     modularScores: null,
+    contextEngine: null,
+    contextSnapshot: null,
     xgLambdasForSources: null,
     formHomeStr: null,
     formAwayStr: null,
