@@ -32,7 +32,19 @@ jobs:
         run: npm run lint
 
       - name: Dependency audit (block on critical)
-        run: npm audit --audit-level=critical
+        run: |
+          attempt=1
+          max_attempts=3
+          until npm audit --audit-level=critical; do
+            exit_code=$?
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "npm audit failed after $max_attempts attempts (exit $exit_code)."
+              exit "$exit_code"
+            fi
+            echo "npm audit attempt $attempt/$max_attempts failed (exit $exit_code) — retrying in 15s (likely a transient registry issue, e.g. npmjs.org audit endpoint 503)..."
+            attempt=$((attempt + 1))
+            sleep 15
+          done
 
       - name: Dependency audit (full report, non-blocking)
         run: npm audit || true
