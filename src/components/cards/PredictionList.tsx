@@ -169,6 +169,7 @@ export default function PredictionList({
                     hashColor={hashColor}
                     animationDelayMs={idx * 45}
                     canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
+                    accessTier={user?.tier}
                     onClick={() => onSelectMatch(m)}
                   />
                 ))}

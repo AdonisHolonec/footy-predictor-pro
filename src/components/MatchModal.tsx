@@ -1652,7 +1652,6 @@ export default function MatchModal({
             </div>
           )}
           {showTierUpgradeLocks &&
-            !match.probs.corners &&
             !match.probs.shotsOnTarget &&
             !match.probs.shotsTotal &&
             !hasExactConfidence && (
