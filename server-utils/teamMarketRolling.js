@@ -43,7 +43,9 @@ export function extractFixtureMarketStats(fixtureStatsPayload) {
     shotsInsideBox: readStat(block?.statistics, "Shots insidebox"),
     shotsOutsideBox: readStat(block?.statistics, "Shots outsidebox"),
     possession: readStat(block?.statistics, "Ball Possession"),
-    xg: readStat(block?.statistics, "expected_goals")
+    xg: readStat(block?.statistics, "expected_goals"),
+    yellowCards: readStat(block?.statistics, "Yellow Cards"),
+    redCards: readStat(block?.statistics, "Red Cards")
   }));
 }
 
@@ -73,6 +75,12 @@ export function aggregateRollingForTeam(matches) {
       sot_against_avg: null,
       shots_total_for_avg: null,
       shots_total_against_avg: null,
+      cards_for_avg: null,
+      cards_against_avg: null,
+      cards_for_home_avg: null,
+      cards_against_home_avg: null,
+      cards_for_away_avg: null,
+      cards_against_away_avg: null,
       last_fixture_id: null,
       last_fixture_date: null
     };
@@ -88,11 +96,26 @@ export function aggregateRollingForTeam(matches) {
     sot_for: [],
     sot_against: [],
     shots_total_for: [],
-    shots_total_against: []
+    shots_total_against: [],
+    cards_for: [],
+    cards_against: [],
+    cards_for_home: [],
+    cards_against_home: [],
+    cards_for_away: [],
+    cards_against_away: []
   };
 
   let lastFixtureId = null;
   let lastFixtureDate = null;
+
+  // Cards use a "weighted points" convention (red=2, yellow=1), not a raw card count —
+  // matches the same convention documented on team_market_rolling.cards_for_avg.
+  const cardsPoints = (stats) => {
+    const y = Number(stats?.yellowCards);
+    const r = Number(stats?.redCards);
+    if (!Number.isFinite(y) || !Number.isFinite(r)) return null;
+    return r * 2 + y;
+  };
 
   for (const m of matches) {
     const teamStats = m?.teamStats || {};
@@ -109,13 +132,19 @@ export function aggregateRollingForTeam(matches) {
     push(bag.sot_against, oppStats.sot);
     push(bag.shots_total_for, teamStats.shotsTotal);
     push(bag.shots_total_against, oppStats.shotsTotal);
+    push(bag.cards_for, cardsPoints(teamStats));
+    push(bag.cards_against, cardsPoints(oppStats));
 
     if (isHome) {
       push(bag.corners_for_home, teamStats.corners);
       push(bag.corners_against_home, oppStats.corners);
+      push(bag.cards_for_home, cardsPoints(teamStats));
+      push(bag.cards_against_home, cardsPoints(oppStats));
     } else {
       push(bag.corners_for_away, teamStats.corners);
       push(bag.corners_against_away, oppStats.corners);
+      push(bag.cards_for_away, cardsPoints(teamStats));
+      push(bag.cards_against_away, cardsPoints(oppStats));
     }
 
     const d = m?.date ? new Date(m.date).getTime() : 0;
@@ -133,7 +162,8 @@ export function aggregateRollingForTeam(matches) {
     matches_sampled: Math.max(
       bag.corners_for.length,
       bag.sot_for.length,
-      bag.shots_total_for.length
+      bag.shots_total_for.length,
+      bag.cards_for.length
     ),
     corners_for_avg: round(avg(bag.corners_for)),
     corners_against_avg: round(avg(bag.corners_against)),
@@ -145,6 +175,12 @@ export function aggregateRollingForTeam(matches) {
     sot_against_avg: round(avg(bag.sot_against)),
     shots_total_for_avg: round(avg(bag.shots_total_for)),
     shots_total_against_avg: round(avg(bag.shots_total_against)),
+    cards_for_avg: round(avg(bag.cards_for)),
+    cards_against_avg: round(avg(bag.cards_against)),
+    cards_for_home_avg: round(avg(bag.cards_for_home)),
+    cards_against_home_avg: round(avg(bag.cards_against_home)),
+    cards_for_away_avg: round(avg(bag.cards_for_away)),
+    cards_against_away_avg: round(avg(bag.cards_against_away)),
     last_fixture_id: lastFixtureId,
     last_fixture_date: lastFixtureDate
   };
@@ -233,6 +269,10 @@ export function deriveMarketLambdas({
     corners: {
       for: "corners_for_avg",
       against: "corners_against_avg"
+    },
+    cards: {
+      for: "cards_for_avg",
+      against: "cards_against_avg"
     },
     sot: {
       for: "sot_for_avg",

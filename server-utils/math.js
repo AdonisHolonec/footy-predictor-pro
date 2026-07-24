@@ -562,6 +562,21 @@ export function extractAdvancedGoalsAverages(teamStatsPayload) {
     const playedHome = Number(fixtures.played?.home) || 0;
     const playedAway = Number(fixtures.played?.away) || 0;
 
+    // Clean sheet / failed to score, ca rate (count / meciuri jucate pe acel venue).
+    // Opţionale — null când lipsesc din payload sau nu avem suficiente meciuri jucate,
+    // apelanţii trebuie să trateze null ca "indisponibil", nu ca 0.
+    const cleanSheet = r?.clean_sheet;
+    const failedToScore = r?.failed_to_score;
+    const rateOrNull = (count, played) => {
+      const c = Number(count);
+      if (!Number.isFinite(c) || !(played > 0)) return null;
+      return Math.max(0, Math.min(1, c / played));
+    };
+    const cleanSheetRateHome = rateOrNull(cleanSheet?.home, playedHome);
+    const cleanSheetRateAway = rateOrNull(cleanSheet?.away, playedAway);
+    const failedToScoreRateHome = rateOrNull(failedToScore?.home, playedHome);
+    const failedToScoreRateAway = rateOrNull(failedToScore?.away, playedAway);
+
     return {
       gfHome,
       gaHome,
@@ -569,11 +584,60 @@ export function extractAdvancedGoalsAverages(teamStatsPayload) {
       gaAway,
       played: playedTotal,
       playedHome,
-      playedAway
+      playedAway,
+      cleanSheetRateHome,
+      cleanSheetRateAway,
+      failedToScoreRateHome,
+      failedToScoreRateAway
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Empirical BTTS estimate from clean-sheet / failed-to-score rates (each 0..1).
+ * Combines each side's own scoring record with the opponent's defensive record
+ * as two independent estimates of "this team fails to score," then averages
+ * them — deliberately simple, no amplification. Returns null if any input is
+ * missing/out of range; callers must fall back to the existing value unchanged.
+ * @param {{cleanSheetRateHome:number, cleanSheetRateAway:number,
+ *   failedToScoreRateHome:number, failedToScoreRateAway:number}} rates
+ * @returns {number|null} 0..1
+ */
+export function computeEmpiricalBttsRate({
+  cleanSheetRateHome,
+  cleanSheetRateAway,
+  failedToScoreRateHome,
+  failedToScoreRateAway
+} = {}) {
+  const csH = Number(cleanSheetRateHome);
+  const csA = Number(cleanSheetRateAway);
+  const ftsH = Number(failedToScoreRateHome);
+  const ftsA = Number(failedToScoreRateAway);
+  if (![csH, csA, ftsH, ftsA].every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return null;
+  const pHomeFailsToScore = (ftsH + csA) / 2;
+  const pAwayFailsToScore = (ftsA + csH) / 2;
+  return (1 - pHomeFailsToScore) * (1 - pAwayFailsToScore);
+}
+
+/**
+ * Blends an already-computed BTTS/GG probability (Poisson + any calibration
+ * already applied) with the conservative empirical estimate above. Fixed
+ * 85% Poisson / 15% empirical weighting, hardcoded on purpose — no env, no
+ * config, no runtime tuning. If the empirical rate can't be computed (missing
+ * stats), returns the input unchanged — exact existing behaviour.
+ * @param {number} poissonPGG already-computed pGG, percent scale (0-100)
+ * @param {object} rates same shape as computeEmpiricalBttsRate's argument
+ * @returns {number}
+ */
+export function blendBttsWithEmpirical(poissonPGG, rates) {
+  const base = Number(poissonPGG);
+  if (!Number.isFinite(base)) return poissonPGG;
+  const empirical = computeEmpiricalBttsRate(rates);
+  if (empirical == null) return poissonPGG;
+  const blended = base * 0.85 + empirical * 100 * 0.15;
+  return Math.max(0, Math.min(100, blended));
 }
 
 /** @deprecated Use strengthRatingsLambdas — kept for backward imports in tests */

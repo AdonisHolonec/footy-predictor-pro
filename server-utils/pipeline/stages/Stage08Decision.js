@@ -35,7 +35,8 @@ import {
   consensusMatchWinnerOdds,
   consensusOverUnderOddsAtLine,
   consensusBttsOdds,
-  consensusDoubleChanceOdds
+  consensusDoubleChanceOdds,
+  consensusCorrectScoreOdds
 } from "../../marketOdds.js";
 import { getOddsForFixture } from "../../oddsPrefetch.js";
 import {
@@ -136,6 +137,7 @@ export async function run(context) {
   let cornersBlock = f.cornersBlock;
   let shotsOnTargetBlock = f.shotsOnTargetBlock;
   let shotsTotalBlock = f.shotsTotalBlock;
+  let cardsBlock = f.cardsBlock;
   let rollingHome = f.rollingHome;
   let rollingAway = f.rollingAway;
   let liveRollingApplied = f.liveRollingApplied;
@@ -225,7 +227,9 @@ export async function run(context) {
       p2Adj,
       leagueParams,
       calibrationMaps,
-      lId
+      lId,
+      hStats: confidenceCtx?.hStats,
+      aStats: confidenceCtx?.aStats
     });
     const marketProbsAligned = aligned.marketProbsAligned;
     const rawSideMarketsPct = aligned.rawSideMarketsPct;
@@ -278,9 +282,22 @@ export async function run(context) {
     if (cornersBlock) pOut.corners = cornersBlock;
     if (shotsOnTargetBlock) pOut.shotsOnTarget = shotsOnTargetBlock;
     if (shotsTotalBlock) pOut.shotsTotal = shotsTotalBlock;
-    
+    if (cardsBlock) pOut.cards = cardsBlock;
+
+    // Correct Score value candidates — odds parsed from the same already-fetched oddsReq,
+    // probabilities reused directly from the already-computed score PMF (f.scorePmf), no
+    // Poisson rerun. Gracefully absent (null) when odds or the PMF aren't available.
+    const correctScoreOddsResult = consensusCorrectScoreOdds(oddsReq);
+    let correctScoreProbsPct = null;
+    if (correctScoreOddsResult && Array.isArray(f.scorePmf?.cells)) {
+      correctScoreProbsPct = {};
+      for (const cell of f.scorePmf.cells) {
+        correctScoreProbsPct[`${cell.home}-${cell.away}`] = cell.prob * 100;
+      }
+    }
+
     // === PROFESSIONAL VALUE BETTING ENGINE (sole value path — Stage07 defers here) ===
-    // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards
+    // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards · Correct Score
     // using final coherent probs. Never recommend negative EV.
     ({ valueEngine, valueDetected, valueType, finalEv, finalKelly, stakingCompact, reasonCodes } = applyValueEngine({
       cardsQuote,
@@ -307,6 +324,8 @@ export async function run(context) {
       finalEv,
       finalKelly,
       stakingCompact,
+      correctScoreOdds: correctScoreOddsResult?.scores ?? null,
+      correctScoreProbsPct,
       reasonCodes
     }));
 
@@ -411,6 +430,7 @@ export async function run(context) {
       cornersBlock,
       shotsOnTargetBlock,
       shotsTotalBlock,
+      cardsBlock,
       rollingHome,
       rollingAway,
       liveRollingApplied,

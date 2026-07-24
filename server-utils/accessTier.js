@@ -243,6 +243,7 @@ export function maskPredictionForTier(row, tier) {
     delete next.probs.shotsOnTarget;
     delete next.probs.shotsTotal;
     delete next.probs.firstHalf;
+    delete next.probs.cards;
     // Keep recommended confidence + value EV for FocusCard (recomandat / goluri).
     // Still hide Kelly / stake plan and advanced model internals.
     if (next.valueBet) {
@@ -267,6 +268,7 @@ export function maskPredictionForTier(row, tier) {
     delete next.probs.shotsOnTarget;
     delete next.probs.shotsTotal;
     delete next.probs.firstHalf;
+    delete next.probs.cards;
     const category = confidenceCategory(next?.recommended?.confidence);
     next.recommended = {
       ...next.recommended,

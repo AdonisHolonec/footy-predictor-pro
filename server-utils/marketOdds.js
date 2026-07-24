@@ -50,6 +50,52 @@ export function consensusMatchWinnerOdds(oddsApiResponse) {
   };
 }
 
+/**
+ * Median Correct Score odds across bookmakers, keyed by "home-away" scoreline
+ * (e.g. "2-1"). Non-numeric scoreline labels some bookmakers include (e.g.
+ * "Other", "4+") are skipped — only exact "\d+-\d+" values are usable here.
+ * @returns {{ scores: Record<string, number>, bookmakersUsed: number, bookmakerNames: string[] } | null}
+ */
+export function consensusCorrectScoreOdds(oddsApiResponse) {
+  const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return null;
+
+  const oddsByScore = new Map();
+  const names = [];
+
+  for (const b of bookmakers) {
+    const market = b.bets?.find((x) => x.name === "Correct Score");
+    if (!market?.values) continue;
+    let usedThisBookmaker = false;
+    for (const v of market.values) {
+      const m = /^(\d+)-(\d+)$/.exec(String(v?.value ?? "").trim());
+      if (!m) continue;
+      const odd = parseFloat(v.odd);
+      if (!Number.isFinite(odd) || odd <= 1) continue;
+      const key = `${m[1]}-${m[2]}`;
+      if (!oddsByScore.has(key)) oddsByScore.set(key, []);
+      oddsByScore.get(key).push(odd);
+      usedThisBookmaker = true;
+    }
+    if (usedThisBookmaker) names.push(b.name || "?");
+  }
+
+  if (oddsByScore.size === 0) return null;
+
+  const scores = {};
+  for (const [key, list] of oddsByScore) {
+    const m = median(list);
+    if (m != null) scores[key] = m;
+  }
+  if (Object.keys(scores).length === 0) return null;
+
+  return {
+    scores,
+    bookmakersUsed: names.length,
+    bookmakerNames: names.slice(0, 8)
+  };
+}
+
 export function impliedProbsFromConsensus(consensus) {
   if (!consensus) return null;
   return removeBookmakerMargin(consensus.home, consensus.draw, consensus.away);

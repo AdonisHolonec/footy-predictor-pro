@@ -10,7 +10,10 @@ import {
   deriveFirstHalfLambdas,
   FIRST_HALF_GOALS_BASELINE,
   poissonCDF,
-  poissonOverLine
+  poissonOverLine,
+  extractAdvancedGoalsAverages,
+  computeEmpiricalBttsRate,
+  blendBttsWithEmpirical
 } from "../server-utils/math.js";
 import {
   extractFixtureMarketStats,
@@ -452,6 +455,32 @@ test("extractFixtureMarketStats citeşte corner + SoT + shots din payload /fixtu
   assert.ok("shotsInsideBox" in out[0] && "possession" in out[0] && "xg" in out[0]);
 });
 
+test("extractFixtureMarketStats citeşte Yellow Cards + Red Cards din payload /fixtures/statistics", () => {
+  const payload = {
+    response: [
+      {
+        team: { id: 42 },
+        statistics: [
+          { type: "Yellow Cards", value: 3 },
+          { type: "Red Cards", value: 1 }
+        ]
+      },
+      {
+        team: { id: 99 },
+        statistics: [
+          { type: "Yellow Cards", value: 2 },
+          { type: "Red Cards", value: 0 }
+        ]
+      }
+    ]
+  };
+  const out = extractFixtureMarketStats(payload);
+  assert.equal(out[0].yellowCards, 3);
+  assert.equal(out[0].redCards, 1);
+  assert.equal(out[1].yellowCards, 2);
+  assert.equal(out[1].redCards, 0);
+});
+
 test("extractFixtureMarketStats întoarce array gol pentru payload invalid", () => {
   assert.deepEqual(extractFixtureMarketStats(null), []);
   assert.deepEqual(extractFixtureMarketStats({}), []);
@@ -498,10 +527,30 @@ test("aggregateRollingForTeam produce medii corecte pe cornere şi SoT", () => {
   assert.equal(agg.last_fixture_id, 3);
 });
 
+test("aggregateRollingForTeam agregă cartonaşe ca puncte ponderate (roşu×2 + galben)", () => {
+  const matches = [
+    // teamStats: 2 galbene + 1 roşu = 2*1 + 1*2 = 4 puncte. opponentStats: 1 galben = 1 punct.
+    { fixtureId: 1, date: "2024-01-01T15:00:00Z", isHome: true,
+      teamStats: { yellowCards: 2, redCards: 1 },
+      opponentStats: { yellowCards: 1, redCards: 0 } },
+    // teamStats: 3 galbene = 3 puncte. opponentStats: 2 galbene + 1 roşu = 4 puncte.
+    { fixtureId: 2, date: "2024-01-08T15:00:00Z", isHome: false,
+      teamStats: { yellowCards: 3, redCards: 0 },
+      opponentStats: { yellowCards: 2, redCards: 1 } }
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  const approxEq = (a, b) => Math.abs(a - b) < 0.005;
+  assert.ok(approxEq(agg.cards_for_avg, (4 + 3) / 2), `for=${agg.cards_for_avg}`);
+  assert.ok(approxEq(agg.cards_against_avg, (1 + 4) / 2), `against=${agg.cards_against_avg}`);
+  assert.ok(approxEq(agg.cards_for_home_avg, 4), `home=${agg.cards_for_home_avg}`);
+  assert.ok(approxEq(agg.cards_for_away_avg, 3), `away=${agg.cards_for_away_avg}`);
+});
+
 test("aggregateRollingForTeam tratează lista goală", () => {
   const r = aggregateRollingForTeam([]);
   assert.equal(r.matches_sampled, 0);
   assert.equal(r.corners_for_avg, null);
+  assert.equal(r.cards_for_avg, null);
 });
 
 test("deriveMarketLambdas: echipa cu atac superior produce λ home mai mare", () => {
@@ -555,6 +604,30 @@ test("deriveMarketLambdas respectă marketKey (sot vs corners folosesc câmpuri 
   });
   // Valorile sunt diferite pentru că citesc din câmpuri diferite
   assert.ok(cornersR.lambdaHome !== sotR.lambdaHome);
+});
+
+test("deriveMarketLambdas: marketKey cards citeşte cards_for_avg/cards_against_avg", () => {
+  const rollingHome = { cards_for_avg: 6, cards_against_avg: 3, matches_sampled: 12 };
+  const rollingAway = { cards_for_avg: 3, cards_against_avg: 5, matches_sampled: 12 };
+  const r = deriveMarketLambdas({
+    rollingHome,
+    rollingAway,
+    baseAvgTotal: 8,
+    marketKey: "cards",
+    homeAdv: 1.05,
+    awayAdv: 0.97
+  });
+  assert.ok(r.lambdaHome > r.lambdaAway, `λH=${r.lambdaHome}, λA=${r.lambdaAway}`);
+  assert.equal(r.usedFallback, false);
+  // Fără rolling data ("cards" nou, echipă niciodată observată) → fallback la media ligii,
+  // exact acelaşi comportament ca la corners/sot.
+  const fallback = deriveMarketLambdas({
+    rollingHome: null,
+    rollingAway: null,
+    baseAvgTotal: 8,
+    marketKey: "cards"
+  });
+  assert.equal(fallback.usedFallback, true);
 });
 
 test("getLeagueConfidenceMultiplier şi getLeagueStakeCap întorc valori plauzibile", () => {
@@ -1814,6 +1887,135 @@ test("consensusOverUnderOddsAtLine matches fuzzy shot markets and nearest line",
   assert.ok(ht.over > 1);
 });
 
+// =============================================================================
+// Correct Score — odds parsing + value candidates
+// =============================================================================
+
+function correctScoreOddsPayload(rows) {
+  return {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "BetA",
+            bets: [{ name: "Correct Score", values: rows.map(([value, odd]) => ({ value, odd })) }]
+          }
+        ]
+      }
+    ]
+  };
+}
+
+test("consensusCorrectScoreOdds parsează cotele per scor exact (home-away)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = correctScoreOddsPayload([
+    ["1-0", "7.00"],
+    ["2-1", "8.50"],
+    ["0-0", "9.00"]
+  ]);
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(out.scores["1-0"], 7.0);
+  assert.equal(out.scores["2-1"], 8.5);
+  assert.equal(out.scores["0-0"], 9.0);
+  assert.equal(out.bookmakersUsed, 1);
+});
+
+test("consensusCorrectScoreOdds ignoră valori non-numerice (ex. \"Other\") fără să eşueze", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = correctScoreOddsPayload([
+    ["1-0", "7.00"],
+    ["Other", "15.00"],
+    ["4+", "20.00"]
+  ]);
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(Object.keys(out.scores).length, 1);
+  assert.equal(out.scores["1-0"], 7.0);
+});
+
+test("consensusCorrectScoreOdds face median pe mai mulţi bookmakeri pentru acelaşi scor", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          { name: "BetA", bets: [{ name: "Correct Score", values: [{ value: "1-0", odd: "7.00" }] }] },
+          { name: "BetB", bets: [{ name: "Correct Score", values: [{ value: "1-0", odd: "9.00" }] }] }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.equal(out.scores["1-0"], 8.0);
+  assert.equal(out.bookmakersUsed, 2);
+});
+
+test("consensusCorrectScoreOdds: null (nu eroare) când piaţa lipseşte sau nu există bookmakeri", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  assert.equal(consensusCorrectScoreOdds(null), null);
+  assert.equal(consensusCorrectScoreOdds({}), null);
+  assert.equal(consensusCorrectScoreOdds({ response: [{ bookmakers: [] }] }), null);
+  assert.equal(
+    consensusCorrectScoreOdds({
+      response: [{ bookmakers: [{ name: "BetA", bets: [{ name: "Match Winner", values: [] }] }] }]
+    }),
+    null
+  );
+});
+
+test("buildValueCandidates: generează exact un candidat Correct Score per scor cu odds + probabilitate", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const list = buildValueCandidates({
+    probs: {},
+    correctScoreOdds: { "1-0": 7.0, "2-1": 8.5, "0-0": 9.0 },
+    correctScoreProbsPct: { "1-0": 12.0, "2-1": 8.0 } // "0-0" lipseşte intenţionat — fără probabilitate, fără candidat
+  });
+  const csCandidates = list.filter((c) => c.family === "Correct Score");
+  assert.equal(csCandidates.length, 2, "doar scorurile cu AMBELE odds şi probabilitate devin candidaţi");
+  const types = csCandidates.map((c) => c.type).sort();
+  assert.deepEqual(types, ["Correct Score 1-0", "Correct Score 2-1"]);
+  // Fără duplicate — un singur candidat per scor.
+  const uniqueTypes = new Set(csCandidates.map((c) => c.type));
+  assert.equal(uniqueTypes.size, csCandidates.length);
+  const c10 = csCandidates.find((c) => c.type === "Correct Score 1-0");
+  assert.equal(c10.odds, 7.0);
+  assert.ok(Math.abs(c10.probability - 0.12) < 1e-9);
+  assert.equal(c10.confidencePct, 12.0);
+});
+
+test("buildValueCandidates: fără cote Correct Score → niciun candidat, fără eroare (skip elegant)", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const list = buildValueCandidates({
+    probs: { p1: 40, pX: 30, p2: 30 },
+    matchWinnerOdds: { home: 2.1, draw: 3.2, away: 3.5 },
+    correctScoreOdds: null,
+    correctScoreProbsPct: { "1-0": 12.0 }
+  });
+  assert.equal(list.filter((c) => c.family === "Correct Score").length, 0);
+  // Restul familiilor rămân complet neafectate.
+  assert.equal(list.filter((c) => c.family === "1X2").length, 3);
+});
+
+test("buildValueCandidates: pieţele existente rămân neschimbate cu Correct Score prezent (regresie)", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const input = {
+    probs: { p1: 40, pX: 30, p2: 30, pGG: 55, pO25: 60 },
+    matchWinnerOdds: { home: 2.1, draw: 3.2, away: 3.5 },
+    bttsOdds: { yes: 1.8, no: 2.0 },
+    goals25Odds: { over: 1.9, under: 1.95 }
+  };
+  const without = buildValueCandidates(input);
+  const withCs = buildValueCandidates({
+    ...input,
+    correctScoreOdds: { "1-0": 7.0 },
+    correctScoreProbsPct: { "1-0": 12.0 }
+  });
+  const strip = (list) => list.filter((c) => c.family !== "Correct Score");
+  assert.deepEqual(strip(withCs), strip(without));
+  assert.equal(withCs.length, without.length + 1);
+});
+
 test("UEFA stats fallback helpers pick domestic league and build averages from FT fixtures", async () => {
   const {
     pickDomesticLeagueId,
@@ -1972,6 +2174,108 @@ test("MotivationEngine is directional on large rank gaps", async () => {
     awayStandingsRow: { rank: 2 }
   });
   assert.ok(out.details.home > out.details.away, "home underdog should get higher factor");
+});
+
+test("MotivationEngine: rank-gap behaviour unchanged when no description is present (regression)", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const out = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 18 },
+    awayStandingsRow: { rank: 2 }
+  });
+  // Same fixture as the pre-existing test above — exact original values, no drift from the new code.
+  assert.equal(out.details.home, 1.025);
+  assert.equal(out.details.away, 0.985);
+});
+
+test("MotivationEngine: description mentioning promotion nudges motivation up", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const withPromotion = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, description: "Promotion - Championship", all: { played: 20 } },
+    awayStandingsRow: { rank: 6, all: { played: 20 } }
+  });
+  const withoutDescription = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, all: { played: 20 } },
+    awayStandingsRow: { rank: 6, all: { played: 20 } }
+  });
+  assert.ok(
+    withPromotion.details.home > withoutDescription.details.home,
+    `promotion should raise home factor: ${withPromotion.details.home} vs ${withoutDescription.details.home}`
+  );
+});
+
+test("MotivationEngine: description mentioning relegation nudges motivation up", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const withRelegation = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, all: { played: 20 } },
+    awayStandingsRow: { rank: 6, description: "Relegation - Championship", all: { played: 20 } }
+  });
+  const withoutDescription = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, all: { played: 20 } },
+    awayStandingsRow: { rank: 6, all: { played: 20 } }
+  });
+  assert.ok(
+    withRelegation.details.away > withoutDescription.details.away,
+    `relegation should raise away factor: ${withRelegation.details.away} vs ${withoutDescription.details.away}`
+  );
+});
+
+test("MotivationEngine: neutral description (mid-table, no stake) applies no competition bonus", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const withNeutralDesc = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 10, description: "Mid-table", all: { played: 20 } },
+    awayStandingsRow: { rank: 11, all: { played: 20 } }
+  });
+  const withoutDescription = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 10, all: { played: 20 } },
+    awayStandingsRow: { rank: 11, all: { played: 20 } }
+  });
+  assert.equal(withNeutralDesc.details.home, withoutDescription.details.home);
+});
+
+test("MotivationEngine: missing description (undefined/null) does not throw and applies no bonus", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const undefinedDesc = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 10 },
+    awayStandingsRow: { rank: 11 }
+  });
+  const nullDesc = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 10, description: null },
+    awayStandingsRow: { rank: 11, description: null }
+  });
+  assert.equal(undefinedDesc.details.home, nullDesc.details.home);
+  assert.ok(Number.isFinite(undefinedDesc.details.home));
+});
+
+test("MotivationEngine: season progress scales the competition bonus (late season amplifies, early dampens)", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const early = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, description: "Champions League", all: { played: 3 } },
+    awayStandingsRow: { rank: 6, all: { played: 3 } }
+  });
+  const late = MotivationEngine.calculate({
+    homeStandingsRow: { rank: 5, description: "Champions League", all: { played: 30 } },
+    awayStandingsRow: { rank: 6, all: { played: 30 } }
+  });
+  assert.ok(
+    late.details.home > early.details.home,
+    `late-season bonus should exceed early-season bonus: ${late.details.home} vs ${early.details.home}`
+  );
+});
+
+test("MotivationEngine: explicit homeMotivation/awayMotivation path also gets the competition bonus", async () => {
+  const { MotivationEngine } = await import("../server-utils/PredictionEngine/MotivationEngine.js");
+  const withDesc = MotivationEngine.calculate({
+    homeMotivation: 0.5,
+    awayMotivation: 0.5,
+    homeStandingsRow: { description: "Relegation", all: { played: 30 } },
+    awayStandingsRow: { all: { played: 30 } }
+  });
+  const withoutDesc = MotivationEngine.calculate({
+    homeMotivation: 0.5,
+    awayMotivation: 0.5
+  });
+  assert.equal(withDesc.details.source, "explicit");
+  assert.ok(withDesc.details.home > withoutDesc.details.home);
 });
 
 test("InjuriesEngine weights suspended players more than doubtful", async () => {
@@ -2140,4 +2444,112 @@ test("extractStackerVector uses calibrated triple when present", async () => {
   });
   // First feature is poisson_log_ratio_1X — must match calibrated, not raw 40/30.
   assert.ok(Math.abs(vec.values[0] - expected.values[0]) < 1e-9);
+});
+
+// =============================================================================
+// Clean Sheet / Failed To Score — extraction + empirical BTTS blend
+// =============================================================================
+
+function teamStatsPayload({ cleanSheet, failedToScore, playedHome = 10, playedAway = 10 } = {}) {
+  return {
+    response: {
+      goals: {
+        for: { average: { home: "1.80", away: "1.20", total: "1.50" } },
+        against: { average: { home: "0.90", away: "1.10", total: "1.00" } }
+      },
+      fixtures: { played: { total: playedHome + playedAway, home: playedHome, away: playedAway } },
+      ...(cleanSheet ? { clean_sheet: cleanSheet } : {}),
+      ...(failedToScore ? { failed_to_score: failedToScore } : {})
+    }
+  };
+}
+
+test("extractAdvancedGoalsAverages extrage clean_sheet ca rate (count / meciuri jucate)", () => {
+  const out = extractAdvancedGoalsAverages(
+    teamStatsPayload({ cleanSheet: { home: 6, away: 3, total: 9 }, playedHome: 10, playedAway: 10 })
+  );
+  assert.ok(out, "should not be null");
+  assert.equal(out.cleanSheetRateHome, 0.6);
+  assert.equal(out.cleanSheetRateAway, 0.3);
+  // Câmpurile existente rămân neschimbate.
+  assert.equal(out.gfHome, 1.8);
+  assert.equal(out.gaAway, 1.1);
+  assert.equal(out.played, 20);
+});
+
+test("extractAdvancedGoalsAverages extrage failed_to_score ca rate", () => {
+  const out = extractAdvancedGoalsAverages(
+    teamStatsPayload({ failedToScore: { home: 1, away: 4, total: 5 }, playedHome: 10, playedAway: 10 })
+  );
+  assert.equal(out.failedToScoreRateHome, 0.1);
+  assert.equal(out.failedToScoreRateAway, 0.4);
+});
+
+test("extractAdvancedGoalsAverages: fallback null când clean_sheet/failed_to_score lipsesc din payload", () => {
+  const out = extractAdvancedGoalsAverages(teamStatsPayload({}));
+  assert.equal(out.cleanSheetRateHome, null);
+  assert.equal(out.cleanSheetRateAway, null);
+  assert.equal(out.failedToScoreRateHome, null);
+  assert.equal(out.failedToScoreRateAway, null);
+  // Restul câmpurilor tot funcţionează normal.
+  assert.equal(out.gfHome, 1.8);
+});
+
+test("computeEmpiricalBttsRate: combină rate-uri proprii + adversar, conservator (mediere, nu amplificare)", () => {
+  const rate = computeEmpiricalBttsRate({
+    cleanSheetRateHome: 0.2,
+    cleanSheetRateAway: 0.3,
+    failedToScoreRateHome: 0.1,
+    failedToScoreRateAway: 0.2
+  });
+  // pHomeFailsToScore = avg(0.1, 0.3) = 0.2 → home scores 0.8
+  // pAwayFailsToScore = avg(0.2, 0.2) = 0.2 → away scores 0.8
+  // BTTS = 0.8 * 0.8 = 0.64
+  assert.ok(Math.abs(rate - 0.64) < 1e-9, `rate=${rate}`);
+});
+
+test("computeEmpiricalBttsRate: null când orice rată lipseşte sau e invalidă", () => {
+  assert.equal(computeEmpiricalBttsRate({ cleanSheetRateHome: 0.2, cleanSheetRateAway: 0.3, failedToScoreRateHome: 0.1 }), null);
+  assert.equal(computeEmpiricalBttsRate({}), null);
+  assert.equal(
+    computeEmpiricalBttsRate({
+      cleanSheetRateHome: 0.2,
+      cleanSheetRateAway: 0.3,
+      failedToScoreRateHome: 0.1,
+      failedToScoreRateAway: 1.5 // în afara [0,1]
+    }),
+    null
+  );
+});
+
+test("blendBttsWithEmpirical: 85% Poisson / 15% empiric, hardcodat", () => {
+  const rates = {
+    cleanSheetRateHome: 0.2,
+    cleanSheetRateAway: 0.3,
+    failedToScoreRateHome: 0.1,
+    failedToScoreRateAway: 0.2
+  };
+  // empiric = 0.64 → 64%. Poisson = 50%. blend = 50*0.85 + 64*0.15 = 42.5 + 9.6 = 52.1
+  const out = blendBttsWithEmpirical(50, rates);
+  assert.ok(Math.abs(out - 52.1) < 1e-9, `out=${out}`);
+});
+
+test("blendBttsWithEmpirical: clampează la [0,100]", () => {
+  const rates = {
+    cleanSheetRateHome: 1,
+    cleanSheetRateAway: 1,
+    failedToScoreRateHome: 0,
+    failedToScoreRateAway: 0
+  };
+  const out = blendBttsWithEmpirical(100, rates);
+  assert.ok(out >= 0 && out <= 100);
+});
+
+test("blendBttsWithEmpirical: fără date empirice → întoarce valoarea Poisson neschimbată (comportament identic azi)", () => {
+  assert.equal(blendBttsWithEmpirical(47.3, {}), 47.3);
+  assert.equal(blendBttsWithEmpirical(47.3, undefined), 47.3);
+  assert.equal(
+    blendBttsWithEmpirical(47.3, { cleanSheetRateHome: 0.2, cleanSheetRateAway: 0.3, failedToScoreRateHome: 0.1 }),
+    47.3
+  );
 });

@@ -65,3 +65,59 @@ test("alignMarketProbsAndCalibrate falls back to p when scorePmf is null/undefin
   });
   assert.equal(out.marketProbsAligned, fallbackP);
 });
+
+test("alignMarketProbsAndCalibrate: no hStats/aStats -> pGG identical to today (no behaviour change)", () => {
+  const lambdaHome = 1.6;
+  const lambdaAway = 1.1;
+  const scorePmf = buildMatchScorePmf(lambdaHome, lambdaAway);
+  const base = {
+    p: fallbackP,
+    scorePmf,
+    lambdaHome,
+    lambdaAway,
+    fixtureId: 999,
+    p1Adj: 70,
+    pXAdj: 15,
+    p2Adj: 15,
+    leagueParams: {},
+    calibrationMaps: null,
+    lId: 39
+  };
+  const withoutStats = alignMarketProbsAndCalibrate(base);
+  const withEmptyStats = alignMarketProbsAndCalibrate({ ...base, hStats: {}, aStats: {} });
+  assert.equal(withoutStats.marketProbsAligned.pGG, withEmptyStats.marketProbsAligned.pGG);
+  // Snapshots used for train/serve calibration-map fitting must be untouched either way.
+  assert.equal(withoutStats.rawSideMarketsPct.pGG, withoutStats.marketProbsAligned.pGG);
+});
+
+test("alignMarketProbsAndCalibrate: hStats/aStats with clean-sheet/failed-to-score rates blend into the final pGG only, snapshots stay raw", () => {
+  const lambdaHome = 1.6;
+  const lambdaAway = 1.1;
+  const scorePmf = buildMatchScorePmf(lambdaHome, lambdaAway);
+  const base = {
+    p: fallbackP,
+    scorePmf,
+    lambdaHome,
+    lambdaAway,
+    fixtureId: 999,
+    p1Adj: 70,
+    pXAdj: 15,
+    p2Adj: 15,
+    leagueParams: {},
+    calibrationMaps: null,
+    lId: 39
+  };
+  const withoutStats = alignMarketProbsAndCalibrate(base);
+  const withStats = alignMarketProbsAndCalibrate({
+    ...base,
+    hStats: { cleanSheetRateHome: 0.5, failedToScoreRateHome: 0.05 },
+    aStats: { cleanSheetRateAway: 0.4, failedToScoreRateAway: 0.5 }
+  });
+  assert.notEqual(withStats.marketProbsAligned.pGG, withoutStats.marketProbsAligned.pGG);
+  // Calibration-map training snapshots must never see the empirical blend —
+  // train/serve alignment (PREDICTOR_V3_ARCHITECTURE.md §3.7) stays intact.
+  assert.equal(withStats.rawSideMarketsPct.pGG, withoutStats.rawSideMarketsPct.pGG);
+  assert.equal(withStats.calibratedSideMarketsPct.pGG, withoutStats.calibratedSideMarketsPct.pGG);
+  // 1X2 and O/U must be completely untouched by this feature.
+  assert.equal(withStats.marketProbsAligned.pO25, withoutStats.marketProbsAligned.pO25);
+});

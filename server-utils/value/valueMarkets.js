@@ -1,6 +1,6 @@
 /**
  * Professional Value Betting Engine — market candidate builders.
- * Families: 1X2 · Double Chance · BTTS · Over/Under · Corners · Cards
+ * Families: 1X2 · Double Chance · BTTS · Over/Under · Corners · Cards · Correct Score
  */
 
 export const VALUE_MARKET_FAMILIES = Object.freeze([
@@ -9,7 +9,8 @@ export const VALUE_MARKET_FAMILIES = Object.freeze([
   "BTTS",
   "Over/Under",
   "Corners",
-  "Cards"
+  "Cards",
+  "Correct Score"
 ]);
 
 /**
@@ -27,6 +28,7 @@ export function classifyMarketFamily(type) {
   if (t === "gg" || t === "ngg" || t.includes("btts")) return "BTTS";
   if (t.includes("corner")) return "Corners";
   if (t.includes("card")) return "Cards";
+  if (t.includes("correct score") || /^\d+-\d+$/.test(t)) return "Correct Score";
   if (t.includes("peste") || t.includes("sub") || t.includes("over") || t.includes("under")) {
     return "Over/Under";
   }
@@ -74,6 +76,8 @@ function pct01(p) {
  * @param {{ over?: number, under?: number, line?: number }|null} input.cardsOdds
  * @param {number|null} input.cardsOverProbPct
  * @param {number|null} input.cardsUnderProbPct
+ * @param {Record<string, number>|null} input.correctScoreOdds - odds keyed by "home-away" scoreline (e.g. "2-1")
+ * @param {Record<string, number>|null} input.correctScoreProbsPct - model % keyed the same way, from the already-computed score PMF
  */
 export function buildValueCandidates(input = {}) {
   const probs = input.probs || {};
@@ -218,6 +222,25 @@ export function buildValueCandidates(input = {}) {
       confidencePct: Number(input.cardsUnderProbPct),
       line
     });
+  }
+
+  // Correct Score — one candidate per scoreline with BOTH a consensus odd and an
+  // already-computed model probability (from the score PMF). No recomputation here:
+  // the probabilities arrive pre-computed via input.correctScoreProbsPct.
+  const csOdds = input.correctScoreOdds;
+  const csProbs = input.correctScoreProbsPct;
+  if (csOdds && csProbs) {
+    for (const [score, odd] of Object.entries(csOdds)) {
+      const probPct = csProbs[score];
+      if (probPct == null) continue;
+      pushCandidate(list, {
+        type: `Correct Score ${score}`,
+        family: "Correct Score",
+        probability: pct01(probPct),
+        odds: odd,
+        confidencePct: Number(probPct)
+      });
+    }
   }
 
   return list;

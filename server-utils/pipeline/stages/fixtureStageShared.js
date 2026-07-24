@@ -65,6 +65,7 @@ export function initFixtureWorkingState(f) {
     cornersBlock: null,
     shotsOnTargetBlock: null,
     shotsTotalBlock: null,
+    cardsBlock: null,
     rollingHome: null,
     rollingAway: null,
     liveRollingApplied: false,

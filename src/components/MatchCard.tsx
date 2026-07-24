@@ -241,6 +241,7 @@ export default function MatchCard({
   const isPickHot = hasExactConfidence && confPct >= 85;
   const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shotsPick = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+  const cardsPick = row.probs?.cards ? deriveBestOverUnderPick(row.probs.cards.total) : null;
   const firstHalfPick =
     row.probs?.firstHalf && Number.isFinite(row.probs.firstHalf.pO15)
       ? row.probs.firstHalf.pO15 >= 50
@@ -248,18 +249,21 @@ export default function MatchCard({
         : { pick: "Under 1.5 FH", probability: 100 - row.probs.firstHalf.pO15 }
       : null;
   // Mirrors server-utils/accessTier.js maskPredictionForTier(): corners unlock on
-  // Premium/Ultra; shots and first-half unlock on Ultra only.
+  // Premium/Ultra; shots, cards and first-half unlock on Ultra only.
   const effectiveAccessTier = String(accessTier || "free").toLowerCase();
   const canSeeCorners = effectiveAccessTier === "premium" || effectiveAccessTier === "ultra";
   const canSeeShots = effectiveAccessTier === "ultra";
+  const canSeeCards = effectiveAccessTier === "ultra";
   const canSeeFirstHalf = effectiveAccessTier === "ultra";
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
+  const cardsLocked = !canSeeCards && !row.probs?.cards;
   const firstHalfLocked = !canSeeFirstHalf && !row.probs?.firstHalf;
   const marketPulseWinnerLabel = (() => {
     const candidates = [
       { label: t("match.featCorners"), probability: Number(cornersPick?.probability || 0) },
       { label: t("match.featShots"), probability: Number(shotsPick?.probability || 0) },
+      { label: t("match.featCards"), probability: Number(cardsPick?.probability || 0) },
       { label: t("match.featHt"), probability: Number(firstHalfPick?.probability || 0) }
     ];
     const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
@@ -655,8 +659,10 @@ export default function MatchCard({
         </div>
       )}
 
-      {!compact && (cornersPick || shotsPick || firstHalfPick || cornersLocked || shotsLocked || firstHalfLocked) && (
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
+      {!compact &&
+        (cornersPick || shotsPick || cardsPick || firstHalfPick ||
+          cornersLocked || shotsLocked || cardsLocked || firstHalfLocked) && (
+        <div className="mt-2 grid grid-cols-4 gap-1.5">
           {[
             {
               label: t("match.featCorners"),
@@ -676,6 +682,14 @@ export default function MatchCard({
                   : row.marketOdds?.shotsOnTarget?.odd,
               source: row.marketOdds?.shotsOnTarget?.bookmaker || row.marketOdds?.shotsTotal?.bookmaker,
               accentClass: "border-violet-500/35 bg-violet-500/10"
+            },
+            {
+              label: t("match.featCards"),
+              data: cardsPick,
+              locked: cardsLocked,
+              odd: row.marketOdds?.cards?.odd,
+              source: row.marketOdds?.cards?.bookmaker,
+              accentClass: "border-amber-500/35 bg-amber-500/10"
             },
             {
               label: t("match.featHt"),

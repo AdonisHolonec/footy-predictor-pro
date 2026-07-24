@@ -1578,8 +1578,8 @@ export default function MatchModal({
             </CollapsiblePanel>
           )}
 
-          {/* === CORNERE + ŞUTURI LA POARTĂ (Poisson pe rolling stats) === */}
-          {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal) && (
+          {/* === CORNERE + ŞUTURI LA POARTĂ + CARTONAŞE (Poisson pe rolling stats) === */}
+          {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal || match.probs.cards) && (
             <div className="space-y-2">
               {match.probs.corners && (
                 <CollapsiblePanel compact title={tr("match.featCorners")} subtitle={tr("match.cornersSub")}>
@@ -1644,6 +1644,24 @@ export default function MatchModal({
                     actualTotal={xgData?.marketResults?.shotsTotal ?? null}
                     quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
                     quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
+                    badgeTone="shots"
+                    framed={false}
+                  />
+                </CollapsiblePanel>
+              )}
+              {match.probs.cards && (
+                <CollapsiblePanel compact title={tr("match.featCards")} subtitle={tr("match.cardsSub")}>
+                  <PoissonMarketSection
+                    title={tr("match.featCards")}
+                    subtitle={tr("match.cardsSub")}
+                    accent="var(--fp-warning)"
+                    icon="▢"
+                    data={match.probs.cards}
+                    homeLabel={match.teams.home}
+                    awayLabel={match.teams.away}
+                    actualTotal={null}
+                    quotedOdd={match.marketOdds?.cards?.odd ?? null}
+                    quoteSource={match.marketOdds?.cards?.bookmaker ?? null}
                     badgeTone="shots"
                     framed={false}
                   />

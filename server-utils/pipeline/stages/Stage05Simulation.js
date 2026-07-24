@@ -147,6 +147,7 @@ export async function run(context) {
   let cornersBlock = f.cornersBlock;
   let shotsOnTargetBlock = f.shotsOnTargetBlock;
   let shotsTotalBlock = f.shotsTotalBlock;
+  let cardsBlock = f.cardsBlock;
   let rollingHome = f.rollingHome;
   let rollingAway = f.rollingAway;
   let liveRollingApplied = f.liveRollingApplied;
@@ -231,6 +232,7 @@ export async function run(context) {
     cornersBlock = null;
     shotsOnTargetBlock = null;
     shotsTotalBlock = null;
+    cardsBlock = null;
 
     const cornersLambdas = deriveMarketLambdas({
       rollingHome,
@@ -300,7 +302,36 @@ export async function run(context) {
       usedFallback: shotsLambdas.usedFallback,
       liveRollingApplied
     };
-    
+
+    // === PIAŢĂ CARTONAŞE (Poisson din rolling stats, puncte ponderate red*2+yellow) ===
+    // Neactivă implicit — PREDICT_ENABLE_CARDS trebuie setat explicit la "1".
+    // Liniile de mai jos sunt provizorii (puncte, nu număr de cartonaşe), în aşteptarea
+    // calibrării pe date rolling reale acumulate offline via rebuildTeamMarketRolling.js.
+    if (String(process.env.PREDICT_ENABLE_CARDS || "").trim() === "1") {
+      const cardsLambdas = deriveMarketLambdas({
+        rollingHome,
+        rollingAway,
+        baseAvgTotal: leagueParams.cardsAvgTotal,
+        marketKey: "cards",
+        homeAdv: leagueParams.homeAdv,
+        awayAdv: leagueParams.awayAdv
+      });
+      cardsBlock = {
+        ...buildPoissonMarketBlock({
+          lambdaHome: cardsLambdas.lambdaHome,
+          lambdaAway: cardsLambdas.lambdaAway,
+          lines: [3.5, 4.5, 5.5, 6.5],
+          teamLines: [1.5, 2.5, 3.5],
+          correlation: 0.07
+        }),
+        sampleHome: cardsLambdas.sampleHome,
+        sampleAway: cardsLambdas.sampleAway,
+        usedFallback: cardsLambdas.usedFallback,
+        liveRollingApplied,
+        leagueBaseline: leagueParams.cardsAvgTotal
+      };
+    }
+
     // === PRIMA REPRIZĂ ===
     // Derivăm λ FH din λ full match + fracţiile pe bucketele de minute (0 calls noi).
     // Dacă bucketele lipsesc, deriveFirstHalfLambdas folosește FIRST_HALF_GOALS_BASELINE.
@@ -366,6 +397,7 @@ export async function run(context) {
       cornersBlock,
       shotsOnTargetBlock,
       shotsTotalBlock,
+      cardsBlock,
       rollingHome,
       rollingAway,
       liveRollingApplied,

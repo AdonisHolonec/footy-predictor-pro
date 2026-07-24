@@ -4,14 +4,17 @@
  * Extracted verbatim from Stage08Decision.js (no logic changes).
  */
 
-import { computeMatchProbs, reweightPmfTo1x2 } from "../../math.js";
+import { computeMatchProbs, reweightPmfTo1x2, blendBttsWithEmpirical } from "../../math.js";
 import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { applySideMarketCalibration, pickCalibrationMapForLeague } from "../../isotonicCalibration.js";
 
 /**
  * @param {{ p: object, scorePmf: object|null, lambdaHome: number, lambdaAway: number,
  *   fixtureId: number, p1Adj: number, pXAdj: number, p2Adj: number, leagueParams: object,
- *   calibrationMaps: object, lId: number }} params
+ *   calibrationMaps: object, lId: number, hStats: object|null, aStats: object|null }} params
+ *   hStats/aStats are optional — when present and carrying clean-sheet/failed-to-score
+ *   rates (server-utils/math.js:extractAdvancedGoalsAverages), the final BTTS/GG value
+ *   gets a small empirical blend (see below); otherwise behaviour is unchanged.
  * @returns {{ marketProbsAligned: object, rawSideMarketsPct: object,
  *   calibratedSideMarketsPct: object, sideCalibrationAny: boolean }}
  */
@@ -26,7 +29,9 @@ export function alignMarketProbsAndCalibrate({
   p2Adj,
   leagueParams,
   calibrationMaps,
-  lId
+  lId,
+  hStats,
+  aStats
 }) {
   let marketProbsAligned = p;
   if (scorePmf?.cells?.length) {
@@ -65,6 +70,22 @@ export function alignMarketProbsAndCalibrate({
     pU35: marketProbsAligned.pU35,
     pGG: marketProbsAligned.pGG
   };
+
+  // Empirical clean-sheet / failed-to-score refinement — strictly AFTER the raw/calibrated
+  // snapshots above, so train/serve calibration-map data is never touched by this. Only the
+  // served pGG (and its derived pNGG downstream) is adjusted; falls back to the unchanged
+  // value whenever the four rates aren't all available (see blendBttsWithEmpirical).
+  if (marketProbsAligned.pGG != null) {
+    const blendedPGG = blendBttsWithEmpirical(marketProbsAligned.pGG, {
+      cleanSheetRateHome: hStats?.cleanSheetRateHome,
+      cleanSheetRateAway: aStats?.cleanSheetRateAway,
+      failedToScoreRateHome: hStats?.failedToScoreRateHome,
+      failedToScoreRateAway: aStats?.failedToScoreRateAway
+    });
+    if (blendedPGG !== marketProbsAligned.pGG) {
+      marketProbsAligned = { ...marketProbsAligned, pGG: blendedPGG };
+    }
+  }
 
   return { marketProbsAligned, rawSideMarketsPct, calibratedSideMarketsPct, sideCalibrationAny };
 }

@@ -17,7 +17,8 @@ import { deriveCardsLambda, clampPct, applyStakePolicyV2 } from "../predictHelpe
  *   goals35Quote: object|null, marketOdds: object|null, cornersPick: object|null,
  *   dataQuality: number, maxConf: number, leagueStakeCap: number, cooldownCap: number,
  *   fixtureId: number, valueEngine: object|null, valueDetected: boolean, valueType: string,
- *   finalEv: number, finalKelly: number, stakingCompact: string, reasonCodes: string[] }} params
+ *   finalEv: number, finalKelly: number, stakingCompact: string, reasonCodes: string[],
+ *   correctScoreOdds: Record<string, number>|null, correctScoreProbsPct: Record<string, number>|null }} params
  * @returns {{ valueEngine: object|null, valueDetected: boolean, valueType: string,
  *   finalEv: number, finalKelly: number, stakingCompact: string, reasonCodes: string[] }}
  */
@@ -46,7 +47,9 @@ export function applyValueEngine({
   finalEv,
   finalKelly,
   stakingCompact,
-  reasonCodes
+  reasonCodes,
+  correctScoreOdds,
+  correctScoreProbsPct
 }) {
   try {
     const cardsLine = Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5);
@@ -77,7 +80,9 @@ export function applyValueEngine({
         ? { over: cardsQuote.over, under: cardsQuote.under, line: cardsLine }
         : null,
       cardsOverProbPct: pCardsOver,
-      cardsUnderProbPct: pCardsUnder
+      cardsUnderProbPct: pCardsUnder,
+      correctScoreOdds: correctScoreOdds || null,
+      correctScoreProbsPct: correctScoreProbsPct || null
     });
 
     const bestVe = valueEngine?.bestMarket;

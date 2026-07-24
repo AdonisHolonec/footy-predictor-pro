@@ -250,6 +250,8 @@ export type Probs = {
   shotsOnTarget?: PoissonMarketProbs;
   /** Total şuturi (on + off target). */
   shotsTotal?: PoissonMarketProbs;
+  /** Cartonaşe (puncte ponderate: roşu×2 + galben; derivate din rolling stats team_market_rolling). */
+  cards?: PoissonMarketProbs;
 };
 
 /** Clasament + mini-formă (API standings / teams statistics). */
