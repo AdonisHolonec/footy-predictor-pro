@@ -187,8 +187,8 @@ export default async function handler(req, res) {
 
   if (wantOdds) {
     oddsPrefetchSummary = await prefetchOddsByDate(date, {
-      leagueIds,
-      maxPages: Math.max(2, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES || 6), 12)),
+      leagueSeasonById,
+      maxPagesPerLeague: Math.max(1, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES_PER_LEAGUE || 3), 10)),
       ttlSeconds: 86400
     });
   }
@@ -205,7 +205,9 @@ export default async function handler(req, res) {
           pagesFetched: oddsPrefetchSummary.pagesFetched,
           pagesFromCache: oddsPrefetchSummary.pagesFromCache,
           fixturesMapped: oddsPrefetchSummary.fixturesMapped,
-          upstreamCalls: oddsPrefetchSummary.upstreamCalls
+          upstreamCalls: oddsPrefetchSummary.upstreamCalls,
+          leaguesQueried: oddsPrefetchSummary.leaguesQueried,
+          leaguesFailed: oddsPrefetchSummary.leaguesFailed
         }
       : null,
     fixturesFromCache: Boolean(dayReq.fromCache),

@@ -1,64 +1,71 @@
 import { getWithCache } from "./fetcher.js";
 
 /**
- * Batch-prefetch Match Winner odds by calendar date (API-Football `/odds?date=`).
- * Replaces up to N per-fixture `/odds?fixture=` calls with a few paginated date queries.
+ * Batch-prefetch Match Winner odds per league (API-Football `/odds?date=&league=&season=`).
+ * `season` is required by the upstream provider — querying `/odds?date=` alone (no league/season)
+ * errors out with "The Season field is required" and silently maps zero fixtures for the whole day.
+ * One call per requested league (each cached independently) also avoids racing our target leagues
+ * against an unbounded global date listing (tens of thousands of fixtures/odds worldwide per day,
+ * paginated ~10 per page) where a league we care about could land past any reasonable page cap.
  *
+ * @param {string} dateISO
+ * @param {{ leagueSeasonById: Map<number, number>, maxPagesPerLeague?: number, ttlSeconds?: number }} options
  * @returns {Promise<{
  *   byFixtureId: Map<number, object>,
  *   pagesFetched: number,
  *   pagesFromCache: number,
  *   fixturesMapped: number,
- *   upstreamCalls: number
+ *   upstreamCalls: number,
+ *   leaguesQueried: number,
+ *   leaguesFailed: number
  * }>}
  */
 export async function prefetchOddsByDate(dateISO, options = {}) {
   const date = String(dateISO || "").slice(0, 10);
-  const maxPages = Math.max(1, Math.min(Number(options.maxPages) || 8, 20));
+  const maxPagesPerLeague = Math.max(1, Math.min(Number(options.maxPagesPerLeague) || 3, 10));
   const ttlSeconds = Math.max(300, Number(options.ttlSeconds) || 86400);
-  const leagueFilter = Array.isArray(options.leagueIds)
-    ? new Set(options.leagueIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))
-    : null;
+  const leagueSeasonById = options.leagueSeasonById instanceof Map ? options.leagueSeasonById : new Map();
 
   const byFixtureId = new Map();
   let pagesFetched = 0;
   let pagesFromCache = 0;
   let upstreamCalls = 0;
+  let leaguesQueried = 0;
+  let leaguesFailed = 0;
 
-  if (!date) {
-    return { byFixtureId, pagesFetched, pagesFromCache, fixturesMapped: 0, upstreamCalls };
+  if (!date || leagueSeasonById.size === 0) {
+    return { byFixtureId, pagesFetched, pagesFromCache, fixturesMapped: 0, upstreamCalls, leaguesQueried, leaguesFailed };
   }
 
-  for (let page = 1; page <= maxPages; page++) {
-    const params = { date, page };
-    // Optional league scoping when a single league is requested (API supports league+season+date).
-    if (options.leagueId != null && options.season != null) {
-      params.league = Number(options.leagueId);
-      params.season = Number(options.season);
-    }
+  for (const [leagueIdRaw, seasonRaw] of leagueSeasonById) {
+    const leagueId = Number(leagueIdRaw);
+    const season = Number(seasonRaw);
+    if (!Number.isFinite(leagueId) || leagueId <= 0 || !Number.isFinite(season)) continue;
+    leaguesQueried += 1;
 
-    const req = await getWithCache("/odds", params, ttlSeconds);
-    pagesFetched += 1;
-    if (req.fromCache) pagesFromCache += 1;
-    else upstreamCalls += 1;
+    for (let page = 1; page <= maxPagesPerLeague; page++) {
+      const req = await getWithCache("/odds", { date, league: leagueId, season, page }, ttlSeconds);
+      pagesFetched += 1;
+      if (req.fromCache) pagesFromCache += 1;
+      else upstreamCalls += 1;
 
-    if (!req.ok) break;
-
-    const rows = Array.isArray(req.data?.response) ? req.data.response : [];
-    for (const row of rows) {
-      const fixtureId = Number(row?.fixture?.id);
-      if (!Number.isFinite(fixtureId) || fixtureId <= 0) continue;
-      if (leagueFilter && leagueFilter.size > 0) {
-        const lid = Number(row?.league?.id);
-        if (!leagueFilter.has(lid)) continue;
+      if (!req.ok) {
+        leaguesFailed += 1;
+        break;
       }
-      // Shape expected by consensusMatchWinnerOdds / consensusBttsOdds helpers.
-      byFixtureId.set(fixtureId, { response: [row] });
-    }
 
-    const totalPages = Number(req.data?.paging?.total) || 1;
-    const current = Number(req.data?.paging?.current) || page;
-    if (current >= totalPages || rows.length === 0) break;
+      const rows = Array.isArray(req.data?.response) ? req.data.response : [];
+      for (const row of rows) {
+        const fixtureId = Number(row?.fixture?.id);
+        if (!Number.isFinite(fixtureId) || fixtureId <= 0) continue;
+        // Shape expected by consensusMatchWinnerOdds / consensusBttsOdds helpers.
+        byFixtureId.set(fixtureId, { response: [row] });
+      }
+
+      const totalPages = Number(req.data?.paging?.total) || 1;
+      const current = Number(req.data?.paging?.current) || page;
+      if (current >= totalPages || rows.length === 0) break;
+    }
   }
 
   return {
@@ -66,7 +73,9 @@ export async function prefetchOddsByDate(dateISO, options = {}) {
     pagesFetched,
     pagesFromCache,
     fixturesMapped: byFixtureId.size,
-    upstreamCalls
+    upstreamCalls,
+    leaguesQueried,
+    leaguesFailed
   };
 }
 

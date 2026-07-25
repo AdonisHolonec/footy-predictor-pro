@@ -31,7 +31,12 @@ import { refreshAutoCalibrationOverlays } from "../../calibration/overlayRuntime
 import { refreshLeagueProfileOverlays } from "../../leagueProfiles/leagueProfileOverlayRuntime.js";
 import { prefetchOddsByDate } from "../../oddsPrefetch.js";
 import { MODEL_VERSION } from "../../modelConstants.js";
-import { LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS, loadRiskContext } from "../predictHelpers.js";
+import {
+  LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS,
+  loadRiskContext,
+  inferSeason,
+  resolveLeagueSeasonFromFixtures
+} from "../predictHelpers.js";
 import { halt } from "../PipelineContext.js";
 
 export const STAGE_ID = "Stage01DataCollection";
@@ -398,9 +403,17 @@ export async function run(context) {
     context.reservedTierUsage = 0;
   }
 
+  const fallbackSeason = inferSeason(date);
+  const leagueSeasonById = new Map();
+  for (const leagueId of leagueIds.map(Number)) {
+    if (!Number.isFinite(leagueId) || leagueId <= 0) continue;
+    const leagueFixtures = (context.allFixtures || []).filter((f) => Number(f?.league?.id) === leagueId);
+    leagueSeasonById.set(leagueId, resolveLeagueSeasonFromFixtures(leagueFixtures, fallbackSeason));
+  }
+
   const oddsPrefetch = await prefetchOddsByDate(date, {
-    leagueIds: leagueIds.map(Number),
-    maxPages: Math.max(2, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES || 6), 12)),
+    leagueSeasonById,
+    maxPagesPerLeague: Math.max(1, Math.min(Number(process.env.ODDS_PREFETCH_MAX_PAGES_PER_LEAGUE || 3), 10)),
     ttlSeconds: 86400
   });
   context.oddsPrefetch = oddsPrefetch;
