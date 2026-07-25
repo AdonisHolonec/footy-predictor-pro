@@ -270,9 +270,9 @@ export function ConfidenceAura({ value, className = "", size = "default" }: Conf
   return (
     <div className={`relative flex ${dim} shrink-0 items-center justify-center ${className}`} title={`Confidence ${Math.round(v)}%`}>
       <div
-        className="absolute inset-0 rounded-full opacity-40 blur-xl motion-reduce:opacity-20"
+        className="absolute inset-0 rounded-full opacity-70 blur-xl motion-reduce:opacity-35"
         style={{
-          background: `conic-gradient(from -90deg, rgba(56,189,248,0.5) ${v * 3.6}deg, transparent 0deg)`
+          background: `conic-gradient(from -90deg, var(--fp-accent-muted) ${v * 3.6}deg, transparent 0deg)`
         }}
       />
       <svg className="relative h-full w-full -rotate-90" viewBox={`0 0 ${vb} ${vb}`} aria-hidden>
@@ -290,8 +290,8 @@ export function ConfidenceAura({ value, className = "", size = "default" }: Conf
         />
         <defs>
           <linearGradient id={auraGrad} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop stopColor="#38bdf8" />
-            <stop offset="1" stopColor="#34d399" />
+            <stop stopColor="var(--fp-accent-hover)" />
+            <stop offset="1" stopColor="var(--fp-accent)" />
           </linearGradient>
         </defs>
       </svg>

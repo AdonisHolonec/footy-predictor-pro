@@ -25,7 +25,7 @@ export type UiPrefsV3 = {
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
-  theme: "dark",
+  theme: "light",
   locale: "ro",
   watchlistFixtureIds: [],
   bookmarkFixtureIds: [],
@@ -43,12 +43,12 @@ const DEFAULT_PREFS: UiPrefsV3 = {
 };
 
 function storageKey(userId?: string | null) {
-  return `footy:ui:v5:${userId || "anon"}`;
+  return `footy:ui:v6:${userId || "anon"}`;
 }
 
 function legacyKeys(userId?: string | null) {
   const id = userId || "anon";
-  return [`footy:ui:v4:${id}`, `footy:ui:v3:${id}`];
+  return [`footy:ui:v5:${id}`, `footy:ui:v4:${id}`, `footy:ui:v3:${id}`];
 }
 
 function readPrefs(userId?: string | null): UiPrefsV3 {
@@ -57,14 +57,14 @@ function readPrefs(userId?: string | null): UiPrefsV3 {
     const raw = localStorage.getItem(storageKey(userId));
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<UiPrefsV3>;
-      return { ...DEFAULT_PREFS, ...parsed, locale: parsed.locale || storedLocale, theme: parsed.theme || "dark" };
+      return { ...DEFAULT_PREFS, ...parsed, locale: parsed.locale || storedLocale, theme: parsed.theme || "light" };
     }
     for (const key of legacyKeys(userId)) {
       const legacy = localStorage.getItem(key);
       if (legacy) {
         const parsed = JSON.parse(legacy) as Partial<UiPrefsV3>;
-        /* UI Sprint 1: dark-first — force the new default regardless of the old stored theme. */
-        return { ...DEFAULT_PREFS, ...parsed, theme: "dark", locale: parsed.locale || storedLocale };
+        /* UI Sprint 2: light-first — force the new default regardless of the old stored theme. */
+        return { ...DEFAULT_PREFS, ...parsed, theme: "light", locale: parsed.locale || storedLocale };
       }
     }
     return { ...DEFAULT_PREFS, locale: storedLocale };

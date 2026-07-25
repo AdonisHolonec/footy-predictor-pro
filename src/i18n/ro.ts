@@ -328,6 +328,7 @@ export const ro: Dict = {
     oddsValue: "02 — Cote & value",
     luckUnavailable: "Factor noroc indisponibil",
     valueNotDetected: "Value bet · nedetectat",
+    valueDetected: "Value bet detectat",
     stakePlan: "Plan miză",
     modelAudit: "Audit model",
     pipeline: "Pipeline:",

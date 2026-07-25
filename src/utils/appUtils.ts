@@ -19,12 +19,23 @@ export function localCalendarDateKey(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Kickoff → local calendar day (avoids UTC date mismatch emptying the board). */
+/**
+ * Kickoff → calendar day in Europe/Bucharest — matches how the server buckets fixtures
+ * for a requested `date` (server-utils/fixtureCalendarDateKey.js). Using the device's own
+ * timezone here (instead of this fixed zone) made evening-kickoff fixtures in timezones
+ * behind Bucharest (e.g. MLS/USA) roll into the next calendar day locally, so they'd fail
+ * the selected-date check and disappear even though the server returned them correctly.
+ */
 export function kickoffLocalDateKey(kickoff?: string | null): string {
   if (!kickoff) return "";
   const d = new Date(kickoff);
   if (!Number.isFinite(d.getTime())) return String(kickoff).slice(0, 10);
-  return localCalendarDateKey(d);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Bucharest",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(d);
 }
 
 /** Merge prediction rows by fixture id — never drop prior dates when a new batch arrives. */

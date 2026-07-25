@@ -91,6 +91,10 @@ export default function PredictionFocusCard({
   const isFreeLike = !hasExactConfidence && !confidenceCategory;
 
   const live = isFixtureInPlay(row.status);
+  const finished = ["FT", "AET", "PEN"].includes(String(row.status || "").toUpperCase());
+  const hasScore = (live || finished) && Number.isFinite(Number(row.score?.home)) && Number.isFinite(Number(row.score?.away));
+  const ev = Number(row.valueBet?.ev);
+  const hasValue = Boolean(row.valueBet?.detected) && Number.isFinite(ev) && ev > 0;
   const kickoff = new Date(row.kickoff);
   const time = Number.isFinite(kickoff.getTime())
     ? kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -277,8 +281,14 @@ export default function PredictionFocusCard({
           </span>
         </div>
 
-        <span className="mt-2.5 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
-          {t("common.vs")}
+        <span
+          className={`mt-2.5 font-mono tabular-nums ${
+            hasScore
+              ? `text-sm font-bold ${live ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"}`
+              : "text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]"
+          }`}
+        >
+          {hasScore ? `${row.score?.home} – ${row.score?.away}` : t("common.vs")}
         </span>
 
         <div className="flex min-w-0 flex-col items-center gap-1">
@@ -330,12 +340,22 @@ export default function PredictionFocusCard({
                     🔒 {t("card.unlock")}
                   </button>
                 ) : (
-                  <span
-                    className={`block truncate font-display text-[12px] font-bold leading-tight tabular-nums ${
-                      r.accent && r.outcome == null ? "text-[var(--fp-accent)]" : ""
-                    }`}
-                  >
-                    {r.pick}
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span
+                      className={`block truncate font-display text-[12px] font-bold leading-tight tabular-nums ${
+                        r.accent && r.outcome == null ? "text-[var(--fp-accent)]" : ""
+                      }`}
+                    >
+                      {r.pick}
+                    </span>
+                    {r.id === "recommended" && hasValue && (
+                      <span
+                        className="shrink-0 rounded bg-[var(--fp-warning)]/15 px-1 py-0.5 text-[8px] font-bold tabular-nums text-[var(--fp-warning)]"
+                        title={t("match.valueDetected")}
+                      >
+                        +{ev.toFixed(1)}% EV
+                      </span>
+                    )}
                   </span>
                 )}
               </div>

@@ -5,8 +5,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Sora", "Plus Jakarta Sans", "system-ui", "sans-serif"],
-        sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
+        display: ["Archivo", "system-ui", "sans-serif"],
+        sans: ["Archivo", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"]
       },
       borderRadius: {

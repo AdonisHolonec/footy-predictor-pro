@@ -253,13 +253,19 @@ export default function ConsumerShell({
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
-              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                isActive ? "text-[var(--fp-accent)]" : "text-[var(--fp-text-muted)]"
-              }`}
+              className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold transition-colors duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
               aria-current={isActive ? "page" : undefined}
             >
-              <NavIcon id={item.id} />
-              {t(item.shortKey)}
+              <span
+                className={`flex items-center justify-center rounded-[var(--fp-radius-sm)] px-3.5 py-1 transition-colors duration-[var(--fp-ease)] ${
+                  isActive ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]" : "text-[var(--fp-text-muted)]"
+                }`}
+              >
+                <NavIcon id={item.id} />
+              </span>
+              <span className={isActive ? "text-[var(--fp-accent)]" : "text-[var(--fp-text-muted)]"}>
+                {t(item.shortKey)}
+              </span>
             </button>
           );
         })}

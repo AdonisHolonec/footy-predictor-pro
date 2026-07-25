@@ -328,6 +328,7 @@ export const en: Dict = {
     oddsValue: "02 — Odds & value",
     luckUnavailable: "Luck factor unavailable",
     valueNotDetected: "Value bet · not detected",
+    valueDetected: "Value bet detected",
     stakePlan: "Stake plan",
     modelAudit: "Model audit",
     pipeline: "Pipeline:",

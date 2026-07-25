@@ -1,49 +1,52 @@
 /**
- * Footy Predictor Pro — UI Sprint 1 tokens.
- * Dark-first · premium sport · three accents (win-green / loss-red / value-gold).
- * Every variable name below is unchanged from the previous token set (31 --fp-*
- * vars, verified against every consumer in src/) — only values change, plus a
- * small additive set for glass/gradient surfaces. No component was touched.
+ * Footy Predictor Pro — UI Sprint 2 tokens.
+ * Light-first · warm neutral paper · single red-orange brand accent, three
+ * independent semantic accents (win-green / loss-wine / value-amber) that
+ * never share a hue with the brand accent so they stay visually distinct.
+ * Every variable name below is unchanged from the previous token set (31
+ * --fp-* vars, verified against every consumer in src/) — only values change.
+ * No component was touched.
  */
 
 :root {
-  /* Surfaces — near-black with a faint pitch-green undertone, not navy, not pure black */
-  --fp-bg: #0a0d0b;
-  --fp-bg-elevated: #10140f;
-  --fp-bg-card: #161b17;
-  --fp-bg-muted: #1d231e;
-  --fp-border: rgba(255, 255, 255, 0.08);
-  --fp-border-strong: rgba(255, 255, 255, 0.16);
+  /* Surfaces — warm off-white paper, not stark white, not cool grey */
+  --fp-bg: #f3f2f2;
+  --fp-bg-elevated: #eae9e9;
+  --fp-bg-card: #ffffff;
+  --fp-bg-muted: #eae7e7;
+  --fp-border: rgba(32, 30, 29, 0.12);
+  --fp-border-strong: rgba(32, 30, 29, 0.24);
 
-  /* Brand — primary accent is the win-green; two more accents (danger/value) carry
-     equal visual weight across the app, so "accent" here is the CTA/interactive one */
-  --fp-navy: #0d1512;
-  --fp-accent: #1fae6b;
-  --fp-accent-hover: #29c97a;
-  --fp-accent-muted: rgba(31, 174, 107, 0.16);
-  --fp-purple: #a78bfa;
+  /* Brand — single warm red-orange accent carries CTA/interactive weight;
+     success/danger/warning below are deliberately different hues so a
+     "value detected" badge never reads as a win/loss badge or vice versa */
+  --fp-navy: #201e1d;
+  --fp-accent: #ec3013;
+  --fp-accent-hover: #dd2b0f;
+  --fp-accent-muted: rgba(236, 48, 19, 0.12);
+  --fp-purple: #7c3aed;
 
-  /* Text — near-white with a whisper of the surface tint, never stark #fff */
-  --fp-text: #f3f5f3;
-  --fp-text-muted: #9fafa6;
-  --fp-text-faint: #6b7a72;
+  /* Text — near-black ink, never stark #000 */
+  --fp-text: #201e1d;
+  --fp-text-muted: #605d5d;
+  --fp-text-faint: #7d7979;
 
-  /* Semantic = the three brand accents (win-green / loss-red / value-gold) */
-  --fp-success: #22d06e;
-  --fp-danger: #f0453a;
-  --fp-warning: #f0b23d;
+  /* Semantic — own hues, independent of --fp-accent's red-orange */
+  --fp-success: #157a4a;
+  --fp-danger: #9d174d;
+  --fp-warning: #b45309;
 
-  /* Elevation — dark surfaces need denser, larger-spread shadows than light ones */
-  --fp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --fp-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --fp-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+  /* Elevation — soft, warm-neutral, low-opacity (paper doesn't need dense shadow) */
+  --fp-shadow-sm: 0 1px 2px rgba(45, 43, 43, 0.14);
+  --fp-shadow: 0 3px 10px rgba(45, 43, 43, 0.16);
+  --fp-shadow-lg: 0 12px 32px rgba(45, 43, 43, 0.22);
 
   /* Glass + gradient — discreet, used sparingly on hero/highlight surfaces only */
-  --fp-glass-bg: rgba(22, 27, 23, 0.72);
-  --fp-glass-border: rgba(255, 255, 255, 0.1);
+  --fp-glass-bg: rgba(255, 255, 255, 0.72);
+  --fp-glass-border: rgba(32, 30, 29, 0.08);
   --fp-glass-blur: 14px;
-  --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.16), rgba(240, 178, 61, 0.08));
-  --fp-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+  --fp-gradient-primary: linear-gradient(135deg, rgba(236, 48, 19, 0.1), rgba(180, 83, 9, 0.06));
+  --fp-gradient-surface: linear-gradient(180deg, rgba(32, 30, 29, 0.02), rgba(32, 30, 29, 0));
 
   /* Bridge to legacy vars */
   --bg: var(--fp-bg);
@@ -102,32 +105,61 @@
   --fp-z-toast: 70;
 }
 
-/* Light — now the opt-in alternative (was default pre-Sprint-1), reachable via Settings */
+/* Light — mirrors :root explicitly so the theme block is self-contained
+   (root is the pre-JS/no-class fallback; this is what applyTheme() applies) */
 html.theme-light {
-  --fp-bg: #f8fafc;
-  --fp-bg-elevated: #f1f5f9;
+  --fp-bg: #f3f2f2;
+  --fp-bg-elevated: #eae9e9;
   --fp-bg-card: #ffffff;
-  --fp-bg-muted: #f1f5f9;
-  --fp-border: #e2e8f0;
-  --fp-border-strong: #cbd5e1;
-  --fp-navy: #0f172a;
-  --fp-accent: #1fae6b;
-  --fp-accent-hover: #17965a;
-  --fp-accent-muted: rgba(31, 174, 107, 0.1);
+  --fp-bg-muted: #eae7e7;
+  --fp-border: rgba(32, 30, 29, 0.12);
+  --fp-border-strong: rgba(32, 30, 29, 0.24);
+  --fp-navy: #201e1d;
+  --fp-accent: #ec3013;
+  --fp-accent-hover: #dd2b0f;
+  --fp-accent-muted: rgba(236, 48, 19, 0.12);
   --fp-purple: #7c3aed;
-  --fp-text: #0f172a;
-  --fp-text-muted: #334155;
-  --fp-text-faint: #475569;
-  --fp-success: #16a34a;
-  --fp-danger: #dc2626;
-  --fp-warning: #d97706;
-  --fp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --fp-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-  --fp-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1);
+  --fp-text: #201e1d;
+  --fp-text-muted: #605d5d;
+  --fp-text-faint: #7d7979;
+  --fp-success: #157a4a;
+  --fp-danger: #9d174d;
+  --fp-warning: #b45309;
+  --fp-shadow-sm: 0 1px 2px rgba(45, 43, 43, 0.14);
+  --fp-shadow: 0 3px 10px rgba(45, 43, 43, 0.16);
+  --fp-shadow-lg: 0 12px 32px rgba(45, 43, 43, 0.22);
   --fp-glass-bg: rgba(255, 255, 255, 0.72);
-  --fp-glass-border: rgba(15, 23, 42, 0.08);
-  --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.08), rgba(217, 119, 6, 0.05));
-  --fp-gradient-surface: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0));
+  --fp-glass-border: rgba(32, 30, 29, 0.08);
+  --fp-gradient-primary: linear-gradient(135deg, rgba(236, 48, 19, 0.1), rgba(180, 83, 9, 0.06));
+  --fp-gradient-surface: linear-gradient(180deg, rgba(32, 30, 29, 0.02), rgba(32, 30, 29, 0));
+}
+
+/* Dark — now the opt-in alternative (was default pre-Sprint-2), reachable via Settings */
+html.theme-dark {
+  --fp-bg: #0a0d0b;
+  --fp-bg-elevated: #10140f;
+  --fp-bg-card: #161b17;
+  --fp-bg-muted: #1d231e;
+  --fp-border: rgba(255, 255, 255, 0.08);
+  --fp-border-strong: rgba(255, 255, 255, 0.16);
+  --fp-navy: #0d1512;
+  --fp-accent: #1fae6b;
+  --fp-accent-hover: #29c97a;
+  --fp-accent-muted: rgba(31, 174, 107, 0.16);
+  --fp-purple: #a78bfa;
+  --fp-text: #f3f5f3;
+  --fp-text-muted: #9fafa6;
+  --fp-text-faint: #6b7a72;
+  --fp-success: #22d06e;
+  --fp-danger: #f0453a;
+  --fp-warning: #f0b23d;
+  --fp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --fp-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --fp-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+  --fp-glass-bg: rgba(22, 27, 23, 0.72);
+  --fp-glass-border: rgba(255, 255, 255, 0.1);
+  --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.16), rgba(240, 178, 61, 0.08));
+  --fp-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
 }
 
 html.theme-contrast {
