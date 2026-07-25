@@ -4,6 +4,7 @@ import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
+import StatTile from "../../design-system/StatTile";
 
 type Props = {
   matches: PredictionRow[];
@@ -160,14 +161,7 @@ export default function HomeSection({
           { label: "Success Rate", value: winRate ? `${winRate.toFixed(0)}%` : "—" },
           { label: "Live now", value: String(live.length) }
         ].map((k) => (
-          <Card key={k.label} padding="sm">
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-text-muted)]">
-              {k.label}
-            </p>
-            <p className="mt-1 font-display text-[length:var(--fp-num)] font-semibold tabular-nums text-[var(--fp-text)]">
-              {k.value}
-            </p>
-          </Card>
+          <StatTile key={k.label} label={k.label} value={k.value} />
         ))}
       </div>
 

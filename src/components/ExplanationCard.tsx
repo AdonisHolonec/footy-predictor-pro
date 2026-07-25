@@ -5,11 +5,11 @@ function polarityClass(polarity?: PredictionReason["polarity"]): string {
   switch (polarity) {
     case "positive":
     case "support":
-      return "text-signal-sage border-signal-sage/25 bg-signal-sage/8";
+      return "text-[var(--fp-success)] border-[var(--fp-success)]/25 bg-[var(--fp-success)]/8";
     case "negative":
-      return "text-signal-rose border-signal-rose/25 bg-signal-rose/8";
+      return "text-[var(--fp-danger)] border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/8";
     default:
-      return "text-signal-ink border-white/10 bg-signal-mist/20";
+      return "text-[var(--fp-text)] border-white/10 bg-[var(--fp-bg-elevated)]/20";
   }
 }
 
@@ -53,16 +53,16 @@ export default function ExplanationCard({
     if (top.length === 0 && formReasons.length === 0) return null;
     return (
       <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
-        <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-signal-petrol/75">{t("panels.reasoning")}</div>
-        <ul className="space-y-0.5 font-mono text-[9px] leading-snug text-signal-inkMuted">
+        <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--fp-accent)]/75">{t("panels.reasoning")}</div>
+        <ul className="space-y-0.5 font-mono text-[9px] leading-snug text-[var(--fp-text-muted)]">
           {top.map((r) => (
             <li key={`${r.code}-${r.label}`} className="truncate" title={r.label}>
-              <span className="text-signal-petrol">·</span> {r.label}
+              <span className="text-[var(--fp-accent)]">·</span> {r.label}
             </li>
           ))}
           {formReasons.map((r) => (
-            <li key={`${r.code}-${r.label}`} className="truncate tracking-wide text-signal-ink" title={r.label}>
-              <span className="text-signal-petrol">·</span> {r.label}
+            <li key={`${r.code}-${r.label}`} className="truncate tracking-wide text-[var(--fp-text)]" title={r.label}>
+              <span className="text-[var(--fp-accent)]">·</span> {r.label}
             </li>
           ))}
         </ul>
@@ -75,10 +75,10 @@ export default function ExplanationCard({
       <div className={`mb-4 flex flex-wrap items-end justify-between gap-3 ${framed ? "border-b border-white/5 pb-3" : ""}`}>
         {framed ? (
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-petrol/80">
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">
               {t("panels.predictionExplanation")}
             </h3>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
               {t("panels.explanationSub")}
             </p>
           </div>
@@ -86,19 +86,19 @@ export default function ExplanationCard({
           <div />
         )}
         <div className="text-right">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-signal-inkMuted">{t("card.prediction")}</div>
-          <div className="font-display text-2xl font-bold text-signal-ink">{pick}</div>
+          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{t("card.prediction")}</div>
+          <div className="font-display text-2xl font-bold text-[var(--fp-text)]">{pick}</div>
           {confidence != null && Number.isFinite(confidence) ? (
-            <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-signal-petrol">
+            <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-[var(--fp-accent)]">
               {t("panels.confidence")} {Math.round(confidence)}%
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="mb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-signal-petrol/80">{t("panels.reasoning")}</div>
+      <div className="mb-3 font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--fp-accent)]/80">{t("panels.reasoning")}</div>
       {otherReasons.length === 0 && formReasons.length === 0 ? (
-        <p className="font-mono text-[11px] text-signal-inkMuted">{t("panels.explanationEmpty")}</p>
+        <p className="font-mono text-[11px] text-[var(--fp-text-muted)]">{t("panels.explanationEmpty")}</p>
       ) : (
         <ul className="space-y-2">
           {otherReasons.map((r) => (
@@ -115,17 +115,17 @@ export default function ExplanationCard({
       {(explanation.formHome || explanation.formAway || formReasons.length > 0) && (
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(explanation.formHome || formReasons.find((r) => r.code === "home_form")) && (
-            <div className="rounded-xl border border-white/10 bg-signal-mist/20 px-3 py-2">
-              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">{t("panels.homeForm")}</div>
-              <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-signal-ink">
+            <div className="rounded-xl border border-white/10 bg-[var(--fp-bg-elevated)]/20 px-3 py-2">
+              <div className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.homeForm")}</div>
+              <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-[var(--fp-text)]">
                 {explanation.formHome || formReasons.find((r) => r.code === "home_form")?.label.replace(/^Home Form\s+/i, "")}
               </div>
             </div>
           )}
           {(explanation.formAway || formReasons.find((r) => r.code === "away_form")) && (
-            <div className="rounded-xl border border-white/10 bg-signal-mist/20 px-3 py-2">
-              <div className="font-mono text-[8px] uppercase tracking-wider text-signal-inkMuted">{t("panels.awayForm")}</div>
-              <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-signal-ink">
+            <div className="rounded-xl border border-white/10 bg-[var(--fp-bg-elevated)]/20 px-3 py-2">
+              <div className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.awayForm")}</div>
+              <div className="mt-1 font-mono text-sm font-semibold tracking-[0.12em] text-[var(--fp-text)]">
                 {explanation.formAway || formReasons.find((r) => r.code === "away_form")?.label.replace(/^Away Form\s+/i, "")}
               </div>
             </div>
@@ -134,8 +134,8 @@ export default function ExplanationCard({
       )}
 
       {explanation.expectedGoals != null && Number.isFinite(explanation.expectedGoals) && (
-        <div className="mt-3 font-mono text-[10px] text-signal-inkMuted">
-          Σ λ = <span className="text-signal-ink">{explanation.expectedGoals.toFixed(2)}</span> {t("panels.expectedGoals")}
+        <div className="mt-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
+          Σ λ = <span className="text-[var(--fp-text)]">{explanation.expectedGoals.toFixed(2)}</span> {t("panels.expectedGoals")}
         </div>
       )}
     </>
@@ -143,5 +143,5 @@ export default function ExplanationCard({
 
   if (!framed) return <div>{body}</div>;
 
-  return <section className="rounded-2xl border border-white/5 bg-signal-void/30 p-5">{body}</section>;
+  return <section className="rounded-2xl border border-white/5 bg-[var(--fp-bg)]/30 p-5">{body}</section>;
 }

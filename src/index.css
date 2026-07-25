@@ -124,29 +124,6 @@
     color: var(--fp-text-faint) !important;
   }
 
-  /* Legacy signal utility classes → readable on light surfaces */
-  html.theme-light [class*="text-signal-inkMuted"],
-  html.theme-light [class*="text-signal-silver"],
-  html.theme-light [class*="text-signal-stone"] {
-    color: var(--fp-text-muted) !important;
-  }
-  html.theme-light [class*="text-signal-ink"]:not([class*="text-signal-inkMuted"]) {
-    color: var(--fp-text) !important;
-  }
-  html.theme-light [class*="text-signal-petrol"] {
-    color: var(--fp-accent) !important;
-  }
-  html.theme-light [class*="text-signal-mint"],
-  html.theme-light [class*="text-signal-sage"] {
-    color: #15803d !important;
-  }
-  html.theme-light [class*="text-signal-amber"],
-  html.theme-light [class*="text-signal-amberSoft"] {
-    color: #b45309 !important;
-  }
-  html.theme-light [class*="text-signal-rose"] {
-    color: #be123c !important;
-  }
   html.theme-light [class*="text-rose-300"] {
     color: #e11d48 !important;
   }
@@ -175,12 +152,6 @@
   html.theme-light [class*="text-white/"] {
     color: var(--fp-text-muted) !important;
   }
-  html.theme-light [class*="bg-signal-void"],
-  html.theme-light [class*="bg-signal-panel"],
-  html.theme-light [class*="bg-signal-mist"],
-  html.theme-light [class*="bg-signal-fog"] {
-    background-color: var(--fp-bg-muted) !important;
-  }
   html.theme-light [class*="border-white/"] {
     border-color: var(--fp-border) !important;
   }
@@ -191,7 +162,6 @@
   }
   html.theme-light [class*="from-emerald-"],
   html.theme-light [class*="via-emerald-"],
-  html.theme-light [class*="to-signal-void"],
   html.theme-light [class*="from-cyan-"],
   html.theme-light [class*="via-cyan-"],
   html.theme-light [class*="from-fuchsia-"],
@@ -241,7 +211,11 @@
 
 @layer components {
   .lab-page {
-    @apply relative min-h-screen text-signal-ink selection:bg-signal-petrol/20;
+    @apply relative min-h-screen text-[var(--fp-text)];
+  }
+
+  .lab-page ::selection {
+    background-color: color-mix(in srgb, var(--fp-accent) 20%, transparent);
   }
 
   /* Cleaner dark canvas — soft depth, less neon grid */
@@ -265,16 +239,19 @@
   }
 
   .lab-glass {
-    @apply rounded-card border border-white/[0.07] bg-signal-panel/80 shadow-card backdrop-blur-[var(--lab-blur)];
+    @apply rounded-card border border-white/[0.07] shadow-card backdrop-blur-[var(--lab-blur)];
+    background-color: color-mix(in srgb, var(--fp-bg-card) 80%, transparent);
   }
 
   .lab-glass-strong {
-    @apply rounded-card-lg border border-white/[0.08] bg-signal-panel/90 shadow-atelierLg backdrop-blur-md;
+    @apply rounded-card-lg border border-white/[0.08] shadow-atelierLg backdrop-blur-md;
+    background-color: color-mix(in srgb, var(--fp-bg-card) 90%, transparent);
   }
 
   /* Modern SaaS / sports-app card */
   .lab-card {
-    @apply rounded-card border border-white/[0.07] bg-signal-panel shadow-card transition-[transform,box-shadow,border-color] duration-atelier ease-out;
+    @apply rounded-card border border-white/[0.07] shadow-card transition-[transform,box-shadow,border-color] duration-atelier ease-out;
+    background-color: var(--fp-bg-card);
   }
 
   .lab-card:hover {
@@ -282,23 +259,29 @@
   }
 
   .lab-stat {
-    @apply rounded-card border border-white/[0.06] bg-signal-fog/80 px-3 py-3 shadow-innerSoft;
+    @apply rounded-card border border-white/[0.06] px-3 py-3 shadow-innerSoft;
+    background-color: color-mix(in srgb, var(--fp-bg-card) 80%, transparent);
   }
 
   .lab-stat-label {
-    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-signal-inkMuted;
+    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.12em];
+    color: var(--fp-text-muted);
   }
 
   .lab-stat-value {
-    @apply mt-1 font-display text-xl font-semibold tabular-nums tracking-tight text-signal-ink sm:text-2xl;
+    @apply mt-1 font-display text-xl font-semibold tabular-nums tracking-tight sm:text-2xl;
+    color: var(--fp-text);
   }
 
   .lab-chip {
-    @apply inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-signal-void/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-silver;
+    @apply inline-flex items-center gap-1 rounded-lg border border-white/[0.08] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide;
+    background-color: color-mix(in srgb, var(--fp-bg) 50%, transparent);
+    color: var(--fp-text-muted);
   }
 
   .lab-heading {
-    @apply font-display font-semibold tracking-tight text-signal-ink;
+    @apply font-display font-semibold tracking-tight;
+    color: var(--fp-text);
   }
 
   .lab-mono {
@@ -306,15 +289,23 @@
   }
 
   .lab-section-title {
-    @apply font-display text-sm font-semibold tracking-tight text-signal-ink sm:text-base;
+    @apply font-display text-sm font-semibold tracking-tight sm:text-base;
+    color: var(--fp-text);
   }
 
   .lab-section-eyebrow {
-    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-signal-petrol/90;
+    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.14em];
+    color: color-mix(in srgb, var(--fp-accent) 90%, transparent);
   }
 
   .glass-input {
-    @apply rounded-lg border border-white/10 bg-signal-fog/90 text-signal-ink placeholder:text-signal-inkMuted/60;
+    @apply rounded-lg border border-white/10;
+    background-color: color-mix(in srgb, var(--fp-bg-card) 90%, transparent);
+    color: var(--fp-text);
+  }
+
+  .glass-input::placeholder {
+    color: color-mix(in srgb, var(--fp-text-muted) 60%, transparent);
   }
 }
 
@@ -484,7 +475,7 @@
   @apply rounded-full bg-white/10;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  @apply bg-signal-petrol/35;
+  background-color: color-mix(in srgb, var(--fp-accent) 35%, transparent);
 }
 
 /**
@@ -493,27 +484,6 @@
  */
 .fp-readable {
   color: var(--fp-text);
-}
-.fp-readable [class*="text-signal-inkMuted"],
-.fp-readable [class*="text-signal-silver"],
-.fp-readable [class*="text-signal-stone"] {
-  color: var(--fp-text-muted) !important;
-}
-.fp-readable [class*="text-signal-ink"]:not([class*="text-signal-inkMuted"]) {
-  color: var(--fp-text) !important;
-}
-.fp-readable [class*="text-signal-petrol"] {
-  color: var(--fp-accent) !important;
-}
-.fp-readable [class*="text-signal-mint"],
-.fp-readable [class*="text-signal-sage"] {
-  color: #15803d !important;
-}
-.fp-readable [class*="bg-signal-void"],
-.fp-readable [class*="bg-signal-panel"],
-.fp-readable [class*="bg-signal-mist"],
-.fp-readable [class*="bg-signal-fog"] {
-  background-color: var(--fp-bg-muted) !important;
 }
 .fp-readable .lab-card,
 .fp-readable .lab-stat {

@@ -25,7 +25,7 @@ export type UiPrefsV3 = {
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
-  theme: "light",
+  theme: "dark",
   locale: "ro",
   watchlistFixtureIds: [],
   bookmarkFixtureIds: [],
@@ -57,14 +57,14 @@ function readPrefs(userId?: string | null): UiPrefsV3 {
     const raw = localStorage.getItem(storageKey(userId));
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<UiPrefsV3>;
-      return { ...DEFAULT_PREFS, ...parsed, locale: parsed.locale || storedLocale, theme: parsed.theme || "light" };
+      return { ...DEFAULT_PREFS, ...parsed, locale: parsed.locale || storedLocale, theme: parsed.theme || "dark" };
     }
     for (const key of legacyKeys(userId)) {
       const legacy = localStorage.getItem(key);
       if (legacy) {
         const parsed = JSON.parse(legacy) as Partial<UiPrefsV3>;
-        /* Enterprise UI V2: light-first — do not carry over dark as default. */
-        return { ...DEFAULT_PREFS, ...parsed, theme: "light", locale: parsed.locale || storedLocale };
+        /* UI Sprint 1: dark-first — force the new default regardless of the old stored theme. */
+        return { ...DEFAULT_PREFS, ...parsed, theme: "dark", locale: parsed.locale || storedLocale };
       }
     }
     return { ...DEFAULT_PREFS, locale: storedLocale };

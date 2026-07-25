@@ -139,7 +139,7 @@ function statusChip(
   if (isLive) {
     return {
       label: t("card.live").toUpperCase(),
-      className: "border-red-400/35 bg-red-500/10 text-red-700"
+      className: "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
     };
   }
   if (hasFinalScore) {
@@ -392,7 +392,7 @@ export default function MatchCard({
           <span
             className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${chip.className}`}
           >
-            {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400 motion-reduce:animate-none" />}
+            {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />}
             {chip.label}
           </span>
           {tier ? (
@@ -568,7 +568,7 @@ export default function MatchCard({
         {(hasFinalScore || showRunningScore) && (
           <div className="self-end text-right font-mono text-xs tabular-nums">
             {showRunningScore ? (
-              <span className={isLive ? "text-red-700" : "text-[var(--fp-warning)]/90"}>
+              <span className={isLive ? "text-[var(--fp-danger)]" : "text-[var(--fp-warning)]/90"}>
                 <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
                 <span className="font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">
                   {row.score?.home}-{row.score?.away}

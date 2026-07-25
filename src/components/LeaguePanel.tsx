@@ -66,7 +66,7 @@ export default function LeaguePanel({
               value={searchLeague}
               onChange={(e) => setSearchLeague(e.target.value)}
               aria-label={t("leagues.searchLabel")}
-              className="h-9 min-w-[8rem] flex-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2.5 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+              className="min-h-[var(--fp-touch)] min-w-[8rem] flex-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2.5 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
             />
             <button
               type="button"
@@ -75,7 +75,7 @@ export default function LeaguePanel({
                 e.stopPropagation();
                 selectEliteLeagues();
               }}
-              className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-2.5 text-[11px] font-bold text-[var(--fp-accent)]"
+              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-2.5 text-[11px] font-bold text-[var(--fp-accent)]"
             >
               {t("leagues.eliteAll")}
             </button>
@@ -86,7 +86,7 @@ export default function LeaguePanel({
                 e.stopPropagation();
                 clearLeagueSelection();
               }}
-              className="h-9 rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2.5 text-[11px] font-bold text-[var(--fp-danger)]"
+              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2.5 text-[11px] font-bold text-[var(--fp-danger)]"
             >
               {t("leagues.clear")}
             </button>
@@ -101,7 +101,7 @@ export default function LeaguePanel({
                   s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
                   setSelectedLeagueIds(Array.from(s));
                 }}
-                className={`flex h-9 w-full items-center justify-between gap-2 rounded-[var(--fp-radius-sm)] border px-2.5 text-left text-sm touch-manipulation ${
+                className={`flex min-h-[var(--fp-touch)] w-full items-center justify-between gap-2 rounded-[var(--fp-radius-sm)] border px-2.5 text-left text-sm touch-manipulation ${
                   selectedSet.has(lg.id)
                     ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)]"
                     : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] hover:bg-[var(--fp-bg-muted)]"

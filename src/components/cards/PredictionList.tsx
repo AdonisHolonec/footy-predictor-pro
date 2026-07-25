@@ -60,7 +60,7 @@ export default function PredictionList({
               type="button"
               onClick={() => setFilterMode("ALL")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                filterMode === "ALL" ? "bg-signal-petrol text-signal-void shadow-sm" : "bg-signal-void/45 text-signal-inkMuted hover:bg-signal-panelHi/60"
+                filterMode === "ALL" ? "bg-[var(--fp-accent)] text-white shadow-sm" :"bg-[var(--fp-bg)]/45 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]/60"
               }`}
             >
               Toate ({preds.length}
@@ -70,7 +70,7 @@ export default function PredictionList({
               type="button"
               onClick={() => setFilterMode("VALUE")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                filterMode === "VALUE" ? "border border-signal-amber/45 bg-signal-amber/15 text-signal-amber shadow-sm" : "bg-signal-void/45 text-signal-inkMuted hover:bg-signal-panelHi/60"
+                filterMode === "VALUE" ? "border border-[var(--fp-warning)]/45 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)] shadow-sm" :"bg-[var(--fp-bg)]/45 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]/60"
               }`}
             >
               Value bets
@@ -79,7 +79,7 @@ export default function PredictionList({
               type="button"
               onClick={() => setFilterMode("SAFE")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                filterMode === "SAFE" ? "border border-signal-sage/35 bg-signal-sage/15 text-signal-sage shadow-sm" : "bg-signal-void/45 text-signal-inkMuted hover:bg-signal-panelHi/60"
+                filterMode === "SAFE" ? "border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/15 text-[var(--fp-success)] shadow-sm" :"bg-[var(--fp-bg)]/45 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]/60"
               }`}
             >
               +70% siguranță
@@ -88,19 +88,19 @@ export default function PredictionList({
               type="button"
               onClick={() => setFilterMode("LOW")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                filterMode === "LOW" ? "border border-signal-rose/30 bg-signal-rose/10 text-signal-rose shadow-sm" : "bg-signal-void/45 text-signal-inkMuted hover:bg-signal-panelHi/60"
+                filterMode === "LOW" ? "border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)] shadow-sm" :"bg-[var(--fp-bg)]/45 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]/60"
               }`}
             >
               &lt;55% guarded
             </button>
           </div>
           <div className="custom-scrollbar flex snap-x snap-mandatory items-center gap-2 overflow-x-auto xl:overflow-visible">
-            <span className="shrink-0 px-1 text-[9px] font-semibold uppercase tracking-wide text-signal-inkMuted">Sortare</span>
+            <span className="shrink-0 px-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Sortare</span>
             <button
               type="button"
               onClick={() => setSortBy("TIME")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                sortBy === "TIME" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                sortBy === "TIME" ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]" : "bg-[var(--fp-bg)]/40 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)]/50"
               }`}
             >
               Ora
@@ -109,7 +109,7 @@ export default function PredictionList({
               type="button"
               onClick={() => setSortBy("CONFIDENCE")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                sortBy === "CONFIDENCE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                sortBy === "CONFIDENCE" ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]" : "bg-[var(--fp-bg)]/40 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)]/50"
               }`}
             >
               Încredere
@@ -118,7 +118,7 @@ export default function PredictionList({
               type="button"
               onClick={() => setSortBy("VALUE")}
               className={`snap-start whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all touch-manipulation sm:py-1.5 ${
-                sortBy === "VALUE" ? "bg-signal-petrol/15 text-signal-petrol" : "bg-signal-void/40 text-signal-inkMuted hover:bg-signal-panel/50"
+                sortBy === "VALUE" ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]" : "bg-[var(--fp-bg)]/40 text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)]/50"
               }`}
             >
               EV
@@ -127,20 +127,20 @@ export default function PredictionList({
         </div>
       )}
       {!user ? (
-        <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/30 bg-signal-panel/20 px-6 text-center">
+        <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-[var(--fp-border)]/30 bg-[var(--fp-bg-card)]/20 px-6 text-center">
           <div>
-            <p className="font-medium text-signal-petrol">Autentifică-te pentru predicții personalizate.</p>
+            <p className="font-medium text-[var(--fp-accent)]">Autentifică-te pentru predicții personalizate.</p>
             <button
               type="button"
               onClick={onOpenAuth}
-              className="mt-4 rounded-xl bg-signal-petrol px-4 py-2 text-sm font-semibold text-white hover:bg-signal-petrolMuted"
+              className="mt-4 rounded-xl bg-[var(--fp-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--fp-accent-hover)]"
             >
               Deschide autentificarea
             </button>
           </div>
         </div>
       ) : !preds.length ? (
-        <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-signal-line/25 bg-signal-void/30 text-center text-signal-inkMuted">
+        <div className="grid h-[400px] place-items-center rounded-[2rem] border-2 border-dashed border-[var(--fp-border)]/25 bg-[var(--fp-bg)]/30 text-center text-[var(--fp-text-muted)]">
           <p className="font-medium italic">Selectează ligile, apoi apasă Predict.</p>
         </div>
       ) : (
@@ -148,7 +148,7 @@ export default function PredictionList({
           {groupedDisplayedMatches.map((group) => (
             <section key={group.dateKey} className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-signal-petrolMuted">
+                <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent-hover)]">
                   {group.dateKey === "Fără dată"
                     ? group.dateKey
                     : new Date(group.dateKey).toLocaleDateString([], {
@@ -157,8 +157,8 @@ export default function PredictionList({
                         month: "2-digit"
                       })}
                 </div>
-                <div className="h-px flex-1 bg-gradient-to-r from-signal-sage/35 to-transparent" />
-                <div className="font-mono text-[10px] tabular-nums text-signal-inkMuted">{group.matches.length} meciuri</div>
+                <div className="h-px flex-1 bg-gradient-to-r from-[var(--fp-success)]/35 to-transparent" />
+                <div className="font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)]">{group.matches.length} meciuri</div>
               </div>
               <div className={gridClass}>
                 {group.matches.map((m, idx) => (

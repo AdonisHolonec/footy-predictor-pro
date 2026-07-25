@@ -40,15 +40,15 @@ export default function GuestHeaderControls({
       <div className="flex flex-col items-stretch gap-2 lg:gap-3">
         <div className="flex justify-end">
           {authLoading ? (
-            <div className="rounded-xl border border-signal-line/50 bg-signal-panel/55 px-3 py-2 text-xs font-semibold text-signal-inkMuted shadow-inner">
+            <div className="rounded-xl border border-[var(--fp-border)]/50 bg-[var(--fp-bg-card)]/55 px-3 py-2 text-xs font-semibold text-[var(--fp-text-muted)] shadow-inner">
               Checking session...
             </div>
           ) : user ? (
-            <div className="flex items-center gap-2 rounded-xl border border-signal-sage/25 bg-signal-sage/10 px-3 py-2 shadow-inner">
-              <span className="max-w-[180px] truncate text-xs font-semibold text-signal-petrol">{user.email}</span>
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-2 shadow-inner">
+              <span className="max-w-[180px] truncate text-xs font-semibold text-[var(--fp-accent)]">{user.email}</span>
               <button
                 onClick={() => void onLogout()}
-                className="rounded-md border border-signal-line bg-signal-fog px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-panel"
+                className="rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-bg-card)]"
               >
                 Logout
               </button>
@@ -56,7 +56,7 @@ export default function GuestHeaderControls({
           ) : (
             <button
               onClick={onOpenAuth}
-              className="rounded-xl border border-signal-petrol/25 bg-signal-petrol/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-signal-petrol hover:bg-signal-petrol/15"
+              className="rounded-xl border border-[var(--fp-accent)]/25 bg-[var(--fp-accent)]/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-accent)]/15"
             >
               Login / Signup
             </button>
@@ -74,7 +74,7 @@ export default function GuestHeaderControls({
                 type="button"
                 onClick={onWarm}
                 disabled={!user}
-                className="touch-manipulation rounded-xl border border-white/10 bg-signal-panel/60 px-4 py-2.5 text-sm font-semibold text-signal-ink transition-all hover:bg-signal-panel disabled:cursor-not-allowed disabled:opacity-50"
+                className="touch-manipulation rounded-xl border border-white/10 bg-[var(--fp-bg-card)]/60 px-4 py-2.5 text-sm font-semibold text-[var(--fp-text)] transition-all hover:bg-[var(--fp-bg-card)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Warm
               </button>
@@ -82,7 +82,7 @@ export default function GuestHeaderControls({
                 type="button"
                 onClick={onPredict}
                 disabled={!user}
-                className="touch-manipulation col-span-2 w-full rounded-xl bg-signal-petrol px-6 py-2.5 text-sm font-semibold text-signal-mist shadow-atelier transition-all hover:bg-signal-petrolMuted active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto"
+                className="touch-manipulation col-span-2 w-full rounded-xl bg-[var(--fp-accent)] px-6 py-2.5 text-sm font-semibold text-white shadow-atelier transition-all hover:bg-[var(--fp-accent-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto"
               >
                 Predict
               </button>

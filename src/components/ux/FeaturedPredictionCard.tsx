@@ -66,7 +66,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mt-2 flex w-full items-center gap-2 border-t border-[var(--fp-border)] px-4 py-3 text-xs font-bold text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
+        className="mt-2 flex min-h-[var(--fp-touch)] w-full items-center gap-2 border-t border-[var(--fp-border)] px-4 py-3 text-xs font-bold text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 3v3M18.4 5.6l-2.1 2.1M21 12h-3M12 21v-3M3 12h3M5.6 5.6l2.1 2.1" />
@@ -102,7 +102,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
           <button
             type="button"
             onClick={onOpenAnalysis}
-            className="mt-4 w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-[13px] font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
+            className="mt-4 min-h-[var(--fp-touch)] w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-[13px] font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
           >
             {t("dash.featuredOpenAnalysis")}
           </button>

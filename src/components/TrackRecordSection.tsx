@@ -33,7 +33,7 @@ function EquitySpark({ points }: { points: Array<{ pnlUnits: number }> }) {
     })
     .join(" ");
   const last = vals[vals.length - 1] ?? 0;
-  const stroke = last >= 0 ? "rgb(52 211 153)" : "rgb(251 113 133)";
+  const stroke = last >= 0 ? "var(--fp-success)" : "var(--fp-danger)";
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="h-14 w-full max-w-xs" aria-hidden>
@@ -200,14 +200,14 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
             </div>
           )}
 
-          <p className="mt-6 max-w-3xl font-mono text-[10px] leading-relaxed text-signal-inkMuted">
+          <p className="mt-6 max-w-3xl font-mono text-[10px] leading-relaxed text-[var(--fp-text-muted)]">
             {data?.disclaimer}
           </p>
         </>
       )}
 
       {!loading && !error && s && s.settled === 0 && (
-        <p className="mt-4 text-sm text-signal-inkMuted">
+        <p className="mt-4 text-sm text-[var(--fp-text-muted)]">
           Încă nu există suficiente predicții settled în fereastra selectată. Revino după sync-ul de istoric.
         </p>
       )}

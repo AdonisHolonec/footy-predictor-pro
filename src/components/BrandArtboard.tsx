@@ -11,9 +11,9 @@ export default function BrandArtboard({ src, alt, className = "", frameClassName
   return (
     <figure className={`group relative ${className}`}>
       <div
-        className={`relative overflow-hidden rounded-2xl border border-white/[0.1] bg-signal-void/50 shadow-atelier backdrop-blur-sm sm:rounded-3xl ${frameClassName}`}
+        className={`relative overflow-hidden rounded-2xl border border-white/[0.1] bg-[var(--fp-bg)]/50 shadow-atelier backdrop-blur-sm sm:rounded-3xl ${frameClassName}`}
       >
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-signal-void/80 via-transparent to-signal-void/20" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--fp-bg)]/80 via-transparent to-[var(--fp-bg)]/20" />
         <img
           src={src}
           alt={alt}
@@ -21,7 +21,7 @@ export default function BrandArtboard({ src, alt, className = "", frameClassName
           loading="lazy"
           decoding="async"
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-signal-petrol/35 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[var(--fp-accent)]/35 to-transparent" />
       </div>
     </figure>
   );

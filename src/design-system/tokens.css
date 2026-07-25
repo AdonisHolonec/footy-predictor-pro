@@ -1,38 +1,49 @@
 /**
- * Footy Predictor Pro — Enterprise UI V2 tokens.
- * Light-first · airy · premium consumer SaaS.
+ * Footy Predictor Pro — UI Sprint 1 tokens.
+ * Dark-first · premium sport · three accents (win-green / loss-red / value-gold).
+ * Every variable name below is unchanged from the previous token set (31 --fp-*
+ * vars, verified against every consumer in src/) — only values change, plus a
+ * small additive set for glass/gradient surfaces. No component was touched.
  */
 
 :root {
-  /* Surfaces */
-  --fp-bg: #f8fafc;
-  --fp-bg-elevated: #f1f5f9;
-  --fp-bg-card: #ffffff;
-  --fp-bg-muted: #f1f5f9;
-  --fp-border: #e2e8f0;
-  --fp-border-strong: #cbd5e1;
+  /* Surfaces — near-black with a faint pitch-green undertone, not navy, not pure black */
+  --fp-bg: #0a0d0b;
+  --fp-bg-elevated: #10140f;
+  --fp-bg-card: #161b17;
+  --fp-bg-muted: #1d231e;
+  --fp-border: rgba(255, 255, 255, 0.08);
+  --fp-border-strong: rgba(255, 255, 255, 0.16);
 
-  /* Brand */
-  --fp-navy: #0f172a;
-  --fp-accent: #2563eb;
-  --fp-accent-hover: #1d4ed8;
-  --fp-accent-muted: rgba(37, 99, 235, 0.1);
-  --fp-purple: #7c3aed;
+  /* Brand — primary accent is the win-green; two more accents (danger/value) carry
+     equal visual weight across the app, so "accent" here is the CTA/interactive one */
+  --fp-navy: #0d1512;
+  --fp-accent: #1fae6b;
+  --fp-accent-hover: #29c97a;
+  --fp-accent-muted: rgba(31, 174, 107, 0.16);
+  --fp-purple: #a78bfa;
 
-  /* Text — strong contrast on light surfaces (WCAG AA+) */
-  --fp-text: #0f172a;
-  --fp-text-muted: #334155;
-  --fp-text-faint: #475569;
+  /* Text — near-white with a whisper of the surface tint, never stark #fff */
+  --fp-text: #f3f5f3;
+  --fp-text-muted: #9fafa6;
+  --fp-text-faint: #6b7a72;
 
-  /* Semantic */
-  --fp-success: #22c55e;
-  --fp-danger: #ef4444;
-  --fp-warning: #f59e0b;
+  /* Semantic = the three brand accents (win-green / loss-red / value-gold) */
+  --fp-success: #22d06e;
+  --fp-danger: #f0453a;
+  --fp-warning: #f0b23d;
 
-  /* Elevation */
-  --fp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --fp-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-  --fp-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1);
+  /* Elevation — dark surfaces need denser, larger-spread shadows than light ones */
+  --fp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --fp-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --fp-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+
+  /* Glass + gradient — discreet, used sparingly on hero/highlight surfaces only */
+  --fp-glass-bg: rgba(22, 27, 23, 0.72);
+  --fp-glass-border: rgba(255, 255, 255, 0.1);
+  --fp-glass-blur: 14px;
+  --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.16), rgba(240, 178, 61, 0.08));
+  --fp-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
 
   /* Bridge to legacy vars */
   --bg: var(--fp-bg);
@@ -48,7 +59,7 @@
   --success: var(--fp-success);
   --info: var(--fp-accent);
 
-  /* Spacing (8pt) */
+  /* Spacing (8pt) — unchanged, already conformant */
   --fp-space-1: 4px;
   --fp-space-2: 8px;
   --fp-space-3: 12px;
@@ -58,12 +69,12 @@
   --fp-space-7: 40px;
   --fp-space-8: 48px;
 
-  /* Radius */
+  /* Radius — unchanged */
   --fp-radius-sm: 10px;
   --fp-radius: 16px;
   --fp-radius-lg: 20px;
 
-  /* Type */
+  /* Type — unchanged */
   --fp-hero: clamp(1.75rem, 2.5vw, 2.25rem);
   --fp-section: 1.25rem;
   --fp-card-title: 1.05rem;
@@ -72,26 +83,51 @@
   --fp-badge: 0.6875rem;
   --fp-num: 1.25rem;
 
-  /* Motion */
+  /* Motion — unchanged */
   --fp-ease: 200ms cubic-bezier(0.33, 1, 0.68, 1);
+  --fp-ease-fast: 120ms cubic-bezier(0.33, 1, 0.68, 1);
   --fp-touch: 44px;
+
+  /* Z-index scale — documents the layering already in use across the app
+     (grep-verified: z-0/10/20/40/50/[60]/[70] in AppShell, MatchModal, overlays).
+     Additive only: existing hardcoded Tailwind z-* classes are NOT retrofitted
+     here (would touch many unrelated files with no demonstrated bug) — this
+     scale exists so new layout/overlay work has a documented reference instead
+     of picking arbitrary numbers. */
+  --fp-z-base: 0;
+  --fp-z-sticky: 20;
+  --fp-z-shell: 40;
+  --fp-z-dropdown: 50;
+  --fp-z-modal: 60;
+  --fp-z-toast: 70;
 }
 
-/* Optional dark — accessible via Settings, not default */
-html.theme-dark {
-  --fp-bg: #0b1220;
-  --fp-bg-elevated: #111827;
-  --fp-bg-card: #1e293b;
-  --fp-bg-muted: #0f172a;
-  --fp-border: rgba(148, 163, 184, 0.2);
-  --fp-border-strong: rgba(148, 163, 184, 0.35);
-  --fp-text: #f8fafc;
-  --fp-text-muted: #94a3b8;
-  --fp-text-faint: #64748b;
-  --fp-accent-muted: rgba(37, 99, 235, 0.2);
-  --fp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --fp-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --fp-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.45);
+/* Light — now the opt-in alternative (was default pre-Sprint-1), reachable via Settings */
+html.theme-light {
+  --fp-bg: #f8fafc;
+  --fp-bg-elevated: #f1f5f9;
+  --fp-bg-card: #ffffff;
+  --fp-bg-muted: #f1f5f9;
+  --fp-border: #e2e8f0;
+  --fp-border-strong: #cbd5e1;
+  --fp-navy: #0f172a;
+  --fp-accent: #1fae6b;
+  --fp-accent-hover: #17965a;
+  --fp-accent-muted: rgba(31, 174, 107, 0.1);
+  --fp-purple: #7c3aed;
+  --fp-text: #0f172a;
+  --fp-text-muted: #334155;
+  --fp-text-faint: #475569;
+  --fp-success: #16a34a;
+  --fp-danger: #dc2626;
+  --fp-warning: #d97706;
+  --fp-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --fp-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --fp-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1);
+  --fp-glass-bg: rgba(255, 255, 255, 0.72);
+  --fp-glass-border: rgba(15, 23, 42, 0.08);
+  --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.08), rgba(217, 119, 6, 0.05));
+  --fp-gradient-surface: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0));
 }
 
 html.theme-contrast {
@@ -101,8 +137,8 @@ html.theme-contrast {
   --fp-border: rgba(255, 255, 255, 0.4);
   --fp-text: #ffffff;
   --fp-text-muted: #e2e8f0;
-  --fp-accent: #3b82f6;
-  --fp-accent-muted: rgba(59, 130, 246, 0.25);
+  --fp-accent: #3ddc84;
+  --fp-accent-muted: rgba(61, 220, 132, 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {

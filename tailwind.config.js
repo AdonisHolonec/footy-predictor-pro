@@ -1,36 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  /** Include CSS that uses @apply so JIT emits theme utilities (e.g. text-signal-ink). */
+  /** Include CSS that uses @apply so JIT emits theme utilities. */
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,css}"],
   theme: {
     extend: {
-      colors: {
-        signal: {
-          /* Deep sports-dashboard dark (SofaScore / FotMob inspired) */
-          void: "#0b0f14",
-          mist: "#111821",
-          fog: "#161e28",
-          bone: "#1a2330",
-          panel: "#1c2633",
-          panelHi: "#243041",
-          stone: "#64748b",
-          /* Accent: electric blue (design system) — petrol aliases map to accent for legacy classes */
-          petrol: "#2563EB",
-          petrolMuted: "#3B82F6",
-          petrolDeep: "#1D4ED8",
-          sage: "#22C55E",
-          mint: "#4ADE80",
-          mintSoft: "rgba(34, 197, 94, 0.12)",
-          amber: "#F59E0B",
-          amberSoft: "#FBBF24",
-          rose: "#EF4444",
-          ink: "#eef2f6",
-          inkMuted: "#8b9aab",
-          silver: "#c2ccd6",
-          line: "rgba(62, 207, 191, 0.14)",
-          glow: "rgba(62, 207, 191, 0.10)"
-        }
-      },
       fontFamily: {
         display: ["Sora", "Plus Jakarta Sans", "system-ui", "sans-serif"],
         sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],

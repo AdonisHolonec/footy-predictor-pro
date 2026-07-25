@@ -22,17 +22,17 @@ export default function Header({ date, modelPulse, children, childrenRight }: He
           <p className="lab-section-eyebrow">
             {localCalendarDateKey()} · SEZON {inferSeason(date)} · INTELIGENȚĂ PREDICTIVĂ
           </p>
-          <h1 className="font-display mt-2 flex items-center gap-3 text-3xl font-bold tracking-tight text-signal-ink sm:text-4xl md:text-[2.75rem] md:leading-[1.08]">
+          <h1 className="font-display mt-2 flex items-center gap-3 text-3xl font-bold tracking-tight text-[var(--fp-text)] sm:text-4xl md:text-[2.75rem] md:leading-[1.08]">
             <img
               src={BRAND_IMAGES.logoPrimary}
               alt="Footy Predictor"
-              className="h-14 w-14 rounded-card border border-signal-petrol/40 object-contain p-1 shadow-card sm:h-16 sm:w-16 lg:h-[4.5rem] lg:w-[4.5rem]"
+              className="h-14 w-14 rounded-card border border-[var(--fp-accent)]/40 object-contain p-1 shadow-card sm:h-16 sm:w-16 lg:h-[4.5rem] lg:w-[4.5rem]"
             />
             <span>
-              Observator de semnale <span className="text-signal-petrol">fotbal</span>
+              Observator de semnale <span className="text-[var(--fp-accent)]">fotbal</span>
             </span>
           </h1>
-          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-signal-inkMuted">
+          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-[var(--fp-text-muted)]">
             Strat analitic editorial: modele calibrate, context xG și edge-uri de valoare — fără hype de cote.
           </p>
           <ModelPulseWave status="OPTIMAL CALIBRATION" className="mt-4 max-w-3xl" />
