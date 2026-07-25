@@ -1964,6 +1964,153 @@ test("consensusCorrectScoreOdds: null (nu eroare) când piaţa lipseşte sau nu 
   );
 });
 
+test("consensusCorrectScoreOdds recunoaşte piaţa numită \"Correct Score\" (neschimbat)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          { name: "BetA", bets: [{ name: "Correct Score", values: [{ value: "1-0", odd: "7.00" }] }] }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(out.scores["1-0"], 7.0);
+  assert.equal(out.bookmakersUsed, 1);
+});
+
+test("consensusCorrectScoreOdds recunoaşte piaţa numită \"Exact Score\" (Sprint 6 fix)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          { name: "BetB", bets: [{ name: "Exact Score", values: [{ value: "2-1", odd: "8.50" }] }] }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(out.scores["2-1"], 8.5);
+  assert.equal(out.bookmakersUsed, 1);
+});
+
+test("consensusCorrectScoreOdds combină \"Correct Score\" şi \"Exact Score\" de la bookmakeri diferiţi în acelaşi consens (median)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          { name: "BetA", bets: [{ name: "Correct Score", values: [{ value: "1-0", odd: "7.00" }] }] },
+          { name: "BetB", bets: [{ name: "Exact Score", values: [{ value: "1-0", odd: "9.00" }] }] }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.equal(out.scores["1-0"], 8.0);
+  assert.equal(out.bookmakersUsed, 2);
+});
+
+test("consensusCorrectScoreOdds ignoră \"Correct Score - First Half\" / \"Correct Score - Second Half\" (pieţe diferite, pe repriză)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "BetA",
+            bets: [
+              { name: "Correct Score - First Half", values: [{ value: "1-0", odd: "3.00" }] },
+              { name: "Correct Score - Second Half", values: [{ value: "0-0", odd: "2.50" }] }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  // Neither half-time variant is the full-time market -> no candidates at all.
+  assert.equal(consensusCorrectScoreOdds(payload), null);
+});
+
+test("consensusCorrectScoreOdds parsează scoreline-uri \"Exact Score\" cu \":\" (ex. \"1:0\") şi le normalizează la cheia \"1-0\"", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "10Bet",
+            bets: [
+              {
+                name: "Exact Score",
+                values: [
+                  { value: "1:0", odd: "6.25" },
+                  { value: "2:1", odd: "7.00" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(out.scores["1-0"], 6.25);
+  assert.equal(out.scores["2-1"], 7.0);
+  assert.equal(out.bookmakersUsed, 1);
+});
+
+test("consensusCorrectScoreOdds face median pe acelaşi scor între bookmakeri cu format \"-\" şi \":\" diferit", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          { name: "BetA", bets: [{ name: "Correct Score", values: [{ value: "1-0", odd: "7.00" }] }] },
+          { name: "10Bet", bets: [{ name: "Exact Score", values: [{ value: "1:0", odd: "9.00" }] }] }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.equal(out.scores["1-0"], 8.0);
+  assert.equal(out.bookmakersUsed, 2);
+});
+
+test("consensusCorrectScoreOdds ignoră \"Other\"/\"4+\" şi când markete-ul e \"Exact Score\" cu \":\" (filtrare neschimbată)", async () => {
+  const { consensusCorrectScoreOdds } = await import("../server-utils/marketOdds.js");
+  const payload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "10Bet",
+            bets: [
+              {
+                name: "Exact Score",
+                values: [
+                  { value: "1:0", odd: "6.25" },
+                  { value: "Other", odd: "15.00" },
+                  { value: "4+", odd: "20.00" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+  const out = consensusCorrectScoreOdds(payload);
+  assert.ok(out);
+  assert.equal(Object.keys(out.scores).length, 1);
+  assert.equal(out.scores["1-0"], 6.25);
+});
+
 test("buildValueCandidates: generează exact un candidat Correct Score per scor cu odds + probabilitate", async () => {
   const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
   const list = buildValueCandidates({
@@ -1984,6 +2131,48 @@ test("buildValueCandidates: generează exact un candidat Correct Score per scor 
   assert.equal(c10.confidencePct, 12.0);
 });
 
+test("buildValueCandidates: Sprint 9 — probabilitate mică (0.4421, adică 0.4421%) devine fracţia corectă 0.004421, nu 44.21% (regresie Sprint 8.1)", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const list = buildValueCandidates({
+    probs: {},
+    correctScoreOdds: { "6-0": 201 },
+    correctScoreProbsPct: { "6-0": 0.4421175488481423 } // cell.prob(0.004421...) * 100, exact ca în Stage08Decision.js
+  });
+  const c = list.find((x) => x.type === "Correct Score 6-0");
+  assert.ok(c);
+  assert.ok(Math.abs(c.probability - 0.004421175488481423) < 1e-9, `probability ar trebui să fie ~0.004421, nu ${c.probability}`);
+  // confidencePct rămâne pe scara 0-100 (neschimbat de acest fix — era deja corect).
+  assert.ok(Math.abs(c.confidencePct - 0.4421175488481423) < 1e-9);
+});
+
+test("buildValueCandidates: Sprint 9 — 2-1 la 9.26% rămâne 0.0926 ca fracţie (piaţă peste pragul de 1.5, se comporta deja corect)", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const list = buildValueCandidates({
+    probs: {},
+    correctScoreOdds: { "2-1": 8.3 },
+    correctScoreProbsPct: { "2-1": 9.261686700539384 }
+  });
+  const c = list.find((x) => x.type === "Correct Score 2-1");
+  assert.ok(c);
+  assert.ok(Math.abs(c.probability - 0.09261686700539384) < 1e-9);
+});
+
+test("buildValueCandidates + buildProfessionalValueEngine: Sprint 9 — EV-ul unui scor rar cu cotă mare rămâne rezonabil, nu explodează la mii de procente", async () => {
+  const { buildProfessionalValueEngine } = await import("../server-utils/value/ValueEngine.js");
+  const engine = buildProfessionalValueEngine({
+    probs: { p1: 40, pX: 30, p2: 30 },
+    matchWinnerOdds: { home: 2.5, draw: 3.2, away: 2.9 },
+    correctScoreOdds: { "6-0": 201 },
+    correctScoreProbsPct: { "6-0": 0.4421175488481423 }
+  });
+  const cs = engine.markets.find((m) => m.type === "Correct Score 6-0");
+  assert.ok(cs);
+  // EV corect: (0.004421 * 201 - 1) * 100 ≈ -11.13%. Înainte de fix, cu 0.4421
+  // interpretat ca fracţie (44.21%), EV ar fi fost ~+8785% — absurd.
+  assert.ok(cs.expectedValue < 0, `EV ar trebui să fie negativ/rezonabil pentru un outsider la cotă 201, nu ${cs.expectedValue}`);
+  assert.ok(Math.abs(cs.expectedValue) < 100, `EV nu ar trebui să fie de ordinul miilor de procente, a ieşit ${cs.expectedValue}`);
+});
+
 test("buildValueCandidates: fără cote Correct Score → niciun candidat, fără eroare (skip elegant)", async () => {
   const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
   const list = buildValueCandidates({
@@ -1995,6 +2184,39 @@ test("buildValueCandidates: fără cote Correct Score → niciun candidat, făr�
   assert.equal(list.filter((c) => c.family === "Correct Score").length, 0);
   // Restul familiilor rămân complet neafectate.
   assert.equal(list.filter((c) => c.family === "1X2").length, 3);
+});
+
+test("buildValueCandidates: Sprint 9 — 1X2/Double Chance/BTTS/Over-Under/Corners/Cards rămân byte-identice cu Correct Score prezent", async () => {
+  const { buildValueCandidates } = await import("../server-utils/value/valueMarkets.js");
+  const input = {
+    probs: { p1: 40, pX: 30, p2: 30, pGG: 55, pO25: 60 },
+    matchWinnerOdds: { home: 2.1, draw: 3.2, away: 3.5 },
+    doubleChanceOdds: { homeDraw: 1.3, homeAway: 1.25, drawAway: 1.6 },
+    bttsOdds: { yes: 1.8, no: 2.0 },
+    goals25Odds: { over: 1.9, under: 1.95 },
+    cornersQuote: { pick: "Peste 9.5", line: 9.5, odd: 1.9 },
+    cornersProbPct: 58,
+    cardsOdds: { over: 1.85, under: 1.95, line: 3.5 },
+    cardsOverProbPct: 52,
+    cardsUnderProbPct: 48
+  };
+  const without = buildValueCandidates(input);
+  const withCs = buildValueCandidates({
+    ...input,
+    correctScoreOdds: { "6-0": 201, "2-1": 8.3 },
+    correctScoreProbsPct: { "6-0": 0.4421175488481423, "2-1": 9.261686700539384 }
+  });
+  const strip = (list) => list.filter((c) => c.family !== "Correct Score");
+  assert.deepEqual(strip(withCs), strip(without));
+  assert.equal(withCs.length, without.length + 2);
+  // Confirmă explicit fiecare familie neatinsă e prezentă şi identică.
+  for (const fam of ["1X2", "Double Chance", "BTTS", "Over/Under", "Corners", "Cards"]) {
+    assert.deepEqual(
+      withCs.filter((c) => c.family === fam),
+      without.filter((c) => c.family === fam),
+      `familia ${fam} ar trebui să rămână byte-identică`
+    );
+  }
 });
 
 test("buildValueCandidates: pieţele existente rămân neschimbate cu Correct Score prezent (regresie)", async () => {

@@ -236,6 +236,11 @@ export function maskPredictionForTier(row, tier) {
   const next = JSON.parse(JSON.stringify(row || {}));
   const effectiveTier = String(tier || USER_TIERS.FREE);
 
+  // Internal debug metadata (motivation/clean-sheet diagnostics, PREDICT_DEBUG_METADATA) must
+  // never reach a tier-masked response, regardless of tier. Only callers that bypass this
+  // function entirely (cron / quota-exempt admin — see Stage11Masking.js) can ever see it.
+  if (next?.modelMeta) delete next.modelMeta.debug;
+
   if (!next?.probs) return next;
 
   if (effectiveTier === USER_TIERS.FREE) {

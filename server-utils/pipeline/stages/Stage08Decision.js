@@ -23,6 +23,7 @@ import { buildPredictionExplanation } from "../../explanation/PredictionExplanat
 import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine.js";
 import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
 import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
+import { matchedCompetitionKeyword } from "../../PredictionEngine/MotivationEngine.js";
 import {
   calculateEV,
   calculateKellyQuarter as calculateKelly,
@@ -35,10 +36,9 @@ import {
   consensusMatchWinnerOdds,
   consensusOverUnderOddsAtLine,
   consensusBttsOdds,
-  consensusDoubleChanceOdds,
-  consensusCorrectScoreOdds
+  consensusDoubleChanceOdds
 } from "../../marketOdds.js";
-import { getOddsForFixture } from "../../oddsPrefetch.js";
+import { resolveCorrectScoreOddsWithFallback } from "../decision/resolveCorrectScoreOdds.js";
 import {
   MODEL_VERSION,
   getModelMarketBlendWeight,
@@ -128,6 +128,8 @@ export async function run(context) {
   let formHomeStr = f.formHomeStr;
   let formAwayStr = f.formAwayStr;
   let confidenceCtx = f.confidenceCtx;
+  let engineCtx = f.engineCtx;
+  let debugMeta = f.debugMeta;
   let fhFractionsHome = f.fhFractionsHome;
   let fhFractionsAway = f.fhFractionsAway;
   let calc = f.calc;
@@ -236,6 +238,32 @@ export async function run(context) {
     const calibratedSideMarketsPct = aligned.calibratedSideMarketsPct;
     const sideCalibrationAny = aligned.sideCalibrationAny;
 
+    // === OPTIONAL DEBUG METADATA (Sprint 2 observability, report-only) ===
+    // Never read by any prediction/decision logic above or below this block. Gated by
+    // PREDICT_DEBUG_METADATA (default off) and, even when on, stripped for every tier in
+    // accessTier.js — only requests that bypass tier masking entirely (cron / quota-exempt
+    // admin, see Stage11Masking.js) can ever see it. Purely additive to modelMeta.
+    if (String(process.env.PREDICT_DEBUG_METADATA || "").trim() === "1") {
+      const motivationScore = modularScores?.motivation || null;
+      const motivationDetail = motivationScore?.details || motivationScore?.detail || null;
+      debugMeta = {
+        motivation: {
+          active: Boolean(motivationDetail?.available),
+          source: motivationDetail?.source || null,
+          multiplierHome: Number.isFinite(Number(motivationDetail?.home)) ? Number(motivationDetail.home) : null,
+          multiplierAway: Number.isFinite(Number(motivationDetail?.away)) ? Number(motivationDetail.away) : null,
+          competitionKeywordHome: matchedCompetitionKeyword(engineCtx?.homeStandingsRow?.description),
+          competitionKeywordAway: matchedCompetitionKeyword(engineCtx?.awayStandingsRow?.description)
+        },
+        cleanSheet: {
+          blendApplied: Boolean(aligned.cleanSheetBlendApplied),
+          empiricalBttsRate: aligned.empiricalBttsRate ?? null
+        }
+      };
+    } else {
+      debugMeta = null;
+    }
+
     // === TOP PICK SELECTION + RECOMMENDED QUOTE ===
     // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
     // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
@@ -285,9 +313,11 @@ export async function run(context) {
     if (cardsBlock) pOut.cards = cardsBlock;
 
     // Correct Score value candidates — odds parsed from the same already-fetched oddsReq,
-    // probabilities reused directly from the already-computed score PMF (f.scorePmf), no
-    // Poisson rerun. Gracefully absent (null) when odds or the PMF aren't available.
-    const correctScoreOddsResult = consensusCorrectScoreOdds(oddsReq);
+    // with a one-shot per-fixture fallback fetch when the batch response is missing this
+    // market (Sprint 8, see resolveCorrectScoreOdds.js). Probabilities reused directly from
+    // the already-computed score PMF (f.scorePmf), no Poisson rerun. Gracefully absent
+    // (null) when odds or the PMF aren't available.
+    const correctScoreOddsResult = await resolveCorrectScoreOddsWithFallback(oddsReq, fixtureId);
     let correctScoreProbsPct = null;
     if (correctScoreOddsResult && Array.isArray(f.scorePmf?.cells)) {
       correctScoreProbsPct = {};
@@ -421,6 +451,8 @@ export async function run(context) {
       formHomeStr,
       formAwayStr,
       confidenceCtx,
+      engineCtx,
+      debugMeta,
       fhFractionsHome,
       fhFractionsAway,
       calc,

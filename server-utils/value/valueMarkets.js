@@ -61,6 +61,25 @@ function pct01(p) {
 }
 
 /**
+ * Correct Score probabilities always arrive as percentage-points (0-100 scale —
+ * Stage08Decision.js computes cell.prob * 100 from the score PMF) and are
+ * frequently under 1.5 (most individual scorelines carry well under 1.5% real
+ * probability — there are dozens of possible scorelines splitting ~100%).
+ * pct01()'s ">1.5 = percentage, else = already a fraction" heuristic works for
+ * markets whose probabilities are usually above that threshold (1X2, BTTS,
+ * O/U, ...) but misclassifies small Correct Score percentages as already-a-
+ * fraction, inflating them ~100x (Sprint 8.1 finding). Correct Score's scale
+ * is unambiguous by construction here, so it's converted directly instead of
+ * being routed through the generic (and, for this market, unreliable) pct01().
+ * pct01() itself is untouched — every other market keeps its exact behavior.
+ */
+function correctScoreProbabilityFraction(probPct) {
+  const n = Number(probPct);
+  if (!Number.isFinite(n)) return null;
+  return n / 100;
+}
+
+/**
  * Build value candidates across all supported market families.
  *
  * @param {object} input
@@ -236,7 +255,7 @@ export function buildValueCandidates(input = {}) {
       pushCandidate(list, {
         type: `Correct Score ${score}`,
         family: "Correct Score",
-        probability: pct01(probPct),
+        probability: correctScoreProbabilityFraction(probPct),
         odds: odd,
         confidencePct: Number(probPct)
       });

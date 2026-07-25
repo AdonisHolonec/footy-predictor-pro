@@ -652,6 +652,25 @@ export type PredictionRow = {
       scaleAway: number;
       baselineUsed?: boolean;
     };
+    /**
+     * Internal-only debug metadata (Sprint 2 observability). Only present when
+     * PREDICT_DEBUG_METADATA=1 server-side, and stripped for every tier in
+     * accessTier.js — normal users (FREE/PREMIUM/ULTRA) never receive this field.
+     */
+    debug?: {
+      motivation: {
+        active: boolean;
+        source: string | null;
+        multiplierHome: number | null;
+        multiplierAway: number | null;
+        competitionKeywordHome: string | null;
+        competitionKeywordAway: string | null;
+      };
+      cleanSheet: {
+        blendApplied: boolean;
+        empiricalBttsRate: number | null;
+      };
+    };
   };
 };
 

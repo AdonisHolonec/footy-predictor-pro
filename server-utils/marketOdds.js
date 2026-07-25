@@ -50,10 +50,20 @@ export function consensusMatchWinnerOdds(oddsApiResponse) {
   };
 }
 
+// Full-time correct-score market — API-Football's bookmaker feed names this bet
+// "Correct Score" for some bookmakers and "Exact Score" for others, and formats
+// the scoreline label with "-" or ":" depending on which name is used (confirmed
+// via live odds inspection across two leagues, Sprint 5/6 — every "Exact Score"
+// bookmaker observed used ":", every "Correct Score" bookmaker used "-").
+// Deliberately excludes "Correct Score - First Half" / "Correct Score - Second
+// Half", which are different (partial-match) markets.
+const CORRECT_SCORE_BET_NAMES = ["Correct Score", "Exact Score"];
+
 /**
  * Median Correct Score odds across bookmakers, keyed by "home-away" scoreline
- * (e.g. "2-1"). Non-numeric scoreline labels some bookmakers include (e.g.
- * "Other", "4+") are skipped — only exact "\d+-\d+" values are usable here.
+ * (e.g. "2-1") regardless of whether the source label used "-" or ":". Non-numeric
+ * scoreline labels some bookmakers include (e.g. "Other", "4+") are skipped —
+ * only exact "\d+[-:]\d+" values are usable here.
  * @returns {{ scores: Record<string, number>, bookmakersUsed: number, bookmakerNames: string[] } | null}
  */
 export function consensusCorrectScoreOdds(oddsApiResponse) {
@@ -64,11 +74,11 @@ export function consensusCorrectScoreOdds(oddsApiResponse) {
   const names = [];
 
   for (const b of bookmakers) {
-    const market = b.bets?.find((x) => x.name === "Correct Score");
+    const market = b.bets?.find((x) => CORRECT_SCORE_BET_NAMES.includes(x.name));
     if (!market?.values) continue;
     let usedThisBookmaker = false;
     for (const v of market.values) {
-      const m = /^(\d+)-(\d+)$/.exec(String(v?.value ?? "").trim());
+      const m = /^(\d+)[-:](\d+)$/.exec(String(v?.value ?? "").trim());
       if (!m) continue;
       const odd = parseFloat(v.odd);
       if (!Number.isFinite(odd) || odd <= 1) continue;

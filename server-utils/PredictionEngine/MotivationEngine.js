@@ -23,6 +23,19 @@ function competitionModifier(description) {
 }
 
 /**
+ * Debug-only helper: which keyword (if any) competitionModifier() matched.
+ * Pure, side-effect-free, never called from calculate() — does not affect the
+ * lambda-facing motivation multiplier in any way. Exists solely so debug
+ * metadata (Sprint 2 observability) can report *why* a competition bonus did
+ * or didn't apply, without duplicating or touching the scoring logic above.
+ */
+export function matchedCompetitionKeyword(description) {
+  const d = String(description || "").toLowerCase();
+  if (!d) return null;
+  return COMPETITION_KEYWORDS.find((kw) => d.includes(kw)) || null;
+}
+
+/**
  * Season-progress proxy for the competition modifier above. There is no
  * total-games-per-season figure anywhere in ctx (leagues vary ~30-38+ rounds,
  * and no field carries it) — only games-played-so-far

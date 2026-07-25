@@ -136,6 +136,7 @@ export async function run(context) {
   let formHomeStr = f.formHomeStr;
   let formAwayStr = f.formAwayStr;
   let confidenceCtx = f.confidenceCtx;
+  let debugMeta = f.debugMeta;
   let fhFractionsHome = f.fhFractionsHome;
   let fhFractionsAway = f.fhFractionsAway;
   let calc = f.calc;
@@ -435,7 +436,8 @@ export async function run(context) {
             }
           : undefined,
         eloSpread: eloInfo?.eloSpread ?? undefined,
-        firstHalf: firstHalfMeta || undefined
+        firstHalf: firstHalfMeta || undefined,
+        debug: debugMeta || undefined
       },
       auditLog: {
         reasonCodes,

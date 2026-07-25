@@ -5,6 +5,7 @@ import {
   resolveEffectiveTierFromProfile,
   tierDailyActionLimit,
   tierDailyLimit,
+  maskPredictionForTier,
   USER_TIERS
 } from "../server-utils/accessTier.js";
 import { classifyApiBudget } from "../server-utils/apiBudgetCircuit.js";
@@ -181,5 +182,40 @@ describe("Trial vs paid subscription priority", () => {
     assert.equal(info.effectiveTier, "ultra");
     assert.equal(info.hasActiveSubscription, true);
     assert.ok(info.premiumTrialRemainingMs > 0);
+  });
+});
+
+describe("Security P0 — internal debug metadata never reaches a tier-masked response", () => {
+  const rowWithDebug = () => ({
+    probs: { p1: 40, pX: 30, p2: 30 },
+    modelMeta: {
+      method: "modular-engine",
+      debug: {
+        motivation: { active: true, source: "standings_rank", multiplierHome: 1.02, multiplierAway: 0.98 },
+        cleanSheet: { blendApplied: true, empiricalBttsRate: 0.42 }
+      }
+    }
+  });
+
+  it("strips modelMeta.debug for FREE", () => {
+    const masked = maskPredictionForTier(rowWithDebug(), USER_TIERS.FREE);
+    assert.equal(masked.modelMeta.debug, undefined);
+  });
+
+  it("strips modelMeta.debug for PREMIUM", () => {
+    const masked = maskPredictionForTier(rowWithDebug(), USER_TIERS.PREMIUM);
+    assert.equal(masked.modelMeta.debug, undefined);
+  });
+
+  it("strips modelMeta.debug for ULTRA (paying but non-admin) even though ULTRA otherwise passes through unmasked", () => {
+    const masked = maskPredictionForTier(rowWithDebug(), USER_TIERS.ULTRA);
+    assert.equal(masked.modelMeta.debug, undefined);
+    // Confirms this is a targeted deletion, not a regression of Ultra's existing full access.
+    assert.equal(masked.modelMeta.method, "modular-engine");
+  });
+
+  it("does not throw when modelMeta or debug is absent", () => {
+    assert.doesNotThrow(() => maskPredictionForTier({ probs: {} }, USER_TIERS.FREE));
+    assert.doesNotThrow(() => maskPredictionForTier({}, USER_TIERS.FREE));
   });
 });

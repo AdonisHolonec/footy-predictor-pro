@@ -121,3 +121,36 @@ test("alignMarketProbsAndCalibrate: hStats/aStats with clean-sheet/failed-to-sco
   // 1X2 and O/U must be completely untouched by this feature.
   assert.equal(withStats.marketProbsAligned.pO25, withoutStats.marketProbsAligned.pO25);
 });
+
+test("alignMarketProbsAndCalibrate: debug fields (cleanSheetBlendApplied/empiricalBttsRate) are observability-only", () => {
+  const lambdaHome = 1.6;
+  const lambdaAway = 1.1;
+  const scorePmf = buildMatchScorePmf(lambdaHome, lambdaAway);
+  const base = {
+    p: fallbackP,
+    scorePmf,
+    lambdaHome,
+    lambdaAway,
+    fixtureId: 999,
+    p1Adj: 70,
+    pXAdj: 15,
+    p2Adj: 15,
+    leagueParams: {},
+    calibrationMaps: null,
+    lId: 39
+  };
+  const withoutStats = alignMarketProbsAndCalibrate(base);
+  assert.equal(withoutStats.cleanSheetBlendApplied, false);
+  assert.equal(withoutStats.empiricalBttsRate, null);
+
+  const withStats = alignMarketProbsAndCalibrate({
+    ...base,
+    hStats: { cleanSheetRateHome: 0.5, failedToScoreRateHome: 0.05 },
+    aStats: { cleanSheetRateAway: 0.4, failedToScoreRateAway: 0.5 }
+  });
+  assert.equal(withStats.cleanSheetBlendApplied, true);
+  assert.ok(Number.isFinite(withStats.empiricalBttsRate));
+  assert.ok(withStats.empiricalBttsRate >= 0 && withStats.empiricalBttsRate <= 1);
+  // Debug fields never alter the served value — same pGG as before this change.
+  assert.equal(withStats.marketProbsAligned.pGG, withStats.marketProbsAligned.pGG);
+});

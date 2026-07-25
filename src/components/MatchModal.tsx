@@ -837,6 +837,11 @@ export default function MatchModal({
   const homeColor = logoColors[match.logos?.home || ""] || hashColor(match.teams.home);
   const awayColor = logoColors[match.logos?.away || ""] || hashColor(match.teams.away);
   const pct = (n: number) => Math.round(n || 0);
+  // UI exposure only — reads existing valueEngine.markets as-is, does not change
+  // candidate generation/ranking (server-utils/value/valueMarkets.js).
+  const correctScoreCandidates = (match.valueEngine?.markets || [])
+    .filter((m) => m.family === "Correct Score")
+    .sort((a, b) => (Number(b.probability) || 0) - (Number(a.probability) || 0));
   const hasFinalScore =
     isFinalStatus(match.status) &&
     match.score?.home !== null &&
@@ -1312,6 +1317,69 @@ export default function MatchModal({
               {match.valueEngine && (
                 <div className="mt-4">
                   <ValueCard engine={match.valueEngine} bookmaker={match.odds?.bookmaker} />
+                </div>
+              )}
+              {correctScoreCandidates.length > 0 && (
+                <div className="mt-4">
+                  <CollapsiblePanel
+                    compact
+                    title={tr("panels.correctScoreValue")}
+                    subtitle={tr("panels.correctScoreValueSub")}
+                  >
+                    <div className="overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]">
+                      <table className="w-full min-w-[360px] border-collapse text-left text-[10px]">
+                        <thead>
+                          <tr className="border-b border-[var(--fp-border)] text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                            <th className="px-2.5 py-2">{tr("panels.colScoreline")}</th>
+                            <th className="px-2.5 py-2 text-right">{tr("panels.colProbability")}</th>
+                            <th className="px-2.5 py-2 text-right">{tr("panels.colOdds")}</th>
+                            <th className="px-2.5 py-2 text-right">{tr("panels.colEv")}</th>
+                            <th className="px-2.5 py-2 text-right">{tr("panels.colScore")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {correctScoreCandidates.slice(0, 12).map((m, idx) => {
+                            const ev = Number(m.expectedValue);
+                            const evClass =
+                              Number.isFinite(ev) && ev > 0
+                                ? "text-[var(--fp-success)]"
+                                : Number.isFinite(ev) && ev < 0
+                                  ? "text-[var(--fp-danger)]"
+                                  : "text-[var(--fp-text-muted)]";
+                            return (
+                              <tr
+                                key={`${m.type || "cs"}-${idx}`}
+                                className={`border-b border-[var(--fp-border)] last:border-0 ${
+                                  m.bestMarket ? "bg-[var(--fp-success)]/10" : "bg-[var(--fp-bg-card)]"
+                                }`}
+                              >
+                                <td className="px-2.5 py-1.5 font-semibold text-[var(--fp-text)]">
+                                  {m.bestMarket ? <span className="mr-1 text-[var(--fp-success)]">★</span> : null}
+                                  {(m.type || "").replace(/^Correct Score\s*/i, "") || "—"}
+                                </td>
+                                <td className="px-2.5 py-1.5 text-right tabular-nums text-[var(--fp-text)]">
+                                  {Number.isFinite(Number(m.probability))
+                                    ? `${(Number(m.probability) * 100).toFixed(1)}%`
+                                    : "—"}
+                                </td>
+                                <td className="px-2.5 py-1.5 text-right tabular-nums text-[var(--fp-text)]">
+                                  {Number.isFinite(Number(m.odds)) && Number(m.odds) > 1
+                                    ? Number(m.odds).toFixed(2)
+                                    : "—"}
+                                </td>
+                                <td className={`px-2.5 py-1.5 text-right font-bold tabular-nums ${evClass}`}>
+                                  {Number.isFinite(ev) ? `${ev > 0 ? "+" : ""}${ev.toFixed(2)}%` : "—"}
+                                </td>
+                                <td className="px-2.5 py-1.5 text-right tabular-nums text-[var(--fp-text-muted)]">
+                                  {Number.isFinite(Number(m.valueScore)) ? Math.round(Number(m.valueScore)) : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CollapsiblePanel>
                 </div>
               )}
               {match.valueBet?.detected && match.valueBet.stakePlan && (

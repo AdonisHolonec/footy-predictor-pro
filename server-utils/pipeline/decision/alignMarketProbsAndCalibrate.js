@@ -4,7 +4,7 @@
  * Extracted verbatim from Stage08Decision.js (no logic changes).
  */
 
-import { computeMatchProbs, reweightPmfTo1x2, blendBttsWithEmpirical } from "../../math.js";
+import { computeMatchProbs, reweightPmfTo1x2, blendBttsWithEmpirical, computeEmpiricalBttsRate } from "../../math.js";
 import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
 import { applySideMarketCalibration, pickCalibrationMapForLeague } from "../../isotonicCalibration.js";
 
@@ -75,19 +75,33 @@ export function alignMarketProbsAndCalibrate({
   // snapshots above, so train/serve calibration-map data is never touched by this. Only the
   // served pGG (and its derived pNGG downstream) is adjusted; falls back to the unchanged
   // value whenever the four rates aren't all available (see blendBttsWithEmpirical).
+  // cleanSheetBlendApplied/empiricalBttsRate are debug-only observability fields (Sprint 2) —
+  // computed alongside the real blend, never fed back into marketProbsAligned themselves.
+  let cleanSheetBlendApplied = false;
+  let empiricalBttsRate = null;
   if (marketProbsAligned.pGG != null) {
-    const blendedPGG = blendBttsWithEmpirical(marketProbsAligned.pGG, {
+    const rates = {
       cleanSheetRateHome: hStats?.cleanSheetRateHome,
       cleanSheetRateAway: aStats?.cleanSheetRateAway,
       failedToScoreRateHome: hStats?.failedToScoreRateHome,
       failedToScoreRateAway: aStats?.failedToScoreRateAway
-    });
+    };
+    empiricalBttsRate = computeEmpiricalBttsRate(rates);
+    const blendedPGG = blendBttsWithEmpirical(marketProbsAligned.pGG, rates);
     if (blendedPGG !== marketProbsAligned.pGG) {
+      cleanSheetBlendApplied = true;
       marketProbsAligned = { ...marketProbsAligned, pGG: blendedPGG };
     }
   }
 
-  return { marketProbsAligned, rawSideMarketsPct, calibratedSideMarketsPct, sideCalibrationAny };
+  return {
+    marketProbsAligned,
+    rawSideMarketsPct,
+    calibratedSideMarketsPct,
+    sideCalibrationAny,
+    cleanSheetBlendApplied,
+    empiricalBttsRate
+  };
 }
 
 export default alignMarketProbsAndCalibrate;
