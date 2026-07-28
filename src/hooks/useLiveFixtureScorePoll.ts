@@ -75,6 +75,13 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             referee?: string | null;
             firstHalfGoals?: number | null;
             elapsed?: number | null;
+            momentum?: {
+              homeMomentum: number;
+              awayMomentum: number;
+              dominantTeam: "home" | "away" | "balanced";
+              trend: "up" | "down" | "stable";
+              confidence: number;
+            } | null;
             score: {
               home: number | null;
               away: number | null;
@@ -97,6 +104,19 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                 : ht && Number.isFinite(Number(ht.home)) && Number.isFinite(Number(ht.away))
                   ? Number(ht.home) + Number(ht.away)
                   : null;
+            // Engine is stateless per-request; derive a real up/down/stable trend here
+            // by diffing against the previous in-memory momentum (no history stored).
+            const momentum = u.momentum
+              ? p.momentum
+                ? (() => {
+                    const prevDiff = p.momentum!.homeMomentum - p.momentum!.awayMomentum;
+                    const nextDiff = u.momentum!.homeMomentum - u.momentum!.awayMomentum;
+                    const delta = nextDiff - prevDiff;
+                    const trend: "up" | "down" | "stable" = delta > 3 ? "up" : delta < -3 ? "down" : "stable";
+                    return { ...u.momentum!, trend };
+                  })()
+                : u.momentum
+              : null;
             return {
               ...p,
               status: u.status || p.status,
@@ -108,6 +128,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                 ...(ht ? { halftime: ht } : p.score?.halftime ? { halftime: p.score.halftime } : {}),
                 ...(Number.isFinite(Number(u.elapsed)) ? { minute: Number(u.elapsed) } : p.score?.minute ? { minute: p.score.minute } : {})
               },
+              momentum,
               marketResults:
                 htGoals != null
                   ? {

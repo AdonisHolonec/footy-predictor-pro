@@ -316,6 +316,44 @@ export default function PredictionFocusCard({
         </div>
       </div>
 
+      {live && row.momentum && (
+        <div className="mt-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 px-2.5 py-2">
+          <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+            {t("card.momentum")}
+          </p>
+          <div className="mt-1.5 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 truncate text-[9px] font-semibold text-[var(--fp-text-muted)]">
+                {t("card.momentumHome")}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
+                <div
+                  className="h-full rounded-full bg-[var(--fp-accent)] transition-[width] duration-500"
+                  style={{ width: `${row.momentum.homeMomentum}%` }}
+                />
+              </div>
+              <span className="w-8 shrink-0 text-right font-mono text-[9px] font-semibold tabular-nums text-[var(--fp-text)]">
+                {row.momentum.homeMomentum}%
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-8 shrink-0 truncate text-[9px] font-semibold text-[var(--fp-text-muted)]">
+                {t("card.momentumAway")}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
+                <div
+                  className="h-full rounded-full bg-[var(--fp-danger)] transition-[width] duration-500"
+                  style={{ width: `${row.momentum.awayMomentum}%` }}
+                />
+              </div>
+              <span className="w-8 shrink-0 text-right font-mono text-[9px] font-semibold tabular-nums text-[var(--fp-text)]">
+                {row.momentum.awayMomentum}%
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-2.5 border-t border-[var(--fp-border)] pt-1.5">
         <div
           className={`${marketGrid} pb-1 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]`}

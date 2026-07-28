@@ -42,6 +42,7 @@ import {
   parseHalftimeGoalsFromFixture,
   resolveFixtureFirstHalfGoals
 } from "../server-utils/fixtureHalftimeGoals.js";
+import { buildMomentumEngine } from "../server-utils/momentum/MomentumEngine.js";
 
 async function requireUserOrCron(req, res) {
   if (isAuthorizedCronOrInternalRequest(req)) return { ok: true, cron: true };
@@ -400,6 +401,63 @@ function parseHalftimeGoals(fx) {
   return parseHalftimeGoalsFromFixture(fx);
 }
 
+// Keep in sync with IN_PLAY_STATUSES in src/utils/appUtils.ts.
+const LIVE_IN_PLAY_STATUSES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP", "VAR", "1ST", "2ND"]);
+
+// Momentum stats change fast during play; keep TTL short but still cache-hit most polls.
+const MOMENTUM_STATS_CACHE_TTL_SEC = Math.max(
+  30,
+  Math.min(Number(process.env.MOMENTUM_STATS_CACHE_TTL_SEC || 60), 180)
+);
+
+function parseMomentumStatValue(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === "string") {
+    const cleaned = raw.replace(/%/g, "").trim();
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function readMomentumStat(statistics, types) {
+  if (!Array.isArray(statistics)) return null;
+  for (const type of types) {
+    const row = statistics.find((s) => String(s?.type || "").toLowerCase() === type.toLowerCase());
+    if (!row) continue;
+    const v = parseMomentumStatValue(row.value);
+    if (v != null) return v;
+  }
+  return null;
+}
+
+function extractMomentumTeamStats(statistics) {
+  return {
+    possession: readMomentumStat(statistics, ["Ball Possession"]),
+    shotsTotal: readMomentumStat(statistics, ["Total Shots"]),
+    shotsOnTarget: readMomentumStat(statistics, ["Shots on Goal", "Shots on Target"]),
+    corners: readMomentumStat(statistics, ["Corner Kicks"]),
+    yellowCards: readMomentumStat(statistics, ["Yellow Cards"]),
+    redCards: readMomentumStat(statistics, ["Red Cards"])
+  };
+}
+
+/** Momentum only makes sense for matches currently in play — never fetched for NS/FT rows. */
+async function fetchMomentumForFixture(fixtureId) {
+  try {
+    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, MOMENTUM_STATS_CACHE_TTL_SEC);
+    if (!statsReq.ok) return null;
+    const resp = statsReq.data?.response;
+    if (!Array.isArray(resp) || resp.length < 2) return null;
+    const home = extractMomentumTeamStats(resp[0]?.statistics);
+    const away = extractMomentumTeamStats(resp[1]?.statistics);
+    return buildMomentumEngine({ home, away });
+  } catch {
+    return null;
+  }
+}
+
 async function handleLive(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -420,16 +478,17 @@ async function handleLive(req, res) {
       return res.status(502).json({ ok: false, error: typeof r.error === "string" ? r.error : "Eroare upstream la fixtures." });
     }
     const rows = r.data?.response || [];
-    const fixtures = rows.map((fx) => {
+    const baseFixtures = rows.map((fx) => {
       const firstHalfGoals = parseHalftimeGoals(fx);
       const htHomeRaw = fx?.score?.halftime?.home;
       const htAwayRaw = fx?.score?.halftime?.away;
       const htHome = htHomeRaw != null ? Number(htHomeRaw) : NaN;
       const htAway = htAwayRaw != null ? Number(htAwayRaw) : NaN;
       const elapsed = Number.isFinite(Number(fx?.fixture?.elapsed)) ? Number(fx.fixture.elapsed) : null;
+      const status = fx?.fixture?.status?.short || "";
       return {
         id: fx?.fixture?.id,
-        status: fx?.fixture?.status?.short || "",
+        status,
         referee: parseRefereeName(fx?.fixture?.referee) || null,
         score: {
           home: typeof fx?.goals?.home === "number" ? fx.goals.home : null,
@@ -440,9 +499,20 @@ async function handleLive(req, res) {
               : null
         },
         firstHalfGoals,
-        elapsed
+        elapsed,
+        inPlay: LIVE_IN_PLAY_STATUSES.has(String(status).toUpperCase())
       };
     });
+
+    // Momentum needs a second upstream call (/fixtures/statistics) — only pay for it
+    // on fixtures actually in play right now, never for NS/FT rows in the batch.
+    const fixtures = await Promise.all(
+      baseFixtures.map(async ({ inPlay, ...f }) => ({
+        ...f,
+        momentum: inPlay && Number.isFinite(Number(f.id)) ? await fetchMomentumForFixture(f.id) : null
+      }))
+    );
+
     return res.status(200).json({
       ok: true,
       fixtures

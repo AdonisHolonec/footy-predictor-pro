@@ -416,6 +416,14 @@ export type PredictionRow = {
   kickoff: string;
   status: string;
   score?: MatchScore;
+  /** Live momentum snapshot (Sprint 1 foundation) — null/absent when unavailable; never a placeholder. */
+  momentum?: {
+    homeMomentum: number;
+    awayMomentum: number;
+    dominantTeam: "home" | "away" | "balanced";
+    trend: "up" | "down" | "stable";
+    confidence: number;
+  } | null;
   /** Merged from history when available — drives WIN/LOSS on the card. */
   cardMarketValidations?: CardMarketValidations | null;
   referee?: string;
