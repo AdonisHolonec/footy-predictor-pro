@@ -641,7 +641,19 @@ export const en: Dict = {
     predictFailed: "Predict failed (HTTP {code}).",
     predictFailedBackend: "Predict failed (HTTP {code}) · {backend}",
     warmException: "Warm failed.",
-    predictException: "Predict failed."
+    predictException: "Predict failed.",
+    onboardingSkip: "Skip",
+    onboardingNext: "Next",
+    onboardingGetStarted: "Get started",
+    onboardingStep1Title: "A prediction engine, not a tipster",
+    onboardingStep1Body:
+      "Every pick is generated from a statistical model — form, xG, injuries, and matchups — never a gut feeling.",
+    onboardingStep2Title: "We flag value, not just favorites",
+    onboardingStep2Body:
+      "When our model's probability beats the bookmaker's odds, we mark it as a value bet so you know where the edge is.",
+    onboardingStep3Title: "A track record you can verify",
+    onboardingStep3Body:
+      "Every settled prediction is logged. Check the Statistics tab any time to see real hit-rate and ROI — nothing hidden."
   },
   common: {
     loading: "Loading…",

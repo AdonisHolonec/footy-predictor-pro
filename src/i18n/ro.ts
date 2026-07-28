@@ -641,7 +641,19 @@ export const ro: Dict = {
     predictFailed: "Predict a eșuat (HTTP {code}).",
     predictFailedBackend: "Predict a eșuat (HTTP {code}) · {backend}",
     warmException: "Warm a eșuat.",
-    predictException: "Predict a eșuat."
+    predictException: "Predict a eșuat.",
+    onboardingSkip: "Sari peste",
+    onboardingNext: "Următorul",
+    onboardingGetStarted: "Începe",
+    onboardingStep1Title: "Un motor de predicție, nu un tipster",
+    onboardingStep1Body:
+      "Fiecare pick e generat dintr-un model statistic — formă, xG, accidentări, meciuri directe — niciodată din instinct.",
+    onboardingStep2Title: "Semnalăm value, nu doar favoriții",
+    onboardingStep2Body:
+      "Când probabilitatea modelului nostru depășește cota casei de pariuri, marcăm value bet ca să știi unde e avantajul.",
+    onboardingStep3Title: "Un track record pe care îl poți verifica",
+    onboardingStep3Body:
+      "Fiecare predicție validată este înregistrată. Verifică oricând tab-ul Statistici pentru rată de succes și ROI reale — nimic ascuns."
   },
   common: {
     loading: "Se încarcă…",

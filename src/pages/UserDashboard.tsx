@@ -11,6 +11,7 @@ import PredictionFocusCard from "../components/ux/PredictionFocusCard";
 import HomeSection from "../components/ux/HomeSection";
 import MatchesSection from "../components/ux/MatchesSection";
 import NotificationsSection from "../components/ux/NotificationsSection";
+import OnboardingCarousel from "../components/ux/OnboardingCarousel";
 import { deriveNotifications } from "../utils/deriveNotifications";
 import { StatTile } from "../design-system";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
@@ -810,20 +811,6 @@ export default function UserDashboard() {
     await runPredict(activePredictDates);
   }
 
-  async function completeOnboarding() {
-    if (!selectedLeagueIds.length) {
-      setStatus("Selecteaza cel putin o liga favorita pentru onboarding.");
-      return;
-    }
-    try {
-      await updateFavoriteLeagues(selectedLeagueIds);
-      await markOnboardingComplete();
-      setStatus("Onboarding finalizat. Preferintele tale au fost salvate.");
-    } catch (error: any) {
-      setStatus(error?.message || "Nu am putut finaliza onboarding-ul.");
-    }
-  }
-
   async function saveNotificationPrefs() {
     if (notifyEmail && !notifyEmailConsent) {
       setStatus("Pentru e-mail trebuie sa bifezi confirmarea din politica de confidentialitate.");
@@ -1593,16 +1580,6 @@ export default function UserDashboard() {
             </Card>
           )}
 
-          {!user?.onboardingCompleted && (
-            <Card>
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.onboarding")}</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.onboardingSub")}</p>
-              <Button className="mt-3" onClick={() => void completeOnboarding()}>
-                {t("dash.finishOnboarding")}
-              </Button>
-            </Card>
-          )}
-
           <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             {!tierQuotaExempt && (
               <button
@@ -1890,6 +1867,9 @@ export default function UserDashboard() {
             />
           </div>
         </div>
+      )}
+      {user && !user.onboardingCompleted && (
+        <OnboardingCarousel onComplete={() => void markOnboardingComplete()} />
       )}
     </ConsumerShell>
   );
