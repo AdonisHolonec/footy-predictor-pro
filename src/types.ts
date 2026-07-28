@@ -290,6 +290,7 @@ export type MatchScore = {
   home: number | null;
   away: number | null;
   halftime?: { home: number; away: number } | null;
+  minute?: number | null;
 };
 
 export type MarketOddQuote = {

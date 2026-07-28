@@ -426,6 +426,7 @@ async function handleLive(req, res) {
       const htAwayRaw = fx?.score?.halftime?.away;
       const htHome = htHomeRaw != null ? Number(htHomeRaw) : NaN;
       const htAway = htAwayRaw != null ? Number(htAwayRaw) : NaN;
+      const elapsed = Number.isFinite(Number(fx?.fixture?.elapsed)) ? Number(fx.fixture.elapsed) : null;
       return {
         id: fx?.fixture?.id,
         status: fx?.fixture?.status?.short || "",
@@ -438,7 +439,8 @@ async function handleLive(req, res) {
               ? { home: htHome, away: htAway }
               : null
         },
-        firstHalfGoals
+        firstHalfGoals,
+        elapsed
       };
     });
     return res.status(200).json({

@@ -281,15 +281,22 @@ export default function PredictionFocusCard({
           </span>
         </div>
 
-        <span
-          className={`mt-2.5 font-mono tabular-nums ${
-            hasScore
-              ? `text-sm font-bold ${live ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"}`
-              : "text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]"
-          }`}
-        >
-          {hasScore ? `${row.score?.home} – ${row.score?.away}` : t("common.vs")}
-        </span>
+        <div className="mt-2.5 flex flex-col items-center gap-0.5">
+          <span
+            className={`font-mono tabular-nums ${
+              hasScore
+                ? `text-sm font-bold ${live ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"}`
+                : "text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]"
+            }`}
+          >
+            {hasScore ? `${row.score?.home} – ${row.score?.away}` : t("common.vs")}
+          </span>
+          {live && Number.isFinite(Number(row.score?.minute)) && (
+            <span className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
+              {row.score?.minute}'
+            </span>
+          )}
+        </div>
 
         <div className="flex min-w-0 flex-col items-center gap-1">
           <div className="flex items-center justify-center gap-1">

@@ -74,6 +74,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             status: string;
             referee?: string | null;
             firstHalfGoals?: number | null;
+            elapsed?: number | null;
             score: {
               home: number | null;
               away: number | null;
@@ -104,7 +105,8 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
               score: {
                 home: u.score?.home ?? p.score?.home ?? null,
                 away: u.score?.away ?? p.score?.away ?? null,
-                ...(ht ? { halftime: ht } : p.score?.halftime ? { halftime: p.score.halftime } : {})
+                ...(ht ? { halftime: ht } : p.score?.halftime ? { halftime: p.score.halftime } : {}),
+                ...(Number.isFinite(Number(u.elapsed)) ? { minute: Number(u.elapsed) } : p.score?.minute ? { minute: p.score.minute } : {})
               },
               marketResults:
                 htGoals != null
