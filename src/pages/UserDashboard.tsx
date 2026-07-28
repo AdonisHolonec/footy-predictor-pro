@@ -544,6 +544,16 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!user?.id) return;
+    setPredictionsByUser((prev) => {
+      const next = { ...prev };
+      delete next[user.id];
+      return next;
+    });
+    setSelectedDates([isoToday()]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
     const localPredictions = predictionsByUser[user.id] || [];
     if (!localPredictions.length) {
       setPreds([]);
