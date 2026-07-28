@@ -149,7 +149,7 @@ html.theme-dark {
   --fp-purple: #a78bfa;
   --fp-text: #f3f5f3;
   --fp-text-muted: #9fafa6;
-  --fp-text-faint: #6b7a72;
+  --fp-text-faint: #a8b5ac;
   --fp-success: #22d06e;
   --fp-danger: #f0453a;
   --fp-warning: #f0b23d;
@@ -169,6 +169,7 @@ html.theme-contrast {
   --fp-border: rgba(255, 255, 255, 0.4);
   --fp-text: #ffffff;
   --fp-text-muted: #e2e8f0;
+  --fp-text-faint: #d4d4d4;
   --fp-accent: #3ddc84;
   --fp-accent-muted: rgba(61, 220, 132, 0.25);
 }
