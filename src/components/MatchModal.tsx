@@ -608,7 +608,7 @@ function LeagueStandingsTable({
   return (
     <div className="max-h-56 overflow-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]">
       <table className="w-full min-w-[480px] text-left text-xs">
-        <thead className="sticky top-0 z-[1] bg-[var(--fp-navy)] text-white">
+        <thead className="sticky top-0 z-[1] border-b border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]">
           <tr className="uppercase tracking-wide">
             <th className="px-2 py-2 font-bold">#</th>
             <th className="px-2 py-2 font-bold">{t("match.team")}</th>
@@ -1539,7 +1539,7 @@ export default function MatchModal({
           <div className="grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3">
             <CollapsiblePanel compact title={tr("panels.model1x2")}>
               <ProbBar label={tr("panels.homeWin")} val={match.probs.p1} color={homeColor} />
-              <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#94a3b8" />
+              <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#475569" />
               <ProbBar label={tr("panels.awayWin")} val={match.probs.p2} color={awayColor} />
             </CollapsiblePanel>
             <CollapsiblePanel
@@ -1548,18 +1548,18 @@ export default function MatchModal({
               subtitle={tr("match.dcSubtitle")}
             >
               <ProbBar label={tr("match.dc1x")} val={ext.pDC1X} color={homeColor} />
-              <ProbBar label={tr("match.dc12")} val={ext.pDC12} color="#a78bfa" />
+              <ProbBar label={tr("match.dc12")} val={ext.pDC12} color="#6d28d9" />
               <ProbBar label={tr("match.dcx2")} val={ext.pDCX2} color={awayColor} />
             </CollapsiblePanel>
             <CollapsiblePanel compact title={tr("panels.goalsMarkets")}>
-              <ProbBar label={tr("match.over15")} val={match.probs.pO15} color="#22d3ee" />
-              <ProbBar label={tr("match.under15")} val={ext.pU15} color="#64748b" />
-              <ProbBar label={tr("match.over25")} val={match.probs.pO25} color="#38bdf8" />
-              <ProbBar label={tr("match.under25")} val={ext.pU25} color="#0ea5e9" />
-              <ProbBar label={tr("match.over35")} val={clamp100(100 - match.probs.pU35)} color="#14b8a6" />
-              <ProbBar label={tr("match.under35")} val={match.probs.pU35} color="#34d399" />
-              <ProbBar label={tr("match.bttsYes")} val={match.probs.pGG} color="#fbbf24" />
-              <ProbBar label={tr("match.bttsNo")} val={ext.pNGG} color="#94a3b8" />
+              <ProbBar label={tr("match.over15")} val={match.probs.pO15} color="#0e7490" />
+              <ProbBar label={tr("match.under15")} val={ext.pU15} color="#334155" />
+              <ProbBar label={tr("match.over25")} val={match.probs.pO25} color="#0369a1" />
+              <ProbBar label={tr("match.under25")} val={ext.pU25} color="#1d4ed8" />
+              <ProbBar label={tr("match.over35")} val={clamp100(100 - match.probs.pU35)} color="#0f766e" />
+              <ProbBar label={tr("match.under35")} val={match.probs.pU35} color="#15803d" />
+              <ProbBar label={tr("match.bttsYes")} val={match.probs.pGG} color="#92400e" />
+              <ProbBar label={tr("match.bttsNo")} val={ext.pNGG} color="#475569" />
             </CollapsiblePanel>
           </div>
 
@@ -1589,17 +1589,17 @@ export default function MatchModal({
                     {tr("match.htResult")}
                   </div>
                   <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
-                  <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#94a3b8" />
+                  <ProbBar label={tr("match.htDraw")} val={match.probs.firstHalf.pX} color="#475569" />
                   <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
                 </div>
                 <div>
                   <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {tr("match.htGoals")}
                   </div>
-                  <ProbBar label={tr("match.htOver05")} val={match.probs.firstHalf.pO05} color="#22d3ee" />
-                  <ProbBar label={tr("match.htOver15")} val={match.probs.firstHalf.pO15} color="#38bdf8" />
-                  <ProbBar label={tr("match.htOver25")} val={match.probs.firstHalf.pO25} color="#0ea5e9" />
-                  <ProbBar label={tr("match.htBtts")} val={match.probs.firstHalf.pGG} color="#fbbf24" />
+                  <ProbBar label={tr("match.htOver05")} val={match.probs.firstHalf.pO05} color="#0e7490" />
+                  <ProbBar label={tr("match.htOver15")} val={match.probs.firstHalf.pO15} color="#0369a1" />
+                  <ProbBar label={tr("match.htOver25")} val={match.probs.firstHalf.pO25} color="#1d4ed8" />
+                  <ProbBar label={tr("match.htBtts")} val={match.probs.firstHalf.pGG} color="#92400e" />
                 </div>
               </div>
               {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
