@@ -108,7 +108,7 @@ export function AdminObservatoryHeader({
 }: AdminObservatoryHeaderProps) {
   const roleLabel = user?.role === "admin" ? "ADMIN" : user ? "DATA LEAD" : "GUEST";
   return (
-    <header className="mb-6 border-b border-[var(--fp-border)] pb-6">
+    <header className="mb-6 rounded-card border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1.4fr)_minmax(0,1fr)] lg:items-center">
         <AdminBrandLockup editorialDate={editorialDate} />
         <div className="min-w-0 space-y-2">
