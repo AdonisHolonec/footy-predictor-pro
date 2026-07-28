@@ -1,26 +1,38 @@
-import type { PredictionRow } from "../../types";
-import { isFixtureInPlay } from "../../utils/appUtils";
+import { useMemo } from "react";
+import type { CardMarketValidations, HistoryEntry, HistoryStats, PredictionRow } from "../../types";
+import { useLocale } from "../../context/LocaleContext";
+import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import StatTile from "../../design-system/StatTile";
+import FeaturedPredictionCard from "./FeaturedPredictionCard";
+import PredictionFocusCard from "./PredictionFocusCard";
+
+type AccessTier = UpgradeTier | "free" | string;
 
 type Props = {
   matches: PredictionRow[];
-  onOpenMatch: (m: PredictionRow) => void;
+  analysisMatch: PredictionRow | null;
+  liveCount: number;
+  accessTier: AccessTier;
+  marketValidationsByFixtureId: Map<number, CardMarketValidations>;
+  isWatched: (fixtureId: number) => boolean;
+  onToggleWatch: (fixtureId: number) => void;
+  onOpenMatch: (row: PredictionRow) => void;
+  onUpgradeRequired: (feature: string, requiredTier: UpgradeTier) => void;
   onGoMatches: () => void;
-  onGoLive?: () => void;
-  onGoHistory?: () => void;
-  onGoStatistics?: () => void;
-  onPredict?: () => void;
-  continueMatch?: PredictionRow | null;
-  winRate?: number;
-  pendingCount?: number;
-  settledCount?: number;
-  wins?: number;
-  losses?: number;
-  usageLabel?: string;
+  onGoLive: () => void;
+  onGoHistory: () => void;
+  onGoStatistics: () => void;
+  onPredict: () => void;
+  valueOnly: boolean;
+  onToggleValue: () => void;
+  highConfActive: boolean;
+  onToggleHighConf: () => void;
+  trackerStats: HistoryStats;
+  history: HistoryEntry[];
 };
 
 function confOf(m: PredictionRow) {
@@ -28,311 +40,193 @@ function confOf(m: PredictionRow) {
   return Number.isFinite(c) ? c : 0;
 }
 
-function evOf(m: PredictionRow) {
-  const e = Number(m.valueBet?.ev ?? m.valueEngine?.expectedValue);
-  return Number.isFinite(e) ? e : 0;
-}
-
-function isFinal(m: PredictionRow) {
-  return ["FT", "AET", "PEN"].includes(String(m.status || "").toUpperCase());
-}
-
-function PickTile({
-  label,
-  match,
-  meta,
-  onOpen
-}: {
-  label: string;
-  match: PredictionRow | null;
-  meta: string;
-  onOpen: (m: PredictionRow) => void;
-}) {
-  if (!match) {
-    return (
-      <Card>
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-text-muted)]">
-          {label}
-        </p>
-        <p className="mt-2 text-sm text-[var(--fp-text-faint)]">Run Predict to unlock today’s picks.</p>
-      </Card>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(match)}
-      className="w-full rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 text-left transition-[border-color,transform] duration-[var(--fp-ease)] hover:border-[var(--fp-accent)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] active:scale-[0.99]"
-    >
-      <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-accent)]">
-        {label}
-      </p>
-      <p className="mt-2 font-display text-[length:var(--fp-card-title)] font-semibold text-[var(--fp-text)]">
-        {match.teams.home} vs {match.teams.away}
-      </p>
-      <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-        Top Pick <span className="font-semibold text-[var(--fp-text)]">{match.recommended?.pick || "—"}</span>
-        {" · "}
-        {meta}
-      </p>
-      {match.league && (
-        <p className="mt-2 font-mono text-[length:var(--fp-caption)] text-[var(--fp-text-faint)]">{match.league}</p>
-      )}
-    </button>
-  );
+function isValueRow(m: PredictionRow) {
+  return Boolean(m.valueBet?.detected);
 }
 
 export default function HomeSection({
   matches,
+  analysisMatch,
+  liveCount,
+  accessTier,
+  marketValidationsByFixtureId,
+  isWatched,
+  onToggleWatch,
   onOpenMatch,
+  onUpgradeRequired,
   onGoMatches,
   onGoLive,
   onGoHistory,
   onGoStatistics,
   onPredict,
-  continueMatch,
-  winRate = 0,
-  pendingCount = 0,
-  settledCount = 0,
-  wins = 0,
-  losses = 0,
-  usageLabel
+  valueOnly,
+  onToggleValue,
+  highConfActive,
+  onToggleHighConf,
+  trackerStats,
+  history
 }: Props) {
-  const playable = matches.filter((m) => !m.insufficientData);
-  const byConf = [...playable].sort((a, b) => confOf(b) - confOf(a));
-  const bestPick = byConf[0] || null;
-  const highestConfidence = byConf.find((m) => m.id !== bestPick?.id) || bestPick;
-  const bestValue =
-    [...playable]
-      .filter((m) => m.valueBet?.detected || evOf(m) > 0)
-      .sort((a, b) => evOf(b) - evOf(a))[0] || null;
-  const live = playable.filter((m) => isFixtureInPlay(m.status)).slice(0, 6);
-  const upcoming = [...playable]
-    .filter((m) => !isFinal(m) && !isFixtureInPlay(m.status))
-    .slice(0, 6);
-  const trending = [...playable]
-    .filter((m) => confOf(m) >= 65 || evOf(m) > 0)
-    .sort((a, b) => confOf(b) + evOf(b) - (confOf(a) + evOf(a)))
-    .slice(0, 5);
-  const avgConf = playable.length ? playable.reduce((s, m) => s + confOf(m), 0) / playable.length : 0;
-  const valueCount = playable.filter((m) => m.valueBet?.detected || evOf(m) > 0).length;
+  const { t } = useLocale();
 
-  if (!matches.length) {
-    return (
-      <section className="space-y-6">
-        <header>
-          <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-            Home
-          </p>
-          <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold tracking-tight">
-            Today’s best opportunities
-          </h1>
-        </header>
-        <EmptyState
-          title="No predictions yet"
-          description="Select your leagues, then run Predict to see Top Picks, Best Value, and Live matches for today."
-          actionLabel={onPredict ? "Run Predict" : "Go to Matches"}
-          onAction={onPredict || onGoMatches}
-        />
-      </section>
-    );
-  }
+  const sortedHistory = useMemo(
+    () => [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
+    [history]
+  );
+  const sparkBars = useMemo(
+    () =>
+      sortedHistory
+        .filter((h) => h.validation === "win" || h.validation === "loss")
+        .slice(0, 12)
+        .reverse(),
+    [sortedHistory]
+  );
+  const recentThree = sortedHistory.slice(0, 3);
+
+  const valueCount = matches.filter(isValueRow).length;
+  const avgConf = matches.length ? matches.reduce((s, m) => s + confOf(m), 0) / matches.length : 0;
+  const topThree = matches.slice(0, 3);
+
+  const chips: { id: string; label: string; active: boolean; onClick: () => void }[] = [
+    { id: "all", label: t("dash.filterAll"), active: !valueOnly && !highConfActive, onClick: () => {
+      if (valueOnly) onToggleValue();
+      if (highConfActive) onToggleHighConf();
+    } },
+    { id: "value", label: t("dash.filterValue"), active: valueOnly, onClick: onToggleValue },
+    { id: "highConf", label: t("dash.filterHighConf"), active: highConfActive, onClick: onToggleHighConf },
+    { id: "live", label: t("dash.filterLive"), active: false, onClick: onGoLive }
+  ];
 
   return (
     <section className="space-y-6">
       <header>
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-          Home
-        </p>
-        <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold tracking-tight text-[var(--fp-text)]">
-          Today’s best opportunities
+        <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-[length:var(--fp-hero)]">
+          {t("dash.predictions")}
         </h1>
-        <p className="mt-2 max-w-xl text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
-          Top Pick, highest confidence, and Best Value — then Live and upcoming fixtures.
-        </p>
+        <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">{t("dash.predictionsSub")}</p>
       </header>
 
-      {/* Today's Summary */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {[
-          { label: "Matches", value: String(matches.length) },
-          { label: "Avg confidence", value: avgConf ? `${Math.round(avgConf)}%` : "—" },
-          { label: "Best Value spots", value: String(valueCount) },
-          { label: "Success Rate", value: winRate ? `${winRate.toFixed(0)}%` : "—" },
-          { label: "Live now", value: String(live.length) }
-        ].map((k) => (
-          <StatTile key={k.label} label={k.label} value={k.value} />
+      <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
+        {chips.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            onClick={chip.onClick}
+            title={t("dash.filterTitle", { label: chip.label })}
+            aria-pressed={chip.active}
+            className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+              chip.active
+                ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+            }`}
+          >
+            {chip.label}
+          </button>
         ))}
       </div>
 
-      {/* Best Pick / Highest Confidence / Best Value */}
-      <div className="grid gap-3 md:grid-cols-3">
-        <PickTile
-          label="Top Pick today"
-          match={bestPick}
-          meta={bestPick ? `${Math.round(confOf(bestPick))}% confidence` : ""}
-          onOpen={onOpenMatch}
-        />
-        <PickTile
-          label="Highest confidence"
-          match={highestConfidence}
-          meta={highestConfidence ? `${Math.round(confOf(highestConfidence))}% · ${highestConfidence.recommended?.pick || "—"}` : ""}
-          onOpen={onOpenMatch}
-        />
-        <PickTile
-          label="Best Value"
-          match={bestValue}
-          meta={bestValue ? `EV ${evOf(bestValue).toFixed(1)}%` : ""}
-          onOpen={onOpenMatch}
-        />
+      {analysisMatch && (
+        <FeaturedPredictionCard match={analysisMatch} onOpenAnalysis={() => onOpenMatch(analysisMatch)} />
+      )}
+
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+        <StatTile label={t("dash.kpiToday")} value={String(matches.length)} tone="neutral" />
+        <StatTile label={t("dash.kpiAvgConfidence")} value={avgConf ? `${Math.round(avgConf)}%` : "—"} tone="neutral" />
+        <StatTile label={t("dash.kpiValue")} value={String(valueCount)} tone={valueCount > 0 ? "success" : "neutral"} />
+        <StatTile label={t("dash.kpiLive")} value={String(liveCount)} tone={liveCount > 0 ? "danger" : "neutral"} />
       </div>
 
-      {continueMatch && (
-        <button
-          type="button"
-          onClick={() => onOpenMatch(continueMatch)}
-          className="flex w-full min-h-[var(--fp-touch)] items-center justify-between rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-4 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-        >
-          <div>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-wider text-[var(--fp-accent)]">
-              Continue
-            </p>
-            <p className="mt-0.5 font-semibold">
-              {continueMatch.teams.home} vs {continueMatch.teams.away}
-            </p>
+      {!matches.length ? (
+        <EmptyState
+          title={t("dash.emptyPredsTitle")}
+          description={t("dash.emptyPredsDesc")}
+          actionLabel={t("shell.predict")}
+          onAction={onPredict}
+        />
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+              {t("dash.topPicksTitle")}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={onGoMatches}>
+              {t("dash.showAll")}
+            </Button>
           </div>
-          <span className="text-sm text-[var(--fp-accent)]">Open →</span>
-        </button>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {topThree.map((row) => (
+              <PredictionFocusCard
+                key={row.id}
+                row={row}
+                accessTier={accessTier}
+                marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
+                watched={isWatched(Number(row.id))}
+                onToggleWatch={() => onToggleWatch(Number(row.id))}
+                onOpen={() => onOpenMatch(row)}
+                onUpgradeRequired={onUpgradeRequired}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Live */}
       <Card>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Live matches</h2>
-          {onGoLive && (
-            <Button variant="ghost" size="sm" onClick={onGoLive}>
-              All live
-            </Button>
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+            {t("dash.performanceTitle")}
+          </h2>
+          <Badge tone={trackerStats.settled && trackerStats.winRate >= 50 ? "success" : "neutral"}>
+            {trackerStats.settled ? `${trackerStats.winRate.toFixed(0)}%` : "—"}
+          </Badge>
         </div>
-        {!live.length ? (
-          <p className="mt-3 text-sm text-[var(--fp-text-muted)]">No live fixtures in your current set.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-[var(--fp-border)]">
-            {live.map((m) => (
-              <li key={m.id}>
+        <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("dash.performanceSub")}</p>
+
+        {sparkBars.length > 0 && (
+          <div
+            className="mt-4 flex h-8 items-end gap-1"
+            role="img"
+            aria-label={t("dash.sparklineLabel")}
+          >
+            {sparkBars.map((h, idx) => (
+              <span
+                key={`${h.id ?? idx}-${idx}`}
+                className={`w-full rounded-sm ${
+                  h.validation === "win" ? "h-full bg-[var(--fp-success)]" : "h-2.5 bg-[var(--fp-danger)]"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+
+        {recentThree.length > 0 && (
+          <ul className="mt-4 divide-y divide-[var(--fp-border)]">
+            {recentThree.map((row, idx) => (
+              <li key={row.id ?? idx}>
                 <button
                   type="button"
-                  onClick={() => onOpenMatch(m)}
+                  onClick={() => onOpenMatch(row)}
                   className="flex w-full min-h-[var(--fp-touch)] items-center justify-between gap-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
                 >
-                  <span>
-                    <span className="inline-flex items-center gap-1.5 text-[var(--fp-danger)]">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
-                      LIVE
-                    </span>
-                    <br />
-                    <span className="font-semibold">
-                      {m.teams.home} {m.score?.home ?? ""} – {m.score?.away ?? ""} {m.teams.away}
-                    </span>
+                  <span className="min-w-0 truncate font-semibold">
+                    {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
                   </span>
-                  <Badge tone="accent">{m.recommended?.pick || "—"}</Badge>
+                  <Badge
+                    tone={row.validation === "win" ? "success" : row.validation === "loss" ? "danger" : "warning"}
+                  >
+                    {row.validation === "win" ? t("history.win") : row.validation === "loss" ? t("history.loss") : t("history.pendingBadge")}
+                  </Badge>
                 </button>
               </li>
             ))}
           </ul>
         )}
-      </Card>
 
-      {/* Upcoming */}
-      <Card>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Upcoming matches</h2>
-          <Button variant="ghost" size="sm" onClick={onGoMatches}>
-            See all
-          </Button>
-        </div>
-        {!upcoming.length ? (
-          <p className="mt-3 text-sm text-[var(--fp-text-muted)]">No upcoming matches — expand leagues or date.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-[var(--fp-border)]">
-            {upcoming.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenMatch(m)}
-                  className="flex w-full min-h-[var(--fp-touch)] items-center justify-between gap-3 py-2 text-left text-sm hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-                >
-                  <span>
-                    <span className="text-[var(--fp-text-muted)]">{m.league}</span>
-                    <br />
-                    <span className="font-semibold">
-                      {m.teams.home} vs {m.teams.away}
-                    </span>
-                  </span>
-                  <Badge tone="accent">{m.recommended?.pick || "—"}</Badge>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      {/* Trending */}
-      {trending.length > 0 && (
-        <Card>
-          <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Trending predictions</h2>
-          <ul className="mt-3 divide-y divide-[var(--fp-border)]">
-            {trending.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpenMatch(m)}
-                  className="flex w-full min-h-[var(--fp-touch)] items-center justify-between gap-3 py-2 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-                >
-                  <span className="font-semibold">
-                    {m.teams.home} vs {m.teams.away}
-                  </span>
-                  <span className="font-mono text-[length:var(--fp-caption)] tabular-nums text-[var(--fp-text-muted)]">
-                    {Math.round(confOf(m))}% · {m.recommended?.pick || "—"}
-                    {evOf(m) > 0 ? ` · EV ${evOf(m).toFixed(0)}%` : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {/* Recent performance + shortcuts */}
-      <Card>
-        <h2 className="font-display text-[length:var(--fp-section)] font-semibold">Recent performance</h2>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-[var(--fp-text-muted)]">
-          <span>
-            Success Rate{" "}
-            <strong className="tabular-nums text-[var(--fp-text)]">{winRate ? `${winRate.toFixed(0)}%` : "—"}</strong>
-          </span>
-          <span>
-            {wins}W · {losses}L · {settledCount} settled
-          </span>
-          {pendingCount > 0 && <span>{pendingCount} pending</span>}
-          {usageLabel && (
-            <span>
-              Plan <strong className="text-[var(--fp-text)]">{usageLabel}</strong>
-            </span>
-          )}
-        </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          {onGoHistory && (
-            <Button variant="secondary" size="sm" onClick={onGoHistory}>
-              History
-            </Button>
-          )}
-          {onGoStatistics && (
-            <Button variant="ghost" size="sm" onClick={onGoStatistics}>
-              Statistics
-            </Button>
-          )}
+          <Button variant="secondary" size="sm" onClick={onGoHistory}>
+            {t("nav.history")}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onGoStatistics}>
+            {t("nav.statistics")}
+          </Button>
         </div>
       </Card>
     </section>

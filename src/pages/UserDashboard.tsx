@@ -8,7 +8,7 @@ import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
 import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
-import FeaturedPredictionCard from "../components/ux/FeaturedPredictionCard";
+import HomeSection from "../components/ux/HomeSection";
 import { StatTile } from "../design-system";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
@@ -315,6 +315,32 @@ export default function UserDashboard() {
     prefs.valueOnly,
     matchSearch
   ]);
+  const homePreds = useMemo(() => {
+    let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+    if (showSettledMarketsOnly) {
+      rows = rows.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
+    }
+    const q = matchSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((row) => {
+        const hay = `${row.teams.home} ${row.teams.away} ${row.league} ${row.recommended?.pick || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    if (prefs.minConfidence > 0) {
+      rows = rows.filter((row) => {
+        const c = Number(row.recommended?.confidence);
+        return Number.isFinite(c) && c >= prefs.minConfidence;
+      });
+    }
+    if (prefs.valueOnly) {
+      rows = rows.filter(
+        (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
+      );
+    }
+    return rows;
+  }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, matchSearch]);
+  const homeLiveCount = useMemo(() => preds.filter((row) => isFixtureInPlay(row.status)).length, [preds]);
   const continueMatch = useMemo(() => {
     const recent = prefs.recentFixtureIds[0];
     if (!recent) return null;
@@ -908,7 +934,7 @@ export default function UserDashboard() {
     [history]
   );
 
-  const isMainBoard = MAIN_VIEWS.includes(navView);
+  const isMainBoard = MAIN_VIEWS.includes(navView) && navView !== "home";
   const simpleRoi = useMemo(() => computeSimpleRoi(history), [history]);
   const analysisMatch = useMemo(() => {
     const playable = preds.filter((p) => !p.insufficientData);
@@ -1056,6 +1082,31 @@ export default function UserDashboard() {
         </div>
       )}
 
+      {navView === "home" && (
+        <HomeSection
+          matches={homePreds}
+          analysisMatch={analysisMatch}
+          liveCount={homeLiveCount}
+          accessTier={userTier}
+          marketValidationsByFixtureId={marketValidationsByFixtureId}
+          isWatched={isWatched}
+          onToggleWatch={toggleWatchlist}
+          onOpenMatch={openMatch}
+          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+          onGoMatches={() => handleNav("matches")}
+          onGoLive={() => handleNav("live")}
+          onGoHistory={() => handleNav("history")}
+          onGoStatistics={() => handleNav("statistics")}
+          onPredict={() => void warmAndPredict()}
+          valueOnly={prefs.valueOnly}
+          onToggleValue={() => updateFilters({ valueOnly: !prefs.valueOnly })}
+          highConfActive={prefs.minConfidence > 0}
+          onToggleHighConf={() => updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : 70 })}
+          trackerStats={trackerStats}
+          history={history}
+        />
+      )}
+
       {isMainBoard && (
         <div className="space-y-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -1109,13 +1160,6 @@ export default function UserDashboard() {
               </label>
             </div>
           </div>
-
-          {navView === "home" && (
-            <FeaturedPredictionCard
-              match={analysisMatch}
-              onOpenAnalysis={() => analysisMatch && openMatch(analysisMatch)}
-            />
-          )}
 
           <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
             <StatTile label={t("dash.kpiToday")} value={String(visiblePreds.length)} tone="neutral" />
