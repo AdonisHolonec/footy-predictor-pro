@@ -733,6 +733,20 @@ export default function MatchCard({
         </div>
       )}
 
+      {!compact && !canShowSpecialBet && (
+        <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
+              {t("card.specialBet")}
+            </div>
+            <span className="text-sm" aria-hidden>
+              🔒
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--fp-text-muted)] sm:text-xs">{t("card.specialBetLocked")}</p>
+        </div>
+      )}
+
       {!compact && canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
         <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
           <div className="flex flex-wrap items-center justify-between gap-2">

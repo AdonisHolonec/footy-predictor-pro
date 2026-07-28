@@ -1077,6 +1077,28 @@ export default function MatchModal({
               </div>
             </div>
           </div>
+          {!canShowSpecialBet && (
+            <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
+                <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
+                    {tr("match.specialBet")}
+                  </div>
+                  <span className="text-sm" aria-hidden>
+                    🔒
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[11px] text-[var(--fp-text-muted)]">{tr("card.specialBetLocked")}</p>
+                <button
+                  type="button"
+                  onClick={() => onUpgradeRequired?.(tr("match.specialBet"), "ultra")}
+                  className="mt-2.5 inline-flex items-center gap-1 rounded-md border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                >
+                  🔒 {tr("card.unlock")}
+                </button>
+              </div>
+            </div>
+          )}
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
             <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">

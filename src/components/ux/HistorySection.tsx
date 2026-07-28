@@ -17,6 +17,9 @@ type Props = {
   winRate: number;
   /** Open full match analysis (MatchModal). */
   onOpenMatch?: (row: HistoryEntry) => void;
+  /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
+  canShowSpecialBet?: boolean;
+  onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
 };
 
 function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
@@ -38,7 +41,9 @@ export default function HistorySection({
   losses,
   settled,
   winRate,
-  onOpenMatch
+  onOpenMatch,
+  canShowSpecialBet = false,
+  onUpgradeRequired
 }: Props) {
   const { t } = useLocale();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -155,7 +160,12 @@ export default function HistorySection({
                         {t("history.clearSelection")}
                       </button>
                     </div>
-                    <HistorySpecialBetCard row={row} onOpenDetails={onOpenMatch} />
+                    <HistorySpecialBetCard
+                      row={row}
+                      onOpenDetails={onOpenMatch}
+                      canShowSpecialBet={canShowSpecialBet}
+                      onUpgradeRequired={onUpgradeRequired}
+                    />
                   </div>
                 ) : null}
               </div>

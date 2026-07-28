@@ -605,6 +605,31 @@ export function useAuth() {
     };
   }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
 
+  /** Mirrors resolveEffectiveTierFromProfile() in server-utils/accessTier.js so the UI
+   *  never shows premium/ultra affordances the server has already stopped honoring. */
+  const isSubscriptionExpired = useMemo(() => {
+    if (!user?.subscription_expires_at) return false;
+    const t = new Date(user.subscription_expires_at).getTime();
+    return Number.isFinite(t) && t <= Date.now();
+  }, [user?.subscription_expires_at]);
+
+  const hasActiveSubscription = useMemo(() => {
+    const requestedTier = user?.tier || "free";
+    if (requestedTier !== "premium" && requestedTier !== "ultra") return false;
+    if (!user?.subscription_expires_at) return true; // open-ended paid tier, no expiry set
+    return !isSubscriptionExpired;
+  }, [user?.tier, user?.subscription_expires_at, isSubscriptionExpired]);
+
+  const effectiveTier = useMemo(() => {
+    const requestedTier = user?.tier || "free";
+    if (hasActiveSubscription && (requestedTier === "premium" || requestedTier === "ultra")) {
+      return requestedTier;
+    }
+    if (trialRemainingTime.ultraMs > 0) return "ultra";
+    if (trialRemainingTime.premiumMs > 0) return "premium";
+    return "free";
+  }, [user?.tier, hasActiveSubscription, trialRemainingTime]);
+
   const trialExpiresAt = useMemo(() => {
     const premiumStart = user?.premium_trial_activated_at ? new Date(user.premium_trial_activated_at).getTime() : NaN;
     const ultraStart = user?.ultra_trial_activated_at ? new Date(user.ultra_trial_activated_at).getTime() : NaN;
@@ -618,7 +643,9 @@ export function useAuth() {
 
   return {
     user,
-    userTier: user?.tier || "free",
+    userTier: effectiveTier,
+    isSubscriptionExpired,
+    hasActiveSubscription,
     trialRemainingTime,
     trialExpiresAt,
     predictCountToday,

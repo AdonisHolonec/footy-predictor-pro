@@ -15,6 +15,9 @@ import { fetchWithAuth } from "../../utils/apiAuth";
 type Props = {
   row: HistoryEntry;
   onOpenDetails?: (row: HistoryEntry) => void;
+  /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
+  canShowSpecialBet?: boolean;
+  onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
 };
 
 /**
@@ -22,7 +25,7 @@ type Props = {
  * plus multi-leg Special Bet when book odds exist for ≥2 legs.
  * Hydrates HT / market totals for finished matches so legs can settle.
  */
-export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
+export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpecialBet = false, onUpgradeRequired }: Props) {
   const { t } = useLocale();
   const [legCount, setLegCount] = useState<2 | 3>(2);
   const [hydratedResults, setHydratedResults] = useState<HistoryEntry["marketResults"] | null>(null);
@@ -111,6 +114,35 @@ export default function HistorySpecialBetCard({ row, onOpenDetails }: Props) {
 
   const homeLogo = row.logos?.home;
   const awayLogo = row.logos?.away;
+
+  if (!canShowSpecialBet) {
+    return (
+      <article className="rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 p-3 shadow-[var(--fp-shadow-sm)] sm:p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
+            {t("card.specialBet")}
+          </p>
+          <span className="text-base" aria-hidden>
+            🔒
+          </span>
+        </div>
+        <p className="mt-2 truncate text-sm font-semibold text-[var(--fp-text)]">
+          {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
+        </p>
+        <p className="mt-1.5 text-xs text-[var(--fp-text-muted)]">{t("card.specialBetLocked")}</p>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpgradeRequired?.(t("card.specialBet"), "ultra");
+          }}
+          className="mt-3 inline-flex items-center gap-1 rounded border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-2 py-1 text-[10px] font-bold text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
+        >
+          🔒 {t("card.unlock")}
+        </button>
+      </article>
+    );
+  }
 
   return (
     <article className="rounded-[var(--fp-radius)] border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 p-3 shadow-[var(--fp-shadow-sm)] sm:p-4">

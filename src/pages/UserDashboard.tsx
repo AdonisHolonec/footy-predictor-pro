@@ -147,6 +147,7 @@ export default function UserDashboard() {
   const {
     user,
     userTier,
+    isSubscriptionExpired,
     trialRemainingTime,
     tierQuotaExempt,
     predictCountToday,
@@ -1271,6 +1272,8 @@ export default function UserDashboard() {
               settled={trackerStats.settled}
               winRate={trackerStats.winRate}
               onOpenMatch={openMatch}
+              canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+              onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
             />
           </CollapsiblePanel>
 
@@ -1328,6 +1331,8 @@ export default function UserDashboard() {
           settled={trackerStats.settled}
           winRate={trackerStats.winRate}
           onOpenMatch={openMatch}
+          canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
         />
       )}
 
@@ -1447,6 +1452,14 @@ export default function UserDashboard() {
             <Card id="upgrade" className="scroll-mt-28">
               <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.subscription")}</h2>
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.subscriptionSub")}</p>
+              {isSubscriptionExpired && (
+                <div className="mt-3 flex items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-2.5">
+                  <span className="text-base" aria-hidden>
+                    ⚠️
+                  </span>
+                  <p className="text-sm font-semibold text-[var(--fp-danger)]">{t("dash.subscriptionExpired")}</p>
+                </div>
+              )}
               <PricingCampaignBanner className="mt-3" />
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">

@@ -359,11 +359,11 @@ export default function PredictionFocusCard({
                   </span>
                 )}
               </div>
-              <span className="text-right font-semibold tabular-nums">
-                {r.locked ? "—" : r.confidence}
+              <span className="text-right font-semibold tabular-nums" aria-hidden={r.locked}>
+                {r.locked ? "🔒" : r.confidence}
               </span>
-              <span className="text-right font-semibold tabular-nums">
-                {r.locked ? "—" : r.odd}
+              <span className="text-right font-semibold tabular-nums" aria-hidden={r.locked}>
+                {r.locked ? "🔒" : r.odd}
               </span>
             </div>
             );
