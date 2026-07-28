@@ -1344,6 +1344,7 @@ export default function UserDashboard() {
           settled={trackerStats.settled}
           wins={trackerStats.wins}
           losses={trackerStats.losses}
+          history={history}
         />
       )}
 
@@ -1591,6 +1592,83 @@ export default function UserDashboard() {
           )}
 
           <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
+            {!tierQuotaExempt && (
+              <button
+                type="button"
+                onClick={() => document.getElementById("upgrade")?.scrollIntoView({ behavior: "smooth" })}
+                className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+              >
+                <span className="text-[var(--fp-accent)]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" />
+                    <line x1="1" y1="10" x2="23" y2="10" />
+                  </svg>
+                </span>
+                <span className="text-sm font-bold text-[var(--fp-text)]">{t("dash.subscription")}</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="ml-auto text-[var(--fp-text-faint)]"
+                >
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                updateFilters({ matchesFilter: "favorites" });
+                handleNav("matches");
+              }}
+              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+            >
+              <span className="text-[var(--fp-accent)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-[var(--fp-text)]">{t("dash.watchlist")}</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="ml-auto text-[var(--fp-text-faint)]"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNav("statistics")}
+              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
+            >
+              <span className="text-[var(--fp-accent)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="20" x2="12" y2="10" />
+                  <line x1="18" y1="20" x2="18" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="16" />
+                </svg>
+              </span>
+              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.statistics")}</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="ml-auto text-[var(--fp-text-faint)]"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={() => handleNav("notifications")}

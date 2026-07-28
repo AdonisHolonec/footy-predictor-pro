@@ -60,6 +60,7 @@ export const en: Dict = {
     emptyLiveTitle: "No live matches",
     emptyLiveDesc: "None of today's selected fixtures are currently in play.",
     matchesSub: "Full list of today's picks — filter, search, and open any match for full analysis.",
+    watchlist: "Watchlist",
     liveSub: "Fixtures currently in play.",
     showAll: "Show all",
     restoreRefresh: "Predict",
@@ -439,7 +440,17 @@ export const en: Dict = {
     successRate: "Success rate",
     wins: "Wins",
     losses: "Losses",
-    settled: "Settled"
+    settled: "Settled",
+    calibrationTitle: "Confidence calibration",
+    calibrationSub: "How your predicted confidence compares to actual results, by confidence band.",
+    calibrationSampleSize: "n = {n}",
+    calibrationPredicted: "Predicted",
+    calibrationActual: "Actual",
+    calibrationBand5059: "50–59%",
+    calibrationBand6069: "60–69%",
+    calibrationBand7079: "70–79%",
+    calibrationBand8089: "80–89%",
+    calibrationBand90plus: "90%+"
   },
   tracker: {
     performance: "Performance",

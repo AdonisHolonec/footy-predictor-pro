@@ -1,7 +1,9 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import type { HistoryEntry } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { StatTile } from "../../design-system";
 import Skeleton from "../../design-system/Skeleton";
+import CalibrationChart from "./CalibrationChart";
 
 const TrackRecordSection = lazy(() => import("../TrackRecordSection"));
 
@@ -11,9 +13,10 @@ type Props = {
   settled: number;
   wins: number;
   losses: number;
+  history?: HistoryEntry[];
 };
 
-export default function StatisticsSection({ trackerSlot, winRate, settled, wins, losses }: Props) {
+export default function StatisticsSection({ trackerSlot, winRate, settled, wins, losses, history = [] }: Props) {
   const { t } = useLocale();
   return (
     <section className="space-y-4">
@@ -35,6 +38,8 @@ export default function StatisticsSection({ trackerSlot, winRate, settled, wins,
       </div>
 
       {trackerSlot}
+
+      <CalibrationChart history={history} />
 
       <Suspense fallback={<Skeleton className="h-48 w-full" />}>
         <TrackRecordSection days={45} showLinkToFull compact={false} />

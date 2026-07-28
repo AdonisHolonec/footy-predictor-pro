@@ -60,6 +60,7 @@ export const ro: Dict = {
     emptyLiveTitle: "Niciun meci live",
     emptyLiveDesc: "Niciunul dintre meciurile selectate azi nu este momentan în desfășurare.",
     matchesSub: "Lista completă a picks-urilor de azi — filtrează, caută și deschide orice meci pentru analiză completă.",
+    watchlist: "Watchlist",
     liveSub: "Meciuri aflate momentan în desfășurare.",
     showAll: "Arată toate",
     restoreRefresh: "Predict",
@@ -439,7 +440,17 @@ export const ro: Dict = {
     successRate: "Rată succes",
     wins: "Victorii",
     losses: "Înfrângeri",
-    settled: "Validate"
+    settled: "Validate",
+    calibrationTitle: "Calibrarea încrederii",
+    calibrationSub: "Cum se compară încrederea prezisă cu rezultatele reale, pe benzi de încredere.",
+    calibrationSampleSize: "n = {n}",
+    calibrationPredicted: "Prezis",
+    calibrationActual: "Real",
+    calibrationBand5059: "50–59%",
+    calibrationBand6069: "60–69%",
+    calibrationBand7079: "70–79%",
+    calibrationBand8089: "80–89%",
+    calibrationBand90plus: "90%+"
   },
   tracker: {
     performance: "Performanță",
