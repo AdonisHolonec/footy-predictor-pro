@@ -63,6 +63,8 @@ export const en: Dict = {
     watchlist: "Watchlist",
     notifKickoffTitle: "Kickoff soon",
     notifValueTitle: "New value bet detected",
+    notifMomentumUpTitle: "Momentum shifting up",
+    notifMomentumDownTitle: "Momentum shifting down",
     notifSettledWinTitle: "Settled: win",
     notifSettledLossTitle: "Settled: loss",
     notifInMinutes: "kicks off in {m}m",

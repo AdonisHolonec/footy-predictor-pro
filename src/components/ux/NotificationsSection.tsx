@@ -14,6 +14,7 @@ type Props = {
 const KIND_ICON: Record<NotificationItem["kind"], string> = {
   kickoff: "⏱",
   value: "💡",
+  momentum: "📈",
   settled: "🏁"
 };
 
@@ -22,9 +23,17 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
   const seen = useMemo(() => new Set(seenIds), [seenIds]);
   const hasUnseen = items.some((item) => !seen.has(item.id));
 
+  const iconFor = (item: NotificationItem) => {
+    if (item.kind === "momentum") return item.trend === "down" ? "📉" : "📈";
+    return KIND_ICON[item.kind];
+  };
+
   const titleFor = (item: NotificationItem) => {
     if (item.kind === "kickoff") return t("dash.notifKickoffTitle");
     if (item.kind === "value") return t("dash.notifValueTitle");
+    if (item.kind === "momentum") {
+      return item.trend === "down" ? t("dash.notifMomentumDownTitle") : t("dash.notifMomentumUpTitle");
+    }
     return item.validation === "win" ? t("dash.notifSettledWinTitle") : t("dash.notifSettledLossTitle");
   };
 
@@ -75,7 +84,7 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
                 }`}
               >
                 <span className="mt-0.5 shrink-0 text-base" aria-hidden>
-                  {KIND_ICON[item.kind]}
+                  {iconFor(item)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">

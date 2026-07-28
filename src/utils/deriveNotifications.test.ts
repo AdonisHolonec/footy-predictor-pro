@@ -70,6 +70,34 @@ describe("deriveNotifications", () => {
     expect(result[0]).toMatchObject({ id: "value-2", kind: "value", ev: 7.5 });
   });
 
+  it("surfaces a live fixture with a shifting momentum trend above the confidence floor", () => {
+    const row = baseRow({
+      id: 6,
+      momentum: { homeMomentum: 78, awayMomentum: 22, dominantTeam: "home", trend: "up", confidence: 67 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "momentum-6-up", kind: "momentum", trend: "up" });
+  });
+
+  it("ignores a momentum trend below the confidence floor", () => {
+    const row = baseRow({
+      id: 7,
+      momentum: { homeMomentum: 60, awayMomentum: 40, dominantTeam: "home", trend: "up", confidence: 33 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores a stable momentum trend regardless of confidence", () => {
+    const row = baseRow({
+      id: 8,
+      momentum: { homeMomentum: 55, awayMomentum: 45, dominantTeam: "home", trend: "stable", confidence: 90 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(0);
+  });
+
   it("surfaces a settled watchlisted prediction as win or loss", () => {
     const entry: HistoryEntry = {
       ...baseRow({ id: 3 }),

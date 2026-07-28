@@ -1,6 +1,6 @@
 import type { HistoryEntry, PredictionRow } from "../types";
 
-export type NotificationKind = "kickoff" | "value" | "settled";
+export type NotificationKind = "kickoff" | "value" | "momentum" | "settled";
 
 export type NotificationItem = {
   id: string;
@@ -13,10 +13,14 @@ export type NotificationItem = {
   ev?: number;
   hoursToKickoff?: number;
   validation?: "win" | "loss";
+  /** "up"/"down" for "momentum" items. */
+  trend?: "up" | "down";
   at: string;
 };
 
 const UPCOMING_WINDOW_MS = 2 * 60 * 60 * 1000;
+/** Below this momentum confidence, live stats are too thin to alert on. */
+const MOMENTUM_ALERT_MIN_CONFIDENCE = 50;
 
 export function deriveNotifications(params: {
   predictions: PredictionRow[];
@@ -57,6 +61,27 @@ export function deriveNotifications(params: {
       at: row.kickoff
     }));
 
+  // Current-state list (like value): auto-clears once trend returns to "stable" —
+  // not an append-only event log.
+  const momentum: NotificationItem[] = predictions
+    .filter(
+      (row) =>
+        row.momentum &&
+        row.momentum.trend !== "stable" &&
+        row.momentum.confidence >= MOMENTUM_ALERT_MIN_CONFIDENCE
+    )
+    .sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime())
+    .map((row) => ({
+      id: `momentum-${row.id}-${row.momentum!.trend}`,
+      kind: "momentum" as const,
+      fixtureId: Number(row.id),
+      teams: row.teams,
+      league: row.league,
+      kickoff: row.kickoff,
+      trend: row.momentum!.trend as "up" | "down",
+      at: row.kickoff
+    }));
+
   const settled: NotificationItem[] = history
     .filter(
       (row) => watched.has(Number(row.id)) && (row.validation === "win" || row.validation === "loss")
@@ -74,5 +99,5 @@ export function deriveNotifications(params: {
       at: row.savedAt
     }));
 
-  return [...upcoming, ...value, ...settled];
+  return [...upcoming, ...value, ...momentum, ...settled];
 }
