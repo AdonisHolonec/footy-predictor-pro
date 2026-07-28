@@ -18,6 +18,10 @@ import {
 
 export type SpecialBetLegId = CardMarketId | "ht" | "gg" | "cards";
 
+export type SpecialBetLiveAdjustment = NonNullable<
+  NonNullable<PredictionRow["confidenceEngine"]>["liveAdjustment"]
+>;
+
 export type SpecialBetLeg = {
   id: SpecialBetLegId;
   label: string;
@@ -25,6 +29,8 @@ export type SpecialBetLeg = {
   probability: number;
   odd: number;
   outcome: MarketOutcome;
+  /** Live momentum nudge (Sprint 2), display-only — only ever set on the "recommended" leg. */
+  liveAdjustment?: SpecialBetLiveAdjustment | null;
 };
 
 export type SpecialBetLabels = {
@@ -36,6 +42,17 @@ export type SpecialBetLabels = {
   gg: string;
   cards: string;
 };
+
+/** Compact display badge for the "recommended" leg's live momentum nudge (Sprint 2). Neutral is not shown — matches the notification threshold pattern (Sprint 3) of only surfacing non-stable signal. */
+export function specialBetLiveAdjustmentBadge(
+  liveAdjustment?: SpecialBetLiveAdjustment | null
+): { delta: string; tone: "success" | "danger" } | null {
+  if (!liveAdjustment || liveAdjustment.reason === "neutral") return null;
+  return {
+    delta: liveAdjustment.delta > 0 ? `+${liveAdjustment.delta}` : String(liveAdjustment.delta),
+    tone: liveAdjustment.reason === "aligned" ? "success" : "danger"
+  };
+}
 
 /** Same threshold as HOT chips on MatchCard. */
 export const SPECIAL_BET_STRONG_SIGNAL = 85;
@@ -179,7 +196,8 @@ export function listSpecialBetCandidates(
       pick: row.recommended?.pick || "",
       probability: confPct,
       odd: Number(recommendedOdd(row)),
-      outcome: resolveCardMarketOutcome("recommended", enrichedRow, stored)
+      outcome: resolveCardMarketOutcome("recommended", enrichedRow, stored),
+      liveAdjustment: row.confidenceEngine?.liveAdjustment ?? null
     },
     {
       id: "goals",

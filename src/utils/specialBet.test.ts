@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   listSpecialBetCandidates,
   pickSpecialBetLegs,
+  specialBetLiveAdjustmentBadge,
   SPECIAL_BET_STRONG_SIGNAL
 } from "./specialBet";
 import type { PredictionRow } from "../types";
@@ -83,5 +84,46 @@ describe("specialBet", () => {
     const pool = listSpecialBetCandidates(row, labels);
     expect(pool.every((l) => Number(l.odd) > 1)).toBe(true);
     expect(pool.some((l) => l.id === "gg")).toBe(false);
+  });
+
+  it("passes liveAdjustment through only on the recommended leg", () => {
+    const row = baseRow({
+      confidenceEngine: {
+        confidence: 70,
+        liveAdjustment: { delta: 3, reason: "aligned" }
+      } as PredictionRow["confidenceEngine"]
+    });
+    const pool = listSpecialBetCandidates(row, labels);
+    const recommended = pool.find((l) => l.id === "recommended");
+    expect(recommended?.liveAdjustment).toEqual({ delta: 3, reason: "aligned" });
+    expect(pool.filter((l) => l.id !== "recommended").every((l) => !l.liveAdjustment)).toBe(true);
+  });
+
+  it("omits liveAdjustment on the recommended leg outside live play", () => {
+    const pool = listSpecialBetCandidates(baseRow(), labels);
+    const recommended = pool.find((l) => l.id === "recommended");
+    expect(recommended?.liveAdjustment).toBeFalsy();
+  });
+});
+
+describe("specialBetLiveAdjustmentBadge", () => {
+  it("renders a positive success badge when aligned", () => {
+    expect(specialBetLiveAdjustmentBadge({ delta: 3, reason: "aligned" })).toEqual({
+      delta: "+3",
+      tone: "success"
+    });
+  });
+
+  it("renders a negative danger badge when contradicted", () => {
+    expect(specialBetLiveAdjustmentBadge({ delta: -2, reason: "contradicted" })).toEqual({
+      delta: "-2",
+      tone: "danger"
+    });
+  });
+
+  it("returns null for neutral or missing adjustment", () => {
+    expect(specialBetLiveAdjustmentBadge({ delta: 0, reason: "neutral" })).toBeNull();
+    expect(specialBetLiveAdjustmentBadge(null)).toBeNull();
+    expect(specialBetLiveAdjustmentBadge(undefined)).toBeNull();
   });
 });

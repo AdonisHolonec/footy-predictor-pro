@@ -25,7 +25,8 @@ import {
   pickSpecialBetLegs,
   outcomeTextClass,
   specialBetCombinedOdd as specialBetCombinedOddValue,
-  specialBetCombinedOutcome
+  specialBetCombinedOutcome,
+  specialBetLiveAdjustmentBadge
 } from "../utils/specialBet";
 import { matchingMarketOdd } from "../utils/marketPicks";
 import { fetchWithAuth } from "../utils/apiAuth";
@@ -1136,6 +1137,8 @@ export default function MatchModal({
                 <div className="mt-2.5 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-2 max-[380px]:px-3">
                   {specialBetLegs.map((leg) => {
                     const tone = outcomeTextClass(leg.outcome);
+                    const liveBadge =
+                      leg.id === "recommended" ? specialBetLiveAdjustmentBadge(leg.liveAdjustment) : null;
                     return (
                       <div
                         key={`${leg.label}-${leg.pick}`}
@@ -1146,6 +1149,19 @@ export default function MatchModal({
                         </span>
                         <span className="shrink-0 rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-0.5 tabular-nums text-right font-bold">
                           {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
+                          {liveBadge && (
+                            <span
+                              className={`ml-1 ${liveBadge.tone === "success" ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}`}
+                              title={tr(
+                                liveBadge.tone === "success"
+                                  ? "panels.liveAdjustedAligned"
+                                  : "panels.liveAdjustedContradicted",
+                                { delta: liveBadge.delta }
+                              )}
+                            >
+                              {liveBadge.delta}
+                            </span>
+                          )}
                         </span>
                       </div>
                     );

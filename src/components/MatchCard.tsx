@@ -19,7 +19,8 @@ import {
   pickSpecialBetLegs,
   outcomeTextClass,
   specialBetCombinedOdd as specialBetCombinedOddValue,
-  specialBetCombinedOutcome
+  specialBetCombinedOutcome,
+  specialBetLiveAdjustmentBadge
 } from "../utils/specialBet";
 import { shotsDisplayOdd } from "../utils/marketPicks";
 
@@ -786,6 +787,7 @@ export default function MatchCard({
           <div className="mt-1.5 space-y-1">
             {specialBetLegs.map((leg) => {
               const tone = outcomeTextClass(leg.outcome);
+              const liveBadge = leg.id === "recommended" ? specialBetLiveAdjustmentBadge(leg.liveAdjustment) : null;
               return (
                 <div
                   key={`${leg.label}-${leg.pick}`}
@@ -796,6 +798,17 @@ export default function MatchCard({
                   </span>
                   <span className="shrink-0 tabular-nums font-bold">
                     {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
+                    {liveBadge && (
+                      <span
+                        className={`ml-1 ${liveBadge.tone === "success" ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}`}
+                        title={t(
+                          liveBadge.tone === "success" ? "panels.liveAdjustedAligned" : "panels.liveAdjustedContradicted",
+                          { delta: liveBadge.delta }
+                        )}
+                      >
+                        {liveBadge.delta}
+                      </span>
+                    )}
                   </span>
                 </div>
               );
