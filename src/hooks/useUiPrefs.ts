@@ -22,6 +22,7 @@ export type UiPrefsV3 = {
   matchSearch: string;
   matchesFilter: MatchesSubFilterPref;
   dashboardWidgets: string[];
+  notificationsSeenIds: string[];
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
@@ -39,7 +40,8 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   settledOnly: false,
   matchSearch: "",
   matchesFilter: "all",
-  dashboardWidgets: ["kpi", "continue", "recommended", "value", "matches"]
+  dashboardWidgets: ["kpi", "continue", "recommended", "value", "matches"],
+  notificationsSeenIds: []
 };
 
 function storageKey(userId?: string | null) {
@@ -162,6 +164,13 @@ export function useUiPrefs(userId?: string | null) {
     []
   );
 
+  const markNotificationsSeen = useCallback((ids: string[]) => {
+    setPrefs((p) => ({
+      ...p,
+      notificationsSeenIds: Array.from(new Set([...p.notificationsSeenIds, ...ids])).slice(-200)
+    }));
+  }, []);
+
   const isWatched = useCallback(
     (fixtureId: number) => prefs.watchlistFixtureIds.includes(fixtureId),
     [prefs.watchlistFixtureIds]
@@ -184,7 +193,8 @@ export function useUiPrefs(userId?: string | null) {
       pushRecent,
       updateFilters,
       isWatched,
-      isBookmarked
+      isBookmarked,
+      markNotificationsSeen
     }),
     [
       prefs,
@@ -196,7 +206,8 @@ export function useUiPrefs(userId?: string | null) {
       pushRecent,
       updateFilters,
       isWatched,
-      isBookmarked
+      isBookmarked,
+      markNotificationsSeen
     ]
   );
 }

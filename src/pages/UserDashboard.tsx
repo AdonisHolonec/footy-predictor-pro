@@ -10,6 +10,8 @@ import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
 import HomeSection from "../components/ux/HomeSection";
 import MatchesSection from "../components/ux/MatchesSection";
+import NotificationsSection from "../components/ux/NotificationsSection";
+import { deriveNotifications } from "../utils/deriveNotifications";
 import { StatTile } from "../design-system";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
@@ -217,7 +219,8 @@ export default function UserDashboard() {
     toggleWatchlist,
     pushRecent,
     updateFilters,
-    isWatched
+    isWatched,
+    markNotificationsSeen
   } = useUiPrefs(user?.id);
 
   useEffect(() => {
@@ -342,6 +345,10 @@ export default function UserDashboard() {
     return rows;
   }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, matchSearch]);
   const homeLiveCount = useMemo(() => preds.filter((row) => isFixtureInPlay(row.status)).length, [preds]);
+  const notificationItems = useMemo(
+    () => deriveNotifications({ predictions: preds, history, watchlistFixtureIds: prefs.watchlistFixtureIds }),
+    [preds, history, prefs.watchlistFixtureIds]
+  );
   const continueMatch = useMemo(() => {
     const recent = prefs.recentFixtureIds[0];
     if (!recent) return null;
@@ -1350,15 +1357,20 @@ export default function UserDashboard() {
 
       {navView === "notifications" && (
         <section className="space-y-6">
-          <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              Notificări
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.notifications")}</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">Alerte Low Risk / Value și email (beta).</p>
-          </header>
+          <NotificationsSection
+            items={notificationItems}
+            seenIds={prefs.notificationsSeenIds}
+            onMarkAllSeen={() => markNotificationsSeen(notificationItems.map((n) => n.id))}
+            onOpenFixture={(fixtureId) => {
+              const row = preds.find((p) => Number(p.id) === fixtureId) || history.find((h) => Number(h.id) === fixtureId);
+              if (row) openMatch(row);
+            }}
+          />
           <Card>
-            <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
+            <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+              {t("dash.notifyLowRisk")} / {t("dash.notifyValue")}
+            </h2>
+            <p className="mt-1 text-xs text-[var(--fp-text-muted)]">
               {t("dash.alertsPreview", { low: alertsPreview.safe, value: alertsPreview.value })}
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">

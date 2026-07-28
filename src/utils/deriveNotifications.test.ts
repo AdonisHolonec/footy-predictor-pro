@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import { deriveNotifications } from "./deriveNotifications";
+import type { HistoryEntry, PredictionRow } from "../types";
+
+function baseRow(over: Partial<PredictionRow> = {}): PredictionRow {
+  return {
+    id: 1,
+    leagueId: 39,
+    league: "PL",
+    teams: { home: "A", away: "B" },
+    kickoff: "2026-07-21T18:00:00Z",
+    status: "NS",
+    probs: { p1: 40, pX: 30, p2: 30 },
+    ...over
+  } as PredictionRow;
+}
+
+const NOW = new Date("2026-07-21T17:00:00Z").getTime();
+
+describe("deriveNotifications", () => {
+  it("returns an empty list when there is nothing to report", () => {
+    const result = deriveNotifications({ predictions: [], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toEqual([]);
+  });
+
+  it("surfaces a watchlisted fixture kicking off within 2h as an upcoming notification", () => {
+    const row = baseRow({ id: 1, kickoff: "2026-07-21T18:00:00Z" });
+    const result = deriveNotifications({
+      predictions: [row],
+      history: [],
+      watchlistFixtureIds: [1],
+      now: NOW
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "kickoff-1", kind: "kickoff", fixtureId: 1 });
+    expect(result[0].hoursToKickoff).toBeCloseTo(1, 1);
+  });
+
+  it("ignores a watchlisted fixture kicking off more than 2h away", () => {
+    const row = baseRow({ id: 1, kickoff: "2026-07-21T21:00:00Z" });
+    const result = deriveNotifications({
+      predictions: [row],
+      history: [],
+      watchlistFixtureIds: [1],
+      now: NOW
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores a watchlisted fixture that has already kicked off", () => {
+    const row = baseRow({ id: 1, kickoff: "2026-07-21T16:00:00Z" });
+    const result = deriveNotifications({
+      predictions: [row],
+      history: [],
+      watchlistFixtureIds: [1],
+      now: NOW
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("surfaces a detected value bet regardless of watchlist status", () => {
+    const row = baseRow({ id: 2, valueBet: { detected: true, ev: 7.5 } as PredictionRow["valueBet"] });
+    const result = deriveNotifications({
+      predictions: [row],
+      history: [],
+      watchlistFixtureIds: [],
+      now: NOW
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "value-2", kind: "value", ev: 7.5 });
+  });
+
+  it("surfaces a settled watchlisted prediction as win or loss", () => {
+    const entry: HistoryEntry = {
+      ...baseRow({ id: 3 }),
+      savedAt: "2026-07-21T16:30:00Z",
+      validation: "win"
+    };
+    const result = deriveNotifications({
+      predictions: [],
+      history: [entry],
+      watchlistFixtureIds: [3],
+      now: NOW
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "settled-3", kind: "settled", validation: "win" });
+  });
+
+  it("ignores a settled prediction for a fixture that is not watchlisted", () => {
+    const entry: HistoryEntry = {
+      ...baseRow({ id: 4 }),
+      savedAt: "2026-07-21T16:30:00Z",
+      validation: "loss"
+    };
+    const result = deriveNotifications({
+      predictions: [],
+      history: [entry],
+      watchlistFixtureIds: [],
+      now: NOW
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores a settled watchlisted prediction that is still pending", () => {
+    const entry: HistoryEntry = {
+      ...baseRow({ id: 5 }),
+      savedAt: "2026-07-21T16:30:00Z",
+      validation: "pending"
+    };
+    const result = deriveNotifications({
+      predictions: [],
+      history: [entry],
+      watchlistFixtureIds: [5],
+      now: NOW
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("orders groups as upcoming kickoffs, then value bets, then settled results", () => {
+    const kickoffRow = baseRow({ id: 10, kickoff: "2026-07-21T18:00:00Z" });
+    const valueRow = baseRow({ id: 20, valueBet: { detected: true, ev: 3 } as PredictionRow["valueBet"] });
+    const settledEntry: HistoryEntry = {
+      ...baseRow({ id: 30 }),
+      savedAt: "2026-07-21T16:30:00Z",
+      validation: "win"
+    };
+    const result = deriveNotifications({
+      predictions: [kickoffRow, valueRow],
+      history: [settledEntry],
+      watchlistFixtureIds: [10, 30],
+      now: NOW
+    });
+    expect(result.map((n) => n.kind)).toEqual(["kickoff", "value", "settled"]);
+  });
+});
