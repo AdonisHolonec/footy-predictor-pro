@@ -31,6 +31,31 @@ export function shouldPollFixtureScore(p: PredictionRow): boolean {
   return true;
 }
 
+/** Capped, additive-only live confidence nudge (Sprint 2) — never touches recommended.pick/confidence. */
+const MAX_LIVE_CONFIDENCE_DELTA = 5;
+
+type LiveAdjustment = NonNullable<NonNullable<PredictionRow["confidenceEngine"]>["liveAdjustment"]>;
+
+/**
+ * Only "1"/"2" picks have a clean home/away momentum mapping — draw/O-U/GG picks
+ * are skipped rather than guessed at. Scaled by momentum.confidence so thin live
+ * data produces a smaller nudge.
+ */
+function deriveLiveConfidenceAdjustment(
+  pick: string | undefined,
+  momentum: PredictionRow["momentum"]
+): LiveAdjustment | null {
+  if (!momentum) return null;
+  const normalizedPick = String(pick || "").trim().toLowerCase();
+  if (normalizedPick !== "1" && normalizedPick !== "2") return null;
+  const momentumDiff = momentum.homeMomentum - momentum.awayMomentum;
+  const alignment = normalizedPick === "1" ? momentumDiff : -momentumDiff;
+  const raw = (alignment / 100) * MAX_LIVE_CONFIDENCE_DELTA * (momentum.confidence / 100);
+  const delta = Math.max(-MAX_LIVE_CONFIDENCE_DELTA, Math.min(MAX_LIVE_CONFIDENCE_DELTA, Math.round(raw)));
+  const reason: LiveAdjustment["reason"] = delta > 1 ? "aligned" : delta < -1 ? "contradicted" : "neutral";
+  return { delta, reason };
+}
+
 type SetPreds = Dispatch<SetStateAction<PredictionRow[]>>;
 
 type Options = {
@@ -117,6 +142,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                   })()
                 : u.momentum
               : null;
+            const liveAdjustment = deriveLiveConfidenceAdjustment(p.recommended?.pick, momentum);
             return {
               ...p,
               status: u.status || p.status,
@@ -129,6 +155,8 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                 ...(Number.isFinite(Number(u.elapsed)) ? { minute: Number(u.elapsed) } : p.score?.minute ? { minute: p.score.minute } : {})
               },
               momentum,
+              // Additive-only: base confidence/overall/scores are untouched, this only adds liveAdjustment.
+              confidenceEngine: p.confidenceEngine ? { ...p.confidenceEngine, liveAdjustment } : p.confidenceEngine,
               marketResults:
                 htGoals != null
                   ? {

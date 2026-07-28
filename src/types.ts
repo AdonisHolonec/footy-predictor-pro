@@ -473,6 +473,16 @@ export type PredictionRow = {
     explanation?: string[];
     why?: string;
     recommendationWhy?: string[];
+    /**
+     * Live-only, additive display signal derived from Momentum (Sprint 2) — never
+     * mutates `overall`/`confidence`/`scores` above. Only computed for "1"/"2" picks
+     * (no clean home/away mapping for draw/O-U/GG). Null/absent outside live play.
+     */
+    liveAdjustment?: {
+      /** -5..+5, capped. */
+      delta: number;
+      reason: "aligned" | "contradicted" | "neutral";
+    } | null;
   };
   /**
    * Value Betting Engine — EV / Kelly / Value Score from predicted probability × odds.

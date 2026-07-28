@@ -70,6 +70,14 @@ export default function ConfidenceEnginePanel({
 }) {
   const { t } = useLocale();
   const overall = Math.round(engine.confidence ?? engine.overall ?? 0);
+  const liveAdjustment = engine.liveAdjustment;
+  const liveAdjustedLabel = liveAdjustment
+    ? liveAdjustment.reason === "aligned"
+      ? t("panels.liveAdjustedAligned", { delta: `+${liveAdjustment.delta}` })
+      : liveAdjustment.reason === "contradicted"
+        ? t("panels.liveAdjustedContradicted", { delta: String(liveAdjustment.delta) })
+        : t("panels.liveAdjustedNeutral")
+    : null;
   const category = engine.category || "Medium";
   const categoryLabel = translateConfidenceCategory(t, category);
   const available = engine.available || {};
@@ -148,6 +156,19 @@ export default function ConfidenceEnginePanel({
               {t("panels.confidence")}
             </div>
             <div className={`font-display text-2xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
+            {liveAdjustedLabel && (
+              <div
+                className={`mt-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                  liveAdjustment?.reason === "aligned"
+                    ? "text-[var(--fp-success)]"
+                    : liveAdjustment?.reason === "contradicted"
+                      ? "text-[var(--fp-danger)]"
+                      : "text-[var(--fp-text-muted)]"
+                }`}
+              >
+                {liveAdjustedLabel}
+              </div>
+            )}
           </div>
         </div>
         {scoreGrid}
