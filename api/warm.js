@@ -34,14 +34,32 @@ export default async function handler(req, res) {
   let wantTeamStats = req.query.teamstats === "1";
   let wantOdds = req.query.odds === "1";
 
+  // P0: warm requires cron secret or authenticated user (no anonymous upstream spend).
+  const isCron = isAuthorizedCronOrInternalRequest(req);
+
   // C10: hard stop — do not warm (upstream) when daily API budget is exhausted.
   try {
     const { evaluateApiBudget } = await import("../server-utils/apiBudgetCircuit.js");
     const budget = await evaluateApiBudget();
     if (budget.hardStop) {
-      return res.status(200).json({
-        ok: true,
-        skipped: true,
+      if (isCron) {
+        // Cron/internal callers: report success-with-skip — this is an expected, recurring
+        // condition near the daily quota, not a failure the scheduler should alert on.
+        return res.status(200).json({
+          ok: true,
+          skipped: true,
+          reason: "api_budget_hard_stop",
+          usageBudget: budget,
+          warmed: []
+        });
+      }
+      // Interactive callers: surface a real error. getWithCache() (used by predict's own
+      // pipeline stages) already treats this exact condition as ok:false — returning a fake
+      // 200 success here let the UI show "Warm succeeded" while nothing was prefetched, so
+      // the follow-up Predict call then hit a cold cache with no visible error either way.
+      return res.status(503).json({
+        ok: false,
+        error: "Bugetul zilnic API-Football este epuizat. Încearcă din nou mai târziu.",
         reason: "api_budget_hard_stop",
         usageBudget: budget,
         warmed: []
@@ -55,8 +73,6 @@ export default async function handler(req, res) {
     /* fail-open */
   }
 
-  // P0: warm requires cron secret or authenticated user (no anonymous upstream spend).
-  const isCron = isAuthorizedCronOrInternalRequest(req);
   if (!isCron) {
     const usageCtx = await resolveAuthenticatedUsageContext(req);
     if (usageCtx.error) {
