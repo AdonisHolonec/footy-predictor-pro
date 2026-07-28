@@ -57,6 +57,10 @@ export const en: Dict = {
     emptyPredsTitle: "No predictions yet",
     emptyPredsDesc:
       "Tap Predict to generate picks for the selected dates. Refresh only reloads what is already saved.",
+    emptyLiveTitle: "No live matches",
+    emptyLiveDesc: "None of today's selected fixtures are currently in play.",
+    matchesSub: "Full list of today's picks — filter, search, and open any match for full analysis.",
+    liveSub: "Fixtures currently in play.",
     showAll: "Show all",
     restoreRefresh: "Predict",
     needPredictForMarkets: "Saved picks are incomplete for your plan — tap Predict for corners & shots.",

@@ -57,6 +57,10 @@ export const ro: Dict = {
     emptyPredsTitle: "Nicio predicție încă",
     emptyPredsDesc:
       "Apasă Predict ca să generezi picks pentru zilele selectate. Reîmprospătarea doar reîncarcă ce e deja salvat.",
+    emptyLiveTitle: "Niciun meci live",
+    emptyLiveDesc: "Niciunul dintre meciurile selectate azi nu este momentan în desfășurare.",
+    matchesSub: "Lista completă a picks-urilor de azi — filtrează, caută și deschide orice meci pentru analiză completă.",
+    liveSub: "Meciuri aflate momentan în desfășurare.",
     showAll: "Arată toate",
     restoreRefresh: "Predict",
     needPredictForMarkets: "Picks-urile salvate sunt incomplete pentru planul tău — apasă Predict pentru cornere & șuturi.",

@@ -9,6 +9,7 @@ import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import PredictionFocusCard from "../components/ux/PredictionFocusCard";
 import HomeSection from "../components/ux/HomeSection";
+import MatchesSection from "../components/ux/MatchesSection";
 import { StatTile } from "../design-system";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import HistorySection from "../components/ux/HistorySection";
@@ -934,7 +935,8 @@ export default function UserDashboard() {
     [history]
   );
 
-  const isMainBoard = MAIN_VIEWS.includes(navView) && navView !== "home";
+  const isMainBoard =
+    MAIN_VIEWS.includes(navView) && navView !== "home" && navView !== "matches" && navView !== "live";
   const simpleRoi = useMemo(() => computeSimpleRoi(history), [history]);
   const analysisMatch = useMemo(() => {
     const playable = preds.filter((p) => !p.insufficientData);
@@ -1107,6 +1109,25 @@ export default function UserDashboard() {
         />
       )}
 
+      {(navView === "matches" || navView === "live") && (
+        <MatchesSection
+          mode={navView === "live" ? "live" : "all"}
+          matches={visiblePreds}
+          accessTier={userTier}
+          marketValidationsByFixtureId={marketValidationsByFixtureId}
+          isWatched={isWatched}
+          onToggleWatch={toggleWatchlist}
+          onOpenMatch={openMatch}
+          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+          onPredict={() => void warmAndPredict()}
+          matchesFilter={matchesFilter === "favorites" ? "favorites" : "all"}
+          onSetFilter={(f) => updateFilters({ matchesFilter: f })}
+          onGoLive={() => handleNav("live")}
+          valueOnly={prefs.valueOnly}
+          onToggleValueOnly={(checked) => updateFilters({ valueOnly: checked })}
+        />
+      )}
+
       {isMainBoard && (
         <div className="space-y-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -1130,7 +1151,7 @@ export default function UserDashboard() {
                   onClick={() => {
                     if (id === "live") handleNav("live");
                     else {
-                      setNavView("home");
+                      setNavView("matches");
                       updateFilters({ matchesFilter: id });
                     }
                   }}
@@ -1138,13 +1159,11 @@ export default function UserDashboard() {
                   className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                     id === "live" ? "hidden lg:inline-flex" : ""
                   } ${
-                    (id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live")
+                    (id === "live" ? matchesFilter === "live" : matchesFilter === id)
                       ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                       : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
                   }`}
-                  aria-pressed={
-                    id === "live" ? navView === "live" || matchesFilter === "live" : matchesFilter === id && navView !== "live"
-                  }
+                  aria-pressed={id === "live" ? matchesFilter === "live" : matchesFilter === id}
                 >
                   {t(key)}
                 </button>
