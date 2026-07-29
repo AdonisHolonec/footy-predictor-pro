@@ -484,7 +484,10 @@ async function handleLive(req, res) {
       const htAwayRaw = fx?.score?.halftime?.away;
       const htHome = htHomeRaw != null ? Number(htHomeRaw) : NaN;
       const htAway = htAwayRaw != null ? Number(htAwayRaw) : NaN;
-      const elapsed = Number.isFinite(Number(fx?.fixture?.elapsed)) ? Number(fx.fixture.elapsed) : null;
+      // fx.fixture.elapsed can be null upstream; Number(null) === 0, so check raw value first
+      // or a null elapsed would be misread as minute 0 instead of "unknown".
+      const rawElapsed = fx?.fixture?.elapsed;
+      const elapsed = rawElapsed != null && Number.isFinite(Number(rawElapsed)) ? Number(rawElapsed) : null;
       const status = fx?.fixture?.status?.short || "";
       return {
         id: fx?.fixture?.id,

@@ -570,7 +570,28 @@ export default function UserDashboard() {
       if (!selectedLeagueSet.size) return true;
       return selectedLeagueSet.has(Number(row.leagueId));
     });
-    setPreds(filtered);
+    // predictionsByUser never receives live poll data (score/momentum/liveAdjustment)
+    // — it lives only in-memory on `preds`. Re-filtering from the cache on every
+    // predictionsByUser change (history sync, xg hydrate, tier promotion, etc.)
+    // would otherwise silently discard it mid-match. Carry it forward unless the
+    // cache shows the match freshly settled (then trust the settled snapshot).
+    setPreds((prevPreds) => {
+      const prevById = new Map(prevPreds.map((p) => [Number(p.id), p]));
+      return filtered.map((row) => {
+        const prev = prevById.get(Number(row.id));
+        if (!prev) return row;
+        if (isFinalMatchStatus(row.status) && !isFinalMatchStatus(prev.status)) return row;
+        return {
+          ...row,
+          status: prev.status || row.status,
+          score: prev.score ?? row.score,
+          momentum: prev.momentum ?? row.momentum,
+          confidenceEngine: row.confidenceEngine
+            ? { ...row.confidenceEngine, liveAdjustment: prev.confidenceEngine?.liveAdjustment ?? row.confidenceEngine?.liveAdjustment }
+            : row.confidenceEngine
+        };
+      });
+    });
     if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
