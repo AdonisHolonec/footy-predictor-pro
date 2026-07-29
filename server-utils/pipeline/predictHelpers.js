@@ -341,11 +341,14 @@ function deriveCardsLambda({ leagueParams = {}, modularScores = null, cornersBlo
 }
 
 /**
- * Load standings for league season; fill missing teams from season-1
- * (UEFA cups often have empty tables early in the campaign).
- * Optional fillTeamIds: for UEFA, pull missing clubs from their domestic tables.
+ * Load standings for exactly the requested league + season. No fallback to a
+ * prior season or another competition — standings/form must always reflect
+ * the selected competition, or come back empty so the UI can show "Unavailable"
+ * rather than a statistically incorrect blend. (Team-stats used by the
+ * prediction algorithm have their own, separately-preserved fallback in
+ * fetchTeamStatisticsWithSeasonFallback above.)
  */
-async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds = 86400, options = {}) {
+async function loadStandingsMap(leagueId, season, ttlSeconds = 86400) {
   const seasonNum = Number(season);
   const lid = Number(leagueId);
   const standingsReq = await getWithCache("/standings", { league: lid, season: seasonNum }, ttlSeconds);
@@ -355,56 +358,10 @@ async function loadStandingsMapWithSeasonFallback(leagueId, season, ttlSeconds =
     if (r?.team?.id) standingsMap.set(String(r.team.id), r);
   }
 
-  let prevSeasonUsed = null;
-  const prevSeason = seasonNum - 1;
-  if (prevSeason >= 2000) {
-    const prevReq = await getWithCache("/standings", { league: lid, season: prevSeason }, ttlSeconds);
-    if (prevReq.ok) {
-      const prevRows = standingsRowsFromApi(prevReq.data);
-      let filled = 0;
-      for (const r of prevRows) {
-        const id = r?.team?.id != null ? String(r.team.id) : null;
-        if (!id || standingsMap.has(id)) continue;
-        standingsMap.set(id, r);
-        standingsRows.push(r);
-        filled += 1;
-      }
-      if (filled > 0) prevSeasonUsed = prevSeason;
-    }
-  }
-
-  let domesticFilled = 0;
-  const fillTeamIds = Array.isArray(options.fillTeamIds) ? options.fillTeamIds : [];
-  if (isUefaClubCompetition(lid) && fillTeamIds.length > 0) {
-    for (const rawId of fillTeamIds) {
-      const tid = String(rawId || "").trim();
-      if (!tid || standingsMap.has(tid)) continue;
-      const domesticId = await resolveTeamDomesticLeagueId(tid, seasonNum, lid, ttlSeconds);
-      if (!domesticId) continue;
-      const seasonsToTry = [seasonNum, prevSeason, seasonNum - 2].filter((s) => s >= 2000);
-      let placed = false;
-      for (const s of seasonsToTry) {
-        const domReq = await getWithCache("/standings", { league: domesticId, season: s }, ttlSeconds);
-        if (!domReq.ok) continue;
-        const domRows = standingsRowsFromApi(domReq.data);
-        const row = domRows.find((r) => String(r?.team?.id) === tid);
-        if (!row) continue;
-        standingsMap.set(tid, row);
-        standingsRows.push(row);
-        domesticFilled += 1;
-        placed = true;
-        break;
-      }
-      if (!placed) continue;
-    }
-  }
-
   return {
     standingsRows,
     standingsMap,
     seasonUsed: seasonNum,
-    prevSeasonUsed,
-    domesticFilled,
     fromCache: Boolean(standingsReq.fromCache)
   };
 }
@@ -917,7 +874,7 @@ export {
   pickDomesticLeagueId,
   buildStatsFromFinishedFixtures,
   fetchTeamStatisticsWithSeasonFallback,
-  loadStandingsMapWithSeasonFallback,
+  loadStandingsMap,
   syntheticLeagueAvgStats,
   leaguePriorLambdas,
   deriveCardsLambda,

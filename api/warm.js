@@ -17,7 +17,7 @@ import {
   inferSeason,
   resolveLeagueSeasonFromFixtures,
   fetchTeamStatisticsWithSeasonFallback,
-  loadStandingsMapWithSeasonFallback
+  loadStandingsMap
 } from "../server-utils/pipeline/predictHelpers.js";
 
 export default async function handler(req, res) {
@@ -170,9 +170,8 @@ export default async function handler(req, res) {
 
     if (wantStandings) {
       try {
-        const st = await loadStandingsMapWithSeasonFallback(leagueId, leagueSeason, 86400);
+        const st = await loadStandingsMap(leagueId, leagueSeason, 86400);
         summary.standings = st.fromCache ? "cached" : "fetched";
-        if (st.prevSeasonUsed) summary.standingsPrevSeason = st.prevSeasonUsed;
       } catch (err) {
         errors.push({ leagueId, where: "standings", error: err?.message || "standings_failed" });
       }

@@ -9,9 +9,8 @@ import { loadLeagueElo } from "../../teamElo.js";
 import { logError } from "../../observability/logger.js";
 import {
   resolveLeagueSeasonFromFixtures,
-  loadStandingsMapWithSeasonFallback,
-  buildLeagueStandingsTable,
-  isUefaClubCompetition
+  loadStandingsMap,
+  buildLeagueStandingsTable
 } from "../predictHelpers.js";
 import { beginFixture, resetFixture } from "../PipelineContext.js";
 import {
@@ -67,21 +66,7 @@ export async function runFixtureStageLoop(context) {
       loadLeagueElo(lId).catch(() => new Map())
     ]);
 
-    const fillTeamIds = isUefaClubCompetition(lId)
-      ? [
-          ...new Set(
-            leagueFixtures
-              .flatMap((fx) => [fx?.teams?.home?.id, fx?.teams?.away?.id])
-              .filter((id) => id != null && id !== "")
-              .map((id) => String(id))
-          )
-        ]
-      : [];
-    const {
-      standingsRows,
-      standingsMap,
-      prevSeasonUsed: standingsPrevSeason
-    } = await loadStandingsMapWithSeasonFallback(lId, leagueSeason, 86400, { fillTeamIds });
+    const { standingsRows, standingsMap } = await loadStandingsMap(lId, leagueSeason, 86400);
     const leagueStandings = buildLeagueStandingsTable(standingsRows);
 
     context.league = {
@@ -93,7 +78,6 @@ export async function runFixtureStageLoop(context) {
       standingsMap,
       leagueStandings,
       standingsRows,
-      standingsPrevSeason,
       leagueFixtures
     };
 
