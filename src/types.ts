@@ -1003,6 +1003,23 @@ export type HealthDashboardBundle = {
   }>;
   dailyReport?: DailyOpsReport | null;
   recentReports?: DailyOpsReport[];
+  metrics?: {
+    date: string;
+    updatedAt: string | null;
+    failures: { prediction: number; api: number; cache: number };
+    routes: {
+      predict: LatencyChannelStats;
+      fixtures: LatencyChannelStats;
+      api: LatencyChannelStats;
+      cache: LatencyChannelStats;
+      lambdaPredictionEngine: LatencyChannelStats;
+      lambdaStrengthRatings: LatencyChannelStats;
+      lambdaStandings: LatencyChannelStats;
+      lambdaPartialStats: LatencyChannelStats;
+      lambdaUefaFallback: LatencyChannelStats;
+      lambdaInsufficientData: LatencyChannelStats;
+    };
+  };
 };
 
 export type BacktestAnalyticsResponse = {

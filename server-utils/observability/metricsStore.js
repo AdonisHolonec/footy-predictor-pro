@@ -162,7 +162,13 @@ export async function getOpsMetrics(dateISO = todayISO()) {
       predict: summarizeChannel(day.routes.predict),
       fixtures: summarizeChannel(day.routes.fixtures),
       api: summarizeChannel(day.routes.api),
-      cache: summarizeChannel(day.routes.cache)
+      cache: summarizeChannel(day.routes.cache),
+      lambdaPredictionEngine: summarizeChannel(day.routes.lambdaPredictionEngine),
+      lambdaStrengthRatings: summarizeChannel(day.routes.lambdaStrengthRatings),
+      lambdaStandings: summarizeChannel(day.routes.lambdaStandings),
+      lambdaPartialStats: summarizeChannel(day.routes.lambdaPartialStats),
+      lambdaUefaFallback: summarizeChannel(day.routes.lambdaUefaFallback),
+      lambdaInsufficientData: summarizeChannel(day.routes.lambdaInsufficientData)
     }
   };
 }

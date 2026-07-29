@@ -9,6 +9,7 @@ import type { UsageSnapshot } from "../../types/index";
 
 const EnterpriseDashboard = lazy(() => import("../analytics/EnterpriseDashboard"));
 const HealthDashboard = lazy(() => import("../monitoring/HealthDashboard"));
+const DiagnosticsDashboard = lazy(() => import("../monitoring/DiagnosticsDashboard"));
 const ModelLabPanel = lazy(() => import("../modelLab/ModelLabPanel"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 
@@ -127,6 +128,11 @@ export default function PerformancePanel({
         {section === "health" && (
           <Suspense fallback={<LabFallback label="Health Dashboard" />}>
             <HealthDashboard />
+          </Suspense>
+        )}
+        {section === "diagnostics" && (
+          <Suspense fallback={<LabFallback label="Diagnostics" />}>
+            <DiagnosticsDashboard />
           </Suspense>
         )}
         {section === "users" && (

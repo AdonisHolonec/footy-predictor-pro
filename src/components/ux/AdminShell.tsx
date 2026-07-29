@@ -5,6 +5,7 @@ export type AdminSection =
   | "model-lab"
   | "backtesting"
   | "health"
+  | "diagnostics"
   | "users"
   | "workspace";
 
@@ -13,6 +14,7 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "model-lab", label: "Model Lab" },
   { id: "backtesting", label: "Backtesting" },
   { id: "health", label: "Health" },
+  { id: "diagnostics", label: "Diagnostics" },
   { id: "users", label: "Users" },
   { id: "workspace", label: "← Workspace" }
 ];
