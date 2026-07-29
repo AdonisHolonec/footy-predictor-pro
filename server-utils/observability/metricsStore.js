@@ -33,7 +33,13 @@ function emptyDayMetrics() {
       predict: emptyChannel(),
       fixtures: emptyChannel(),
       api: emptyChannel(),
-      cache: emptyChannel()
+      cache: emptyChannel(),
+      lambdaPredictionEngine: emptyChannel(),
+      lambdaStrengthRatings: emptyChannel(),
+      lambdaStandings: emptyChannel(),
+      lambdaPartialStats: emptyChannel(),
+      lambdaUefaFallback: emptyChannel(),
+      lambdaInsufficientData: emptyChannel()
     },
     failures: {
       prediction: 0,

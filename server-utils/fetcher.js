@@ -1,6 +1,7 @@
 import { createClient } from "@vercel/kv";
 import { logError, logWarn } from "./observability/logger.js";
 import { recordObservation } from "./observability/metricsStore.js";
+export { recordObservation };
 
 const kv = createClient({
   url: process.env.KV_REST_API_URL || process.env.Database_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL,

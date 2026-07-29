@@ -3,7 +3,7 @@
  * Consumes context.fixture.engineCtx from Stage02.
  */
 
-import { getWithCache } from "../../fetcher.js";
+import { getWithCache, recordObservation } from "../../fetcher.js";
 import {
   computeMatchProbs,
   clampLambda,
@@ -95,6 +95,15 @@ export const STAGE_ID = "Stage03LambdaGeneration";
 export const STAGE_DESCRIPTION =
   "PredictionEngine λ / fallback / standings; insufficientData abort.";
 
+/** Maps the resolved λ-generation `method` to its telemetry channel (metricsStore.js routes). */
+const LAMBDA_METHOD_CHANNELS = {
+  "modular-engine": "lambdaPredictionEngine",
+  "strength-ratings": "lambdaStrengthRatings",
+  standings: "lambdaStandings",
+  partial_stats_league_prior: "lambdaPartialStats",
+  uefa_league_prior: "lambdaUefaFallback"
+};
+
 export async function run(context) {
   if (context.halted || context.fixture?.aborted) return context;
   const f = context.fixture;
@@ -176,10 +185,16 @@ export async function run(context) {
   if (!isGoodNum(lambdaHome)) {
     const rowH = standingsMap.get(homeIdStr);
     const rowA = standingsMap.get(awayIdStr);
-    if (rowH && rowA) {
+    // Quality gate: a standings-derived per-game rate is too noisy on a handful of
+    // matches — require a minimum sample before trusting it (lower bar for UEFA,
+    // where qualifying rounds mean thinner tables even for legitimate contenders).
+    const minPlayedForStandings = isUefaClubCompetition(lId) ? 3 : 5;
+    const playedH = Number(rowH?.all?.played) || 0;
+    const playedA = Number(rowA?.all?.played) || 0;
+    if (rowH && rowA && playedH >= minPlayedForStandings && playedA >= minPlayedForStandings) {
       method = "standings";
-      const phH = Math.max(1, Number(rowH.all?.played) || 1);
-      const phA = Math.max(1, Number(rowA.all?.played) || 1);
+      const phH = Math.max(1, playedH);
+      const phA = Math.max(1, playedA);
       const gfH = Number(rowH.all?.goals?.for) / phH;
       const gaH = Number(rowH.all?.goals?.against) / phH;
       const gfA = Number(rowA.all?.goals?.for) / phA;
@@ -247,6 +262,12 @@ export async function run(context) {
       lambdaAway = clampLambda(nudged.lambdaAway);
     }
   }
+
+  const lambdaMethodChannel =
+    isGoodNum(lambdaHome) && isGoodNum(lambdaAway)
+      ? LAMBDA_METHOD_CHANNELS[method] || null
+      : "lambdaInsufficientData";
+  if (lambdaMethodChannel) void recordObservation(lambdaMethodChannel, { durationMs: 0, ok: true });
 
   Object.assign(f, {
     method,
