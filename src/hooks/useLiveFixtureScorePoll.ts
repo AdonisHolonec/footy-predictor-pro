@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
-import type { PredictionRow } from "../types";
+import type { MatchLiveEvent, MomentumRawStats, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import { fetchWithAuth } from "../utils/apiAuth";
 
@@ -106,7 +106,9 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
               dominantTeam: "home" | "away" | "balanced";
               trend: "up" | "down" | "stable";
               confidence: number;
+              raw?: { home: MomentumRawStats; away: MomentumRawStats };
             } | null;
+            liveEvents?: MatchLiveEvent[];
             score: {
               home: number | null;
               away: number | null;
@@ -155,6 +157,8 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                 ...(Number.isFinite(Number(u.elapsed)) ? { minute: Number(u.elapsed) } : p.score?.minute ? { minute: p.score.minute } : {})
               },
               momentum,
+              // Real match events from upstream — absent/empty means the timeline falls back to inference.
+              liveEvents: u.liveEvents && u.liveEvents.length ? u.liveEvents : p.liveEvents,
               // Additive-only: base confidence/overall/scores are untouched, this only adds liveAdjustment.
               confidenceEngine: p.confidenceEngine ? { ...p.confidenceEngine, liveAdjustment } : p.confidenceEngine,
               marketResults:

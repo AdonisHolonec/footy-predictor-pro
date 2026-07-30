@@ -10,6 +10,7 @@ import PredictionContributionsChart from "./PredictionContributionsChart";
 import ValueCard from "./ValueCard";
 import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import MonteCarloPanel from "./MonteCarloPanel";
+import MatchMomentumTimeline from "./ux/MatchMomentumTimeline";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -1057,6 +1058,7 @@ export default function MatchModal({
                 <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
                   <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" /> Live ·{" "}
                   {match.score?.home}-{match.score?.away}
+                  {Number.isFinite(Number(match.score?.minute)) ? ` · ${match.score?.minute}'` : ""}
                 </div>
               )}
               <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-[var(--fp-text-muted)] sm:mt-3 sm:gap-x-3 sm:text-[10px]">
@@ -1066,6 +1068,19 @@ export default function MatchModal({
                 <span>·</span>
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
+              {hasLiveScore && match.momentum && (
+                <div className="mt-3 w-full">
+                  <MatchMomentumTimeline
+                    fixtureId={Number(match.id)}
+                    status={match.status}
+                    score={match.score}
+                    momentum={match.momentum}
+                    homeTeam={match.teams.home}
+                    awayTeam={match.teams.away}
+                    liveEvents={match.liveEvents}
+                  />
+                </div>
+              )}
             </div>
             <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
               <img

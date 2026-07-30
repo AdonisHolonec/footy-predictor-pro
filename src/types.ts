@@ -405,6 +405,34 @@ export type CardMarketValidations = {
   shots?: "pending" | "win" | "loss" | null;
 };
 
+export type MomentumRawStats = {
+  possession: number | null;
+  shotsTotal: number | null;
+  shotsOnTarget: number | null;
+  corners: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+};
+
+export type MatchLiveEventType =
+  | "goal"
+  | "ownGoal"
+  | "penalty"
+  | "penaltyMissed"
+  | "yellow"
+  | "red"
+  | "substitution"
+  | "var";
+
+export type MatchLiveEvent = {
+  minute: number;
+  extra?: number | null;
+  team: "home" | "away";
+  type: MatchLiveEventType;
+  player?: string | null;
+  assist?: string | null;
+};
+
 export type PredictionRow = {
   id: number;
   leagueId: number;
@@ -423,7 +451,11 @@ export type PredictionRow = {
     dominantTeam: "home" | "away" | "balanced";
     trend: "up" | "down" | "stable";
     confidence: number;
+    /** Raw per-team inputs behind the composite score — absent fields mean that stat wasn't reported. */
+    raw?: { home: MomentumRawStats; away: MomentumRawStats };
   } | null;
+  /** Real match events from /fixtures/events (in-play only) — absent/empty means the timeline falls back to inference. */
+  liveEvents?: MatchLiveEvent[];
   /** Merged from history when available — drives WIN/LOSS on the card. */
   cardMarketValidations?: CardMarketValidations | null;
   referee?: string;

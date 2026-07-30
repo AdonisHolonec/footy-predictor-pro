@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { useLocale } from "../../context/LocaleContext";
@@ -56,6 +57,93 @@ function sidePickLabel(
   return side === "over" ? t("match.overLine", { line: line.toFixed(1) }) : t("match.underLine", { line: line.toFixed(1) });
 }
 
+/** Mirrors the risk-level thresholds already used on MatchCard's confidence badge (70/55). */
+function deriveRiskLevel(
+  t: (k: string, p?: Record<string, string | number>) => string,
+  confPct: number | null
+): { label: string; className: string } | null {
+  if (confPct == null) return null;
+  if (confPct >= 70) {
+    return {
+      label: t("card.riskLabel", { level: t("card.riskLow") }),
+      className: "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
+    };
+  }
+  if (confPct >= 55) {
+    return {
+      label: t("card.riskLabel", { level: t("card.riskMed") }),
+      className: "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
+    };
+  }
+  return {
+    label: t("card.riskLabel", { level: t("card.riskHigh") }),
+    className: "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+  };
+}
+
+/** Win rate 0..1 from a W/D/L form string (W=1, D=0.5, L=0) — null when no usable characters. */
+function formStreakRate(form: string | null | undefined): number | null {
+  if (!form) return null;
+  const chars = form.toUpperCase().replace(/[^WDL]/g, "");
+  if (!chars.length) return null;
+  let sum = 0;
+  for (const c of chars) sum += c === "W" ? 1 : c === "D" ? 0.5 : 0;
+  return sum / chars.length;
+}
+
+/**
+ * Rule-based "Why AI likes this" — every bullet is a direct read of already-loaded
+ * PredictionRow fields (xG lambdas, standings form, defensive record, live momentum).
+ * No AI/LLM call, no extra requests. A signal only produces a bullet when its own gap
+ * clears a meaningful threshold; capped at 3, ordered by how decisive the signal is.
+ */
+function buildWhyAiLikes(t: (k: string, p?: Record<string, string | number>) => string, row: PredictionRow): string[] {
+  const observations: string[] = [];
+  const homeTeam = row.teams.home;
+  const awayTeam = row.teams.away;
+
+  const lamHome = row.lambdas?.home;
+  const lamAway = row.lambdas?.away;
+  if (lamHome != null && lamAway != null && Number.isFinite(lamHome) && Number.isFinite(lamAway)) {
+    if (Math.abs(lamHome - lamAway) >= 0.5) {
+      const team = lamHome > lamAway ? homeTeam : awayTeam;
+      observations.push(t("card.whyXgEdge", { team, home: lamHome.toFixed(2), away: lamAway.toFixed(2) }));
+    }
+  }
+
+  const homeForm = row.teamContext?.home?.form;
+  const awayForm = row.teamContext?.away?.form;
+  const homeFormRate = formStreakRate(homeForm);
+  const awayFormRate = formStreakRate(awayForm);
+  if (homeFormRate != null && awayFormRate != null && Math.abs(homeFormRate - awayFormRate) >= 0.3) {
+    const team = homeFormRate > awayFormRate ? homeTeam : awayTeam;
+    const form = homeFormRate > awayFormRate ? homeForm : awayForm;
+    observations.push(t("card.whyForm", { team, form: form || "" }));
+  }
+
+  const hc = row.teamContext?.home;
+  const ac = row.teamContext?.away;
+  const homeConcededRate = hc?.goalsAgainst != null && hc?.played ? Number(hc.goalsAgainst) / Number(hc.played) : null;
+  const awayConcededRate = ac?.goalsAgainst != null && ac?.played ? Number(ac.goalsAgainst) / Number(ac.played) : null;
+  if (
+    homeConcededRate != null &&
+    awayConcededRate != null &&
+    Number.isFinite(homeConcededRate) &&
+    Number.isFinite(awayConcededRate) &&
+    Math.abs(homeConcededRate - awayConcededRate) >= 0.5
+  ) {
+    const team = homeConcededRate < awayConcededRate ? homeTeam : awayTeam;
+    observations.push(t("card.whyDefense", { team }));
+  }
+
+  if (row.momentum && row.momentum.dominantTeam !== "balanced" && row.momentum.confidence >= 50) {
+    const team = row.momentum.dominantTeam === "home" ? homeTeam : awayTeam;
+    observations.push(t("card.whyMomentum", { team }));
+  }
+
+  return observations.slice(0, 3);
+}
+
 function RankChip({ text, label }: { text: string; label: string }) {
   return (
     <span
@@ -79,6 +167,7 @@ export default function PredictionFocusCard({
 }: Props) {
   const { t } = useLocale();
   const { weather, loading: weatherLoading } = useKickoffWeather(row.venue, row.kickoff);
+  const [showDetails, setShowDetails] = useState(false);
 
   const tier = String(accessTier || "free").toLowerCase();
   const canSeeCorners = tier === "premium" || tier === "ultra";
@@ -126,6 +215,14 @@ export default function PredictionFocusCard({
     ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
     : null;
   const shotsOdd = shots ? shotsDisplayOdd(row, shots.side, shots.line) : null;
+  const recOdd = recommendedOdd(row);
+
+  // Value Edge: EV = (AI probability × odd) − 1, using the AI's own confidence for the
+  // recommended pick — only ever shown when both are real numbers and EV is positive.
+  const evPct =
+    hasExactConfidence && recOdd != null && recOdd > 1 ? (conf / 100) * recOdd * 100 - 100 : null;
+  const riskInfo = deriveRiskLevel(t, hasExactConfidence ? Math.round(conf) : null);
+  const whyBullets = buildWhyAiLikes(t, row);
 
   const marketRows: MarketRow[] = [
     {
@@ -136,7 +233,7 @@ export default function PredictionFocusCard({
       lockFeature: t("match.featMain"),
       pick: row.recommended?.pick || "—",
       confidence: confLabel,
-      odd: fmtOdd(recommendedOdd(row), noBook),
+      odd: fmtOdd(recOdd, noBook),
       outcome: resolveCardMarketOutcome("recommended", row, stored),
       accent: true
     },
@@ -354,7 +451,60 @@ export default function PredictionFocusCard({
         </div>
       )}
 
-      <div className="mt-2.5 border-t border-[var(--fp-border)] pt-1.5">
+      <div className="mt-2.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/40 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.mainPick")}</p>
+            <p className="truncate font-display text-sm font-bold text-[var(--fp-accent)]">{row.recommended?.pick || "—"}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.colOdds")}</p>
+            <p className="font-mono text-sm font-bold text-[var(--fp-text)]">{fmtOdd(recOdd, noBook)}</p>
+          </div>
+        </div>
+        {(riskInfo || (evPct != null && evPct > 0)) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {riskInfo && (
+              <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${riskInfo.className}`}>
+                {riskInfo.label}
+              </span>
+            )}
+            {evPct != null && evPct > 0 && (
+              <span className="rounded border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[8px] font-bold text-[var(--fp-warning)]">
+                ⚡ +{Math.round(evPct)}% {t("card.valueEdge")}
+              </span>
+            )}
+          </div>
+        )}
+        {whyBullets.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5">
+            {whyBullets.map((b, i) => (
+              <li key={i} className="flex gap-1 text-[9px] leading-snug text-[var(--fp-text-muted)]">
+                <span aria-hidden>•</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowDetails((v) => !v);
+        }}
+        aria-expanded={showDetails}
+        className="mt-2 flex w-full items-center justify-between rounded-[var(--fp-radius-sm)] px-0.5 py-1 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] hover-fine:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+      >
+        <span>{showDetails ? t("card.hideDetails") : t("card.showDetails")}</span>
+        <span aria-hidden className={`transition-transform duration-200 ${showDetails ? "rotate-180" : ""}`}>
+          ⌄
+        </span>
+      </button>
+
+      {showDetails && (
+      <div className="mt-1.5 border-t border-[var(--fp-border)] pt-1.5">
         <div
           className={`${marketGrid} pb-1 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]`}
         >
@@ -415,6 +565,7 @@ export default function PredictionFocusCard({
           })}
         </div>
       </div>
+      )}
 
       {((tier === "free" && isFreeLike) || (tier === "premium" && (isPremiumLike || isFreeLike))) && (
         <p className="mt-1.5 text-[9px] font-medium text-[var(--fp-text-faint)]">{t("card.tierHint")}</p>

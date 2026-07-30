@@ -452,9 +452,78 @@ async function fetchMomentumForFixture(fixtureId) {
     if (!Array.isArray(resp) || resp.length < 2) return null;
     const home = extractMomentumTeamStats(resp[0]?.statistics);
     const away = extractMomentumTeamStats(resp[1]?.statistics);
-    return buildMomentumEngine({ home, away });
+    const engine = buildMomentumEngine({ home, away });
+    if (!engine) return null;
+    // Raw per-team stats were already fetched/computed above for the engine — surface
+    // them too so the client can render possession/shots/corners/cards, not just the
+    // composite momentum %. Additive only: engine output/shape is unchanged.
+    return { ...engine, raw: { home, away } };
   } catch {
     return null;
+  }
+}
+
+// Live events change as fast as momentum stats; same short-TTL pattern.
+const LIVE_EVENTS_CACHE_TTL_SEC = Math.max(
+  30,
+  Math.min(Number(process.env.LIVE_EVENTS_CACHE_TTL_SEC || 60), 180)
+);
+
+/**
+ * Map API-Football's raw type/detail pair to the compact event kind the client renders.
+ * Returns null for event types the timeline doesn't display (e.g. "Var" cancellations we
+ * can't attribute cleanly, or unknown future types) — never guessed, just omitted.
+ */
+function mapLiveEventKind(type, detail) {
+  const t = String(type || "").toLowerCase();
+  const d = String(detail || "").toLowerCase();
+  if (t === "goal") {
+    if (d.includes("missed penalty")) return "penaltyMissed";
+    if (d.includes("penalty")) return "penalty";
+    if (d.includes("own goal")) return "ownGoal";
+    return "goal";
+  }
+  if (t === "card") {
+    return d.includes("red") ? "red" : "yellow";
+  }
+  if (t === "subst") return "substitution";
+  if (t === "var") return "var";
+  return null;
+}
+
+/** Only events attributable to a known side (home/away by team.id) are kept — never guessed. */
+function extractLiveEvents(events, homeTeamId, awayTeamId) {
+  if (!Array.isArray(events) || (!homeTeamId && !awayTeamId)) return [];
+  const out = [];
+  for (const ev of events) {
+    const kind = mapLiveEventKind(ev?.type, ev?.detail);
+    if (!kind) continue;
+    const teamId = Number(ev?.team?.id);
+    const team = teamId === Number(homeTeamId) ? "home" : teamId === Number(awayTeamId) ? "away" : null;
+    if (!team) continue;
+    const minute = Number(ev?.time?.elapsed);
+    if (!Number.isFinite(minute)) continue;
+    const extra = Number(ev?.time?.extra);
+    out.push({
+      minute,
+      extra: Number.isFinite(extra) ? extra : null,
+      team,
+      type: kind,
+      player: ev?.player?.name || null,
+      assist: ev?.assist?.name || null
+    });
+  }
+  return out.slice(0, 60);
+}
+
+/** Live events only make sense for matches currently in play — never fetched for NS/FT rows. */
+async function fetchLiveEventsForFixture(fixtureId, homeTeamId, awayTeamId) {
+  try {
+    const evReq = await getWithCache("/fixtures/events", { fixture: fixtureId }, LIVE_EVENTS_CACHE_TTL_SEC);
+    if (!evReq.ok) return [];
+    return extractLiveEvents(evReq.data?.response, homeTeamId, awayTeamId);
+  } catch {
+    return [];
   }
 }
 
@@ -489,6 +558,8 @@ async function handleLive(req, res) {
       const rawElapsed = fx?.fixture?.elapsed;
       const elapsed = rawElapsed != null && Number.isFinite(Number(rawElapsed)) ? Number(rawElapsed) : null;
       const status = fx?.fixture?.status?.short || "";
+      const homeTeamId = Number(fx?.teams?.home?.id);
+      const awayTeamId = Number(fx?.teams?.away?.id);
       return {
         id: fx?.fixture?.id,
         status,
@@ -503,17 +574,25 @@ async function handleLive(req, res) {
         },
         firstHalfGoals,
         elapsed,
-        inPlay: LIVE_IN_PLAY_STATUSES.has(String(status).toUpperCase())
+        inPlay: LIVE_IN_PLAY_STATUSES.has(String(status).toUpperCase()),
+        homeTeamId: Number.isFinite(homeTeamId) ? homeTeamId : null,
+        awayTeamId: Number.isFinite(awayTeamId) ? awayTeamId : null
       };
     });
 
-    // Momentum needs a second upstream call (/fixtures/statistics) — only pay for it
-    // on fixtures actually in play right now, never for NS/FT rows in the batch.
+    // Momentum/events each need a second upstream call — only pay for them on fixtures
+    // actually in play right now, never for NS/FT rows in the batch.
     const fixtures = await Promise.all(
-      baseFixtures.map(async ({ inPlay, ...f }) => ({
-        ...f,
-        momentum: inPlay && Number.isFinite(Number(f.id)) ? await fetchMomentumForFixture(f.id) : null
-      }))
+      baseFixtures.map(async ({ inPlay, homeTeamId, awayTeamId, ...f }) => {
+        if (!inPlay || !Number.isFinite(Number(f.id))) {
+          return { ...f, momentum: null, liveEvents: [] };
+        }
+        const [momentum, liveEvents] = await Promise.all([
+          fetchMomentumForFixture(f.id),
+          fetchLiveEventsForFixture(f.id, homeTeamId, awayTeamId)
+        ]);
+        return { ...f, momentum, liveEvents };
+      })
     );
 
     return res.status(200).json({
