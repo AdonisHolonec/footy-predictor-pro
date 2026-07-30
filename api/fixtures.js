@@ -553,10 +553,12 @@ async function handleLive(req, res) {
       const htAwayRaw = fx?.score?.halftime?.away;
       const htHome = htHomeRaw != null ? Number(htHomeRaw) : NaN;
       const htAway = htAwayRaw != null ? Number(htAwayRaw) : NaN;
-      // fx.fixture.elapsed can be null upstream; Number(null) === 0, so check raw value first
+      // fx.fixture.status.elapsed can be null upstream; Number(null) === 0, so check raw value first
       // or a null elapsed would be misread as minute 0 instead of "unknown".
-      const rawElapsed = fx?.fixture?.elapsed;
+      const rawElapsed = fx?.fixture?.status?.elapsed;
       const elapsed = rawElapsed != null && Number.isFinite(Number(rawElapsed)) ? Number(rawElapsed) : null;
+      const rawExtra = fx?.fixture?.status?.extra;
+      const extra = rawExtra != null && Number.isFinite(Number(rawExtra)) ? Number(rawExtra) : null;
       const status = fx?.fixture?.status?.short || "";
       const homeTeamId = Number(fx?.teams?.home?.id);
       const awayTeamId = Number(fx?.teams?.away?.id);
@@ -574,6 +576,7 @@ async function handleLive(req, res) {
         },
         firstHalfGoals,
         elapsed,
+        extra,
         inPlay: LIVE_IN_PLAY_STATUSES.has(String(status).toUpperCase()),
         homeTeamId: Number.isFinite(homeTeamId) ? homeTeamId : null,
         awayTeamId: Number.isFinite(awayTeamId) ? awayTeamId : null

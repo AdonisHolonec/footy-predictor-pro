@@ -100,6 +100,7 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             referee?: string | null;
             firstHalfGoals?: number | null;
             elapsed?: number | null;
+            extra?: number | null;
             momentum?: {
               homeMomentum: number;
               awayMomentum: number;
@@ -154,7 +155,11 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                 home: u.score?.home ?? p.score?.home ?? null,
                 away: u.score?.away ?? p.score?.away ?? null,
                 ...(ht ? { halftime: ht } : p.score?.halftime ? { halftime: p.score.halftime } : {}),
-                ...(Number.isFinite(Number(u.elapsed)) ? { minute: Number(u.elapsed) } : p.score?.minute ? { minute: p.score.minute } : {})
+                ...(Number.isFinite(Number(u.elapsed))
+                  ? { minute: Number(u.elapsed), extra: Number.isFinite(Number(u.extra)) ? Number(u.extra) : null }
+                  : p.score?.minute
+                    ? { minute: p.score.minute, extra: p.score.extra ?? null }
+                    : {})
               },
               momentum,
               // Real match events from upstream — absent/empty means the timeline falls back to inference.

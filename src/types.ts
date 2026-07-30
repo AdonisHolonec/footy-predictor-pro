@@ -291,6 +291,8 @@ export type MatchScore = {
   away: number | null;
   halftime?: { home: number; away: number } | null;
   minute?: number | null;
+  /** Stoppage-time minutes (e.g. 2 for "45+2'") — null/absent means no added time is being played. */
+  extra?: number | null;
 };
 
 export type MarketOddQuote = {

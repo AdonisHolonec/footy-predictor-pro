@@ -46,6 +46,13 @@ function isFinalStatus(status?: string) {
   return ["FT", "AET", "PEN"].includes(status || "");
 }
 
+/** "67'" or, during stoppage time, "45+2'" — never estimated, only from upstream minute/extra. */
+function formatLiveMinute(minute?: number | null, extra?: number | null): string | null {
+  if (minute == null || !Number.isFinite(Number(minute))) return null;
+  const m = Number(minute);
+  return extra != null && Number.isFinite(Number(extra)) && Number(extra) > 0 ? `${m}+${Number(extra)}'` : `${m}'`;
+}
+
 function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
   if (!pick || !score) return null;
   if (score.home === null || score.away === null) return null;
@@ -235,6 +242,7 @@ export default function MatchCard({
     hasNumericScore &&
     !hasFinalScore &&
     (isLive || (pastKickoffPollWindow && !isFinalStatus(row.status)));
+  const liveMinuteLabel = isLive ? formatLiveMinute(row.score?.minute, row.score?.extra) : null;
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive, t);
   const tier = modelTierBadge(row);
@@ -574,6 +582,11 @@ export default function MatchCard({
                 <span className="font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">
                   {row.score?.home}-{row.score?.away}
                 </span>
+                {liveMinuteLabel && (
+                  <span className="block text-[10px] font-semibold tabular-nums text-[var(--fp-danger)]/80">
+                    {liveMinuteLabel}
+                  </span>
+                )}
               </span>
             ) : (
               <span className="text-[var(--fp-text-muted)]">
