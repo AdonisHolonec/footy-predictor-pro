@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { CardMarketValidations, HistoryEntry, HistoryStats, PredictionRow } from "../../types";
+import type { CardMarketValidations, HistoryEntry, HistoryStats, PerformanceLeagueBreakdown, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Card from "../../design-system/Card";
@@ -9,6 +9,8 @@ import EmptyState from "../../design-system/EmptyState";
 import StatTile from "../../design-system/StatTile";
 import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import PredictionFocusCard from "./PredictionFocusCard";
+import HistoryTrustSection from "./HistoryTrustSection";
+import { computeYesterdayAccuracy } from "../../utils/historyStats";
 
 type AccessTier = UpgradeTier | "free" | string;
 
@@ -33,15 +35,23 @@ type Props = {
   onToggleHighConf: () => void;
   trackerStats: HistoryStats;
   history: HistoryEntry[];
+  leagueBreakdown: PerformanceLeagueBreakdown[];
 };
+
+const HIGH_CONFIDENCE_THRESHOLD = 70;
 
 function confOf(m: PredictionRow) {
   const c = Number(m.recommended?.confidence);
   return Number.isFinite(c) ? c : 0;
 }
 
+function evOf(m: PredictionRow) {
+  const e = Number(m.valueBet?.ev ?? m.valueEngine?.expectedValue);
+  return Number.isFinite(e) ? e : 0;
+}
+
 function isValueRow(m: PredictionRow) {
-  return Boolean(m.valueBet?.detected);
+  return Boolean(m.valueBet?.detected) || evOf(m) > 0;
 }
 
 export default function HomeSection({
@@ -64,9 +74,10 @@ export default function HomeSection({
   highConfActive,
   onToggleHighConf,
   trackerStats,
-  history
+  history,
+  leagueBreakdown
 }: Props) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
 
   const sortedHistory = useMemo(
     () => [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
@@ -84,7 +95,22 @@ export default function HomeSection({
 
   const valueCount = matches.filter(isValueRow).length;
   const avgConf = matches.length ? matches.reduce((s, m) => s + confOf(m), 0) / matches.length : 0;
-  const topThree = matches.slice(0, 3);
+  const topPicks = useMemo(() => {
+    const eligible = matches.filter((m) => confOf(m) >= HIGH_CONFIDENCE_THRESHOLD || isValueRow(m));
+    const pool = eligible.length ? eligible : matches;
+    return [...pool].sort((a, b) => confOf(b) - confOf(a) || evOf(b) - evOf(a)).slice(0, 3);
+  }, [matches]);
+
+  const yesterdayStats = useMemo(() => computeYesterdayAccuracy(history), [history]);
+  const todayLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", {
+        weekday: "long",
+        day: "numeric",
+        month: "long"
+      }).format(new Date()),
+    [locale]
+  );
 
   const chips: { id: string; label: string; active: boolean; onClick: () => void }[] = [
     { id: "all", label: t("dash.filterAll"), active: !valueOnly && !highConfActive, onClick: () => {
@@ -100,10 +126,28 @@ export default function HomeSection({
     <section className="space-y-6">
       <header>
         <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-[length:var(--fp-hero)]">
-          {t("dash.predictions")}
+          {t("dash.goodMorning")}
         </h1>
-        <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">{t("dash.predictionsSub")}</p>
+        <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">
+          {todayLabel} · {t("dash.matchesAnalyzedToday", { n: matches.length })}
+        </p>
       </header>
+
+      <Card className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+            {t("dash.yesterdayAccuracyTitle")}
+          </p>
+          <p className="mt-1 font-display text-xl font-semibold tabular-nums text-[var(--fp-text)]">
+            {yesterdayStats.settled ? `${yesterdayStats.winRate.toFixed(0)}%` : "—"}
+          </p>
+        </div>
+        <Badge tone={!yesterdayStats.settled ? "neutral" : yesterdayStats.winRate >= 50 ? "success" : "danger"}>
+          {yesterdayStats.settled
+            ? `${yesterdayStats.wins}W – ${yesterdayStats.losses}L`
+            : t("dash.yesterdayAccuracyNoData")}
+        </Badge>
+      </Card>
 
       <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
         {chips.map((chip) => (
@@ -153,7 +197,7 @@ export default function HomeSection({
             </Button>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {topThree.map((row) => (
+            {topPicks.map((row) => (
               <PredictionFocusCard
                 key={row.id}
                 row={row}
@@ -229,6 +273,8 @@ export default function HomeSection({
           </Button>
         </div>
       </Card>
+
+      <HistoryTrustSection history={history} leagueBreakdown={leagueBreakdown} />
     </section>
   );
 }

@@ -764,6 +764,22 @@ export type PerformanceUserLeagueBreakdown = PerformanceLeagueBreakdown & {
   email?: string | null;
 };
 
+/** Single calendar day's settled accuracy — powers the "last 7 days" table on the home dashboard. */
+export type DayAccuracyRow = HistoryStats & {
+  /** YYYY-MM-DD, Europe/Bucharest (matches kickoffLocalDateKey bucketing). */
+  date: string;
+};
+
+/** Settled counts for a market family (1X2 / Over-Under / BTTS) on the home dashboard. */
+export type MarketBreakdownRow = {
+  market: "oneXTwo" | "overUnder" | "btts";
+  wins: number;
+  losses: number;
+  pending: number;
+  settled: number;
+  winRate: number;
+};
+
 export type DayResponse = {
   ok: boolean;
   date: string;

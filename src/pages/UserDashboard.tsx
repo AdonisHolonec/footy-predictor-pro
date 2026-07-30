@@ -60,7 +60,7 @@ import {
   useLocalStorageState
 } from "../utils/appUtils";
 import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
-import { historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historyStats";
+import { computeSimpleRoi, historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historyStats";
 import { loadBillingConfig, openBillingPortal, startCheckout } from "../services/billingService";
 
 
@@ -123,22 +123,6 @@ function clampTierDates(baseDate: string, tier: string | undefined, dates: strin
   const allowed = new Set(buildTierDates(baseDate, tier));
   const filtered = normalizeSelectedDates((dates || []).filter((d) => allowed.has(d)));
   return filtered.length ? filtered : [baseDate];
-}
-
-/** Simple 1u ROI from settled history — display only, no engine change. */
-function computeSimpleRoi(rows: HistoryEntry[]): number | null {
-  let stake = 0;
-  let pnl = 0;
-  for (const h of rows) {
-    if (h.validation !== "win" && h.validation !== "loss") continue;
-    const odd = Number(h.recommended?.odd ?? h.valueBet?.odd);
-    if (!Number.isFinite(odd) || odd <= 1) continue;
-    stake += 1;
-    if (h.validation === "win") pnl += odd - 1;
-    else pnl -= 1;
-  }
-  if (!stake) return null;
-  return (pnl / stake) * 100;
 }
 
 const MAIN_VIEWS: AppNavView[] = ["home", "matches", "predictions", "live"];
@@ -1132,6 +1116,7 @@ export default function UserDashboard() {
           onToggleHighConf={() => updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : 70 })}
           trackerStats={trackerStats}
           history={history}
+          leagueBreakdown={userPerformanceByLeague}
         />
       )}
 
