@@ -15,8 +15,8 @@ export default function CallsCounter({ usageCount, usageLimit, usagePct }: Calls
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg)]/70">
         <div
-          style={{ width: `${usagePct}%` }}
-          className={`h-full rounded-full transition-[width] duration-500 ${
+          style={{ transform: `scaleX(${usagePct / 100})` }}
+          className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${
             usagePct > 80 ? "bg-[var(--fp-danger)]" : "bg-gradient-to-r from-[var(--fp-accent)] to-[var(--fp-success)]"
           }`}
         />

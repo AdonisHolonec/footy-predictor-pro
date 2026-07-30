@@ -80,7 +80,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          className="ml-auto transition-transform"
+          className="ml-auto transition-transform duration-[var(--fp-ease)]"
           style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
         >
           <path d="m6 9 6 6 6-6" />

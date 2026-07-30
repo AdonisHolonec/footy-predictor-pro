@@ -35,7 +35,7 @@ export default function CollapsiblePanel({
     >
       <button
         type="button"
-        className={`flex min-h-[var(--fp-touch)] w-full items-center justify-between gap-2 text-left transition-colors duration-[var(--fp-ease)] hover:bg-[var(--fp-bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
+        className={`flex min-h-[var(--fp-touch)] w-full items-center justify-between gap-2 text-left transition-colors duration-[var(--fp-ease)] hover-fine:bg-[var(--fp-bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
           compact ? "px-3 py-2" : "px-3 py-2.5"
         }`}
         aria-expanded={open}

@@ -75,8 +75,8 @@ function LambdaSourceRow({ label, count, pct }: { label: string; count: number; 
       <span className="w-36 shrink-0 truncate text-[11px] font-semibold text-[var(--fp-text)] sm:w-44">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
         <div
-          className="h-full rounded-full bg-[var(--fp-accent)] transition-[width] duration-500"
-          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+          className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-500"
+          style={{ transform: `scaleX(${Math.max(0, Math.min(100, pct)) / 100})` }}
         />
       </div>
       <span className="w-24 shrink-0 text-right font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">

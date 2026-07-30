@@ -62,7 +62,7 @@ export default function ConsumerShell({
   const { locale, setLocale, t } = useLocale();
 
   const iconBtn =
-    "flex h-9 min-w-9 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-sm font-semibold text-[var(--fp-text)] transition-colors hover:border-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]";
+    "flex h-9 min-w-9 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-sm font-semibold text-[var(--fp-text)] transition-colors hover-fine:border-[var(--fp-accent)] hover-fine:bg-[var(--fp-accent-muted)] hover-fine:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]";
 
   const langSwitch = (
     <div

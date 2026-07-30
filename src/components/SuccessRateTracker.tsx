@@ -128,8 +128,8 @@ export default function SuccessRateTracker({
           </p>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
             <div
-              className="h-full rounded-full bg-[var(--fp-accent)] transition-all duration-700"
-              style={{ width: `${Math.max(0, Math.min(100, stats.winRate))}%` }}
+              className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-700"
+              style={{ transform: `scaleX(${Math.max(0, Math.min(100, stats.winRate)) / 100})` }}
             />
           </div>
         </div>

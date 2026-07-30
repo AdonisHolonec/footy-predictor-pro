@@ -82,8 +82,8 @@ export default function FeatureImportanceChart({
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
               <div
-                className={`h-full rounded-full transition-[width] duration-500 ${barColor(i, items.length)}`}
-                style={{ width: `${Math.max(2, Math.min(100, item.contribution))}%` }}
+                className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${barColor(i, items.length)}`}
+                style={{ transform: `scaleX(${Math.max(2, Math.min(100, item.contribution)) / 100})` }}
                 title={`${item.label}: ${item.contribution}%`}
               />
             </div>

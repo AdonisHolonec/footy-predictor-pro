@@ -57,7 +57,7 @@ export default function AppShell({
                 className={`flex min-h-[var(--fp-touch)] items-center gap-3 rounded-[var(--fp-radius-sm)] px-3 text-sm font-semibold transition-[background-color,color] duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
                   isActive
                     ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
+                    : "text-[var(--fp-text-muted)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)]"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -111,7 +111,7 @@ export default function AppShell({
             <button
               type="button"
               onClick={onOpenCommand}
-              className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] transition-[background-color,color] duration-[var(--fp-ease)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+              className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] transition-[background-color,color] duration-[var(--fp-ease)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
               aria-label={t("shell.search")}
             >
               ⌘K
@@ -121,7 +121,7 @@ export default function AppShell({
             <button
               type="button"
               onClick={onOpenNotifications}
-              className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] transition-[background-color,color] duration-[var(--fp-ease)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+              className="flex h-11 w-11 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] transition-[background-color,color] duration-[var(--fp-ease)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
               aria-label={t("shell.notifications")}
             >
               <NavIcon id="notifications" />
@@ -153,7 +153,7 @@ export default function AppShell({
               className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-[color,background-color] duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 isActive
                   ? "text-[var(--fp-accent)]"
-                  : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
+                  : "text-[var(--fp-text-muted)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)]"
               }`}
               aria-current={isActive ? "page" : undefined}
             >

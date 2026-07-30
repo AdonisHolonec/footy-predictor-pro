@@ -28,8 +28,8 @@ export default function XGPerformanceBar({ xg }: XGPerformanceBarProps) {
           </span>
           <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--fp-bg-elevated)] ring-1 ring-white/10 sm:h-3.5">
             <div
-              className="h-full bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-[width] duration-500 ease-out"
-              style={{ width: `${hW}%` }}
+              className="h-full w-full origin-left bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-transform duration-500 ease-out"
+              style={{ transform: `scaleX(${hW / 100})` }}
             />
           </div>
         </div>
@@ -40,8 +40,8 @@ export default function XGPerformanceBar({ xg }: XGPerformanceBarProps) {
           </span>
           <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--fp-bg-elevated)] ring-1 ring-white/10 sm:h-3.5">
             <div
-              className="h-full bg-gradient-to-r from-[var(--fp-success)] to-[var(--fp-accent-hover)] transition-[width] duration-500 ease-out"
-              style={{ width: `${aW}%` }}
+              className="h-full w-full origin-left bg-gradient-to-r from-[var(--fp-success)] to-[var(--fp-accent-hover)] transition-transform duration-500 ease-out"
+              style={{ transform: `scaleX(${aW / 100})` }}
             />
           </div>
         </div>

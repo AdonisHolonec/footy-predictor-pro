@@ -60,5 +60,12 @@ export default {
       }
     }
   },
-  plugins: []
+  plugins: [
+    // `hover-fine:` — real mouse hover only, gated behind (hover:hover) and (pointer:fine).
+    // Plain `hover:` also fires on touch (tap), which can leave translate/shadow "stuck"
+    // until the next tap elsewhere. Use on primary tap targets.
+    ({ addVariant }) => {
+      addVariant("hover-fine", "@media (hover: hover) and (pointer: fine) { &:hover }");
+    }
+  ]
 };

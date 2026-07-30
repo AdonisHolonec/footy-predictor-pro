@@ -60,15 +60,28 @@ export default function Login() {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (mq.matches) return;
+    let rafId: number | null = null;
+    let pending: { x: number; y: number } | null = null;
     const onMove = (event: MouseEvent) => {
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       const nx = (event.clientX - cx) / Math.max(cx, 1);
       const ny = (event.clientY - cy) / Math.max(cy, 1);
-      setParallax({ x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) });
+      pending = { x: Math.max(-1, Math.min(1, nx)), y: Math.max(-1, Math.min(1, ny)) };
+      // Coalesce to one state update per frame — mousemove can fire far faster than
+      // the display refreshes, and each update was triggering a full re-render.
+      if (rafId == null) {
+        rafId = requestAnimationFrame(() => {
+          if (pending) setParallax(pending);
+          rafId = null;
+        });
+      }
     };
     window.addEventListener("mousemove", onMove);
-    return () => window.removeEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
   }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -117,7 +130,7 @@ export default function Login() {
     <div className="lab-page">
       <div className="lab-bg" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.18] saturate-125 transition-transform duration-300"
+        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.18] saturate-125 transition-transform duration-75 ease-out"
         style={{
           backgroundImage: `url(${BRAND_IMAGES.landingAccessHero})`,
           transform: `translate3d(${parallax.x * 10}px, ${parallax.y * 10}px, 0)`
@@ -125,7 +138,7 @@ export default function Login() {
         aria-hidden
       />
       <div
-        className="login-ultra-glow pointer-events-none absolute inset-0 z-[1] opacity-[0.05] mix-blend-screen transition-transform duration-300"
+        className="login-ultra-glow pointer-events-none absolute inset-0 z-[1] opacity-[0.05] mix-blend-screen transition-transform duration-75 ease-out"
         style={{
           backgroundImage: `url(${BRAND_IMAGES.heroForesight})`,
           backgroundSize: "120% auto",

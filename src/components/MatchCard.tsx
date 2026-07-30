@@ -323,7 +323,7 @@ export default function MatchCard({
         }
       }}
       style={{ animationDelay: `${animationDelayMs}ms` }}
-      className="group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] p-3.5 sm:p-4 touch-manipulation select-none transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--fp-accent)]/25 hover:shadow-[var(--fp-shadow)] active:translate-y-0 motion-reduce:animate-none motion-reduce:hover:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/50"
+      className="group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] p-3.5 sm:p-4 touch-manipulation select-none transition-[transform,box-shadow,border-color] duration-200 ease-out hover-fine:-translate-y-0.5 hover-fine:border-[var(--fp-accent)]/25 hover-fine:shadow-[var(--fp-shadow)] active:translate-y-0 motion-reduce:animate-none motion-reduce:hover-fine:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/50"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--fp-accent)]/25 to-transparent opacity-80" />
 
@@ -537,7 +537,7 @@ export default function MatchCard({
             ) : null}
             {isPickHot ? (
               <span
-                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-[var(--fp-success)] animate-pulse motion-reduce:animate-none"
+                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-[var(--fp-success)]"
                 title={t("card.strongSignalTip")}
               >
                 HOT
@@ -547,7 +547,7 @@ export default function MatchCard({
           <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
             {row.recommended.pick}
           </div>
-          <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)] animate-pulse motion-reduce:animate-none" : "text-[var(--fp-accent)]"}`}>
+          <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)]" : "text-[var(--fp-accent)]"}`}>
             {Number.isFinite(Number(recommendedOdd)) && Number(recommendedOdd) > 1
               ? `odd ${Number(recommendedOdd).toFixed(2)}`
               : "-"}
@@ -705,7 +705,7 @@ export default function MatchCard({
             return (
             <div
               key={item.label}
-              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-[var(--fp-accent)]/40 animate-pulse motion-reduce:animate-none" : ""}`}
+              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-[var(--fp-accent)]/40" : ""}`}
             >
               <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{item.label}</div>
               {item.locked ? (

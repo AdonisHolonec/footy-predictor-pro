@@ -36,14 +36,14 @@ export function SignalLens({ confidence, edge, className = "" }: SignalLensProps
           title={t("panels.confidenceBar")}
         >
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-[width] duration-700 ease-out"
-            style={{ width: `${c}%` }}
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-transform duration-700 ease-out"
+            style={{ transform: `scaleX(${c / 100})` }}
           />
         </div>
         <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]" title={t("panels.edgeBar")}>
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--fp-success)]/70 to-[var(--fp-success)] transition-[width] duration-700 ease-out"
-            style={{ width: `${e}%` }}
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-success)]/70 to-[var(--fp-success)] transition-transform duration-700 ease-out"
+            style={{ transform: `scaleX(${e / 100})` }}
           />
         </div>
       </div>
@@ -336,8 +336,8 @@ export function SignalScanStrip({
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-[width] duration-500"
-            style={{ width: `${e}%` }}
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-accent-hover)] to-[var(--fp-accent)] transition-transform duration-500"
+            style={{ transform: `scaleX(${e / 100})` }}
           />
         </div>
       </div>
@@ -348,8 +348,8 @@ export function SignalScanStrip({
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--fp-border-strong)] to-[var(--fp-success)]/80 transition-[width] duration-500"
-            style={{ width: `${dq}%` }}
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-border-strong)] to-[var(--fp-success)]/80 transition-transform duration-500"
+            style={{ transform: `scaleX(${dq / 100})` }}
           />
         </div>
       </div>
@@ -362,8 +362,8 @@ export function SignalScanStrip({
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
-            className={`h-full rounded-full transition-[width] duration-500 ${valueDetected ? "bg-[var(--fp-warning)]/90" : "bg-[var(--fp-border)]/40"}`}
-            style={{ width: `${vPulse}%` }}
+            className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${valueDetected ? "bg-[var(--fp-warning)]/90" : "bg-[var(--fp-border)]/40"}`}
+            style={{ transform: `scaleX(${vPulse / 100})` }}
           />
         </div>
       </div>

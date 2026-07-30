@@ -328,8 +328,8 @@ export default function PredictionFocusCard({
               </span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
                 <div
-                  className="h-full rounded-full bg-[var(--fp-accent)] transition-[width] duration-500"
-                  style={{ width: `${row.momentum.homeMomentum}%` }}
+                  className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-500"
+                  style={{ transform: `scaleX(${row.momentum.homeMomentum / 100})` }}
                 />
               </div>
               <span className="w-8 shrink-0 text-right font-mono text-[9px] font-semibold tabular-nums text-[var(--fp-text)]">
@@ -342,8 +342,8 @@ export default function PredictionFocusCard({
               </span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
                 <div
-                  className="h-full rounded-full bg-[var(--fp-danger)] transition-[width] duration-500"
-                  style={{ width: `${row.momentum.awayMomentum}%` }}
+                  className="h-full w-full origin-left rounded-full bg-[var(--fp-danger)] transition-transform duration-500"
+                  style={{ transform: `scaleX(${row.momentum.awayMomentum / 100})` }}
                 />
               </div>
               <span className="w-8 shrink-0 text-right font-mono text-[9px] font-semibold tabular-nums text-[var(--fp-text)]">
