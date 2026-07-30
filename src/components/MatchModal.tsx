@@ -1069,7 +1069,7 @@ export default function MatchModal({
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
               {hasLiveScore && match.momentum && (
-                <div className="mt-3 w-full">
+                <div className="mt-3 hidden w-full sm:block">
                   <MatchMomentumTimeline
                     fixtureId={Number(match.id)}
                     status={match.status}
@@ -1093,6 +1093,20 @@ export default function MatchModal({
               </div>
             </div>
           </div>
+          {/* Mobile-only: full-width slot so the timeline isn't width-starved inside the narrow score column (see sm:block copy above for desktop). */}
+          {hasLiveScore && match.momentum && (
+            <div className="mt-3 w-full sm:hidden">
+              <MatchMomentumTimeline
+                fixtureId={Number(match.id)}
+                status={match.status}
+                score={match.score}
+                momentum={match.momentum}
+                homeTeam={match.teams.home}
+                awayTeam={match.teams.away}
+                liveEvents={match.liveEvents}
+              />
+            </div>
+          )}
           {!canShowSpecialBet && (
             <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
