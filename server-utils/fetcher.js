@@ -97,12 +97,6 @@ function getDateISOWithOffset(daysOffset = 0) {
   return shifted.toISOString().slice(0, 10);
 }
 
-function secondsUntilUtcMidnight() {
-  const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-  const seconds = Math.floor((end.getTime() - now.getTime()) / 1000);
-  return Math.max(60, seconds);
-}
 
 /**
  * Provider-agnostic cache key so api-sports and RapidAPI share the same entries.
@@ -116,13 +110,6 @@ export function buildCacheKey(endpoint, paramsObj = {}) {
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const qs = entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
   return qs ? `req:v2:${ep}?${qs}` : `req:v2:${ep}`;
-}
-
-/** Legacy host-bound key (read fallback during migration). */
-function buildLegacyCacheKey(baseUrl, endpoint, paramsObj = {}) {
-  const u = new URL(baseUrl + endpoint);
-  Object.entries(paramsObj || {}).forEach(([k, v]) => u.searchParams.set(k, String(v)));
-  return `req:${u.toString()}`;
 }
 
 function buildFetchUrl(baseUrl, endpoint, paramsObj = {}) {
@@ -153,22 +140,17 @@ async function recordUsageFromHeaders(res, provider) {
     updatedAt: new Date().toISOString(),
     provider
   };
-  await kv.set(key, usagePayload, { ex: secondsUntilUtcMidnight() });
-  await kv.set(`footy_api_usage_history:${today}`, usagePayload);
+  // Single durable key per day (date is already in the key) — no midnight TTL,
+  // no separate history copy needed.
+  await kv.set(key, usagePayload);
 }
 
 async function bumpDailyCacheStats({ hit, miss, inflightJoin }) {
+  const field = hit ? "hits" : miss ? "misses" : inflightJoin ? "inflightJoins" : null;
+  if (!field) return;
   try {
-    const today = getTodayISO();
-    const key = `footy_cache_stats:${today}`;
-    const prev = (await kv.get(key)) || {};
-    const next = {
-      hits: Number(prev.hits || 0) + (hit ? 1 : 0),
-      misses: Number(prev.misses || 0) + (miss ? 1 : 0),
-      inflightJoins: Number(prev.inflightJoins || 0) + (inflightJoin ? 1 : 0),
-      updatedAt: new Date().toISOString()
-    };
-    await kv.set(key, next, { ex: secondsUntilUtcMidnight() });
+    // Atomic counter — avoids the read-modify-write GET+SET round trip.
+    await kv.hincrby(`footy_cache_stats:${getTodayISO()}`, field, 1);
   } catch {
     // non-fatal
   }
@@ -184,7 +166,7 @@ export function getLocalCacheStats() {
 
 export async function getDailyCacheStats(dateISO = getTodayISO()) {
   try {
-    const row = (await kv.get(`footy_cache_stats:${dateISO}`)) || {};
+    const row = (await kv.hgetall(`footy_cache_stats:${dateISO}`)) || {};
     const hits = Number(row.hits || 0);
     const misses = Number(row.misses || 0);
     const total = hits + misses;
@@ -194,7 +176,8 @@ export async function getDailyCacheStats(dateISO = getTodayISO()) {
       misses,
       inflightJoins: Number(row.inflightJoins || 0),
       hitRatio: total > 0 ? Number((hits / total).toFixed(4)) : null,
-      updatedAt: row.updatedAt || null
+      // Per-field HINCRBY has no single "last write" timestamp; not tracked.
+      updatedAt: null
     };
   } catch {
     return { date: dateISO, hits: 0, misses: 0, inflightJoins: 0, hitRatio: null, updatedAt: null };
@@ -208,12 +191,11 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
   }
 
   const cacheKey = buildCacheKey(endpoint, paramsObj);
-  const legacyKey = buildLegacyCacheKey(primary.baseUrl, endpoint, paramsObj);
   const fetchUrl = buildFetchUrl(primary.baseUrl, endpoint, paramsObj);
 
   try {
     const cacheStarted = Date.now();
-    const cached = (await kv.get(cacheKey)) || (await kv.get(legacyKey));
+    const cached = await kv.get(cacheKey);
     const cacheMs = Date.now() - cacheStarted;
     if (cached) {
       localCacheStats.hits += 1;
@@ -318,8 +300,6 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
       try {
         const writeStarted = Date.now();
         await kv.set(cacheKey, json, { ex: ttl });
-        // Dual-write legacy key briefly so mixed deploys still share hits.
-        await kv.set(legacyKey, json, { ex: ttl });
         void recordObservation("cache", { durationMs: Date.now() - writeStarted, ok: true });
       } catch (writeErr) {
         void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
@@ -351,9 +331,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
 
 export async function getApiUsage(dateISO = getTodayISO()) {
   try {
-    const usage =
-      (await kv.get(`footy_api_usage_history:${dateISO}`)) ||
-      (await kv.get(`footy_api_usage:${dateISO}`));
+    const usage = await kv.get(`footy_api_usage:${dateISO}`);
     if (!usage) return { date: dateISO, count: 0, limit: 100, updatedAt: null };
     return {
       date: dateISO,

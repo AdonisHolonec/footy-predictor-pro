@@ -9,11 +9,6 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function secondsUntilUtcMidnight() {
-  const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-  return Math.max(60, Math.floor((end.getTime() - now.getTime()) / 1000));
-}
 
 function emptyChannel() {
   return {
@@ -103,9 +98,9 @@ async function readDay(dateISO = todayISO()) {
 async function writeDay(day) {
   const dateISO = day.date || todayISO();
   const payload = { ...day, date: dateISO, updatedAt: new Date().toISOString() };
-  await kv.set(`footy_ops_metrics:${dateISO}`, payload, { ex: secondsUntilUtcMidnight() });
-  // Durable history copy (no midnight TTL) for daily reports
-  await kv.set(`footy_ops_metrics_history:${dateISO}`, payload);
+  // Single durable key per day (date is already in the key) — no midnight TTL,
+  // no separate history copy needed.
+  await kv.set(`footy_ops_metrics:${dateISO}`, payload);
   return payload;
 }
 
@@ -181,7 +176,7 @@ export async function getOpsMetricsHistory(days = 7) {
     d.setUTCDate(d.getUTCDate() - i);
     const dateISO = d.toISOString().slice(0, 10);
     try {
-      const hist = (await kv.get(`footy_ops_metrics_history:${dateISO}`)) || (await kv.get(`footy_ops_metrics:${dateISO}`));
+      const hist = await kv.get(`footy_ops_metrics:${dateISO}`);
       if (hist && typeof hist === "object") {
         rows.push({
           date: dateISO,
