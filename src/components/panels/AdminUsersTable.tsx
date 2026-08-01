@@ -57,7 +57,7 @@ function describeMonetizationChange(
   fallbackExpiry: string | null | undefined
 ) {
   if (tier === "free") return `seteze ${who} pe nivelul free`;
-  const expiryIso = expiryDraft !== undefined ? new Date(expiryDraft).toISOString() : fallbackExpiry;
+  const expiryIso = expiryDraft ? new Date(expiryDraft).toISOString() : fallbackExpiry;
   const expiryMs = expiryIso ? new Date(expiryIso).getTime() : NaN;
   const willBeOpenEnded = !expiryIso || !Number.isFinite(expiryMs) || expiryMs <= Date.now();
   return willBeOpenEnded
