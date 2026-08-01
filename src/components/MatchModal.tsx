@@ -1069,7 +1069,7 @@ export default function MatchModal({
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
               {hasLiveScore && match.momentum && (
-                <div className="mt-3 hidden w-full sm:block">
+                <div className="mt-4 hidden w-full sm:block">
                   <MatchMomentumTimeline
                     fixtureId={Number(match.id)}
                     status={match.status}
@@ -1079,6 +1079,17 @@ export default function MatchModal({
                     awayTeam={match.teams.away}
                     liveEvents={match.liveEvents}
                   />
+                </div>
+              )}
+              {hasLiveScore && !match.momentum && (
+                <div className="mt-4 hidden w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center sm:flex">
+                  <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
+                    <path
+                      fill="currentColor"
+                      d="M3 14.5a.75.75 0 0 1 .75-.75h.5v-3a.75.75 0 0 1 1.5 0v3h1.5v-6a.75.75 0 0 1 1.5 0v6h1.5v-9a.75.75 0 0 1 1.5 0v9h1.5v-4.5a.75.75 0 0 1 1.5 0v4.5h.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z"
+                    />
+                  </svg>
+                  <p className="text-[10px] text-[var(--fp-text-muted)]">{tr("match.momentumUnavailable")}</p>
                 </div>
               )}
             </div>
@@ -1095,7 +1106,7 @@ export default function MatchModal({
           </div>
           {/* Mobile-only: full-width slot so the timeline isn't width-starved inside the narrow score column (see sm:block copy above for desktop). */}
           {hasLiveScore && match.momentum && (
-            <div className="mt-3 w-full sm:hidden">
+            <div className="mt-4 w-full sm:hidden">
               <MatchMomentumTimeline
                 fixtureId={Number(match.id)}
                 status={match.status}
@@ -1105,6 +1116,17 @@ export default function MatchModal({
                 awayTeam={match.teams.away}
                 liveEvents={match.liveEvents}
               />
+            </div>
+          )}
+          {hasLiveScore && !match.momentum && (
+            <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center sm:hidden">
+              <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
+                <path
+                  fill="currentColor"
+                  d="M3 14.5a.75.75 0 0 1 .75-.75h.5v-3a.75.75 0 0 1 1.5 0v3h1.5v-6a.75.75 0 0 1 1.5 0v6h1.5v-9a.75.75 0 0 1 1.5 0v9h1.5v-4.5a.75.75 0 0 1 1.5 0v4.5h.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z"
+                />
+              </svg>
+              <p className="text-[10px] text-[var(--fp-text-muted)]">{tr("match.momentumUnavailable")}</p>
             </div>
           )}
           {!canShowSpecialBet && (

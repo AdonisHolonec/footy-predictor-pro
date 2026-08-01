@@ -158,7 +158,7 @@ export default function AppShell({
               aria-current={isActive ? "page" : undefined}
             >
               <NavIcon id={item.id} />
-              {t(item.shortKey)}
+              {t(item.mobileShortKey ?? item.shortKey)}
             </button>
           );
         })}

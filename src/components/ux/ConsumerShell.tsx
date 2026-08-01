@@ -264,7 +264,7 @@ export default function ConsumerShell({
                 <NavIcon id={item.id} />
               </span>
               <span className={isActive ? "text-[var(--fp-accent)]" : "text-[var(--fp-text-muted)]"}>
-                {t(item.shortKey)}
+                {t(item.mobileShortKey ?? item.shortKey)}
               </span>
             </button>
           );

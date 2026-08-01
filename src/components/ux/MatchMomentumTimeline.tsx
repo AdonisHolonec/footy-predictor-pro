@@ -181,26 +181,26 @@ function StatRow({
   const total = h + a;
   const homeShare = total > 0 ? h / total : 0.5;
   return (
-    <div className="flex items-center gap-2 text-[10px] sm:text-[11px]">
-      <span className="w-7 shrink-0 text-right font-mono font-semibold tabular-nums text-[var(--fp-text)]">
+    <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+      <span className="w-8 shrink-0 text-right font-mono font-semibold tabular-nums text-[var(--fp-accent)]">
         {home != null ? `${home}${suffix}` : "—"}
       </span>
-      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
+      <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
         <div
           className="h-full origin-left bg-[var(--fp-accent)] transition-transform duration-500"
           style={{ transform: `scaleX(${homeShare})`, width: "100%" }}
         />
       </div>
-      <span className="shrink-0 px-1 text-center text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+      <span className="shrink-0 px-1 text-center text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
         {label}
       </span>
-      <div className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
+      <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
         <div
           className="ml-auto h-full origin-right bg-[var(--fp-danger)] transition-transform duration-500"
           style={{ transform: `scaleX(${1 - homeShare})`, width: "100%" }}
         />
       </div>
-      <span className="w-7 shrink-0 font-mono font-semibold tabular-nums text-[var(--fp-text)]">
+      <span className="w-8 shrink-0 font-mono font-semibold tabular-nums text-[var(--fp-danger)]">
         {away != null ? `${away}${suffix}` : "—"}
       </span>
     </div>
@@ -342,18 +342,40 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
 
   const raw = momentum.raw;
 
+  const dominantBadgeClass =
+    momentum.dominantTeam === "home"
+      ? "border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
+      : momentum.dominantTeam === "away"
+        ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+        : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]";
+
   return (
     <>
-    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3 sm:p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
           {t("card.momentum")}
         </p>
-        <p className="text-[9px] font-semibold text-[var(--fp-text-muted)] sm:text-[10px]">{dominantLabel}</p>
+        <p
+          className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${dominantBadgeClass}`}
+        >
+          {dominantLabel}
+        </p>
+      </div>
+
+      <div className="mb-2 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-accent)]" />
+          <span className="truncate">{homeTeam}</span>
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{awayTeam}</span>
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-danger)]" />
+        </span>
       </div>
 
       {displayEvents.length > 0 && (
-        <div className="relative mb-1 h-5 w-full">
+        <div className="relative mb-1 h-7 w-full">
           {displayEvents.map((ev, i) => {
             const teamName = ev.team === "home" ? homeTeam : awayTeam;
             const label = eventLabel(t, ev.kind);
@@ -368,14 +390,14 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
             return (
               <div
                 key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                className="absolute -translate-x-1/2"
+                className="absolute top-0 -translate-x-1/2"
                 style={{ left: xPct(ev.minute + (ev.extra || 0)) }}
               >
                 <Tooltip label={tooltipLabel} align={align}>
                   <button
                     type="button"
                     aria-label={tooltipLabel}
-                    className="animate-card-in rounded-full text-[10px] leading-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                    className="animate-card-in flex h-7 w-7 items-center justify-center rounded-full text-[11px] leading-none transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
                   >
                     {eventIcon(ev.kind)}
                   </button>
@@ -386,18 +408,21 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
         </div>
       )}
 
-      <div className="relative h-20 w-full sm:h-24">
-        <div className="absolute inset-x-0 top-1/2 border-t border-[var(--fp-border)]" />
+      <div className="relative h-24 w-full overflow-hidden rounded-[var(--fp-radius-sm)] sm:h-28">
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-[var(--fp-accent)]/[0.04]" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[var(--fp-danger)]/[0.04]" />
+        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--fp-border)]" />
         <div className="flex h-full w-full items-stretch gap-px">
           {history.map((pt, i) => {
             const homeUp = pt.homeMomentum >= pt.awayMomentum;
             const magnitude = Math.abs(pt.homeMomentum - pt.awayMomentum) / 100;
+            const barLabel = `${pt.minute}' · ${homeTeam} ${Math.round(pt.homeMomentum)} – ${Math.round(pt.awayMomentum)} ${awayTeam}`;
             return (
-              <div key={`${pt.minute}-${i}`} className="flex flex-1 flex-col justify-center">
+              <div key={`${pt.minute}-${i}`} title={barLabel} className="flex flex-1 flex-col justify-center">
                 {homeUp ? (
                   <>
                     <div
-                      className="w-full self-end rounded-t-[1px] bg-[var(--fp-accent)]"
+                      className="w-full self-end rounded-t-[1px] bg-[var(--fp-accent)] transition-opacity duration-150 hover:opacity-80"
                       style={{ height: `${Math.max(4, magnitude * 100)}%` }}
                     />
                     <div className="w-full flex-1" />
@@ -406,7 +431,7 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
                   <>
                     <div className="w-full flex-1" />
                     <div
-                      className="w-full rounded-b-[1px] bg-[var(--fp-danger)]"
+                      className="w-full rounded-b-[1px] bg-[var(--fp-danger)] transition-opacity duration-150 hover:opacity-80"
                       style={{ height: `${Math.max(4, magnitude * 100)}%` }}
                     />
                   </>
@@ -417,7 +442,7 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
         </div>
       </div>
 
-      <div className="relative mt-1 h-3 w-full">
+      <div className="relative mt-1.5 h-3 w-full">
         {ticks.map((m) => (
           <span
             key={m}
@@ -433,7 +458,7 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
       </div>
 
       {raw && (
-        <div className="mt-3 space-y-1.5 border-t border-[var(--fp-border)] pt-2.5">
+        <div className="mt-4 space-y-2 border-t border-[var(--fp-border)] pt-3">
           <StatRow label={statLabel(t, "possession")} home={raw.home.possession} away={raw.away.possession} suffix="%" />
           <StatRow label={statLabel(t, "shotsTotal")} home={raw.home.shotsTotal} away={raw.away.shotsTotal} />
           <StatRow
@@ -446,12 +471,12 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
             raw.away.yellowCards != null ||
             raw.home.redCards != null ||
             raw.away.redCards != null) && (
-            <div className="flex items-center justify-center gap-3 pt-0.5 text-[10px] sm:text-[11px]">
+            <div className="flex items-center justify-center gap-3 pt-1 text-[11px] sm:text-xs">
               <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
                 {raw.home.yellowCards != null && raw.home.yellowCards > 0 ? `🟨${raw.home.yellowCards} ` : ""}
                 {raw.home.redCards != null && raw.home.redCards > 0 ? `🟥${raw.home.redCards}` : ""}
               </span>
-              <span className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                 {t("match.momentumCards")}
               </span>
               <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
@@ -464,18 +489,18 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
       )}
 
       {displayEvents.length > 0 && (
-        <div className="mt-3 border-t border-[var(--fp-border)] pt-2.5">
-          <div className="mb-1.5 flex flex-wrap gap-1" role="group" aria-label={t("match.filtersLabel")}>
+        <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
+          <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label={t("match.filtersLabel")}>
             {EVENT_FILTERS.map(({ id, labelKey }) => (
               <button
                 key={id}
                 type="button"
                 aria-pressed={filter === id}
                 onClick={() => setFilter(id)}
-                className={`h-6 rounded-md px-2 text-[9px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                className={`h-8 touch-manipulation rounded-md px-3 text-[10px] font-bold uppercase tracking-wide transition-colors duration-150 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                   filter === id
                     ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)] hover:text-[var(--fp-text)]"
                 }`}
               >
                 {t(labelKey)}
@@ -486,12 +511,12 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
             ref={feedRef}
             onScroll={handleFeedScroll}
             role="list"
-            className="max-h-32 space-y-0.5 overflow-y-auto"
+            className="max-h-36 space-y-0.5 overflow-y-auto sm:max-h-44"
           >
             {filteredEvents.map((ev, i) => (
               <li
                 key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1 py-1 text-[10px] sm:text-[11px]"
+                className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)]/15 sm:text-xs"
               >
                 <span className="w-9 shrink-0 font-mono tabular-nums text-[var(--fp-text-muted)]">
                   {formatMinute(ev.minute, ev.extra)}
@@ -513,14 +538,14 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
     </div>
 
     {matchStory.length > 0 && (
-      <div className="mt-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4">
-        <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+      <div className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
+        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
           {t("match.storyTitle")}
         </p>
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {matchStory.map((line, i) => (
-            <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-[var(--fp-text)] sm:text-[11px]">
-              <span aria-hidden>•</span>
+            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[var(--fp-text)] sm:text-xs">
+              <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--fp-accent)]" />
               <span>{line}</span>
             </li>
           ))}

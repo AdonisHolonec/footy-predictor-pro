@@ -12,12 +12,13 @@ export type AppNavView =
 export type MatchesSubFilter = "all" | "live" | "favorites";
 
 /** Nav items use i18n keys under `nav.*` — resolve labels via `t()`. */
-export const APP_NAV_ITEMS: { id: AppNavView; labelKey: string; shortKey: string }[] = [
+export const APP_NAV_ITEMS: { id: AppNavView; labelKey: string; shortKey: string; mobileShortKey?: string }[] = [
   { id: "home", labelKey: "nav.home", shortKey: "nav.home" },
-  { id: "matches", labelKey: "nav.matches", shortKey: "nav.matches" },
+  /** Bottom tab reads "Predictions" (mobile) while the desktop sidebar keeps "Matches" — same view, id="matches". */
+  { id: "matches", labelKey: "nav.matches", shortKey: "nav.matches", mobileShortKey: "nav.predictions" },
   { id: "predictions", labelKey: "nav.predictions", shortKey: "nav.picks" },
   { id: "live", labelKey: "nav.live", shortKey: "nav.live" },
-  { id: "history", labelKey: "nav.history", shortKey: "nav.history" },
+  { id: "history", labelKey: "nav.history", shortKey: "nav.history", mobileShortKey: "nav.resultsShort" },
   { id: "statistics", labelKey: "nav.statistics", shortKey: "nav.stats" },
   { id: "notifications", labelKey: "nav.notifications", shortKey: "nav.alerts" },
   { id: "profile", labelKey: "nav.profile", shortKey: "nav.profile" },

@@ -2,6 +2,7 @@ import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import EmptyState from "../../design-system/EmptyState";
+import Skeleton from "../../design-system/Skeleton";
 import PredictionFocusCard from "./PredictionFocusCard";
 
 type AccessTier = UpgradeTier | "free" | string;
@@ -22,6 +23,8 @@ type Props = {
   onGoLive?: () => void;
   valueOnly?: boolean;
   onToggleValueOnly?: (checked: boolean) => void;
+  /** True while a fetch is in flight and no cached rows exist yet — shows skeleton cards instead of the empty state. */
+  loading?: boolean;
 };
 
 export default function MatchesSection({
@@ -38,7 +41,8 @@ export default function MatchesSection({
   onSetFilter,
   onGoLive,
   valueOnly = false,
-  onToggleValueOnly
+  onToggleValueOnly,
+  loading = false
 }: Props) {
   const { t } = useLocale();
 
@@ -96,7 +100,24 @@ export default function MatchesSection({
         </div>
       )}
 
-      {!matches.length ? (
+      {!matches.length && loading ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-hidden>
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="flex h-[168px] flex-col gap-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 sm:p-4"
+            >
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-14" />
+              </div>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="mt-auto h-8 w-full" />
+            </div>
+          ))}
+        </div>
+      ) : !matches.length ? (
         <EmptyState
           title={
             mode === "live"

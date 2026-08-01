@@ -26,7 +26,7 @@ import { isCompactViewport, useLeaguePanelState } from "../hooks/useLeaguePanelS
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
-import { useUiPrefs } from "../hooks/useUiPrefs";
+import { useUiPrefs, type MarketPref } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import { isFinalMatchStatus } from "../utils/cardMarketOutcome";
 import Button from "../design-system/Button";
@@ -126,6 +126,17 @@ function clampTierDates(baseDate: string, tier: string | undefined, dates: strin
 }
 
 const MAIN_VIEWS: AppNavView[] = ["home", "matches", "predictions", "live"];
+
+/** True when `row` has an actionable (non-toss) tier for at least one of the onboarding-picked markets. */
+function matchesPreferredMarkets(row: PredictionRow, preferredMarkets: MarketPref[]) {
+  if (!preferredMarkets.length) return true;
+  const tiers = row.predictions?.marketTiers;
+  return preferredMarkets.some((market) => {
+    const tier =
+      market === "oneXTwo" ? tiers?.oneXtwo?.tier : market === "overUnder" ? tiers?.over25?.tier : tiers?.gg?.tier;
+    return Boolean(tier) && tier !== "toss";
+  });
+}
 
 export default function UserDashboard() {
   const {
@@ -293,6 +304,9 @@ export default function UserDashboard() {
         (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
       );
     }
+    if (prefs.preferredMarkets.length) {
+      rows = rows.filter((row) => matchesPreferredMarkets(row, prefs.preferredMarkets));
+    }
     return rows;
   }, [
     preds,
@@ -303,6 +317,7 @@ export default function UserDashboard() {
     prefs.minConfidence,
     prefs.minEv,
     prefs.valueOnly,
+    prefs.preferredMarkets,
     matchSearch
   ]);
   const homePreds = useMemo(() => {
@@ -328,8 +343,11 @@ export default function UserDashboard() {
         (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
       );
     }
+    if (prefs.preferredMarkets.length) {
+      rows = rows.filter((row) => matchesPreferredMarkets(row, prefs.preferredMarkets));
+    }
     return rows;
-  }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, matchSearch]);
+  }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, prefs.preferredMarkets, matchSearch]);
   const homeLiveCount = useMemo(() => preds.filter((row) => isFixtureInPlay(row.status)).length, [preds]);
   const notificationItems = useMemo(
     () => deriveNotifications({ predictions: preds, history, watchlistFixtureIds: prefs.watchlistFixtureIds }),
@@ -457,7 +475,7 @@ export default function UserDashboard() {
     inferSeason,
     usageDay: todayKey,
     setStatus,
-    predictLimit: "15",
+    predictLimit: "50",
     messages: USER_PREDICT_FLOW_MESSAGES,
     onWarmCompleted: async () => {
       setStatus("Warm finalizat pentru ligile favorite.");
@@ -1136,6 +1154,7 @@ export default function UserDashboard() {
           onGoLive={() => handleNav("live")}
           valueOnly={prefs.valueOnly}
           onToggleValueOnly={(checked) => updateFilters({ valueOnly: checked })}
+          loading={warmPredictBusy && !visiblePreds.length}
         />
       )}
 
@@ -1898,7 +1917,15 @@ export default function UserDashboard() {
         </div>
       )}
       {user && !user.onboardingCompleted && (
-        <OnboardingCarousel onComplete={() => void markOnboardingComplete()} />
+        <OnboardingCarousel
+          leagueOptions={ELITE_LEAGUE_META}
+          initialLeagueIds={selectedLeagueIds}
+          onComplete={({ leagueIds, markets }) => {
+            setSelectedLeagueIdsLimited(leagueIds);
+            updateFilters({ preferredMarkets: markets });
+            void markOnboardingComplete().catch(() => {});
+          }}
+        />
       )}
     </ConsumerShell>
   );

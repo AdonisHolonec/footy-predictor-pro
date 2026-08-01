@@ -6,6 +6,9 @@ export type { Locale };
 
 export type MatchesSubFilterPref = "all" | "live" | "favorites";
 
+/** Mirrors the 1X2 / Over-Under / BTTS market family used by marketTiers and the accuracy tracker. */
+export type MarketPref = "oneXTwo" | "overUnder" | "btts";
+
 export type UiPrefsV3 = {
   theme: UiTheme;
   locale: Locale;
@@ -23,6 +26,8 @@ export type UiPrefsV3 = {
   matchesFilter: MatchesSubFilterPref;
   dashboardWidgets: string[];
   notificationsSeenIds: string[];
+  /** From onboarding — empty means no preference, show every market. */
+  preferredMarkets: MarketPref[];
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
@@ -41,7 +46,8 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   matchSearch: "",
   matchesFilter: "all",
   dashboardWidgets: ["kpi", "continue", "recommended", "value", "matches"],
-  notificationsSeenIds: []
+  notificationsSeenIds: [],
+  preferredMarkets: []
 };
 
 function storageKey(userId?: string | null) {
@@ -155,7 +161,13 @@ export function useUiPrefs(userId?: string | null) {
       patch: Partial<
         Pick<
           UiPrefsV3,
-          "minConfidence" | "minEv" | "valueOnly" | "settledOnly" | "matchSearch" | "matchesFilter"
+          | "minConfidence"
+          | "minEv"
+          | "valueOnly"
+          | "settledOnly"
+          | "matchSearch"
+          | "matchesFilter"
+          | "preferredMarkets"
         >
       >
     ) => {
