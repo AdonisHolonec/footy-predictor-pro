@@ -92,31 +92,39 @@ export function useAppAuthActions(
     }
   }
 
-  async function handleAdminRoleChange(targetUserId: string, role: "user" | "admin") {
+  async function handleAdminRoleChange(targetUserId: string, role: "user" | "admin"): Promise<boolean> {
     setIsAdminWorking(true);
     try {
       await api.updateProfileRole(targetUserId, role);
       setStatus(`Rol actualizat la ${role} pentru ${targetUserId.slice(0, 8)}...`);
+      return true;
     } catch (error: unknown) {
       setStatus(error instanceof Error ? error.message : "Nu am putut actualiza rolul.");
+      return false;
     } finally {
       setIsAdminWorking(false);
     }
   }
 
-  async function handleAdminToggleBlock(targetUserId: string, isBlocked: boolean) {
+  async function handleAdminToggleBlock(targetUserId: string, isBlocked: boolean): Promise<boolean> {
     setIsAdminWorking(true);
     try {
       await api.toggleProfileBlock(targetUserId, isBlocked);
       setStatus(`${isBlocked ? "Blocat" : "Deblocat"} utilizator ${targetUserId.slice(0, 8)}...`);
+      return true;
     } catch (error: unknown) {
       setStatus(error instanceof Error ? error.message : "Nu am putut actualiza statusul utilizatorului.");
+      return false;
     } finally {
       setIsAdminWorking(false);
     }
   }
 
-  async function handleAdminMonetizationSave(userId: string, fallbackTier: UserTier, fallbackExpiry?: string | null) {
+  async function handleAdminMonetizationSave(
+    userId: string,
+    fallbackTier: UserTier,
+    fallbackExpiry?: string | null
+  ): Promise<boolean> {
     setIsAdminWorking(true);
     try {
       const tier = (adminTierDraftByUser[userId] || fallbackTier) as UserTier;
@@ -133,11 +141,13 @@ export function useAppAuthActions(
       await api.updateProfileMonetization(userId, { tier, subscriptionExpiresAt });
       setStatus(
         subscriptionExpiresAt
-          ? `Subscription updated for ${userId}.`
-          : `Subscription updated for ${userId} (open-ended ${tier}).`
+          ? `Abonament actualizat pentru ${userId}.`
+          : `Abonament actualizat pentru ${userId} (${tier}, nelimitat).`
       );
-    } catch (e: any) {
-      setStatus(e?.message || "Nu am putut actualiza abonamentul.");
+      return true;
+    } catch (e: unknown) {
+      setStatus(e instanceof Error ? e.message : "Nu am putut actualiza abonamentul.");
+      return false;
     } finally {
       setIsAdminWorking(false);
     }

@@ -106,7 +106,7 @@ export function AdminObservatoryHeader({
   onOpenAuth,
   onLogout
 }: AdminObservatoryHeaderProps) {
-  const roleLabel = user?.role === "admin" ? "ADMIN" : user ? "DATA LEAD" : "GUEST";
+  const roleLabel = user ? "ADMIN" : "GUEST";
   return (
     <header className="mb-6 rounded-card border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1.4fr)_minmax(0,1fr)] lg:items-center">
@@ -132,11 +132,6 @@ export function AdminObservatoryHeader({
                   <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-accent-hover)]">{roleLabel}</div>
                 </div>
                 <div className="h-10 w-10 shrink-0 rounded-full border border-[var(--fp-accent)]/35 bg-gradient-to-br from-[var(--fp-accent)]/25 to-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)]" />
-              </div>
-              <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
-                <span className="text-[var(--fp-accent)]">v4.2</span>
-                <span className="mx-2 text-[var(--fp-border)]">|</span>
-                <span>latency ~12ms</span>
               </div>
               <button
                 type="button"

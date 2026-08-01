@@ -32,9 +32,13 @@ type AdminUsersPanelProps = {
   setAdminTierDraftByUser: Dispatch<SetStateAction<Record<string, UserTier>>>;
   adminExpiryDraftByUser: Record<string, string>;
   setAdminExpiryDraftByUser: Dispatch<SetStateAction<Record<string, string>>>;
-  onRoleChange: (userId: string, role: "user" | "admin") => void;
-  onToggleBlock: (userId: string, isBlocked: boolean) => void;
-  onMonetizationSave: (userId: string, fallbackTier: UserTier, fallbackExpiry?: string | null) => void;
+  onRoleChange: (userId: string, role: "user" | "admin") => boolean | void | Promise<boolean | void>;
+  onToggleBlock: (userId: string, isBlocked: boolean) => boolean | void | Promise<boolean | void>;
+  onMonetizationSave: (
+    userId: string,
+    fallbackTier: UserTier,
+    fallbackExpiry?: string | null
+  ) => boolean | void | Promise<boolean | void>;
 };
 
 export default function AdminUsersPanel({
@@ -75,7 +79,7 @@ export default function AdminUsersPanel({
           disabled={isAdminWorking}
           className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-bg-card)] disabled:opacity-50"
         >
-          Refresh
+          Reîmprospătează
         </button>
       </div>
       <AdminUsageSnapshot usageSnapshot={usageSnapshot} usageLoading={usageLoading} onLoad={onLoadUsage} />

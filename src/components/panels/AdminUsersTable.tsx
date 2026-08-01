@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { UserTier } from "../../types";
 
@@ -12,6 +13,9 @@ type ManagedProfile = {
   favoriteLeagues: number[];
 };
 
+/** Result is optional: existing callers that don't report success/failure still work, and skip inline row feedback. */
+type RowActionResult = boolean | void | Promise<boolean | void>;
+
 type AdminUsersTableProps = {
   managedProfiles: ManagedProfile[];
   isAdminWorking: boolean;
@@ -19,9 +23,9 @@ type AdminUsersTableProps = {
   setAdminTierDraftByUser: Dispatch<SetStateAction<Record<string, UserTier>>>;
   adminExpiryDraftByUser: Record<string, string>;
   setAdminExpiryDraftByUser: Dispatch<SetStateAction<Record<string, string>>>;
-  onRoleChange: (userId: string, role: "user" | "admin") => void;
-  onToggleBlock: (userId: string, isBlocked: boolean) => void;
-  onMonetizationSave: (userId: string, fallbackTier: UserTier, fallbackExpiry?: string | null) => void;
+  onRoleChange: (userId: string, role: "user" | "admin") => RowActionResult;
+  onToggleBlock: (userId: string, isBlocked: boolean) => RowActionResult;
+  onMonetizationSave: (userId: string, fallbackTier: UserTier, fallbackExpiry?: string | null) => RowActionResult;
 };
 
 function isoToLocalDatetimeInput(value?: string | null) {
@@ -45,6 +49,22 @@ function isExpiredSubscription(iso?: string | null) {
   return t <= Date.now();
 }
 
+/** Describes what Save Plan will actually do, for the confirmation prompt. */
+function describeMonetizationChange(
+  who: string,
+  tier: UserTier,
+  expiryDraft: string | undefined,
+  fallbackExpiry: string | null | undefined
+) {
+  if (tier === "free") return `seteze ${who} pe nivelul free`;
+  const expiryIso = expiryDraft !== undefined ? new Date(expiryDraft).toISOString() : fallbackExpiry;
+  const expiryMs = expiryIso ? new Date(expiryIso).getTime() : NaN;
+  const willBeOpenEnded = !expiryIso || !Number.isFinite(expiryMs) || expiryMs <= Date.now();
+  return willBeOpenEnded
+    ? `acorde ${who} acces ${tier} pe termen nelimitat (fara data de expirare)`
+    : `seteze ${who} pe nivelul ${tier} pana la ${new Date(expiryMs).toLocaleString("ro-RO")}`;
+}
+
 export default function AdminUsersTable({
   managedProfiles,
   isAdminWorking,
@@ -56,20 +76,42 @@ export default function AdminUsersTable({
   onToggleBlock,
   onMonetizationSave
 }: AdminUsersTableProps) {
+  const [rowFeedback, setRowFeedback] = useState<Record<string, { ok: boolean; label: string } | undefined>>({});
+
+  function clearRowFeedbackAfterDelay(userId: string) {
+    window.setTimeout(() => {
+      setRowFeedback((prev) => {
+        if (!(userId in prev)) return prev;
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }, 4000);
+  }
+
+  async function runRowAction(userId: string, label: string, confirmMessage: string, action: () => RowActionResult) {
+    if (!window.confirm(confirmMessage)) return;
+    const result = await action();
+    // Callers that don't report an outcome (plain void) are treated as successful — no regression for existing behavior.
+    const ok = result !== false;
+    setRowFeedback((prev) => ({ ...prev, [userId]: { ok, label } }));
+    clearRowFeedbackAfterDelay(userId);
+  }
+
   return (
     <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
       <table className="min-w-full text-left text-[11px] text-[var(--fp-accent)]">
         <thead className="sticky top-0 bg-[var(--fp-bg-muted)]/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
           <tr>
             <th className="px-3 py-2">Email</th>
-            <th className="px-3 py-2">User ID</th>
-            <th className="px-3 py-2">Role</th>
-            <th className="px-3 py-2">Tier</th>
-            <th className="px-3 py-2">Subscription Expiry</th>
-            <th className="px-3 py-2">Blocked</th>
+            <th className="px-3 py-2">ID utilizator</th>
+            <th className="px-3 py-2">Rol</th>
+            <th className="px-3 py-2">Nivel</th>
+            <th className="px-3 py-2">Expirare abonament</th>
+            <th className="px-3 py-2">Blocat</th>
             <th className="px-3 py-2">Warm / Predict</th>
-            <th className="px-3 py-2">Favorite Leagues</th>
-            <th className="px-3 py-2">Actions</th>
+            <th className="px-3 py-2">Ligi favorite</th>
+            <th className="px-3 py-2">Acțiuni</th>
           </tr>
         </thead>
         <tbody>
@@ -82,7 +124,7 @@ export default function AdminUsersTable({
                   <span className="inline-flex items-center gap-2">
                     <span>—</span>
                     <span className="rounded-full border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
-                      email missing
+                      email lipsă
                     </span>
                   </span>
                 )}
@@ -139,53 +181,100 @@ export default function AdminUsersTable({
                     }))
                   }
                   className="ml-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-1 text-[9px] text-[var(--fp-text-muted)]"
-                  title="Clear expiry"
+                  title="Șterge data expirării"
                 >
-                  Clear
+                  Șterge
                 </button>
                 {isExpiredSubscription(profile.subscriptionExpiresAt) && (
                   <div className="mt-1 inline-flex rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
-                    Expired — Save Plan clears it for paid tiers
+                    Expirat — Salvează planul pentru acces nelimitat pe nivelurile plătite
                   </div>
                 )}
               </td>
-              <td className="px-3 py-2">{profile.isBlocked ? "yes" : "no"}</td>
+              <td className="px-3 py-2">{profile.isBlocked ? "da" : "nu"}</td>
               <td className="px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
                 {profile.warmPredictUsage ? `${profile.warmPredictUsage.warm} / ${profile.warmPredictUsage.predict}` : "—"}
               </td>
               <td className="px-3 py-2">{profile.favoriteLeagues.length ? profile.favoriteLeagues.join(", ") : "-"}</td>
               <td className="px-3 py-2">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => void onRoleChange(profile.userId, profile.role === "admin" ? "user" : "admin")}
+                    onClick={() => {
+                      const nextRole = profile.role === "admin" ? "user" : "admin";
+                      const who = profile.email || profile.userId;
+                      void runRowAction(
+                        profile.userId,
+                        "Rol actualizat",
+                        `Faci ${who} ${nextRole === "admin" ? "admin" : "user obișnuit"}? Accesul se schimbă imediat.`,
+                        () => onRoleChange(profile.userId, nextRole)
+                      );
+                    }}
                     disabled={isAdminWorking}
                     className="rounded-md border border-[var(--fp-accent)]/20 bg-[var(--fp-accent)]/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
                   >
-                    Make {profile.role === "admin" ? "user" : "admin"}
+                    Fă {profile.role === "admin" ? "user" : "admin"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => void onToggleBlock(profile.userId, !profile.isBlocked)}
+                    onClick={() => {
+                      const willBlock = !profile.isBlocked;
+                      const who = profile.email || profile.userId;
+                      void runRowAction(
+                        profile.userId,
+                        willBlock ? "Blocat" : "Deblocat",
+                        willBlock
+                          ? `Blochezi ${who}? Va pierde accesul imediat.`
+                          : `Deblochezi ${who}? Va recăpăta accesul imediat.`,
+                        () => onToggleBlock(profile.userId, willBlock)
+                      );
+                    }}
                     disabled={isAdminWorking}
                     className="rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] disabled:opacity-50"
                   >
-                    {profile.isBlocked ? "Unblock" : "Block"}
+                    {profile.isBlocked ? "Deblochează" : "Blochează"}
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      void onMonetizationSave(
+                    onClick={() => {
+                      const who = profile.email || profile.userId;
+                      const tier = (adminTierDraftByUser[profile.userId] || profile.tier || "free") as UserTier;
+                      const consequence = describeMonetizationChange(
+                        who,
+                        tier,
+                        adminExpiryDraftByUser[profile.userId],
+                        profile.subscriptionExpiresAt
+                      );
+                      void runRowAction(
                         profile.userId,
-                        (profile.tier || "free") as UserTier,
-                        profile.subscriptionExpiresAt ?? null
-                      )
-                    }
+                        "Plan salvat",
+                        `Salvezi planul? Aceasta va ${consequence}.`,
+                        () =>
+                          onMonetizationSave(
+                            profile.userId,
+                            (profile.tier || "free") as UserTier,
+                            profile.subscriptionExpiresAt ?? null
+                          )
+                      );
+                    }}
                     disabled={isAdminWorking}
                     className="rounded-md border border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] disabled:opacity-50"
                   >
-                    Save Plan
+                    Salvează planul
                   </button>
+                  {rowFeedback[profile.userId] && (
+                    <span
+                      role="status"
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                        rowFeedback[profile.userId]!.ok
+                          ? "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
+                          : "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+                      }`}
+                    >
+                      {rowFeedback[profile.userId]!.ok ? "✓" : "✗"} {rowFeedback[profile.userId]!.label}
+                      {!rowFeedback[profile.userId]!.ok && " — eșuat"}
+                    </span>
+                  )}
                 </div>
               </td>
             </tr>

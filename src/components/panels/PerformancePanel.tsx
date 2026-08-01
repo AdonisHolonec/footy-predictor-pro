@@ -4,6 +4,7 @@ import AdminUsersPanel from "./AdminUsersPanel";
 import SuccessRateTracker from "../SuccessRateTracker";
 import StatisticsPanel, { type StatisticsPanelProps } from "./StatisticsPanel";
 import AdminShell, { type AdminSection } from "../ux/AdminShell";
+import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 import type { HistoryStats } from "../../types";
 import type { UsageSnapshot } from "../../types/index";
 
@@ -112,7 +113,11 @@ export default function PerformancePanel({
                 onLoadUsage={onLoadUsage}
               />
             </Suspense>
-            {accessToken && <AdminModelMetricsPanel accessToken={accessToken} days={45} />}
+            {accessToken && (
+              <CollapsiblePanel title="Model metrics" subtitle="Calibrare, sincronizare istoric, status pipeline ML">
+                <AdminModelMetricsPanel accessToken={accessToken} days={45} />
+              </CollapsiblePanel>
+            )}
           </div>
         )}
         {section === "model-lab" && (
