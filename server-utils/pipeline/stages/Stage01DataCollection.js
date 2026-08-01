@@ -134,6 +134,12 @@ export async function run(context) {
       predictLimit: Number.isFinite(dailyLimit) ? dailyLimit : null
     };
 
+    // Stage00Ingress caps against the highest tier's ceiling (tier is unknown that early) —
+    // now that the caller's real tier is resolved, clamp down to what it's actually entitled to.
+    if (Number.isFinite(dailyLimit)) {
+      effectiveLimit = Math.min(effectiveLimit, dailyLimit);
+    }
+
     const readDbOnlyPredictions = async (reason = "db_only_free") => {
       const from = `${date}T00:00:00.000Z`;
       const to = `${date}T23:59:59.999Z`;

@@ -9,6 +9,7 @@ import { isAuthorizedCronOrInternalRequest } from "../../cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../fixtureCalendarDateKey.js";
 import { inferSeason } from "../predictHelpers.js";
 import { halt } from "../PipelineContext.js";
+import { USER_TIERS, tierDailyLimit } from "../../accessTier.js";
 
 export const STAGE_ID = "Stage00Ingress";
 export const STAGE_DESCRIPTION = "HTTP ingress: monitoring, query normalization, auth gate.";
@@ -24,7 +25,10 @@ export async function run(context) {
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map((s) => s.trim());
   const season = Number(req.query.season || inferSeason(date));
-  const limit = Math.min(Number(req.query.limit || 15), 15);
+  // Tier isn't resolved yet here — cap against the highest tier's daily allowance
+  // (Stage01DataCollection re-clamps to the caller's actual resolved tier).
+  const maxRequestFixtures = tierDailyLimit(USER_TIERS.ULTRA);
+  const limit = Math.min(Number(req.query.limit || 15), maxRequestFixtures);
 
   context.date = date;
   context.leagueIds = leagueIds;
