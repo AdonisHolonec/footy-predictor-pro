@@ -43,14 +43,14 @@ export default function Login() {
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery" || lastAuthEvent === "PASSWORD_RECOVERY") {
       setMode("reset");
-      setMessage("Seteaza o parola noua pentru contul tau.");
+      setMessage(t("auth.recoveryPrompt"));
     }
     if (hashParams.get("type") === "signup") {
-      setMessage("Email confirmat. Te poti autentifica.");
+      setMessage(t("auth.emailConfirmedMsg"));
       setMode("login");
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
     }
-  }, [lastAuthEvent]);
+  }, [lastAuthEvent, t]);
 
   useEffect(() => {
     if (!user) return;
@@ -89,11 +89,11 @@ export default function Login() {
     setLocalError("");
     setMessage("");
     if (mode !== "reset" && !email.trim()) {
-      setLocalError("Email este obligatoriu.");
+      setLocalError(t("auth.emailRequiredMsg"));
       return;
     }
     if (mode === "signup" && !privacyAccepted) {
-      setLocalError("Trebuie sa confirmi ca ai citit politica de confidentialitate.");
+      setLocalError(t("auth.privacyRequiredMsg"));
       return;
     }
     try {
@@ -102,25 +102,25 @@ export default function Login() {
         await login(email.trim(), password);
       } else if (mode === "signup") {
         await signup(email.trim(), password);
-        setMessage("Cont creat. Verifica email-ul pentru confirmare.");
+        setMessage(t("auth.signupSuccessMsg"));
       } else if (mode === "forgot") {
         await sendPasswordResetEmail(email.trim());
-        setMessage("Am trimis email-ul de reset.");
+        setMessage(t("auth.resetSentMsg"));
       } else {
         if (password.length < 6) {
-          setLocalError("Parola trebuie sa aiba minim 6 caractere.");
+          setLocalError(t("auth.passwordTooShortMsg"));
           return;
         }
         if (password !== confirmPassword) {
-          setLocalError("Parolele nu coincid.");
+          setLocalError(t("auth.passwordMismatchMsg"));
           return;
         }
         await updatePassword(password);
-        setMessage("Parola actualizata. Te poti autentifica.");
+        setMessage(t("auth.passwordUpdatedMsg"));
         setMode("login");
       }
     } catch (submitError: unknown) {
-      setLocalError(submitError instanceof Error ? submitError.message : "Operatiune esuata.");
+      setLocalError(submitError instanceof Error ? submitError.message : t("auth.operationFailedMsg"));
     } finally {
       setSubmitting(false);
     }
@@ -155,11 +155,11 @@ export default function Login() {
         <header className="mb-10 border-b border-white/[0.1] pb-8 animate-fadeIn">
           <Link
             to="/"
-            className="inline-block font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)] transition hover:text-[var(--fp-accent)]"
+            className="inline-block font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)] transition hover:text-[var(--fp-accent)]"
           >
-            ← Pagina de acces
+            {t("auth.backLink")}
           </Link>
-          <p className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--fp-accent)]">Footy Predictor · Laborator de inteligență</p>
+          <p className="mt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--fp-accent-text)]">{t("auth.tagline")}</p>
           <img
             src={BRAND_IMAGES.logoPrimary}
             alt="Footy Predictor"
@@ -180,10 +180,7 @@ export default function Login() {
                 </span>
               </span>
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--fp-text)]">
-              Login într-un mediu premium, cinematic și calm. Intră în observatorul tău de predicții, piețe avansate și
-              performanță în timp real.
-            </p>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--fp-text)]">{t("auth.heroDesc")}</p>
           </div>
         </header>
 
@@ -192,37 +189,32 @@ export default function Login() {
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
             <div className="rounded-2xl border border-[var(--fp-success)]/45 bg-[var(--fp-bg-card)]/80 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-[24px]">
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">Performanță globală model · ultimele 30 zile</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--fp-accent-text)]/80">{t("auth.statsTitle")}</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--fp-success)] sm:text-3xl">
                     {globalStats.settled ? globalStats.winRate.toFixed(1) : "—"}%
                   </div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--fp-text)]">Success Rate · 30d</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--fp-text)]">{t("auth.statSuccessRate")}</div>
                 </div>
                 <div>
-                  <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--fp-accent)] sm:text-3xl">{globalStats.settled || "—"}</div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--fp-text)]">Settled</div>
+                  <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--fp-accent-text)] sm:text-3xl">{globalStats.settled || "—"}</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--fp-text)]">{t("auth.statSettled")}</div>
                 </div>
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--fp-success)] sm:text-3xl">
                     {globalStats.wins + globalStats.losses > 0 ? `${globalStats.wins}W/${globalStats.losses}L` : "—"}
                   </div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-[var(--fp-text)]">Record</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--fp-text)]">{t("auth.statRecord")}</div>
                 </div>
               </div>
             </div>
 
             <section className="rounded-2xl border border-white/[0.2] bg-[var(--fp-bg-card)]/80 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-[24px]">
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent)]">Servicii disponibile în platformă</h2>
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.servicesTitle")}</h2>
               <div className="grid gap-2 sm:grid-cols-2">
-                {[
-                  "Predicții 1X2 + O/U calibrate",
-                  "Piețe Corners / Shots / HT Goals",
-                  "Signal Lens + Edge Compass",
-                  "Performance Counter pe user/ligă"
-                ].map((service) => (
-                  <div key={service} className="rounded-xl border border-[var(--fp-success)]/25 bg-[var(--fp-bg)]/45 px-3 py-2 font-mono text-[10px] text-[var(--fp-text)]">
+                {[t("auth.service1"), t("auth.service2"), t("auth.service3"), t("auth.service4")].map((service) => (
+                  <div key={service} className="rounded-xl border border-[var(--fp-success)]/25 bg-[var(--fp-bg)]/45 px-3 py-2 font-mono text-[11px] text-[var(--fp-text)]">
                     {service}
                   </div>
                 ))}
@@ -230,7 +222,7 @@ export default function Login() {
             </section>
 
             <section>
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent)]">Observatory pulse</h2>
+              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.pulseTitle")}</h2>
               <SuccessRateTracker
                 stats={globalStats}
                 animatedWins={globalStats.wins}
@@ -247,11 +239,11 @@ export default function Login() {
             <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-[var(--fp-bg-card)]/100 via-[var(--fp-bg-elevated)]/100 to-[var(--fp-bg-card)]/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-accent)]/55 to-transparent" />
-                <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{t("auth.title")}</span>
+                <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{t("auth.title")}</span>
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-success)]/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent)]">{t("auth.secure")}</p>
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.secure")}</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && t("auth.login")}
                   {mode === "signup" && t("auth.signup")}
@@ -261,7 +253,7 @@ export default function Login() {
                 <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("auth.continue")}</p>
 
                 <form onSubmit={(event) => void onSubmit(event)} className="mt-5 space-y-3">
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {t("auth.email")}
                     <input
                       type="email"
@@ -272,7 +264,7 @@ export default function Login() {
                     />
                   </label>
                   {mode !== "forgot" && (
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
                       {t("auth.password")}
                       <input
                         type="password"
@@ -283,8 +275,8 @@ export default function Login() {
                     </label>
                   )}
                   {mode === "reset" && (
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
-                      Confirm password
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                      {t("auth.confirmPasswordLabel")}
                       <input
                         type="password"
                         value={confirmPassword}
@@ -303,14 +295,14 @@ export default function Login() {
                         className="mt-1 h-3.5 w-3.5 rounded border-white/20 bg-[var(--fp-bg-card)] accent-[var(--fp-accent)] focus:ring-[var(--fp-accent)]/40"
                       />
                       <span>
-                        Confirm ca am citit{" "}
+                        {t("auth.privacyPrefix")}
                         <Link
                           to="/privacy"
-                          className="font-semibold text-[var(--fp-accent)] underline decoration-[var(--fp-border)]/60 underline-offset-2 hover:text-[var(--fp-accent-hover)]"
+                          className="font-semibold text-[var(--fp-accent-text)] underline decoration-[var(--fp-border)]/60 underline-offset-2 hover:text-[var(--fp-accent-hover)]"
                         >
-                          politica de confidentialitate
-                        </Link>{" "}
-                        si sunt de acord cu prelucrarea datelor necesare contului.
+                          {t("auth.privacyPolicyLink")}
+                        </Link>
+                        {t("auth.privacySuffix")}
                       </span>
                     </label>
                   )}
@@ -351,9 +343,9 @@ export default function Login() {
                         setPrivacyAccepted(false);
                         setMode(mode === "login" ? "signup" : "login");
                       }}
-                      className="text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)]"
+                      className="text-[var(--fp-accent-text)] transition hover:text-[var(--fp-accent-hover)]"
                     >
-                      {mode === "login" ? "Nu ai cont? Creeaza unul." : "Ai cont? Intra in aplicatie."}
+                      {mode === "login" ? t("auth.noAccount") : t("auth.hasAccount")}
                     </button>
                   )}
                   {mode === "login" && (
@@ -362,12 +354,12 @@ export default function Login() {
                       onClick={() => setMode("forgot")}
                       className="text-[var(--fp-warning)]/90 transition hover:text-[var(--fp-warning)]"
                     >
-                      Ai uitat parola?
+                      {t("auth.forgotLink")}
                     </button>
                   )}
                   {(mode === "forgot" || mode === "reset") && (
-                    <button type="button" onClick={() => setMode("login")} className="text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)]">
-                      Inapoi la login
+                    <button type="button" onClick={() => setMode("login")} className="text-[var(--fp-accent-text)] transition hover:text-[var(--fp-accent-hover)]">
+                      {t("auth.backToLogin")}
                     </button>
                   )}
                 </div>
@@ -377,9 +369,9 @@ export default function Login() {
             <p className="mt-4 text-center text-[11px] text-[var(--fp-text-muted)] lg:text-left">
               <Link
                 to="/privacy"
-                className="text-[var(--fp-text-muted)] underline decoration-white/15 underline-offset-2 transition hover:text-[var(--fp-accent)]"
+                className="text-[var(--fp-text-muted)] underline decoration-white/15 underline-offset-2 transition hover:text-[var(--fp-accent-text)]"
               >
-                Politica de confidentialitate (GDPR)
+                {t("auth.privacyFooterLink")}
               </Link>
             </p>
           </section>

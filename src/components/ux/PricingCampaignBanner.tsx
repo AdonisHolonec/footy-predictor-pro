@@ -19,7 +19,7 @@ export default function PricingCampaignBanner({ compact = false, className = "" 
       <p
         className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-3 py-2 text-xs font-semibold leading-snug text-[var(--fp-text)] ${className}`}
       >
-        <span className="mr-1.5 inline-flex items-center rounded-md bg-[var(--fp-warning)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-navy)]">
+        <span className="mr-1.5 inline-flex items-center rounded-md bg-[var(--fp-warning)] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
           −{pct}%
         </span>
         {t("pricing.compact", { pct })}
@@ -33,15 +33,17 @@ export default function PricingCampaignBanner({ compact = false, className = "" 
       role="status"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-[var(--fp-navy)]">
+        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
           {t("pricing.badge", { pct })}
         </span>
-        <span className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
+        <span className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent-text)]">
           {t("pricing.limited")}
         </span>
       </div>
       <p className="mt-2 text-sm font-semibold text-[var(--fp-text)]">{t("pricing.headline", { pct })}</p>
-      <p className="mt-1 text-xs font-medium leading-relaxed text-[var(--fp-text-muted)]">{t("pricing.body", { pct })}</p>
+      <p className="mt-1 max-w-[65ch] text-xs font-medium leading-relaxed text-[var(--fp-text-muted)]">
+        {t("pricing.body", { pct })}
+      </p>
     </div>
   );
 }
@@ -66,7 +68,7 @@ export function PlanCampaignPrice({ tier, className = "" }: PlanPriceProps) {
   if (campaign == null || list == null) {
     return (
       <div className={`mt-2 flex flex-wrap items-baseline gap-2 ${className}`}>
-        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-navy)]">
+        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
           −{pct}%
         </span>
         <span className="text-sm font-semibold text-[var(--fp-text)]">{t("pricing.promoLabel")}</span>
@@ -86,7 +88,7 @@ export function PlanCampaignPrice({ tier, className = "" }: PlanPriceProps) {
         </span>
         <span className="font-display text-3xl font-bold tabular-nums text-[var(--fp-text)]">{formatLocalEur(campaign)}</span>
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("pricing.perMonth")}</span>
-        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-navy)]">
+        <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
           −{pct}%
         </span>
       </div>

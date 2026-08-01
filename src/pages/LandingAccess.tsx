@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import { BRAND_IMAGES, LANDING_PREVIEW_LOGOS } from "../constants/brandAssets";
@@ -6,17 +7,28 @@ import { useLocale } from "../context/LocaleContext";
 import Badge from "../design-system/Badge";
 import Card from "../design-system/Card";
 import { useAuth } from "../hooks/useAuth";
+import type { HistoryStats } from "../types";
 
 export default function LandingAccess() {
   const { t, locale, setLocale } = useLocale();
   const { user, loading } = useAuth();
+  const [trustStats, setTrustStats] = useState<HistoryStats | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/history?days=30")
+      .then((response) => response.json())
+      .then((json) => {
+        if (json?.ok && json.stats) setTrustStats(json.stats);
+      })
+      .catch(() => null);
+  }, []);
 
   const workspace = "/workspace";
   const login = "/login";
   const signup = "/login?mode=signup";
 
   const langBtn = (code: "ro" | "en") =>
-    `min-w-9 px-2 text-[11px] font-bold ${
+    `min-w-9 px-2 text-[11px] font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
       locale === code ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
     }`;
 
@@ -37,7 +49,7 @@ export default function LandingAccess() {
             />
             <div className="min-w-0">
               <p className="truncate font-display text-sm font-semibold tracking-tight">{t("landing.brand")}</p>
-              <p className="truncate text-[10px] font-medium text-[var(--fp-text-muted)]">{t("landing.brandSub")}</p>
+              <p className="truncate text-[11px] font-medium text-[var(--fp-text-muted)]">{t("landing.brandSub")}</p>
             </div>
           </Link>
 
@@ -54,7 +66,7 @@ export default function LandingAccess() {
                 {t("shell.langEn")}
               </button>
             </div>
-            <Link to={user ? workspace : login} className={`${linkSecondary} !min-h-9 px-3 text-xs`}>
+            <Link to={user ? workspace : login} className={`${linkSecondary} !min-h-[var(--fp-touch)] px-3 text-xs`}>
               {user ? t("landing.openApp") : t("landing.login")}
             </Link>
           </div>
@@ -64,12 +76,16 @@ export default function LandingAccess() {
       <main className="mx-auto max-w-5xl space-y-6 px-3 py-6 sm:px-4 sm:py-8">
         {/* Hero */}
         <section className="text-center sm:text-left">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("landing.brand")}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>
           <h1 className="mt-2 font-display text-[length:var(--fp-hero)] font-semibold leading-tight tracking-tight">
             {t("landing.headline")}
           </h1>
           <p className="mx-auto mt-2 max-w-xl text-sm font-medium leading-relaxed text-[var(--fp-text-muted)] sm:mx-0">
             {t("landing.sub")}
+          </p>
+          <p className="mx-auto mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:mx-0">
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-success)]" aria-hidden />
+            {t("landing.liveTag")}
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
             {user ? (
@@ -87,14 +103,52 @@ export default function LandingAccess() {
           </div>
         </section>
 
+        {/* Trust stat — real accuracy history, not just a claim */}
+        {trustStats && trustStats.settled > 0 && (
+          <Card padding="sm" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 sm:justify-start">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+              {t("landing.trustTitle")}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 sm:justify-start">
+              <div className="text-center sm:text-left">
+                <div className="font-display text-lg font-bold tabular-nums text-[var(--fp-success)]">
+                  {trustStats.winRate.toFixed(1)}%
+                </div>
+                <div className="text-[11px] font-medium text-[var(--fp-text-muted)]">{t("landing.trustSuccessRate")}</div>
+              </div>
+              <div className="text-center sm:text-left">
+                <div className="font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">
+                  {trustStats.settled}
+                </div>
+                <div className="text-[11px] font-medium text-[var(--fp-text-muted)]">{t("landing.trustSettled")}</div>
+              </div>
+              <div className="text-center sm:text-left">
+                <div className="font-display text-lg font-bold tabular-nums text-[var(--fp-success)]">
+                  {trustStats.wins}W/{trustStats.losses}L
+                </div>
+                <div className="text-[11px] font-medium text-[var(--fp-text-muted)]">{t("landing.trustRecord")}</div>
+              </div>
+            </div>
+            <Link
+              to="/track-record"
+              className="text-[11px] font-semibold text-[var(--fp-accent-text)] hover:underline sm:ml-auto"
+            >
+              {t("landing.trackRecord")}
+            </Link>
+          </Card>
+        )}
+
         {/* Preview + benefits */}
         <section className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <Card padding="sm" className="border-[var(--fp-accent)]/25 shadow-[var(--fp-shadow)]">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                 {t("landing.previewEyebrow")}
               </p>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--fp-text-faint)]">{t("landing.previewTime")}</span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--fp-success)]">
+                <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-success)]" aria-hidden />
+                {t("landing.previewLive")} {t("landing.previewMinute")}
+              </span>
             </div>
             <div className="mt-1 flex items-center gap-1.5">
               <img
@@ -104,7 +158,7 @@ export default function LandingAccess() {
                 loading="lazy"
                 decoding="async"
               />
-              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--fp-accent-text)]">
                 {t("landing.previewLeague")}
               </p>
             </div>
@@ -119,7 +173,7 @@ export default function LandingAccess() {
                 />
                 <p className="line-clamp-2 text-center text-sm font-semibold">{t("landing.previewHome")}</p>
               </div>
-              <span className="text-[10px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
+              <span className="text-[11px] font-bold uppercase text-[var(--fp-text-faint)]">{t("common.vs")}</span>
               <div className="flex min-w-0 flex-col items-center gap-1">
                 <img
                   src={LANDING_PREVIEW_LOGOS.away}
@@ -139,10 +193,10 @@ export default function LandingAccess() {
                 { label: t("card.value"), value: "+4.2%" }
               ].map((m) => (
                 <div key={m.label} className="min-w-0 px-0.5 text-center">
-                  <p className="truncate text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{m.label}</p>
+                  <p className="truncate text-[11px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{m.label}</p>
                   <p
                     className={`mt-0.5 truncate font-display text-sm font-bold tabular-nums ${
-                      m.accent ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
+                      m.accent ? "text-[var(--fp-accent-text)]" : "text-[var(--fp-text)]"
                     }`}
                   >
                     {m.value}
@@ -167,7 +221,7 @@ export default function LandingAccess() {
         {/* Pricing */}
         <section id="pricing" className="scroll-mt-20 space-y-3">
           <header>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("landing.pricingTitle")}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.pricingKicker")}</p>
             <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold">{t("landing.pricingTitle")}</h2>
             <p className="mt-1 max-w-2xl text-sm text-[var(--fp-text-muted)]">{t("landing.pricingSub")}</p>
           </header>
@@ -192,7 +246,7 @@ export default function LandingAccess() {
                   highlight: false,
                   priceNode: <p className="mt-1 font-display text-2xl font-bold">{t("landing.freePrice")}</p>,
                   cta: (
-                    <Link to={signup} className={`${linkSecondary} !min-h-9 w-full text-xs`}>
+                    <Link to={signup} className={`${linkSecondary} !min-h-[var(--fp-touch)] w-full text-xs`}>
                       {t("landing.freeCta")}
                     </Link>
                   )
@@ -214,7 +268,7 @@ export default function LandingAccess() {
                   cta: (
                     <Link
                       to={`${login}?from=pricing&tier=premium`}
-                      className={`${linkPrimary} !min-h-9 w-full text-xs`}
+                      className={`${linkPrimary} !min-h-[var(--fp-touch)] w-full text-xs`}
                     >
                       {PRICING_CAMPAIGN.active ? t("pricing.subscribePremium") : t("landing.premiumTitle")}
                     </Link>
@@ -237,7 +291,7 @@ export default function LandingAccess() {
                   cta: (
                     <Link
                       to={`${login}?from=pricing&tier=ultra`}
-                      className={`${linkSecondary} !min-h-9 w-full text-xs`}
+                      className={`${linkSecondary} !min-h-[var(--fp-touch)] w-full text-xs`}
                     >
                       {PRICING_CAMPAIGN.active ? t("pricing.subscribeUltra") : t("landing.ultraTitle")}
                     </Link>
@@ -258,8 +312,8 @@ export default function LandingAccess() {
                   </Badge>
                 ) : null}
                 <p
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
-                    plan.key === "free" ? "text-[var(--fp-text-muted)]" : "pr-14 text-[var(--fp-accent)]"
+                  className={`text-[11px] font-bold uppercase tracking-wider ${
+                    plan.key === "free" ? "text-[var(--fp-text-muted)]" : "pr-14 text-[var(--fp-accent-text)]"
                   }`}
                 >
                   {plan.title}
@@ -269,7 +323,7 @@ export default function LandingAccess() {
                 <ul className="mt-3 space-y-1.5 text-xs font-medium text-[var(--fp-text)]">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex gap-2">
-                      <span className="mt-0.5 shrink-0 font-bold text-[var(--fp-accent)]" aria-hidden>
+                      <span className="mt-0.5 shrink-0 font-bold text-[var(--fp-accent-text)]" aria-hidden>
                         ✓
                       </span>
                       <span>{feature}</span>
@@ -289,11 +343,11 @@ export default function LandingAccess() {
             <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">{t("landing.finalSub")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to={user ? workspace : signup} className={`${linkPrimary} !min-h-9 text-xs`}>
+            <Link to={user ? workspace : signup} className={`${linkPrimary} !min-h-[var(--fp-touch)] text-xs`}>
               {user ? t("landing.openApp") : t("landing.finalCta")}
             </Link>
             {!user ? (
-              <Link to={login} className={`${linkSecondary} !min-h-9 text-xs`}>
+              <Link to={login} className={`${linkSecondary} !min-h-[var(--fp-touch)] text-xs`}>
                 {t("landing.login")}
               </Link>
             ) : null}
@@ -308,17 +362,17 @@ export default function LandingAccess() {
                 ? t("landing.sessionActive", { email: user.email || "" })
                 : t("landing.sessionGuest")}
           </p>
-          <div className="flex flex-wrap justify-center gap-4 sm:justify-end">
-            <Link to="/track-record" className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+          <nav aria-label={t("landing.footerNav")} className="flex flex-wrap justify-center gap-4 sm:justify-end">
+            <Link to="/track-record" className="text-xs font-semibold text-[var(--fp-accent-text)] hover:underline">
               {t("landing.trackRecord")}
             </Link>
-            <Link to="/privacy" className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+            <Link to="/privacy" className="text-xs font-semibold text-[var(--fp-accent-text)] hover:underline">
               {t("landing.privacy")}
             </Link>
-            <Link to={login} className="text-xs font-semibold text-[var(--fp-accent)] hover:underline">
+            <Link to={login} className="text-xs font-semibold text-[var(--fp-accent-text)] hover:underline">
               {t("landing.login")}
             </Link>
-          </div>
+          </nav>
         </footer>
       </main>
     </div>

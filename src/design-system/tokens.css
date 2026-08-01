@@ -24,6 +24,9 @@
   --fp-accent: #ec3013;
   --fp-accent-hover: #dd2b0f;
   --fp-accent-muted: rgba(236, 48, 19, 0.12);
+  /* Darker than --fp-accent for small/bold TEXT use only (~5:1 on white vs. --fp-accent's ~4.2:1);
+     keep --fp-accent for large text, borders, and non-text UI fills. */
+  --fp-accent-text: #d22b11;
   --fp-purple: #7c3aed;
 
   /* Text — near-black ink, never stark #000 */
@@ -118,6 +121,7 @@ html.theme-light {
   --fp-accent: #ec3013;
   --fp-accent-hover: #dd2b0f;
   --fp-accent-muted: rgba(236, 48, 19, 0.12);
+  --fp-accent-text: #d22b11;
   --fp-purple: #7c3aed;
   --fp-text: #201e1d;
   --fp-text-muted: #605d5d;
@@ -146,6 +150,7 @@ html.theme-dark {
   --fp-accent: #1fae6b;
   --fp-accent-hover: #29c97a;
   --fp-accent-muted: rgba(31, 174, 107, 0.16);
+  --fp-accent-text: var(--fp-accent);
   --fp-purple: #a78bfa;
   --fp-text: #f3f5f3;
   --fp-text-muted: #9fafa6;
@@ -172,6 +177,7 @@ html.theme-contrast {
   --fp-text-faint: #d4d4d4;
   --fp-accent: #3ddc84;
   --fp-accent-muted: rgba(61, 220, 132, 0.25);
+  --fp-accent-text: var(--fp-accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
