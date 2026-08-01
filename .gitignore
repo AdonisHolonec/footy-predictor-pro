@@ -2,3 +2,14 @@
 .env*.local
 node_modules/
 dist/
+
+# Local agent/tooling harness artifacts (not project code)
+.codegraph/
+.codex/
+.serena/
+.agents/
+.github/hooks/
+.github/skills/
+.claude/skills/
+.claude/settings.json
+ui-ux-pro-max-skill/
