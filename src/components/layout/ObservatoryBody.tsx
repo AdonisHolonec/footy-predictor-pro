@@ -66,6 +66,7 @@ export default function ObservatoryBody({
   onOpenAuth,
   managedProfiles,
   isAdminWorking,
+  busyUserIds,
   onRefreshProfiles,
   usageLoading,
   perfAdminSnapshot,
@@ -93,6 +94,7 @@ export default function ObservatoryBody({
         accessToken={accessToken}
         managedProfiles={managedProfiles}
         isAdminWorking={isAdminWorking}
+        busyUserIds={busyUserIds}
         onRefreshProfiles={onRefreshProfiles}
         usageLoading={usageLoading}
         perfAdminSnapshot={perfAdminSnapshot}

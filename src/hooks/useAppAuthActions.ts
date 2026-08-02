@@ -22,7 +22,17 @@ export function useAppAuthActions(
   adminExpiryDraftByUser: Record<string, string>
 ) {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
-  const [isAdminWorking, setIsAdminWorking] = useState(false);
+  const [busyAdminUserIds, setBusyAdminUserIds] = useState<Set<string>>(new Set());
+  const isAdminWorking = busyAdminUserIds.size > 0;
+
+  function setAdminUserBusy(userId: string, busy: boolean) {
+    setBusyAdminUserIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }
 
   function localDatetimeInputToIso(value: string) {
     if (!value) return null;
@@ -92,31 +102,41 @@ export function useAppAuthActions(
     }
   }
 
-  async function handleAdminRoleChange(targetUserId: string, role: "user" | "admin"): Promise<boolean> {
-    setIsAdminWorking(true);
+  async function handleAdminRoleChange(
+    targetUserId: string,
+    role: "user" | "admin"
+  ): Promise<{ ok: boolean; message?: string }> {
+    setAdminUserBusy(targetUserId, true);
     try {
       await api.updateProfileRole(targetUserId, role);
-      setStatus(`Rol actualizat la ${role} pentru ${targetUserId.slice(0, 8)}...`);
-      return true;
+      const message = `Rol actualizat la ${role} pentru ${targetUserId.slice(0, 8)}...`;
+      setStatus(message);
+      return { ok: true };
     } catch (error: unknown) {
-      setStatus(error instanceof Error ? error.message : "Nu am putut actualiza rolul.");
-      return false;
+      const message = error instanceof Error ? error.message : "Nu am putut actualiza rolul.";
+      setStatus(message);
+      return { ok: false, message };
     } finally {
-      setIsAdminWorking(false);
+      setAdminUserBusy(targetUserId, false);
     }
   }
 
-  async function handleAdminToggleBlock(targetUserId: string, isBlocked: boolean): Promise<boolean> {
-    setIsAdminWorking(true);
+  async function handleAdminToggleBlock(
+    targetUserId: string,
+    isBlocked: boolean
+  ): Promise<{ ok: boolean; message?: string }> {
+    setAdminUserBusy(targetUserId, true);
     try {
       await api.toggleProfileBlock(targetUserId, isBlocked);
-      setStatus(`${isBlocked ? "Blocat" : "Deblocat"} utilizator ${targetUserId.slice(0, 8)}...`);
-      return true;
+      const message = `${isBlocked ? "Blocat" : "Deblocat"} utilizator ${targetUserId.slice(0, 8)}...`;
+      setStatus(message);
+      return { ok: true };
     } catch (error: unknown) {
-      setStatus(error instanceof Error ? error.message : "Nu am putut actualiza statusul utilizatorului.");
-      return false;
+      const message = error instanceof Error ? error.message : "Nu am putut actualiza statusul utilizatorului.";
+      setStatus(message);
+      return { ok: false, message };
     } finally {
-      setIsAdminWorking(false);
+      setAdminUserBusy(targetUserId, false);
     }
   }
 
@@ -124,8 +144,8 @@ export function useAppAuthActions(
     userId: string,
     fallbackTier: UserTier,
     fallbackExpiry?: string | null
-  ): Promise<boolean> {
-    setIsAdminWorking(true);
+  ): Promise<{ ok: boolean; message?: string }> {
+    setAdminUserBusy(userId, true);
     try {
       const tier = (adminTierDraftByUser[userId] || fallbackTier) as UserTier;
       const expiryRaw = adminExpiryDraftByUser[userId];
@@ -139,23 +159,24 @@ export function useAppAuthActions(
         }
       }
       await api.updateProfileMonetization(userId, { tier, subscriptionExpiresAt });
-      setStatus(
-        subscriptionExpiresAt
-          ? `Abonament actualizat pentru ${userId}.`
-          : `Abonament actualizat pentru ${userId} (${tier}, nelimitat).`
-      );
-      return true;
+      const message = subscriptionExpiresAt
+        ? `Abonament actualizat pentru ${userId}.`
+        : `Abonament actualizat pentru ${userId} (${tier}, nelimitat).`;
+      setStatus(message);
+      return { ok: true };
     } catch (e: unknown) {
-      setStatus(e instanceof Error ? e.message : "Nu am putut actualiza abonamentul.");
-      return false;
+      const message = e instanceof Error ? e.message : "Nu am putut actualiza abonamentul.";
+      setStatus(message);
+      return { ok: false, message };
     } finally {
-      setIsAdminWorking(false);
+      setAdminUserBusy(userId, false);
     }
   }
 
   return {
     isAuthSubmitting,
     isAdminWorking,
+    busyAdminUserIds,
     handleLogin,
     handleSignup,
     handleLogout,

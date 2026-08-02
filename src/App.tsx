@@ -101,6 +101,7 @@ export default function App() {
             insightSample={c.predictions.insightSample}
             managedProfiles={c.managedProfiles}
             isAdminWorking={c.actions.isAdminWorking}
+            busyUserIds={c.actions.busyAdminUserIds}
             onRefreshProfiles={() => void c.refreshManagedProfiles()}
             usageLoading={c.calls.usageLoading}
             perfAdminSnapshot={c.perfAdminSnapshot}

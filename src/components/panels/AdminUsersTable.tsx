@@ -14,11 +14,13 @@ type ManagedProfile = {
 };
 
 /** Result is optional: existing callers that don't report success/failure still work, and skip inline row feedback. */
-type RowActionResult = boolean | void | Promise<boolean | void>;
+type RowActionOutcome = boolean | { ok: boolean; message?: string };
+type RowActionResult = RowActionOutcome | void | Promise<RowActionOutcome | void>;
 
 type AdminUsersTableProps = {
   managedProfiles: ManagedProfile[];
-  isAdminWorking: boolean;
+  /** User ids with an admin action currently in flight — only that row disables. */
+  busyUserIds: Set<string>;
   adminTierDraftByUser: Record<string, UserTier>;
   setAdminTierDraftByUser: Dispatch<SetStateAction<Record<string, UserTier>>>;
   adminExpiryDraftByUser: Record<string, string>;
@@ -67,7 +69,7 @@ function describeMonetizationChange(
 
 export default function AdminUsersTable({
   managedProfiles,
-  isAdminWorking,
+  busyUserIds,
   adminTierDraftByUser,
   setAdminTierDraftByUser,
   adminExpiryDraftByUser,
@@ -76,7 +78,9 @@ export default function AdminUsersTable({
   onToggleBlock,
   onMonetizationSave
 }: AdminUsersTableProps) {
-  const [rowFeedback, setRowFeedback] = useState<Record<string, { ok: boolean; label: string } | undefined>>({});
+  const [rowFeedback, setRowFeedback] = useState<
+    Record<string, { ok: boolean; label: string; detail?: string } | undefined>
+  >({});
 
   function clearRowFeedbackAfterDelay(userId: string) {
     window.setTimeout(() => {
@@ -93,8 +97,9 @@ export default function AdminUsersTable({
     if (!window.confirm(confirmMessage)) return;
     const result = await action();
     // Callers that don't report an outcome (plain void) are treated as successful — no regression for existing behavior.
-    const ok = result !== false;
-    setRowFeedback((prev) => ({ ...prev, [userId]: { ok, label } }));
+    const ok = typeof result === "object" && result !== null ? result.ok !== false : result !== false;
+    const detail = typeof result === "object" && result !== null && result.ok === false ? result.message : undefined;
+    setRowFeedback((prev) => ({ ...prev, [userId]: { ok, label, detail } }));
     clearRowFeedbackAfterDelay(userId);
   }
 
@@ -210,7 +215,7 @@ export default function AdminUsersTable({
                         () => onRoleChange(profile.userId, nextRole)
                       );
                     }}
-                    disabled={isAdminWorking}
+                    disabled={busyUserIds.has(profile.userId)}
                     className="rounded-md border border-[var(--fp-accent)]/20 bg-[var(--fp-accent)]/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
                   >
                     Fă {profile.role === "admin" ? "user" : "admin"}
@@ -229,7 +234,7 @@ export default function AdminUsersTable({
                         () => onToggleBlock(profile.userId, willBlock)
                       );
                     }}
-                    disabled={isAdminWorking}
+                    disabled={busyUserIds.has(profile.userId)}
                     className="rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] disabled:opacity-50"
                   >
                     {profile.isBlocked ? "Deblochează" : "Blochează"}
@@ -257,7 +262,7 @@ export default function AdminUsersTable({
                           )
                       );
                     }}
-                    disabled={isAdminWorking}
+                    disabled={busyUserIds.has(profile.userId)}
                     className="rounded-md border border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] disabled:opacity-50"
                   >
                     Salvează planul
@@ -265,14 +270,21 @@ export default function AdminUsersTable({
                   {rowFeedback[profile.userId] && (
                     <span
                       role="status"
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                      className={`inline-flex max-w-[240px] items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
                         rowFeedback[profile.userId]!.ok
                           ? "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
                           : "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
                       }`}
                     >
                       {rowFeedback[profile.userId]!.ok ? "✓" : "✗"} {rowFeedback[profile.userId]!.label}
-                      {!rowFeedback[profile.userId]!.ok && " — eșuat"}
+                      {!rowFeedback[profile.userId]!.ok &&
+                        (rowFeedback[profile.userId]!.detail ? (
+                          <span className="truncate normal-case tracking-normal">
+                            : {rowFeedback[profile.userId]!.detail}
+                          </span>
+                        ) : (
+                          " — eșuat"
+                        ))}
                     </span>
                   )}
                 </div>

@@ -18,9 +18,13 @@ type ManagedProfile = {
   favoriteLeagues: number[];
 };
 
+type RowActionOutcome = boolean | { ok: boolean; message?: string };
+
 type AdminUsersPanelProps = {
   managedProfiles: ManagedProfile[];
   isAdminWorking: boolean;
+  /** User ids with an admin action currently in flight — only that row disables. */
+  busyUserIds: Set<string>;
   onRefreshProfiles: () => void;
   usageSnapshot: UsageSnapshot | null;
   usageLoading: boolean;
@@ -32,18 +36,19 @@ type AdminUsersPanelProps = {
   setAdminTierDraftByUser: Dispatch<SetStateAction<Record<string, UserTier>>>;
   adminExpiryDraftByUser: Record<string, string>;
   setAdminExpiryDraftByUser: Dispatch<SetStateAction<Record<string, string>>>;
-  onRoleChange: (userId: string, role: "user" | "admin") => boolean | void | Promise<boolean | void>;
-  onToggleBlock: (userId: string, isBlocked: boolean) => boolean | void | Promise<boolean | void>;
+  onRoleChange: (userId: string, role: "user" | "admin") => RowActionOutcome | void | Promise<RowActionOutcome | void>;
+  onToggleBlock: (userId: string, isBlocked: boolean) => RowActionOutcome | void | Promise<RowActionOutcome | void>;
   onMonetizationSave: (
     userId: string,
     fallbackTier: UserTier,
     fallbackExpiry?: string | null
-  ) => boolean | void | Promise<boolean | void>;
+  ) => RowActionOutcome | void | Promise<RowActionOutcome | void>;
 };
 
 export default function AdminUsersPanel({
   managedProfiles,
   isAdminWorking,
+  busyUserIds,
   onRefreshProfiles,
   usageSnapshot,
   usageLoading,
@@ -90,7 +95,7 @@ export default function AdminUsersPanel({
       />
       <AdminUsersTable
         managedProfiles={managedProfiles}
-        isAdminWorking={isAdminWorking}
+        busyUserIds={busyUserIds}
         adminTierDraftByUser={adminTierDraftByUser}
         setAdminTierDraftByUser={setAdminTierDraftByUser}
         adminExpiryDraftByUser={adminExpiryDraftByUser}

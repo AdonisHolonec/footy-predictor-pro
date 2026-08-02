@@ -64,6 +64,7 @@ export default function PerformancePanel({
   accessToken,
   managedProfiles,
   isAdminWorking,
+  busyUserIds,
   onRefreshProfiles,
   usageLoading,
   perfAdminSnapshot,
@@ -144,6 +145,7 @@ export default function PerformancePanel({
           <AdminUsersPanel
             managedProfiles={managedProfiles}
             isAdminWorking={isAdminWorking}
+            busyUserIds={busyUserIds}
             onRefreshProfiles={onRefreshProfiles}
             usageSnapshot={usageSnapshot}
             usageLoading={usageLoading}
