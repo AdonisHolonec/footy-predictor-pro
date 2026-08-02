@@ -197,6 +197,8 @@ export default function UserDashboard() {
   const [, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
   /** Avoid re-hydrating selection from profile every time favoriteLeaguesByUser echoes from saves (caused “stuck” league list). */
   const lastSelectionHydrateUserId = useRef<string | null>(null);
+  /** Distinguishes a genuine account switch (clear cached predictions) from a same-user refresh/session-restore (keep them). */
+  const previousUserIdRef = useRef<string | null>(null);
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [warmPredictBusy, setWarmPredictBusy] = useState(false);
@@ -546,6 +548,9 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!user?.id) return;
+    const isDifferentUser = previousUserIdRef.current !== null && previousUserIdRef.current !== user.id;
+    previousUserIdRef.current = user.id;
+    if (!isDifferentUser) return;
     setPredictionsByUser((prev) => {
       const next = { ...prev };
       delete next[user.id];
