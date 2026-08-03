@@ -1,3 +1,8 @@
+/** UEFA Champions League league id (API-Football). */
+export const CHAMPIONS_LEAGUE_ID = 2;
+/** UEFA Europa League league id (API-Football). */
+export const EUROPA_LEAGUE_ID = 3;
+
 /**
  * Top leagues supported officially. Keep in sync with
  * `TOP_LEAGUE_IDS` from leagueProfiles.config.json / modelConstants.js.
@@ -10,8 +15,8 @@ export const ELITE_LEAGUES: number[] = [
   135, // Serie A
   78, // Bundesliga
   61, // Ligue 1
-  2, // UEFA Champions League
-  3, // UEFA Europa League
+  CHAMPIONS_LEAGUE_ID,
+  EUROPA_LEAGUE_ID,
   848, // UEFA Conference League
   88, // Eredivisie
   283, // SuperLiga România

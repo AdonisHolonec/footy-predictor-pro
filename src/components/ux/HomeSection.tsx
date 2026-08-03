@@ -11,6 +11,9 @@ import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import PredictionFocusCard from "./PredictionFocusCard";
 import HistoryTrustSection from "./HistoryTrustSection";
 import { computeYesterdayAccuracy } from "../../utils/historyStats";
+import { getGreeting } from "../../utils/greeting";
+import { isFixtureInPlay } from "../../utils/appUtils";
+import { CHAMPIONS_LEAGUE_ID, EUROPA_LEAGUE_ID } from "../../constants/appConstants";
 
 type AccessTier = UpgradeTier | "free" | string;
 
@@ -101,6 +104,27 @@ export default function HomeSection({
     return [...pool].sort((a, b) => confOf(b) - confOf(a) || evOf(b) - evOf(a)).slice(0, 3);
   }, [matches]);
 
+  const hasLiveChampionsLeague = useMemo(
+    () => matches.some((m) => m.leagueId === CHAMPIONS_LEAGUE_ID && isFixtureInPlay(m.status)),
+    [matches]
+  );
+  const hasLiveEuropaLeague = useMemo(
+    () => matches.some((m) => m.leagueId === EUROPA_LEAGUE_ID && isFixtureInPlay(m.status)),
+    [matches]
+  );
+
+  const greeting = useMemo(
+    () =>
+      getGreeting({
+        locale,
+        hasLiveMatches: liveCount > 0,
+        liveCount,
+        hasLiveChampionsLeague,
+        hasLiveEuropaLeague
+      }),
+    [locale, liveCount, hasLiveChampionsLeague, hasLiveEuropaLeague]
+  );
+
   const yesterdayStats = useMemo(() => computeYesterdayAccuracy(history), [history]);
   const todayLabel = useMemo(
     () =>
@@ -126,7 +150,7 @@ export default function HomeSection({
     <section className="space-y-6">
       <header>
         <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-[length:var(--fp-hero)]">
-          {t("dash.goodMorning")}
+          {greeting.text}
         </h1>
         <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">
           {todayLabel} · {t("dash.matchesAnalyzedToday", { n: matches.length })}

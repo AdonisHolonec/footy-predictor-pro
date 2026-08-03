@@ -90,6 +90,8 @@ export const ro: Dict = {
     performanceSub: "Ultimele rezultate validate și rata de succes",
     sparklineLabel: "Ultimele 12 rezultate validate",
     goodMorning: "Bună dimineața 👋",
+    goodDay: "Bună ziua 👋",
+    goodEvening: "Bună seara 👋",
     matchesAnalyzedToday: "{n} meciuri analizate azi",
     yesterdayAccuracyTitle: "Acuratețea de ieri",
     yesterdayAccuracyNoData: "Niciun meci validat ieri",

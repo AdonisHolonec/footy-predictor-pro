@@ -90,6 +90,8 @@ export const en: Dict = {
     performanceSub: "Your last settled results and success rate",
     sparklineLabel: "Last 12 settled results",
     goodMorning: "Good Morning 👋",
+    goodDay: "Good Afternoon 👋",
+    goodEvening: "Good Evening 👋",
     matchesAnalyzedToday: "{n} matches analyzed today",
     yesterdayAccuracyTitle: "Yesterday's accuracy",
     yesterdayAccuracyNoData: "No settled matches yesterday",
