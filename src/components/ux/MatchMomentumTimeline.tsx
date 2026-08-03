@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MatchLiveEvent, MatchLiveEventType, MatchScore, MomentumRawStats, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import Tooltip from "../../design-system/Tooltip";
+import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
@@ -15,6 +16,7 @@ type TimelineEvent = {
   assist?: string | null;
 };
 type EventFilter = "all" | "goal" | "card" | "substitution" | "var";
+type WhyChip = { label: string; value: string };
 
 type Props = {
   fixtureId: number;
@@ -25,6 +27,10 @@ type Props = {
   awayTeam: string;
   /** Real match events from /fixtures/events — when present, these are used instead of the score/card-diff inference below. */
   liveEvents?: MatchLiveEvent[];
+  /** match.recommended.pick — the prediction already computed elsewhere in MatchModal; never derived from momentum. */
+  recommendedPick: string;
+  /** Pre-formatted confidence string (e.g. "72%" or a locked/category label) — mirrors the header's own confidence gating so this widget never invents its own. */
+  confidenceLabel: string;
 };
 
 function eventIcon(kind: MatchLiveEventType): string {
@@ -96,6 +102,8 @@ const MAX_HISTORY_POINTS = 160;
 const EDGE_ALIGN_PCT = 15;
 /** Feed auto-scroll only kicks in when the user is already this close to the latest row. */
 const STICK_TO_BOTTOM_PX = 24;
+/** Compact "moments" strip in the default view shows only the most recent events — full history lives in the detail panel. */
+const RECENT_MOMENTS_COUNT = 3;
 
 function statLabel(t: (key: string) => string, kind: keyof MomentumRawStats): string {
   switch (kind) {
@@ -110,6 +118,29 @@ function statLabel(t: (key: string) => string, kind: keyof MomentumRawStats): st
     default:
       return "";
   }
+}
+
+/**
+ * Highest-weighted stats in MomentumEngine first (shotsOnTarget .25, possession .2, corners/shotsTotal
+ * .15 — see server-utils/momentum/MomentumEngine.js) — the "why" chips are whichever of these are
+ * actually available for both sides, in that priority order, capped at two so they stay a glance, not a table.
+ */
+const WHY_CHIP_PRIORITY: Array<keyof MomentumRawStats> = ["shotsOnTarget", "possession", "corners", "shotsTotal"];
+
+function deriveWhyChips(t: (key: string) => string, raw?: { home: MomentumRawStats; away: MomentumRawStats }): WhyChip[] {
+  if (!raw) return [];
+  const chips: WhyChip[] = [];
+  for (const kind of WHY_CHIP_PRIORITY) {
+    if (chips.length >= 2) break;
+    const home = raw.home[kind];
+    const away = raw.away[kind];
+    if (home == null || away == null) continue;
+    chips.push({
+      label: statLabel(t, kind),
+      value: kind === "possession" ? `${Math.round(home)}%` : `${home}–${away}`
+    });
+  }
+  return chips;
 }
 
 /**
@@ -207,7 +238,17 @@ function StatRow({
   );
 }
 
-export default function MatchMomentumTimeline({ fixtureId, status, score, momentum, homeTeam, awayTeam, liveEvents }: Props) {
+export default function MatchMomentumTimeline({
+  fixtureId,
+  status,
+  score,
+  momentum,
+  homeTeam,
+  awayTeam,
+  liveEvents,
+  recommendedPick,
+  confidenceLabel
+}: Props) {
   const { t } = useLocale();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [inferredEvents, setInferredEvents] = useState<TimelineEvent[]>([]);
@@ -349,209 +390,291 @@ export default function MatchMomentumTimeline({ fixtureId, status, score, moment
         ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
         : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]";
 
+  // The single highest-priority observation becomes the headline sentence; a quiet match
+  // (zero rules fired) falls back to an explicit neutral statement rather than showing nothing.
+  const anchorText = matchStory[0] ?? t("match.momentumNeutral");
+  const whyChips = deriveWhyChips(t, raw);
+  const recentMoments = displayEvents.slice(-RECENT_MOMENTS_COUNT);
+
   return (
     <>
-    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
+      <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
           {t("card.momentum")}
         </p>
-        <p
-          className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${dominantBadgeClass}`}
+
+        <div className="mb-2.5 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-accent)]" />
+            <span className="truncate">{homeTeam}</span>
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">{awayTeam}</span>
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-danger)]" />
+          </span>
+        </div>
+
+        <div
+          className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--fp-border)]"
+          role="img"
+          aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
         >
-          {dominantLabel}
-        </p>
-      </div>
+          <div
+            className="absolute inset-y-0 left-0 bg-[var(--fp-accent)] transition-[width] duration-500"
+            style={{ width: `${momentum.homeMomentum}%` }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 bg-[var(--fp-danger)] transition-[width] duration-500"
+            style={{ width: `${momentum.awayMomentum}%` }}
+          />
+        </div>
 
-      <div className="mb-2 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-accent)]" />
-          <span className="truncate">{homeTeam}</span>
-        </span>
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{awayTeam}</span>
-          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-danger)]" />
-        </span>
-      </div>
+        <p className="mt-3 text-[13px] font-bold leading-snug text-[var(--fp-text)] sm:text-sm">{anchorText}</p>
 
-      {displayEvents.length > 0 && (
-        <div className="relative mb-1 h-7 w-full">
-          {displayEvents.map((ev, i) => {
-            const teamName = ev.team === "home" ? homeTeam : awayTeam;
-            const label = eventLabel(t, ev.kind);
-            const minuteLabel = formatMinute(ev.minute, ev.extra);
-            const tooltipLabel = ev.player
-              ? ev.assist
-                ? `${teamName} · ${minuteLabel} · ${label} · ${ev.player} (${t("match.eventAssist")}: ${ev.assist})`
-                : `${teamName} · ${minuteLabel} · ${label} · ${ev.player}`
-              : `${teamName} · ${minuteLabel} · ${label}`;
-            const pct = posPct(ev.minute + (ev.extra || 0));
-            const align = pct < EDGE_ALIGN_PCT ? "start" : pct > 100 - EDGE_ALIGN_PCT ? "end" : "center";
-            return (
-              <div
-                key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                className="absolute top-0 -translate-x-1/2"
-                style={{ left: xPct(ev.minute + (ev.extra || 0)) }}
+        {whyChips.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {whyChips.map((chip) => (
+              <span
+                key={chip.label}
+                className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)]"
               >
-                <Tooltip label={tooltipLabel} align={align}>
+                {chip.label} {chip.value}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {recentMoments.length > 0 && (
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5">
+            {recentMoments.map((ev, i) => {
+              const teamName = ev.team === "home" ? homeTeam : awayTeam;
+              const label = eventLabel(t, ev.kind);
+              const minuteLabel = formatMinute(ev.minute, ev.extra);
+              const tooltipLabel = ev.player
+                ? ev.assist
+                  ? `${teamName} · ${minuteLabel} · ${label} · ${ev.player} (${t("match.eventAssist")}: ${ev.assist})`
+                  : `${teamName} · ${minuteLabel} · ${label} · ${ev.player}`
+                : `${teamName} · ${minuteLabel} · ${label}`;
+              return (
+                <Tooltip key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`} label={tooltipLabel}>
                   <button
                     type="button"
                     aria-label={tooltipLabel}
-                    className="animate-card-in flex h-7 w-7 items-center justify-center rounded-full text-[11px] leading-none transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                    className="animate-card-in flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] transition-transform duration-150 hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
                   >
-                    {eventIcon(ev.kind)}
+                    <span aria-hidden className="text-sm leading-none">
+                      {eventIcon(ev.kind)}
+                    </span>
+                    <span className="font-mono text-[8px] font-semibold text-[var(--fp-text-muted)]">{minuteLabel}</span>
                   </button>
                 </Tooltip>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
 
-      <div className="relative h-24 w-full overflow-hidden rounded-[var(--fp-radius-sm)] sm:h-28">
-        <div className="absolute inset-x-0 top-0 h-1/2 bg-[var(--fp-accent)]/[0.04]" />
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[var(--fp-danger)]/[0.04]" />
-        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--fp-border)]" />
-        <div className="flex h-full w-full items-stretch gap-px">
-          {history.map((pt, i) => {
-            const homeUp = pt.homeMomentum >= pt.awayMomentum;
-            const magnitude = Math.abs(pt.homeMomentum - pt.awayMomentum) / 100;
-            const barLabel = `${pt.minute}' · ${homeTeam} ${Math.round(pt.homeMomentum)} – ${Math.round(pt.awayMomentum)} ${awayTeam}`;
-            return (
-              <div key={`${pt.minute}-${i}`} title={barLabel} className="flex flex-1 flex-col justify-center">
-                {homeUp ? (
-                  <>
-                    <div
-                      className="w-full self-end rounded-t-[1px] bg-[var(--fp-accent)] transition-opacity duration-150 hover:opacity-80"
-                      style={{ height: `${Math.max(4, magnitude * 100)}%` }}
-                    />
-                    <div className="w-full flex-1" />
-                  </>
-                ) : (
-                  <>
-                    <div className="w-full flex-1" />
-                    <div
-                      className="w-full rounded-b-[1px] bg-[var(--fp-danger)] transition-opacity duration-150 hover:opacity-80"
-                      style={{ height: `${Math.max(4, magnitude * 100)}%` }}
-                    />
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="relative mt-1.5 h-3 w-full">
-        {ticks.map((m) => (
-          <span
-            key={m}
-            className="absolute -translate-x-1/2 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]"
-            style={{ left: xPct(m) }}
-          >
-            {m}'
+        <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[var(--fp-border)] pt-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+              {t("match.momentumNext")}
+            </p>
+            <p className="truncate text-[13px] font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
+          </div>
+          <span className="shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2.5 py-1 font-mono text-[11px] font-bold text-[var(--fp-accent)]">
+            {confidenceLabel}
           </span>
-        ))}
-        <span className="absolute right-0 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]">
-          {status === "HT" ? "HT" : status === "FT" ? "FT" : ""}
-        </span>
+        </div>
       </div>
 
-      {raw && (
-        <div className="mt-4 space-y-2 border-t border-[var(--fp-border)] pt-3">
-          <StatRow label={statLabel(t, "possession")} home={raw.home.possession} away={raw.away.possession} suffix="%" />
-          <StatRow label={statLabel(t, "shotsTotal")} home={raw.home.shotsTotal} away={raw.away.shotsTotal} />
-          <StatRow
-            label={statLabel(t, "shotsOnTarget")}
-            home={raw.home.shotsOnTarget}
-            away={raw.away.shotsOnTarget}
-          />
-          <StatRow label={statLabel(t, "corners")} home={raw.home.corners} away={raw.away.corners} />
-          {(raw.home.yellowCards != null ||
-            raw.away.yellowCards != null ||
-            raw.home.redCards != null ||
-            raw.away.redCards != null) && (
-            <div className="flex items-center justify-center gap-3 pt-1 text-[11px] sm:text-xs">
-              <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
-                {raw.home.yellowCards != null && raw.home.yellowCards > 0 ? `🟨${raw.home.yellowCards} ` : ""}
-                {raw.home.redCards != null && raw.home.redCards > 0 ? `🟥${raw.home.redCards}` : ""}
-              </span>
-              <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
-                {t("match.momentumCards")}
-              </span>
-              <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
-                {raw.away.yellowCards != null && raw.away.yellowCards > 0 ? `🟨${raw.away.yellowCards} ` : ""}
-                {raw.away.redCards != null && raw.away.redCards > 0 ? `🟥${raw.away.redCards}` : ""}
-              </span>
+      <div className="mt-3">
+        <CollapsiblePanel title={t("match.momentumDetails")} compact>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${dominantBadgeClass}`}
+            >
+              {dominantLabel}
+            </span>
+          </div>
+
+          {displayEvents.length > 0 && (
+            <div className="relative mb-1 h-7 w-full">
+              {displayEvents.map((ev, i) => {
+                const teamName = ev.team === "home" ? homeTeam : awayTeam;
+                const label = eventLabel(t, ev.kind);
+                const minuteLabel = formatMinute(ev.minute, ev.extra);
+                const tooltipLabel = ev.player
+                  ? ev.assist
+                    ? `${teamName} · ${minuteLabel} · ${label} · ${ev.player} (${t("match.eventAssist")}: ${ev.assist})`
+                    : `${teamName} · ${minuteLabel} · ${label} · ${ev.player}`
+                  : `${teamName} · ${minuteLabel} · ${label}`;
+                const pct = posPct(ev.minute + (ev.extra || 0));
+                const align = pct < EDGE_ALIGN_PCT ? "start" : pct > 100 - EDGE_ALIGN_PCT ? "end" : "center";
+                return (
+                  <div
+                    key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
+                    className="absolute top-0 -translate-x-1/2"
+                    style={{ left: xPct(ev.minute + (ev.extra || 0)) }}
+                  >
+                    <Tooltip label={tooltipLabel} align={align}>
+                      <button
+                        type="button"
+                        aria-label={tooltipLabel}
+                        className="animate-card-in flex h-7 w-7 items-center justify-center rounded-full text-[11px] leading-none transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                      >
+                        {eventIcon(ev.kind)}
+                      </button>
+                    </Tooltip>
+                  </div>
+                );
+              })}
             </div>
           )}
-        </div>
-      )}
 
-      {displayEvents.length > 0 && (
-        <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
-          <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label={t("match.filtersLabel")}>
-            {EVENT_FILTERS.map(({ id, labelKey }) => (
-              <button
-                key={id}
-                type="button"
-                aria-pressed={filter === id}
-                onClick={() => setFilter(id)}
-                className={`h-8 touch-manipulation rounded-md px-3 text-[10px] font-bold uppercase tracking-wide transition-colors duration-150 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                  filter === id
-                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)] hover:text-[var(--fp-text)]"
-                }`}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
+          <div className="relative h-24 w-full overflow-hidden rounded-[var(--fp-radius-sm)] sm:h-28">
+            <div className="absolute inset-x-0 top-0 h-1/2 bg-[var(--fp-accent)]/[0.04]" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[var(--fp-danger)]/[0.04]" />
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--fp-border)]" />
+            <div className="flex h-full w-full items-stretch gap-px">
+              {history.map((pt, i) => {
+                const homeUp = pt.homeMomentum >= pt.awayMomentum;
+                const magnitude = Math.abs(pt.homeMomentum - pt.awayMomentum) / 100;
+                const barLabel = `${pt.minute}' · ${homeTeam} ${Math.round(pt.homeMomentum)} – ${Math.round(pt.awayMomentum)} ${awayTeam}`;
+                return (
+                  <div key={`${pt.minute}-${i}`} title={barLabel} className="flex flex-1 flex-col justify-center">
+                    {homeUp ? (
+                      <>
+                        <div
+                          className="w-full self-end rounded-t-[1px] bg-[var(--fp-accent)] transition-opacity duration-150 hover:opacity-80"
+                          style={{ height: `${Math.max(4, magnitude * 100)}%` }}
+                        />
+                        <div className="w-full flex-1" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-full flex-1" />
+                        <div
+                          className="w-full rounded-b-[1px] bg-[var(--fp-danger)] transition-opacity duration-150 hover:opacity-80"
+                          style={{ height: `${Math.max(4, magnitude * 100)}%` }}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <ul
-            ref={feedRef}
-            onScroll={handleFeedScroll}
-            role="list"
-            className="max-h-36 space-y-0.5 overflow-y-auto sm:max-h-44"
-          >
-            {filteredEvents.map((ev, i) => (
-              <li
-                key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)]/15 sm:text-xs"
-              >
-                <span className="w-9 shrink-0 font-mono tabular-nums text-[var(--fp-text-muted)]">
-                  {formatMinute(ev.minute, ev.extra)}
-                </span>
-                <span aria-hidden className="shrink-0">
-                  {eventIcon(ev.kind)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[var(--fp-text)]">
-                  <span className="font-semibold">{ev.team === "home" ? homeTeam : awayTeam}</span>
-                  {` · ${eventLabel(t, ev.kind)}`}
-                  {ev.player ? ` · ${ev.player}` : ""}
-                  {ev.assist ? ` (${t("match.eventAssist")}: ${ev.assist})` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
 
-    {matchStory.length > 0 && (
-      <div className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
-        <p className="mb-2.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
-          {t("match.storyTitle")}
-        </p>
-        <ul className="space-y-1.5">
-          {matchStory.map((line, i) => (
-            <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[var(--fp-text)] sm:text-xs">
-              <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--fp-accent)]" />
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
+          <div className="relative mt-1.5 h-3 w-full">
+            {ticks.map((m) => (
+              <span
+                key={m}
+                className="absolute -translate-x-1/2 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]"
+                style={{ left: xPct(m) }}
+              >
+                {m}'
+              </span>
+            ))}
+            <span className="absolute right-0 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]">
+              {status === "HT" ? "HT" : status === "FT" ? "FT" : ""}
+            </span>
+          </div>
+
+          {raw && (
+            <div className="mt-4 space-y-2 border-t border-[var(--fp-border)] pt-3">
+              <StatRow label={statLabel(t, "possession")} home={raw.home.possession} away={raw.away.possession} suffix="%" />
+              <StatRow label={statLabel(t, "shotsTotal")} home={raw.home.shotsTotal} away={raw.away.shotsTotal} />
+              <StatRow
+                label={statLabel(t, "shotsOnTarget")}
+                home={raw.home.shotsOnTarget}
+                away={raw.away.shotsOnTarget}
+              />
+              <StatRow label={statLabel(t, "corners")} home={raw.home.corners} away={raw.away.corners} />
+              {(raw.home.yellowCards != null ||
+                raw.away.yellowCards != null ||
+                raw.home.redCards != null ||
+                raw.away.redCards != null) && (
+                <div className="flex items-center justify-center gap-3 pt-1 text-[11px] sm:text-xs">
+                  <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
+                    {raw.home.yellowCards != null && raw.home.yellowCards > 0 ? `🟨${raw.home.yellowCards} ` : ""}
+                    {raw.home.redCards != null && raw.home.redCards > 0 ? `🟥${raw.home.redCards}` : ""}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+                    {t("match.momentumCards")}
+                  </span>
+                  <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
+                    {raw.away.yellowCards != null && raw.away.yellowCards > 0 ? `🟨${raw.away.yellowCards} ` : ""}
+                    {raw.away.redCards != null && raw.away.redCards > 0 ? `🟥${raw.away.redCards}` : ""}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {matchStory.length > 0 && (
+            <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
+                {t("match.storyTitle")}
+              </p>
+              <ul className="space-y-1.5">
+                {matchStory.map((line, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-[var(--fp-text)] sm:text-xs">
+                    <span aria-hidden className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--fp-accent)]" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {displayEvents.length > 0 && (
+            <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
+              <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label={t("match.filtersLabel")}>
+                {EVENT_FILTERS.map(({ id, labelKey }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={filter === id}
+                    onClick={() => setFilter(id)}
+                    className={`h-8 touch-manipulation rounded-md px-3 text-[10px] font-bold uppercase tracking-wide transition-colors duration-150 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                      filter === id
+                        ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                        : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-card)] hover:text-[var(--fp-text)]"
+                    }`}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+              <ul
+                ref={feedRef}
+                onScroll={handleFeedScroll}
+                role="list"
+                className="max-h-36 space-y-0.5 overflow-y-auto sm:max-h-44"
+              >
+                {filteredEvents.map((ev, i) => (
+                  <li
+                    key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
+                    className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)]/15 sm:text-xs"
+                  >
+                    <span className="w-9 shrink-0 font-mono tabular-nums text-[var(--fp-text-muted)]">
+                      {formatMinute(ev.minute, ev.extra)}
+                    </span>
+                    <span aria-hidden className="shrink-0">
+                      {eventIcon(ev.kind)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[var(--fp-text)]">
+                      <span className="font-semibold">{ev.team === "home" ? homeTeam : awayTeam}</span>
+                      {` · ${eventLabel(t, ev.kind)}`}
+                      {ev.player ? ` · ${ev.player}` : ""}
+                      {ev.assist ? ` (${t("match.eventAssist")}: ${ev.assist})` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CollapsiblePanel>
       </div>
-    )}
     </>
   );
 }

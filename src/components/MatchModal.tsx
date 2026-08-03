@@ -1078,6 +1078,8 @@ export default function MatchModal({
                     homeTeam={match.teams.home}
                     awayTeam={match.teams.away}
                     liveEvents={match.liveEvents}
+                    recommendedPick={match.recommended.pick}
+                    confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                   />
                 </div>
               )}
@@ -1115,6 +1117,8 @@ export default function MatchModal({
                 homeTeam={match.teams.home}
                 awayTeam={match.teams.away}
                 liveEvents={match.liveEvents}
+                recommendedPick={match.recommended.pick}
+                confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
               />
             </div>
           )}
