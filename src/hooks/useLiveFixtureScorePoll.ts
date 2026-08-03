@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "
 import type { MatchLiveEvent, MomentumRawStats, PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import { fetchWithAuth } from "../utils/apiAuth";
+import { useLocale } from "../context/LocaleContext";
 
 /** Interval between live score polls — keep ≥ server LIVE_SCORES_CACHE_TTL_SEC for cache hits. */
 export const LIVE_SCORE_POLL_MS = 75_000;
@@ -72,6 +73,7 @@ type Options = {
 export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPreds, options?: Options) {
   const enabled = options?.enabled !== false;
   const intervalMs = options?.intervalMs ?? LIVE_SCORE_POLL_MS;
+  const { locale } = useLocale();
   const liveIdsKey = useMemo(
     () =>
       preds
@@ -91,7 +93,9 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
     const fetchAndMerge = async () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       try {
-        const res = await fetchWithAuth(`/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}`);
+        const res = await fetchWithAuth(
+          `/api/fixtures?view=live&ids=${encodeURIComponent(liveIdsKey)}&locale=${encodeURIComponent(locale)}`
+        );
         const json = (await res.json()) as {
           ok?: boolean;
           fixtures?: Array<{
@@ -110,6 +114,8 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
               raw?: { home: MomentumRawStats; away: MomentumRawStats };
             } | null;
             liveEvents?: MatchLiveEvent[];
+            /** Real AI-generated one-sentence narration (opt-in, server-side) — null/absent means the client's own deterministic sentence applies. */
+            momentumNarrative?: string | null;
             score: {
               home: number | null;
               away: number | null;
@@ -164,6 +170,8 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
               momentum,
               // Real match events from upstream — absent/empty means the timeline falls back to inference.
               liveEvents: u.liveEvents && u.liveEvents.length ? u.liveEvents : p.liveEvents,
+              // AI narration is opt-in server-side; null/absent means the widget uses its own deterministic sentence.
+              momentumNarrative: u.momentumNarrative ?? null,
               // Additive-only: base confidence/overall/scores are untouched, this only adds liveAdjustment.
               confidenceEngine: p.confidenceEngine ? { ...p.confidenceEngine, liveAdjustment } : p.confidenceEngine,
               marketResults:
@@ -191,5 +199,5 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [enabled, liveIdsKey, intervalMs]);
+  }, [enabled, liveIdsKey, intervalMs, locale]);
 }

@@ -39,6 +39,10 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.7" }
         },
+        "orb-breathe": {
+          "0%, 100%": { transform: "translate(-50%, -50%) scale(1)" },
+          "50%": { transform: "translate(-50%, -50%) scale(1.035)" }
+        },
         "stagger-in": {
           from: { opacity: "0", transform: "translateY(10px)" },
           to: { opacity: "1", transform: "translateY(0)" }
@@ -54,6 +58,7 @@ export default {
       },
       animation: {
         "pulse-soft": "pulse-soft 3s ease-in-out infinite",
+        "orb-breathe": "orb-breathe 2.6s ease-in-out infinite",
         "stagger-in": "stagger-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both",
         shimmer: "shimmer 8s ease-in-out infinite",
         "card-in": "card-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both"

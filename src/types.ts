@@ -458,6 +458,8 @@ export type PredictionRow = {
   } | null;
   /** Real match events from /fixtures/events (in-play only) — absent/empty means the timeline falls back to inference. */
   liveEvents?: MatchLiveEvent[];
+  /** Real AI-generated one-sentence narration of the current state (opt-in, server-side) — null/absent falls back to the deterministic buildMatchStory() sentence on the client. */
+  momentumNarrative?: string | null;
   /** Merged from history when available — drives WIN/LOSS on the card. */
   cardMarketValidations?: CardMarketValidations | null;
   referee?: string;

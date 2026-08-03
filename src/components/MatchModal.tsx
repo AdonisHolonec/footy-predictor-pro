@@ -11,6 +11,7 @@ import ValueCard from "./ValueCard";
 import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import MonteCarloPanel from "./MonteCarloPanel";
 import MatchMomentumTimeline from "./ux/MatchMomentumTimeline";
+import MatchMomentumStickyStrip from "./ux/MatchMomentumStickyStrip";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -996,6 +997,25 @@ export default function MatchModal({
           ✕
         </button>
 
+        {hasLiveScore && match.momentum && (
+          <MatchMomentumStickyStrip
+            minute={match.score?.minute ?? null}
+            status={match.status}
+            homeTeam={match.teams.home}
+            awayTeam={match.teams.away}
+            homeScore={match.score?.home ?? null}
+            awayScore={match.score?.away ?? null}
+            homeMomentum={match.momentum.homeMomentum}
+            awayMomentum={match.momentum.awayMomentum}
+            confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
+            onJumpToTop={() => {
+              const reduceMotion =
+                typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+              modalRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+            }}
+          />
+        )}
+
         <div className="border-b border-[var(--fp-border)] px-4 pb-4 pt-1 sm:px-6">
           <p id="match-modal-title" className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
             {tr("match.analysis")}
@@ -1080,6 +1100,7 @@ export default function MatchModal({
                     liveEvents={match.liveEvents}
                     recommendedPick={match.recommended.pick}
                     confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
+                    momentumNarrative={match.momentumNarrative ?? null}
                   />
                 </div>
               )}
@@ -1119,6 +1140,7 @@ export default function MatchModal({
                 liveEvents={match.liveEvents}
                 recommendedPick={match.recommended.pick}
                 confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
+                momentumNarrative={match.momentumNarrative ?? null}
               />
             </div>
           )}

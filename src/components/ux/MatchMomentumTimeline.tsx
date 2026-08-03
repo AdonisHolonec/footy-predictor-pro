@@ -3,6 +3,7 @@ import type { MatchLiveEvent, MatchLiveEventType, MatchScore, MomentumRawStats, 
 import { useLocale } from "../../context/LocaleContext";
 import Tooltip from "../../design-system/Tooltip";
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
+import { useLocalStorageState } from "../../utils/appUtils";
 
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
@@ -16,7 +17,7 @@ type TimelineEvent = {
   assist?: string | null;
 };
 type EventFilter = "all" | "goal" | "card" | "substitution" | "var";
-type WhyChip = { label: string; value: string };
+type WhyChip = { label: string; value: string; detail: string };
 
 type Props = {
   fixtureId: number;
@@ -31,6 +32,8 @@ type Props = {
   recommendedPick: string;
   /** Pre-formatted confidence string (e.g. "72%" or a locked/category label) — mirrors the header's own confidence gating so this widget never invents its own. */
   confidenceLabel: string;
+  /** Real AI-generated one-sentence narration from the server (opt-in) — takes priority over the local deterministic sentence when present; null/absent is a normal, expected state, not an error. */
+  momentumNarrative?: string | null;
 };
 
 function eventIcon(kind: MatchLiveEventType): string {
@@ -127,7 +130,12 @@ function statLabel(t: (key: string) => string, kind: keyof MomentumRawStats): st
  */
 const WHY_CHIP_PRIORITY: Array<keyof MomentumRawStats> = ["shotsOnTarget", "possession", "corners", "shotsTotal"];
 
-function deriveWhyChips(t: (key: string) => string, raw?: { home: MomentumRawStats; away: MomentumRawStats }): WhyChip[] {
+function deriveWhyChips(
+  t: (key: string) => string,
+  homeTeam: string,
+  awayTeam: string,
+  raw?: { home: MomentumRawStats; away: MomentumRawStats }
+): WhyChip[] {
   if (!raw) return [];
   const chips: WhyChip[] = [];
   for (const kind of WHY_CHIP_PRIORITY) {
@@ -135,10 +143,13 @@ function deriveWhyChips(t: (key: string) => string, raw?: { home: MomentumRawSta
     const home = raw.home[kind];
     const away = raw.away[kind];
     if (home == null || away == null) continue;
-    chips.push({
-      label: statLabel(t, kind),
-      value: kind === "possession" ? `${Math.round(home)}%` : `${home}–${away}`
-    });
+    const label = statLabel(t, kind);
+    const value = kind === "possession" ? `${Math.round(home)}%` : `${home}–${away}`;
+    const detail =
+      kind === "possession"
+        ? `${homeTeam} ${Math.round(home)}% – ${Math.round(away)}% ${awayTeam} · ${label}`
+        : `${homeTeam} ${home} – ${away} ${awayTeam} · ${label}`;
+    chips.push({ label, value, detail });
   }
   return chips;
 }
@@ -238,6 +249,47 @@ function StatRow({
   );
 }
 
+/** Animates a displayed integer toward `target` over `durationMs` — jumps straight there under prefers-reduced-motion. */
+function useCountUp(target: number | null, durationMs = 500): number | null {
+  const [display, setDisplay] = useState<number | null>(target);
+  const fromRef = useRef<number | null>(target);
+
+  useEffect(() => {
+    if (target == null) {
+      fromRef.current = null;
+      setDisplay(null);
+      return;
+    }
+    const from = fromRef.current ?? target;
+    if (from === target) {
+      setDisplay(target);
+      return;
+    }
+    const reduceMotion =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      fromRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / durationMs);
+      setDisplay(Math.round(from + (target - from) * progress));
+      if (progress < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = target;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+
+  return display;
+}
+
 export default function MatchMomentumTimeline({
   fixtureId,
   status,
@@ -247,7 +299,8 @@ export default function MatchMomentumTimeline({
   awayTeam,
   liveEvents,
   recommendedPick,
-  confidenceLabel
+  confidenceLabel,
+  momentumNarrative
 }: Props) {
   const { t } = useLocale();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -262,6 +315,16 @@ export default function MatchMomentumTimeline({
   } | null>(null);
   const feedRef = useRef<HTMLUListElement | null>(null);
   const stickToBottomRef = useRef(true);
+
+  // Opt-in "cinematic" display — same data, alternate visual (see the Pulse concept in the
+  // Match Momentum redesign proposal). Persisted like theme/locale, independent of them.
+  const [visualMode, setVisualMode] = useLocalStorageState<"rail" | "orb">("footy.momentum.visualMode", "rail");
+
+  // Only a pure "NN%" label gets the count-up treatment — category/locked text (e.g. "Strong", "Locked")
+  // cross-fades instead, since there's no number to animate toward.
+  const confidenceNumericMatch = /^(\d+)%$/.exec(confidenceLabel);
+  const confidenceNumeric = confidenceNumericMatch ? Number(confidenceNumericMatch[1]) : null;
+  const animatedConfidence = useCountUp(confidenceNumeric, 500);
 
   const minute = score?.minute ?? null;
   // Real upstream events (goals/cards/subs/VAR with player names) take priority — the
@@ -390,18 +453,40 @@ export default function MatchMomentumTimeline({
         ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
         : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]";
 
-  // The single highest-priority observation becomes the headline sentence; a quiet match
-  // (zero rules fired) falls back to an explicit neutral statement rather than showing nothing.
-  const anchorText = matchStory[0] ?? t("match.momentumNeutral");
-  const whyChips = deriveWhyChips(t, raw);
+  // Real AI narration (when the server generated one) leads; the deterministic rule engine is the
+  // fallback, not a replacement — it still powers the full "Match Story" list below either way. A
+  // quiet match with neither source firing gets an explicit neutral statement, never a blank line.
+  const isAiAnchor = Boolean(momentumNarrative);
+  const anchorText = momentumNarrative || matchStory[0] || t("match.momentumNeutral");
+  const whyChips = deriveWhyChips(t, homeTeam, awayTeam, raw);
   const recentMoments = displayEvents.slice(-RECENT_MOMENTS_COUNT);
+
+  // Orb mode only: position already encodes control (left = home share); size/glow encode how
+  // strongly one side dominates, so the same two numbers drive every visual cue, nothing invented.
+  const dominanceMagnitude = Math.abs(momentum.homeMomentum - momentum.awayMomentum);
+  const orbSize = Math.round(36 + Math.min(20, dominanceMagnitude * 0.3));
+  const orbFill = `color-mix(in srgb, var(--fp-accent) ${momentum.homeMomentum}%, var(--fp-danger) ${momentum.awayMomentum}%)`;
+  const orbGlowColor = `color-mix(in srgb, ${orbFill} 45%, transparent)`;
+  const orbGlowRadius = Math.round(14 + dominanceMagnitude * 0.25);
 
   return (
     <>
       <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
-          {t("card.momentum")}
-        </p>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
+            {t("card.momentum")}
+          </p>
+          <button
+            type="button"
+            onClick={() => setVisualMode((m) => (m === "orb" ? "rail" : "orb"))}
+            aria-pressed={visualMode === "orb"}
+            title={visualMode === "orb" ? t("match.momentumSwitchToRail") : t("match.momentumSwitchToOrb")}
+            aria-label={visualMode === "orb" ? t("match.momentumSwitchToRail") : t("match.momentumSwitchToOrb")}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[11px] leading-none text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+          >
+            {visualMode === "orb" ? "▬" : "◉"}
+          </button>
+        </div>
 
         <div className="mb-2.5 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
           <span className="flex min-w-0 items-center gap-1.5">
@@ -414,32 +499,67 @@ export default function MatchMomentumTimeline({
           </span>
         </div>
 
-        <div
-          className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--fp-border)]"
-          role="img"
-          aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
-        >
+        {visualMode === "orb" ? (
           <div
-            className="absolute inset-y-0 left-0 bg-[var(--fp-accent)] transition-[width] duration-500"
-            style={{ width: `${momentum.homeMomentum}%` }}
-          />
+            className="relative mt-1 h-9 w-full"
+            role="img"
+            aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
+          >
+            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--fp-border)]" />
+            <div
+              className="absolute top-1/2 animate-orb-breathe rounded-full transition-[left,width,height] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none motion-reduce:transition-none"
+              style={{
+                left: `${momentum.homeMomentum}%`,
+                width: `${orbSize}px`,
+                height: `${orbSize}px`,
+                background: orbFill,
+                boxShadow: `0 0 ${orbGlowRadius}px 2px ${orbGlowColor}`
+              }}
+            />
+          </div>
+        ) : (
           <div
-            className="absolute inset-y-0 right-0 bg-[var(--fp-danger)] transition-[width] duration-500"
-            style={{ width: `${momentum.awayMomentum}%` }}
-          />
-        </div>
+            className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--fp-border)]"
+            role="img"
+            aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
+          >
+            <div
+              className="absolute inset-y-0 left-0 bg-[var(--fp-accent)] transition-[width] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+              style={{ width: `${momentum.homeMomentum}%` }}
+            />
+            <div
+              className="absolute inset-y-0 right-0 bg-[var(--fp-danger)] transition-[width] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+              style={{ width: `${momentum.awayMomentum}%` }}
+            />
+          </div>
+        )}
 
-        <p className="mt-3 text-[13px] font-bold leading-snug text-[var(--fp-text)] sm:text-sm">{anchorText}</p>
+        <p
+          key={anchorText}
+          className="mt-3 flex animate-card-in items-start gap-1.5 text-[13px] font-bold leading-snug text-[var(--fp-text)] motion-reduce:animate-none sm:text-sm"
+        >
+          <span>{anchorText}</span>
+          {isAiAnchor && (
+            <span
+              title={t("match.momentumInsightBadge")}
+              className="mt-0.5 shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-accent)]"
+            >
+              {t("match.momentumInsightBadge")}
+            </span>
+          )}
+        </p>
 
         {whyChips.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {whyChips.map((chip) => (
-              <span
-                key={chip.label}
-                className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)]"
-              >
-                {chip.label} {chip.value}
-              </span>
+              <Tooltip key={chip.label} label={chip.detail}>
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                >
+                  {chip.label} {chip.value}
+                </button>
+              </Tooltip>
             ))}
           </div>
         )}
@@ -480,8 +600,13 @@ export default function MatchMomentumTimeline({
             </p>
             <p className="truncate text-[13px] font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
           </div>
-          <span className="shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2.5 py-1 font-mono text-[11px] font-bold text-[var(--fp-accent)]">
-            {confidenceLabel}
+          <span
+            key={confidenceNumeric != null ? "numeric" : confidenceLabel}
+            className={`shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-[var(--fp-accent)] ${
+              confidenceNumeric == null ? "animate-card-in motion-reduce:animate-none" : ""
+            }`}
+          >
+            {confidenceNumeric != null ? `${animatedConfidence ?? confidenceNumeric}%` : confidenceLabel}
           </span>
         </div>
       </div>

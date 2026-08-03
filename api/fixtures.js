@@ -21,6 +21,7 @@ import {
   getLocalCacheStats
 } from "../server-utils/fetcher.js";
 import { attachRequestMonitor } from "../server-utils/observability/requestMonitor.js";
+import { narrateMatchState } from "../server-utils/momentum/narrateMatchState.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   isWarmPredictQuotaExempt,
@@ -579,22 +580,40 @@ async function handleLive(req, res) {
         extra,
         inPlay: LIVE_IN_PLAY_STATUSES.has(String(status).toUpperCase()),
         homeTeamId: Number.isFinite(homeTeamId) ? homeTeamId : null,
-        awayTeamId: Number.isFinite(awayTeamId) ? awayTeamId : null
+        awayTeamId: Number.isFinite(awayTeamId) ? awayTeamId : null,
+        // Only used server-side to build the AI narration prompt below — never included in the
+        // response payload (the client already has team names from the initial prediction fetch).
+        homeTeamName: fx?.teams?.home?.name || "",
+        awayTeamName: fx?.teams?.away?.name || ""
       };
     });
+
+    const locale = req.query.locale === "en" ? "en" : "ro";
 
     // Momentum/events each need a second upstream call — only pay for them on fixtures
     // actually in play right now, never for NS/FT rows in the batch.
     const fixtures = await Promise.all(
-      baseFixtures.map(async ({ inPlay, homeTeamId, awayTeamId, ...f }) => {
+      baseFixtures.map(async ({ inPlay, homeTeamId, awayTeamId, homeTeamName, awayTeamName, ...f }) => {
         if (!inPlay || !Number.isFinite(Number(f.id))) {
-          return { ...f, momentum: null, liveEvents: [] };
+          return { ...f, momentum: null, liveEvents: [], momentumNarrative: null };
         }
         const [momentum, liveEvents] = await Promise.all([
           fetchMomentumForFixture(f.id),
           fetchLiveEventsForFixture(f.id, homeTeamId, awayTeamId)
         ]);
-        return { ...f, momentum, liveEvents };
+        // Narration needs momentum to describe — skip cleanly when momentum itself is unavailable.
+        const momentumNarrative = momentum
+          ? await narrateMatchState({
+              locale,
+              fixtureId: f.id,
+              homeTeam: homeTeamName,
+              awayTeam: awayTeamName,
+              score: { home: f.score.home, away: f.score.away, minute: f.elapsed },
+              momentum,
+              recentEvents: liveEvents
+            })
+          : null;
+        return { ...f, momentum, liveEvents, momentumNarrative };
       })
     );
 
