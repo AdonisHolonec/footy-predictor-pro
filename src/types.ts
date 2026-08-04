@@ -621,6 +621,8 @@ export type PredictionRow = {
   };
   recommended: {
     pick: string;
+    /** Authoritative market family the pick came from (1X2 / Double Chance / BTTS / Over/Under / Corners / Cards / Correct Score) — see selectRecommendation.js. Absent on rows persisted before this field existed. */
+    family?: string | null;
     confidence: number | null;
     confidenceCategory?: string | null;
     odd?: number | null;

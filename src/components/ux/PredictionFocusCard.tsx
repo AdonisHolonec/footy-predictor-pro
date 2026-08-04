@@ -19,6 +19,8 @@ import {
   recommendedOdd,
   shotsDisplayOdd
 } from "../../utils/marketPicks";
+import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 
 type Props = {
   row: PredictionRow;
@@ -33,7 +35,7 @@ type Props = {
 };
 
 type MarketRow = {
-  id: CardMarketId;
+  id: CardMarketId | "shotsTotal";
   marketLabel: string;
   locked: boolean;
   lockTier: UpgradeTier;
@@ -199,9 +201,13 @@ export default function PredictionFocusCard({
   const shots = row.probs?.shotsOnTarget
     ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
     : null;
+  const shotsTotal = row.probs?.shotsTotal
+    ? deriveAlignedOuPick(row.probs.shotsTotal.total, row.marketOdds?.shotsTotal)
+    : null;
 
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
+  const shotsTotalLocked = !canSeeShots && !row.probs?.shotsTotal;
 
   const confLabel = hasExactConfidence
     ? `${Math.round(conf)}%`
@@ -215,7 +221,11 @@ export default function PredictionFocusCard({
     ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
     : null;
   const shotsOdd = shots ? shotsDisplayOdd(row, shots.side, shots.line) : null;
+  const shotsTotalOdd = shotsTotal
+    ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotal.side, shotsTotal.line, 4)
+    : null;
   const recOdd = recommendedOdd(row);
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
 
   // Value Edge: EV = (AI probability × odd) − 1, using the AI's own confidence for the
   // recommended pick — only ever shown when both are real numbers and EV is positive.
@@ -231,7 +241,7 @@ export default function PredictionFocusCard({
       locked: false,
       lockTier: "premium",
       lockFeature: t("match.featMain"),
-      pick: row.recommended?.pick || "—",
+      pick: recommendedLabel.label,
       confidence: confLabel,
       odd: fmtOdd(recOdd, noBook),
       outcome: resolveCardMarketOutcome("recommended", row, stored),
@@ -261,7 +271,7 @@ export default function PredictionFocusCard({
     },
     {
       id: "shots",
-      marketLabel: t("card.marketShots"),
+      marketLabel: t("match.shotsSub"),
       locked: shotsLocked,
       lockTier: "ultra",
       lockFeature: t("match.featShots"),
@@ -269,6 +279,17 @@ export default function PredictionFocusCard({
       confidence: shots ? `${Math.round(shots.probability)}%` : "—",
       odd: fmtOdd(shotsOdd, noBook),
       outcome: shotsLocked ? null : resolveCardMarketOutcome("shots", row, stored)
+    },
+    {
+      id: "shotsTotal",
+      marketLabel: t("match.shotsTotalTitle"),
+      locked: shotsTotalLocked,
+      lockTier: "ultra",
+      lockFeature: t("match.shotsTotalTitle"),
+      pick: shotsTotal ? sidePickLabel(t, shotsTotal.side, shotsTotal.line) : "—",
+      confidence: shotsTotal ? `${Math.round(shotsTotal.probability)}%` : "—",
+      odd: fmtOdd(shotsTotalOdd, noBook),
+      outcome: null
     }
   ];
 
@@ -455,7 +476,10 @@ export default function PredictionFocusCard({
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.mainPick")}</p>
-            <p className="truncate font-display text-sm font-bold text-[var(--fp-accent)]">{row.recommended?.pick || "—"}</p>
+            <p className="flex items-center gap-1 truncate font-display text-sm font-bold text-[var(--fp-accent)]">
+              <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
+              {recommendedLabel.label}
+            </p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.colOdds")}</p>

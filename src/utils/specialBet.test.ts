@@ -104,6 +104,39 @@ describe("specialBet", () => {
     const recommended = pool.find((l) => l.id === "recommended");
     expect(recommended?.liveAdjustment).toBeFalsy();
   });
+
+  it("never selects two legs from the same market family", () => {
+    // Recommended is itself a Corners pick (family persisted by the recommendation
+    // engine) — same family as the dedicated "corners" slot, just a different line.
+    // Reproduces the reported bug: Under 10.5 Corners (recommended) alongside
+    // Over 8.5 Corners (dedicated slot) would be two correlated Corners legs.
+    const row = baseRow({
+      recommended: { pick: "Under 10.5", confidence: 90, odd: 1.95, family: "Corners" }
+    });
+    const pool = listSpecialBetCandidates(row, labels);
+    const corners = pool.find((l) => l.id === "corners");
+    expect(corners?.family).toBe("CORNERS");
+    expect(pool.find((l) => l.id === "recommended")?.family).toBe("CORNERS");
+
+    const legs2 = pickSpecialBetLegs(pool, 2);
+    const families2 = legs2.map((l) => l.family);
+    expect(new Set(families2).size).toBe(families2.length);
+    expect(legs2.some((l) => l.id === "recommended")).toBe(true);
+    expect(legs2.some((l) => l.id === "corners")).toBe(false);
+
+    const legs3 = pickSpecialBetLegs(pool, 3);
+    const families3 = legs3.map((l) => l.family);
+    expect(new Set(families3).size).toBe(families3.length);
+    expect(legs3.some((l) => l.id === "corners")).toBe(false);
+  });
+
+  it("groups first-half goals with full-match goals as one correlated family", () => {
+    const pool = listSpecialBetCandidates(baseRow(), labels);
+    const goals = pool.find((l) => l.id === "goals");
+    const ht = pool.find((l) => l.id === "ht");
+    expect(goals?.family).toBe("GOALS");
+    expect(ht?.family).toBe("GOALS");
+  });
 });
 
 describe("specialBetLiveAdjustmentBadge", () => {

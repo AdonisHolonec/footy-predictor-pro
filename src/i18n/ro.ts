@@ -775,6 +775,15 @@ export const ro: Dict = {
     onboardingMarketsBody: "Alege una sau mai multe piețe — restul rămân disponibile, doar le dăm prioritate acestora.",
     onboardingMarketsSkipNote: "Fără nicio selecție, vezi toate piețele."
   },
+  recommendation: {
+    homeWin: "Victorie Gazde",
+    awayWin: "Victorie Oaspeți",
+    draw: "Egal",
+    doubleChance: "Șansă Dublă",
+    bttsYes: "Ambele Echipe Marchează – Da",
+    bttsNo: "Ambele Echipe Marchează – Nu",
+    correctScore: "Scor Exact"
+  },
   common: {
     loading: "Se încarcă…",
     close: "Închide",

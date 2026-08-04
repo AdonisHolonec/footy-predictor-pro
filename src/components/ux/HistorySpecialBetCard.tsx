@@ -11,6 +11,8 @@ import {
 import { formatBookOdd, recommendedOdd, resolveFirstHalfGoalsActual } from "../../utils/marketPicks";
 import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
 import { fetchWithAuth } from "../../utils/apiAuth";
+import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 
 type Props = {
   row: HistoryEntry;
@@ -90,6 +92,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
       : "—";
   const odd = recommendedOdd(row);
   const oddLabel = formatBookOdd(odd, t("card.noBookOdd"));
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
 
   const pool = listSpecialBetCandidates(
     enrichedRow,
@@ -213,8 +216,9 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
           {t("card.topPick")}
         </p>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
-          <p className="font-display text-lg font-semibold text-[var(--fp-text)]">
-            {row.recommended?.pick || "—"}
+          <p className="flex items-center gap-1.5 font-display text-lg font-semibold text-[var(--fp-text)]">
+            <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
+            {recommendedLabel.label}
           </p>
           <div className="text-right">
             <p className="font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]">

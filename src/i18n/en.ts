@@ -775,6 +775,15 @@ export const en: Dict = {
     onboardingMarketsBody: "Pick one or more — everything else still shows, these just get priority.",
     onboardingMarketsSkipNote: "Leave none selected to see every market."
   },
+  recommendation: {
+    homeWin: "Home Win",
+    awayWin: "Away Win",
+    draw: "Draw",
+    doubleChance: "Double Chance",
+    bttsYes: "Both Teams To Score – Yes",
+    bttsNo: "Both Teams To Score – No",
+    correctScore: "Correct Score"
+  },
   common: {
     loading: "Loading…",
     close: "Close",

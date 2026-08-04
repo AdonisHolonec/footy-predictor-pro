@@ -30,8 +30,10 @@ import {
   specialBetCombinedOutcome,
   specialBetLiveAdjustmentBadge
 } from "../utils/specialBet";
-import { matchingMarketOdd } from "../utils/marketPicks";
+import { matchingMarketOdd, shotsDisplayOdd, deriveAlignedOuPick } from "../utils/marketPicks";
 import { fetchWithAuth } from "../utils/apiAuth";
+import { formatRecommendedPick } from "../utils/formatRecommendation";
+import MarketFamilyIcon from "./icons/MarketFamilyIcon";
 
 /**
  * Stil vizual pentru un pick în funcţie de nivelul de încredere.
@@ -860,6 +862,7 @@ export default function MatchModal({
     !hasFinalScore &&
     (isFixtureInPlay(match.status) || (pastKickoffPollWindow && !isFinalStatus(match.status)));
   const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
+  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, tr);
   const kickoffDate = new Date(match.kickoff);
   const hasExactConfidence =
     match.recommended?.confidence != null && Number.isFinite(Number(match.recommended?.confidence));
@@ -1058,7 +1061,10 @@ export default function MatchModal({
                       {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                     </span>
                   </div>
-                  <div className="line-clamp-2 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] max-[380px]:text-base sm:text-3xl">{match.recommended.pick}</div>
+                  <div className="flex items-center gap-1.5 line-clamp-2 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] max-[380px]:text-base sm:text-3xl">
+                    <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
+                    {recommendedLabel.label}
+                  </div>
                   <div className="font-mono text-[10px] font-semibold tabular-nums text-[var(--fp-success)] sm:text-[11px]">
                     {tr("match.odd")} {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
                   </div>
@@ -1098,7 +1104,7 @@ export default function MatchModal({
                     homeTeam={match.teams.home}
                     awayTeam={match.teams.away}
                     liveEvents={match.liveEvents}
-                    recommendedPick={match.recommended.pick}
+                    recommendedPick={recommendedLabel.label}
                     confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                     momentumNarrative={match.momentumNarrative ?? null}
                   />
@@ -1138,7 +1144,7 @@ export default function MatchModal({
                 homeTeam={match.teams.home}
                 awayTeam={match.teams.away}
                 liveEvents={match.liveEvents}
-                recommendedPick={match.recommended.pick}
+                recommendedPick={recommendedLabel.label}
                 confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
                 momentumNarrative={match.momentumNarrative ?? null}
               />
@@ -1550,7 +1556,7 @@ export default function MatchModal({
             <div className={tab(["why", "overview"])}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
-                recommendationPick={match.recommended?.pick || null}
+                recommendationPick={match.recommended?.pick ? recommendedLabel.label : null}
               />
             </div>
           )}
@@ -1797,13 +1803,20 @@ export default function MatchModal({
                       match.marketResults?.shotsOnTargetTotal ??
                       null
                     }
-                    quotedOdd={
-                      Number(match.marketOdds?.shotsOnTarget?.odd) > 1
-                        ? Number(match.marketOdds?.shotsOnTarget?.odd)
-                        : Number(match.marketOdds?.shotsTotal?.odd) > 1
-                          ? Number(match.marketOdds?.shotsTotal?.odd)
-                          : null
-                    }
+                    quotedOdd={(() => {
+                      const pick = deriveAlignedOuPick(
+                        match.probs.shotsOnTarget.total,
+                        match.marketOdds?.shotsOnTarget
+                      );
+                      if (!pick) {
+                        return Number(match.marketOdds?.shotsOnTarget?.odd) > 1
+                          ? Number(match.marketOdds?.shotsOnTarget?.odd)
+                          : Number(match.marketOdds?.shotsTotal?.odd) > 1
+                            ? Number(match.marketOdds?.shotsTotal?.odd)
+                            : null;
+                      }
+                      return shotsDisplayOdd(match, pick.side, pick.line);
+                    })()}
                     quoteSource={
                       match.marketOdds?.shotsOnTarget?.bookmaker ||
                       match.marketOdds?.shotsTotal?.bookmaker ||
@@ -1825,7 +1838,18 @@ export default function MatchModal({
                     homeLabel={match.teams.home}
                     awayLabel={match.teams.away}
                     actualTotal={xgData?.marketResults?.shotsTotal ?? null}
-                    quotedOdd={match.marketOdds?.shotsTotal?.odd ?? null}
+                    quotedOdd={(() => {
+                      const pick = deriveAlignedOuPick(
+                        match.probs.shotsTotal.total,
+                        match.marketOdds?.shotsTotal
+                      );
+                      if (!pick) {
+                        return Number(match.marketOdds?.shotsTotal?.odd) > 1
+                          ? Number(match.marketOdds?.shotsTotal?.odd)
+                          : null;
+                      }
+                      return matchingMarketOdd(match.marketOdds?.shotsTotal, pick.side, pick.line, 4);
+                    })()}
                     quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
                     badgeTone="shots"
                     framed={false}
