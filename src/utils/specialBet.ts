@@ -9,11 +9,14 @@ import {
   deriveAlignedOuPick,
   deriveCardGoalsPick,
   goalsOddForLine,
+  listGoalsPickCandidates,
   matchingMarketOdd,
+  parseGoalsOuPick,
   parseOuSide,
   recommendedOdd,
   resolveFirstHalfGoalsActual,
-  shotsDisplayOdd
+  shotsDisplayOdd,
+  type GoalsOuPick
 } from "./marketPicks";
 import { resolveMarketFamilyKey, type MarketFamilyKey } from "./formatRecommendation";
 
@@ -35,6 +38,23 @@ export type SpecialBetLeg = {
   /** Live momentum nudge (Sprint 2), display-only — only ever set on the "recommended" leg. */
   liveAdjustment?: SpecialBetLiveAdjustment | null;
 };
+
+/**
+ * Prefer the highest-probability goals O/U that also has a real book quote.
+ * Without this, Over 1.5 can win on model % while lacking goals15 odds and get
+ * filtered out of the special-bet pool entirely.
+ */
+function deriveSpecialBetGoalsPick(row: PredictionRow): GoalsOuPick | null {
+  const exclude = parseGoalsOuPick(row.recommended?.pick);
+  const candidates = listGoalsPickCandidates(row).filter((c) => {
+    if (!exclude) return true;
+    return !(c.side === exclude.side && Math.abs(c.line - exclude.line) < 1e-6);
+  });
+  for (const c of candidates) {
+    if (goalsOddForLine(row, c.line, c.side) != null) return c;
+  }
+  return candidates[0] || deriveCardGoalsPick(row);
+}
 
 export type SpecialBetLabels = {
   main: string;
@@ -160,7 +180,7 @@ export function listSpecialBetCandidates(
 ): SpecialBetLeg[] {
   const conf = Number(row.recommended?.confidence);
   const confPct = Number.isFinite(conf) ? conf : 0;
-  const goalsPick = deriveCardGoalsPick(row);
+  const goalsPick = deriveSpecialBetGoalsPick(row);
   const cornersPick = row.probs?.corners
     ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
     : null;
