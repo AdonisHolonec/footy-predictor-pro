@@ -186,7 +186,7 @@ export async function getDailyCacheStats(dateISO = getTodayISO()) {
   }
 }
 
-export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
+export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}) {
   const primary = resolveUpstream();
   if (!primary.key) {
     return { ok: false, error: "Cheia API nu este configurată (setează APISPORTS_KEY sau X_RAPIDAPI_KEY)." };
@@ -194,6 +194,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
 
   const cacheKey = buildCacheKey(endpoint, paramsObj);
   const fetchUrl = buildFetchUrl(primary.baseUrl, endpoint, paramsObj);
+  const shouldCacheFn = typeof options?.shouldCache === "function" ? options.shouldCache : null;
 
   try {
     const cacheStarted = Date.now();
@@ -299,13 +300,16 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
       }
 
       const ttl = Math.max(30, Number(ttlSeconds) || 300);
-      try {
-        const writeStarted = Date.now();
-        await kv.set(cacheKey, json, { ex: ttl });
-        void recordObservation("cache", { durationMs: Date.now() - writeStarted, ok: true });
-      } catch (writeErr) {
-        void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
-        logWarn("cache.write_failed", { endpoint, error: writeErr?.message || "kv_write" });
+      const allowCache = shouldCacheFn ? Boolean(shouldCacheFn(json)) : true;
+      if (allowCache) {
+        try {
+          const writeStarted = Date.now();
+          await kv.set(cacheKey, json, { ex: ttl });
+          void recordObservation("cache", { durationMs: Date.now() - writeStarted, ok: true });
+        } catch (writeErr) {
+          void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
+          logWarn("cache.write_failed", { endpoint, error: writeErr?.message || "kv_write" });
+        }
       }
 
       void recordObservation("api", { durationMs: apiMs, ok: true });
@@ -315,7 +319,8 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds) {
         data: json,
         cacheKey,
         provider: attempt.upstreamCfg.provider,
-        apiMs
+        apiMs,
+        cached: allowCache
       };
     } catch (err) {
       const apiMs = Date.now() - apiStarted;
