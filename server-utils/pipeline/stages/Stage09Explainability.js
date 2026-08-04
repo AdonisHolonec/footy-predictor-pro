@@ -322,6 +322,11 @@ export async function run(context) {
       },
       recommended: {
         pick: topPick,
+        // Market family the pick actually came from (1X2 / Double Chance / BTTS / Over-Under
+        // / Corners / Cards) — persisted so settlement can grade against the right totals
+        // instead of guessing from the pick string (a "Peste"/"Over N.5"-shaped string can be
+        // either a goals or a Corners pick; only the selector knows which).
+        family: topSelection?.family || null,
         confidence: maxConf,
         odd: Number.isFinite(Number(recommendedQuote.odd)) ? Number(recommendedQuote.odd) : null,
         oddSource: recommendedQuote.source || null,

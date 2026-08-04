@@ -74,7 +74,7 @@ import {
   marketTier
 } from "../predictHelpers.js";
 import { alignMarketProbsAndCalibrate } from "../decision/alignMarketProbsAndCalibrate.js";
-import { selectTopPickAndQuote } from "../decision/selectTopPickAndQuote.js";
+import { selectRecommendation } from "../decision/selectRecommendation.js";
 import { applyValueEngine } from "../decision/applyValueEngine.js";
 
 
@@ -243,7 +243,8 @@ export async function run(context) {
     // PREDICT_DEBUG_METADATA (default off) and, even when on, stripped for every tier in
     // accessTier.js — only requests that bypass tier masking entirely (cron / quota-exempt
     // admin, see Stage11Masking.js) can ever see it. Purely additive to modelMeta.
-    if (String(process.env.PREDICT_DEBUG_METADATA || "").trim() === "1") {
+    const debugEnabled = String(process.env.PREDICT_DEBUG_METADATA || "").trim() === "1";
+    if (debugEnabled) {
       const motivationScore = modularScores?.motivation || null;
       const motivationDetail = motivationScore?.details || motivationScore?.detail || null;
       debugMeta = {
@@ -265,9 +266,13 @@ export async function run(context) {
     }
 
     // === TOP PICK SELECTION + RECOMMENDED QUOTE ===
-    // Alegerea pick-ului top ia în considerare TOATE pieţele (Peste 1.5 / 2.5 / 3.5, Sub *, GG, NGG, 1X2)
-    // şi penalizează pieţele banal-sigure (Peste 1.5 la exact baseline nu e informativ).
-    ({ topSelection, topPick, maxConf, recommendedQuote } = selectTopPickAndQuote({
+    // Recommendation selection compares ALL markets with valid odds (1X2, Double Chance,
+    // BTTS, Over/Under, Corners, Cards — Correct Score is Phase 2) via the same candidate
+    // pool the Value Engine uses (buildValueCandidates), gated by MIN_DISPLAY_ODDS BEFORE
+    // scoring, and ranked by one composite score (confidence + EV + price quality + a
+    // bounded market-diversity term) so a different market can win a near-tie instead of
+    // Over/Under always dominating. See selectRecommendation.js for the full rationale.
+    const recommendationResult = selectRecommendation({
       marketProbsAligned,
       p1Adj,
       pXAdj,
@@ -278,8 +283,23 @@ export async function run(context) {
       bttsQuote,
       goals15Quote,
       goals25Quote,
-      goals35Quote
-    }));
+      goals35Quote,
+      doubleChanceQuote,
+      marketOdds,
+      cornersPick,
+      cardsQuote,
+      leagueParams,
+      modularScores,
+      cornersBlock,
+      debug: debugEnabled
+    });
+    topSelection = recommendationResult.topSelection;
+    topPick = recommendationResult.topPick;
+    maxConf = recommendationResult.maxConf;
+    recommendedQuote = recommendationResult.recommendedQuote;
+    if (debugEnabled && recommendationResult.diagnostics) {
+      debugMeta = { ...(debugMeta || {}), recommendation: recommendationResult.diagnostics };
+    }
     stakePolicy = applyStakePolicyV2({
       stakePct: finalKelly,
       confidencePct: maxConf,

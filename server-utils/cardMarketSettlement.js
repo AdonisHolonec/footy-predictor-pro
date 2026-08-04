@@ -47,6 +47,44 @@ function validationFromMatch(status, pick, score) {
   return result ? "win" : "loss";
 }
 
+// Goals Over/Under lines this codebase ever offers as a recommendation (buildValueCandidates
+// only ever builds 1.5/2.5/3.5 goals lines). Any other O/U-shaped line can only be Corners —
+// Cards has no settlement totals tracked yet.
+const GOALS_OU_LINES = new Set([1.5, 2.5, 3.5]);
+
+/**
+ * Market-aware grading for a `recommended` pick — the fix for the P0 settlement bug: a
+ * Corners pick like "Over 7.5" is string-identical in shape to a goals pick and was being
+ * silently graded against goals scored instead of corners won.
+ *
+ * Prefers the explicit `family` persisted on the row (recommended.family, added alongside
+ * this fix) when present. Falls back to a deterministic line check for older rows that
+ * predate it: a goals-shaped line is always exactly 1.5/2.5/3.5 in this codebase, so any
+ * other O/U line can only be Corners.
+ *
+ * @param {{ pick: string, family?: string|null, status: string,
+ *   score: { home: number|null, away: number|null },
+ *   marketTotals?: { cornersTotal?: number|null } }} params
+ * @returns {"win"|"loss"|"pending"}
+ */
+export function resolveRecommendedValidation({ pick, family, status, score, marketTotals }) {
+  if (!isFinalStatus(status)) return "pending";
+  if (family === "Cards") return "pending"; // no cards totals tracked yet
+
+  const ou = parseGoalsOuPick(pick);
+  const isCorners = family === "Corners" || (!family && ou != null && !GOALS_OU_LINES.has(ou.line));
+
+  if (isCorners) {
+    if (!ou) return "pending";
+    const total = marketTotals?.cornersTotal;
+    if (total == null) return "pending";
+    const hit = evaluateOuLine(ou.side, ou.line, total);
+    return hit == null ? "pending" : hit ? "win" : "loss";
+  }
+
+  return validationFromMatch(status, pick, score);
+}
+
 function parseLineThreshold(key) {
   const m = String(key || "").match(/^o(\d+)_(\d+)$/);
   if (!m) return null;
@@ -155,6 +193,7 @@ export function validationFromOu(status, side, line, actualTotal) {
 export function deriveCardMarketPicks(prediction) {
   const row = prediction && typeof prediction === "object" ? prediction : {};
   const recommendedPick = String(row.recommended?.pick || "").trim() || null;
+  const recommendedFamily = row.recommended?.family || null;
 
   // If recommended is already goals O/U, card goals row uses the next-best line.
   const goalsBest = deriveBestGoalsPick(row, parseGoalsOuPick(recommendedPick));
@@ -192,7 +231,7 @@ export function deriveCardMarketPicks(prediction) {
     : null;
 
   return {
-    recommended: recommendedPick ? { pick: recommendedPick } : null,
+    recommended: recommendedPick ? { pick: recommendedPick, family: recommendedFamily } : null,
     goals,
     corners,
     shots
@@ -215,7 +254,13 @@ export function settleCardMarkets({ status, score, picks, marketTotals = {} }) {
   };
 
   if (picks?.recommended?.pick) {
-    out.recommended = validationFromMatch(status, picks.recommended.pick, score);
+    out.recommended = resolveRecommendedValidation({
+      pick: picks.recommended.pick,
+      family: picks.recommended.family,
+      status,
+      score,
+      marketTotals
+    });
   }
 
   if (picks?.goals?.side && picks.goals.line != null) {
@@ -367,7 +412,15 @@ export function resolveCardMarketValidations(rowOrEntry) {
     const legacy =
       rowOrEntry?.validation ||
       payload.validation ||
-      (picks.recommended ? validationFromMatch(status, picks.recommended.pick, score) : null);
+      (picks.recommended
+        ? resolveRecommendedValidation({
+            pick: picks.recommended.pick,
+            family: picks.recommended.family,
+            status,
+            score,
+            marketTotals: totals
+          })
+        : null);
     if (legacy === "win" || legacy === "loss" || legacy === "pending") {
       return { recommended: legacy, goals: null, corners: null, shots: null };
     }

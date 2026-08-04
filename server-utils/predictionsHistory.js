@@ -3,7 +3,8 @@ import { MODEL_VERSION } from "./modelConstants.js";
 import {
   aggregateCardMarketStats,
   attachCardMarketsToPayload,
-  resolveCardMarketValidations
+  resolveCardMarketValidations,
+  resolveRecommendedValidation
 } from "./cardMarketSettlement.js";
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 
@@ -110,7 +111,13 @@ function mapPredictionToDbRow(prediction) {
     match_status: status,
     score_home: scoreHome,
     score_away: scoreAway,
-    validation: validationFromMatch(status, recommendedPick, score),
+    validation: resolveRecommendedValidation({
+      pick: recommendedPick,
+      family: prediction.recommended?.family || null,
+      status,
+      score,
+      marketTotals: { cornersTotal: prediction.marketResults?.cornersTotal ?? null }
+    }),
     value_bet_validation: valueBetValidation,
     model_version: modelVer,
     reason_codes: Array.isArray(prediction?.auditLog?.reasonCodes) ? prediction.auditLog.reasonCodes : null,

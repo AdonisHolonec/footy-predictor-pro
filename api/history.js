@@ -9,7 +9,8 @@ import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
   attachCardMarketsToPayload,
   deriveCardMarketPicks,
-  needsMarketTotalsForSettlement
+  needsMarketTotalsForSettlement,
+  resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import {
@@ -456,8 +457,14 @@ async function handleHistorySync(req, res) {
       const scoreHome = typeof fx?.goals?.home === "number" ? fx.goals.home : null;
       const scoreAway = typeof fx?.goals?.away === "number" ? fx.goals.away : null;
       const score = { home: scoreHome, away: scoreAway };
-      const validation = validationFromMatch(matchStatus, row.recommended_pick, score);
       const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+      const validation = resolveRecommendedValidation({
+        pick: row.recommended_pick,
+        family: raw.recommended?.family || null,
+        status: matchStatus,
+        score,
+        marketTotals: { cornersTotal: raw.marketResults?.cornersTotal ?? null }
+      });
       const vbPick = resolveValueBetPick(raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type);
       const valueBetValidation = vbPick
         ? validationFromMatch(matchStatus, vbPick, score)
@@ -530,7 +537,13 @@ async function handleHistorySync(req, res) {
         const validation =
           row.validation === "win" || row.validation === "loss"
             ? row.validation
-            : validationFromMatch(row.match_status, row.recommended_pick, score);
+            : resolveRecommendedValidation({
+                pick: row.recommended_pick,
+                family: raw.recommended?.family || null,
+                status: row.match_status,
+                score,
+                marketTotals: { cornersTotal: raw.marketResults?.cornersTotal ?? null }
+              });
         if (String(valueBetValidation) === String(row.value_bet_validation || "") &&
             String(validation) === String(row.validation || "")) {
           continue;
@@ -651,7 +664,13 @@ async function handleHistorySync(req, res) {
         const validation =
           row.validation === "win" || row.validation === "loss"
             ? row.validation
-            : validationFromMatch(row.match_status, row.recommended_pick, score);
+            : resolveRecommendedValidation({
+                pick: row.recommended_pick,
+                family: raw.recommended?.family || null,
+                status: row.match_status,
+                score,
+                marketTotals
+              });
 
         const cardChanged =
           JSON.stringify(raw.cardMarketValidations || null) !==
