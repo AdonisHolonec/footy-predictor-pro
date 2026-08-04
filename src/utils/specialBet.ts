@@ -313,33 +313,72 @@ export function listSpecialBetCandidates(
 
   return pool
     .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0 && hasValidOdd(x.odd))
-    .sort((a, b) => b.probability - a.probability);
+    .sort(compareSpecialBetCandidates);
+}
+
+/**
+ * Fixed slot order used only when Recommendation Scores tie — keeps the
+ * generator fully deterministic across engines without changing quality ranking.
+ */
+const LEG_ID_TIEBREAK: Record<SpecialBetLegId, number> = {
+  recommended: 0,
+  goals: 1,
+  gg: 2,
+  corners: 3,
+  shots: 4,
+  ht: 5,
+  cards: 6
+};
+
+function compareSpecialBetCandidates(a: SpecialBetLeg, b: SpecialBetLeg): number {
+  const byScore = b.probability - a.probability;
+  if (byScore !== 0) return byScore;
+  return (LEG_ID_TIEBREAK[a.id] ?? 99) - (LEG_ID_TIEBREAK[b.id] ?? 99);
 }
 
 /**
  * Selects `legCount` base legs plus up to `MAX_EXTRA_STRONG_LEGS` extra legs with
  * probability ≥ SPECIAL_BET_STRONG_SIGNAL — greedily, by market family diversity.
  *
- * `candidates` must already be sorted by probability descending (the
- * "Recommendation Score" for this pool — see listSpecialBetCandidates). The
- * algorithm always takes the highest-scoring remaining candidate, then excludes
- * every other candidate from that same `family` before considering the next
- * leg, so an accumulator never carries two correlated picks from the same
- * market (e.g. two different Corners lines, or the "recommended" leg
- * duplicating the dedicated Goals/Corners/Cards slot). Deterministic — no
- * randomness, no shuffling; ties are broken purely by the incoming score order.
+ * Pipeline (Phase 1):
+ *   1. Re-sort by Recommendation Score desc (defensive — listSpecialBetCandidates
+ *      already sorts; this guarantees callers cannot bypass determinism).
+ *   2. Take the highest-scoring remaining candidate.
+ *   3. Mark its MarketFamilyKey as used and skip every other same-family candidate.
+ *   4. Repeat until `legCount`, then optionally append premium extras (≥85%).
  *
- * Phase 2 (not implemented here): cross-family correlation filtering, e.g.
- * Home Win + Double Chance 1X, Over 2.5 Goals + BTTS Yes, Under 2.5 Goals +
- * BTTS No. Family diversity already removes the most severe correlation
- * (same market, different line); these weaker cross-family pairs are left for
- * a follow-up so this pass stays scoped to the reported same-family bug.
+ * Same-family pairs that are impossible after this pass include two Corners
+ * lines, Goals + HT Goals, duplicated BTTS/Cards/1X2/Double Chance, etc.
+ * 1X2 and Double Chance remain DISTINCT families in Phase 1 (Home Win + 1X is
+ * Phase 2 correlation, not same-family diversity).
+ *
+ * Deterministic — no randomness; score ties break via LEG_ID_TIEBREAK.
+ *
+ * ---------------------------------------------------------------------------
+ * Phase 2 — Correlation Matrix (DO NOT IMPLEMENT HERE)
+ * ---------------------------------------------------------------------------
+ * After family diversity, optionally reject cross-family pairs that are still
+ * strongly dependent, e.g.:
+ *   - 1X2 Home Win + Double Chance 1X
+ *   - Over 2.5 Goals + BTTS Yes
+ *   - Under 2.5 Goals + BTTS No
+ *   - Goals total + Team Goals (when that slot exists)
+ *
+ * Integration without touching PredictorV3 / recommendation engine / odds:
+ *   - Keep listSpecialBetCandidates() and MarketFamilyKey as-is.
+ *   - Add a pure `areStronglyCorrelated(a, b): boolean` table in this module
+ *     (or a sibling `specialBetCorrelation.ts`) keyed by family + pick shape.
+ *   - Inside pickSpecialBetLegs, after the family check, also skip a candidate
+ *     when it correlates with any already-selected leg.
+ *   - UI continues to only render pickSpecialBetLegs output — no component
+ *     filtering. Probabilities / confidence / odds stay read-only inputs.
  */
 export function pickSpecialBetLegs(candidates: SpecialBetLeg[], legCount: 2 | 3): SpecialBetLeg[] {
+  const ranked = [...candidates].sort(compareSpecialBetCandidates);
   const usedFamilies = new Set<MarketFamilyKey>();
 
   const base: SpecialBetLeg[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of ranked) {
     if (base.length >= legCount) break;
     if (usedFamilies.has(candidate.family)) continue;
     base.push(candidate);
@@ -348,7 +387,7 @@ export function pickSpecialBetLegs(candidates: SpecialBetLeg[], legCount: 2 | 3)
 
   const usedIds = new Set(base.map((l) => l.id));
   const extras: SpecialBetLeg[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of ranked) {
     if (extras.length >= MAX_EXTRA_STRONG_LEGS) break;
     if (usedIds.has(candidate.id) || usedFamilies.has(candidate.family)) continue;
     if (candidate.probability < SPECIAL_BET_STRONG_SIGNAL) continue;

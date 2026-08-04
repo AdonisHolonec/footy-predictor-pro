@@ -5,6 +5,17 @@ import type { TranslateFn } from "../i18n";
  * text and the contextual icon. Distinct from the raw `recommended.family`
  * string persisted by the server (see server-utils/value/valueMarkets.js
  * VALUE_MARKET_FAMILIES), which this module maps onto one of these keys.
+ *
+ * Source of truth for Special Bet diversity + UI labels:
+ *   resolveMarketFamilyKey() in THIS file (client).
+ *
+ * Intentionally separate (do not merge blindly):
+ *   - classifyMarketFamily() in server-utils/value/valueMarkets.js
+ *     → builds ValueEngine / selectRecommendation candidates; returns
+ *       display strings like "Over/Under" / "Corners", not MarketFamilyKey.
+ *   - resolveRecommendedValidation() in server-utils/cardMarketSettlement.js
+ *     → settlement grading only; reuses the same goals-line set heuristic
+ *       but must not import React-side i18n utilities.
  */
 export type MarketFamilyKey =
   | "1X2"
@@ -25,21 +36,38 @@ export type FormattedRecommendation = {
 /** Goals lines the model ever recommends at (1.5 / 2.5 / 3.5) — mirrors GOALS_OU_LINES in server-utils/cardMarketSettlement.js. */
 const GOALS_LINES = new Set([1.5, 2.5, 3.5]);
 
+/**
+ * Map persisted server family strings onto MarketFamilyKey.
+ * Case-insensitive; accepts legacy separators ("Over-Under", "over under").
+ */
 function normalizeServerFamily(family: string | null | undefined): MarketFamilyKey | null {
-  switch (family) {
-    case "1X2":
+  const key = String(family || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[/_\-]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (!key) return null;
+  switch (key) {
+    case "1x2":
       return "1X2";
-    case "Double Chance":
+    case "double chance":
+    case "dc":
       return "DOUBLE_CHANCE";
-    case "BTTS":
+    case "btts":
       return "BTTS";
-    case "Over/Under":
+    case "over under":
       return "GOALS";
-    case "Corners":
+    case "corners":
+    case "corner":
       return "CORNERS";
-    case "Cards":
+    case "cards":
+    case "card":
       return "CARDS";
-    case "Correct Score":
+    case "shots":
+    case "shot":
+    case "shots on target":
+      return "SHOTS";
+    case "correct score":
       return "CORRECT_SCORE";
     default:
       return null;
@@ -56,6 +84,19 @@ function parseOuPick(pick: string): { side: "over" | "under"; line: number } | n
 }
 
 /**
+ * Explicit market tokens in the pick label beat ambiguous server families
+ * (e.g. "Over 10.5 Corners" must stay CORNERS even if family was "Over/Under").
+ */
+function inferFamilyFromPickTokens(pick: string): MarketFamilyKey | null {
+  const p = pick.trim().toLowerCase();
+  if (!p) return null;
+  if (/\bcorners?\b|cornere/.test(p)) return "CORNERS";
+  if (/\bcards?\b|cartona|booking/.test(p)) return "CARDS";
+  if (/\bshots?\b|suturi|șuturi/.test(p)) return "SHOTS";
+  return null;
+}
+
+/**
  * Best-effort family inference for rows persisted before `recommended.family`
  * existed. Only reached when the server didn't send a recognized family —
  * new predictions should always carry it (see Stage09Explainability.js).
@@ -65,21 +106,37 @@ function inferFamilyFromPick(pick: string): MarketFamilyKey {
   if (p === "1" || p === "x" || p === "2") return "1X2";
   if (p === "1x" || p === "12" || p === "x2") return "DOUBLE_CHANCE";
   if (p === "gg" || p === "ngg") return "BTTS";
-  if (p.includes("card")) return "CARDS";
+  const fromTokens = inferFamilyFromPickTokens(p);
+  if (fromTokens) return fromTokens;
   if (/^\d+-\d+$/.test(p)) return "CORRECT_SCORE";
   const ou = parseOuPick(p);
+  // Goals recommendations only ever use 1.5 / 2.5 / 3.5 — any other O/U line is Corners
+  // (same rule as server-utils/cardMarketSettlement.js resolveRecommendedValidation).
   if (ou) return GOALS_LINES.has(ou.line) ? "GOALS" : "CORNERS";
   return "OTHER";
 }
 
-/** Resolves the market family a recommended pick belongs to, preferring the persisted metadata over string-guessing. */
+/**
+ * Resolves the market family a recommended pick belongs to.
+ * Prefer explicit pick-text tokens, then persisted family, then line-based inference.
+ * Server "Over/Under" means goals only when the line is a goals line; high lines
+ * (e.g. Under 10.5) are Corners so Special Bet diversity can exclude the corners slot.
+ */
 export function resolveMarketFamilyKey(
   pick: string | null | undefined,
   family?: string | null
 ): MarketFamilyKey {
+  const raw = String(pick || "");
+  const fromTokens = inferFamilyFromPickTokens(raw);
+  if (fromTokens) return fromTokens;
+
   const normalized = normalizeServerFamily(family);
+  if (normalized === "GOALS") {
+    const ou = parseOuPick(raw);
+    if (ou && !GOALS_LINES.has(ou.line)) return "CORNERS";
+  }
   if (normalized) return normalized;
-  return inferFamilyFromPick(String(pick || ""));
+  return inferFamilyFromPick(raw);
 }
 
 /**
