@@ -8,6 +8,7 @@
 import { createPipelineContext } from "./PipelineContext.js";
 import { logError } from "../observability/logger.js";
 import { decrementPredictCountBy } from "../accessTier.js";
+import { filterByMinDisplayOdds } from "../predictionDisplayGate.js";
 import * as Stage00Ingress from "./stages/Stage00Ingress.js";
 import * as Stage01DataCollection from "./stages/Stage01DataCollection.js";
 import { runFixtureStageLoop } from "./stages/runFixtureStageLoop.js";
@@ -67,6 +68,11 @@ export async function handle(req, res) {
       await Stage12Response.run(context);
       return;
     }
+
+    // Global odds floor: drop candidates below MIN_DISPLAY_ODDS the moment odds become
+    // known (end of the fixture loop) — before persistence, tier masking, or the response
+    // body are built, so a filtered row never occupies a slot, gets ranked, or reaches a user.
+    context.out = filterByMinDisplayOdds(context.out);
 
     for (const stage of REQUEST_STAGES_AFTER_FIXTURES) {
       await stage.run(context);

@@ -1,5 +1,6 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../server-utils/supabaseAdmin.js";
+import { passesMinDisplayOdds } from "../../server-utils/predictionDisplayGate.js";
 
 function buildEmailHtml(items, type) {
   const title = type === "safe" ? "Safe Picks Alerts" : "Value Bets Alerts";
@@ -92,6 +93,10 @@ export default async function handler(req, res) {
       .limit(800);
     if (predictionsError) throw predictionsError;
 
+    // Odds floor before any recommendation selection or slot limit below —
+    // a sub-MIN_DISPLAY_ODDS pick must never occupy a safe/value email slot.
+    const eligiblePredictions = (predictions || []).filter((item) => passesMinDisplayOdds(item.raw_payload));
+
     const { data: existingLogs, error: logsError } = await supabase
       .from("notification_dispatch_log")
       .select("user_id, fixture_id, notification_type")
@@ -112,7 +117,7 @@ export default async function handler(req, res) {
       const safeItems = [];
       const valueItems = [];
 
-      for (const item of predictions || []) {
+      for (const item of eligiblePredictions) {
         if (!leaguesSet.has(Number(item.league_id))) continue;
         const isSafe = Number(item.recommended_confidence || 0) >= 70;
         const isValue = Boolean(item.raw_payload?.valueBet?.detected);

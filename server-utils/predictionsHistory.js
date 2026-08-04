@@ -5,6 +5,7 @@ import {
   attachCardMarketsToPayload,
   resolveCardMarketValidations
 } from "./cardMarketSettlement.js";
+import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
@@ -274,7 +275,7 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
   const { data, error } = await supabase.from(HISTORY_TABLE).select("*").gte("kickoff_at", cutoff).order("kickoff_at", { ascending: false }).limit(safeLimit);
   if (error) throw error;
   const rows = data || [];
-  const items = rows.map(mapDbRowToHistoryEntry);
+  const items = filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry));
   return { items, stats: aggregateCardMarketStats(rows) };
 }
 
@@ -312,6 +313,6 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
   });
   if (error) throw error;
   const rows = data || [];
-  const items = rows.map(mapDbRowToHistoryEntry);
+  const items = filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry));
   return { items, stats: aggregateCardMarketStats(rows) };
 }

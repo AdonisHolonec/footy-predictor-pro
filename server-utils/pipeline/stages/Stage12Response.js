@@ -3,19 +3,10 @@
  */
 
 import { getLocalCacheStats } from "../../fetcher.js";
+import { passesMinDisplayOdds } from "../../predictionDisplayGate.js";
 
 export const STAGE_ID = "Stage12Response";
 export const STAGE_DESCRIPTION = "Final JSON response assembly.";
-
-// Global floor: never expose a prediction whose final displayed odds are below this.
-// Applied once, here, as the last stage before the array leaves the server.
-const MIN_DISPLAYED_ODDS = 1.25;
-
-function passesMinDisplayedOdds(row) {
-  const odd = Number(row?.recommended?.odd);
-  if (!Number.isFinite(odd)) return true;
-  return odd >= MIN_DISPLAYED_ODDS;
-}
 
 /**
  * @param {object} context
@@ -42,7 +33,7 @@ export async function run(context) {
   }
 
   const { res } = context;
-  const masked = (context.masked ?? context.out ?? []).filter(passesMinDisplayedOdds);
+  const masked = (context.masked ?? context.out ?? []).filter(passesMinDisplayOdds);
   const oddsPrefetch = context.oddsPrefetch || {};
 
   if (context.responseHeaders) {
