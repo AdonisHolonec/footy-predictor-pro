@@ -7,6 +7,8 @@ dist/
 # Local agent/tooling harness artifacts (not project code)
 .codegraph/
 .cursor/
+graphify-out/
+.impeccable/
 .codex/
 .serena/
 .agents/
