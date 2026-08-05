@@ -44,7 +44,7 @@ function normalizeServerFamily(family: string | null | undefined): MarketFamilyK
   const key = String(family || "")
     .trim()
     .toLowerCase()
-    .replace(/[/_\-]+/g, " ")
+    .replace(/[/_-]+/g, " ")
     .replace(/\s+/g, " ");
   if (!key) return null;
   switch (key) {
