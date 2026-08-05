@@ -178,6 +178,69 @@ test("last_5 att/def parse from percentage strings rather than nulling out", () 
   assert.equal(api.teamsForm.home.goals.for.average, 3);
 });
 
+test("a null winner.id stays null rather than collapsing to team 0", () => {
+  // Number(null) is 0 and passes Number.isFinite, so the absent winner used to be
+  // stored as a real team id of 0 — observed live on 27 of 30 swept fixtures.
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({ predictions: { winner: { id: null, name: null, comment: null } } }),
+    566
+  );
+  assert.equal(api.winner.teamId, null);
+});
+
+test("absent last_5 goal totals stay null rather than becoming 0", () => {
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({
+      teams: {
+        home: { last_5: { form: "50%", att: "38%", def: "88%", goals: { for: { total: null, average: null } } } }
+      }
+    }),
+    567
+  );
+  assert.equal(api.teamsForm.home.goals.for.total, null);
+  assert.equal(api.teamsForm.home.goals.for.average, null);
+});
+
+test("declared family wins: a corners pick is not treated as a goals O/U", () => {
+  // "Over 7.5" is a corners line. Without the authoritative family it would fall
+  // into the single "ou" bucket and line up against API-Football's goals number.
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({ predictions: { under_over: "+2.5" } }),
+    568
+  );
+  const consensus = buildBenchmarkConsensus(
+    { pick: "Over 7.5", confidence: 76, family: "Corners" },
+    api,
+    FIXTURE_TEAMS
+  );
+  assert.equal(consensus.ourPick.family, "corners");
+  assert.equal(consensus.familyComparable, false);
+  assert.equal(consensus.agree, null);
+});
+
+test("declared goals family still compares against the API goals line", () => {
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({ predictions: { under_over: "+2.5" } }),
+    569
+  );
+  const consensus = buildBenchmarkConsensus(
+    { pick: "Over 2.5", confidence: 70, family: "Over/Under" },
+    api,
+    FIXTURE_TEAMS
+  );
+  assert.equal(consensus.ourPick.family, "ou");
+  assert.equal(consensus.familyComparable, true);
+  assert.equal(consensus.agree, true);
+});
+
+test("legacy row without a declared family: non-goals line splits out of 'ou'", () => {
+  const api = normalizeApiFootballPrediction(rawApiResponse(), 570);
+  const corners = buildBenchmarkConsensus({ pick: "Over 7.5", confidence: 76 }, api, FIXTURE_TEAMS);
+  const goals = buildBenchmarkConsensus({ pick: "Peste 2.5", confidence: 70 }, api, FIXTURE_TEAMS);
+  assert.equal(corners.ourPick.family, "ou_other");
+  assert.equal(goals.ourPick.family, "ou");
+});
+
 test("is deterministic — identical inputs produce identical agree/family output across calls", () => {
   const api = normalizeApiFootballPrediction(rawApiResponse(), 561);
   const a = buildBenchmarkConsensus({ pick: "1", confidence: 72 }, api, FIXTURE_TEAMS);

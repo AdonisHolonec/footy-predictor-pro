@@ -16,6 +16,24 @@ function parsePercent(raw) {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Number(null) is 0 — not NaN — so a bare Number.isFinite() check silently turns
+ * an absent field into a real zero. Observed live: a null winner.id was stored as
+ * teamId 0, which reads as "API-Football named a team" to anything doing a
+ * != null check. Reject null/undefined/"" before coercing.
+ */
+function toNumber(raw) {
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Team/fixture ids are always positive upstream; 0 means "absent", never a team. */
+function toId(raw) {
+  const n = toNumber(raw);
+  return n != null && n > 0 ? n : null;
+}
+
 function parseComparisonSide(block, side) {
   if (!block || typeof block !== "object") return null;
   return parsePercent(block[side]);
@@ -45,12 +63,12 @@ function normalizeLast5(team) {
     def: parsePercent(last5.def),
     goals: {
       for: {
-        average: Number.isFinite(Number(last5.goals?.for?.average)) ? Number(last5.goals.for.average) : null,
-        total: Number.isFinite(Number(last5.goals?.for?.total)) ? Number(last5.goals.for.total) : null
+        average: toNumber(last5.goals?.for?.average),
+        total: toNumber(last5.goals?.for?.total)
       },
       against: {
-        average: Number.isFinite(Number(last5.goals?.against?.average)) ? Number(last5.goals.against.average) : null,
-        total: Number.isFinite(Number(last5.goals?.against?.total)) ? Number(last5.goals.against.total) : null
+        average: toNumber(last5.goals?.against?.average),
+        total: toNumber(last5.goals?.against?.total)
       }
     }
   };
@@ -59,10 +77,10 @@ function normalizeLast5(team) {
 function normalizeH2h(h2h) {
   if (!Array.isArray(h2h)) return null;
   return h2h.map((item) => ({
-    fixtureId: Number.isFinite(Number(item?.fixture?.id)) ? Number(item.fixture.id) : null,
+    fixtureId: toId(item?.fixture?.id),
     date: item?.fixture?.date || null,
-    homeGoals: Number.isFinite(Number(item?.goals?.home)) ? Number(item.goals.home) : null,
-    awayGoals: Number.isFinite(Number(item?.goals?.away)) ? Number(item.goals.away) : null
+    homeGoals: toNumber(item?.goals?.home),
+    awayGoals: toNumber(item?.goals?.away)
   }));
 }
 
@@ -86,7 +104,7 @@ export function normalizeApiFootballPrediction(rawItem, fixtureId) {
     schemaVersion: BENCHMARK_SCHEMA_VERSION,
 
     winner: {
-      teamId: Number.isFinite(Number(predictions.winner?.id)) ? Number(predictions.winner.id) : null,
+      teamId: toId(predictions.winner?.id),
       teamName: predictions.winner?.name || null,
       comment: predictions.winner?.comment || null
     },

@@ -132,6 +132,48 @@ function formatGradeablePick(entry) {
   return entry.side;
 }
 
+/** Goals totals live on these lines; any other O/U line is a corners/shots/cards
+ * total. Mirrors GOALS_LINES in src/utils/formatRecommendation.ts. */
+const GOALS_LINES = new Set([1.5, 2.5, 3.5]);
+
+/** Server-authoritative family (valueMarkets.js#classifyMarketFamily, carried on
+ * recommended.family) → the family keys used here. */
+const DECLARED_FAMILY_ALIASES = {
+  "1x2": "1x2",
+  "double chance": "dc",
+  dc: "dc",
+  btts: "btts",
+  "over/under": "ou",
+  "over under": "ou",
+  goals: "ou",
+  corners: "corners",
+  corner: "corners",
+  cards: "cards",
+  card: "cards",
+  shots: "shots",
+  "shots on target": "shots",
+  "correct score": "correct_score"
+};
+
+/**
+ * tipMarketFamily() buckets every O/U line into a single "ou" family, so a
+ * corners pick ("Over 7.5") was indistinguishable from a goals pick and could be
+ * lined up against API-Football's goals under_over. The recommendation already
+ * carries an authoritative family (selectRecommendation.js sets it explicitly and
+ * documents that it must not be re-derived from the pick string) — prefer it, and
+ * only fall back to the lossy derivation for legacy rows that predate it.
+ */
+function resolveOurFamily(pick, declaredFamily) {
+  const declared = DECLARED_FAMILY_ALIASES[String(declaredFamily || "").trim().toLowerCase()];
+  if (declared) return declared;
+
+  const base = tipMarketFamily(pick);
+  if (base !== "ou") return base;
+  const parsed = normalizeOurSide(pick);
+  // An O/U on a non-goals line is a totals market API-Football does not cover.
+  return parsed?.line != null && GOALS_LINES.has(parsed.line) ? "ou" : "ou_other";
+}
+
 function compareWithinFamily(family, ourSide, apiEntry) {
   if (!apiEntry || ourSide == null) return { agree: null, lineMismatch: false };
   if (family === "ou") {
@@ -149,7 +191,7 @@ function compareWithinFamily(family, ourSide, apiEntry) {
  * @returns {object} BenchmarkConsensusResult
  */
 export function buildBenchmarkConsensus(ourRecommendation, apiPrediction, fixtureTeams = {}) {
-  const ourFamily = tipMarketFamily(ourRecommendation?.pick);
+  const ourFamily = resolveOurFamily(ourRecommendation?.pick, ourRecommendation?.family);
   const ourSide = normalizeOurSide(ourRecommendation?.pick);
   const ourConfidence = Number.isFinite(Number(ourRecommendation?.confidence))
     ? Number(ourRecommendation.confidence)
