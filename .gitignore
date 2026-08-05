@@ -1,10 +1,12 @@
 .vercel
 .env*.local
+.env*.local.*
 node_modules/
 dist/
 
 # Local agent/tooling harness artifacts (not project code)
 .codegraph/
+.cursor/
 .codex/
 .serena/
 .agents/
