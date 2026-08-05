@@ -95,6 +95,89 @@ test("draw fallback: no explicit winner, draw is the max percent", () => {
   assert.equal(consensus.apiPick.inferredPick, "x");
 });
 
+test("no-data response: a uniform 33/33/33 percent triple is not a pick", () => {
+  // Verbatim shape of a live /predictions response (fixture 1607560) for a
+  // fixture API-Football does not cover: null winner, null under_over, and a
+  // uniform percent placeholder. This must not become a Home pick.
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({
+      predictions: {
+        winner: { id: null, name: null, comment: null },
+        percent: { home: "33%", draw: "33%", away: "33%" },
+        advice: "No predictions available",
+        under_over: null
+      }
+    }),
+    562
+  );
+  const consensus = buildBenchmarkConsensus({ pick: "1", confidence: 60 }, api, FIXTURE_TEAMS);
+  assert.equal(consensus.apiPick.inferredPick, null);
+  assert.equal(consensus.apiPick.source, null);
+  assert.equal(consensus.familyComparable, false);
+  assert.equal(consensus.agree, null);
+  assert.equal(consensus.confidenceDelta, null);
+});
+
+test("no-data response: a tied top-two percent is ambiguous, not a pick", () => {
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({
+      predictions: {
+        winner: { id: null, name: null, comment: null },
+        percent: { home: "40%", draw: "40%", away: "20%" }
+      }
+    }),
+    563
+  );
+  const consensus = buildBenchmarkConsensus({ pick: "1", confidence: 60 }, api, FIXTURE_TEAMS);
+  assert.equal(consensus.apiPick.inferredPick, null);
+  assert.equal(consensus.agree, null);
+});
+
+test("an explicit winner still wins even when the percent triple is uniform", () => {
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({
+      predictions: {
+        winner: { id: 100, name: "Home FC", comment: "Winner" },
+        percent: { home: "33%", draw: "33%", away: "33%" }
+      }
+    }),
+    564
+  );
+  const consensus = buildBenchmarkConsensus({ pick: "1", confidence: 60 }, api, FIXTURE_TEAMS);
+  assert.equal(consensus.apiPick.source, "winner");
+  assert.equal(consensus.agree, true);
+});
+
+test("last_5 att/def parse from percentage strings rather than nulling out", () => {
+  const api = normalizeApiFootballPrediction(
+    rawApiResponse({
+      teams: {
+        home: {
+          last_5: {
+            form: "50%",
+            att: "38%",
+            def: "88%",
+            goals: { for: { total: 6, average: "3.0" }, against: { total: 2, average: "1.0" } }
+          }
+        },
+        away: {
+          last_5: {
+            form: "0%",
+            att: "0%",
+            def: "0%",
+            goals: { for: { total: 0, average: "0.0" }, against: { total: 0, average: "0.0" } }
+          }
+        }
+      }
+    }),
+    565
+  );
+  assert.equal(api.teamsForm.home.att, 38);
+  assert.equal(api.teamsForm.home.def, 88);
+  assert.equal(api.teamsForm.away.att, 0);
+  assert.equal(api.teamsForm.home.goals.for.average, 3);
+});
+
 test("is deterministic — identical inputs produce identical agree/family output across calls", () => {
   const api = normalizeApiFootballPrediction(rawApiResponse(), 561);
   const a = buildBenchmarkConsensus({ pick: "1", confidence: 72 }, api, FIXTURE_TEAMS);

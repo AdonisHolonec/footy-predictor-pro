@@ -84,7 +84,11 @@ export async function runBenchmarkSweep({ getWithCache }) {
     .from(BENCHMARK_TABLE)
     .select("fixture_id")
     .eq("model_version", MODEL_VERSION)
-    .eq("schema_version", "benchmark-v1")
+    // Must match what persistPredictionBenchmarks actually writes (afb-v1).
+    // The previous "benchmark-v1" literal never matched a stored row, so the
+    // already-benchmarked skip was a no-op and every sweep re-fetched the whole
+    // window — roughly 3x the necessary upstream calls at the default 3-day window.
+    .eq("schema_version", BENCHMARK_SCHEMA_VERSION)
     .in("fixture_id", fixtureIds);
   const alreadyBenchmarked = new Set((existing || []).map((r) => Number(r.fixture_id)));
 

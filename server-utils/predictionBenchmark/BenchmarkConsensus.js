@@ -83,7 +83,14 @@ function classify1x2(apiPrediction, fixtureTeams) {
       ["2", away]
     ].filter(([, v]) => Number.isFinite(v));
     if (entries.length) {
-      const [side, pct] = entries.reduce((max, cur) => (cur[1] > max[1] ? cur : max));
+      const ranked = [...entries].sort((a, b) => b[1] - a[1]);
+      // A percent triple with no strict maximum is API-Football's "no data"
+      // placeholder, not a lean — observed live as 33/33/33 alongside a null
+      // winner.id and advice "No predictions available" (fixture 1607560). The
+      // previous reducer kept the first entry on a tie, which turned every
+      // uncovered fixture into a fabricated Home pick.
+      if (ranked.length > 1 && ranked[0][1] === ranked[1][1]) return null;
+      const [side, pct] = ranked[0];
       return { family: "1x2", side, line: null, source: "percent", confidencePct: pct };
     }
   }

@@ -38,8 +38,11 @@ function normalizeLast5(team) {
   if (!last5 || typeof last5 !== "object") return null;
   return {
     form: last5.form ?? null,
-    att: Number.isFinite(Number(last5.att)) ? Number(last5.att) : null,
-    def: Number.isFinite(Number(last5.def)) ? Number(last5.def) : null,
+    // att/def arrive as percentage strings ("38%"), never plain numbers, so the
+    // previous Number() cast produced NaN and silently nulled both on every row.
+    // Confirmed against a live /predictions response (fixture 1607560).
+    att: parsePercent(last5.att),
+    def: parsePercent(last5.def),
     goals: {
       for: {
         average: Number.isFinite(Number(last5.goals?.for?.average)) ? Number(last5.goals.for.average) : null,
