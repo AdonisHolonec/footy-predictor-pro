@@ -34,6 +34,7 @@ import { matchingMarketOdd, shotsDisplayOdd, deriveAlignedOuPick } from "../util
 import { fetchWithAuth } from "../utils/apiAuth";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
 import MarketFamilyIcon from "./icons/MarketFamilyIcon";
+import MatchDecisionBlock, { type BenchmarkConsensus } from "./matchModal/MatchDecisionBlock";
 
 /**
  * Stil vizual pentru un pick în funcţie de nivelul de încredere.
@@ -655,18 +656,22 @@ function LeagueStandingsTable({
   );
 }
 
+/**
+ * Four decision-oriented sections, down from eleven data-oriented tabs.
+ * The tab count now matches the number of user intents, not the number of model
+ * outputs. Every former tab's content is preserved — it moved into the group
+ * that answers the same question:
+ *
+ *   overview → live context, special bet, form/standings  (what is happening)
+ *   analysis → prediction lab, why/key factors, xG, Monte Carlo  (why this pick)
+ *   markets  → 1X2 odds, value, per-market Poisson panels  (every price)
+ *   advanced → model internals, previously buried in prediction/why
+ */
 const DETAIL_TABS = [
   { id: "overview", labelKey: "match.tabOverview" },
-  { id: "prediction", labelKey: "match.tabPrediction" },
-  { id: "statistics", labelKey: "nav.statistics" },
-  { id: "h2h", labelKey: "match.tabH2h" },
-  { id: "form", labelKey: "match.tabForm" },
-  { id: "xg", labelKey: "match.tabXg" },
-  { id: "montecarlo", labelKey: "match.tabMc" },
-  { id: "value", labelKey: "match.tabValue" },
-  { id: "odds", labelKey: "match.tabMarkets" },
-  { id: "why", labelKey: "match.tabWhy" },
-  { id: "timeline", labelKey: "match.tabLabs" }
+  { id: "analysis", labelKey: "match.tabAnalysis" },
+  { id: "markets", labelKey: "match.tabMarkets" },
+  { id: "advanced", labelKey: "match.tabAdvanced" }
 ] as const;
 
 type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
@@ -874,6 +879,35 @@ export default function MatchModal({
   const showTierUpgradeLocks = effectiveAccessTier === "free" || effectiveAccessTier === "premium";
   const edgeScore = deriveSignalEdge(match);
   const dq = deriveDataQuality(match);
+
+  /**
+   * Decision Layer inputs. All three READ already-computed engine output — no EV,
+   * confidence or probability math happens here. When an engine reports nothing
+   * for this fixture the Decision Block renders a neutral "n/a" instead.
+   */
+  const decisionEvPct = (() => {
+    const fromValueBet = Number(match.valueBet?.ev);
+    if (Number.isFinite(fromValueBet)) return fromValueBet;
+    const fromEngine = Number(match.valueEngine?.expectedValue);
+    if (Number.isFinite(fromEngine)) return fromEngine;
+    return null;
+  })();
+
+  /** First plain-language reason from the Explanation engine — never a formula. */
+  const decisionRationale = (() => {
+    const label = match.explanation?.reasons?.[0]?.label;
+    if (typeof label === "string" && label.trim()) return label.trim();
+    const sentence = match.explanation?.reasoning?.[0];
+    if (typeof sentence === "string" && sentence.trim()) return sentence.trim();
+    return null;
+  })();
+
+  /**
+   * Prediction Benchmark placeholder (api/backtest?view=benchmark-*). Intentionally
+   * null until the feature ships: the consensus row is omitted entirely when this is
+   * absent, so the block degrades gracefully rather than showing an empty slot.
+   */
+  const decisionBenchmark: BenchmarkConsensus | null = null;
 
   const ProbBar = ({ label, val, color }: { label: string; val: number; color: string }) => (
     <div className="mb-4">
@@ -1094,33 +1128,6 @@ export default function MatchModal({
                 <span>·</span>
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
-              {hasLiveScore && match.momentum && (
-                <div className="mt-4 hidden w-full sm:block">
-                  <MatchMomentumTimeline
-                    fixtureId={Number(match.id)}
-                    status={match.status}
-                    score={match.score}
-                    momentum={match.momentum}
-                    homeTeam={match.teams.home}
-                    awayTeam={match.teams.away}
-                    liveEvents={match.liveEvents}
-                    recommendedPick={recommendedLabel.label}
-                    confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
-                    momentumNarrative={match.momentumNarrative ?? null}
-                  />
-                </div>
-              )}
-              {hasLiveScore && !match.momentum && (
-                <div className="mt-4 hidden w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center sm:flex">
-                  <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
-                    <path
-                      fill="currentColor"
-                      d="M3 14.5a.75.75 0 0 1 .75-.75h.5v-3a.75.75 0 0 1 1.5 0v3h1.5v-6a.75.75 0 0 1 1.5 0v6h1.5v-9a.75.75 0 0 1 1.5 0v9h1.5v-4.5a.75.75 0 0 1 1.5 0v4.5h.5a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75Z"
-                    />
-                  </svg>
-                  <p className="text-[10px] text-[var(--fp-text-muted)]">{tr("match.momentumUnavailable")}</p>
-                </div>
-              )}
             </div>
             <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
               <img
@@ -1133,9 +1140,50 @@ export default function MatchModal({
               </div>
             </div>
           </div>
-          {/* Mobile-only: full-width slot so the timeline isn't width-starved inside the narrow score column (see sm:block copy above for desktop). */}
+          {/* Decision Layer — the last thing above the navigation, by design.
+              Everything a bet/no-bet call needs lives here; every other block
+              moved below the tabs. */}
+          <MatchDecisionBlock
+            pickLabel={recommendedLabel.label}
+            familyKey={recommendedLabel.familyKey}
+            odd={recommendedOdd}
+            confidencePct={hasExactConfidence ? confPct : null}
+            confidenceCategory={confidenceCategory}
+            evPct={decisionEvPct}
+            dataQuality={dq}
+            rationale={decisionRationale}
+            benchmark={decisionBenchmark}
+          />
+        </div>
+
+        {/* Navigation sits immediately after the Decision Block so the user learns
+            the modal has sections before scrolling through any of them. */}
+        <div className="sticky top-0 z-20 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 px-2 py-1.5 backdrop-blur-md sm:px-4">
+          <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={tr("match.analysis")}>
+            {DETAIL_TABS.map((tabItem) => (
+              <button
+                key={tabItem.id}
+                type="button"
+                role="tab"
+                aria-selected={detailTab === tabItem.id}
+                onClick={() => setDetailTab(tabItem.id)}
+                className={`h-9 shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                  detailTab === tabItem.id
+                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
+                }`}
+              >
+                {tr(tabItem.labelKey)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5">
+          {/* Live context — a single full-width timeline. Previously mounted twice
+              (a desktop copy inside the narrow score column plus a mobile copy). */}
           {hasLiveScore && match.momentum && (
-            <div className="mt-4 w-full sm:hidden">
+            <div className={`w-full ${tab(["overview"])}`}>
               <MatchMomentumTimeline
                 fixtureId={Number(match.id)}
                 status={match.status}
@@ -1151,7 +1199,7 @@ export default function MatchModal({
             </div>
           )}
           {hasLiveScore && !match.momentum && (
-            <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center sm:hidden">
+            <div className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center ${tab(["overview"])}`}>
               <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
                 <path
                   fill="currentColor"
@@ -1161,8 +1209,11 @@ export default function MatchModal({
               <p className="text-[10px] text-[var(--fp-text-muted)]">{tr("match.momentumUnavailable")}</p>
             </div>
           )}
+          {/* Special Bet — a secondary product (parlay builder). It now sits after the
+              recommendation has been justified, so it can no longer compete with the
+              single-pick decision for attention. */}
           {!canShowSpecialBet && (
-            <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
+            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
@@ -1184,7 +1235,7 @@ export default function MatchModal({
             </div>
           )}
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-            <div className="mx-auto mt-1 flex w-full max-w-[32rem] items-center justify-center px-1 sm:mt-2">
+            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-3.5 py-3 text-center shadow-[var(--fp-shadow-sm)] max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
@@ -1274,7 +1325,10 @@ export default function MatchModal({
             </div>
           )}
 
-          <div className="mx-auto hidden max-w-2xl sm:block">
+          {/* Desktop-only today (unchanged behaviour) — see follow-ups for surfacing
+              these signals on mobile, which needs its own responsive pass. Explicit
+              ternary rather than tab(): "hidden" alone would lose to `sm:block`. */}
+          <div className={`mx-auto max-w-2xl ${detailTab === "overview" ? "hidden sm:block" : "hidden"}`}>
             {hasExactConfidence ? (
               <CollapsiblePanel compact title={tr("panels.advancedSignals")} lazy={false}>
                 <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4">
@@ -1325,16 +1379,10 @@ export default function MatchModal({
           </div>
 
           <section
-            className={`mx-auto mt-6 max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5 ${
-              detailTab === "form" || detailTab === "h2h"
-                ? ""
-                : detailTab === "overview"
-                  ? "hidden sm:block"
-                  : "hidden"
-            }`}
+            className={`mx-auto max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5 ${tab(["overview"])}`}
           >
             <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">
-              {detailTab === "h2h" ? tr("match.h2hContext") : tr("match.standingsForm")}
+              {tr("match.standingsForm")}
             </h3>
             {showStandingsBlock ? (
               <>
@@ -1362,46 +1410,23 @@ export default function MatchModal({
               </p>
             )}
           </section>
-        </div>
 
-        <div className="sticky top-0 z-20 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 px-2 py-1.5 backdrop-blur-md sm:px-4">
-          <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={tr("match.analysis")}>
-            {DETAIL_TABS.map((tabItem) => (
-              <button
-                key={tabItem.id}
-                type="button"
-                role="tab"
-                aria-selected={detailTab === tabItem.id}
-                onClick={() => setDetailTab(tabItem.id)}
-                className={`h-9 shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                  detailTab === tabItem.id
-                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
-                }`}
-              >
-                {tr(tabItem.labelKey)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5">
-          <div className={tab(["prediction"])}>
+          <div className={tab(["analysis"])}>
             <CollapsiblePanel compact title={tr("panels.predictionAnalysis")}>
               <PredictionLaboratoryPanel match={match} framed={false} />
             </CollapsiblePanel>
           </div>
 
           {match.monteCarlo?.probabilityDistribution ? (
-            <div className={tab(["montecarlo"])}>
+            <div className={tab(["analysis"])}>
               <CollapsiblePanel compact title={tr("panels.monteCarlo")}>
                 <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} framed={false} />
               </CollapsiblePanel>
             </div>
           ) : null}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds", "value", "overview"])}`}>
-            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["xg", "overview"])}`}>
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["overview", "analysis", "markets"])}`}>
+            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["analysis"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.xgLuck")}</h3>
               <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
@@ -1415,7 +1440,7 @@ export default function MatchModal({
               )}
             </section>
 
-            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["odds", "value", "overview"])}`}>
+            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["overview", "markets"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
@@ -1529,7 +1554,7 @@ export default function MatchModal({
           </div>
 
           {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
-            <div className={tab(["prediction", "overview"])}>
+            <div className={tab(["overview", "analysis"])}>
               <CollapsiblePanel compact title={tr("panels.predictionExplanation")}>
                 <ExplanationCard explanation={match.explanation} framed={false} />
               </CollapsiblePanel>
@@ -1537,7 +1562,7 @@ export default function MatchModal({
           ) : null}
 
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
-            <div className={tab(["why", "prediction"])}>
+            <div className={tab(["analysis"])}>
               <CollapsiblePanel compact title={tr("panels.keyFactors")} subtitle={tr("panels.keyFactorsSub")}>
                 <FeatureImportanceChart importance={match.featureImportance} framed={false} />
               </CollapsiblePanel>
@@ -1545,7 +1570,7 @@ export default function MatchModal({
           ) : null}
 
           {match.predictionContributions?.items?.length ? (
-            <div className={tab(["why", "prediction"])}>
+            <div className={tab(["analysis"])}>
               <CollapsiblePanel compact title={tr("panels.whyPrediction")}>
                 <PredictionContributionsChart data={match.predictionContributions} framed={false} />
               </CollapsiblePanel>
@@ -1553,7 +1578,7 @@ export default function MatchModal({
           ) : null}
 
           {match.confidenceEngine && (
-            <div className={tab(["why", "overview"])}>
+            <div className={tab(["overview", "analysis"])}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
                 recommendationPick={match.recommended?.pick ? recommendedLabel.label : null}
@@ -1561,7 +1586,7 @@ export default function MatchModal({
             </div>
           )}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["statistics", "overview", "timeline"])}`}>
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["markets"])}`}>
             <section className="rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">04 — Piețe & scor</h3>
@@ -1657,7 +1682,9 @@ export default function MatchModal({
             </section>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3">
+          {/* Previously un-gated: these market panels rendered in every tab, which is
+              what made every section feel equally heavy. They belong to Markets. */}
+          <div className={`grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3 ${tab(["markets"])}`}>
             <CollapsiblePanel compact title={tr("panels.model1x2")}>
               <ProbBar label={tr("panels.homeWin")} val={match.probs.p1} color={homeColor} />
               <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#475569" />
@@ -1690,6 +1717,7 @@ export default function MatchModal({
               compact
               title={tr("panels.firstHalf")}
               subtitle={tr("match.htSubtitle")}
+              className={tab(["markets"])}
             >
               {match.modelMeta?.firstHalf && (
                 <div className="mb-3 text-right font-mono text-[10px] text-[var(--fp-text-muted)] tabular-nums">
@@ -1760,6 +1788,7 @@ export default function MatchModal({
               compact
               title={tr("match.htLockedTitle")}
               badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
+              className={tab(["markets"])}
             >
               <p className="text-sm text-[var(--fp-text-muted)]">
                 {isPremiumLike ? tr("match.htLockedUltra") : tr("match.htLocked")}
@@ -1769,7 +1798,7 @@ export default function MatchModal({
 
           {/* === CORNERE + ŞUTURI LA POARTĂ + CARTONAŞE (Poisson pe rolling stats) === */}
           {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal || match.probs.cards) && (
-            <div className="space-y-2">
+            <div className={`space-y-2 ${tab(["markets"])}`}>
               {match.probs.corners && (
                 <CollapsiblePanel compact title={tr("match.featCorners")} subtitle={tr("match.cornersSub")}>
                   <PoissonMarketSection
@@ -1884,6 +1913,7 @@ export default function MatchModal({
               compact
               title={tr("match.lockedMarkets")}
               badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
+              className={tab(["markets"])}
             >
               <p className="text-sm font-medium text-[var(--fp-text)]">
                 {effectiveAccessTier === "free" || isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
@@ -1919,7 +1949,7 @@ export default function MatchModal({
               match.modelMeta.reasonCodes?.length ||
               match.modelMeta.stakeBucket ||
               match.evaluation) && (
-              <details className={`group rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5 ${tab(["prediction", "why"])}`}>
+              <details className={`group rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5 ${tab(["advanced"])}`}>
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
                     {tr("match.modelAudit")}
