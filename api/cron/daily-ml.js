@@ -1,5 +1,7 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
+import { getWithCache } from "../../server-utils/fetcher.js";
+import { runBenchmarkSweep } from "../../server-utils/predictionBenchmark/runBenchmarkSweep.js";
 import {
   fitIsotonicPav,
   applyIsotonicMap,
@@ -401,6 +403,21 @@ export default async function handler(req, res) {
     } catch (err) {
       logError("cron.daily_report_failed", { error: err?.message || String(err) });
       return res.status(500).json({ ok: false, mode, error: err?.message || "Daily report failed" });
+    }
+  }
+  // Prediction benchmark sweep — comparison-only vs API-Football, no ML training;
+  // folded here for Hobby serverless function limits (see runBenchmarkSweep.js).
+  if (mode === "prediction-benchmark-sweep" || mode === "prediction_benchmark_sweep" || mode === "benchmark-sweep") {
+    if (String(process.env.PREDICTION_BENCHMARK_ENABLED || "0") !== "1") {
+      return res.status(200).json({ ok: true, mode, skipped: "flag_disabled" });
+    }
+    try {
+      const result = await runBenchmarkSweep({ getWithCache });
+      return res.status(200).json({ ok: true, mode, ...result });
+    } catch (err) {
+      // Never throw past the cron boundary — log-and-continue, same convention as Stage10Persistence.js.
+      logError("cron.prediction_benchmark_sweep_failed", { error: err?.message || String(err) });
+      return res.status(200).json({ ok: false, mode, error: err?.message || "sweep_failed" });
     }
   }
 

@@ -21,6 +21,12 @@ import {
 } from "../server-utils/backtest/BacktestAnalytics.js";
 import { buildClvReport, computeClvPct } from "../server-utils/backtest/ClvReport.js";
 import { resolvePublishedTip } from "../server-utils/backtest/TipEvent.js";
+import { extractBenchmarkEvents } from "../server-utils/backtest/benchmarkEvents.js";
+import {
+  computeAgreementRate,
+  computeHeadToHead,
+  computeOurPerformance
+} from "../server-utils/backtest/benchmarkMetrics.js";
 import { evaluateTipClvReport } from "../server-utils/validation/TipClvReport.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
@@ -786,6 +792,77 @@ async function handleWalkForwardTip(req, res) {
   }
 }
 
+/**
+ * Prediction benchmark views — comparison-only vs API-Football's own /predictions,
+ * folded into api/backtest.js's view= dispatch for Hobby serverless function limits
+ * (was api/predictionBenchmark.js). Never read by PredictorV3/Stage00-08 or the
+ * Recommendation Engine — admin/cron reporting only.
+ *
+ *   GET /api/backtest?view=benchmark-summary&days=45
+ *   GET /api/backtest?view=benchmark-by-market&days=45
+ *   GET /api/backtest?view=benchmark-head-to-head&days=45
+ *   GET /api/backtest?view=benchmark-agreement-rate&days=45
+ */
+async function loadBenchmarkEvents(req) {
+  const config = assertSupabaseConfigured();
+  if (!config.ok) return { ok: false, error: config.error };
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { ok: false, error: "Supabase client unavailable" };
+
+  const days = Math.max(1, Math.min(Number(req.query.days || 45), 365));
+  const cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("prediction_benchmarks")
+    .select(
+      "fixture_id, league_id, kickoff_at, our_pick, our_family, our_confidence, our_odd, consensus, agree, confidence_delta, our_result, api_result"
+    )
+    .gte("kickoff_at", cutoffIso)
+    .order("kickoff_at", { ascending: false })
+    .limit(10000);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, events: extractBenchmarkEvents(data || []), days };
+}
+
+async function handleBenchmarkSummary(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed." });
+  const loaded = await loadBenchmarkEvents(req);
+  if (!loaded.ok) return res.status(500).json({ ok: false, error: loaded.error });
+  const performance = computeOurPerformance(loaded.events);
+  const agreement = computeAgreementRate(loaded.events);
+  const headToHead = computeHeadToHead(loaded.events);
+  return res.status(200).json({ ok: true, days: loaded.days, performance, agreement, headToHead });
+}
+
+async function handleBenchmarkByMarket(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed." });
+  const loaded = await loadBenchmarkEvents(req);
+  if (!loaded.ok) return res.status(500).json({ ok: false, error: loaded.error });
+  const performance = computeOurPerformance(loaded.events);
+  const agreement = computeAgreementRate(loaded.events);
+  return res.status(200).json({
+    ok: true,
+    days: loaded.days,
+    byMarketFamily: performance.byMarket,
+    agreementByMarketFamily: agreement.byMarketFamily
+  });
+}
+
+async function handleBenchmarkHeadToHead(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed." });
+  const loaded = await loadBenchmarkEvents(req);
+  if (!loaded.ok) return res.status(500).json({ ok: false, error: loaded.error });
+  return res.status(200).json({ ok: true, days: loaded.days, ...computeHeadToHead(loaded.events) });
+}
+
+async function handleBenchmarkAgreementRate(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed." });
+  const loaded = await loadBenchmarkEvents(req);
+  if (!loaded.ok) return res.status(500).json({ ok: false, error: loaded.error });
+  return res.status(200).json({ ok: true, days: loaded.days, ...computeAgreementRate(loaded.events) });
+}
+
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
   // Public track record is intentionally ungated (sanitized aggregates only) + rate-limited.
@@ -813,7 +890,15 @@ export default async function handler(req, res) {
     "metrics",
     "walk-forward-tip",
     "walkforwardtip",
-    "tip-wf"
+    "tip-wf",
+    "benchmark-summary",
+    "benchmarksummary",
+    "benchmark-by-market",
+    "benchmarkbymarket",
+    "benchmark-head-to-head",
+    "benchmarkheadtohead",
+    "benchmark-agreement-rate",
+    "benchmarkagreementrate"
   ]);
   if (gatedViews.has(view) && !(await isAuthorizedForMetrics(req))) {
     return res.status(401).json({ ok: false, error: "Neautorizat. Autentificare admin sau cron necesară." });
@@ -829,9 +914,15 @@ export default async function handler(req, res) {
   }
   if (view === "model-lab" || view === "modellab") return handleModelLab(req, res);
   if (view === "model-select" || view === "modelselect") return handleModelSelect(req, res);
+  if (view === "benchmark-summary" || view === "benchmarksummary") return handleBenchmarkSummary(req, res);
+  if (view === "benchmark-by-market" || view === "benchmarkbymarket") return handleBenchmarkByMarket(req, res);
+  if (view === "benchmark-head-to-head" || view === "benchmarkheadtohead") return handleBenchmarkHeadToHead(req, res);
+  if (view === "benchmark-agreement-rate" || view === "benchmarkagreementrate") {
+    return handleBenchmarkAgreementRate(req, res);
+  }
   return res.status(400).json({
     ok: false,
     error:
-      "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, public-track, snapshot, metrics, health, clv, walk-forward-tip sau model-lab."
+      "Parametrul view lipsește sau este invalid. Folosește view=kpi, analytics, public-track, snapshot, metrics, health, clv, walk-forward-tip, model-lab sau benchmark-summary."
   });
 }

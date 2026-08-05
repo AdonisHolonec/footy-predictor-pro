@@ -51,7 +51,7 @@ async function getJson<T>(url: string, notFoundMessage: string): Promise<T> {
 
 export async function loadBenchmarkSummary(days = 45): Promise<BenchmarkSummary> {
   return getJson<BenchmarkSummary>(
-    `/api/predictionBenchmark?view=summary&days=${days}`,
+    `/api/backtest?view=benchmark-summary&days=${days}`,
     "Could not load benchmark summary."
   );
 }
@@ -59,9 +59,9 @@ export async function loadBenchmarkSummary(days = 45): Promise<BenchmarkSummary>
 export async function loadBenchmarkByMarket(
   days = 45
 ): Promise<{ ok: boolean; days: number; byMarketFamily: BenchmarkPerformance["byMarket"]; agreementByMarketFamily: BenchmarkAgreement["byMarketFamily"] }> {
-  return getJson(`/api/predictionBenchmark?view=by-market&days=${days}`, "Could not load by-market breakdown.");
+  return getJson(`/api/backtest?view=benchmark-by-market&days=${days}`, "Could not load by-market breakdown.");
 }
 
 export async function loadBenchmarkHeadToHead(days = 45): Promise<BenchmarkHeadToHead & { ok: boolean; days: number }> {
-  return getJson(`/api/predictionBenchmark?view=head-to-head&days=${days}`, "Could not load head-to-head.");
+  return getJson(`/api/backtest?view=benchmark-head-to-head&days=${days}`, "Could not load head-to-head.");
 }
