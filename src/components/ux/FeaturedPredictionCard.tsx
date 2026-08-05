@@ -3,6 +3,8 @@ import type { PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { ConfidenceAura } from "../SignalLab";
 import PredictionContributionsChart from "../PredictionContributionsChart";
+import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 
 type Props = {
   match: PredictionRow | null;
@@ -15,6 +17,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
 
   if (!match) return null;
 
+  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, t);
   const confPct =
     match.recommended?.confidence != null && Number.isFinite(Number(match.recommended.confidence))
       ? Math.round(Number(match.recommended.confidence))
@@ -51,10 +54,8 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
             {match.teams.away}
           </div>
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--fp-accent-muted)] px-2.5 py-1 text-xs font-extrabold text-[var(--fp-accent)]">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8">
-              <path d="m5 13 4 4L19 7" />
-            </svg>
-            {match.recommended.pick}
+            <MarketFamilyIcon familyKey={recommendedLabel.familyKey} />
+            {recommendedLabel.label}
           </div>
           <div className="mt-1.5 text-xs text-[var(--fp-text-muted)]">
             {kickoffTime}

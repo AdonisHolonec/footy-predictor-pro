@@ -84,6 +84,89 @@ test("selectRecommendation does not let diversity override a clear confidence le
   assert.equal(out.topPick, "Peste 1.5");
 });
 
+test("selectRecommendation soft-penalizes typical Over 1.5 so stronger alternatives can win", () => {
+  // Reproduces the post-recalibration habit: O1.5 ~82% with short odds beating Corners/BTTS.
+  // Soft safe-line penalty must let a competitive Corners pick win without touching PredictorV3.
+  const out = selectRecommendation(
+    baseParams({
+      marketProbsAligned: {
+        pGG: 55,
+        pNGG: 45,
+        pO15: 82,
+        pU15: 18,
+        pO25: 58,
+        pU25: 42,
+        pO35: 32,
+        pU35: 68,
+        pDC1X: 70,
+        pDC12: 72,
+        pDCX2: 58
+      },
+      marketOdds: { corners: { pick: "Over 8.5", line: 8.5, odd: 1.85, bookmakersUsed: 4 } },
+      cornersPick: { pick: "Over 8.5", probability: 62 },
+      goals15Quote: { over: 1.28, under: 3.6, bookmakersUsed: 6 },
+      debug: true
+    })
+  );
+  assert.notEqual(out.topPick, "Peste 1.5");
+  const o15 = out.diagnostics.ranked.find((c) => c.type === "Peste 1.5");
+  assert.ok(o15);
+  assert.equal(o15.safeOuPenalty, 9);
+});
+
+test("selectRecommendation soft-penalizes typical Under 3.5 so it does not dominate by default", () => {
+  const out = selectRecommendation(
+    baseParams({
+      marketProbsAligned: {
+        pGG: 48,
+        pNGG: 52,
+        pO15: 72,
+        pU15: 28,
+        pO25: 48,
+        pU25: 52,
+        pO35: 25,
+        pU35: 75,
+        pDC1X: 68,
+        pDC12: 70,
+        pDCX2: 62
+      },
+      marketOdds: { corners: { pick: "Over 8.5", line: 8.5, odd: 1.85, bookmakersUsed: 4 } },
+      cornersPick: { pick: "Over 8.5", probability: 62 },
+      goals15Quote: { over: 1.35, under: 3.2, bookmakersUsed: 6 },
+      goals35Quote: { over: 2.8, under: 1.42, bookmakersUsed: 6 },
+      debug: true
+    })
+  );
+  assert.notEqual(out.topPick, "Sub 3.5");
+  const u35 = out.diagnostics.ranked.find((c) => c.type === "Sub 3.5");
+  assert.ok(u35);
+  assert.equal(u35.safeOuPenalty, 8);
+});
+
+test("selectRecommendation prefers Goals 2.5 over safe Over 1.5 when both are competitive", () => {
+  const out = selectRecommendation(
+    baseParams({
+      marketProbsAligned: {
+        pGG: 50,
+        pNGG: 50,
+        pO15: 80,
+        pU15: 20,
+        pO25: 64,
+        pU25: 36,
+        pO35: 30,
+        pU35: 70
+      },
+      goals15Quote: { over: 1.3, under: 3.4, bookmakersUsed: 5 },
+      goals25Quote: { over: 1.85, under: 1.95, bookmakersUsed: 5 },
+      bttsQuote: { yes: 2.1, no: 1.75, bookmakersUsed: 4 },
+      // No corners — isolate O/U line preference inside the goals family.
+      marketOdds: null,
+      cornersPick: null
+    })
+  );
+  assert.equal(out.topPick, "Peste 2.5");
+});
+
 test("selectRecommendation is deterministic across repeated calls with identical input", () => {
   const params = baseParams();
   const a = selectRecommendation(params);

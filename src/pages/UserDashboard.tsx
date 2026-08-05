@@ -29,6 +29,7 @@ import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
 import { useUiPrefs, type MarketPref } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import { isFinalMatchStatus } from "../utils/cardMarketOutcome";
+import { formatRecommendedPick } from "../utils/formatRecommendation";
 import Button from "../design-system/Button";
 import Card from "../design-system/Card";
 import Badge from "../design-system/Badge";
@@ -1291,7 +1292,12 @@ export default function UserDashboard() {
                   {analysisMatch.confidenceEngine && (
                     <ConfidenceEnginePanel
                       engine={analysisMatch.confidenceEngine}
-                      recommendationPick={analysisMatch.recommended?.pick || null}
+                      recommendationPick={
+                        analysisMatch.recommended?.pick
+                          ? formatRecommendedPick(analysisMatch.recommended.pick, analysisMatch.recommended.family, t)
+                              .label
+                          : null
+                      }
                     />
                   )}
                   {analysisMatch.predictionContributions && (

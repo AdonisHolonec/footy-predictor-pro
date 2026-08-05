@@ -160,6 +160,8 @@ function valueKind(label) {
 
 function normalizeMarketName(name) {
   return String(name || "")
+    // API-Football uses camel compounds like "Total ShotOnGoal"
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/[-_/]+/g, " ")
     .replace(/\s+/g, " ")
@@ -175,10 +177,16 @@ export const PREFERRED_SHOTS_BOOKMAKERS = [
   "1xbet",
   "bwin",
   "betfair",
-  "marathonbet"
+  "marathonbet",
+  "betano",
+  "superbet"
 ];
 
 export const SHOTS_SOT_MARKET_NAMES = [
+  // API-Football v3 bet id 87
+  "Total ShotOnGoal",
+  "Total Shot On Goal",
+  "ShotOnGoal",
   "Shots On Target - Over/Under",
   "Shots on Target Over/Under",
   "Shots on Goal Over/Under",
@@ -193,9 +201,10 @@ export const SHOTS_SOT_MARKET_NAMES = [
 ];
 
 export const SHOTS_TOTAL_MARKET_NAMES = [
+  // API-Football v3 bet id 211
+  "Total Shots",
   "Total Shots Over/Under",
   "Shots Over/Under",
-  "Total Shots",
   "Match Shots Over/Under",
   "Shots",
   "Total Match Shots",
@@ -252,7 +261,8 @@ function scoreMarketName(apiName, candidates, kind = "generic") {
   if (!teamKind && (/\bhome team\b/.test(n) || /\baway team\b/.test(n))) return 0;
 
   if (kind === "shots_on_target" || kind === "shots_on_target_home" || kind === "shots_on_target_away") {
-    if (!/(on target|on goal|shots on|\bsot\b)/.test(n)) return 0;
+    // "shot on goal" covers camelCase-normalized "ShotOnGoal"; shotongoal is a belt-and-suspenders fallback.
+    if (!/(on target|on goal|shot\s*on\s*goal|shots on|\bsot\b|shotongoal)/.test(n)) return 0;
   }
   if (kind === "shots_on_target_home") {
     if (!/\bhome\b/.test(n)) return 0;

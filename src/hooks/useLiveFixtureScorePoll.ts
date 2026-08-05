@@ -36,6 +36,30 @@ export function shouldPollFixtureScore(p: PredictionRow): boolean {
 const MAX_LIVE_CONFIDENCE_DELTA = 5;
 
 type LiveAdjustment = NonNullable<NonNullable<PredictionRow["confidenceEngine"]>["liveAdjustment"]>;
+type Momentum = NonNullable<PredictionRow["momentum"]>;
+
+/**
+ * Merge server momentum into the in-memory row.
+ * Transient nulls (empty stats / rate limit / uncached miss) must NOT wipe a previously
+ * good live momentum while the match is still in play — that is why some 70' cards
+ * flicker or stay empty while others keep showing.
+ */
+export function mergeLiveMomentum(
+  previous: PredictionRow["momentum"] | null | undefined,
+  incoming: PredictionRow["momentum"] | null | undefined,
+  nextStatus: string
+): PredictionRow["momentum"] | null {
+  if (incoming) {
+    if (!previous) return incoming;
+    const prevDiff = previous.homeMomentum - previous.awayMomentum;
+    const nextDiff = incoming.homeMomentum - incoming.awayMomentum;
+    const delta = nextDiff - prevDiff;
+    const trend: Momentum["trend"] = delta > 3 ? "up" : delta < -3 ? "down" : "stable";
+    return { ...incoming, trend };
+  }
+  if (previous && isFixtureInPlay(nextStatus)) return previous;
+  return null;
+}
 
 /**
  * Only "1"/"2" picks have a clean home/away momentum mapping — draw/O-U/GG picks
@@ -140,21 +164,13 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
                   : null;
             // Engine is stateless per-request; derive a real up/down/stable trend here
             // by diffing against the previous in-memory momentum (no history stored).
-            const momentum = u.momentum
-              ? p.momentum
-                ? (() => {
-                    const prevDiff = p.momentum!.homeMomentum - p.momentum!.awayMomentum;
-                    const nextDiff = u.momentum!.homeMomentum - u.momentum!.awayMomentum;
-                    const delta = nextDiff - prevDiff;
-                    const trend: "up" | "down" | "stable" = delta > 3 ? "up" : delta < -3 ? "down" : "stable";
-                    return { ...u.momentum!, trend };
-                  })()
-                : u.momentum
-              : null;
+            // Preserve last good momentum on transient null while still in play.
+            const nextStatus = u.status || p.status;
+            const momentum = mergeLiveMomentum(p.momentum, u.momentum, nextStatus);
             const liveAdjustment = deriveLiveConfidenceAdjustment(p.recommended?.pick, momentum);
             return {
               ...p,
-              status: u.status || p.status,
+              status: nextStatus,
               // Prefer fresh referee once API-Football publishes it (often empty at predict time).
               referee: nextReferee || p.referee,
               score: {

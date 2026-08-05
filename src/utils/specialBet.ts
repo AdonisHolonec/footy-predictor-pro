@@ -9,12 +9,16 @@ import {
   deriveAlignedOuPick,
   deriveCardGoalsPick,
   goalsOddForLine,
+  listGoalsPickCandidates,
   matchingMarketOdd,
+  parseGoalsOuPick,
   parseOuSide,
   recommendedOdd,
   resolveFirstHalfGoalsActual,
-  shotsDisplayOdd
+  shotsDisplayOdd,
+  type GoalsOuPick
 } from "./marketPicks";
+import { resolveMarketFamilyKey, type MarketFamilyKey } from "./formatRecommendation";
 
 export type SpecialBetLegId = CardMarketId | "ht" | "gg" | "cards";
 
@@ -29,9 +33,28 @@ export type SpecialBetLeg = {
   probability: number;
   odd: number;
   outcome: MarketOutcome;
+  /** Market family this leg belongs to (Goals / Corners / Cards / BTTS / 1X2 / Double Chance / Shots) — drives one-per-family diversity in pickSpecialBetLegs(). */
+  family: MarketFamilyKey;
   /** Live momentum nudge (Sprint 2), display-only — only ever set on the "recommended" leg. */
   liveAdjustment?: SpecialBetLiveAdjustment | null;
 };
+
+/**
+ * Prefer the highest-probability goals O/U that also has a real book quote.
+ * Without this, Over 1.5 can win on model % while lacking goals15 odds and get
+ * filtered out of the special-bet pool entirely.
+ */
+function deriveSpecialBetGoalsPick(row: PredictionRow): GoalsOuPick | null {
+  const exclude = parseGoalsOuPick(row.recommended?.pick);
+  const candidates = listGoalsPickCandidates(row).filter((c) => {
+    if (!exclude) return true;
+    return !(c.side === exclude.side && Math.abs(c.line - exclude.line) < 1e-6);
+  });
+  for (const c of candidates) {
+    if (goalsOddForLine(row, c.line, c.side) != null) return c;
+  }
+  return candidates[0] || deriveCardGoalsPick(row);
+}
 
 export type SpecialBetLabels = {
   main: string;
@@ -157,7 +180,7 @@ export function listSpecialBetCandidates(
 ): SpecialBetLeg[] {
   const conf = Number(row.recommended?.confidence);
   const confPct = Number.isFinite(conf) ? conf : 0;
-  const goalsPick = deriveCardGoalsPick(row);
+  const goalsPick = deriveSpecialBetGoalsPick(row);
   const cornersPick = row.probs?.corners
     ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners)
     : null;
@@ -197,6 +220,7 @@ export function listSpecialBetCandidates(
       probability: confPct,
       odd: Number(recommendedOdd(row)),
       outcome: resolveCardMarketOutcome("recommended", enrichedRow, stored),
+      family: resolveMarketFamilyKey(row.recommended?.pick, row.recommended?.family),
       liveAdjustment: row.confidenceEngine?.liveAdjustment ?? null
     },
     {
@@ -207,7 +231,8 @@ export function listSpecialBetCandidates(
         : "",
       probability: Number(goalsPick?.probability || 0),
       odd: goalsPick ? Number(goalsOddForLine(row, goalsPick.line, goalsPick.side) ?? NaN) : NaN,
-      outcome: resolveCardMarketOutcome("goals", enrichedRow, stored)
+      outcome: resolveCardMarketOutcome("goals", enrichedRow, stored),
+      family: "GOALS"
     },
     {
       id: "gg",
@@ -215,7 +240,8 @@ export function listSpecialBetCandidates(
       pick: ggPick || "",
       probability: ggProbability,
       odd: ggPick ? Number(bttsOddForPick(row, ggPick) ?? NaN) : NaN,
-      outcome: ggPick ? gradeGgOutcome(enrichedRow, ggPick) : null
+      outcome: ggPick ? gradeGgOutcome(enrichedRow, ggPick) : null,
+      family: "BTTS"
     },
     {
       id: "corners",
@@ -231,7 +257,8 @@ export function listSpecialBetCandidates(
               NaN
           )
         : NaN,
-      outcome: resolveCardMarketOutcome("corners", enrichedRow, stored)
+      outcome: resolveCardMarketOutcome("corners", enrichedRow, stored),
+      family: "CORNERS"
     },
     {
       id: "shots",
@@ -241,7 +268,8 @@ export function listSpecialBetCandidates(
         : "",
       probability: Number(shotsPick?.probability || 0),
       odd: shotsPick ? Number(shotsDisplayOdd(row, shotsPick.side, shotsPick.line) ?? NaN) : NaN,
-      outcome: resolveCardMarketOutcome("shots", enrichedRow, stored)
+      outcome: resolveCardMarketOutcome("shots", enrichedRow, stored),
+      family: "SHOTS"
     },
     {
       id: "ht",
@@ -265,7 +293,10 @@ export function listSpecialBetCandidates(
             ? Number(ht) > firstHalfPick.line
             : Number(ht) < firstHalfPick.line;
         return ok ? "win" : "loss";
-      })()
+      })(),
+      // First-half goals totals are the same underlying market as full-match Goals
+      // (highly correlated) — grouped into GOALS so an accumulator never carries both.
+      family: "GOALS"
     },
     {
       id: "cards",
@@ -275,22 +306,95 @@ export function listSpecialBetCandidates(
       odd: cardsPick
         ? Number(matchingMarketOdd(row.marketOdds?.cards, cardsPick.side, cardsPick.line) ?? NaN)
         : NaN,
-      outcome: null
+      outcome: null,
+      family: "CARDS"
     }
   ];
 
   return pool
     .filter((x) => x.pick && Number.isFinite(x.probability) && x.probability > 0 && hasValidOdd(x.odd))
-    .sort((a, b) => b.probability - a.probability);
+    .sort(compareSpecialBetCandidates);
 }
 
-/** Top `legCount` plus up to 2 extra legs with probability ≥ 85%. */
+/**
+ * Fixed slot order used only when Recommendation Scores tie — keeps the
+ * generator fully deterministic across engines without changing quality ranking.
+ */
+const LEG_ID_TIEBREAK: Record<SpecialBetLegId, number> = {
+  recommended: 0,
+  goals: 1,
+  gg: 2,
+  corners: 3,
+  shots: 4,
+  ht: 5,
+  cards: 6
+};
+
+function compareSpecialBetCandidates(a: SpecialBetLeg, b: SpecialBetLeg): number {
+  const byScore = b.probability - a.probability;
+  if (byScore !== 0) return byScore;
+  return (LEG_ID_TIEBREAK[a.id] ?? 99) - (LEG_ID_TIEBREAK[b.id] ?? 99);
+}
+
+/**
+ * Selects `legCount` base legs plus up to `MAX_EXTRA_STRONG_LEGS` extra legs with
+ * probability ≥ SPECIAL_BET_STRONG_SIGNAL — greedily, by market family diversity.
+ *
+ * Pipeline (Phase 1):
+ *   1. Re-sort by Recommendation Score desc (defensive — listSpecialBetCandidates
+ *      already sorts; this guarantees callers cannot bypass determinism).
+ *   2. Take the highest-scoring remaining candidate.
+ *   3. Mark its MarketFamilyKey as used and skip every other same-family candidate.
+ *   4. Repeat until `legCount`, then optionally append premium extras (≥85%).
+ *
+ * Same-family pairs that are impossible after this pass include two Corners
+ * lines, Goals + HT Goals, duplicated BTTS/Cards/1X2/Double Chance, etc.
+ * 1X2 and Double Chance remain DISTINCT families in Phase 1 (Home Win + 1X is
+ * Phase 2 correlation, not same-family diversity).
+ *
+ * Deterministic — no randomness; score ties break via LEG_ID_TIEBREAK.
+ *
+ * ---------------------------------------------------------------------------
+ * Phase 2 — Correlation Matrix (DO NOT IMPLEMENT HERE)
+ * ---------------------------------------------------------------------------
+ * After family diversity, optionally reject cross-family pairs that are still
+ * strongly dependent, e.g.:
+ *   - 1X2 Home Win + Double Chance 1X
+ *   - Over 2.5 Goals + BTTS Yes
+ *   - Under 2.5 Goals + BTTS No
+ *   - Goals total + Team Goals (when that slot exists)
+ *
+ * Integration without touching PredictorV3 / recommendation engine / odds:
+ *   - Keep listSpecialBetCandidates() and MarketFamilyKey as-is.
+ *   - Add a pure `areStronglyCorrelated(a, b): boolean` table in this module
+ *     (or a sibling `specialBetCorrelation.ts`) keyed by family + pick shape.
+ *   - Inside pickSpecialBetLegs, after the family check, also skip a candidate
+ *     when it correlates with any already-selected leg.
+ *   - UI continues to only render pickSpecialBetLegs output — no component
+ *     filtering. Probabilities / confidence / odds stay read-only inputs.
+ */
 export function pickSpecialBetLegs(candidates: SpecialBetLeg[], legCount: 2 | 3): SpecialBetLeg[] {
-  const base = candidates.slice(0, legCount);
-  const used = new Set(base.map((l) => l.id));
-  const extras = candidates
-    .filter((c) => !used.has(c.id) && c.probability >= SPECIAL_BET_STRONG_SIGNAL)
-    .slice(0, MAX_EXTRA_STRONG_LEGS);
+  const ranked = [...candidates].sort(compareSpecialBetCandidates);
+  const usedFamilies = new Set<MarketFamilyKey>();
+
+  const base: SpecialBetLeg[] = [];
+  for (const candidate of ranked) {
+    if (base.length >= legCount) break;
+    if (usedFamilies.has(candidate.family)) continue;
+    base.push(candidate);
+    usedFamilies.add(candidate.family);
+  }
+
+  const usedIds = new Set(base.map((l) => l.id));
+  const extras: SpecialBetLeg[] = [];
+  for (const candidate of ranked) {
+    if (extras.length >= MAX_EXTRA_STRONG_LEGS) break;
+    if (usedIds.has(candidate.id) || usedFamilies.has(candidate.family)) continue;
+    if (candidate.probability < SPECIAL_BET_STRONG_SIGNAL) continue;
+    extras.push(candidate);
+    usedFamilies.add(candidate.family);
+  }
+
   return [...base, ...extras];
 }
 

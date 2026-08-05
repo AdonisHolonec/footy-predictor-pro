@@ -55,6 +55,8 @@ function buildOuQuotePayload(pick, quote, sourceKind = null) {
     pick: pickLabel,
     line,
     odd: odd ?? null,
+    over: quote?.over ?? null,
+    under: quote?.under ?? null,
     requestedLine: pick.line,
     bookLine: Number.isFinite(matchedLine) ? matchedLine : null,
     lineExact: quote ? Boolean(quote.lineExact) : null,

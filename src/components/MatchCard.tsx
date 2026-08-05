@@ -22,7 +22,9 @@ import {
   specialBetCombinedOutcome,
   specialBetLiveAdjustmentBadge
 } from "../utils/specialBet";
-import { shotsDisplayOdd } from "../utils/marketPicks";
+import { matchingMarketOdd, shotsDisplayOdd } from "../utils/marketPicks";
+import { formatRecommendedPick } from "../utils/formatRecommendation";
+import MarketFamilyIcon from "./icons/MarketFamilyIcon";
 
 type MatchCardProps = {
   row: PredictionRow;
@@ -247,9 +249,11 @@ export default function MatchCard({
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive, t);
   const tier = modelTierBadge(row);
   const recommendedOdd = deriveRecommendedOdd(row);
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
   const isPickHot = hasExactConfidence && confPct >= 85;
   const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
   const shotsPick = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
+  const shotsTotalPick = row.probs?.shotsTotal ? deriveBestOverUnderPick(row.probs.shotsTotal.total) : null;
   const cardsPick = row.probs?.cards ? deriveBestOverUnderPick(row.probs.cards.total) : null;
   const firstHalfPick =
     row.probs?.firstHalf && Number.isFinite(row.probs.firstHalf.pO15)
@@ -266,6 +270,7 @@ export default function MatchCard({
   const canSeeFirstHalf = effectiveAccessTier === "ultra";
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
+  const shotsTotalLocked = !canSeeShots && !row.probs?.shotsTotal;
   const cardsLocked = !canSeeCards && !row.probs?.cards;
   const firstHalfLocked = !canSeeFirstHalf && !row.probs?.firstHalf;
   const marketPulseWinnerLabel = (() => {
@@ -379,7 +384,7 @@ export default function MatchCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const text = `${row.teams.home} ${t("common.vs")} ${row.teams.away} · ${t("card.topPick")} ${row.recommended?.pick || "—"} · ${Math.round(Number(row.recommended?.confidence) || 0)}%`;
+              const text = `${row.teams.home} ${t("common.vs")} ${row.teams.away} · ${t("card.topPick")} ${recommendedLabel.label} · ${Math.round(Number(row.recommended?.confidence) || 0)}%`;
               if (navigator.share) {
                 void navigator.share({ title: "Footy Predictor", text }).catch(() => undefined);
               } else if (navigator.clipboard?.writeText) {
@@ -552,8 +557,9 @@ export default function MatchCard({
               </span>
             ) : null}
           </div>
-          <div className={`line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
-            {row.recommended.pick}
+          <div className={`flex items-center gap-1.5 line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
+            <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0 text-[var(--fp-accent)]/70" />
+            {recommendedLabel.label}
           </div>
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)]" : "text-[var(--fp-accent)]"}`}>
             {Number.isFinite(Number(recommendedOdd)) && Number(recommendedOdd) > 1
@@ -674,9 +680,9 @@ export default function MatchCard({
       )}
 
       {!compact &&
-        (cornersPick || shotsPick || cardsPick || firstHalfPick ||
-          cornersLocked || shotsLocked || cardsLocked || firstHalfLocked) && (
-        <div className="mt-2 grid grid-cols-4 gap-1.5">
+        (cornersPick || shotsPick || shotsTotalPick || cardsPick || firstHalfPick ||
+          cornersLocked || shotsLocked || shotsTotalLocked || cardsLocked || firstHalfLocked) && (
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
           {[
             {
               label: t("match.featCorners"),
@@ -687,7 +693,7 @@ export default function MatchCard({
               accentClass: "border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)]"
             },
             {
-              label: t("match.featShots"),
+              label: t("match.shotsSub"),
               data: shotsPick,
               locked: shotsLocked,
               odd:
@@ -696,6 +702,17 @@ export default function MatchCard({
                   : row.marketOdds?.shotsOnTarget?.odd,
               source: row.marketOdds?.shotsOnTarget?.bookmaker || row.marketOdds?.shotsTotal?.bookmaker,
               accentClass: "border-violet-500/35 bg-violet-500/10"
+            },
+            {
+              label: t("match.shotsTotalTitle"),
+              data: shotsTotalPick,
+              locked: shotsTotalLocked,
+              odd:
+                shotsTotalPick != null
+                  ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotalPick.side, shotsTotalPick.line, 4)
+                  : row.marketOdds?.shotsTotal?.odd,
+              source: row.marketOdds?.shotsTotal?.bookmaker,
+              accentClass: "border-fuchsia-500/35 bg-fuchsia-500/10"
             },
             {
               label: t("match.featCards"),

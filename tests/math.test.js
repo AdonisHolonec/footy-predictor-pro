@@ -1858,6 +1858,90 @@ test("consensusOverUnderOddsAtLine matches fuzzy shot markets and nearest line",
   assert.ok(viaHome);
   assert.equal(viaHome.sourceKind, "team_home");
 
+  // API-Football v3 names: bet 87 "Total ShotOnGoal", bet 211 "Total Shots"
+  const apiFootballPayload = {
+    response: [
+      {
+        bookmakers: [
+          {
+            name: "Betano",
+            bets: [
+              {
+                name: "Total ShotOnGoal",
+                values: [
+                  { value: "Over 8.5", odd: "1.95" },
+                  { value: "Under 8.5", odd: "1.80" },
+                  { value: "Over 7.5", odd: "1.55" },
+                  { value: "Under 7.5", odd: "2.35" }
+                ]
+              },
+              {
+                name: "Total Shots",
+                values: [
+                  { value: "Over 23.5", odd: "1.83" },
+                  { value: "Under 23.5", odd: "1.91" }
+                ]
+              },
+              {
+                name: "Home Player Shots",
+                values: [
+                  { value: "Over 2.5", odd: "1.40" },
+                  { value: "Under 2.5", odd: "2.80" }
+                ]
+              }
+            ]
+          },
+          {
+            name: "1xBet",
+            bets: [
+              {
+                name: "Total ShotOnGoal",
+                values: [
+                  { value: "Over 8.5", odd: "2.07" },
+                  { value: "Under 8.5", odd: "1.67" }
+                ]
+              },
+              {
+                name: "Total Shots",
+                values: [
+                  { value: "Over 23.5", odd: "1.80" },
+                  { value: "Under 23.5", odd: "1.91" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  const {
+    SHOTS_SOT_MARKET_NAMES: sotNames,
+    SHOTS_TOTAL_MARKET_NAMES: totalNames
+  } = await import("../server-utils/marketOdds.js");
+
+  const apiSot = consensusOverUnderOddsAtLine(apiFootballPayload, sotNames, 8.5, {
+    maxLineDelta: 1.5,
+    kind: "shots_on_target"
+  });
+  assert.ok(apiSot, "Total ShotOnGoal must resolve as match SOT market");
+  assert.equal(apiSot.line, 8.5);
+  assert.ok(apiSot.over > 1);
+  assert.ok(apiSot.under > 1);
+  assert.ok(apiSot.bookmakersUsed >= 2);
+
+  const apiTotal = consensusOverUnderOddsAtLine(apiFootballPayload, totalNames, 23.5, {
+    maxLineDelta: 2,
+    kind: "shots_total"
+  });
+  assert.ok(apiTotal, "Total Shots must resolve as match total-shots market");
+  assert.equal(apiTotal.line, 23.5);
+  assert.ok(apiTotal.over > 1);
+
+  const viaApiSot = resolveShotsOnTargetMarketQuote(apiFootballPayload, { matchLine: 8.5 });
+  assert.ok(viaApiSot);
+  assert.equal(viaApiSot.sourceKind, "sot");
+
   const htPayload = {
     response: [
       {

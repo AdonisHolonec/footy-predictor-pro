@@ -6,6 +6,7 @@ import { StatTile } from "../../design-system";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
 import HistorySpecialBetCard from "./HistorySpecialBetCard";
+import { formatRecommendedPick } from "../../utils/formatRecommendation";
 
 type Props = {
   history: HistoryEntry[];
@@ -136,7 +137,9 @@ export default function HistorySection({
                       </p>
                       <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
                         {t("history.topPick")}{" "}
-                        <span className="text-[var(--fp-text)]">{row.recommended?.pick || "—"}</span>
+                        <span className="text-[var(--fp-text)]">
+                          {formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t).label}
+                        </span>
                         {row.score?.home != null && row.score?.away != null
                           ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
                           : ""}

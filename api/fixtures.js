@@ -445,14 +445,42 @@ function extractMomentumTeamStats(statistics) {
 }
 
 /** Momentum only makes sense for matches currently in play — never fetched for NS/FT rows. */
-async function fetchMomentumForFixture(fixtureId) {
+async function fetchMomentumForFixture(fixtureId, homeTeamId = null, awayTeamId = null) {
   try {
-    const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, MOMENTUM_STATS_CACHE_TTL_SEC);
+    const statsReq = await getWithCache(
+      "/fixtures/statistics",
+      { fixture: fixtureId },
+      MOMENTUM_STATS_CACHE_TTL_SEC,
+      {
+        // Empty / one-sided payloads are common early or on low-coverage leagues.
+        // Never cache them — otherwise a 60s empty hit keeps momentum hidden at 70'.
+        shouldCache: (json) => Array.isArray(json?.response) && json.response.length >= 2
+      }
+    );
     if (!statsReq.ok) return null;
     const resp = statsReq.data?.response;
     if (!Array.isArray(resp) || resp.length < 2) return null;
-    const home = extractMomentumTeamStats(resp[0]?.statistics);
-    const away = extractMomentumTeamStats(resp[1]?.statistics);
+
+    const byTeamId = new Map();
+    for (const block of resp) {
+      const tid = Number(block?.team?.id);
+      if (!Number.isFinite(tid)) continue;
+      byTeamId.set(tid, extractMomentumTeamStats(block?.statistics));
+    }
+
+    let home =
+      Number.isFinite(Number(homeTeamId)) && byTeamId.has(Number(homeTeamId))
+        ? byTeamId.get(Number(homeTeamId))
+        : null;
+    let away =
+      Number.isFinite(Number(awayTeamId)) && byTeamId.has(Number(awayTeamId))
+        ? byTeamId.get(Number(awayTeamId))
+        : null;
+
+    // Fallback: API usually returns [home, away], but order is not contractually guaranteed.
+    if (!home) home = extractMomentumTeamStats(resp[0]?.statistics);
+    if (!away) away = extractMomentumTeamStats(resp[1]?.statistics);
+
     const engine = buildMomentumEngine({ home, away });
     if (!engine) return null;
     // Raw per-team stats were already fetched/computed above for the engine — surface
@@ -598,7 +626,7 @@ async function handleLive(req, res) {
           return { ...f, momentum: null, liveEvents: [], momentumNarrative: null };
         }
         const [momentum, liveEvents] = await Promise.all([
-          fetchMomentumForFixture(f.id),
+          fetchMomentumForFixture(f.id, homeTeamId, awayTeamId),
           fetchLiveEventsForFixture(f.id, homeTeamId, awayTeamId)
         ]);
         // Narration needs momentum to describe — skip cleanly when momentum itself is unavailable.

@@ -38,15 +38,31 @@ export const DEFAULT_RECOMMENDATION_WEIGHTS = Object.freeze({
    * cut the diversity term's maximum swing roughly 7x (from up to ~12 score points to ~1.8),
    * so it can still resolve genuine near-ties toward variety but can never overrule a clear
    * confidence/EV leader.
+   *
+   * Over/Under kept slightly below other families so raw-confidence-heavy safe lines
+   * (1.5 / 3.5) do not re-dominate after the Aug 2026 confidence=0.72 recalibration —
+   * paired with safeOuScorePenalty below.
    */
   familyDiversityBonus: Object.freeze({
-    "Over/Under": 0.35,
+    "Over/Under": 0.25,
     "1X2": 0.45,
     "Double Chance": 0.55,
     BTTS: 0.6,
     Corners: 0.6,
     Cards: 0.6,
     "Correct Score": 0.6
+  }),
+  /**
+   * Soft score-point penalties for statistically over-represented "safe" goals lines.
+   * Restores the UX intent of the old MARKET_BASELINES lift in selectTopPick (which made
+   * Peste 1.5 @~75% and Sub 3.5 @~70% non-informative) without changing PredictorV3
+   * probabilities, odds, or confidence stored on the row — only the Recommendation
+   * Selector ranking. Clear high-confidence leaders still win; typical 75–85% safe
+   * lines lose near-ties to BTTS / Corners / Double Chance / Goals 2.5.
+   */
+  safeOuScorePenalty: Object.freeze({
+    over_1_5: 9,
+    under_3_5: 8
   })
 });
 
@@ -67,7 +83,11 @@ export function getRecommendationWeights(overrides = {}) {
     ...DEFAULT_RECOMMENDATION_WEIGHTS.familyDiversityBonus,
     ...(overrides?.familyDiversityBonus || {})
   };
-  return { ...base, scoreWeights, familyDiversityBonus };
+  const safeOuScorePenalty = {
+    ...DEFAULT_RECOMMENDATION_WEIGHTS.safeOuScorePenalty,
+    ...(overrides?.safeOuScorePenalty || {})
+  };
+  return { ...base, scoreWeights, familyDiversityBonus, safeOuScorePenalty };
 }
 
 export default { DEFAULT_RECOMMENDATION_WEIGHTS, getRecommendationWeights };
