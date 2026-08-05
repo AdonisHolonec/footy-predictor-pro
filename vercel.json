@@ -5,6 +5,9 @@
     },
     "api/cron/daily-ml.js": {
       "maxDuration": 300
+    },
+    "api/cron/predictionBenchmarkSweep.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [
@@ -78,6 +81,10 @@
     {
       "path": "/api/cron/daily-ml?mode=model-selection",
       "schedule": "35 3 * * *"
+    },
+    {
+      "path": "/api/cron/predictionBenchmarkSweep",
+      "schedule": "45 11 * * *"
     }
   ]
 }

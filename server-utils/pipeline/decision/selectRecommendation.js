@@ -13,7 +13,9 @@
  * Over-Under / Corners / Cards), applying the MIN_DISPLAY_ODDS floor BEFORE any
  * candidate is scored or compared, and ranking the full pool with one composite,
  * deterministic score: confidence + expected value + price quality + market
- * diversity. Diversity is a weighted term inside that same score (not a separate
+ * diversity, minus a soft penalty for statistically over-represented safe goals
+ * lines (Over 1.5 / Under 3.5 — see safeOuScorePenalty in recommendationWeights.js).
+ * Diversity is a weighted term inside that same score (not a separate
  * tie-break pass), so a different market can outrank a slightly higher raw-confidence
  * Over/Under pick once combined scores are close — never when one candidate is
  * clearly stronger, since the diversity weight is small relative to confidence/EV.
@@ -85,10 +87,26 @@ function sourceForCandidate(candidate, ctx) {
 }
 
 /**
+ * Soft score penalty for Over 1.5 / Under 3.5 — the lines that dominated recommendations
+ * when ranking was raw-confidence-heavy. Does not alter candidate.confidencePct / odds.
+ */
+function resolveSafeOuScorePenalty(candidate, weights) {
+  if (candidate.family !== "Over/Under") return 0;
+  const line = Number(candidate.line);
+  if (!Number.isFinite(line)) return 0;
+  const type = String(candidate.type || "").trim().toLowerCase();
+  const table = weights.safeOuScorePenalty || {};
+  if (/^(peste|over)\b/.test(type) && line === 1.5) return Math.max(0, Number(table.over_1_5) || 0);
+  if (/^(sub|under)\b/.test(type) && line === 3.5) return Math.max(0, Number(table.under_3_5) || 0);
+  return 0;
+}
+
+/**
  * Composite score for one candidate. `components` are the raw 0-100 factor readings
  * (for display); `contributions` are those same factors after weighting, in score
- * points — they sum to `score` and are what the diagnostics explanation compares to
- * determine whether diversity actually changed the outcome.
+ * points — they sum to `score` (before safe-O/U soft penalty) and are what the
+ * diagnostics explanation compares to determine whether diversity actually changed
+ * the outcome.
  */
 function scoreCandidate(candidate, weights) {
   const confidenceComponent = clamp01(candidate.confidencePct / 100);
@@ -106,11 +124,16 @@ function scoreCandidate(candidate, weights) {
     quality: round2(qualityComponent * sw.quality * 100),
     diversity: round2(diversityComponent * sw.diversity * 100)
   };
-  const score = round2(contributions.confidence + contributions.expectedValue + contributions.quality + contributions.diversity);
+  const safeOuPenalty = resolveSafeOuScorePenalty(candidate, weights);
+  const rawScore = round2(
+    contributions.confidence + contributions.expectedValue + contributions.quality + contributions.diversity
+  );
+  const score = round2(Math.max(0, rawScore - safeOuPenalty));
 
   return {
     score,
     expectedValuePct,
+    safeOuPenalty,
     components: {
       confidence: round2(confidenceComponent * 100),
       expectedValue: round2(evComponent * 100),
@@ -266,8 +289,8 @@ export function selectRecommendation({
   const scoreAndSort = (list) =>
     list
       .map((c) => {
-        const { score, components, contributions, expectedValuePct } = scoreCandidate(c, weights);
-        return { ...c, score, components, contributions, expectedValuePct };
+        const { score, components, contributions, expectedValuePct, safeOuPenalty } = scoreCandidate(c, weights);
+        return { ...c, score, components, contributions, expectedValuePct, safeOuPenalty };
       })
       .sort(compareCandidates);
 
@@ -342,6 +365,7 @@ export function selectRecommendation({
             score: winner.score,
             components: winner.components,
             contributions: winner.contributions,
+            safeOuPenalty: winner.safeOuPenalty || 0,
             odds: winner.odds,
             confidencePct: round2(winner.confidencePct)
           }
@@ -354,6 +378,7 @@ export function selectRecommendation({
         score: c.score,
         components: c.components,
         contributions: c.contributions,
+        safeOuPenalty: c.safeOuPenalty || 0,
         odds: c.odds,
         confidencePct: round2(c.confidencePct)
       })),
@@ -361,6 +386,7 @@ export function selectRecommendation({
       weights: {
         scoreWeights: weights.scoreWeights,
         familyDiversityBonus: weights.familyDiversityBonus,
+        safeOuScorePenalty: weights.safeOuScorePenalty,
         minProbabilityPct: weights.minProbabilityPct
       },
       explanation: buildDiagnosticsExplanation({ winner, scored: effectiveScored, rejected, fallbackTier })
