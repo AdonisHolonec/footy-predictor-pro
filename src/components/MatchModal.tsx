@@ -13,7 +13,6 @@ import MonteCarloPanel from "./MonteCarloPanel";
 import MatchMomentumTimeline from "./ux/MatchMomentumTimeline";
 import MatchMomentumStickyStrip from "./ux/MatchMomentumStickyStrip";
 import {
-  ConfidenceAura,
   deriveDataQuality,
   deriveSignalEdge,
   EdgeCompass,
@@ -33,7 +32,6 @@ import {
 import { matchingMarketOdd, shotsDisplayOdd, deriveAlignedOuPick } from "../utils/marketPicks";
 import { fetchWithAuth } from "../utils/apiAuth";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
-import MarketFamilyIcon from "./icons/MarketFamilyIcon";
 import MatchDecisionBlock, { type BenchmarkConsensus } from "./matchModal/MatchDecisionBlock";
 
 /**
@@ -1075,38 +1073,8 @@ export default function MatchModal({
               <div className="font-display text-3xl font-bold leading-none tracking-tighter text-[var(--fp-text)] max-[380px]:text-2xl sm:text-5xl">
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
-              <div className="mt-1.5 flex w-full items-center justify-center gap-1.5 sm:mt-2.5 sm:justify-start sm:gap-2.5">
-                <div className="shrink-0">
-                  {hasExactConfidence ? (
-                    <ConfidenceAura value={confPct} size="compact" />
-                  ) : (
-                    <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-1.5 text-center">
-                      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">{tr("match.confidence")}</div>
-                      <div className="mt-0.5 text-[11px] font-bold text-[var(--fp-accent)]">
-                        {confidenceCategory || tr("match.locked")}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-[var(--fp-accent)]/70 sm:text-[9px]">
-                    <span>{tr("match.pick")}</span>
-                    <span className="sm:hidden rounded-sm border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1 py-[1px] text-[7px] font-bold tracking-wider text-[var(--fp-accent)]">
-                      {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 line-clamp-2 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] max-[380px]:text-base sm:text-3xl">
-                    <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
-                    {recommendedLabel.label}
-                  </div>
-                  <div className="font-mono text-[10px] font-semibold tabular-nums text-[var(--fp-success)] sm:text-[11px]">
-                    {tr("match.odd")} {Number.isFinite(Number(recommendedOdd)) ? Number(recommendedOdd).toFixed(2) : "N/A"}
-                  </div>
-                  <div className="hidden font-mono text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)] sm:block sm:text-[11px]">
-                    {hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.tierLocked")}
-                  </div>
-                </div>
-              </div>
+              {/* Pick / odds / confidence intentionally NOT repeated here — they are
+                  the Decision Block's job, directly below. */}
               {hasFinalScore && (
                 <div
                     className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide max-[380px]:text-[8px] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
