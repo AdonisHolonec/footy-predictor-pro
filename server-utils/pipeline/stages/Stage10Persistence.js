@@ -6,6 +6,7 @@ import { assertSupabaseConfigured, getSupabaseAdmin } from "../../supabaseAdmin.
 import { upsertPredictionsHistory } from "../../predictionsHistory.js";
 import { persistFeatureImportanceRows } from "../../importance/persistFeatureImportance.js";
 import { persistContextSnapshots } from "../../context/persistContextSnapshots.js";
+import { linkUserPredictionFixtures } from "../../linkUserPredictionFixtures.js";
 import { decrementPredictCountBy, rememberUniquePredictFixtures, USER_TIERS } from "../../accessTier.js";
 
 export const STAGE_ID = "Stage10Persistence";
@@ -48,18 +49,12 @@ export async function run(context) {
       }
       if (usageCtx?.userId) {
         const supabase = getSupabaseAdmin();
-        const linkRows = persistable
-          .map((p) => ({ user_id: usageCtx.userId, fixture_id: Number(p.id) }))
-          .filter((r) => Number.isFinite(r.fixture_id));
-        if (linkRows.length) {
-          const { error: linkErr } = await supabase.from("user_prediction_fixtures").upsert(linkRows, {
-            onConflict: "user_id,fixture_id",
-            ignoreDuplicates: true
-          });
-          if (linkErr) {
-            console.error("[predict persist link]", linkErr?.message || linkErr);
-            res.setHeader("X-Persist-Warning", "user_prediction_fixtures_link_failed");
-          }
+        const link = await linkUserPredictionFixtures(
+          usageCtx.userId,
+          persistable.map((p) => p.id)
+        );
+        if (!link.ok) {
+          res.setHeader("X-Persist-Warning", "user_prediction_fixtures_link_failed");
         }
         try {
           const persistInserted = Number(persistStats?.inserted ?? 0);
