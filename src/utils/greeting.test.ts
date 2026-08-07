@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { ensureCatalog } from "../i18n";
 import { getGreeting, getGreetingType } from "./greeting";
+
+// The EN catalog registers lazily since the Sprint 5 i18n split; in the app,
+// LocaleContext guarantees registration before the locale ever flips to EN.
+// These tests exercise EN paths directly, so they honour the same contract.
+beforeAll(() => ensureCatalog("en"));
 
 function atHour(hour: number, minute = 0): Date {
   const d = new Date(2026, 0, 15, hour, minute, 0);
