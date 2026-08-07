@@ -22,7 +22,6 @@
     "test:golden": "vitest run tests/pipeline/goldenFixture.test.js",
     "test:golden:record": "node scripts/record-golden-fixture.mjs",
     "preview": "vite preview",
-    "api": "npm --prefix server run api",
     "backtest": "node --env-file=.env.local scripts/backtest.js",
     "backfill:ownership": "node --env-file=.env.local scripts/backfill-prediction-ownership.mjs",
     "validate:sprint1": "node --env-file=.env.local scripts/validateSprint1.js",
