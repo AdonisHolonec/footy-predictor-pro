@@ -83,6 +83,8 @@ import {
   matchesPreferredMarkets
 } from "./userDashboard/helpers";
 import ProfileView from "./userDashboard/ProfileView";
+import NotificationsView from "./userDashboard/NotificationsView";
+import SettingsView from "./userDashboard/SettingsView";
 
 export default function UserDashboard() {
   const {
@@ -1339,67 +1341,25 @@ export default function UserDashboard() {
       )}
 
       {navView === "notifications" && (
-        <section className="space-y-6">
-          <NotificationsSection
-            items={notificationItems}
-            seenIds={prefs.notificationsSeenIds}
-            onMarkAllSeen={() => markNotificationsSeen(notificationItems.map((n) => n.id))}
-            onOpenFixture={(fixtureId) => {
-              const row = preds.find((p) => Number(p.id) === fixtureId) || history.find((h) => Number(h.id) === fixtureId);
-              if (row) openMatch(row);
-            }}
-          />
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
-              {t("dash.notifyLowRisk")} / {t("dash.notifyValue")}
-            </h2>
-            <p className="mt-1 text-xs text-[var(--fp-text-muted)]">
-              {t("dash.alertsPreview", { low: alertsPreview.safe, value: alertsPreview.value })}
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input type="checkbox" checked={notifySafe} onChange={(e) => setNotifySafe(e.target.checked)} />
-                {t("dash.notifyLowRisk")}
-              </label>
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input type="checkbox" checked={notifyValue} onChange={(e) => setNotifyValue(e.target.checked)} />
-                {t("dash.notifyValue")}
-              </label>
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={notifyEmail}
-                  onChange={(e) => {
-                    const next = e.target.checked;
-                    setNotifyEmail(next);
-                    if (!next) setNotifyEmailConsent(false);
-                  }}
-                />
-                {t("dash.notifyEmail")}
-              </label>
-            </div>
-            {notifyEmail && (
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-[var(--fp-text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={notifyEmailConsent}
-                  onChange={(e) => setNotifyEmailConsent(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Confirm consimțământul pentru email — vezi{" "}
-                  <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                    politica
-                  </Link>
-                  .
-                </span>
-              </label>
-            )}
-            <Button className="mt-4" loading={notifSaveBusy} onClick={() => void saveNotificationPrefs()}>
-              Salvează preferințe
-            </Button>
-          </Card>
-        </section>
+        <NotificationsView
+          notificationItems={notificationItems}
+          alertsPreview={alertsPreview}
+          preds={preds}
+          prefs={prefs}
+          openMatch={openMatch}
+          history={history}
+          markNotificationsSeen={markNotificationsSeen}
+          saveNotificationPrefs={saveNotificationPrefs}
+          notifSaveBusy={notifSaveBusy}
+          notifySafe={notifySafe}
+          setNotifySafe={setNotifySafe}
+          notifyValue={notifyValue}
+          setNotifyValue={setNotifyValue}
+          notifyEmail={notifyEmail}
+          setNotifyEmail={setNotifyEmail}
+          notifyEmailConsent={notifyEmailConsent}
+          setNotifyEmailConsent={setNotifyEmailConsent}
+        />
       )}
 
       {navView === "profile" && (
@@ -1426,72 +1386,14 @@ export default function UserDashboard() {
       )}
 
       {navView === "settings" && (
-        <section className="space-y-6">
-          <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              {t("dash.settingsTitle")}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("dash.settingsTitle")}</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">{t("dash.settingsSub")}</p>
-          </header>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.appearance")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              {t("dash.currentTheme", { theme: prefs.theme })}
-            </p>
-            <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
-              {t("dash.changeTheme")}
-            </Button>
-          </Card>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.savedFilters")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              Confidence ≥ {prefs.minConfidence}% · EV ≥ {prefs.minEv}% · Best Value only:{" "}
-              {prefs.valueOnly ? t("dash.on") : t("dash.off")} · Settled:{" "}
-              {prefs.settledOnly ? t("dash.on") : t("dash.off")}
-            </p>
-            <p className="mt-2 text-xs text-[var(--fp-text-faint)]">{t("dash.savedFiltersSub")}</p>
-            <Button
-              className="mt-3"
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                updateFilters({
-                  minConfidence: 0,
-                  minEv: 0,
-                  valueOnly: false,
-                  settledOnly: false,
-                  matchSearch: "",
-                  matchesFilter: "all"
-                })
-              }
-            >
-              {t("dash.resetFilters")}
-            </Button>
-          </Card>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.gdprTitle")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              {t("dash.gdprSub")} —{" "}
-              <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                {t("dash.privacyPolicy")}
-              </Link>
-              .
-            </p>
-            <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
-              {t("dash.downloadExport")}
-            </Button>
-          </Card>
-
-          <Card>
-            <Button variant="danger" onClick={() => void logout()}>
-              {t("dash.logout")}
-            </Button>
-          </Card>
-        </section>
+        <SettingsView
+          prefs={prefs}
+          updateFilters={updateFilters}
+          logout={logout}
+          cycleTheme={cycleTheme}
+          downloadPersonalDataExport={downloadPersonalDataExport}
+          exportBusy={exportBusy}
+        />
       )}
 
       <PerformanceCounterModal
