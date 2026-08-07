@@ -10,6 +10,7 @@ import {
 import { processResourceSnapshot } from "./requestMonitor.js";
 import { getBenchmarkHealth, getSettlementHealth } from "./syncTelemetry.js";
 import { readLatestOpsSnapshot } from "./opsSnapshot.js";
+import { evaluateAlertRules } from "./alertRules.js";
 import { logInfo, logWarn } from "./logger.js";
 
 function levelFrom(ok, degraded) {
@@ -18,9 +19,6 @@ function levelFrom(ok, degraded) {
   return "healthy";
 }
 
-/**
- * Build ops alerts from live metrics + usage/cache.
- */
 /**
  * Prediction health (S2), derived from the split channels and counters requestMonitor
  * records off response headers. No pipeline instrumentation: PredictorV3 is untouched.
@@ -54,183 +52,15 @@ export function buildPredictionHealth(metrics) {
   };
 }
 
-export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark, snapshot }) {
-  const alerts = [];
-  const predict = metrics?.routes?.predict;
-  const api = metrics?.routes?.api;
-  const cacheRoute = metrics?.routes?.cache;
-  const failures = metrics?.failures || {};
-
-  if ((failures.prediction || 0) >= 3) {
-    alerts.push({
-      id: "prediction_failures",
-      level: failures.prediction >= 10 ? "high" : "medium",
-      message: `Prediction failures today: ${failures.prediction}`,
-      value: failures.prediction
-    });
-  }
-  if ((failures.api || 0) >= 5) {
-    alerts.push({
-      id: "api_failures",
-      level: failures.api >= 20 ? "high" : "medium",
-      message: `Upstream API failures today: ${failures.api}`,
-      value: failures.api
-    });
-  }
-  if ((failures.cache || 0) >= 3) {
-    alerts.push({
-      id: "cache_failures",
-      level: failures.cache >= 10 ? "high" : "medium",
-      message: `Cache failures today: ${failures.cache}`,
-      value: failures.cache
-    });
-  }
-
-  if (predict?.errorRate >= 0.15 && predict.count >= 5) {
-    alerts.push({
-      id: "predict_error_rate",
-      level: predict.errorRate >= 0.35 ? "high" : "medium",
-      message: `Predict error rate ${(predict.errorRate * 100).toFixed(0)}% (n=${predict.count})`,
-      value: predict.errorRate
-    });
-  }
-  if ((predict?.p95Ms || 0) >= 20000) {
-    alerts.push({
-      id: "predict_latency",
-      level: "medium",
-      message: `Predict p95 latency ${Math.round(predict.p95Ms)}ms`,
-      value: predict.p95Ms
-    });
-  }
-  if ((api?.p95Ms || 0) >= 5000) {
-    alerts.push({
-      id: "api_latency",
-      level: "medium",
-      message: `Upstream API p95 ${Math.round(api.p95Ms)}ms`,
-      value: api.p95Ms
-    });
-  }
-
-  // C10: soft alert ≥80%, hard ≥95% (aligned with apiBudgetCircuit defaults).
-  const usagePct = usage?.limit ? (usage.count / usage.limit) * 100 : 0;
-  const softPct = Math.max(50, Math.min(Number(process.env.API_BUDGET_SOFT_PCT || 80), 99));
-  const hardPct = Math.max(softPct, Math.min(Number(process.env.API_BUDGET_HARD_PCT || 95), 100));
-  if (usagePct >= softPct) {
-    alerts.push({
-      id: "api_quota",
-      level: usagePct >= hardPct ? "high" : "medium",
-      message: `API quota ${usagePct.toFixed(0)}% (${usage.count}/${usage.limit}) — circuit ${
-        usagePct >= hardPct ? "HARD" : "SOFT"
-      }`,
-      value: usagePct
-    });
-  }
-
-  const hitRatio = cache?.hitRatio;
-  if (hitRatio != null && hitRatio < 0.15 && (cache.hits || 0) + (cache.misses || 0) >= 20) {
-    alerts.push({
-      id: "cache_hit_ratio",
-      level: "medium",
-      message: `Cache hit ratio ${(hitRatio * 100).toFixed(0)}%`,
-      value: hitRatio
-    });
-  }
-
-  // Settlement: finished matches whose recommended pick no surface can render as win/loss.
-  // This is the signal that was missing when a settled Corners pick showed "no result".
-  const stillPending = Number(settlement?.recommendedStillPending ?? 0);
-  const pendingWarn = Math.max(1, Number(process.env.SETTLEMENT_PENDING_WARN || 5));
-  const pendingCrit = Math.max(pendingWarn, Number(process.env.SETTLEMENT_PENDING_CRITICAL || 20));
-  if (stillPending >= pendingWarn) {
-    alerts.push({
-      id: "settlement_pending",
-      level: stillPending >= pendingCrit ? "high" : "medium",
-      message: `Finished fixtures with an ungraded recommended pick: ${stillPending}`,
-      value: stillPending
-    });
-  }
-  // A settlement sync that stopped running is worse than one reporting a backlog.
-  const settlementAge = Number(settlement?.ageMinutes);
-  const staleAfterMin = Math.max(60, Number(process.env.SETTLEMENT_STALE_MINUTES || 1440));
-  if (settlement?.ok && Number.isFinite(settlementAge) && settlementAge >= staleAfterMin) {
-    alerts.push({
-      id: "settlement_stale",
-      level: "high",
-      message: `Settlement sync last ran ${Math.round(settlementAge / 60)}h ago`,
-      value: settlementAge
-    });
-  }
-
-  // Benchmark sweep: a growing backlog means accrual is budget-bound, not that it stopped.
-  const benchmarkBacklog = Number(benchmark?.backlog ?? 0);
-  if (benchmarkBacklog > 0) {
-    alerts.push({
-      id: "benchmark_backlog",
-      level: benchmarkBacklog >= 200 ? "medium" : "low",
-      message: `Benchmark sweep backlog: ${benchmarkBacklog} unbenchmarked fixtures in window`,
-      value: benchmarkBacklog
-    });
-  }
-
-  // Persistence warnings were header-only until S2. A prediction the user was shown but
-  // that never reached the database is the ownership/settlement class of bug, so any
-  // occurrence is worth surfacing rather than waiting for a threshold.
-  const counters = metrics?.counters || {};
-  const persistHistory = Number(counters.persist_history_failed || 0);
-  const persistOwnership = Number(counters.persist_ownership_failed || 0);
-  if (persistHistory + persistOwnership > 0) {
-    alerts.push({
-      id: "persist_failures",
-      level: persistHistory + persistOwnership >= 5 ? "high" : "medium",
-      message: `Persist warnings today — history: ${persistHistory}, ownership: ${persistOwnership}`,
-      value: persistHistory + persistOwnership
-    });
-  }
-
-  // A stale snapshot means the dashboard's slow-moving numbers are lying about "today".
-  const snapshotAge = Number(snapshot?.ageMinutes);
-  if (Number.isFinite(snapshotAge) && snapshotAge >= 2880) {
-    alerts.push({
-      id: "ops_snapshot_stale",
-      level: "medium",
-      message: `Health snapshot is ${Math.round(snapshotAge / 60)}h old`,
-      value: snapshotAge
-    });
-  }
-  // Cron Health, the replacement for the brief's Queue Health: this system has no queue,
-  // so what matters is whether each scheduled job still runs and still succeeds.
-  const failingJobs = snapshot?.cron?.failingJobs || [];
-  const staleJobs = snapshot?.cron?.staleJobs || [];
-  if (failingJobs.length > 0) {
-    alerts.push({
-      id: "cron_failing",
-      level: "high",
-      message: `Cron jobs reporting failure: ${failingJobs.join(", ")}`,
-      value: failingJobs.length
-    });
-  }
-  if (staleJobs.length > 0) {
-    alerts.push({
-      id: "cron_stale",
-      level: "medium",
-      message: `Cron jobs not run in over 24h: ${staleJobs.join(", ")}`,
-      value: staleJobs.length
-    });
-  }
-
-  if (checks?.kv?.ok === false) {
-    alerts.push({ id: "kv_down", level: "high", message: "KV health check failed", value: 1 });
-  }
-  if (checks?.supabase?.ok === false) {
-    alerts.push({ id: "supabase_down", level: "high", message: "Supabase health check failed", value: 1 });
-  }
-
-  const severity = alerts.some((a) => a.level === "high")
-    ? "high"
-    : alerts.some((a) => a.level === "medium")
-      ? "medium"
-      : "none";
-
+/**
+ * Ops alerts for the dashboard and the daily report.
+ *
+ * The thresholds themselves live in alertRules.js as a declarative table (S5) so that one
+ * escalation policy serves the alert list, the subsystem rollup and the dashboard reading.
+ * This stays a named export because callers and tests depend on the signature.
+ */
+export function buildOpsAlerts(context) {
+  const { alerts, severity } = evaluateAlertRules(context);
   return { alerts, severity };
 }
 
@@ -308,7 +138,9 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     upstreamConfigured: Boolean(process.env.APISPORTS_KEY || process.env.X_RAPIDAPI_KEY || process.env.APIFOOTBALL_KEY)
   };
 
-  const { alerts, severity } = buildOpsAlerts({
+  // Evaluated once: the alert list and the per-subsystem Healthy/Warning/Critical rollup
+  // come from the same pass, so they can never disagree about the same reading.
+  const { alerts, severity, subsystems, thresholds } = evaluateAlertRules({
     metrics,
     usage,
     cache,
@@ -353,6 +185,10 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     /** Slow-moving aggregates from the daily cron; null until the first snapshot runs. */
     snapshot,
     alerts,
+    /** Per-subsystem Healthy/Warning/Critical rollup of the same rule evaluation (S5). */
+    subsystems,
+    /** Effective alert thresholds, env overrides applied, so the UI reads what alerting reads. */
+    thresholds,
     history,
     dailyReport: latestReport,
     recentReports: reports,
@@ -386,6 +222,9 @@ export async function generateDailyReport(dateISO) {
     failures: bundle.failures,
     alertCount: bundle.alerts.length,
     alerts: bundle.alerts.map((a) => ({ id: a.id, level: a.level, message: a.message })),
+    // Stored per day so digests are comparable: "settlement went warning on the 5th" is a
+    // question the alert list alone cannot answer once the alerts have cleared.
+    subsystems: bundle.subsystems,
     memoryMb: bundle.process.memory.heapUsedMb,
     generatedAt: new Date().toISOString()
   };

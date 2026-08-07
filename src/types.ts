@@ -999,6 +999,23 @@ export type OpsAlert = {
   value?: number;
 };
 
+/** Healthy/Warning/Critical, rolled up from the alert rules that name each subsystem (S5). */
+export type SubsystemStatus = "healthy" | "warning" | "critical";
+
+/**
+ * Thresholds the server derives from its alert rules and publishes so the dashboard reads a
+ * figure the same way alerting does. Env overrides are already applied — the browser cannot
+ * see them otherwise. Values may be null if a rule ever drops the band they read.
+ */
+export type AlertThresholds = {
+  settlementPendingWarn: number | null;
+  settlementPendingCritical: number | null;
+  settlementStaleMinutes: number | null;
+  snapshotStaleMinutes: number | null;
+  benchmarkBacklogWatch: number | null;
+  predictionFailuresWatch: number | null;
+};
+
 export type DailyOpsReport = {
   date: string;
   status: string;
@@ -1015,8 +1032,166 @@ export type DailyOpsReport = {
   failures?: { prediction: number; api: number; cache: number };
   alertCount?: number;
   alerts?: Array<{ id: string; level: string; message: string }>;
+  subsystems?: Record<string, SubsystemStatus>;
   memoryMb?: number;
   generatedAt?: string;
+};
+
+/**
+ * Prediction delivery counters (S2), derived from response headers rather than pipeline
+ * instrumentation — PredictorV3 is not touched to produce these.
+ */
+export type PredictionHealth = {
+  generatedToday: number;
+  servedLive: number;
+  servedFromCache: number;
+  cacheServedPct: number | null;
+  /** Live requests run the fixture loop, so this is generation time, not user-facing latency. */
+  avgGenerationMs: number | null;
+  p95GenerationMs: number | null;
+  avgLatencyMs: number | null;
+  p95LatencyMs: number | null;
+  avgCachedLatencyMs: number | null;
+  failures: number;
+  /** A prediction shown to the user that never reached the database. Any occurrence matters. */
+  persistFailures: { history: number; ownership: number };
+  upstreamFallbacks: number;
+};
+
+/** Settlement sync health (S1), read from the KV run stream written by each sync. */
+export type SettlementHealth = {
+  ok: boolean;
+  lastRunAt: string | null;
+  ageMinutes: number | null;
+  runs: number;
+  totals: {
+    finishedScanned: number;
+    recommendedSettled: number;
+    missingTotals: number;
+    skippedByBudget: number;
+  };
+  pendingTrend?: Array<{ at: string; stillPending: number }>;
+  /** Finished fixtures whose recommended pick still has no win/loss verdict. */
+  recommendedStillPending: number;
+};
+
+/** Benchmark sweep health (S1). A backlog means accrual is budget-bound, not stopped. */
+export type BenchmarkHealth = {
+  ok: boolean;
+  lastRunAt: string | null;
+  ageMinutes: number | null;
+  runs: number;
+  totals: { fetched: number; persisted: number; errors: number };
+  backlog: number;
+  coveragePct: number | null;
+};
+
+/**
+ * EV of the pick we actually recommend, in percent (migration 042). Median leads because
+ * the distribution has a heavy right tail; a median just under zero is what a calibrated
+ * model looks like against a price carrying the bookmaker's margin.
+ */
+export type OpsRecommendedEv = {
+  n: number;
+  median: number | null;
+  p25: number | null;
+  p75: number | null;
+  mean: number | null;
+  negativePct: number | null;
+  unit: "percent";
+};
+
+/** EV of the best-value market — a DIFFERENT bet from the recommended pick. */
+export type OpsValueMarketEv = {
+  n: number;
+  median: number | null;
+  p75: number | null;
+  max: number | null;
+  /** Rows meaning "no value found", not a zero edge. */
+  zeroRows: number;
+  above100Rows: number;
+  detected: number;
+  differsFromRecommended: number;
+  describesRecommendedPick: false;
+  unit: "percent";
+};
+
+/** Sections land as `{}` when their RPC degrades, so every field is optional. */
+export type OpsPredictionAggregate = {
+  windowDays?: number;
+  total?: number;
+  avgConfidence?: number | null;
+  avgOdds?: number | null;
+  recommendedEv?: OpsRecommendedEv | null;
+  valueMarketEv?: OpsValueMarketEv | null;
+  byFamily?: Array<{ family: string; count: number }>;
+  /** Picks without a persisted family fall back to line heuristics when grading. */
+  unknownFamilyPct?: number | null;
+  topLeagues?: Array<{ leagueId: number; league: string; count: number }>;
+};
+
+export type OpsSettlementAggregate = {
+  windowDays?: number;
+  rows?: number;
+  finished?: number;
+  settled?: number;
+  pending?: number;
+  recommendedPending?: number;
+  settlementSuccessPct?: number | null;
+  avgSettlementMinutes?: number | null;
+  oldestPendingAt?: string | null;
+};
+
+export type OpsBusinessMetrics = {
+  windowDays?: number;
+  users?: number;
+  /** Proxied by warm/predict usage: "ran the engine", not "opened the app". */
+  activeUsers?: number;
+  activeDays?: number;
+  predictRuns?: number;
+  warmRuns?: number;
+  tierDistribution?: Array<{ tier: string; count: number }>;
+  topFavoriteLeagues?: Array<{ leagueId: number; count: number }>;
+};
+
+export type OpsCronJob = {
+  lastRanAt: string | null;
+  ageMinutes: number | null;
+  ok: boolean;
+  scanned?: number;
+  updated?: number;
+  error?: string | null;
+};
+
+export type OpsCronHealth = {
+  ok?: boolean;
+  jobs?: Record<string, OpsCronJob>;
+  staleJobs?: string[];
+  failingJobs?: string[];
+};
+
+export type OpsNotificationHealth = {
+  ok?: boolean;
+  windowDays?: number;
+  total?: number;
+  byStatus?: Record<string, number>;
+  byType?: Record<string, number>;
+  errorPct?: number | null;
+  successPct?: number | null;
+  lastDispatchAt?: string | null;
+  error?: string;
+};
+
+/** Newest row of `ops_health_snapshots`, written by the daily cron (S3). */
+export type OpsHealthSnapshot = {
+  capturedAt: string;
+  ageMinutes: number | null;
+  windowDays: number;
+  prediction: OpsPredictionAggregate;
+  settlement: OpsSettlementAggregate;
+  business: OpsBusinessMetrics;
+  notifications: OpsNotificationHealth;
+  cron: OpsCronHealth;
 };
 
 export type HealthDashboardBundle = {
@@ -1044,7 +1219,18 @@ export type HealthDashboardBundle = {
     fixturesLatency: LatencyChannelStats;
   };
   failures: { prediction: number; api: number; cache: number };
+  /** S2 — how predictions were delivered today. */
+  predictionHealth?: PredictionHealth;
+  /** S1 — settlement and benchmark sync streams. */
+  settlementHealth?: SettlementHealth;
+  benchmarkHealth?: BenchmarkHealth;
+  /** S3 — slow-moving aggregates from the daily cron; null until the first snapshot runs. */
+  snapshot?: OpsHealthSnapshot | null;
   alerts: OpsAlert[];
+  /** S5 — per-subsystem rollup of the same rule evaluation that produced `alerts`. */
+  subsystems?: Record<string, SubsystemStatus>;
+  /** S5 — effective alert thresholds, so the dashboard and the alerting agree on a figure. */
+  thresholds?: Partial<AlertThresholds>;
   history?: Array<{
     date: string;
     failures: { prediction: number; api: number; cache: number };
