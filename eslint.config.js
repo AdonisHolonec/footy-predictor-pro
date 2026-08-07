@@ -27,7 +27,18 @@ export default [
       "backups/**",
       "supabase/**",
       "public/**",
-      "server-utils/context/**"
+      "server-utils/context/**",
+      // Vendored AI-assistant tooling, not project code — the moral equivalent of
+      // node_modules. Mostly gitignored, so CI never saw it; locally it drowned the
+      // real signal in 6,739 third-party errors (browser-context skill scripts,
+      // CommonJS) while the project itself linted clean of errors. Ignoring it
+      // restores local/CI parity. Deliberately NOT ".github/**": a future action
+      // script of our own must stay linted.
+      ".agents/**",
+      ".claude/**",
+      ".github/skills/**",
+      ".github/agents/**",
+      "ui-ux-pro-max-skill/**"
     ]
   },
   js.configs.recommended,
