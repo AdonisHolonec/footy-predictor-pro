@@ -14,7 +14,7 @@
     "test:security": "node --test tests/securityP0.test.js tests/apiAuth.fixtures.test.js",
     "test:validation": "node --test tests/walkForward.test.js tests/clv.test.js tests/htGoals.test.js tests/ultraUniqueQuota.test.js tests/Sprint1FeatureReport.test.js tests/Sprint3MarketValidation.test.js tests/Sprint4ValidationStatus.test.js tests/narrateMatchState.test.js tests/cardMarketSettlement.test.js tests/historySyncChunking.test.js",
     "test:ownership": "node --test --experimental-test-module-mocks tests/predictionOwnership.test.js",
-    "test:validation": "node --test tests/walkForward.test.js tests/clv.test.js tests/htGoals.test.js tests/ultraUniqueQuota.test.js tests/Sprint1FeatureReport.test.js tests/Sprint3MarketValidation.test.js tests/Sprint4ValidationStatus.test.js tests/narrateMatchState.test.js tests/cardMarketSettlement.test.js tests/syncTelemetry.test.js tests/predictionHealth.test.js",
+    "test:validation": "node --test tests/walkForward.test.js tests/clv.test.js tests/htGoals.test.js tests/ultraUniqueQuota.test.js tests/Sprint1FeatureReport.test.js tests/Sprint3MarketValidation.test.js tests/Sprint4ValidationStatus.test.js tests/narrateMatchState.test.js tests/cardMarketSettlement.test.js tests/syncTelemetry.test.js tests/predictionHealth.test.js tests/opsSnapshot.test.js",
     "test:pipeline": "node --test tests/pipeline/modelFusion/*.test.js",
     "test:decision": "node --test tests/pipeline/decision/*.test.js",
     "test:league-profiles": "node --test tests/leagueProfiles/*.test.js",

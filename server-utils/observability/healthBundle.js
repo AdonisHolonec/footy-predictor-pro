@@ -9,6 +9,7 @@ import {
 } from "./metricsStore.js";
 import { processResourceSnapshot } from "./requestMonitor.js";
 import { getBenchmarkHealth, getSettlementHealth } from "./syncTelemetry.js";
+import { readLatestOpsSnapshot } from "./opsSnapshot.js";
 import { logInfo, logWarn } from "./logger.js";
 
 function levelFrom(ok, degraded) {
@@ -53,7 +54,7 @@ export function buildPredictionHealth(metrics) {
   };
 }
 
-export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark }) {
+export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark, snapshot }) {
   const alerts = [];
   const predict = metrics?.routes?.predict;
   const api = metrics?.routes?.api;
@@ -186,6 +187,37 @@ export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benc
     });
   }
 
+  // A stale snapshot means the dashboard's slow-moving numbers are lying about "today".
+  const snapshotAge = Number(snapshot?.ageMinutes);
+  if (Number.isFinite(snapshotAge) && snapshotAge >= 2880) {
+    alerts.push({
+      id: "ops_snapshot_stale",
+      level: "medium",
+      message: `Health snapshot is ${Math.round(snapshotAge / 60)}h old`,
+      value: snapshotAge
+    });
+  }
+  // Cron Health, the replacement for the brief's Queue Health: this system has no queue,
+  // so what matters is whether each scheduled job still runs and still succeeds.
+  const failingJobs = snapshot?.cron?.failingJobs || [];
+  const staleJobs = snapshot?.cron?.staleJobs || [];
+  if (failingJobs.length > 0) {
+    alerts.push({
+      id: "cron_failing",
+      level: "high",
+      message: `Cron jobs reporting failure: ${failingJobs.join(", ")}`,
+      value: failingJobs.length
+    });
+  }
+  if (staleJobs.length > 0) {
+    alerts.push({
+      id: "cron_stale",
+      level: "medium",
+      message: `Cron jobs not run in over 24h: ${staleJobs.join(", ")}`,
+      value: staleJobs.length
+    });
+  }
+
   if (checks?.kv?.ok === false) {
     alerts.push({ id: "kv_down", level: "high", message: "KV health check failed", value: 1 });
   }
@@ -248,7 +280,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     latestReport,
     reports,
     settlementHealth,
-    benchmarkHealth
+    benchmarkHealth,
+    snapshot
   ] = await Promise.all([
     checkKv(),
     checkSupabase(),
@@ -261,7 +294,10 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     // Both read the KV streams written by the settlement sync and the benchmark sweep —
     // no SQL, no upstream calls, so they add no meaningful cost to this bundle.
     getSettlementHealth(historyDays),
-    getBenchmarkHealth(historyDays)
+    getBenchmarkHealth(historyDays),
+    // One indexed row written by the daily cron — the expensive aggregates are NOT
+    // recomputed here, which is what keeps this bundle fast.
+    readLatestOpsSnapshot()
   ]);
 
   const processSnapshot = processResourceSnapshot();
@@ -278,7 +314,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     cache,
     checks,
     settlement: settlementHealth,
-    benchmark: benchmarkHealth
+    benchmark: benchmarkHealth,
+    snapshot
   });
 
   const anyCritical = !kvCheck.ok || !sbCheck.ok;
@@ -313,6 +350,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     predictionHealth: buildPredictionHealth(metrics),
     settlementHealth,
     benchmarkHealth,
+    /** Slow-moving aggregates from the daily cron; null until the first snapshot runs. */
+    snapshot,
     alerts,
     history,
     dailyReport: latestReport,
