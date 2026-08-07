@@ -444,7 +444,7 @@ function MarketPickCard({
         <span>{label}</span>
         {badge ? (
           <span
-            className={`rounded-sm px-1 py-[1px] text-[8.5px] font-bold tracking-wider ${
+            className={`rounded-sm px-1 py-[1px] text-[9px] font-bold tracking-wider ${
               isToss ? "bg-[var(--fp-warning)]/20 text-[var(--fp-warning)]" : ""
             }`}
             title={

@@ -121,7 +121,7 @@ export default function ConfidenceEnginePanel({
               />
             </div>
             {!isAvailable && (
-              <div className="mt-0.5 text-[7.5px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+              <div className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
                 {t("common.na")}
               </div>
             )}

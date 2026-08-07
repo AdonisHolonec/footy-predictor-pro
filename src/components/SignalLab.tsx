@@ -301,7 +301,7 @@ export function ConfidenceAura({ value, className = "", size = "default" }: Conf
         >
           {Math.round(v)}
         </span>
-        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[7px]" : "text-[8px]"}`}>
+        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[8px]" : "text-[9px]"}`}>
           conf
         </span>
       </div>

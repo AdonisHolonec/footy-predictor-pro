@@ -411,7 +411,7 @@ export default function MatchCard({
           </span>
           {tier ? (
             <span
-              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide ${tier.className}`}
+              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide ${tier.className}`}
               title={tier.title}
             >
               {tier.label}
@@ -419,7 +419,7 @@ export default function MatchCard({
           ) : null}
           {row.confidenceEngine ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/8 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/8 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
               title={t("card.confidenceCtxTip")}
             >
               {row.confidenceEngine.category
@@ -469,7 +469,7 @@ export default function MatchCard({
               <img src={row.logos?.home} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
             <div className="min-w-0">
-              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)] sm:text-[13px]">{row.teams.home}</div>
+              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)]">{row.teams.home}</div>
               <div
                 className="mt-2 h-0.5 max-w-[8rem] rounded-full opacity-80"
                 style={{ background: `linear-gradient(90deg, ${homeColor}, transparent)` }}
@@ -485,7 +485,7 @@ export default function MatchCard({
               <img src={row.logos?.away} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
             <div className="min-w-0">
-              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)] sm:text-[13px]">{row.teams.away}</div>
+              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)]">{row.teams.away}</div>
               <div
                 className="mt-2 h-0.5 max-w-[8rem] rounded-full opacity-80"
                 style={{ background: `linear-gradient(90deg, ${awayColor}, transparent)` }}
@@ -542,7 +542,7 @@ export default function MatchCard({
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
-                className="rounded-sm bg-[var(--fp-warning)]/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-[var(--fp-warning)]"
+                className="rounded-sm bg-[var(--fp-warning)]/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-warning)]"
                 title={t("card.lowConfTip")}
               >
                 Nesigur
@@ -550,7 +550,7 @@ export default function MatchCard({
             ) : null}
             {isPickHot ? (
               <span
-                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[7.5px] font-bold tracking-wider text-[var(--fp-success)]"
+                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-success)]"
                 title={t("card.strongSignalTip")}
               >
                 HOT
@@ -756,7 +756,7 @@ export default function MatchCard({
                       ? t("card.oddLabel", { odd: Number(item.odd).toFixed(2) })
                       : "-"}
                   </div>
-                  <div className="font-mono text-[7px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>
+                  <div className="font-mono text-[8px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>
                 </>
               )}
             </div>

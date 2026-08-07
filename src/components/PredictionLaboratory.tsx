@@ -201,7 +201,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
                 className="w-full rounded-sm bg-[var(--fp-accent)]/70"
                 style={{ height: `${Math.max(8, (p.value / 100) * 40)}px` }}
               />
-              <span className="truncate text-[7px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
+              <span className="truncate text-[8px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
             </div>
           ))}
         </div>
