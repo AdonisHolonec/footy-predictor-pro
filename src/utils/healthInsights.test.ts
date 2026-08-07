@@ -272,6 +272,39 @@ describe("buildDeliveryInsight", () => {
     expect(insight.tone).toBe("unknown");
   });
 
+  it("says nothing happened rather than claiming it has no data", () => {
+    const insight = buildDeliveryInsight(
+      bundleWith({
+        predictionHealth: { ...healthy, generatedToday: 0, servedLive: 0, servedFromCache: 0 }
+      })
+    );
+
+    expect(insight.statusLabel).toBe("Nothing yet");
+    expect(insight.figures.length).toBeGreaterThan(0);
+  });
+
+  it("does not report a cached latency nobody measured", () => {
+    const idle = buildDeliveryInsight(
+      bundleWith({
+        predictionHealth: {
+          ...healthy,
+          generatedToday: 0,
+          servedLive: 0,
+          servedFromCache: 0,
+          avgCachedLatencyMs: 0
+        }
+      })
+    );
+    expect(idle.figures.find((f) => f.label === "Cached response")?.value).toBe("—");
+
+    const busy = buildDeliveryInsight(bundleWith({ predictionHealth: healthy }));
+    expect(busy.figures.find((f) => f.label === "Cached response")?.value).toBe("120ms");
+  });
+
+  it("leaves the tone label alone when the standing is judgeable", () => {
+    expect(buildDeliveryInsight(bundleWith({ predictionHealth: healthy })).statusLabel).toBeUndefined();
+  });
+
   it("summarises a clean day with the cache share", () => {
     const insight = buildDeliveryInsight(bundleWith({ predictionHealth: healthy }));
 
