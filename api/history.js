@@ -13,6 +13,7 @@ import {
   resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
+import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
@@ -571,9 +572,37 @@ async function handleHistorySync(req, res) {
       0,
       Math.min(Number(process.env.HISTORY_SYNC_CARD_STATS_MAX || 80), 150)
     );
+    /**
+     * Separate, larger budget for fixtures whose *recommended* pick is still ungraded.
+     * A recommended pick on a totals-backed family (Corners / Shots / Cards) cannot settle
+     * until /fixtures/statistics arrives — `resolveRecommendedValidation` returns "pending"
+     * while marketTotals are null. Sharing one budget with cosmetic market touch-ups meant a
+     * busy window exhausted it on non-recommended rows and a recommended pick stayed pending
+     * forever. That is the P0: Corners tile WIN, Recommended still "no result".
+     */
+    const recommendedStatsCap = Math.max(
+      0,
+      Math.min(Number(process.env.HISTORY_SYNC_RECOMMENDED_STATS_MAX || 250), 500)
+    );
     let cardResettled = 0;
     let statsFetchCalls = 0;
+    let recommendedStatsCalls = 0;
     const cardUpdates = [];
+    const settlement = {
+      finishedScanned: 0,
+      recommendedPendingBefore: 0,
+      recommendedSettledNow: 0,
+      recommendedStillPending: 0,
+      missingTotals: 0,
+      syncSkippedBudget: 0,
+      recommendedStatsCalls: 0,
+      recommendedStatsCap,
+      statsFetchCap
+    };
+
+    // Collect the finished window before grading so recommended-pending fixtures can be
+    // processed ahead of everything else — priority is meaningless while paging inline.
+    const finishedRows = [];
     for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
       const { data: page, error: cardErr } = await supabase
         .from(HISTORY_TABLE)
@@ -587,8 +616,21 @@ async function handleHistorySync(req, res) {
         .range(offset, offset + scanChunkSize - 1);
       if (cardErr) throw cardErr;
       if (!page?.length) break;
+      finishedRows.push(...page);
+      if (page.length < scanChunkSize) break;
+    }
 
-      for (const row of page) {
+    /** Finished match + a recommended pick that never reached win/loss. */
+    const recommendedUnsettled = (row) =>
+      Boolean(row.recommended_pick) && row.validation !== "win" && row.validation !== "loss";
+
+    settlement.finishedScanned = finishedRows.length;
+    settlement.recommendedPendingBefore = finishedRows.filter(recommendedUnsettled).length;
+    // Stable priority sort: recommended gaps first, kickoff/fixture order preserved within groups.
+    finishedRows.sort((a, b) => Number(recommendedUnsettled(b)) - Number(recommendedUnsettled(a)));
+
+    {
+      for (const row of finishedRows) {
         const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
         const score = { home: row.score_home, away: row.score_away };
         if (score.home == null || score.away == null) continue;
@@ -636,17 +678,36 @@ async function handleHistorySync(req, res) {
           { status: row.match_status, score, marketTotals }
         );
 
+        const isRecommendedGap = recommendedUnsettled(row);
+        const provisionalRecommended = provisional.cardMarketValidations?.recommended;
         const needsStats =
-          needsMarketTotalsForSettlement(provisional.cardMarketValidations, picks) || missingHt;
-        if (needsStats && statsFetchCalls < statsFetchCap) {
+          needsMarketTotalsForSettlement(provisional.cardMarketValidations, picks) ||
+          missingHt ||
+          // Recommended still ungraded with the totals we hold — fetching them is the only
+          // thing that can settle it, so it must not be starved by the general market budget.
+          (isRecommendedGap &&
+            provisionalRecommended !== "win" &&
+            provisionalRecommended !== "loss");
+
+        const withinBudget = isRecommendedGap
+          ? recommendedStatsCalls < recommendedStatsCap
+          : statsFetchCalls < statsFetchCap;
+
+        if (needsStats && !withinBudget) settlement.syncSkippedBudget += 1;
+
+        if (needsStats && withinBudget) {
           const totals = await fetchFixtureMarketTotals(Number(row.fixture_id));
           statsFetchCalls += 1;
+          if (isRecommendedGap) recommendedStatsCalls += 1;
           if (totals.ok) {
             marketTotals = {
               cornersTotal: totals.cornersTotal ?? marketTotals.cornersTotal,
               shotsOnTargetTotal: totals.shotsOnTargetTotal ?? marketTotals.shotsOnTargetTotal,
               firstHalfGoals: totals.firstHalfGoals ?? marketTotals.firstHalfGoals
             };
+          } else if (isRecommendedGap) {
+            // Upstream had no statistics for this fixture — it stays pending, not mis-graded.
+            settlement.missingTotals += 1;
           }
         }
 
@@ -687,8 +748,24 @@ async function handleHistorySync(req, res) {
           updated_at: new Date().toISOString()
         });
       }
-      if (page.length < scanChunkSize) break;
     }
+
+    const settledNow = new Set(
+      cardUpdates
+        .filter((u) => u.validation === "win" || u.validation === "loss")
+        .map((u) => Number(u.fixture_id))
+    );
+    settlement.recommendedSettledNow = finishedRows.filter(
+      (r) => recommendedUnsettled(r) && settledNow.has(Number(r.fixture_id))
+    ).length;
+    settlement.recommendedStillPending =
+      settlement.recommendedPendingBefore - settlement.recommendedSettledNow;
+    settlement.recommendedStatsCalls = recommendedStatsCalls;
+
+    // Persist the run so `recommendedStillPending` becomes a trend instead of a number
+    // that only ever existed in one HTTP response. Never blocks the sync.
+    void recordSyncRun(SYNC_KINDS.SETTLEMENT, settlement);
+
     if (cardUpdates.length > 0) {
       const { error: cardWriteErr } = await supabase
         .from(HISTORY_TABLE)
@@ -708,7 +785,10 @@ async function handleHistorySync(req, res) {
         resettled,
         cardResettled,
         statsFetchCalls,
-        cappedScan
+        cappedScan,
+        // Settlement observability: a non-zero recommendedStillPending after a run means
+        // finished matches whose recommended pick no surface can render as win/loss.
+        ...settlement
       })
     );
     await persistHistorySyncStatus(supabase, req, {
@@ -742,6 +822,7 @@ async function handleHistorySync(req, res) {
         idsChunks: idsFetchCalls,
         cardStats: statsFetchCalls
       },
+      settlement,
       ...(closing ? { closing } : {})
     });
   } catch (error) {
