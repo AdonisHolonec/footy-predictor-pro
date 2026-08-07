@@ -30,6 +30,12 @@ export type HealthInsight = {
   /** One sentence: what this means. Never a restatement of the headline. */
   verdict: string;
   tone: InsightTone;
+  /**
+   * Overrides the tone's default wording. "No data" and "nothing has happened yet" are both
+   * unjudgeable, but they are not the same claim, and a card carrying real figures must not
+   * label itself empty.
+   */
+  statusLabel?: string;
   figures: InsightFigure[];
 };
 
@@ -251,11 +257,14 @@ export function buildDeliveryInsight(bundle: HealthDashboardBundle): HealthInsig
     (num(health.persistFailures?.history) ?? 0) + (num(health.persistFailures?.ownership) ?? 0);
   const failures = num(health.failures) ?? 0;
 
+  const servedFromCache = num(health.servedFromCache) ?? 0;
   const figures: InsightFigure[] = [
     { label: "Live / cached", value: `${fmtCount(health.servedLive)} / ${fmtCount(health.servedFromCache)}` },
     { label: "Served from cache", value: fmtPlainPct(health.cacheServedPct, 0) },
     { label: "Generation p95", value: fmtMs(health.p95GenerationMs) },
-    { label: "Cached response", value: fmtMs(health.avgCachedLatencyMs) },
+    // The channel reports an average of 0 when it has no samples. Rendering that as "0ms"
+    // would claim a measurement nobody took.
+    { label: "Cached response", value: servedFromCache > 0 ? fmtMs(health.avgCachedLatencyMs) : "—" },
     { label: "Upstream fallbacks", value: fmtCount(health.upstreamFallbacks) }
   ];
 
@@ -286,6 +295,8 @@ export function buildDeliveryInsight(bundle: HealthDashboardBundle): HealthInsig
       ...base,
       headline: "0",
       tone: "unknown",
+      // Not "No data": the counters reported, they reported nothing happening.
+      statusLabel: "Nothing yet",
       verdict: "No predictions served yet today, so there is nothing to read into the latency figures below.",
       figures
     };

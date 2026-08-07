@@ -42,7 +42,7 @@ function InsightCard({ insight }: { insight: HealthInsight }) {
           className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
           style={{ color: accent }}
         >
-          {TONE_LABEL[insight.tone]}
+          {insight.statusLabel ?? TONE_LABEL[insight.tone]}
         </span>
       </div>
 
@@ -85,7 +85,9 @@ export default function HealthInsightGrid({ bundle }: { bundle: HealthDashboardB
           Ordered by what needs attention first
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* items-start, not the default stretch: a card with no figures yet would otherwise be
+          pulled to its neighbour's height and open a large void under one sentence. */}
+      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
         {insights.map((insight) => (
           <InsightCard key={insight.id} insight={insight} />
         ))}
