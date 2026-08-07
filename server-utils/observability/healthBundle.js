@@ -20,6 +20,39 @@ function levelFrom(ok, degraded) {
 /**
  * Build ops alerts from live metrics + usage/cache.
  */
+/**
+ * Prediction health (S2), derived from the split channels and counters requestMonitor
+ * records off response headers. No pipeline instrumentation: PredictorV3 is untouched.
+ */
+export function buildPredictionHealth(metrics) {
+  const counters = metrics?.counters || {};
+  const live = Number(counters.predict_served_live || 0);
+  const cached = Number(counters.predict_served_cache || 0);
+  const total = live + cached;
+  const liveCh = metrics?.routes?.predictLive || null;
+  const cachedCh = metrics?.routes?.predictCached || null;
+
+  return {
+    generatedToday: total,
+    servedLive: live,
+    servedFromCache: cached,
+    cacheServedPct: total > 0 ? Number(((cached / total) * 100).toFixed(1)) : null,
+    /** Live requests run the fixture loop, so this is generation time. */
+    avgGenerationMs: liveCh?.avgMs ?? null,
+    p95GenerationMs: liveCh?.p95Ms ?? null,
+    /** All predict requests, cached and live — the latency a user actually experiences. */
+    avgLatencyMs: metrics?.routes?.predict?.avgMs ?? null,
+    p95LatencyMs: metrics?.routes?.predict?.p95Ms ?? null,
+    avgCachedLatencyMs: cachedCh?.avgMs ?? null,
+    failures: Number(metrics?.failures?.prediction || 0),
+    persistFailures: {
+      history: Number(counters.persist_history_failed || 0),
+      ownership: Number(counters.persist_ownership_failed || 0)
+    },
+    upstreamFallbacks: Number(counters.api_upstream_fallback || 0)
+  };
+}
+
 export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark }) {
   const alerts = [];
   const predict = metrics?.routes?.predict;
@@ -135,6 +168,21 @@ export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benc
       level: benchmarkBacklog >= 200 ? "medium" : "low",
       message: `Benchmark sweep backlog: ${benchmarkBacklog} unbenchmarked fixtures in window`,
       value: benchmarkBacklog
+    });
+  }
+
+  // Persistence warnings were header-only until S2. A prediction the user was shown but
+  // that never reached the database is the ownership/settlement class of bug, so any
+  // occurrence is worth surfacing rather than waiting for a threshold.
+  const counters = metrics?.counters || {};
+  const persistHistory = Number(counters.persist_history_failed || 0);
+  const persistOwnership = Number(counters.persist_ownership_failed || 0);
+  if (persistHistory + persistOwnership > 0) {
+    alerts.push({
+      id: "persist_failures",
+      level: persistHistory + persistOwnership >= 5 ? "high" : "medium",
+      message: `Persist warnings today — history: ${persistHistory}, ownership: ${persistOwnership}`,
+      value: persistHistory + persistOwnership
     });
   }
 
@@ -262,6 +310,7 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
       fixturesLatency: metrics.routes.fixtures
     },
     failures: metrics.failures,
+    predictionHealth: buildPredictionHealth(metrics),
     settlementHealth,
     benchmarkHealth,
     alerts,

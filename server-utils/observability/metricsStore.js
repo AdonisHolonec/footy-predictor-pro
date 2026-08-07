@@ -41,6 +41,12 @@ function emptyDayMetrics() {
       api: 0,
       cache: 0
     },
+    /**
+     * Free-form daily counters (S2). Unlike `failures`, the key set is open so a new
+     * signal can be counted without a schema step; days written before S2 read back as
+     * {}. Names are namespaced by concern: predict_*, persist_*, api_*.
+     */
+    counters: {},
     updatedAt: null
   };
 }
@@ -119,6 +125,33 @@ export async function bumpFailure(kind) {
 }
 
 /**
+ * Increment a free-form daily counter (S2).
+ *
+ * Deliberately open-keyed: the signals it carries — how many predicts were served from
+ * the DB cache vs generated live, how many persistence warnings fired — are read off
+ * response headers by requestMonitor, so counting them needs no change inside the
+ * prediction pipeline. Never throws.
+ *
+ * @param {string} name Counter key, e.g. "predict_served_cache".
+ * @param {number} [by] Increment, default 1.
+ */
+export async function bumpCounter(name, by = 1) {
+  const key = String(name || "").trim();
+  if (!key) return null;
+  const delta = Number(by);
+  if (!Number.isFinite(delta) || delta === 0) return null;
+  try {
+    const day = await readDay();
+    if (!day.counters || typeof day.counters !== "object") day.counters = {};
+    day.counters[key] = Number(day.counters[key] || 0) + delta;
+    await writeDay(day);
+    return day;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Record a timed observation for a metrics channel.
  * @param {"predict"|"fixtures"|"api"|"cache"} channel
  * @param {{ durationMs: number, ok?: boolean, failureKind?: "prediction"|"api"|"cache"|null }} opts
@@ -153,8 +186,15 @@ export async function getOpsMetrics(dateISO = todayISO()) {
     date: day.date,
     updatedAt: day.updatedAt,
     failures: day.failures,
+    counters: day.counters && typeof day.counters === "object" ? day.counters : {},
     routes: {
       predict: summarizeChannel(day.routes.predict),
+      // Split of `predict` by data source (S2). `predictLive` is the closest thing to
+      // "generation time" available without instrumenting the pipeline: a cached predict
+      // never enters the fixture loop, so its latency measures a different thing entirely
+      // and averaging the two together hides both.
+      predictLive: summarizeChannel(day.routes.predictLive),
+      predictCached: summarizeChannel(day.routes.predictCached),
       fixtures: summarizeChannel(day.routes.fixtures),
       api: summarizeChannel(day.routes.api),
       cache: summarizeChannel(day.routes.cache),
