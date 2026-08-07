@@ -86,6 +86,10 @@
     {
       "path": "/api/cron/daily-ml?mode=meta-learning-refresh",
       "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/cron/daily-ml?mode=ops-snapshot",
+      "schedule": "25 4 * * *"
     }
   ]
 }

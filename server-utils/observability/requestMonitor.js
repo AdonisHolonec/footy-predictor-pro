@@ -1,5 +1,36 @@
 import { logError, logInfo, logWarn } from "./logger.js";
-import { recordObservation } from "./metricsStore.js";
+import { bumpCounter, recordObservation } from "./metricsStore.js";
+
+/** Read a response header defensively — a test double may not implement getHeader. */
+function readHeader(res, name) {
+  try {
+    if (typeof res?.getHeader !== "function") return null;
+    const v = res.getHeader(name);
+    return v == null ? null : String(v);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Classify a predict response as cache-served or live from the header Stage01 already
+ * sets. Every DB-cache short-circuit stamps X-Data-Source with a `db_only_*` reason; the
+ * live pipeline leaves it unset. Reading it here is what keeps this counter out of
+ * PredictorV3 — the pipeline is observed, not modified.
+ */
+export function classifyPredictSource(res) {
+  const source = readHeader(res, "X-Data-Source");
+  if (!source) return { channel: "predictLive", counter: "predict_served_live", source: "live" };
+  return source.startsWith("db_only")
+    ? { channel: "predictCached", counter: "predict_served_cache", source }
+    : { channel: "predictLive", counter: "predict_served_live", source };
+}
+
+/** Persistence warnings Stage10 already surfaces as a response header. */
+export const PERSIST_WARNING_COUNTERS = Object.freeze({
+  predictions_history_upsert_failed: "persist_history_failed",
+  user_prediction_fixtures_link_failed: "persist_ownership_failed"
+});
 
 function stampTimingHeaders(res, durationMs) {
   try {
@@ -65,7 +96,28 @@ export function attachRequestMonitor(req, res, opts = {}) {
       failureKind
     });
 
+    let dataSource = null;
+    if (route === "predict") {
+      // Split predict by data source so "generation time" (live) is not averaged with
+      // cache-served responses, which never enter the fixture loop.
+      const { channel, counter, source } = classifyPredictSource(res);
+      dataSource = source;
+      void recordObservation(channel, { durationMs, ok, failureKind });
+      void bumpCounter(counter);
+
+      // Persistence warnings were previously header-only: nothing counted them, so a
+      // silent persist failure was invisible. This is the ownership/history gap made
+      // observable without touching Stage10.
+      const warning = readHeader(res, "X-Persist-Warning");
+      const counterName = warning ? PERSIST_WARNING_COUNTERS[warning] : null;
+      if (counterName) {
+        void bumpCounter(counterName);
+        logWarn("predict.persist_warning", { warning, path: String(req.url || "").split("?")[0] });
+      }
+    }
+
     const meta = {
+      ...(dataSource ? { dataSource } : {}),
       route,
       method: req.method,
       status: statusCode,

@@ -9,6 +9,7 @@ import {
 } from "./metricsStore.js";
 import { processResourceSnapshot } from "./requestMonitor.js";
 import { getBenchmarkHealth, getSettlementHealth } from "./syncTelemetry.js";
+import { readLatestOpsSnapshot } from "./opsSnapshot.js";
 import { logInfo, logWarn } from "./logger.js";
 
 function levelFrom(ok, degraded) {
@@ -20,7 +21,40 @@ function levelFrom(ok, degraded) {
 /**
  * Build ops alerts from live metrics + usage/cache.
  */
-export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark }) {
+/**
+ * Prediction health (S2), derived from the split channels and counters requestMonitor
+ * records off response headers. No pipeline instrumentation: PredictorV3 is untouched.
+ */
+export function buildPredictionHealth(metrics) {
+  const counters = metrics?.counters || {};
+  const live = Number(counters.predict_served_live || 0);
+  const cached = Number(counters.predict_served_cache || 0);
+  const total = live + cached;
+  const liveCh = metrics?.routes?.predictLive || null;
+  const cachedCh = metrics?.routes?.predictCached || null;
+
+  return {
+    generatedToday: total,
+    servedLive: live,
+    servedFromCache: cached,
+    cacheServedPct: total > 0 ? Number(((cached / total) * 100).toFixed(1)) : null,
+    /** Live requests run the fixture loop, so this is generation time. */
+    avgGenerationMs: liveCh?.avgMs ?? null,
+    p95GenerationMs: liveCh?.p95Ms ?? null,
+    /** All predict requests, cached and live — the latency a user actually experiences. */
+    avgLatencyMs: metrics?.routes?.predict?.avgMs ?? null,
+    p95LatencyMs: metrics?.routes?.predict?.p95Ms ?? null,
+    avgCachedLatencyMs: cachedCh?.avgMs ?? null,
+    failures: Number(metrics?.failures?.prediction || 0),
+    persistFailures: {
+      history: Number(counters.persist_history_failed || 0),
+      ownership: Number(counters.persist_ownership_failed || 0)
+    },
+    upstreamFallbacks: Number(counters.api_upstream_fallback || 0)
+  };
+}
+
+export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark, snapshot }) {
   const alerts = [];
   const predict = metrics?.routes?.predict;
   const api = metrics?.routes?.api;
@@ -138,6 +172,52 @@ export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benc
     });
   }
 
+  // Persistence warnings were header-only until S2. A prediction the user was shown but
+  // that never reached the database is the ownership/settlement class of bug, so any
+  // occurrence is worth surfacing rather than waiting for a threshold.
+  const counters = metrics?.counters || {};
+  const persistHistory = Number(counters.persist_history_failed || 0);
+  const persistOwnership = Number(counters.persist_ownership_failed || 0);
+  if (persistHistory + persistOwnership > 0) {
+    alerts.push({
+      id: "persist_failures",
+      level: persistHistory + persistOwnership >= 5 ? "high" : "medium",
+      message: `Persist warnings today — history: ${persistHistory}, ownership: ${persistOwnership}`,
+      value: persistHistory + persistOwnership
+    });
+  }
+
+  // A stale snapshot means the dashboard's slow-moving numbers are lying about "today".
+  const snapshotAge = Number(snapshot?.ageMinutes);
+  if (Number.isFinite(snapshotAge) && snapshotAge >= 2880) {
+    alerts.push({
+      id: "ops_snapshot_stale",
+      level: "medium",
+      message: `Health snapshot is ${Math.round(snapshotAge / 60)}h old`,
+      value: snapshotAge
+    });
+  }
+  // Cron Health, the replacement for the brief's Queue Health: this system has no queue,
+  // so what matters is whether each scheduled job still runs and still succeeds.
+  const failingJobs = snapshot?.cron?.failingJobs || [];
+  const staleJobs = snapshot?.cron?.staleJobs || [];
+  if (failingJobs.length > 0) {
+    alerts.push({
+      id: "cron_failing",
+      level: "high",
+      message: `Cron jobs reporting failure: ${failingJobs.join(", ")}`,
+      value: failingJobs.length
+    });
+  }
+  if (staleJobs.length > 0) {
+    alerts.push({
+      id: "cron_stale",
+      level: "medium",
+      message: `Cron jobs not run in over 24h: ${staleJobs.join(", ")}`,
+      value: staleJobs.length
+    });
+  }
+
   if (checks?.kv?.ok === false) {
     alerts.push({ id: "kv_down", level: "high", message: "KV health check failed", value: 1 });
   }
@@ -200,7 +280,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     latestReport,
     reports,
     settlementHealth,
-    benchmarkHealth
+    benchmarkHealth,
+    snapshot
   ] = await Promise.all([
     checkKv(),
     checkSupabase(),
@@ -213,7 +294,10 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     // Both read the KV streams written by the settlement sync and the benchmark sweep —
     // no SQL, no upstream calls, so they add no meaningful cost to this bundle.
     getSettlementHealth(historyDays),
-    getBenchmarkHealth(historyDays)
+    getBenchmarkHealth(historyDays),
+    // One indexed row written by the daily cron — the expensive aggregates are NOT
+    // recomputed here, which is what keeps this bundle fast.
+    readLatestOpsSnapshot()
   ]);
 
   const processSnapshot = processResourceSnapshot();
@@ -230,7 +314,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     cache,
     checks,
     settlement: settlementHealth,
-    benchmark: benchmarkHealth
+    benchmark: benchmarkHealth,
+    snapshot
   });
 
   const anyCritical = !kvCheck.ok || !sbCheck.ok;
@@ -262,8 +347,11 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
       fixturesLatency: metrics.routes.fixtures
     },
     failures: metrics.failures,
+    predictionHealth: buildPredictionHealth(metrics),
     settlementHealth,
     benchmarkHealth,
+    /** Slow-moving aggregates from the daily cron; null until the first snapshot runs. */
+    snapshot,
     alerts,
     history,
     dailyReport: latestReport,

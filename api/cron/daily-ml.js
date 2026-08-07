@@ -33,6 +33,7 @@ import { selectBestCalibration } from "../../server-utils/calibration/Calibratio
 import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
 import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
 import { recordSyncRun, SYNC_KINDS } from "../../server-utils/observability/syncTelemetry.js";
+import { captureOpsSnapshot } from "../../server-utils/observability/opsSnapshot.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
@@ -407,6 +408,22 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok: false, mode, error: err?.message || "Daily report failed" });
     }
   }
+  // Ops health snapshot (S3) — aggregates predictions_history / profiles once a day so
+  // the Health dashboard reads one row instead of scanning thousands. Read-only with
+  // respect to every other table; writes only ops_health_snapshots.
+  if (mode === "ops-snapshot" || mode === "ops_snapshot" || mode === "health-snapshot") {
+    try {
+      const result = await captureOpsSnapshot({
+        windowDays: req.query.windowDays,
+        dryRun: String(req.query.dryRun || "") === "1"
+      });
+      return res.status(200).json({ ok: result.ok !== false, mode, ...result });
+    } catch (err) {
+      logError("cron.ops_snapshot_failed", { error: err?.message || String(err) });
+      return res.status(200).json({ ok: false, mode, error: err?.message || "snapshot_failed" });
+    }
+  }
+
   // Prediction benchmark sweep — comparison-only vs API-Football, no ML training;
   // folded here for Hobby serverless function limits (see runBenchmarkSweep.js).
   if (mode === "prediction-benchmark-sweep" || mode === "prediction_benchmark_sweep" || mode === "benchmark-sweep") {

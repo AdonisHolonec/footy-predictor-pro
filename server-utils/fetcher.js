@@ -1,6 +1,6 @@
 import { createClient } from "@vercel/kv";
 import { logError, logWarn } from "./observability/logger.js";
-import { recordObservation } from "./observability/metricsStore.js";
+import { bumpCounter, recordObservation } from "./observability/metricsStore.js";
 export { recordObservation };
 
 const kv = createClient({
@@ -269,6 +269,9 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
       if ((!attempt.res.ok || notSubscribed) && notSubscribed) {
         const fallback = resolveFallbackUpstream(primary.provider);
         if (fallback?.key) {
+          // S2: the one retry path this client has. Counting it makes "retry count"
+          // observable; the retry behaviour itself is unchanged.
+          void bumpCounter("api_upstream_fallback");
           attempt = await fetchWith(fallback);
         }
       }
