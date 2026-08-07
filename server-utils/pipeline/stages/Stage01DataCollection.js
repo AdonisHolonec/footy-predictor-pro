@@ -23,6 +23,7 @@ import {
 } from "../../accessTier.js";
 import { getSupabaseAdmin } from "../../supabaseAdmin.js";
 import { mapDbRowToHistoryEntry } from "../../predictionsHistory.js";
+import { linkUserPredictionFixtures } from "../../linkUserPredictionFixtures.js";
 import { getPredictionWeights } from "../../prediction/PredictionEngine.js";
 import { getActiveModelId } from "../../modelLab/BlendRecipeSelection.js";
 import { loadCalibrationMaps } from "../../isotonicCalibration.js";
@@ -169,6 +170,13 @@ export async function run(context) {
         "X-Predict-Limit": String(limitHdr),
         "X-Data-Source": reason
       };
+      // Invariant: predictions returned ⇒ ownership exists. This path halts before
+      // Stage10Persistence, so the link `/api/history?mine=1` joins on must be written here
+      // or the user cannot restore these rows after a reconnect.
+      await linkUserPredictionFixtures(
+        usageCtx.userId,
+        items.map((row) => row.id)
+      );
       return halt(context, 200, items);
     };
 
@@ -234,6 +242,11 @@ export async function run(context) {
         "X-Predict-Limit": String(limitHdr),
         "X-Data-Source": "db_only_paid_cache"
       };
+      // Same invariant as readDbOnlyPredictions — this path also halts before Stage10Persistence.
+      await linkUserPredictionFixtures(
+        usageCtx.userId,
+        items.map((row) => row.id)
+      );
       halt(context, 200, items);
       return true;
     };

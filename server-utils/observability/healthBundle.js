@@ -8,6 +8,7 @@ import {
   saveDailyReport
 } from "./metricsStore.js";
 import { processResourceSnapshot } from "./requestMonitor.js";
+import { getBenchmarkHealth, getSettlementHealth } from "./syncTelemetry.js";
 import { logInfo, logWarn } from "./logger.js";
 
 function levelFrom(ok, degraded) {
@@ -19,7 +20,7 @@ function levelFrom(ok, degraded) {
 /**
  * Build ops alerts from live metrics + usage/cache.
  */
-export function buildOpsAlerts({ metrics, usage, cache, checks }) {
+export function buildOpsAlerts({ metrics, usage, cache, checks, settlement, benchmark }) {
   const alerts = [];
   const predict = metrics?.routes?.predict;
   const api = metrics?.routes?.api;
@@ -101,6 +102,42 @@ export function buildOpsAlerts({ metrics, usage, cache, checks }) {
     });
   }
 
+  // Settlement: finished matches whose recommended pick no surface can render as win/loss.
+  // This is the signal that was missing when a settled Corners pick showed "no result".
+  const stillPending = Number(settlement?.recommendedStillPending ?? 0);
+  const pendingWarn = Math.max(1, Number(process.env.SETTLEMENT_PENDING_WARN || 5));
+  const pendingCrit = Math.max(pendingWarn, Number(process.env.SETTLEMENT_PENDING_CRITICAL || 20));
+  if (stillPending >= pendingWarn) {
+    alerts.push({
+      id: "settlement_pending",
+      level: stillPending >= pendingCrit ? "high" : "medium",
+      message: `Finished fixtures with an ungraded recommended pick: ${stillPending}`,
+      value: stillPending
+    });
+  }
+  // A settlement sync that stopped running is worse than one reporting a backlog.
+  const settlementAge = Number(settlement?.ageMinutes);
+  const staleAfterMin = Math.max(60, Number(process.env.SETTLEMENT_STALE_MINUTES || 1440));
+  if (settlement?.ok && Number.isFinite(settlementAge) && settlementAge >= staleAfterMin) {
+    alerts.push({
+      id: "settlement_stale",
+      level: "high",
+      message: `Settlement sync last ran ${Math.round(settlementAge / 60)}h ago`,
+      value: settlementAge
+    });
+  }
+
+  // Benchmark sweep: a growing backlog means accrual is budget-bound, not that it stopped.
+  const benchmarkBacklog = Number(benchmark?.backlog ?? 0);
+  if (benchmarkBacklog > 0) {
+    alerts.push({
+      id: "benchmark_backlog",
+      level: benchmarkBacklog >= 200 ? "medium" : "low",
+      message: `Benchmark sweep backlog: ${benchmarkBacklog} unbenchmarked fixtures in window`,
+      value: benchmarkBacklog
+    });
+  }
+
   if (checks?.kv?.ok === false) {
     alerts.push({ id: "kv_down", level: "high", message: "KV health check failed", value: 1 });
   }
@@ -153,7 +190,18 @@ async function checkSupabase() {
  * Full health + monitoring bundle for the Health Dashboard.
  */
 export async function buildHealthBundle({ historyDays = 7 } = {}) {
-  const [kvCheck, sbCheck, usage, cache, metrics, history, latestReport, reports] = await Promise.all([
+  const [
+    kvCheck,
+    sbCheck,
+    usage,
+    cache,
+    metrics,
+    history,
+    latestReport,
+    reports,
+    settlementHealth,
+    benchmarkHealth
+  ] = await Promise.all([
     checkKv(),
     checkSupabase(),
     getApiUsage(),
@@ -161,7 +209,11 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     getOpsMetrics(),
     getOpsMetricsHistory(historyDays),
     getDailyReport(),
-    listDailyReports(Math.min(historyDays, 7))
+    listDailyReports(Math.min(historyDays, 7)),
+    // Both read the KV streams written by the settlement sync and the benchmark sweep —
+    // no SQL, no upstream calls, so they add no meaningful cost to this bundle.
+    getSettlementHealth(historyDays),
+    getBenchmarkHealth(historyDays)
   ]);
 
   const processSnapshot = processResourceSnapshot();
@@ -172,7 +224,14 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
     upstreamConfigured: Boolean(process.env.APISPORTS_KEY || process.env.X_RAPIDAPI_KEY || process.env.APIFOOTBALL_KEY)
   };
 
-  const { alerts, severity } = buildOpsAlerts({ metrics, usage, cache, checks });
+  const { alerts, severity } = buildOpsAlerts({
+    metrics,
+    usage,
+    cache,
+    checks,
+    settlement: settlementHealth,
+    benchmark: benchmarkHealth
+  });
 
   const anyCritical = !kvCheck.ok || !sbCheck.ok;
   const anyDegraded = severity === "medium" || severity === "high" || !checks.upstreamConfigured;
@@ -203,6 +262,8 @@ export async function buildHealthBundle({ historyDays = 7 } = {}) {
       fixturesLatency: metrics.routes.fixtures
     },
     failures: metrics.failures,
+    settlementHealth,
+    benchmarkHealth,
     alerts,
     history,
     dailyReport: latestReport,

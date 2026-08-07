@@ -536,7 +536,7 @@ export default function MatchMomentumTimeline({
 
         <p
           key={anchorText}
-          className="mt-3 flex animate-card-in items-start gap-1.5 text-[13px] font-bold leading-snug text-[var(--fp-text)] motion-reduce:animate-none sm:text-sm"
+          className="mt-3 flex animate-card-in items-start gap-1.5 text-[12px] font-bold leading-snug text-[var(--fp-text)] motion-reduce:animate-none sm:text-sm"
         >
           <span>{anchorText}</span>
           {isAiAnchor && (
@@ -598,7 +598,7 @@ export default function MatchMomentumTimeline({
             <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
               {t("match.momentumNext")}
             </p>
-            <p className="truncate text-[13px] font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
+            <p className="truncate text-[12px] font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
           </div>
           <span
             key={confidenceNumeric != null ? "numeric" : confidenceLabel}

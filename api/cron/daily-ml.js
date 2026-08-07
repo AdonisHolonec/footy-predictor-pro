@@ -32,6 +32,7 @@ import { runAutoCalibration } from "../../server-utils/calibration/AutoCalibrati
 import { selectBestCalibration } from "../../server-utils/calibration/CalibrationSelector.js";
 import { refreshAutoCalibrationOverlays, clearRuntimeOverlays } from "../../server-utils/calibration/overlayRuntime.js";
 import { generateDailyReport } from "../../server-utils/observability/healthBundle.js";
+import { recordSyncRun, SYNC_KINDS } from "../../server-utils/observability/syncTelemetry.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
@@ -414,6 +415,9 @@ export default async function handler(req, res) {
     }
     try {
       const result = await runBenchmarkSweep({ getWithCache });
+      // Persist the sweep result so coverage and backlog become a trend rather than a
+      // number that lived only in this response. Never blocks the cron.
+      void recordSyncRun(SYNC_KINDS.BENCHMARK, result);
       return res.status(200).json({ ok: true, mode, ...result });
     } catch (err) {
       // Never throw past the cron boundary — log-and-continue, same convention as Stage10Persistence.js.

@@ -103,7 +103,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
           <button
             type="button"
             onClick={onOpenAnalysis}
-            className="mt-4 min-h-[var(--fp-touch)] w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-[13px] font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
+            className="mt-4 min-h-[var(--fp-touch)] w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-[12px] font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
           >
             {t("dash.featuredOpenAnalysis")}
           </button>

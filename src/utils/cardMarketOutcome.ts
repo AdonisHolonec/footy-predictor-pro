@@ -10,32 +10,6 @@ export function isFinalMatchStatus(status?: string): boolean {
   return FINAL.has(String(status || "").toUpperCase());
 }
 
-function evaluateTopPick(
-  pick: string | undefined,
-  score?: { home: number | null; away: number | null } | null
-): boolean | null {
-  if (!pick || !score) return null;
-  if (score.home === null || score.away === null) return null;
-  const home = Number(score.home);
-  const away = Number(score.away);
-  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
-  const total = home + away;
-  const normalized = String(pick).trim().toLowerCase();
-  if (normalized === "1") return home > away;
-  if (normalized === "2") return away > home;
-  if (normalized === "x") return home === away;
-  if (normalized === "1x") return home >= away;
-  if (normalized === "12") return home !== away;
-  if (normalized === "x2") return away >= home;
-  if (normalized === "gg") return home > 0 && away > 0;
-  if (normalized === "ngg") return home === 0 || away === 0;
-  const overMatch = normalized.match(/^(?:peste|over)\s*(\d+(?:[.,]\d+)?)/);
-  if (overMatch) return total > Number(overMatch[1].replace(",", "."));
-  const underMatch = normalized.match(/^(?:sub|under)\s*(\d+(?:[.,]\d+)?)/);
-  if (underMatch) return total < Number(underMatch[1].replace(",", "."));
-  return null;
-}
-
 function gradeOu(side: "over" | "under", line: number, total: number | null): MarketOutcome {
   if (total == null || !Number.isFinite(total)) return "pending";
   const ok = side === "over" ? total > line : total < line;
@@ -63,15 +37,15 @@ export function resolveCardMarketOutcome(
   const fromStore = stored?.[marketId] ?? row.cardMarketValidations?.[marketId] ?? null;
   if (fromStore === "win" || fromStore === "loss") return fromStore;
 
+  // The recommended pick is NEVER graded client-side. Its market family lives only on the
+  // server (`recommended.family` + the fixture totals needed to settle Corners/Shots/Cards),
+  // so any local fallback has to guess it from the pick string — which is exactly how a
+  // Corners "Over 7.5" came to be graded against goals scored and rendered LOSE while the
+  // Corners tile rendered WIN. Render whatever the server persisted, or nothing.
+  if (marketId === "recommended") return fromStore;
+
   if (!isFinalMatchStatus(row.status)) {
     return fromStore === "pending" ? "pending" : null;
-  }
-
-  if (marketId === "recommended") {
-    const result = evaluateTopPick(row.recommended?.pick, row.score);
-    if (result === true) return "win";
-    if (result === false) return "loss";
-    return "pending";
   }
 
   if (marketId === "goals") {
