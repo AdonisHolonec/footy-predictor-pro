@@ -25,7 +25,7 @@ import { isCompactViewport, useLeaguePanelState } from "../hooks/useLeaguePanelS
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
-import { useUiPrefs, type MarketPref } from "../hooks/useUiPrefs";
+import { useUiPrefs } from "../hooks/useUiPrefs";
 import { DayResponse, HistoryEntry, HistoryStats, League, PerformanceLeagueBreakdown, PredictionRow } from "../types";
 import { isFinalMatchStatus } from "../utils/cardMarketOutcome";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
@@ -71,81 +71,20 @@ import {
 import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
 import { computeSimpleRoi, historyStatsFromRows, tallyEntryCardMarkets } from "../utils/historyStats";
 import { loadBillingConfig, openBillingPortal, startCheckout } from "../services/billingService";
-
-
-/** True when cached rows are older than the UI expects, or under-masked for the user's effective tier. */
-function hasLegacyPredictionShape(rows: PredictionRow[], accessTier?: string): boolean {
-  const tier = String(accessTier || "free").toLowerCase();
-  return rows.some((row) => {
-    if (row?.insufficientData) return false;
-    const probs = row?.probs;
-    // Paid tiers must not keep free/premium-masked localStorage rows (common on mobile).
-    if (tier === "ultra") {
-      return !probs?.corners || !probs?.shotsOnTarget;
-    }
-    if (tier === "premium") {
-      return !probs?.corners;
-    }
-    // Free: only treat truly ancient shapes (no modelVersion) as stale.
-    if (row?.modelVersion) return false;
-    const hasExactConfidence =
-      row?.recommended?.confidence != null && Number.isFinite(Number(row?.recommended?.confidence));
-    if (hasExactConfidence) {
-      return !probs?.firstHalf || !probs?.corners || !probs?.shotsOnTarget;
-    }
-    return !probs?.firstHalf && !probs?.corners && !probs?.shotsOnTarget && !probs?.shotsTotal;
-  });
-}
-
-function isFinalStatus(status?: string) {
-  return ["FT", "AET", "PEN"].includes(String(status || "").toUpperCase());
-}
-
-function hasDerivateMarkets(row: PredictionRow) {
-  return Boolean(row.probs?.corners || row.probs?.shotsOnTarget || row.probs?.shotsTotal || row.probs?.firstHalf);
-}
-
-function tierPredictWindowDays(tier?: string) {
-  if (tier === "ultra") return 3; // today +2
-  if (tier === "premium") return 2; // today +1
-  return 1; // free
-}
-
-function addIsoDay(dateIso: string, plusDays: number) {
-  const [y, m, d] = String(dateIso).split("-").map((v) => Number(v));
-  const utc = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
-  utc.setUTCDate(utc.getUTCDate() + plusDays);
-  const yy = utc.getUTCFullYear();
-  const mm = String(utc.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(utc.getUTCDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-
-function buildTierDates(baseDate: string, tier?: string) {
-  const span = tierPredictWindowDays(tier);
-  const out: string[] = [];
-  for (let i = 0; i < span; i += 1) out.push(addIsoDay(baseDate, i));
-  return normalizeSelectedDates(out);
-}
-
-function clampTierDates(baseDate: string, tier: string | undefined, dates: string[]) {
-  const allowed = new Set(buildTierDates(baseDate, tier));
-  const filtered = normalizeSelectedDates((dates || []).filter((d) => allowed.has(d)));
-  return filtered.length ? filtered : [baseDate];
-}
-
-const MAIN_VIEWS: AppNavView[] = ["home", "matches", "predictions", "live"];
-
-/** True when `row` has an actionable (non-toss) tier for at least one of the onboarding-picked markets. */
-function matchesPreferredMarkets(row: PredictionRow, preferredMarkets: MarketPref[]) {
-  if (!preferredMarkets.length) return true;
-  const tiers = row.predictions?.marketTiers;
-  return preferredMarkets.some((market) => {
-    const tier =
-      market === "oneXTwo" ? tiers?.oneXtwo?.tier : market === "overUnder" ? tiers?.over25?.tier : tiers?.gg?.tier;
-    return Boolean(tier) && tier !== "toss";
-  });
-}
+// Pure helpers extracted verbatim in Sprint 6 — the component keeps the
+// wiring, ./userDashboard/helpers keeps the arithmetic.
+import {
+  MAIN_VIEWS,
+  addIsoDay,
+  clampTierDates,
+  hasDerivateMarkets,
+  hasLegacyPredictionShape,
+  isFinalStatus,
+  matchesPreferredMarkets
+} from "./userDashboard/helpers";
+import ProfileView from "./userDashboard/ProfileView";
+import NotificationsView from "./userDashboard/NotificationsView";
+import SettingsView from "./userDashboard/SettingsView";
 
 export default function UserDashboard() {
   const {
@@ -1402,461 +1341,59 @@ export default function UserDashboard() {
       )}
 
       {navView === "notifications" && (
-        <section className="space-y-6">
-          <NotificationsSection
-            items={notificationItems}
-            seenIds={prefs.notificationsSeenIds}
-            onMarkAllSeen={() => markNotificationsSeen(notificationItems.map((n) => n.id))}
-            onOpenFixture={(fixtureId) => {
-              const row = preds.find((p) => Number(p.id) === fixtureId) || history.find((h) => Number(h.id) === fixtureId);
-              if (row) openMatch(row);
-            }}
-          />
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
-              {t("dash.notifyLowRisk")} / {t("dash.notifyValue")}
-            </h2>
-            <p className="mt-1 text-xs text-[var(--fp-text-muted)]">
-              {t("dash.alertsPreview", { low: alertsPreview.safe, value: alertsPreview.value })}
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input type="checkbox" checked={notifySafe} onChange={(e) => setNotifySafe(e.target.checked)} />
-                {t("dash.notifyLowRisk")}
-              </label>
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input type="checkbox" checked={notifyValue} onChange={(e) => setNotifyValue(e.target.checked)} />
-                {t("dash.notifyValue")}
-              </label>
-              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={notifyEmail}
-                  onChange={(e) => {
-                    const next = e.target.checked;
-                    setNotifyEmail(next);
-                    if (!next) setNotifyEmailConsent(false);
-                  }}
-                />
-                {t("dash.notifyEmail")}
-              </label>
-            </div>
-            {notifyEmail && (
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-[var(--fp-text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={notifyEmailConsent}
-                  onChange={(e) => setNotifyEmailConsent(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Confirm consimțământul pentru email — vezi{" "}
-                  <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                    politica
-                  </Link>
-                  .
-                </span>
-              </label>
-            )}
-            <Button className="mt-4" loading={notifSaveBusy} onClick={() => void saveNotificationPrefs()}>
-              Salvează preferințe
-            </Button>
-          </Card>
-        </section>
+        <NotificationsView
+          notificationItems={notificationItems}
+          alertsPreview={alertsPreview}
+          preds={preds}
+          prefs={prefs}
+          openMatch={openMatch}
+          history={history}
+          markNotificationsSeen={markNotificationsSeen}
+          saveNotificationPrefs={saveNotificationPrefs}
+          notifSaveBusy={notifSaveBusy}
+          notifySafe={notifySafe}
+          setNotifySafe={setNotifySafe}
+          notifyValue={notifyValue}
+          setNotifyValue={setNotifyValue}
+          notifyEmail={notifyEmail}
+          setNotifyEmail={setNotifyEmail}
+          notifyEmailConsent={notifyEmailConsent}
+          setNotifyEmailConsent={setNotifyEmailConsent}
+        />
       )}
 
       {navView === "profile" && (
-        <section className="space-y-6">
-          <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              {t("nav.profile")}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
-          </header>
-
-          <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--fp-accent)] font-display text-xl font-bold text-white">
-              {(user?.email?.[0] || "?").toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate font-display text-base font-bold text-[var(--fp-text)]">{user?.email}</p>
-              <Badge tone="accent" className="mt-1.5">
-                {userTier}
-              </Badge>
-            </div>
-          </div>
-
-          {!tierQuotaExempt && predictLimitToday != null && (
-            <div className="rounded-[var(--fp-radius-lg)] bg-[var(--fp-accent)] p-4 text-white shadow-[var(--fp-shadow-sm)]">
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-85">{t("dash.dailyQuota")}</p>
-              <p className="mt-1.5 font-display text-3xl font-bold tracking-tight">
-                {predictCountToday}
-                <span className="text-base font-semibold opacity-70"> / {predictLimitToday} {t("dash.quotaCallsSuffix")}</span>
-              </p>
-              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-white/25">
-                <div
-                  className="h-full rounded-full bg-white"
-                  style={{ width: `${Math.max(0, Math.min(100, (predictCountToday / predictLimitToday) * 100))}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {!tierQuotaExempt && (
-            <Card id="upgrade" className="scroll-mt-28">
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.subscription")}</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.subscriptionSub")}</p>
-              {isSubscriptionExpired && (
-                <div className="mt-3 flex items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-2.5">
-                  <span className="text-base" aria-hidden>
-                    ⚠️
-                  </span>
-                  <p className="text-sm font-semibold text-[var(--fp-danger)]">{t("dash.subscriptionExpired")}</p>
-                </div>
-              )}
-              <PricingCampaignBanner className="mt-3" />
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Premium</p>
-                  <PlanCampaignPrice tier="premium" />
-                </div>
-                <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">Ultra</p>
-                  <PlanCampaignPrice tier="ultra" />
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  disabled={!billingConfigured || billingBusy !== null}
-                  loading={billingBusy === "premium"}
-                  onClick={async () => {
-                    setBillingBusy("premium");
-                    try {
-                      window.location.href = await startCheckout("premium");
-                    } catch (e: unknown) {
-                      setStatus(e instanceof Error ? e.message : "Checkout Premium eșuat.");
-                      setBillingBusy(null);
-                    }
-                  }}
-                >
-                  {t("pricing.subscribePremium")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={!billingConfigured || billingBusy !== null}
-                  loading={billingBusy === "ultra"}
-                  onClick={async () => {
-                    setBillingBusy("ultra");
-                    try {
-                      window.location.href = await startCheckout("ultra");
-                    } catch (e: unknown) {
-                      setStatus(e instanceof Error ? e.message : "Checkout Ultra eșuat.");
-                      setBillingBusy(null);
-                    }
-                  }}
-                >
-                  {t("pricing.subscribeUltra")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={!billingConfigured || billingBusy !== null}
-                  loading={billingBusy === "portal"}
-                  onClick={async () => {
-                    setBillingBusy("portal");
-                    try {
-                      window.location.href = await openBillingPortal();
-                    } catch (e: unknown) {
-                      setStatus(e instanceof Error ? e.message : "Portal billing eșuat.");
-                      setBillingBusy(null);
-                    }
-                  }}
-                >
-                  {t("dash.manageBilling")}
-                </Button>
-              </div>
-              {!billingConfigured && (
-                <p className="mt-3 text-xs text-[var(--fp-text-muted)]">{t("dash.stripeMissing")}</p>
-              )}
-            </Card>
-          )}
-
-          {!tierQuotaExempt && (
-            <Card>
-              <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.trial24h")}</h2>
-              <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.trial24hSub")}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  disabled={trialBusy !== null || !!user?.premium_trial_activated_at || trialRemainingTime.ultraMs > 0}
-                  loading={trialBusy === "premium"}
-                  onClick={async () => {
-                    setTrialBusy("premium");
-                    try {
-                      await activate24hTrial("premium");
-                      setStatus("Trial Premium activat pentru 24h.");
-                    } catch (e: unknown) {
-                      setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Premium.");
-                    } finally {
-                      setTrialBusy(null);
-                    }
-                  }}
-                >
-                  {user?.premium_trial_activated_at
-                    ? t("dash.trialPremiumUsed")
-                    : trialRemainingTime.ultraMs > 0
-                      ? t("dash.trialUltraActive")
-                      : t("dash.trialActivatePremium")}
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={trialBusy !== null || !!user?.ultra_trial_activated_at || trialRemainingTime.premiumMs > 0}
-                  loading={trialBusy === "ultra"}
-                  onClick={async () => {
-                    setTrialBusy("ultra");
-                    try {
-                      await activate24hTrial("ultra");
-                      setStatus("Trial Ultra activat pentru 24h.");
-                    } catch (e: unknown) {
-                      setStatus(e instanceof Error ? e.message : "Nu am putut activa trial Ultra.");
-                    } finally {
-                      setTrialBusy(null);
-                    }
-                  }}
-                >
-                  {user?.ultra_trial_activated_at
-                    ? t("dash.trialUltraUsed")
-                    : trialRemainingTime.premiumMs > 0
-                      ? t("dash.trialPremiumActive")
-                      : t("dash.trialActivateUltra")}
-                </Button>
-              </div>
-              {(trialRemainingTime.premiumMs > 0 || trialRemainingTime.ultraMs > 0) && (
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  {trialRemainingTime.premiumMs > 0 && (
-                    <Badge tone="accent">
-                      {t("dash.trialPremiumActive")}: {formatRemaining(trialRemainingTime.premiumMs)}
-                    </Badge>
-                  )}
-                  {trialRemainingTime.ultraMs > 0 && (
-                    <Badge tone="warning">
-                      {t("dash.trialUltraActive")}: {formatRemaining(trialRemainingTime.ultraMs)}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </Card>
-          )}
-
-          <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
-            {!tierQuotaExempt && (
-              <button
-                type="button"
-                onClick={() => document.getElementById("upgrade")?.scrollIntoView({ behavior: "smooth" })}
-                className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-              >
-                <span className="text-[var(--fp-accent)]">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="1" y="4" width="22" height="16" rx="2" />
-                    <line x1="1" y1="10" x2="23" y2="10" />
-                  </svg>
-                </span>
-                <span className="text-sm font-bold text-[var(--fp-text)]">{t("dash.subscription")}</span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="ml-auto text-[var(--fp-text-faint)]"
-                >
-                  <path d="m9 6 6 6-6 6" />
-                </svg>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                updateFilters({ matchesFilter: "favorites" });
-                handleNav("matches");
-              }}
-              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-            >
-              <span className="text-[var(--fp-accent)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                </svg>
-              </span>
-              <span className="text-sm font-bold text-[var(--fp-text)]">{t("dash.watchlist")}</span>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="ml-auto text-[var(--fp-text-faint)]"
-              >
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNav("statistics")}
-              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-            >
-              <span className="text-[var(--fp-accent)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="20" x2="12" y2="10" />
-                  <line x1="18" y1="20" x2="18" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="16" />
-                </svg>
-              </span>
-              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.statistics")}</span>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="ml-auto text-[var(--fp-text-faint)]"
-              >
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNav("notifications")}
-              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-            >
-              <span className="text-[var(--fp-accent)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-              </span>
-              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.notifications")}</span>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="ml-auto text-[var(--fp-text-faint)]"
-              >
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleNav("settings")}
-              className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-            >
-              <span className="text-[var(--fp-accent)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-                </svg>
-              </span>
-              <span className="text-sm font-bold text-[var(--fp-text)]">{t("nav.settings")}</span>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="ml-auto text-[var(--fp-text-faint)]"
-              >
-                <path d="m9 6 6 6-6 6" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"
-            >
-              <span className="text-[var(--fp-danger)]">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <path d="M16 17l5-5-5-5M21 12H9" />
-                </svg>
-              </span>
-              <span className="text-sm font-bold text-[var(--fp-danger)]">{t("dash.logout")}</span>
-            </button>
-          </div>
-        </section>
+        <ProfileView
+          user={user}
+          userTier={userTier}
+          isSubscriptionExpired={isSubscriptionExpired}
+          trialRemainingTime={trialRemainingTime}
+          tierQuotaExempt={tierQuotaExempt}
+          predictCountToday={predictCountToday}
+          predictLimitToday={predictLimitToday}
+          logout={logout}
+          activate24hTrial={activate24hTrial}
+          updateFilters={updateFilters}
+          setStatus={setStatus}
+          trialBusy={trialBusy}
+          setTrialBusy={setTrialBusy}
+          billingBusy={billingBusy}
+          setBillingBusy={setBillingBusy}
+          billingConfigured={billingConfigured}
+          formatRemaining={formatRemaining}
+          handleNav={handleNav}
+        />
       )}
 
       {navView === "settings" && (
-        <section className="space-y-6">
-          <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-              {t("dash.settingsTitle")}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("dash.settingsTitle")}</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">{t("dash.settingsSub")}</p>
-          </header>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.appearance")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              {t("dash.currentTheme", { theme: prefs.theme })}
-            </p>
-            <Button className="mt-3" variant="secondary" onClick={cycleTheme}>
-              {t("dash.changeTheme")}
-            </Button>
-          </Card>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.savedFilters")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              Confidence ≥ {prefs.minConfidence}% · EV ≥ {prefs.minEv}% · Best Value only:{" "}
-              {prefs.valueOnly ? t("dash.on") : t("dash.off")} · Settled:{" "}
-              {prefs.settledOnly ? t("dash.on") : t("dash.off")}
-            </p>
-            <p className="mt-2 text-xs text-[var(--fp-text-faint)]">{t("dash.savedFiltersSub")}</p>
-            <Button
-              className="mt-3"
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                updateFilters({
-                  minConfidence: 0,
-                  minEv: 0,
-                  valueOnly: false,
-                  settledOnly: false,
-                  matchSearch: "",
-                  matchesFilter: "all"
-                })
-              }
-            >
-              {t("dash.resetFilters")}
-            </Button>
-          </Card>
-
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.gdprTitle")}</h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">
-              {t("dash.gdprSub")} —{" "}
-              <Link to="/privacy" className="text-[var(--fp-accent)] underline">
-                {t("dash.privacyPolicy")}
-              </Link>
-              .
-            </p>
-            <Button className="mt-3" variant="secondary" loading={exportBusy} onClick={() => void downloadPersonalDataExport()}>
-              {t("dash.downloadExport")}
-            </Button>
-          </Card>
-
-          <Card>
-            <Button variant="danger" onClick={() => void logout()}>
-              {t("dash.logout")}
-            </Button>
-          </Card>
-        </section>
+        <SettingsView
+          prefs={prefs}
+          updateFilters={updateFilters}
+          logout={logout}
+          cycleTheme={cycleTheme}
+          downloadPersonalDataExport={downloadPersonalDataExport}
+          exportBusy={exportBusy}
+        />
       )}
 
       <PerformanceCounterModal
