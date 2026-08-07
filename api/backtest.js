@@ -27,6 +27,7 @@ import {
   computeHeadToHead,
   computeOurPerformance
 } from "../server-utils/backtest/benchmarkMetrics.js";
+import { loadMetaDataHealth } from "../server-utils/metaLearning/runMetaLearningRefresh.js";
 import { evaluateTipClvReport } from "../server-utils/validation/TipClvReport.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
@@ -863,6 +864,27 @@ async function handleBenchmarkAgreementRate(req, res) {
   return res.status(200).json({ ok: true, days: loaded.days, ...computeAgreementRate(loaded.events) });
 }
 
+/**
+ * Meta Learning & Benchmark Intelligence — Data Health (Sprint 1).
+ *
+ * Reports coverage and statistical POWER, never a performance verdict: with a ~10%
+ * comparability ceiling this is the view that tells an operator whether any future
+ * who-is-better claim is answerable yet. Read-only over the derived meta_* tables.
+ *
+ *   GET /api/backtest?view=meta-data-health&days=90
+ */
+async function handleMetaDataHealth(req, res) {
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed." });
+  const config = assertSupabaseConfigured();
+  if (!config.ok) return res.status(500).json({ ok: false, error: config.error });
+  const result = await loadMetaDataHealth({
+    days: req.query.days != null ? Number(req.query.days) : 90,
+    modelVersion: req.query.modelVersion || undefined
+  });
+  if (!result.ok) return res.status(500).json(result);
+  return res.status(200).json(result);
+}
+
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
   // Public track record is intentionally ungated (sanitized aggregates only) + rate-limited.
@@ -898,7 +920,9 @@ export default async function handler(req, res) {
     "benchmark-head-to-head",
     "benchmarkheadtohead",
     "benchmark-agreement-rate",
-    "benchmarkagreementrate"
+    "benchmarkagreementrate",
+    "meta-data-health",
+    "metadatahealth"
   ]);
   if (gatedViews.has(view) && !(await isAuthorizedForMetrics(req))) {
     return res.status(401).json({ ok: false, error: "Neautorizat. Autentificare admin sau cron necesară." });
@@ -920,6 +944,7 @@ export default async function handler(req, res) {
   if (view === "benchmark-agreement-rate" || view === "benchmarkagreementrate") {
     return handleBenchmarkAgreementRate(req, res);
   }
+  if (view === "meta-data-health" || view === "metadatahealth") return handleMetaDataHealth(req, res);
   return res.status(400).json({
     ok: false,
     error:

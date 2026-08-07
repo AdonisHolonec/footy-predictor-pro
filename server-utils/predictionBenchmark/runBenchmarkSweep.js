@@ -23,8 +23,22 @@ import { BENCHMARK_SCHEMA_VERSION } from "./normalizeApiFootballPrediction.js";
 const HISTORY_TABLE = "predictions_history";
 const BENCHMARK_TABLE = "prediction_benchmarks";
 
-const SWEEP_WINDOW_DAYS = Math.max(1, Math.min(Number(process.env.PREDICTION_BENCHMARK_SWEEP_WINDOW_DAYS || 3), 14));
-const SWEEP_BUDGET = Math.max(1, Math.min(Number(process.env.PREDICTION_BENCHMARK_SWEEP_BUDGET || 30), 200));
+const SWEEP_WINDOW_DAYS = Math.max(1, Math.min(Number(process.env.PREDICTION_BENCHMARK_SWEEP_WINDOW_DAYS || 7), 14));
+const SWEEP_BUDGET = Math.max(1, Math.min(Number(process.env.PREDICTION_BENCHMARK_SWEEP_BUDGET || 120), 200));
+
+/**
+ * The candidate query must over-fetch. Supabase applies `.limit()` BEFORE the
+ * already-benchmarked filter below, so capping candidates at SWEEP_BUDGET meant a
+ * window whose newest rows were all benchmarked produced zero fetches, while older
+ * unbenchmarked rows stayed permanently unreachable — the budget acted as a scan cap,
+ * not a fetch cap. Scan a multiple of the budget, then cap actual upstream fetches at
+ * SWEEP_BUDGET, so PREDICTION_BENCHMARK_SWEEP_BUDGET means "max upstream fetches per
+ * run" as its name implies. Raising the budget only increases accrual with this fix.
+ */
+const CANDIDATE_SCAN_MULTIPLIER = Math.max(
+  1,
+  Math.min(Number(process.env.PREDICTION_BENCHMARK_SCAN_MULTIPLIER || 6), 20)
+);
 const FIXTURE_TEAMS_TTL_SEC = 86400; // team ids for a given fixture never change — cache generously
 
 /** Resolves {homeTeamId, awayTeamId} for a fixture via the same cached /fixtures
@@ -71,7 +85,7 @@ export async function runBenchmarkSweep({ getWithCache }) {
     .gte("kickoff_at", cutoffIso)
     .not("recommended_pick", "is", null)
     .order("kickoff_at", { ascending: false })
-    .limit(SWEEP_BUDGET);
+    .limit(SWEEP_BUDGET * CANDIDATE_SCAN_MULTIPLIER);
 
   if (candidatesError) {
     return { ok: false, scanned: 0, fetched: 0, persisted: 0, errors: 1, error: candidatesError.message };
@@ -79,7 +93,10 @@ export async function runBenchmarkSweep({ getWithCache }) {
   const rows = candidates || [];
   if (rows.length === 0) return { ok: true, scanned: 0, fetched: 0, persisted: 0, errors: 0 };
 
-  const fixtureIds = rows.map((r) => Number(r.fixture_id)).filter((id) => Number.isFinite(id));
+  // Scoped by the same kickoff window rather than by an `.in(fixture_id, [...])` list:
+  // every benchmark row for a candidate carries that candidate's kickoff_at, so the
+  // window is an exact superset of the ids we care about — and it keeps the query string
+  // bounded now that the candidate scan can reach several hundred rows.
   const { data: existing } = await supabase
     .from(BENCHMARK_TABLE)
     .select("fixture_id")
@@ -89,10 +106,13 @@ export async function runBenchmarkSweep({ getWithCache }) {
     // already-benchmarked skip was a no-op and every sweep re-fetched the whole
     // window — roughly 3x the necessary upstream calls at the default 3-day window.
     .eq("schema_version", BENCHMARK_SCHEMA_VERSION)
-    .in("fixture_id", fixtureIds);
+    .gte("kickoff_at", cutoffIso)
+    .limit(20000);
   const alreadyBenchmarked = new Set((existing || []).map((r) => Number(r.fixture_id)));
 
-  const pending = rows.filter((r) => !alreadyBenchmarked.has(Number(r.fixture_id)));
+  // Budget is enforced here, on fetches — not on the scan above.
+  const unbenchmarked = rows.filter((r) => !alreadyBenchmarked.has(Number(r.fixture_id)));
+  const pending = unbenchmarked.slice(0, SWEEP_BUDGET);
 
   let fetched = 0;
   let errors = 0;
@@ -148,7 +168,21 @@ export async function runBenchmarkSweep({ getWithCache }) {
     persisted = persistResult.upserted;
   }
 
-  return { ok: true, scanned: rows.length, fetched, persisted, errors };
+  return {
+    ok: true,
+    scanned: rows.length,
+    unbenchmarked: unbenchmarked.length,
+    attempted: pending.length,
+    fetched,
+    persisted,
+    errors,
+    budget: SWEEP_BUDGET,
+    windowDays: SWEEP_WINDOW_DAYS,
+    // > 0 means the window holds more unbenchmarked fixtures than one run can fetch —
+    // accrual is budget-bound, which is the number the meta-learning Data Health panel
+    // uses to project days-to-minimum-support.
+    backlog: Math.max(0, unbenchmarked.length - pending.length)
+  };
 }
 
 export default { runBenchmarkSweep };

@@ -1,0 +1,23 @@
+{
+  "version": "lt-v1",
+  "description": "League quality tiers + season-start month for the meta-learning layer. ADDITIVE: leagueProfiles.config.json owns model priors (goal/draw/card frequencies) and is never modified by this layer. Override via META_LEAGUE_TIERS_JSON or META_LEAGUE_TIERS_PATH. seasonStartMonth (1-12) exists because BacktestAnalytics.seasonStartIso() hardcodes August, which is wrong for calendar-year competitions such as MLS - season-phase buckets would otherwise be meaningless for them. Only league ids already present in leagueProfiles.config.json are seeded here; every other league falls through to `default`. Tier assignment is an editorial judgement about which competitions are comparable, not a technical fact.",
+  "tiers": {
+    "1": "Top 5",
+    "2": "Top 10",
+    "3": "Rest"
+  },
+  "leagues": {
+    "39": { "tier": 1, "seasonStartMonth": 8, "name": "Premier League" },
+    "140": { "tier": 1, "seasonStartMonth": 8, "name": "La Liga" },
+    "135": { "tier": 1, "seasonStartMonth": 8, "name": "Serie A" },
+    "78": { "tier": 1, "seasonStartMonth": 8, "name": "Bundesliga" },
+    "61": { "tier": 1, "seasonStartMonth": 8, "name": "Ligue 1" },
+    "2": { "tier": 1, "seasonStartMonth": 9, "name": "Champions League" },
+    "3": { "tier": 2, "seasonStartMonth": 9, "name": "Europa League" },
+    "88": { "tier": 2, "seasonStartMonth": 8, "name": "Eredivisie" },
+    "848": { "tier": 3, "seasonStartMonth": 9, "name": "Conference League" },
+    "283": { "tier": 3, "seasonStartMonth": 7, "name": "Romania SuperLiga" },
+    "253": { "tier": 3, "seasonStartMonth": 2, "name": "MLS" }
+  },
+  "default": { "tier": 3, "seasonStartMonth": 8 }
+}
