@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { HealthDashboardBundle, OpsAlert } from "../../types";
 import { loadHealthDashboard } from "../../services/healthService";
+import HealthInsightGrid from "./HealthInsightGrid";
 import { StatTile, Button } from "../../design-system";
 import {
   Bar,
@@ -193,6 +194,10 @@ export default function HealthDashboard() {
               {bundle.checks.supabase.latencyMs != null ? ` ${bundle.checks.supabase.latencyMs}ms` : ""}
             </div>
           </div>
+
+          {/* Interpretation before measurement: the reading of the numbers precedes the
+              numbers themselves, so the page opens with an answer rather than a quiz. */}
+          <HealthInsightGrid bundle={bundle} />
 
           <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 lg:grid-cols-6">
             <StatTile
