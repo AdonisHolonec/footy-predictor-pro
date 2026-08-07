@@ -13,6 +13,7 @@ import {
   resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
+import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
@@ -760,6 +761,10 @@ async function handleHistorySync(req, res) {
     settlement.recommendedStillPending =
       settlement.recommendedPendingBefore - settlement.recommendedSettledNow;
     settlement.recommendedStatsCalls = recommendedStatsCalls;
+
+    // Persist the run so `recommendedStillPending` becomes a trend instead of a number
+    // that only ever existed in one HTTP response. Never blocks the sync.
+    void recordSyncRun(SYNC_KINDS.SETTLEMENT, settlement);
 
     if (cardUpdates.length > 0) {
       const { error: cardWriteErr } = await supabase
