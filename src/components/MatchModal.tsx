@@ -30,6 +30,7 @@ import {
   specialBetLiveAdjustmentBadge
 } from "../utils/specialBet";
 import { matchingMarketOdd, shotsDisplayOdd, deriveAlignedOuPick } from "../utils/marketPicks";
+import { resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
 import { fetchWithAuth } from "../utils/apiAuth";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
 import MatchDecisionBlock, { type BenchmarkConsensus } from "./matchModal/MatchDecisionBlock";
@@ -488,7 +489,15 @@ function isFinalStatus(status?: string) {
   return ["FT", "AET", "PEN"].includes(status || "");
 }
 
-function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
+/**
+ * Grades ONLY the fixed-family rows of the predictions table (1X2, BTTS, goals Over 2.5),
+ * where the market is known by construction and the final score settles it.
+ *
+ * MUST NOT be used for `recommended.pick`: that pick's family is not knowable client-side,
+ * and grading it here is what produced the P0 where a Corners "Over 7.5" was settled against
+ * goals scored. The recommended verdict comes from the server via cardMarketValidations.
+ */
+function evaluateScoreDerivedPick(pick: string, score?: MatchScore): boolean | null {
   if (!pick || !score) return null;
   if (score.home === null || score.away === null) return null;
   const home = score.home;
@@ -864,7 +873,11 @@ export default function MatchModal({
     hasNumericScore &&
     !hasFinalScore &&
     (isFixtureInPlay(match.status) || (pastKickoffPollWindow && !isFinalStatus(match.status)));
-  const finalPickResult = hasFinalScore ? evaluateTopPick(match.recommended.pick, match.score) : null;
+  // Recommended settlement is server-resolved only — never regraded here (see
+  // resolveCardMarketOutcome). Renders the persisted verdict, or neutral when still pending.
+  const recommendedOutcome = resolveCardMarketOutcome("recommended", match);
+  const finalPickResult =
+    recommendedOutcome === "win" ? true : recommendedOutcome === "loss" ? false : null;
   const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, tr);
   const kickoffDate = new Date(match.kickoff);
   const hasExactConfidence =
@@ -1600,13 +1613,13 @@ export default function MatchModal({
                 ).length;
 
                 const oneXtwoOutcome = hasFinalScore
-                  ? evaluateTopPick(oneXtwoPick, match.score)
+                  ? evaluateScoreDerivedPick(oneXtwoPick, match.score)
                   : null;
                 const ggOutcome = hasFinalScore
-                  ? evaluateTopPick(match.predictions.gg, match.score)
+                  ? evaluateScoreDerivedPick(match.predictions.gg, match.score)
                   : null;
                 const over25Outcome = hasFinalScore
-                  ? evaluateTopPick(match.predictions.over25, match.score)
+                  ? evaluateScoreDerivedPick(match.predictions.over25, match.score)
                   : null;
 
                 return (
