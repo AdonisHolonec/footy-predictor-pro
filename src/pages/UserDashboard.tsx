@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import LeaguePanel from "../components/LeaguePanel";
-import MatchModal from "../components/MatchModal";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
@@ -40,11 +39,20 @@ import Tooltip from "../design-system/Tooltip";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import { useLocale } from "../context/LocaleContext";
 
-const PredictionLaboratoryPanel = lazy(() => import("../components/PredictionLaboratory"));
+// Statically imported ON PURPOSE: MatchCard / FeaturedPredictionCard anchor these
+// three with static imports, so a lazy() here was theater — the bundler kept them
+// in this chunk anyway and the build flagged INEFFECTIVE_DYNAMIC_IMPORT. Honest
+// static imports until the Sprint 7 card refactor moves the anchors.
+import PredictionLaboratoryPanel from "../components/PredictionLaboratory";
+import FeatureImportanceChart from "../components/FeatureImportanceChart";
+import PredictionContributionsChart from "../components/PredictionContributionsChart";
+
+// The modal is the keystone split: it renders only when a match is opened, it is
+// imported nowhere else, and five heavy panels ride in its static subtree. Making
+// it lazy is what lets the panel splits below actually take effect.
+const MatchModal = lazy(() => import("../components/MatchModal"));
 const MonteCarloPanel = lazy(() => import("../components/MonteCarloPanel"));
-const FeatureImportanceChart = lazy(() => import("../components/FeatureImportanceChart"));
 const ConfidenceEnginePanel = lazy(() => import("../components/ConfidenceEnginePanel"));
-const PredictionContributionsChart = lazy(() => import("../components/PredictionContributionsChart"));
 const TrackRecordSection = lazy(() =>
   import("../components/TrackRecordSection").then((m) => ({ default: m.default }))
 );
@@ -1861,16 +1869,20 @@ export default function UserDashboard() {
         leagueTableHeading="Predicțiile tale · pe ligă (ultimele 30 zile)"
       />
       {selectedMatch && (
-        <MatchModal
-          match={selectedMatch}
-          logoColors={{}}
-          hashColor={hashColor}
-          canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
-          accessTier={userTier}
-          presentation="focus"
-          onClose={() => setSelectedMatch(null)}
-          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-        />
+        // Null fallback: the first open pays one cached network roundtrip; a
+        // spinner for that beat would flash more than it informs.
+        <Suspense fallback={null}>
+          <MatchModal
+            match={selectedMatch}
+            logoColors={{}}
+            hashColor={hashColor}
+            canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+            accessTier={userTier}
+            presentation="focus"
+            onClose={() => setSelectedMatch(null)}
+            onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+          />
+        </Suspense>
       )}
       <UpgradePrompt
         open={Boolean(upgradePrompt)}
