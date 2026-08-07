@@ -12,8 +12,9 @@ import ValueCard from "./ValueCard";
 import ExplanationCard from "./ExplanationCard";
 import FeatureImportanceChart from "./FeatureImportanceChart";
 import PredictionLaboratoryPanel from "./PredictionLaboratory";
-import { MatchScore, PredictionRow } from "../types";
+import { PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
+import { resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
 import {
   listSpecialBetCandidates,
   pickSpecialBetLegs,
@@ -53,29 +54,6 @@ function formatLiveMinute(minute?: number | null, extra?: number | null): string
   if (minute == null || !Number.isFinite(Number(minute))) return null;
   const m = Number(minute);
   return extra != null && Number.isFinite(Number(extra)) && Number(extra) > 0 ? `${m}+${Number(extra)}'` : `${m}'`;
-}
-
-function evaluateTopPick(pick: string, score?: MatchScore): boolean | null {
-  if (!pick || !score) return null;
-  if (score.home === null || score.away === null) return null;
-  const home = score.home;
-  const away = score.away;
-  const total = home + away;
-  const normalized = pick.trim().toLowerCase();
-
-  if (normalized === "1") return home > away;
-  if (normalized === "2") return away > home;
-  if (normalized === "x") return home === away;
-  if (normalized === "gg") return home > 0 && away > 0;
-  if (normalized === "ngg") return home === 0 || away === 0;
-
-  const overMatch = normalized.match(/peste\s*(\d+(?:[.,]\d+)?)/);
-  if (overMatch) return total > Number(overMatch[1].replace(",", "."));
-
-  const underMatch = normalized.match(/sub\s*(\d+(?:[.,]\d+)?)/);
-  if (underMatch) return total < Number(underMatch[1].replace(",", "."));
-
-  return null;
 }
 
 function deriveRecommendedOdd(row: PredictionRow): number | null {
@@ -234,7 +212,11 @@ export default function MatchCard({
     row.score?.away !== null &&
     row.score?.home !== undefined &&
     row.score?.away !== undefined;
-  const finalPickResult = hasFinalScore ? evaluateTopPick(row.recommended.pick, row.score) : null;
+  // Recommended settlement is server-resolved only (see resolveCardMarketOutcome) — the
+  // pick's market family is not knowable here, so we render the persisted verdict or nothing.
+  const recommendedOutcome = resolveCardMarketOutcome("recommended", row);
+  const finalPickResult =
+    recommendedOutcome === "win" ? true : recommendedOutcome === "loss" ? false : null;
   const hasNumericScore =
     row.score != null && typeof row.score.home === "number" && typeof row.score.away === "number";
   const koMs = new Date(row.kickoff).getTime();
