@@ -17,3 +17,7 @@ graphify-out/
 .claude/skills/
 .claude/settings.json
 ui-ux-pro-max-skill/
+
+# Playwright artifacts (E2E smoke)
+test-results/
+playwright-report/

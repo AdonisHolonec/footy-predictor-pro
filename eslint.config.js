@@ -64,5 +64,15 @@ export default [
     languageOptions: {
       globals: { ...globals.node }
     }
+  },
+  {
+    // E2E specs and the Playwright config run under Node but are TS files
+    // outside src/, so they get node globals with no-undef kept ON — unlike
+    // src/**, they are not covered by the tsc typecheck project, so the rule
+    // still has real work to do here.
+    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    languageOptions: {
+      globals: { ...globals.node }
+    }
   }
 ];

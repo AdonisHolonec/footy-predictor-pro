@@ -1,0 +1,51 @@
+name: E2E Smoke
+
+# Deliberately a SEPARATE, non-required workflow in its first iteration: a
+# flaky browser test must earn the right to block merges. Promotion path: once
+# it has run quietly for a while, add it to branch protection.
+#
+# Runs against production (the deployed default in playwright.config.ts)
+# because preview deployments sit behind Vercel deployment protection. The
+# smoke is read-mostly by design: predict hits the warm cache, billing stops
+# at the checkout-session response and never completes a payment.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke suite
+        env:
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+        run: npx playwright test
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
