@@ -14,6 +14,7 @@ const DiagnosticsDashboard = lazy(() => import("../monitoring/DiagnosticsDashboa
 const ModelLabPanel = lazy(() => import("../modelLab/ModelLabPanel"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 const BenchmarkPanel = lazy(() => import("../admin/BenchmarkPanel"));
+const MetaDataHealthPanel = lazy(() => import("../admin/MetaDataHealthPanel"));
 
 type TrackerProps = {
   stats: HistoryStats;
@@ -135,6 +136,11 @@ export default function PerformancePanel({
         {section === "benchmark" && (
           <Suspense fallback={<LabFallback label="Benchmark" />}>
             <BenchmarkPanel />
+          </Suspense>
+        )}
+        {section === "meta-learning" && (
+          <Suspense fallback={<LabFallback label="Meta Learning" />}>
+            <MetaDataHealthPanel />
           </Suspense>
         )}
         {section === "health" && (

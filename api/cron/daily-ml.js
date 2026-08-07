@@ -2,6 +2,7 @@ import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronReques
 import { getSupabaseAdmin, assertSupabaseConfigured } from "../../server-utils/supabaseAdmin.js";
 import { getWithCache } from "../../server-utils/fetcher.js";
 import { runBenchmarkSweep } from "../../server-utils/predictionBenchmark/runBenchmarkSweep.js";
+import { runMetaLearningRefresh } from "../../server-utils/metaLearning/runMetaLearningRefresh.js";
 import {
   fitIsotonicPav,
   applyIsotonicMap,
@@ -418,6 +419,32 @@ export default async function handler(req, res) {
       // Never throw past the cron boundary — log-and-continue, same convention as Stage10Persistence.js.
       logError("cron.prediction_benchmark_sweep_failed", { error: err?.message || String(err) });
       return res.status(200).json({ ok: false, mode, error: err?.message || "sweep_failed" });
+    }
+  }
+
+  // Meta-learning ETL — read-only projection of predictions_history +
+  // prediction_benchmarks into the derived meta_* tables. No ML training, no upstream
+  // API calls (so it cannot contend with apiBudgetCircuit.js), and nothing it writes is
+  // ever read by PredictorV3 or the Recommendation Engine. Folded here rather than given
+  // its own endpoint for the Hobby serverless function limit.
+  if (mode === "meta-learning-refresh" || mode === "meta_learning_refresh" || mode === "meta-refresh") {
+    try {
+      const result = await runMetaLearningRefresh({
+        modelVersion: req.query.modelVersion || undefined,
+        windowDays: req.query.windowDays != null ? Number(req.query.windowDays) : undefined,
+        dryRun: String(req.query.dryRun || "") === "1"
+      });
+      logInfo("cron.meta_learning_refresh", {
+        ok: result.ok,
+        selections: result.selections ?? null,
+        comparabilityPct: result.health?.coverage?.comparabilityPct ?? null,
+        readiness: result.health?.power?.readiness ?? null
+      });
+      return res.status(200).json({ ok: result.ok !== false, mode, ...result });
+    } catch (err) {
+      // Never throw past the cron boundary — same convention as the benchmark sweep.
+      logError("cron.meta_learning_refresh_failed", { error: err?.message || String(err) });
+      return res.status(200).json({ ok: false, mode, error: err?.message || "meta_refresh_failed" });
     }
   }
 
