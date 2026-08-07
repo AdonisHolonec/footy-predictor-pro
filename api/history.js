@@ -71,6 +71,28 @@ async function fetchFixtureMarketTotals(fixtureId) {
 
 const HISTORY_TABLE = "predictions_history";
 
+/**
+ * predictions_history rows carry a raw_payload measuring ~134KB at the median, so a
+ * single upsert across the cron's 45-day window reaches ~29MB in one statement. Postgres
+ * cancels it ("canceling statement due to statement timeout"), the handler throws, and
+ * settlement never finishes — which is why finished fixtures sat ungraded for days.
+ *
+ * Same rows, same onConflict, same result: only split into bounded statements. Rows that
+ * carry raw_payload get a small chunk; scalar-only updates batch far wider.
+ */
+const UPSERT_CHUNK_PAYLOAD = Math.max(1, Math.min(Number(process.env.HISTORY_SYNC_UPSERT_CHUNK || 25), 200));
+const UPSERT_CHUNK_SCALAR = Math.max(1, Math.min(Number(process.env.HISTORY_SYNC_UPSERT_CHUNK_SCALAR || 200), 1000));
+
+export async function upsertHistoryChunked(supabase, rows, chunkSize) {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const { error } = await supabase
+      .from(HISTORY_TABLE)
+      .upsert(rows.slice(i, i + chunkSize), { onConflict: "fixture_id" });
+    if (error) throw error;
+  }
+  return rows.length;
+}
+
 async function isAuthorizedHistorySync(req) {
   // P0: history sync burns API-Football — cron or admin only (not any JWT).
   if (isAuthorizedCronOrInternalRequest(req)) return true;
@@ -503,8 +525,7 @@ async function handleHistorySync(req, res) {
     }
 
     if (updates.length > 0) {
-      const { error: updateError } = await supabase.from(HISTORY_TABLE).upsert(updates, { onConflict: "fixture_id" });
-      if (updateError) throw updateError;
+      await upsertHistoryChunked(supabase, updates, UPSERT_CHUNK_PAYLOAD);
     }
 
     // DB-only pass: grade multi-market value bets on already-finished rows
@@ -559,11 +580,8 @@ async function handleHistorySync(req, res) {
       if (page.length < scanChunkSize) break;
     }
     if (resettleUpdates.length > 0) {
-      const { error: resettleWriteErr } = await supabase
-        .from(HISTORY_TABLE)
-        .upsert(resettleUpdates, { onConflict: "fixture_id" });
-      if (resettleWriteErr) throw resettleWriteErr;
-      resettled = resettleUpdates.length;
+      // Scalar columns only — no raw_payload, so these batch far wider.
+      resettled = await upsertHistoryChunked(supabase, resettleUpdates, UPSERT_CHUNK_SCALAR);
     }
 
     // Resettle card markets (goals / corners / shots) on finished rows.
@@ -767,11 +785,7 @@ async function handleHistorySync(req, res) {
     void recordSyncRun(SYNC_KINDS.SETTLEMENT, settlement);
 
     if (cardUpdates.length > 0) {
-      const { error: cardWriteErr } = await supabase
-        .from(HISTORY_TABLE)
-        .upsert(cardUpdates, { onConflict: "fixture_id" });
-      if (cardWriteErr) throw cardWriteErr;
-      cardResettled = cardUpdates.length;
+      cardResettled = await upsertHistoryChunked(supabase, cardUpdates, UPSERT_CHUNK_PAYLOAD);
     }
 
     const updatedTotal = updates.length + resettled + cardResettled;
