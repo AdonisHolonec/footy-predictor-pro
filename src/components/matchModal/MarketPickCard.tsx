@@ -3,7 +3,7 @@
  */
 
 import { useLocale } from "../../context/LocaleContext";
-import type { MarketTierInfo, PredictionRow } from "../../types";
+import type { MarketTierInfo } from "../../types";
 import { tierBadgeLabel, tierToneClass } from "./helpers";
 
 export default function MarketPickCard({
@@ -74,5 +74,4 @@ export default function MarketPickCard({
     </div>
   );
 }
-
 
