@@ -39,11 +39,10 @@ import Tooltip from "../design-system/Tooltip";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import { useLocale } from "../context/LocaleContext";
 
-// Statically imported ON PURPOSE: MatchCard / FeaturedPredictionCard anchor these
-// three with static imports, so a lazy() here was theater — the bundler kept them
-// in this chunk anyway and the build flagged INEFFECTIVE_DYNAMIC_IMPORT. Honest
-// static imports until the Sprint 7 card refactor moves the anchors.
-import PredictionLaboratoryPanel from "../components/PredictionLaboratory";
+// FeatureImportanceChart / PredictionContributionsChart rămân statice: sunt SVG
+// custom fără recharts, iar MatchCard le ancorează oricum static în acest chunk.
+// PredictionLaboratory (singura muchie către chunk-ul recharts de ~370 kB) e
+// lazy și aici și în MatchCard, deci split-ul chiar are efect de data asta.
 import FeatureImportanceChart from "../components/FeatureImportanceChart";
 import PredictionContributionsChart from "../components/PredictionContributionsChart";
 
@@ -51,6 +50,7 @@ import PredictionContributionsChart from "../components/PredictionContributionsC
 // imported nowhere else, and five heavy panels ride in its static subtree. Making
 // it lazy is what lets the panel splits below actually take effect.
 const MatchModal = lazy(() => import("../components/MatchModal"));
+const PredictionLaboratoryPanel = lazy(() => import("../components/PredictionLaboratory"));
 const MonteCarloPanel = lazy(() => import("../components/MonteCarloPanel"));
 const ConfidenceEnginePanel = lazy(() => import("../components/ConfidenceEnginePanel"));
 const TrackRecordSection = lazy(() =>
