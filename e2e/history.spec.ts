@@ -4,10 +4,14 @@ import { hasCreds, loginViaUi } from "./helpers";
 test.describe("history", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
-  test("the history section opens and shows entries or an honest empty state", async ({ page }) => {
+  test("the history section renders entries or an honest empty state", async ({ page }) => {
     await loginViaUi(page);
 
-    await page.getByText("Istoric", { exact: false }).first().click();
+    // The board's "Istoric & Încredere" block exposes an "Istoric" control —
+    // that is the user's route into their history.
+    const historyButton = page.getByRole("button", { name: "Istoric", exact: true }).first();
+    await historyButton.scrollIntoViewIfNeeded();
+    await historyButton.click();
 
     // Entries or a real empty state are both correct products of a working
     // flow; an error banner is not.

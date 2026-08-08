@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { hasCreds, loginViaUi } from "./helpers";
+import { hasCreds, loginViaUi, predictButton } from "./helpers";
 
 test.describe("predict flow", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
@@ -11,7 +11,7 @@ test.describe("predict flow", () => {
       (r) => r.url().includes("/api/predict") || r.url().includes("/api/warm"),
       { timeout: 60_000 }
     );
-    await page.getByRole("button", { name: /^predict/i }).first().click();
+    await predictButton(page).click();
     const response = await responsePromise;
 
     // The warm cron pre-heats the visible day, so a healthy run is served from
@@ -20,7 +20,7 @@ test.describe("predict flow", () => {
     // a blank screen is the failure.
     if (response.ok()) {
       await expect(
-        page.getByText(/vs|încredere|cotă|nicio predicție|niciun meci/i).first()
+        page.getByText(/vs|încredere|cotă|nicio predicție|niciun meci|lipsă meciuri/i).first()
       ).toBeVisible({ timeout: 30_000 });
     } else {
       await expect(page.getByText(/limit|cotă|încearcă|upgrade/i).first()).toBeVisible({
