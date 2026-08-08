@@ -166,7 +166,7 @@ export default function Login() {
             className="mt-4 h-28 w-28 rounded-2xl border-2 border-cyan-300/65 object-contain p-1 brightness-110 saturate-150 shadow-[0_0_44px_rgba(34,211,238,0.5)] animate-[pulse_4s_ease-in-out_infinite] motion-reduce:animate-none sm:h-36 sm:w-36"
           />
           <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.18] bg-[var(--fp-bg-card)]/68 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-[24px] sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
-            <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-[5rem]">
+            <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-7xl">
               <span className="relative inline-block">
                 <span
                   className="absolute inset-0 z-0 text-transparent opacity-75 blur-[1px]"
@@ -175,8 +175,8 @@ export default function Login() {
                 >
                   Footy Predictor
                 </span>
-                <span className="relative z-10 bg-gradient-to-r from-[var(--fp-text)] via-[var(--fp-accent)] to-[var(--fp-success)] bg-clip-text text-transparent drop-shadow-[0_0_26px_rgba(56,189,248,0.34)]">
-                  Footy Predictor
+                <span className="relative z-10 text-[var(--fp-text)] drop-shadow-[0_0_26px_rgba(56,189,248,0.34)]">
+                  Footy <span className="text-[var(--fp-accent)]">Predictor</span>
                 </span>
               </span>
             </h1>
