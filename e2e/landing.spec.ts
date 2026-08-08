@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 /** Public surface — runs with no credentials at all. */
+// The shared storage state would land these on the workspace; the public
+// site is only reachable logged out.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test("landing page renders the product, pricing and auth entry", async ({ page }) => {
   await page.goto("/");

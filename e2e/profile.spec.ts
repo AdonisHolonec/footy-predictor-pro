@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { CREDS, hasCreds, loginViaUi, openProfile } from "./helpers";
+import { CREDS, gotoWorkspace, hasCreds, openProfile } from "./helpers";
 
 test.describe("profile & account surface", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
   test("the shell shows the logged-in identity and the free tier", async ({ page }) => {
-    await loginViaUi(page);
+    await gotoWorkspace(page);
 
     // The shell surfaces who is logged in and on what plan — the two facts a
     // user needs to trust the workspace is really theirs.
@@ -14,7 +14,7 @@ test.describe("profile & account surface", () => {
   });
 
   test("the profile view exposes the subscription surface with both paid plans", async ({ page }) => {
-    await loginViaUi(page);
+    await gotoWorkspace(page);
     await openProfile(page);
 
     await expect(page.getByRole("heading", { name: /abonament/i }).first()).toBeVisible({

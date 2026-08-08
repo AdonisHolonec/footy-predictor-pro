@@ -27,5 +27,25 @@ export default defineConfig({
     locale: "ro-RO",
     viewport: { width: 1366, height: 900 }
   },
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }]
+  projects: [
+    // One real UI login per account per run (auth.setup.ts); every spec then
+    // reuses the saved storage state — off Supabase's password-login rate
+    // limit and ~3× faster than per-test logins.
+    { name: "setup", testMatch: /.*\.setup\.ts/ },
+    {
+      name: "chromium",
+      dependencies: ["setup"],
+      testIgnore: /auth\.spec\.ts/,
+      use: { browserName: "chromium", storageState: "e2e/.auth/user.json" }
+    },
+    {
+      // The logout journey MUST run last: Supabase signOut revokes ALL of the
+      // account's sessions (global scope), which would kill the shared storage
+      // state for every spec scheduled after it.
+      name: "auth-journey",
+      dependencies: ["chromium"],
+      testMatch: /auth\.spec\.ts/,
+      use: { browserName: "chromium" }
+    }
+  ]
 });

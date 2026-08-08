@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { hasCreds, loginViaUi, openProfile } from "./helpers";
+import { gotoWorkspace, hasCreds, openProfile } from "./helpers";
 
 test.describe("billing", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
   test("the upgrade path reaches Stripe checkout — and stops there", async ({ page }) => {
-    await loginViaUi(page);
+    await gotoWorkspace(page);
 
     // The upgrade surface lives in the profile view (👤).
     await openProfile(page);

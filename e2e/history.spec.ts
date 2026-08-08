@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { hasCreds, loginViaUi } from "./helpers";
+import { gotoWorkspace, hasCreds } from "./helpers";
 
 test.describe("history", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
   test("the history section renders entries or an honest empty state", async ({ page }) => {
-    await loginViaUi(page);
+    await gotoWorkspace(page);
 
     // The board's "Istoric & Încredere" block exposes an "Istoric" control —
     // that is the user's route into their history.
