@@ -83,7 +83,7 @@ export default async function handler(req, res) {
     }
 
     if (!(await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail))) {
-      let effectiveTier = USER_TIERS.FREE;
+      let effectiveTier;
       try {
         const sb = getSupabaseAdmin();
         const { data: profile } = await sb

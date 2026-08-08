@@ -66,7 +66,7 @@ test("evaluateWalkForward aggregates fold metrics", () => {
   const out = evaluateWalkForward(
     samples,
     (train) => ({ n: train.length }),
-    (model, test) => ({
+    (model) => ({
       logLoss: 0.5,
       brier: 0.2,
       accuracy: 0.55,

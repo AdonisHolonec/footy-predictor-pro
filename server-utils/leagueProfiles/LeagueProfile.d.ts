@@ -25,14 +25,14 @@ export interface LeagueProfile extends LeagueProfileRates {
   fromCatalog?: boolean;
 }
 
-export declare function loadLeagueProfilesConfig(...args: any[]): any;
-export declare function invalidateLeagueProfilesCache(...args: any[]): any;
-export declare function getLeagueProfile(...args: any[]): LeagueProfile;
-export declare function getLeagueProfileSnapshot(...args: any[]): any;
-export declare function resolveLeagueParams(...args: any[]): any;
-export declare function profileToLeagueParams(...args: any[]): any;
-export declare function rhoFromDrawFrequency(...args: any[]): number;
-export declare function splitGoalAverages(...args: any[]): any;
-export declare function listConfiguredLeagueIds(...args: any[]): any;
-export declare function applyLeagueMarketPriors(...args: any[]): any;
+export declare function loadLeagueProfilesConfig(...args: unknown[]): unknown;
+export declare function invalidateLeagueProfilesCache(...args: unknown[]): unknown;
+export declare function getLeagueProfile(...args: unknown[]): LeagueProfile;
+export declare function getLeagueProfileSnapshot(...args: unknown[]): unknown;
+export declare function resolveLeagueParams(...args: unknown[]): unknown;
+export declare function profileToLeagueParams(...args: unknown[]): unknown;
+export declare function rhoFromDrawFrequency(...args: unknown[]): number;
+export declare function splitGoalAverages(...args: unknown[]): unknown;
+export declare function listConfiguredLeagueIds(...args: unknown[]): unknown;
+export declare function applyLeagueMarketPriors(...args: unknown[]): unknown;
 export declare const PROFILE_RATE_KEYS: readonly string[];

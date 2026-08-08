@@ -46,7 +46,7 @@ export function loadLeagueProfilesConfig(force = false) {
   const now = Date.now();
   if (!force && cached.config && now - cached.loadedAt < 30_000) return cached.config;
 
-  let config = null;
+  let config;
   const inline = typeof process !== "undefined" ? process.env?.LEAGUE_PROFILES_JSON : undefined;
   if (inline && String(inline).trim()) {
     config = JSON.parse(inline);

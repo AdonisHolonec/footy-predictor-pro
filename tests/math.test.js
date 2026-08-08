@@ -900,7 +900,6 @@ test("evaluateStackerWalkForward runs genuine out-of-sample folds on a larger da
 
 test("evaluateStackerWalkForward never scores a fold on data that trained it (chronology holds)", () => {
   const samples = makeStackerSamples(500);
-  const nFeatures = samples[0].x.length;
   // Reuse the same chronological-fold primitive CalibrationSelector relies on —
   // this asserts evaluateStackerWalkForward is actually built on it, not a
   // reimplementation that could silently leak future data into training.

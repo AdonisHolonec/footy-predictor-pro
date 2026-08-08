@@ -16,7 +16,7 @@
  * - Global fallback: fit pe tot pool-ul.
  */
 import { createClient } from "@supabase/supabase-js";
-import { extractStackerFeatures, applyStacker, trainSoftmax, computeStackerMetrics } from "../server-utils/mlStacker.js";
+import { extractStackerFeatures, trainSoftmax, computeStackerMetrics } from "../server-utils/mlStacker.js";
 import { evaluateStackerWalkForward } from "../server-utils/validation/StackerWalkForward.js";
 import { shinImpliedProbs } from "../server-utils/advancedMath.js";
 import { actual1x2FromScore, brier1x2, logLoss1x2 } from "../server-utils/probabilityMetrics.js";

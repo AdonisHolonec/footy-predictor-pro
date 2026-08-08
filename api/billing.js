@@ -65,7 +65,7 @@ function parseBody(req) {
   return body && typeof body === "object" ? body : {};
 }
 
-function appOrigin(_req) {
+function appOrigin() {
   const resolved = resolveTrustedAppOrigin(null, { purpose: "billing_redirect" });
   if (resolved.ok) return resolved.origin;
   // Last-resort documented production hostname (never request Host).
@@ -115,7 +115,7 @@ async function handleCheckout(req, res) {
 
   // App 24h trials must never block paid Checkout.
   const stripe = getStripe();
-  const origin = appOrigin(req);
+  const origin = appOrigin();
   const customerId = await ensureStripeCustomer({
     userId: requester.user.id,
     email: requester.user.email,
@@ -195,7 +195,7 @@ async function handlePortal(req, res) {
   }
 
   const stripe = getStripe();
-  const origin = appOrigin(req);
+  const origin = appOrigin();
   const portal = await stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url: `${origin}/workspace?billing=portal`

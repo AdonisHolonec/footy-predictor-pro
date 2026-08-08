@@ -15,5 +15,5 @@ export interface PredictionExplanationResult {
   reasoning: string[];
 }
 
-export declare function buildPredictionExplanation(...args: any[]): PredictionExplanationResult;
-export declare const PredictionExplanation: any;
+export declare function buildPredictionExplanation(...args: unknown[]): PredictionExplanationResult;
+export declare const PredictionExplanation: unknown;

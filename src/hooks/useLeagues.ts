@@ -69,8 +69,8 @@ export function useLeagues({
             ? `OK: ${aggregated.totalFixtures} meciuri pentru ${effectiveDates.length} zi(le).`
             : "Lipsă meciuri."
         );
-      } catch (e: any) {
-        setStatus(`Eroare: ${e.message}`);
+      } catch (e) {
+        setStatus(`Eroare: ${(e as Error).message}`);
       }
     },
     [date, setStatus]
@@ -99,6 +99,7 @@ export function useLeagues({
       return;
     }
     void fetchDays(normalized);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch is deliberately keyed to date/selection; fetchDays/setSelectedDates identities would add render-driven refetches
   }, [date, selectedDates]);
 
   useEffect(() => {
@@ -127,6 +128,7 @@ export function useLeagues({
       });
     }, 450);
     return () => clearTimeout(saveTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced save is keyed to user.id + selection; whole `user` object identity (token refresh) must not re-trigger writes
   }, [user?.id, selectedLeagueIds, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
 
   const selectedSet = new Set(selectedLeagueIds);

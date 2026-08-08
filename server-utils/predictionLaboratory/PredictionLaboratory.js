@@ -161,7 +161,7 @@ function expectedValueScore(row) {
 function bookmakerDifference(row) {
   const pick = String(row?.recommended?.pick || "").trim().toLowerCase();
   let modelPct = null;
-  let impliedPct = null;
+  let impliedPct;
   let odd = num(row?.recommended?.odd, null);
 
   if (pick === "1") {

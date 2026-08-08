@@ -4,15 +4,11 @@ import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
 /**
- * Deliberately narrow rule set for a first ESLint pass on a codebase that has
- * never been linted before. `no-unused-vars` alone produces 600+ hits (mostly
- * server-utils/pipeline/stages/*, which import a shared ~90-line dependency
- * list per stage regardless of use — a known, separately-tracked cleanup, not
- * something to force through a lint gate). Rather than block CI on a wall of
- * pre-existing noise, only rules that have demonstrated real bug-catching
- * value here are errors; everything else reports as a warning so it's visible
- * without breaking builds. Tighten this incrementally as the noisy rules get
- * addressed on their own schedule.
+ * The 2026-08 lint-zero pass cleared the historical warning backlog (695 → 0:
+ * stage-file import/local cleanup, dead stores, catch-any typing), so every
+ * enabled rule now runs at error severity and `npm run lint` gates with
+ * --max-warnings 0. Add new rules at "warn" first only while burning down
+ * their findings, then promote.
  *
  * no-constant-binary-expression is not a stylistic pick: it's what caught a
  * live bug in AutoCalibrationEngine.js where `Number(x) ?? DEFAULT` silently
@@ -48,11 +44,15 @@ export default [
       "no-undef": "error",
       "no-constant-binary-expression": "error",
 
-      "@typescript-eslint/no-unused-vars": "warn",
-      "no-useless-assignment": "warn",
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-expressions": "warn",
-      "no-unused-expressions": "warn"
+      // Underscore prefixes and rest-sibling omission are the deliberate
+      // "intentionally unused" convention this codebase already follows
+      // (interface params, JSDoc'd stubs, { omitted, ...rest } destructuring) —
+      // the options below are the typescript-eslint-documented way to encode it.
+      "@typescript-eslint/no-unused-vars": ["error", { args: "after-used", argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_", ignoreRestSiblings: true }],
+      "no-useless-assignment": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-expressions": "error",
+      "no-unused-expressions": "error"
     }
   },
   {

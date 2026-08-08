@@ -176,7 +176,6 @@ export function shinImpliedProbs(homeOdd, drawOdd, awayOdd) {
     }
     if (fLo * fMid < 0) {
       hi = mid;
-      fHi = fMid;
     } else {
       lo = mid;
       fLo = fMid;

@@ -3,88 +3,10 @@
  * P4: hydrate / late xG moved to Stage04 (finalizeLambdasWithRollingXg) before Poisson.
  */
 
-import { getWithCache } from "../../fetcher.js";
-import {
-  computeMatchProbs,
-  clampLambda,
-  extractFormMultiplier,
-  extractAdvancedGoalsAverages,
-  extractFirstHalfFractions,
-  deriveFirstHalfLambdas,
-  normalizeTeamStatisticsPayload,
-  strengthRatingsLambdas,
-  poissonOverLine
-} from "../../math.js";
-import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
-import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
-import {
-  buildConfidenceEngine,
-  attachRecommendationExplanation
-} from "../../confidence/ConfidenceEngine.js";
-import { buildPredictionExplanation } from "../../explanation/PredictionExplanation.js";
-import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine.js";
-import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
-import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
-import {
-  buildValueEngine,
-  buildProfessionalValueEngine,
-  evaluateValue
-} from "../../value/ValueEngine.js";
-import {
-  calculateEV,
-  calculateKellyQuarter as calculateKelly,
-  calculateEnsembleStake,
-  blendModelWithMarket,
-  evaluateNoBetZone,
-  shinImpliedProbs
-} from "../../advancedMath.js";
-import {
-  consensusMatchWinnerOdds,
-  consensusOverUnderOddsAtLine,
-  consensusBttsOdds,
-  consensusDoubleChanceOdds
-} from "../../marketOdds.js";
-import { getOddsForFixture } from "../../oddsPrefetch.js";
-import {
-  MODEL_VERSION,
-  getModelMarketBlendWeight,
-  getLeagueConfidenceMultiplier,
-  getLeagueStakeCap
-} from "../../modelConstants.js";
-import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
-import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
+import { computeMatchProbs, deriveFirstHalfLambdas } from "../../math.js";
 import { computeExactMatchDistribution } from "../../monteCarlo/MonteCarloEngine.js";
-import {
-  pickCalibrationMapForLeague,
-  applyCalibratedTriple
-} from "../../isotonicCalibration.js";
-import {
-  pickStackerWeightsForLeague,
-  extractStackerFeatures,
-  applyStacker
-} from "../../mlStacker.js";
-import { lookupEloPair, eloProbabilities } from "../../teamElo.js";
 import { deriveMarketLambdas } from "../../teamMarketRolling.js";
-import { deriveXgLambdas } from "../../xg/RollingXgModel.js";
-import { blendLambdasWithXg, resolveFixtureXg, buildXgSourceProbs } from "../xgLambdaBlend.js";
-import { PIPELINE_TRACE_VERSION, buildPipelineTrace } from "../pipelineTrace.js";
-import {
-  isGoodNum,
-  roundDisplayRate,
-  clampPct,
-  buildPoissonMarketBlock,
-  hasUsableRolling,
-  buildLiveRollingForTeam,
-  selectTopPick,
-  coerceFormFromTeamStats,
-  buildTeamContext,
-  extendProbsWithMarkets,
-  dataQualityScore,
-  deriveBestOverUnderPick,
-  blendByPenalty,
-  applyStakePolicyV2,
-  marketTier
-} from "../predictHelpers.js";
+import { isGoodNum, roundDisplayRate, clampPct, buildPoissonMarketBlock } from "../predictHelpers.js";
 
 
 export const STAGE_ID = "Stage05Simulation";
@@ -101,32 +23,14 @@ export async function run(context) {
   const league = context.league;
   if (!f || !league) return context;
 
-  const lId = league.lId;
   const leagueParams = league.leagueParams;
-  const leagueProfile = league.leagueProfile;
   const marketRollingMap = league.marketRollingMap;
-  const standingsMap = league.standingsMap;
-  const leagueStandings = league.leagueStandings;
 
-  const season = context.season;
-  const shrinkageK = context.shrinkageK;
   const poissonCorrelation = context.poissonCorrelation;
-  const oddsByFixtureId = context.oddsByFixtureId;
-  const liveRollingCache = context.liveRollingCache;
-  const statsBudgetRef = context.statsBudgetRef;
-  const calibrationMaps = context.calibrationMaps;
-  const stackerWeightsMap = context.stackerWeightsMap;
-  const engineWeights = context.engineWeights;
-  const activeModelId = context.activeModelId;
-  const riskContext = context.riskContext;
 
   const fixtureId = f.fixtureId;
-  const fx = f.fx;
-  const homeName = f.homeName;
-  const awayName = f.awayName;
   const homeIdStr = f.homeIdStr;
   const awayIdStr = f.awayIdStr;
-  const refereeName = f.refereeName;
 
   let method = f.method;
   let lambdaHome = f.lambdaHome;

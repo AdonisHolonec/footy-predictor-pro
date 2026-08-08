@@ -342,8 +342,8 @@ export default function UserDashboard() {
         emailConsentAcknowledged: notifyEmail ? true : undefined
       });
       setStatus("Preferintele de notificare au fost salvate.");
-    } catch (error: any) {
-      setStatus(error?.message || "Nu am putut salva preferintele de notificare.");
+    } catch (error) {
+      setStatus((error as { message?: string })?.message || "Nu am putut salva preferintele de notificare.");
     } finally {
       setNotifSaveBusy(false);
     }

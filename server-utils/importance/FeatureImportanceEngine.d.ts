@@ -17,9 +17,9 @@ export interface FeatureImportanceResult {
   method: string;
 }
 
-export declare function buildFeatureImportance(...args: any[]): FeatureImportanceResult;
-export declare function featureImportanceToMlVector(...args: any[]): any;
-export declare const FeatureImportanceEngine: any;
+export declare function buildFeatureImportance(...args: unknown[]): FeatureImportanceResult;
+export declare function featureImportanceToMlVector(...args: unknown[]): unknown;
+export declare const FeatureImportanceEngine: unknown;
 
 export {
   FEATURE_IMPORTANCE_KEYS,

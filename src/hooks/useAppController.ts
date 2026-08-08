@@ -120,10 +120,10 @@ export function useAppController() {
         });
         setHistory(result.items);
         setHistoryStats(result.stats);
-      } catch (error: any) {
+      } catch (error) {
         setHistory([]);
         setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
-        setStatus((prev) => prev || `Istoric indisponibil: ${error?.message || "eroare necunoscută"}`);
+        setStatus((prev) => prev || `Istoric indisponibil: ${(error as { message?: string })?.message || "eroare necunoscută"}`);
       }
     },
     [session?.access_token, user?.role]
@@ -174,6 +174,7 @@ export function useAppController() {
   useEffect(() => {
     void backtest.loadKpi(45);
     void backtest.loadAlerts(7);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only KPI bootstrap; re-running on `backtest` identity would refetch on every render
   }, []);
 
   useEffect(() => {
@@ -182,6 +183,7 @@ export function useAppController() {
       return;
     }
     void syncHistory(7);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed to auth changes only; syncHistory identity is not stable and would re-trigger sync every render
   }, [session?.access_token, user?.role]);
 
   useEffect(() => {

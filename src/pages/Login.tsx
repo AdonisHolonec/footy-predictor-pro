@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import BrandArtboard from "../components/BrandArtboard";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
@@ -55,6 +54,7 @@ export default function Login() {
   useEffect(() => {
     if (!user) return;
     navigate("/workspace", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redirect is keyed to user.id appearing; whole `user` identity (token refresh) must not re-fire navigation
   }, [user?.id, navigate]);
 
   useEffect(() => {
