@@ -3,87 +3,13 @@
  * Algorithms unchanged; hands engineCtx to Stage03 via context.fixture.
  */
 
-import {
-  computeMatchProbs,
-  clampLambda,
-  extractFormMultiplier,
-  extractFirstHalfFractions,
-  deriveFirstHalfLambdas,
-  strengthRatingsLambdas,
-  poissonOverLine
-} from "../../math.js";
-import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
+import { extractFormMultiplier, extractFirstHalfFractions } from "../../math.js";
 import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
 import { computeRefereeStatsFromHistory } from "../../context/refereeStatsFromHistory.js";
 import { buildContextSnapshot } from "../../context/captureContextSnapshot.js";
-import {
-  buildConfidenceEngine,
-  attachRecommendationExplanation
-} from "../../confidence/ConfidenceEngine.js";
-import { buildPredictionExplanation } from "../../explanation/PredictionExplanation.js";
-import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine.js";
-import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
-import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
-import {
-  buildValueEngine,
-  buildProfessionalValueEngine,
-  evaluateValue
-} from "../../value/ValueEngine.js";
-import {
-  calculateEV,
-  calculateKellyQuarter as calculateKelly,
-  calculateEnsembleStake,
-  blendModelWithMarket,
-  evaluateNoBetZone,
-  shinImpliedProbs
-} from "../../advancedMath.js";
-import {
-  consensusMatchWinnerOdds,
-  consensusOverUnderOddsAtLine,
-  consensusBttsOdds,
-  consensusDoubleChanceOdds
-} from "../../marketOdds.js";
-import { getOddsForFixture } from "../../oddsPrefetch.js";
-import {
-  MODEL_VERSION,
-  getModelMarketBlendWeight,
-  getLeagueConfidenceMultiplier,
-  getLeagueStakeCap
-} from "../../modelConstants.js";
-import { applyLeagueMarketPriors } from "../../leagueProfiles/LeagueProfile.js";
-import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
-import {
-  pickCalibrationMapForLeague,
-  applyCalibratedTriple
-} from "../../isotonicCalibration.js";
-import {
-  pickStackerWeightsForLeague,
-  extractStackerFeatures,
-  applyStacker
-} from "../../mlStacker.js";
-import { lookupEloPair, eloProbabilities } from "../../teamElo.js";
-import { deriveMarketLambdas } from "../../teamMarketRolling.js";
-import { deriveXgLambdas } from "../../xg/RollingXgModel.js";
-import { blendLambdasWithXg, resolveFixtureXg, buildXgSourceProbs } from "../xgLambdaBlend.js";
-import { PIPELINE_TRACE_VERSION, buildPipelineTrace } from "../pipelineTrace.js";
-import {
-  isGoodNum,
-  roundDisplayRate,
-  clampPct,
-  buildPoissonMarketBlock,
-  hasUsableRolling,
-  buildLiveRollingForTeam,
-  selectTopPick,
-  coerceFormFromTeamStats,
-  buildTeamContext,
-  extendProbsWithMarkets,
-  dataQualityScore,
-  deriveBestOverUnderPick,
-  blendByPenalty,
-  applyStakePolicyV2,
-  marketTier,
-  fetchTeamStatisticsWithSeasonFallback
-} from "../predictHelpers.js";
+import { MODEL_VERSION } from "../../modelConstants.js";
+import { resolveFixtureXg } from "../xgLambdaBlend.js";
+import { coerceFormFromTeamStats, fetchTeamStatisticsWithSeasonFallback } from "../predictHelpers.js";
 
 
 
@@ -101,7 +27,6 @@ export async function run(context) {
   const leagueParams = league.leagueParams;
   const marketRollingMap = league.marketRollingMap;
   const standingsMap = league.standingsMap;
-  const leagueStandings = league.leagueStandings;
 
   const season = Number(league.leagueSeason) || Number(context.season);
   const shrinkageK = context.shrinkageK;
@@ -109,8 +34,6 @@ export async function run(context) {
 
   const fixtureId = f.fixtureId;
   const fx = f.fx;
-  const homeName = f.homeName;
-  const awayName = f.awayName;
   const homeIdStr = f.homeIdStr;
   const awayIdStr = f.awayIdStr;
   const refereeName = f.refereeName;

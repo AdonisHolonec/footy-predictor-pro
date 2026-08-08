@@ -98,8 +98,9 @@ export function usePredictFlow<TPrediction>(options: UsePredictFlowOptions<TPred
           if (json?.ok) okCount += 1;
         }
         await onWarmCompleted?.(okCount, dates.length, token);
-      } catch (error: any) {
-        setStatus(messages?.warmException?.(error?.message || "Warm failed") || `Eroare: ${error?.message || "Warm a eșuat."}`);
+      } catch (error) {
+        const message = (error as { message?: string })?.message;
+        setStatus(messages?.warmException?.(message || "Warm failed") || `Eroare: ${message || "Warm a eșuat."}`);
       }
     },
     [
@@ -146,10 +147,11 @@ export function usePredictFlow<TPrediction>(options: UsePredictFlowOptions<TPred
           const json = await response.json();
           if (Array.isArray(json)) batches.push(...json);
         }
-        const deduped = dedupePredictionsById(batches as any[]) as TPrediction[];
+        const deduped = dedupePredictionsById(batches as Array<{ id?: string | number }>) as TPrediction[];
         await onPredictCompleted?.(deduped, token, dates);
-      } catch (error: any) {
-        setStatus(messages?.predictException?.(error?.message || "Predict failed") || `Eroare: ${error?.message || "Predict a eșuat."}`);
+      } catch (error) {
+        const message = (error as { message?: string })?.message;
+        setStatus(messages?.predictException?.(message || "Predict failed") || `Eroare: ${message || "Predict a eșuat."}`);
       }
     },
     [

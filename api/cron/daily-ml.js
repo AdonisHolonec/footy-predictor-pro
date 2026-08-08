@@ -4,14 +4,12 @@ import { getWithCache } from "../../server-utils/fetcher.js";
 import { runBenchmarkSweep } from "../../server-utils/predictionBenchmark/runBenchmarkSweep.js";
 import { runMetaLearningRefresh } from "../../server-utils/metaLearning/runMetaLearningRefresh.js";
 import {
-  fitIsotonicPav,
   applyIsotonicMap,
   invalidateCalibrationCache,
   loadCalibrationMaps
 } from "../../server-utils/isotonicCalibration.js";
 import {
   extractStackerFeatures,
-  applyStacker,
   trainSoftmax,
   computeStackerMetrics,
   invalidateStackerCache

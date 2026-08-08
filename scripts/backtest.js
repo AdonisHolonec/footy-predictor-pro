@@ -54,7 +54,7 @@ async function run() {
   let evCount = 0;
   let maxDrawdown = 0;
   let peak = 0;
-  let equity = 0;
+  let equity;
 
   for (const row of rows) {
     const payload = row.raw_payload || {};

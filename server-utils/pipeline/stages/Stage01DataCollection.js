@@ -50,7 +50,7 @@ export const STAGE_DESCRIPTION =
 export async function run(context) {
   if (context.halted) return context;
 
-  const { req, res } = context;
+  const { req } = context;
   const date = context.date;
   const leagueIds = context.leagueIds;
   let effectiveLimit = context.effectiveLimit;
@@ -79,7 +79,7 @@ export async function run(context) {
 
   if (!isCron && !usageCtx.anonymous && usageCtx.userId) {
     const supabase = getSupabaseAdmin();
-    let profile = null;
+    let profile;
     let { data: profData, error: profileError } = await supabase
       .from("profiles")
       .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
@@ -118,7 +118,7 @@ export async function run(context) {
       predictCountToday = await getTierPredictCountToday(usageCtx.userId, usageCtx.usageDay, resolvedTier, {
         failClosed: !quotaExempt
       });
-    } catch (e) {
+    } catch {
       if (!quotaExempt) {
         return halt(context, 503, {
           ok: false,
@@ -418,7 +418,6 @@ export async function run(context) {
     tierContext.predictCountToday = knownIds.size;
     tierContext.predictLimit = matchLimit;
     context.tierContext = tierContext;
-    reservedTierUsage = 0;
     context.reservedTierUsage = 0;
   }
 

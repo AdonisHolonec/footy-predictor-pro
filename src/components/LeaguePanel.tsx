@@ -98,7 +98,8 @@ export default function LeaguePanel({
                 type="button"
                 onClick={() => {
                   const s = new Set(selectedLeagueIds);
-                  s.has(lg.id) ? s.delete(lg.id) : s.add(lg.id);
+                  if (s.has(lg.id)) s.delete(lg.id);
+                  else s.add(lg.id);
                   setSelectedLeagueIds(Array.from(s));
                 }}
                 className={`flex min-h-[var(--fp-touch)] w-full items-center justify-between gap-2 rounded-[var(--fp-radius-sm)] border px-2.5 text-left text-sm touch-manipulation ${

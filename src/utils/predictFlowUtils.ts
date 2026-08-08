@@ -8,7 +8,7 @@ export function buildAuthHeaders(accessToken?: string | null) {
  * P0: users must not trigger global history sync.
  * Kept as a no-op for backward-compatible call sites; settlement relies on cron + local hydrate.
  */
-export async function syncHistoryAfterPredict(_accessToken?: string | null, _days = 7) {
+export async function syncHistoryAfterPredict(_accessToken?: string | null, _days?: number) {
   return;
 }
 

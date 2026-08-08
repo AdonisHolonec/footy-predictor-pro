@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.ci.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "validate:pkg": "node scripts/validate-package.mjs",
     "test": "npm run test:math && npm run test:security && npm run test:validation && npm run test:ownership && npm run test:pipeline && npm run test:decision && npm run test:league-profiles && npm run test:benchmark && npm run test:meta && npm run test:unit && npm run test:golden",
     "test:math": "node --test tests/math.test.js",

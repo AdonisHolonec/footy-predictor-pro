@@ -362,7 +362,7 @@ async function handleDay(req, res) {
 
     // P0: never expose provider usage / cache / diagnostics on the public day view.
     return res.status(200).json({ ok: true, date, totalFixtures: allFixtures.length, leagues, tierStatus });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ ok: false, error: "Eroare internă." });
   }
 }

@@ -18,7 +18,7 @@ export async function run(context) {
   const isCron = context.isCronInternal === true;
 
   // P0: never return unmasked Ultra payload to non-cron callers.
-  let masked = out;
+  let masked;
   if (isCron) {
     masked = out;
   } else if (tierContext?.quotaExempt) {

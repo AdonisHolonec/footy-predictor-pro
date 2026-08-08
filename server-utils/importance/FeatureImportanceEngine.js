@@ -19,10 +19,6 @@ function num(v, fallback = null) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function clamp(n, lo, hi) {
-  return Math.max(lo, Math.min(hi, n));
-}
-
 /** Activation from multiplicative factor centered at 1.0. */
 function activationFromFactor(factor) {
   const f = num(factor);

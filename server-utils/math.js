@@ -528,7 +528,7 @@ export function extractFormMultiplier(formString) {
   for (let i = 0; i < recent.length; i++) {
     const char = recent[recent.length - 1 - i];
     const w = Math.pow(0.85, i); // half-life ≈ 4 meciuri
-    let pts = 0;
+    let pts;
     if (char === "W") pts = 3;
     else if (char === "D") pts = 1;
     else if (char === "L") pts = 0;

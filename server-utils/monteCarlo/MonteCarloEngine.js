@@ -17,7 +17,7 @@
  * the PMF, so there is nothing left to report an interval around.
  */
 
-import { buildMatchScorePmf, clamp } from "../math.js";
+import { buildMatchScorePmf } from "../math.js";
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100;

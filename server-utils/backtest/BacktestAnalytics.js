@@ -423,7 +423,7 @@ export function computeBacktestMetrics(events) {
   let evCount = 0;
   let maxDrawdown = 0;
   let peak = 0;
-  let equity = 0;
+  let equity;
 
   let winStreak = 0;
   let lossStreak = 0;

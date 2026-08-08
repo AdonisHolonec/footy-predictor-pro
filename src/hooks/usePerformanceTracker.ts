@@ -84,6 +84,7 @@ export function usePerformanceTracker(history: HistoryEntry[], predIds: Array<st
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- animated* are the tween's moving start values; depending on them would restart the animation every frame
   }, [trackerStats.wins, trackerStats.losses, trackerStats.winRate]);
 
   return {

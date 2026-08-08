@@ -14,6 +14,6 @@ export interface PredictionReason {
   meta?: Record<string, unknown>;
 }
 
-export declare function createReason(...args: any[]): PredictionReason;
-export declare function formatSignedPct(...args: any[]): string;
-export declare function formatFixed(...args: any[]): string;
+export declare function createReason(...args: unknown[]): PredictionReason;
+export declare function formatSignedPct(...args: unknown[]): string;
+export declare function formatFixed(...args: unknown[]): string;

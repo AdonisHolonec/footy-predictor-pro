@@ -7,7 +7,7 @@ import { PredictionRow } from "../types";
 
 import { outcomeTextClass, specialBetLiveAdjustmentBadge } from "../utils/specialBet";
 
-import MatchDecisionBlock, { type BenchmarkConsensus } from "./matchModal/MatchDecisionBlock";
+import MatchDecisionBlock from "./matchModal/MatchDecisionBlock";
 import { finalScoreBadgeClass, finalScoreLabel } from "./matchModal/helpers";
 import TeamSnapshotCard from "./matchModal/TeamSnapshotCard";
 import LeagueStandingsTable from "./matchModal/LeagueStandingsTable";

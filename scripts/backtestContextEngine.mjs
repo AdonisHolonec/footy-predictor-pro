@@ -44,10 +44,6 @@ import {
 const OU_LINE = 2.5;
 const EDGE_THRESHOLD = 0.02; // 2pp of model-prob-over-implied-prob to count as a "value" bet
 
-function pct(n, d = 2) {
-  return `${(Number(n) || 0).toFixed(d)}%`;
-}
-
 function pickFromProbs(probs) {
   const entries = [["1", probs.p1], ["X", probs.pX], ["2", probs.p2]];
   entries.sort((a, b) => b[1] - a[1]);

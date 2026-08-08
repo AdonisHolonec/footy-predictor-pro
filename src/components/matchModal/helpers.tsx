@@ -120,7 +120,7 @@ export function marketResultBadge(
   const oddText =
     Number.isFinite(Number(odd)) && Number(odd) > 1
       ? ` · ${Number(odd).toFixed(2)}`
-      : " · -";
+      : ` · ${noBookOddLabel}`;
   const srcText = source ? ` · ${source}` : "";
   const pred = `${predicted} · ${Math.round(probability)}%${oddText}${srcText}`;
   const isHot = probability >= 85;

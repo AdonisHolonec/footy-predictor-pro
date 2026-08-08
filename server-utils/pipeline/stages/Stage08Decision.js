@@ -3,76 +3,12 @@
  * Body moved from runFixtureComposite.js (bind/write-back; algorithms unchanged).
  */
 
-import { getWithCache } from "../../fetcher.js";
-import {
-  clampLambda,
-  extractFormMultiplier,
-  extractAdvancedGoalsAverages,
-  extractFirstHalfFractions,
-  deriveFirstHalfLambdas,
-  normalizeTeamStatisticsPayload,
-  strengthRatingsLambdas
-} from "../../math.js";
-import { PredictionEngine, summarizeModuleScores, getPredictionWeights } from "../../prediction/PredictionEngine.js";
-import { collectModuleInputs } from "../../PredictionEngine/moduleInputs.js";
-import {
-  buildConfidenceEngine,
-  attachRecommendationExplanation
-} from "../../confidence/ConfidenceEngine.js";
+import { buildConfidenceEngine, attachRecommendationExplanation } from "../../confidence/ConfidenceEngine.js";
 import { buildPredictionExplanation } from "../../explanation/PredictionExplanation.js";
-import { buildFeatureImportance } from "../../importance/FeatureImportanceEngine.js";
-import { buildPredictionContributions } from "../../importance/PredictionContributions.js";
-import { blendModel, getModelById } from "../../modelLab/ModelLab.js";
 import { matchedCompetitionKeyword } from "../../PredictionEngine/MotivationEngine.js";
-import {
-  calculateEV,
-  calculateKellyQuarter as calculateKelly,
-  calculateEnsembleStake,
-  blendModelWithMarket,
-  evaluateNoBetZone,
-  shinImpliedProbs
-} from "../../advancedMath.js";
-import {
-  consensusMatchWinnerOdds,
-  consensusOverUnderOddsAtLine,
-  consensusBttsOdds,
-  consensusDoubleChanceOdds
-} from "../../marketOdds.js";
 import { resolveCorrectScoreOddsWithFallback } from "../decision/resolveCorrectScoreOdds.js";
-import {
-  MODEL_VERSION,
-  getModelMarketBlendWeight,
-  getLeagueConfidenceMultiplier,
-  getLeagueStakeCap
-} from "../../modelConstants.js";
-import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
-import { applyCalibratedTriple } from "../../isotonicCalibration.js";
-import {
-  pickStackerWeightsForLeague,
-  extractStackerFeatures,
-  applyStacker
-} from "../../mlStacker.js";
-import { lookupEloPair, eloProbabilities } from "../../teamElo.js";
-import { deriveMarketLambdas } from "../../teamMarketRolling.js";
-import { deriveXgLambdas } from "../../xg/RollingXgModel.js";
-import { blendLambdasWithXg, resolveFixtureXg, buildXgSourceProbs } from "../xgLambdaBlend.js";
-import { PIPELINE_TRACE_VERSION, buildPipelineTrace } from "../pipelineTrace.js";
-import {
-  isGoodNum,
-  roundDisplayRate,
-  clampPct,
-  buildPoissonMarketBlock,
-  hasUsableRolling,
-  buildLiveRollingForTeam,
-  coerceFormFromTeamStats,
-  buildTeamContext,
-  extendProbsWithMarkets,
-  dataQualityScore,
-  deriveBestOverUnderPick,
-  blendByPenalty,
-  applyStakePolicyV2,
-  marketTier
-} from "../predictHelpers.js";
+import { MODEL_VERSION } from "../../modelConstants.js";
+import { clampPct, buildTeamContext, extendProbsWithMarkets, applyStakePolicyV2 } from "../predictHelpers.js";
 import { alignMarketProbsAndCalibrate } from "../decision/alignMarketProbsAndCalibrate.js";
 import { selectRecommendation } from "../decision/selectRecommendation.js";
 import { applyValueEngine } from "../decision/applyValueEngine.js";
@@ -93,27 +29,12 @@ export async function run(context) {
 
   const lId = league.lId;
   const leagueParams = league.leagueParams;
-  const leagueProfile = league.leagueProfile;
-  const marketRollingMap = league.marketRollingMap;
   const standingsMap = league.standingsMap;
-  const leagueStandings = league.leagueStandings;
 
-  const season = context.season;
-  const shrinkageK = context.shrinkageK;
-  const poissonCorrelation = context.poissonCorrelation;
-  const oddsByFixtureId = context.oddsByFixtureId;
-  const liveRollingCache = context.liveRollingCache;
-  const statsBudgetRef = context.statsBudgetRef;
   const calibrationMaps = context.calibrationMaps;
-  const stackerWeightsMap = context.stackerWeightsMap;
-  const engineWeights = context.engineWeights;
-  const activeModelId = context.activeModelId;
   const riskContext = context.riskContext;
 
   const fixtureId = f.fixtureId;
-  const fx = f.fx;
-  const homeName = f.homeName;
-  const awayName = f.awayName;
   const homeIdStr = f.homeIdStr;
   const awayIdStr = f.awayIdStr;
   const refereeName = f.refereeName;
