@@ -414,7 +414,7 @@ export default function MatchCard({
         <div className="mt-3 space-y-1.5">
           {[
             { label: "1", val: row.probs.p1, color: homeColor },
-            { label: "X", val: row.probs.pX, color: "#3ecfbf" },
+            { label: "X", val: row.probs.pX, color: "var(--fp-text-muted)" },
             { label: "2", val: row.probs.p2, color: awayColor }
           ].map((b) => (
             <div key={b.label} className="flex items-center gap-2">
