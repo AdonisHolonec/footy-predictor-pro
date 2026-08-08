@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
-import type { TranslateFn } from "../i18n/types";
 import { translateConfidenceCategory } from "../i18n/labels";
 import {
   ConfidenceAura,
@@ -14,17 +13,17 @@ import FeatureImportanceChart from "./FeatureImportanceChart";
 import { PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import { resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
-import {
-  listSpecialBetCandidates,
-  pickSpecialBetLegs,
-  outcomeTextClass,
-  specialBetCombinedOdd as specialBetCombinedOddValue,
-  specialBetCombinedOutcome,
-  specialBetLiveAdjustmentBadge
-} from "../utils/specialBet";
-import { matchingMarketOdd, shotsDisplayOdd } from "../utils/marketPicks";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
 import MarketFamilyIcon from "./icons/MarketFamilyIcon";
+import {
+  deriveRecommendedOdd,
+  formatLiveMinute,
+  isFinalStatus,
+  modelTierBadge,
+  statusChip
+} from "./matchCard/derivations";
+import { MarketPicksGrid } from "./matchCard/MarketPicksGrid";
+import { SpecialBetSection } from "./matchCard/SpecialBetSection";
 
 // Singura muchie statică dinspre card către recharts (~370 kB chunk). Lazy aici
 // înseamnă că dashboard-ul nu mai preîncarcă chunk-ul de chart-uri la deschidere;
@@ -49,139 +48,6 @@ type MatchCardProps = {
   /** Effective access tier (free / premium / ultra) — drives lock vs missing-data UI. */
   accessTier?: string;
 };
-
-function isFinalStatus(status?: string) {
-  return ["FT", "AET", "PEN"].includes(status || "");
-}
-
-/** "67'" or, during stoppage time, "45+2'" — never estimated, only from upstream minute/extra. */
-function formatLiveMinute(minute?: number | null, extra?: number | null): string | null {
-  if (minute == null || !Number.isFinite(Number(minute))) return null;
-  const m = Number(minute);
-  return extra != null && Number.isFinite(Number(extra)) && Number(extra) > 0 ? `${m}+${Number(extra)}'` : `${m}'`;
-}
-
-function deriveRecommendedOdd(row: PredictionRow): number | null {
-  const explicit = Number(row.recommended?.odd);
-  if (Number.isFinite(explicit) && explicit > 1) return explicit;
-  const pick = (row.recommended?.pick || "").trim().toLowerCase();
-  if (!pick) return null;
-  if (pick === "1") return Number.isFinite(Number(row.odds?.home)) ? Number(row.odds?.home) : null;
-  if (pick === "x") return Number.isFinite(Number(row.odds?.draw)) ? Number(row.odds?.draw) : null;
-  if (pick === "2") return Number.isFinite(Number(row.odds?.away)) ? Number(row.odds?.away) : null;
-  if (pick === "gg") return Number.isFinite(Number(row.marketOdds?.btts?.odd)) ? Number(row.marketOdds?.btts?.odd) : null;
-  if (pick === "ngg") {
-    const yesOdd = Number(row.marketOdds?.btts?.odd);
-    if (Number.isFinite(yesOdd) && yesOdd > 1) {
-      const noOdd = (yesOdd / (yesOdd - 1)) || null;
-      return Number.isFinite(Number(noOdd)) ? Number(noOdd) : null;
-    }
-    return null;
-  }
-  const ou = pick.match(/^(peste|sub)\s*(1[.,]5|2[.,]5|3[.,]5)$/);
-  if (ou) {
-    const line = ou[2].replace(",", ".");
-    const quote =
-      line === "1.5" ? row.marketOdds?.goals15 : line === "2.5" ? row.marketOdds?.goals25 : row.marketOdds?.goals35;
-    if (!quote) return null;
-    const overOdd = Number(quote.odd);
-    if (!Number.isFinite(overOdd) || overOdd <= 1) return null;
-    if (ou[1] === "peste") return overOdd;
-    const underOdd = (overOdd / (overOdd - 1)) || null;
-    return Number.isFinite(Number(underOdd)) ? Number(underOdd) : null;
-  }
-  return null;
-}
-
-function parseLineThreshold(key: string): number | null {
-  const m = key.match(/^o(\d+)_(\d+)$/);
-  if (!m) return null;
-  return Number(`${m[1]}.${m[2]}`);
-}
-
-function deriveBestOverUnderPick(
-  totalLines?: Record<string, number>
-): { pick: string; probability: number; side: "over" | "under"; line: number } | null {
-  if (!totalLines) return null;
-  let best: { pick: string; probability: number; side: "over" | "under"; line: number } | null = null;
-  for (const [key, raw] of Object.entries(totalLines)) {
-    const line = parseLineThreshold(key);
-    const pOver = Number(raw);
-    if (line == null || !Number.isFinite(pOver)) continue;
-    const over = { pick: `Over ${line.toFixed(1)}`, probability: pOver, side: "over" as const, line };
-    const under = {
-      pick: `Under ${line.toFixed(1)}`,
-      probability: 100 - pOver,
-      side: "under" as const,
-      line
-    };
-    const current = over.probability >= under.probability ? over : under;
-    if (!best || current.probability > best.probability) best = current;
-  }
-  return best;
-}
-
-function statusChip(
-  row: PredictionRow,
-  confPct: number,
-  hasFinalScore: boolean,
-  finalPickResult: boolean | null,
-  isLive: boolean,
-  t: TranslateFn
-): { label: string; className: string } {
-  if (isLive) {
-    return {
-      label: t("card.live").toUpperCase(),
-      className: "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
-    };
-  }
-  if (hasFinalScore) {
-    if (finalPickResult === true) {
-      return { label: t("card.chipWin"), className: "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 text-[var(--fp-success)]" };
-    }
-    if (finalPickResult === false) {
-      return { label: t("card.chipLose"), className: "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]" };
-    }
-    return { label: t("card.chipFinal"), className: "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]" };
-  }
-  if (row.valueBet?.detected) {
-    return { label: t("card.chipValue"), className: "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]" };
-  }
-  if (confPct >= 70) {
-    return { label: t("card.chipLowRisk"), className: "border-[var(--fp-success)]/25 bg-[var(--fp-success)]/8 text-[var(--fp-success)]" };
-  }
-  return { label: t("card.chipOpen"), className: "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]" };
-}
-
-/**
- * Mic badge ce arată nivelul modelului aplicat:
- * - "ML": a fost folosit stacker-ul (multinomial LR)
- * - "CAL": probabilităţi post-calibrare isotonică
- * - "DC" (fallback): doar Poisson + Dixon-Coles (fără învățare pe istoric)
- */
-function modelTierBadge(row: PredictionRow): { label: string; title: string; className: string } | null {
-  const meta = row.modelMeta;
-  if (!meta) return null;
-  if (meta.stackerApplied) {
-    return {
-      label: "ML",
-      title: `Stacker ML activ${meta.stackerSampleSize ? ` · n=${meta.stackerSampleSize}` : ""}`,
-      className: "border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
-    };
-  }
-  if (meta.calibrationApplied) {
-    return {
-      label: "CAL",
-      title: `Isotonic calibration aplicată${meta.calibrationSampleSize ? ` · n=${meta.calibrationSampleSize}` : ""}`,
-      className: "border-[var(--fp-accent)]/45 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
-    };
-  }
-  return {
-    label: "DC",
-    title: "Poisson + Dixon-Coles (fără calibrare pe istoric încă)",
-    className: "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"
-  };
-}
 
 export default function MatchCard({
   row,
@@ -238,53 +104,6 @@ export default function MatchCard({
   const recommendedOdd = deriveRecommendedOdd(row);
   const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
   const isPickHot = hasExactConfidence && confPct >= 85;
-  const cornersPick = row.probs?.corners ? deriveBestOverUnderPick(row.probs.corners.total) : null;
-  const shotsPick = row.probs?.shotsOnTarget ? deriveBestOverUnderPick(row.probs.shotsOnTarget.total) : null;
-  const shotsTotalPick = row.probs?.shotsTotal ? deriveBestOverUnderPick(row.probs.shotsTotal.total) : null;
-  const cardsPick = row.probs?.cards ? deriveBestOverUnderPick(row.probs.cards.total) : null;
-  const firstHalfPick =
-    row.probs?.firstHalf && Number.isFinite(row.probs.firstHalf.pO15)
-      ? row.probs.firstHalf.pO15 >= 50
-        ? { pick: "Over 1.5 FH", probability: row.probs.firstHalf.pO15 }
-        : { pick: "Under 1.5 FH", probability: 100 - row.probs.firstHalf.pO15 }
-      : null;
-  // Mirrors server-utils/accessTier.js maskPredictionForTier(): corners unlock on
-  // Premium/Ultra; shots, cards and first-half unlock on Ultra only.
-  const effectiveAccessTier = String(accessTier || "free").toLowerCase();
-  const canSeeCorners = effectiveAccessTier === "premium" || effectiveAccessTier === "ultra";
-  const canSeeShots = effectiveAccessTier === "ultra";
-  const canSeeCards = effectiveAccessTier === "ultra";
-  const canSeeFirstHalf = effectiveAccessTier === "ultra";
-  const cornersLocked = !canSeeCorners && !row.probs?.corners;
-  const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
-  const shotsTotalLocked = !canSeeShots && !row.probs?.shotsTotal;
-  const cardsLocked = !canSeeCards && !row.probs?.cards;
-  const firstHalfLocked = !canSeeFirstHalf && !row.probs?.firstHalf;
-  const marketPulseWinnerLabel = (() => {
-    const candidates = [
-      { label: t("match.featCorners"), probability: Number(cornersPick?.probability || 0) },
-      { label: t("match.featShots"), probability: Number(shotsPick?.probability || 0) },
-      { label: t("match.featCards"), probability: Number(cardsPick?.probability || 0) },
-      { label: t("match.featHt"), probability: Number(firstHalfPick?.probability || 0) }
-    ];
-    const winner = candidates.reduce((best, item) => (item.probability > best.probability ? item : best), candidates[0]);
-    return winner.probability >= 85 ? winner.label : null;
-  })();
-  const specialBetLabels = {
-    main: t("match.featMain"),
-    goals: t("card.marketGoals"),
-    corners: t("match.featCorners"),
-    shots: t("match.featShots"),
-    ht: t("match.featHt"),
-    gg: t("match.marketGgNgg"),
-    cards: t("match.cards")
-  };
-  const specialBetPool = listSpecialBetCandidates(row, specialBetLabels, row.cardMarketValidations);
-  const specialBetLegs = pickSpecialBetLegs(specialBetPool, specialLegCount);
-  const specialBetCombinedOdd = specialBetCombinedOddValue(specialBetLegs);
-  const specialCombinedOutcome = specialBetCombinedOutcome(specialBetLegs);
-  const specialCombinedTone = outcomeTextClass(specialCombinedOutcome);
-  const specialBetCandidatesLen = specialBetPool.length;
 
   if (row.insufficientData) {
     return (
@@ -670,192 +489,16 @@ export default function MatchCard({
         </div>
       )}
 
-      {!compact &&
-        (cornersPick || shotsPick || shotsTotalPick || cardsPick || firstHalfPick ||
-          cornersLocked || shotsLocked || shotsTotalLocked || cardsLocked || firstHalfLocked) && (
-        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
-          {[
-            {
-              label: t("match.featCorners"),
-              data: cornersPick,
-              locked: cornersLocked,
-              odd: row.marketOdds?.corners?.odd,
-              source: row.marketOdds?.corners?.bookmaker,
-              accentClass: "border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)]"
-            },
-            {
-              label: t("match.shotsSub"),
-              data: shotsPick,
-              locked: shotsLocked,
-              odd:
-                shotsPick != null
-                  ? shotsDisplayOdd(row, shotsPick.side, shotsPick.line)
-                  : row.marketOdds?.shotsOnTarget?.odd,
-              source: row.marketOdds?.shotsOnTarget?.bookmaker || row.marketOdds?.shotsTotal?.bookmaker,
-              accentClass: "border-violet-500/35 bg-violet-500/10"
-            },
-            {
-              label: t("match.shotsTotalTitle"),
-              data: shotsTotalPick,
-              locked: shotsTotalLocked,
-              odd:
-                shotsTotalPick != null
-                  ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotalPick.side, shotsTotalPick.line, 4)
-                  : row.marketOdds?.shotsTotal?.odd,
-              source: row.marketOdds?.shotsTotal?.bookmaker,
-              accentClass: "border-fuchsia-500/35 bg-fuchsia-500/10"
-            },
-            {
-              label: t("match.featCards"),
-              data: cardsPick,
-              locked: cardsLocked,
-              odd: row.marketOdds?.cards?.odd,
-              source: row.marketOdds?.cards?.bookmaker,
-              accentClass: "border-amber-500/35 bg-amber-500/10"
-            },
-            {
-              label: t("match.featHt"),
-              data: firstHalfPick,
-              locked: firstHalfLocked,
-              odd: row.marketOdds?.firstHalfGoals?.odd,
-              source: row.marketOdds?.firstHalfGoals?.bookmaker,
-              accentClass: "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10"
-            }
-          ].map((item) => {
-            const isHot = item.label === marketPulseWinnerLabel;
-            return (
-            <div
-              key={item.label}
-              className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-[var(--fp-accent)]/40" : ""}`}
-            >
-              <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{item.label}</div>
-              {item.locked ? (
-                <div
-                  className="mt-0.5 flex items-center justify-center gap-0.5 font-mono text-[9px] font-bold text-[var(--fp-text-muted)]"
-                  title={t("card.unlockHigher")}
-                >
-                  🔒 {t("card.unlock")}
-                </div>
-              ) : (
-                <>
-                  <div className="mt-0.5 font-mono text-[9px] font-bold text-[var(--fp-text)]">{item.data?.pick ?? "—"}</div>
-                  <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text)]">
-                    {item.data ? `${Math.round(item.data.probability)}%` : "—"}
-                  </div>
-                  <div className="font-mono text-[8px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
-                    {Number.isFinite(Number(item.odd)) && Number(item.odd) > 1
-                      ? t("card.oddLabel", { odd: Number(item.odd).toFixed(2) })
-                      : "-"}
-                  </div>
-                  <div className="font-mono text-[8px] text-[var(--fp-text-faint)]">{item.source || t("card.sourceNa")}</div>
-                </>
-              )}
-            </div>
-          )})}
-        </div>
-      )}
+      {!compact && <MarketPicksGrid row={row} accessTier={accessTier} />}
 
-      {!compact && !canShowSpecialBet && (
-        <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
-              {t("card.specialBet")}
-            </div>
-            <span className="text-sm" aria-hidden>
-              🔒
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[var(--fp-text-muted)] sm:text-xs">{t("card.specialBetLocked")}</p>
-        </div>
-      )}
-
-      {!compact && canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-        <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
-              {t("card.specialBet")}
-            </div>
-            {specialBetCandidatesLen >= 3 ? (
-              <div
-                className="inline-flex rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-0.5"
-                role="group"
-                aria-label={t("card.specialBet")}
-              >
-                {[2, 3].map((n) => {
-                  const active = specialLegCount === n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSpecialLegCount(n as 2 | 3);
-                      }}
-                      className={`rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors sm:text-[11px] ${
-                        active
-                          ? "bg-[var(--fp-success)] text-white shadow-sm ring-1 ring-[var(--fp-success)]"
-                          : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-                      }`}
-                    >
-                      {t("card.legs", { n })}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-1.5 space-y-1">
-            {specialBetLegs.map((leg) => {
-              const tone = outcomeTextClass(leg.outcome);
-              const liveBadge = leg.id === "recommended" ? specialBetLiveAdjustmentBadge(leg.liveAdjustment) : null;
-              return (
-                <div
-                  key={`${leg.label}-${leg.pick}`}
-                  className={`flex items-center justify-between gap-2 text-[11px] sm:text-xs ${tone}`}
-                >
-                  <span className="min-w-0 flex-1 truncate font-semibold">
-                    {leg.label}: {leg.pick}
-                  </span>
-                  <span className="shrink-0 tabular-nums font-bold">
-                    {Math.round(leg.probability)}% · {Number(leg.odd).toFixed(2)}
-                    {liveBadge && (
-                      <span
-                        className={`ml-1 ${liveBadge.tone === "success" ? "text-[var(--fp-success)]" : "text-[var(--fp-danger)]"}`}
-                        title={t(
-                          liveBadge.tone === "success" ? "panels.liveAdjustedAligned" : "panels.liveAdjustedContradicted",
-                          { delta: liveBadge.delta }
-                        )}
-                      >
-                        {liveBadge.delta}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className={`text-sm font-extrabold tabular-nums tracking-tight sm:text-base ${specialCombinedTone}`}>
-              {t("card.combinedOdd", {
-                odd: Number.isFinite(Number(specialBetCombinedOdd))
-                  ? Number(specialBetCombinedOdd).toFixed(2)
-                  : t("card.na")
-              })}
-            </span>
-            {specialCombinedOutcome === "win" || specialCombinedOutcome === "loss" ? (
-              <span
-                className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
-                  specialCombinedOutcome === "win"
-                    ? "bg-[var(--fp-success)] text-white"
-                    : "bg-[var(--fp-danger)] text-white"
-                }`}
-              >
-                {specialCombinedOutcome === "win" ? t("card.chipWin") : t("card.chipLose")}
-              </span>
-            ) : null}
-          </div>
-        </div>
+      {!compact && (
+        <SpecialBetSection
+          row={row}
+          canShowSpecialBet={canShowSpecialBet}
+          hasExactConfidence={hasExactConfidence}
+          specialLegCount={specialLegCount}
+          onLegCountChange={setSpecialLegCount}
+        />
       )}
 
       <p className="relative mt-3 font-mono text-[9px] text-[var(--fp-text-muted)]/90">
