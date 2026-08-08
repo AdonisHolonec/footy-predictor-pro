@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, type ComponentProps } from "react";
-import { AdminModelMetricsPanel, AdminPerformanceObservatory } from "../admin/AdminObservatory";
+import { AdminModelMetricsPanel } from "../admin/AdminModelMetricsPanel";
+import { AdminPerformanceObservatory } from "../admin/AdminObservatory";
 import AdminUsersPanel from "./AdminUsersPanel";
 import SuccessRateTracker from "../SuccessRateTracker";
 import StatisticsPanel, { type StatisticsPanelProps } from "./StatisticsPanel";
