@@ -9,7 +9,8 @@
   },
   "rewrites": [
     { "source": "/api/stripe-webhook", "destination": "/api/billing?view=webhook" },
-    { "source": "/api/activate-trial", "destination": "/api/billing?view=trial" }
+    { "source": "/api/activate-trial", "destination": "/api/billing?view=trial" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

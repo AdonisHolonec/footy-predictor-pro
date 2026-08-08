@@ -1,11 +1,9 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Shared E2E helpers. Navigation always starts at "/" and proceeds through
- * clicks: direct GETs on client routes (/login, /track-record) return a
- * Vercel 404 because vercel.json has no SPA fallback rewrite — a real
- * production defect recorded in the Sprint 3 report, deliberately not fixed
- * here (out of sprint scope).
+ * Shared E2E helpers. Navigation starts at "/" and proceeds through clicks —
+ * the real user journey. (Deep links work since the SPA-fallback rewrite in
+ * vercel.json; landing.spec guards that regression explicitly.)
  *
  * Selectors target the shell's aria-labels (i18n `shell.*` keys) rather than
  * visible copy where the copy is short or duplicated — those labels are the
@@ -112,9 +110,9 @@ export async function loginViaUi(page: Page, creds = CREDS) {
  * Enter the workspace on a context that already carries a stored session
  * (see auth.setup.ts) — no password login, no rate-limit exposure.
  *
- * "/" is always the marketing landing; /workspace only exists client-side
- * (direct GET 404s — the known missing SPA-fallback defect), so the way in
- * is the landing's own logged-in "Deschide aplicația/workspace" link.
+ * "/" is always the marketing landing; the workspace lives at /workspace.
+ * Entering through the landing's logged-in "Deschide aplicația" link keeps
+ * this on the real user journey (and worked even before the SPA fallback).
  */
 export async function gotoWorkspace(page: Page) {
   await page.goto("/");
