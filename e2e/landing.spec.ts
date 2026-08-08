@@ -17,6 +17,16 @@ test("landing page renders the product, pricing and auth entry", async ({ page }
   }
 });
 
+test("deep links serve the app, not a platform 404 (SPA fallback)", async ({ page }) => {
+  // Regression guard for the missing-SPA-fallback defect: a direct GET on a
+  // client route must serve index.html and let the router take over.
+  const response = await page.goto("/login");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Autentificare", exact: true })).toBeVisible({
+    timeout: 15_000
+  });
+});
+
 test("wrong password is rejected with visible feedback, not a silent nothing", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Autentificare" }).first().click();
