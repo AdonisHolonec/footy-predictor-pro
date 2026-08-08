@@ -21,3 +21,6 @@ ui-ux-pro-max-skill/
 # Playwright artifacts (E2E smoke)
 test-results/
 playwright-report/
+
+# Playwright saved sessions (real auth tokens)
+e2e/.auth/

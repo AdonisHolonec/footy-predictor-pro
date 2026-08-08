@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { hasCreds, loginViaUi, predictButton } from "./helpers";
+import { gotoWorkspace, hasCreds, predictButton } from "./helpers";
 
 test.describe("predict flow", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
   test("pressing Predict produces predictions or an explicit quota message", async ({ page }) => {
-    await loginViaUi(page);
+    await gotoWorkspace(page);
 
     const responsePromise = page.waitForResponse(
       (r) => r.url().includes("/api/predict") || r.url().includes("/api/warm"),

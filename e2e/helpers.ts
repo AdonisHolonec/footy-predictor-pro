@@ -25,14 +25,22 @@ export const ADMIN_CREDS = {
 export const hasCreds = Boolean(CREDS.email && CREDS.password);
 export const hasAdminCreds = Boolean(ADMIN_CREDS.email && ADMIN_CREDS.password);
 
+/** Saved storage-state files written by auth.setup.ts (gitignored). */
+export const USER_STATE = "e2e/.auth/user.json";
+export const ADMIN_STATE = "e2e/.auth/admin.json";
+
 /** The Predict action button — only a logged-in workspace renders it. */
 export function predictButton(page: Page) {
   return page.getByRole("button", { name: /generează predicții/i }).first();
 }
 
-/** Something only a logged-in workspace shows. */
+/**
+ * Something only a logged-in session shows. Regular accounts land in the
+ * consumer workspace (Predict button); admin accounts land in the Admin
+ * Observatory (its "Admin" navigation rail).
+ */
 export function loggedInMarker(page: Page) {
-  return predictButton(page);
+  return predictButton(page).or(page.getByRole("navigation", { name: "Admin" })).first();
 }
 
 /** Shell icon buttons (aria-labels from i18n shell.*). */
@@ -69,13 +77,24 @@ async function dismissOnboardingIfPresent(page: Page) {
 async function settleLeagueDialogIfPresent(page: Page) {
   const dialog = page.getByRole("dialog", { name: "League filter" });
   try {
-    await dialog.waitFor({ state: "visible", timeout: 5_000 });
+    await dialog.waitFor({ state: "visible", timeout: 3_000 });
   } catch {
     return; // dialog not shown — selection already exists
   }
   await dialog.getByRole("button", { name: "Elite · toate" }).first().click();
   await dialog.getByRole("button", { name: "Închide", exact: true }).first().click();
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+}
+
+/**
+ * The workspace opens its first-run overlays per browser context, not per
+ * account — a fresh storage-state context can still get the league dialog.
+ * Order matters: the league dialog (z-70) stacks ABOVE the onboarding
+ * carousel (z-50), so it must be settled first.
+ */
+async function settleWorkspaceOverlays(page: Page) {
+  await settleLeagueDialogIfPresent(page);
+  await dismissOnboardingIfPresent(page);
 }
 
 /** Log in through the real UI, exactly like a user. */
@@ -86,11 +105,25 @@ export async function loginViaUi(page: Page, creds = CREDS) {
   await page.getByRole("textbox", { name: "Parolă" }).fill(creds.password);
   await page.getByRole("button", { name: "Autentificare", exact: true }).click();
   await expect(loggedInMarker(page)).toBeVisible({ timeout: 30_000 });
-  // Order matters: the league dialog (z-70) stacks ABOVE the onboarding
-  // carousel (z-50), so it must be settled first or the skip click is
-  // intercepted.
-  await settleLeagueDialogIfPresent(page);
-  await dismissOnboardingIfPresent(page);
+  await settleWorkspaceOverlays(page);
+}
+
+/**
+ * Enter the workspace on a context that already carries a stored session
+ * (see auth.setup.ts) — no password login, no rate-limit exposure.
+ *
+ * "/" is always the marketing landing; /workspace only exists client-side
+ * (direct GET 404s — the known missing SPA-fallback defect), so the way in
+ * is the landing's own logged-in "Deschide aplicația/workspace" link.
+ */
+export async function gotoWorkspace(page: Page) {
+  await page.goto("/");
+  await page
+    .getByRole("link", { name: /deschide (aplicația|workspace)/i })
+    .first()
+    .click();
+  await expect(loggedInMarker(page)).toBeVisible({ timeout: 30_000 });
+  await settleWorkspaceOverlays(page);
 }
 
 /** Log out through the profile view and wait for the public site. */
