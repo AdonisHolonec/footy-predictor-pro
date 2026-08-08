@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
 import type { TranslateFn } from "../i18n/types";
 import { translateConfidenceCategory } from "../i18n/labels";
@@ -11,7 +11,6 @@ import {
 import ValueCard from "./ValueCard";
 import ExplanationCard from "./ExplanationCard";
 import FeatureImportanceChart from "./FeatureImportanceChart";
-import PredictionLaboratoryPanel from "./PredictionLaboratory";
 import { PredictionRow } from "../types";
 import { isFixtureInPlay } from "../utils/appUtils";
 import { resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
@@ -26,6 +25,12 @@ import {
 import { matchingMarketOdd, shotsDisplayOdd } from "../utils/marketPicks";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
 import MarketFamilyIcon from "./icons/MarketFamilyIcon";
+
+// Singura muchie statică dinspre card către recharts (~370 kB chunk). Lazy aici
+// înseamnă că dashboard-ul nu mai preîncarcă chunk-ul de chart-uri la deschidere;
+// el se descarcă abia când un card ne-compact cu date suficiente chiar randează
+// laboratorul.
+const PredictionLaboratoryPanel = lazy(() => import("./PredictionLaboratory"));
 
 type MatchCardProps = {
   row: PredictionRow;
@@ -634,7 +639,11 @@ export default function MatchCard({
         </div>
       ) : null}
 
-      {!compact && !row.insufficientData ? <PredictionLaboratoryPanel match={row} compact /> : null}
+      {!compact && !row.insufficientData ? (
+        <Suspense fallback={null}>
+          <PredictionLaboratoryPanel match={row} compact />
+        </Suspense>
+      ) : null}
 
       {!compact && row.explanation && (row.explanation.reasons?.length || row.explanation.reasoning?.length) ? (
         <ExplanationCard explanation={row.explanation} compact />
