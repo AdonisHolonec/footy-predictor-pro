@@ -9,6 +9,8 @@ const SHIFT_NOISE_FLOOR_PP = 3;
 type Props = {
   match: PredictionRow;
   className?: string;
+  /** Card-density variant: tighter paddings/typography for PredictionFocusCard; default is the modal panel. */
+  compact?: boolean;
 };
 
 type OutcomeCell = {
@@ -31,7 +33,7 @@ function formatDelta(deltaPp: number): string {
  * (display-only; the engine's probs/recommended stay untouched) and leads with
  * the biggest mover versus the pre-match probabilities.
  */
-export default function LiveWinProbabilityStrip({ match, className = "" }: Props) {
+export default function LiveWinProbabilityStrip({ match, className = "", compact = false }: Props) {
   const { t } = useLocale();
   const live = useMemo(
     () => deriveLiveWinProbability(match),
@@ -78,17 +80,31 @@ export default function LiveWinProbabilityStrip({ match, className = "" }: Props
 
   return (
     <div
-      className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4 ${className}`}
+      className={
+        compact
+          ? `rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 px-2.5 py-2 ${className}`
+          : `rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4 ${className}`
+      }
     >
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
+      <div className={`flex items-center justify-between gap-2 ${compact ? "mb-1.5" : "mb-2.5"}`}>
+        <p
+          className={`font-bold uppercase tracking-wide text-[var(--fp-text-muted)] ${
+            compact ? "text-[8px]" : "text-[10px] sm:text-[11px]"
+          }`}
+        >
           {t("match.liveWinTitle")}
         </p>
-        <p className="text-[10px] font-semibold text-[var(--fp-text-muted)] sm:text-[11px]">{shiftLine}</p>
+        <p
+          className={`truncate font-semibold text-[var(--fp-text-muted)] ${
+            compact ? "text-[9px]" : "text-[10px] sm:text-[11px]"
+          }`}
+        >
+          {shiftLine}
+        </p>
       </div>
 
       <div
-        className="flex h-2 w-full overflow-hidden rounded-full bg-[var(--fp-border)]"
+        className={`flex w-full overflow-hidden rounded-full bg-[var(--fp-border)] ${compact ? "h-1.5" : "h-2"}`}
         role="img"
         aria-label={cells.map((c) => `${c.label} ${Math.round(c.livePct)}%`).join(" · ")}
       >
@@ -101,7 +117,7 @@ export default function LiveWinProbabilityStrip({ match, className = "" }: Props
         ))}
       </div>
 
-      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] sm:text-[11px]">
+      <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 text-[9px]" : "mt-2 text-[10px] sm:text-[11px]"}`}>
         {cells.map((c, idx) => (
           <div
             key={c.key}
