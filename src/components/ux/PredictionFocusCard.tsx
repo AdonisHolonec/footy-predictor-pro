@@ -21,6 +21,7 @@ import {
 } from "../../utils/marketPicks";
 import { formatRecommendedPick } from "../../utils/formatRecommendation";
 import MarketFamilyIcon from "../icons/MarketFamilyIcon";
+import LiveWinProbabilityStrip from "./LiveWinProbabilityStrip";
 
 type Props = {
   row: PredictionRow;
@@ -433,6 +434,8 @@ export default function PredictionFocusCard({
           </span>
         </div>
       </div>
+
+      {live && <LiveWinProbabilityStrip match={row} compact className="mt-2" />}
 
       {live && row.momentum && (
         <div className="mt-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 px-2.5 py-2">
