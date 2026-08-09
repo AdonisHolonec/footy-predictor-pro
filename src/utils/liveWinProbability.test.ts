@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveLiveWinProbability } from "./liveWinProbability";
+import { appendLiveWinHistory, deriveLiveWinProbability, type LiveWinHistoryPoint } from "./liveWinProbability";
 
 type Input = Parameters<typeof deriveLiveWinProbability>[0];
 
@@ -91,5 +91,34 @@ describe("deriveLiveWinProbability", () => {
     expect(early).not.toBeNull();
     expect(late).not.toBeNull();
     expect(late!.p1).toBeGreaterThan(early!.p1);
+  });
+});
+
+describe("appendLiveWinHistory", () => {
+  const point = (minute: number, p1 = 40): LiveWinHistoryPoint => ({ minute, p1, pX: 30, p2: 30 });
+
+  it("appends a point for a new minute without mutating the input", () => {
+    const prev = [point(10)];
+    const next = appendLiveWinHistory(prev, point(11));
+    expect(next).toHaveLength(2);
+    expect(next[1].minute).toBe(11);
+    expect(prev).toHaveLength(1);
+  });
+
+  it("replaces the last point when the minute repeats (latest values win)", () => {
+    const prev = [point(10, 40)];
+    const next = appendLiveWinHistory(prev, point(10, 55));
+    expect(next).toHaveLength(1);
+    expect(next[0].p1).toBe(55);
+  });
+
+  it("caps the history length by dropping the oldest points", () => {
+    let history: LiveWinHistoryPoint[] = [];
+    for (let minute = 0; minute < 130; minute++) {
+      history = appendLiveWinHistory(history, point(minute));
+    }
+    expect(history.length).toBeLessThanOrEqual(120);
+    expect(history[0].minute).toBe(130 - history.length);
+    expect(history[history.length - 1].minute).toBe(129);
   });
 });

@@ -24,6 +24,32 @@ export type LiveWinProbability = {
   remainingFraction: number;
 };
 
+/** One live-probability snapshot per observed minute — the sparkline's data point. */
+export type LiveWinHistoryPoint = {
+  minute: number;
+  p1: number;
+  pX: number;
+  p2: number;
+};
+
+/** Poll cadence is ~75s, so one point per minute; 120 covers 90' + stoppage comfortably. */
+export const MAX_LIVE_WIN_HISTORY_POINTS = 120;
+
+/**
+ * Immutable append for the in-memory sparkline history: a repeated minute
+ * replaces the previous snapshot (latest poll wins), and length is capped by
+ * dropping the oldest points. No persistence — per-mount, like momentum history.
+ */
+export function appendLiveWinHistory(
+  history: LiveWinHistoryPoint[],
+  point: LiveWinHistoryPoint,
+  max = MAX_LIVE_WIN_HISTORY_POINTS
+): LiveWinHistoryPoint[] {
+  const last = history[history.length - 1];
+  const next = last && last.minute === point.minute ? [...history.slice(0, -1), point] : [...history, point];
+  return next.length > max ? next.slice(next.length - max) : next;
+}
+
 const REGULATION_MINUTES = 90;
 /** Truncation for the remaining-goals grid; residual mass is renormalized away. */
 const MAX_REMAINING_GOALS = 10;
