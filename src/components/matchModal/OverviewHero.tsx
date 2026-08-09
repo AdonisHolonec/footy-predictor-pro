@@ -4,6 +4,7 @@
  */
 
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
+import LiveWinProbabilityStrip from "../ux/LiveWinProbabilityStrip";
 import MatchMomentumTimeline from "../ux/MatchMomentumTimeline";
 import { EdgeCompass, FormRibbon, SignalLens } from "../SignalLab";
 import { LeagueStandingEntry, PredictionRow } from "../../types";
@@ -58,6 +59,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
   } = props;
   return (
     <>
+          {hasLiveScore && <LiveWinProbabilityStrip match={match} className={`w-full ${tab(["overview"])}`} />}
           {hasLiveScore && match.momentum && (
             <div className={`w-full ${tab(["overview"])}`}>
               <MatchMomentumTimeline
