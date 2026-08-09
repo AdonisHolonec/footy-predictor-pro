@@ -104,6 +104,8 @@ export default function UserDashboard() {
   const [exportBusy, setExportBusy] = useState(false);
   const [warmPredictBusy, setWarmPredictBusy] = useState(false);
   const [notifSaveBusy, setNotifSaveBusy] = useState(false);
+  /** Set when onboarding finished with leagues picked — the effect below fires the first predict once the selection state has propagated. */
+  const [onboardingAutoPredict, setOnboardingAutoPredict] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [billingBusy, setBillingBusy] = useState<"premium" | "ultra" | "portal" | null>(null);
@@ -387,6 +389,13 @@ export default function UserDashboard() {
       setWarmPredictBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!onboardingAutoPredict || !selectedLeagueIds.length) return;
+    setOnboardingAutoPredict(false);
+    void warmAndPredict();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- warmAndPredict is a stable-in-practice component function; the effect must fire exactly once per onboarding completion
+  }, [onboardingAutoPredict, selectedLeagueIds]);
 
   /** Refresh: reload saved picks. Runs Predict when saved rows are under-masked for the plan. */
   async function restoreOrPredict() {
@@ -771,6 +780,10 @@ export default function UserDashboard() {
             setSelectedLeagueIdsLimited(leagueIds);
             updateFilters({ preferredMarkets: markets });
             void markOnboardingComplete().catch(() => {});
+            // First value moment: generate predictions right away instead of dropping
+            // the new user on an empty dashboard. Deferred via effect — warm/predict
+            // read selectedLeagueIds, which hasn't propagated yet in this handler.
+            setOnboardingAutoPredict(leagueIds.length > 0);
           }}
         />
       )}

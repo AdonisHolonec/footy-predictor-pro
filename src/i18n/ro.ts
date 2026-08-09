@@ -790,6 +790,7 @@ export const ro: Dict = {
     onboardingSkip: "Sari peste",
     onboardingNext: "Următorul",
     onboardingGetStarted: "Începe",
+    onboardingBack: "Înapoi",
     onboardingLeaguesTitle: "Ce ligi urmărești?",
     onboardingLeaguesBody: "Alege ligile favorite ca să-ți filtrăm feed-ul de predicții după ele.",
     onboardingLeaguesSelectAll: "Selectează toate",
