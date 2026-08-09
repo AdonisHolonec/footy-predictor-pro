@@ -66,6 +66,7 @@ export const ro: Dict = {
     notifValueTitle: "Value bet nou detectat",
     notifMomentumUpTitle: "Momentum în creștere",
     notifMomentumDownTitle: "Momentum în scădere",
+    notifLiveSwingTitle: "Răsturnare de șanse live",
     notifSettledWinTitle: "Validat: câștig",
     notifSettledLossTitle: "Validat: pierdere",
     notifInMinutes: "începe în {m}m",
