@@ -1,10 +1,17 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import type { PredictionRow } from "../../types";
-import { deriveLiveWinProbability } from "../../utils/liveWinProbability";
+import {
+  appendLiveWinHistory,
+  deriveLiveWinProbability,
+  type LiveWinHistoryPoint
+} from "../../utils/liveWinProbability";
 
 /** Shifts smaller than this (pp) read as noise, not a story — show the stable line instead. */
 const SHIFT_NOISE_FLOOR_PP = 3;
+/** Sparkline plot box (viewBox units) — strokes stay non-scaling so they render at true px. */
+const SPARK_W = 100;
+const SPARK_H = 32;
 
 type Props = {
   match: PredictionRow;
@@ -40,6 +47,24 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute only on the live inputs the derivation reads
     [match.status, match.score?.home, match.score?.away, match.score?.minute, match.lambdas]
   );
+
+  // In-memory sparkline history (modal variant only) — per-mount like the momentum
+  // timeline's, reset when the strip is reused for a different fixture.
+  const [history, setHistory] = useState<LiveWinHistoryPoint[]>([]);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const fixtureRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (compact || !live) return;
+    const point: LiveWinHistoryPoint = { minute: live.minute, p1: live.p1, pX: live.pX, p2: live.p2 };
+    setHistory((prev) => {
+      const base = fixtureRef.current === Number(match.id) ? prev : [];
+      fixtureRef.current = Number(match.id);
+      return appendLiveWinHistory(base, point);
+    });
+    setHoverIdx(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one snapshot per observed live minute
+  }, [compact, match.id, live?.minute, live?.p1, live?.pX, live?.p2]);
+
   if (!live) return null;
 
   const kickoff = match.probs;
@@ -77,6 +102,30 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
     biggestMover && Math.abs(biggestMover.deltaPp) >= SHIFT_NOISE_FLOOR_PP
       ? t("match.liveWinShift", { label: biggestMover.label, delta: formatDelta(biggestMover.deltaPp) })
       : t("match.liveWinStable");
+
+  // Sparkline geometry — x is the match clock (0..max(90, last minute)), y is 0–100%.
+  const showSpark = !compact && history.length >= 2;
+  const maxMinute = showSpark ? Math.max(90, history[history.length - 1].minute) : 90;
+  const sparkX = (minute: number) => (minute / maxMinute) * SPARK_W;
+  const sparkY = (pct: number) => SPARK_H - (pct / 100) * SPARK_H;
+  const sparkPath = (key: "p1" | "pX" | "p2") =>
+    history.map((pt) => `${sparkX(pt.minute).toFixed(2)},${sparkY(pt[key]).toFixed(2)}`).join(" ");
+  const hoverPoint = hoverIdx != null ? (history[hoverIdx] ?? null) : null;
+  const handleSparkPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const minuteAtCursor = ((e.clientX - rect.left) / rect.width) * maxMinute;
+    let best = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    history.forEach((pt, idx) => {
+      const dist = Math.abs(pt.minute - minuteAtCursor);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = idx;
+      }
+    });
+    setHoverIdx(best);
+  };
 
   return (
     <div
@@ -139,6 +188,75 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
           </div>
         ))}
       </div>
+
+      {showSpark && (
+        <div className="relative mt-2" onPointerMove={handleSparkPointer} onPointerLeave={() => setHoverIdx(null)}>
+          <svg
+            viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+            preserveAspectRatio="none"
+            className="block h-10 w-full"
+            role="img"
+            aria-label={`${t("match.liveWinTitle")} — ${match.teams.home} · ${t("match.liveWinDraw")} · ${match.teams.away}`}
+          >
+            <line
+              x1="0"
+              y1={sparkY(50)}
+              x2={SPARK_W}
+              y2={sparkY(50)}
+              stroke="var(--fp-border)"
+              strokeDasharray="2 3"
+              vectorEffect="non-scaling-stroke"
+            />
+            <polyline
+              points={sparkPath("pX")}
+              fill="none"
+              stroke="var(--fp-text-muted)"
+              strokeOpacity="0.5"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+            <polyline
+              points={sparkPath("p2")}
+              fill="none"
+              stroke="var(--fp-danger)"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+            <polyline
+              points={sparkPath("p1")}
+              fill="none"
+              stroke="var(--fp-accent)"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+            {hoverPoint && (
+              <line
+                x1={sparkX(hoverPoint.minute)}
+                y1="0"
+                x2={sparkX(hoverPoint.minute)}
+                y2={SPARK_H}
+                stroke="var(--fp-text-muted)"
+                strokeOpacity="0.6"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </svg>
+          {hoverPoint && (
+            <div
+              className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 font-mono text-[9px] tabular-nums text-[var(--fp-text)] shadow-[var(--fp-shadow-sm)]"
+              style={{ left: `${Math.min(88, Math.max(12, (hoverPoint.minute / maxMinute) * 100))}%` }}
+            >
+              {hoverPoint.minute}&apos;
+              <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-accent)] align-middle" aria-hidden />
+              {Math.round(hoverPoint.p1)}%
+              <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-text-muted)]/50 align-middle" aria-hidden />
+              {Math.round(hoverPoint.pX)}%
+              <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-danger)] align-middle" aria-hidden />
+              {Math.round(hoverPoint.p2)}%
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
