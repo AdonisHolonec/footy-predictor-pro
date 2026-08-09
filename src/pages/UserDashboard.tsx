@@ -635,6 +635,7 @@ export default function UserDashboard() {
           openMatch={openMatch}
           history={history}
           markNotificationsSeen={markNotificationsSeen}
+          onToggleLiveSwing={(enabled) => updateFilters({ notifyLiveSwing: enabled })}
           saveNotificationPrefs={saveNotificationPrefs}
           notifSaveBusy={notifSaveBusy}
           notifySafe={notifySafe}

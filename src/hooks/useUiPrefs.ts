@@ -28,6 +28,8 @@ export type UiPrefsV3 = {
   notificationsSeenIds: string[];
   /** From onboarding — empty means no preference, show every market. */
   preferredMarkets: MarketPref[];
+  /** In-app "big live swing" alerts (client-derived, never emailed) — on by default. */
+  notifyLiveSwing: boolean;
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
@@ -47,7 +49,8 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   matchesFilter: "all",
   dashboardWidgets: ["kpi", "continue", "recommended", "value", "matches"],
   notificationsSeenIds: [],
-  preferredMarkets: []
+  preferredMarkets: [],
+  notifyLiveSwing: true
 };
 
 function storageKey(userId?: string | null) {
@@ -168,6 +171,7 @@ export function useUiPrefs(userId?: string | null) {
           | "matchSearch"
           | "matchesFilter"
           | "preferredMarkets"
+          | "notifyLiveSwing"
         >
       >
     ) => {

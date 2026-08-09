@@ -165,6 +165,24 @@ describe("deriveNotifications", () => {
     expect(result[0].id).toBe("liveswing-14-home-down");
   });
 
+  it("omits liveSwing items (and only those) when includeLiveSwing is false", () => {
+    const swingRow = baseRow({
+      id: 15,
+      status: "2H",
+      lambdas: { home: 1.5, away: 1.1 },
+      score: { home: 0, away: 1, minute: 70 }
+    });
+    const valueRow = baseRow({ id: 16, valueBet: { detected: true, ev: 4 } as PredictionRow["valueBet"] });
+    const result = deriveNotifications({
+      predictions: [swingRow, valueRow],
+      history: [],
+      watchlistFixtureIds: [],
+      includeLiveSwing: false,
+      now: NOW
+    });
+    expect(result.map((n) => n.kind)).toEqual(["value"]);
+  });
+
   it("surfaces a settled watchlisted prediction as win or loss", () => {
     const entry: HistoryEntry = {
       ...baseRow({ id: 3 }),
