@@ -1,8 +1,9 @@
 name: E2E Smoke
 
-# Deliberately a SEPARATE, non-required workflow in its first iteration: a
-# flaky browser test must earn the right to block merges. Promotion path: once
-# it has run quietly for a while, add it to branch protection.
+# Promoted to a required branch-protection check (2026-08-09) after running
+# quietly since its introduction; the pull_request trigger exists so the check
+# can gate merges. Fork PRs would run without secrets and skip the credentialed
+# specs, but this repo takes no fork contributions today.
 #
 # Runs against production (the deployed default in playwright.config.ts)
 # because preview deployments sit behind Vercel deployment protection. The
@@ -10,6 +11,9 @@ name: E2E Smoke
 # at the checkout-session response and never completes a payment.
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
