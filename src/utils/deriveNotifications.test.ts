@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveNotifications } from "./deriveNotifications";
+import { deriveLiveWinProbability } from "./liveWinProbability";
 import type { HistoryEntry, PredictionRow } from "../types";
 
 function baseRow(over: Partial<PredictionRow> = {}): PredictionRow {
@@ -96,6 +97,72 @@ describe("deriveNotifications", () => {
     });
     const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
     expect(result).toHaveLength(0);
+  });
+
+  it("surfaces a big live probability swing on an in-play fixture", () => {
+    // Kickoff probs said home 40 / draw 30 / away 30; away leads 0-1 at 70' →
+    // the live away chance is far above 30 pp, well over the swing threshold.
+    const row = baseRow({
+      id: 9,
+      status: "2H",
+      lambdas: { home: 1.5, away: 1.1 },
+      score: { home: 0, away: 1, minute: 70 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: "liveswing-9-away-up", kind: "liveSwing", swingOutcome: "away" });
+    expect(result[0].swingPp).toBeGreaterThan(15);
+  });
+
+  it("ignores a small live drift below the swing threshold", () => {
+    // Kickoff probs are set to the model's own minute-0 values, so a 0-0 at 5'
+    // has drifted only marginally — below the 15 pp floor.
+    const lambdas = { home: 1.5, away: 1.1 };
+    const atKickoff = deriveLiveWinProbability({
+      status: "1H",
+      lambdas,
+      score: { home: 0, away: 0, minute: 0 }
+    })!;
+    const row = baseRow({
+      id: 11,
+      status: "1H",
+      lambdas,
+      probs: { p1: atKickoff.p1, pX: atKickoff.pX, p2: atKickoff.p2 } as PredictionRow["probs"],
+      score: { home: 0, away: 0, minute: 5 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores fixtures where the live probability is not derivable", () => {
+    const notInPlay = baseRow({ id: 12, status: "NS", lambdas: { home: 1.5, away: 1.1 }, score: { home: 0, away: 0, minute: 0 } });
+    const noLambdas = baseRow({ id: 13, status: "2H", score: { home: 0, away: 2, minute: 70 } });
+    const result = deriveNotifications({
+      predictions: [notInPlay, noLambdas],
+      history: [],
+      watchlistFixtureIds: [],
+      now: NOW
+    });
+    expect(result).toHaveLength(0);
+  });
+
+  it("reports the outcome that moved most, with a signed delta", () => {
+    // Home was the 70 pp favourite; level 1-1 at 60' the collapse of the home
+    // chance is the single biggest move (the compensating rise splits between
+    // draw and away), so the alert points at home, downward.
+    const row = baseRow({
+      id: 14,
+      status: "2H",
+      probs: { p1: 70, pX: 15, p2: 15 } as PredictionRow["probs"],
+      lambdas: { home: 1.5, away: 1.1 },
+      score: { home: 1, away: 1, minute: 60 }
+    });
+    const result = deriveNotifications({ predictions: [row], history: [], watchlistFixtureIds: [], now: NOW });
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("liveSwing");
+    expect(result[0].swingOutcome).toBe("home");
+    expect(result[0].swingPp).toBeLessThan(-15);
+    expect(result[0].id).toBe("liveswing-14-home-down");
   });
 
   it("surfaces a settled watchlisted prediction as win or loss", () => {

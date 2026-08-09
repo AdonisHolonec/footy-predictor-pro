@@ -15,6 +15,7 @@ const KIND_ICON: Record<NotificationItem["kind"], string> = {
   kickoff: "⏱",
   value: "💡",
   momentum: "📈",
+  liveSwing: "⚡",
   settled: "🏁"
 };
 
@@ -34,6 +35,7 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
     if (item.kind === "momentum") {
       return item.trend === "down" ? t("dash.notifMomentumDownTitle") : t("dash.notifMomentumUpTitle");
     }
+    if (item.kind === "liveSwing") return t("dash.notifLiveSwingTitle");
     return item.validation === "win" ? t("dash.notifSettledWinTitle") : t("dash.notifSettledLossTitle");
   };
 
@@ -46,6 +48,16 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
     }
     if (item.kind === "value") {
       return item.ev != null ? `${teamsLine} · EV +${item.ev.toFixed(1)}%` : teamsLine;
+    }
+    if (item.kind === "liveSwing" && item.swingOutcome && item.swingPp != null) {
+      const outcomeLabel =
+        item.swingOutcome === "home"
+          ? item.teams.home
+          : item.swingOutcome === "away"
+            ? item.teams.away
+            : t("match.liveWinDraw");
+      const pp = Math.round(item.swingPp);
+      return `${teamsLine} · ${outcomeLabel} ${pp > 0 ? `+${pp}` : pp} pp`;
     }
     return teamsLine;
   };

@@ -1,6 +1,7 @@
 import type { HistoryEntry, PredictionRow } from "../types";
+import { deriveLiveWinProbability } from "./liveWinProbability";
 
-export type NotificationKind = "kickoff" | "value" | "momentum" | "settled";
+export type NotificationKind = "kickoff" | "value" | "momentum" | "liveSwing" | "settled";
 
 export type NotificationItem = {
   id: string;
@@ -15,12 +16,17 @@ export type NotificationItem = {
   validation?: "win" | "loss";
   /** "up"/"down" for "momentum" items. */
   trend?: "up" | "down";
+  /** "liveSwing" items: which 1X2 outcome moved most vs kickoff, and by how many signed pp. */
+  swingOutcome?: "home" | "draw" | "away";
+  swingPp?: number;
   at: string;
 };
 
 const UPCOMING_WINDOW_MS = 2 * 60 * 60 * 1000;
 /** Below this momentum confidence, live stats are too thin to alert on. */
 const MOMENTUM_ALERT_MIN_CONFIDENCE = 50;
+/** A live 1X2 shift below this (pp vs kickoff) is drift, not a swing worth alerting on. */
+const LIVE_SWING_MIN_DELTA_PP = 15;
 
 export function deriveNotifications(params: {
   predictions: PredictionRow[];
@@ -82,6 +88,35 @@ export function deriveNotifications(params: {
       at: row.kickoff
     }));
 
+  // Current-state list like value/momentum: derived fresh from the live rows each
+  // poll, auto-clears when the swing drops back under the floor. The id encodes
+  // outcome+direction (not magnitude) so a growing swing doesn't re-ring every poll.
+  const liveSwing: NotificationItem[] = predictions
+    .flatMap((row) => {
+      const live = deriveLiveWinProbability(row);
+      if (!live || !row.probs) return [];
+      const deltas: Array<{ outcome: NonNullable<NotificationItem["swingOutcome"]>; delta: number }> = [
+        { outcome: "home" as const, delta: live.p1 - row.probs.p1 },
+        { outcome: "draw" as const, delta: live.pX - row.probs.pX },
+        { outcome: "away" as const, delta: live.p2 - row.probs.p2 }
+      ].filter((d) => Number.isFinite(d.delta));
+      const biggest = [...deltas].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
+      if (!biggest || Math.abs(biggest.delta) < LIVE_SWING_MIN_DELTA_PP) return [];
+      return [{ row, biggest }];
+    })
+    .sort((a, b) => Math.abs(b.biggest.delta) - Math.abs(a.biggest.delta))
+    .map(({ row, biggest }) => ({
+      id: `liveswing-${row.id}-${biggest.outcome}-${biggest.delta > 0 ? "up" : "down"}`,
+      kind: "liveSwing" as const,
+      fixtureId: Number(row.id),
+      teams: row.teams,
+      league: row.league,
+      kickoff: row.kickoff,
+      swingOutcome: biggest.outcome,
+      swingPp: biggest.delta,
+      at: row.kickoff
+    }));
+
   const settled: NotificationItem[] = history
     .filter(
       (row) => watched.has(Number(row.id)) && (row.validation === "win" || row.validation === "loss")
@@ -99,5 +134,5 @@ export function deriveNotifications(params: {
       at: row.savedAt
     }));
 
-  return [...upcoming, ...value, ...momentum, ...settled];
+  return [...upcoming, ...liveSwing, ...value, ...momentum, ...settled];
 }
