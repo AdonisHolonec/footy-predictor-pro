@@ -32,9 +32,11 @@ export function deriveNotifications(params: {
   predictions: PredictionRow[];
   history: HistoryEntry[];
   watchlistFixtureIds: number[];
+  /** User pref (default on): big live swing alerts are client-derived, so the gate lives here, not server-side. */
+  includeLiveSwing?: boolean;
   now?: number;
 }): NotificationItem[] {
-  const { predictions, history, watchlistFixtureIds, now = Date.now() } = params;
+  const { predictions, history, watchlistFixtureIds, includeLiveSwing = true, now = Date.now() } = params;
   const watched = new Set(watchlistFixtureIds);
 
   const upcoming: NotificationItem[] = predictions
@@ -91,7 +93,7 @@ export function deriveNotifications(params: {
   // Current-state list like value/momentum: derived fresh from the live rows each
   // poll, auto-clears when the swing drops back under the floor. The id encodes
   // outcome+direction (not magnitude) so a growing swing doesn't re-ring every poll.
-  const liveSwing: NotificationItem[] = predictions
+  const liveSwing: NotificationItem[] = (includeLiveSwing ? predictions : [])
     .flatMap((row) => {
       const live = deriveLiveWinProbability(row);
       if (!live || !row.probs) return [];

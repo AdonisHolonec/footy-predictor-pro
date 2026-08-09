@@ -23,6 +23,8 @@ type NotificationsViewProps = {
   openMatch: (row: PredictionRow | HistoryEntry) => void;
   history: HistoryEntry[];
   markNotificationsSeen: (ids: string[]) => void;
+  /** In-app pref (useUiPrefs) — applies instantly, unlike the server-saved trio below. */
+  onToggleLiveSwing: (enabled: boolean) => void;
   saveNotificationPrefs: () => void;
   notifSaveBusy: boolean;
   notifySafe: boolean;
@@ -44,6 +46,7 @@ export default function NotificationsView(props: NotificationsViewProps) {
     openMatch,
     history,
     markNotificationsSeen,
+    onToggleLiveSwing,
     saveNotificationPrefs,
     notifSaveBusy,
     notifySafe,
@@ -74,7 +77,15 @@ export default function NotificationsView(props: NotificationsViewProps) {
             <p className="mt-1 text-xs text-[var(--fp-text-muted)]">
               {t("dash.alertsPreview", { low: alertsPreview.safe, value: alertsPreview.value })}
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={prefs.notifyLiveSwing}
+                  onChange={(e) => onToggleLiveSwing(e.target.checked)}
+                />
+                {t("dash.notifyLiveSwing")}
+              </label>
               <label className="flex min-h-[var(--fp-touch)] items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] px-3 text-sm">
                 <input type="checkbox" checked={notifySafe} onChange={(e) => setNotifySafe(e.target.checked)} />
                 {t("dash.notifyLowRisk")}

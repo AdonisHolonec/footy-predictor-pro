@@ -128,8 +128,14 @@ export function useDerivedPredictions({
   }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, prefs.preferredMarkets, matchSearch]);
   const homeLiveCount = useMemo(() => preds.filter((row) => isFixtureInPlay(row.status)).length, [preds]);
   const notificationItems = useMemo(
-    () => deriveNotifications({ predictions: preds, history, watchlistFixtureIds: prefs.watchlistFixtureIds }),
-    [preds, history, prefs.watchlistFixtureIds]
+    () =>
+      deriveNotifications({
+        predictions: preds,
+        history,
+        watchlistFixtureIds: prefs.watchlistFixtureIds,
+        includeLiveSwing: prefs.notifyLiveSwing
+      }),
+    [preds, history, prefs.watchlistFixtureIds, prefs.notifyLiveSwing]
   );
   const continueMatch = useMemo(() => {
     const recent = prefs.recentFixtureIds[0];

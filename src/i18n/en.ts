@@ -67,6 +67,7 @@ export const en: Dict = {
     notifMomentumUpTitle: "Momentum shifting up",
     notifMomentumDownTitle: "Momentum shifting down",
     notifLiveSwingTitle: "Big live swing",
+    notifyLiveSwing: "Live swing alerts",
     notifSettledWinTitle: "Settled: win",
     notifSettledLossTitle: "Settled: loss",
     notifInMinutes: "kicks off in {m}m",
