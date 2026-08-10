@@ -1,5 +1,8 @@
 import type { CardMarketValidations, PredictionRow } from "../types";
 import {
+  gradeOverUnder,
+  isFinalMatchStatus,
+  officialTotalFor,
   outcomeTextClass,
   resolveCardMarketOutcome,
   type CardMarketId,
@@ -212,6 +215,27 @@ export function listSpecialBetCandidates(
     marketResults: marketResults ?? row.marketResults
   };
 
+  /**
+   * A leg settles the selection it DISPLAYS. `resolveCardMarketOutcome` re-derives
+   * the market's own pick, which is the same selection for Corners and Shots but not
+   * always for Goals — this module deliberately prefers a goals line that has a real
+   * book quote, so the card could show "Over 1.5" while the resolver graded a
+   * different line. Grading the displayed side/line against the same official total
+   * the market tiles use keeps every surface on one answer.
+   */
+  const gradeLeg = (
+    marketId: Exclude<CardMarketId, "recommended">,
+    displayed: { side: "over" | "under"; line: number } | null
+  ): MarketOutcome => {
+    if (!displayed) return resolveCardMarketOutcome(marketId, enrichedRow, stored);
+    if (!isFinalMatchStatus(enrichedRow.status)) {
+      return resolveCardMarketOutcome(marketId, enrichedRow, stored);
+    }
+    const local = gradeOverUnder(displayed.side, displayed.line, officialTotalFor(marketId, enrichedRow));
+    if (local === "win" || local === "loss") return local;
+    return resolveCardMarketOutcome(marketId, enrichedRow, stored);
+  };
+
   const pool: SpecialBetLeg[] = [
     {
       id: "recommended",
@@ -231,7 +255,7 @@ export function listSpecialBetCandidates(
         : "",
       probability: Number(goalsPick?.probability || 0),
       odd: goalsPick ? Number(goalsOddForLine(row, goalsPick.line, goalsPick.side) ?? NaN) : NaN,
-      outcome: resolveCardMarketOutcome("goals", enrichedRow, stored),
+      outcome: gradeLeg("goals", goalsPick),
       family: "GOALS"
     },
     {
@@ -257,7 +281,7 @@ export function listSpecialBetCandidates(
               NaN
           )
         : NaN,
-      outcome: resolveCardMarketOutcome("corners", enrichedRow, stored),
+      outcome: gradeLeg("corners", cornersPick),
       family: "CORNERS"
     },
     {
@@ -268,7 +292,7 @@ export function listSpecialBetCandidates(
         : "",
       probability: Number(shotsPick?.probability || 0),
       odd: shotsPick ? Number(shotsDisplayOdd(row, shotsPick.side, shotsPick.line) ?? NaN) : NaN,
-      outcome: resolveCardMarketOutcome("shots", enrichedRow, stored),
+      outcome: gradeLeg("shots", shotsPick),
       family: "SHOTS"
     },
     {
