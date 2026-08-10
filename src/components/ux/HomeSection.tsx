@@ -98,9 +98,13 @@ export default function HomeSection({
 
   const valueCount = matches.filter(isValueRow).length;
   const avgConf = matches.length ? matches.reduce((s, m) => s + confOf(m), 0) / matches.length : 0;
+  const liveMatches = useMemo(() => matches.filter((m) => isFixtureInPlay(m.status)), [matches]);
   const topPicks = useMemo(() => {
-    const eligible = matches.filter((m) => confOf(m) >= HIGH_CONFIDENCE_THRESHOLD || isValueRow(m));
-    const pool = eligible.length ? eligible : matches;
+    // In-play rows own the "Live now" section at the top of the page — Top picks
+    // stays the upcoming, still-actionable shortlist (no duplicate cards).
+    const upcoming = matches.filter((m) => !isFixtureInPlay(m.status));
+    const eligible = upcoming.filter((m) => confOf(m) >= HIGH_CONFIDENCE_THRESHOLD || isValueRow(m));
+    const pool = eligible.length ? eligible : upcoming;
     return [...pool].sort((a, b) => confOf(b) - confOf(a) || evOf(b) - evOf(a)).slice(0, 3);
   }, [matches]);
 
@@ -157,6 +161,105 @@ export default function HomeSection({
         </p>
       </header>
 
+      {!matches.length ? (
+        <EmptyState
+          title={t("dash.emptyPredsTitle")}
+          description={t("dash.emptyPredsDesc")}
+          actionLabel={t("shell.predict")}
+          onAction={onPredict}
+        />
+      ) : (
+        <>
+          {liveMatches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none"
+                  />
+                  {t("dash.homeLiveTitle")}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={onGoLive}>
+                  {t("dash.showAll")} · {liveMatches.length}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {liveMatches.slice(0, 3).map((row) => (
+                  <PredictionFocusCard
+                    key={row.id}
+                    row={row}
+                    accessTier={accessTier}
+                    marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
+                    watched={isWatched(Number(row.id))}
+                    onToggleWatch={() => onToggleWatch(Number(row.id))}
+                    onOpen={() => onOpenMatch(row)}
+                    onUpgradeRequired={onUpgradeRequired}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {analysisMatch && (
+            <FeaturedPredictionCard match={analysisMatch} onOpenAnalysis={() => onOpenMatch(analysisMatch)} />
+          )}
+
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
+            {chips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={chip.onClick}
+                title={t("dash.filterTitle", { label: chip.label })}
+                aria-pressed={chip.active}
+                className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                  chip.active
+                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                    : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {topPicks.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+                  {t("dash.topPicksTitle")}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={onGoMatches}>
+                  {t("dash.showAll")}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {topPicks.map((row) => (
+                  <PredictionFocusCard
+                    key={row.id}
+                    row={row}
+                    accessTier={accessTier}
+                    marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
+                    watched={isWatched(Number(row.id))}
+                    onToggleWatch={() => onToggleWatch(Number(row.id))}
+                    onOpen={() => onOpenMatch(row)}
+                    onUpgradeRequired={onUpgradeRequired}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+        <StatTile label={t("dash.kpiToday")} value={String(matches.length)} tone="neutral" />
+        <StatTile label={t("dash.kpiAvgConfidence")} value={avgConf ? `${Math.round(avgConf)}%` : "—"} tone="neutral" />
+        <StatTile label={t("dash.kpiValue")} value={String(valueCount)} tone={valueCount > 0 ? "success" : "neutral"} />
+        <StatTile label={t("dash.kpiLive")} value={String(liveCount)} tone={liveCount > 0 ? "danger" : "neutral"} />
+      </div>
+
       <Card className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
@@ -172,70 +275,6 @@ export default function HomeSection({
             : t("dash.yesterdayAccuracyNoData")}
         </Badge>
       </Card>
-
-      <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
-        {chips.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            onClick={chip.onClick}
-            title={t("dash.filterTitle", { label: chip.label })}
-            aria-pressed={chip.active}
-            className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-              chip.active
-                ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-            }`}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
-
-      {analysisMatch && (
-        <FeaturedPredictionCard match={analysisMatch} onOpenAnalysis={() => onOpenMatch(analysisMatch)} />
-      )}
-
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-        <StatTile label={t("dash.kpiToday")} value={String(matches.length)} tone="neutral" />
-        <StatTile label={t("dash.kpiAvgConfidence")} value={avgConf ? `${Math.round(avgConf)}%` : "—"} tone="neutral" />
-        <StatTile label={t("dash.kpiValue")} value={String(valueCount)} tone={valueCount > 0 ? "success" : "neutral"} />
-        <StatTile label={t("dash.kpiLive")} value={String(liveCount)} tone={liveCount > 0 ? "danger" : "neutral"} />
-      </div>
-
-      {!matches.length ? (
-        <EmptyState
-          title={t("dash.emptyPredsTitle")}
-          description={t("dash.emptyPredsDesc")}
-          actionLabel={t("shell.predict")}
-          onAction={onPredict}
-        />
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
-              {t("dash.topPicksTitle")}
-            </h2>
-            <Button variant="ghost" size="sm" onClick={onGoMatches}>
-              {t("dash.showAll")}
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {topPicks.map((row) => (
-              <PredictionFocusCard
-                key={row.id}
-                row={row}
-                accessTier={accessTier}
-                marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
-                watched={isWatched(Number(row.id))}
-                onToggleWatch={() => onToggleWatch(Number(row.id))}
-                onOpen={() => onOpenMatch(row)}
-                onUpgradeRequired={onUpgradeRequired}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       <Card>
         <div className="flex items-center justify-between gap-2">
