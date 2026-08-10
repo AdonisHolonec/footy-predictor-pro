@@ -23,7 +23,8 @@ import { spawnSync } from "node:child_process";
  * files — a guard added after suites once vanished from `npm test` — and hiding
  * the path inside this runner would blind it.
  */
-const SUITE = process.argv[2] || "tests/integration/globalSpecialBets.db.test.js";
+const SUITES = process.argv.slice(2);
+if (SUITES.length === 0) SUITES.push("tests/integration/globalSpecialBets.db.test.js");
 const CONTAINER = process.env.GSB_TEST_CONTAINER || "fp-gsb-test";
 const IMAGE = process.env.GSB_TEST_IMAGE || "postgres:16-alpine";
 const KEEP = process.env.GSB_TEST_KEEP === "1";
@@ -76,7 +77,9 @@ for (let attempt = 0; attempt < 30; attempt += 1) {
 }
 if (!ready) fail("Postgres did not become ready inside the container.");
 
-const test = run("node", ["--test", SUITE], { stdio: "inherit" });
+// One database, so one suite at a time. node --test runs FILES in parallel by
+// default, and two suites truncating the same tables interleave into nonsense.
+const test = run("node", ["--test", "--test-concurrency=1", ...SUITES], { stdio: "inherit" });
 
 if (!KEEP) {
   run("docker", ["rm", "-f", CONTAINER]);

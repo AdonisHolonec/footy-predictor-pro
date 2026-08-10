@@ -25,6 +25,22 @@ import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily
 /** A selection must be worth including at all — below this it is not a bet, it is a formality. */
 export const MIN_SELECTION_ODD = 1.25;
 
+/**
+ * Families the server can actually settle today, as `resolveMarketFamily`
+ * names them.
+ *
+ * A bet is only as good as its ability to resolve: a leg the settlement layer
+ * cannot grade leaves the whole accumulator pending forever. `cards` and
+ * `correct_score` have no official total in the system (`marketResults` carries
+ * corners, shots on target and first-half goals, nothing else), and
+ * `ou_other`/`other` are unclassified by construction — so none of them may
+ * enter the pool.
+ *
+ * Applied during collection, before ranking and before any variant is sliced,
+ * so an unsettleable market can never reach a bet.
+ */
+export const SETTLEABLE_MARKET_FAMILIES = new Set(["ou", "corners", "shots", "1x2", "dc", "btts"]);
+
 export const GLOBAL_SPECIAL_BET_VARIANTS = [3, 5, 8];
 
 /**
@@ -62,7 +78,8 @@ function emptyRejections() {
     insufficientData: 0,
     notRecommendable: 0,
     oddBelowMinimum: 0,
-    missingData: 0
+    missingData: 0,
+    marketNotSettleable: 0
   };
 }
 
@@ -170,12 +187,19 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
         continue;
       }
 
+      // A market we cannot settle must never reach ranking, let alone a bet.
+      const family = resolveMarketFamily(market?.type, market?.family);
+      if (!SETTLEABLE_MARKET_FAMILIES.has(family)) {
+        rejected.marketNotSettleable += 1;
+        continue;
+      }
+
       candidates.push({
         fixtureId,
         leagueId,
         kickoff: String(row.kickoff),
         fixtureLabel: `${row.teams?.home ?? "?"} – ${row.teams?.away ?? "?"}`,
-        market: resolveMarketFamily(market?.type, market?.family),
+        market: family,
         selection,
         side,
         line,
