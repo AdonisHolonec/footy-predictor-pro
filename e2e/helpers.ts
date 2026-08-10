@@ -115,12 +115,29 @@ export async function loginViaUi(page: Page, creds = CREDS) {
  * this on the real user journey (and worked even before the SPA fallback).
  */
 export async function gotoWorkspace(page: Page) {
-  await page.goto("/");
-  await page
-    .getByRole("link", { name: /deschide (aplicația|workspace)/i })
-    .first()
-    .click();
-  await expect(loggedInMarker(page)).toBeVisible({ timeout: 30_000 });
+  // Two bounded attempts: while the stored session is still hydrating, the
+  // landing can render its logged-out state (no workspace link) or AuthGate can
+  // bounce the entry to /login — the documented session-hydration race, and the
+  // exact shape of the 2026-08-10 CI flake. One reload after the race settles
+  // recovers, just like a real user pressing the link again; failing BOTH
+  // attempts is a real bug and must fail the test.
+  const attempts = [
+    { linkTimeout: 10_000, markerTimeout: 12_000 },
+    { linkTimeout: 10_000, markerTimeout: 20_000 }
+  ];
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      await page.goto("/");
+      await page
+        .getByRole("link", { name: /deschide (aplicația|workspace)/i })
+        .first()
+        .click({ timeout: attempts[i].linkTimeout });
+      await expect(loggedInMarker(page)).toBeVisible({ timeout: attempts[i].markerTimeout });
+      break;
+    } catch (err) {
+      if (i === attempts.length - 1) throw err;
+    }
+  }
   await settleWorkspaceOverlays(page);
 }
 
