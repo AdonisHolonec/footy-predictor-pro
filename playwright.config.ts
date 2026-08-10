@@ -43,9 +43,10 @@ export default defineConfig({
       use: { browserName: "chromium", storageState: "e2e/.auth/user.json" }
     },
     {
-      // The logout journey MUST run last: Supabase signOut revokes ALL of the
-      // account's sessions (global scope), which would kill the shared storage
-      // state for every spec scheduled after it.
+      // The logout journey runs on its own account (E2E_LOGOUT_*), so its
+      // global signOut can no longer revoke the shared storage state. Ordering
+      // it last stays as defence in depth — and as the fallback path, where no
+      // dedicated account is configured and it reuses the shared one.
       name: "auth-journey",
       dependencies: ["chromium"],
       testMatch: /auth\.spec\.ts/,

@@ -20,8 +20,27 @@ export const ADMIN_CREDS = {
   password: process.env.E2E_ADMIN_PASSWORD || ""
 };
 
+/**
+ * The logout journey gets its own account. Supabase's signOut is global — it
+ * revokes EVERY session of the account it runs on — so performing it on the
+ * account the rest of the suite depends on is a session-destroying operation
+ * pointed at ourselves. Project ordering keeps that safe within one run, but
+ * nothing protects a run from ANOTHER run's logout: on 2026-08-10 a main-push
+ * run and a PR run started 12 seconds apart and killed each other's sessions.
+ *
+ * Falls back to the shared account when unset, so the suite still works before
+ * the E2E_LOGOUT_* secrets exist — just without the isolation.
+ */
+export const LOGOUT_CREDS = {
+  email: process.env.E2E_LOGOUT_EMAIL || CREDS.email,
+  password: process.env.E2E_LOGOUT_PASSWORD || CREDS.password
+};
+
 export const hasCreds = Boolean(CREDS.email && CREDS.password);
 export const hasAdminCreds = Boolean(ADMIN_CREDS.email && ADMIN_CREDS.password);
+export const hasDedicatedLogoutAccount = Boolean(
+  process.env.E2E_LOGOUT_EMAIL && process.env.E2E_LOGOUT_PASSWORD
+);
 
 /** Saved storage-state files written by auth.setup.ts (gitignored). */
 export const USER_STATE = "e2e/.auth/user.json";
@@ -110,6 +129,19 @@ export async function loginViaUi(page: Page, creds = CREDS) {
 const HYDRATION_GRACE_MS = 8_000;
 
 /**
+ * Recovery logins are real password logins on the shared account, and Supabase
+ * rate-limits those per ACCOUNT. Left uncapped, one early session death makes
+ * every remaining spec log in again — 10+ logins in a run — which trips the
+ * limit and takes the suite fully red for 30-60 minutes, main-push runs
+ * included. Observed on 2026-08-10: recoveries began working, then started
+ * failing inside loginViaUi with the limit's signature (the login screen simply
+ * never resolves). Two is enough to survive a normal late session death; past
+ * that, failing loudly is cheaper than poisoning the account.
+ */
+const MAX_SESSION_RECOVERIES = 2;
+let sessionRecoveries = 0;
+
+/**
  * Enter the workspace on a context that already carries a stored session
  * (see auth.setup.ts) — no password login, no rate-limit exposure.
  *
@@ -152,6 +184,14 @@ export async function gotoWorkspace(page: Page) {
   // works stays auth.spec's job, and the annotation keeps the recovery visible
   // in the report instead of silently green.
   if (!hasCreds) throw new Error("gotoWorkspace: no stored session and no credentials to recover with");
+  if (sessionRecoveries >= MAX_SESSION_RECOVERIES) {
+    throw new Error(
+      `gotoWorkspace: the stored session is gone and ${MAX_SESSION_RECOVERIES} recovery logins have already been ` +
+        "used this run. Refusing to log in again — repeated password logins trip Supabase's account-scoped rate " +
+        "limit, which would take the whole suite red for 30-60 minutes instead of just this spec."
+    );
+  }
+  sessionRecoveries += 1;
   test.info().annotations.push({
     type: "session-recovered",
     description: "stored session did not open the workspace; fell back to a UI login"
