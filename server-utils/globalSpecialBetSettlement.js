@@ -76,14 +76,15 @@ export function settleSelection(selection, fixture, now) {
   const market = String(selection?.market || "");
 
   if (TOTALS_FAMILIES.has(market)) {
-    const total = officialTotalForFamily(market, fixture);
-    // Guard, not a second grader: evaluateOuLine() runs the missing total through
-    // Number(), and Number(null) is 0 — so an absent corners figure would grade
-    // "Over 7.5" as a LOSS rather than as ungraded. Missing data must never
-    // manufacture a result, so the total is checked before it is handed over.
-    // (The same trap exists in the per-match settlement path; out of scope here,
-    // reported separately rather than changed.)
-    outcome = total === null ? "pending" : validationFromOu(status, selection?.side, selection?.line, total);
+    // An absent total is rejected inside evaluateOuLine, which is the one place
+    // that decides what "no answer" means. This module previously guarded here
+    // as well; that duplicate is gone now the boundary itself is correct.
+    outcome = validationFromOu(
+      status,
+      selection?.side,
+      selection?.line,
+      officialTotalForFamily(market, fixture)
+    );
   } else if (PICK_FAMILIES.has(market)) {
     if (isFinalStatus(status)) {
       const hit = evaluateTopPick(selection?.selection, fixture?.score);
