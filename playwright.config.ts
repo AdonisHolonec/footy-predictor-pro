@@ -14,7 +14,11 @@ import { defineConfig } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 45_000,
+  // Headroom for the one expensive path: when a stored session has been revoked
+  // mid-run, gotoWorkspace spends its hydration grace and then performs a real
+  // UI login. At 45s the test died before that recovery could finish, which is
+  // what turned one dead session into a wall of red (CI, 2026-08-10, PR #44).
+  timeout: 90_000,
   retries: 1,
   // Smoke specs share one logged-in journey where noted; workers=1 keeps the
   // free-tier test account from racing its own rate limits.

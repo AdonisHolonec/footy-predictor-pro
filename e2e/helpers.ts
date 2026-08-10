@@ -106,6 +106,9 @@ export async function loginViaUi(page: Page, creds = CREDS) {
   await settleWorkspaceOverlays(page);
 }
 
+/** How long the landing gets to hydrate a stored session before we treat it as gone. */
+const HYDRATION_GRACE_MS = 8_000;
+
 /**
  * Enter the workspace on a context that already carries a stored session
  * (see auth.setup.ts) — no password login, no rate-limit exposure.
@@ -115,44 +118,40 @@ export async function loginViaUi(page: Page, creds = CREDS) {
  * this on the real user journey (and worked even before the SPA fallback).
  */
 export async function gotoWorkspace(page: Page) {
-  // Two bounded attempts: while the stored session is still hydrating, the
-  // landing can render its logged-out state (no workspace link) or AuthGate can
-  // bounce the entry to /login — the documented session-hydration race, and the
-  // exact shape of the 2026-08-10 CI flake. One reload after the race settles
-  // recovers, just like a real user pressing the link again; failing BOTH
-  // attempts is a real bug and must fail the test.
-  const attempts = [
-    { linkTimeout: 10_000, markerTimeout: 12_000 },
-    { linkTimeout: 10_000, markerTimeout: 20_000 }
-  ];
-  let lastError: unknown;
-  for (let i = 0; i < attempts.length; i++) {
+  // Budget matters as much as the retry ladder here. The previous version spent
+  // up to 52s across two attempts before it could even try recovering, which is
+  // more than the 45s per-test timeout — so the fallback below never ran and
+  // every affected test died at the timeout instead (CI, 2026-08-10, PR #44).
+  //
+  // Now: wait only for the workspace link. Its absence IS the signal that the
+  // stored session is gone, and waiting on a marker that will never appear buys
+  // nothing. Two short attempts cover the hydration race, where the landing
+  // paints its logged-out state before the session hydrates.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto("/");
     try {
-      await page.goto("/");
-      await page
-        .getByRole("link", { name: /deschide (aplicația|workspace)/i })
-        .first()
-        .click({ timeout: attempts[i].linkTimeout });
-      await expect(loggedInMarker(page)).toBeVisible({ timeout: attempts[i].markerTimeout });
+      const link = page.getByRole("link", { name: /deschide (aplicația|workspace)/i }).first();
+      await link.waitFor({ state: "visible", timeout: HYDRATION_GRACE_MS });
+      await link.click({ timeout: 5_000 });
+      await expect(loggedInMarker(page)).toBeVisible({ timeout: 15_000 });
       await settleWorkspaceOverlays(page);
       return;
-    } catch (err) {
-      lastError = err;
+    } catch {
+      // logged-out landing, or the entry bounced — try once more, then recover
     }
   }
 
-  // Both attempts saw a logged-out landing, so the stored session is gone
-  // rather than slow: Supabase rotates refresh tokens, and every spec opens a
-  // fresh context replaying the SAME saved token, so one late rotation revokes
-  // the family mid-run and every spec after it lands logged out. Observed in CI
-  // on 2026-08-10, where profile.spec failed at test 13 of 16 while the twelve
-  // before it passed.
+  // The stored session is gone rather than slow: Supabase rotates refresh
+  // tokens, and every spec opens a fresh context replaying the SAME saved
+  // token, so one late rotation revokes the family and every spec after it
+  // lands logged out. That is why this looked like a flake landing on a
+  // different test each run.
   //
   // Entering the workspace is a PRECONDITION here, not the assertion — so
   // recover the way a user would, by logging in again. Whether login itself
   // works stays auth.spec's job, and the annotation keeps the recovery visible
   // in the report instead of silently green.
-  if (!hasCreds) throw lastError;
+  if (!hasCreds) throw new Error("gotoWorkspace: no stored session and no credentials to recover with");
   test.info().annotations.push({
     type: "session-recovered",
     description: "stored session did not open the workspace; fell back to a UI login"
