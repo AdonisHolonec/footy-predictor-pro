@@ -1,28 +1,31 @@
-import type { PredictionRow } from "../types";
-import { resolveMarketFamilyKey, type MarketFamilyKey } from "./formatRecommendation";
-import { parseOuSide } from "./marketPicks";
-
 /**
  * Global Special Bet — candidate pool, ranking and diversification.
  *
  * Distinct product from the per-match "Special Bet · Top signals"
- * (`specialBet.ts`), which stays exactly as it is: that one combines markets
- * WITHIN one fixture, this one combines the best selections ACROSS the fixtures
- * of a user's favourite leagues.
+ * (src/utils/specialBet.ts), which stays exactly as it is: that one combines
+ * markets WITHIN one fixture, this one combines the best selections ACROSS the
+ * fixtures of a user's favourite leagues.
  *
- * Pure and deterministic by construction — no clock, no I/O, no React. `now` is
- * an argument so the same inputs always produce the same bet, which is what
- * makes an immutable snapshot meaningful.
+ * Server-side ONLY, and deliberately so. The server reconstructs the candidate
+ * pool from the canonical `predictions_history.raw_payload` and never trusts a
+ * client-supplied selection, so a browser copy of this engine would be a second
+ * opinion with no authority — the exact shape of the Admin/Mobile divergence
+ * this product already had to fix once.
+ *
+ * Pure and deterministic by construction — no clock, no I/O. `now` is an
+ * argument so the same inputs always produce the same bet, which is what makes
+ * an immutable snapshot meaningful.
  *
  * One pool feeds every variant: 3, 5 and 8 are slices of the SAME ranked and
  * diversified list, never three separate algorithms.
  */
 
+import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily.js";
+
 /** A selection must be worth including at all — below this it is not a bet, it is a formality. */
 export const MIN_SELECTION_ODD = 1.25;
 
-export const GLOBAL_SPECIAL_BET_VARIANTS = [3, 5, 8] as const;
-export type GlobalSpecialBetVariant = (typeof GLOBAL_SPECIAL_BET_VARIANTS)[number];
+export const GLOBAL_SPECIAL_BET_VARIANTS = [3, 5, 8];
 
 /**
  * How much ranking strength league spread is allowed to cost.
@@ -34,44 +37,25 @@ export type GlobalSpecialBetVariant = (typeof GLOBAL_SPECIAL_BET_VARIANTS)[numbe
  */
 export const LEAGUE_SPREAD_TOLERANCE = 0.85;
 
-export type GlobalCandidate = {
-  fixtureId: number;
-  leagueId: number;
-  kickoff: string;
-  /** Home vs Away, for display and for making a snapshot readable later. */
-  fixtureLabel: string;
-  market: MarketFamilyKey;
-  /** Human selection exactly as it will be settled, e.g. "Over 7.5". */
-  selection: string;
-  side: "over" | "under" | null;
-  line: number | null;
-  odds: number;
-  confidence: number;
-  valueScore: number;
-  dataQuality: number;
-  /** valueScore × dataQuality — see rankGlobalCandidates. */
-  score: number;
-};
+/**
+ * @typedef {object} GlobalCandidate
+ * @property {number} fixtureId
+ * @property {number} leagueId
+ * @property {string} kickoff
+ * @property {string} fixtureLabel   Home – Away, so a stored snapshot stays readable
+ * @property {string} market         resolveMarketFamily() output
+ * @property {string} selection      settled exactly as written, e.g. "Over 7.5"
+ * @property {"over"|"under"|null} side
+ * @property {number|null} line
+ * @property {number} odds
+ * @property {number} confidence
+ * @property {number} valueScore
+ * @property {number} dataQuality
+ * @property {number} score          valueScore × dataQuality
+ */
 
 /** Why a market never made it into the pool. Counted, never silently dropped. */
-export type CandidateRejectionReason =
-  | "leagueNotSelected"
-  | "alreadyStarted"
-  | "insufficientData"
-  | "notRecommendable"
-  | "oddBelowMinimum"
-  | "missingData";
-
-export type CandidateRejections = Record<CandidateRejectionReason, number>;
-
-export type CollectCandidatesResult = {
-  candidates: GlobalCandidate[];
-  /** Markets examined across every row — the denominator for the rejection counts. */
-  examined: number;
-  rejected: CandidateRejections;
-};
-
-function emptyRejections(): CandidateRejections {
+function emptyRejections() {
   return {
     leagueNotSelected: 0,
     alreadyStarted: 0,
@@ -88,7 +72,7 @@ function emptyRejections(): CandidateRejections {
  * real-looking zero — which is precisely the "missing data as fallback" this
  * product must never do.
  */
-function finiteOrNull(value: unknown): number | null {
+function finiteOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -99,22 +83,10 @@ function finiteOrNull(value: unknown): number | null {
  * side/line rather than re-parsed from prose, so the snapshot carries the same
  * shape the settlement layer compares against.
  */
-function buildSelectionLabel(
-  type: string,
-  side: "over" | "under" | null,
-  line: number | null
-): string {
+function buildSelectionLabel(type, side, line) {
   if (side && line != null) return `${side === "over" ? "Over" : "Under"} ${line.toFixed(1)}`;
   return String(type || "").trim();
 }
-
-export type CollectCandidatesOptions = {
-  rows: PredictionRow[];
-  /** The user's favourite leagues. An empty list yields an empty pool — never "all". */
-  leagueIds: number[];
-  /** Reference instant; only fixtures kicking off after it can be bet on. */
-  now: number;
-};
 
 /**
  * Every eligible selection across the given fixtures, with hard filters applied
@@ -124,15 +96,14 @@ export type CollectCandidatesOptions = {
  * value score or data quality is rejected, not defaulted. A high-confidence
  * market that fails the odds floor is rejected too — confidence never buys an
  * exemption.
+ *
+ * @param {{ rows: object[], leagueIds: number[], now: number }} options
+ * @returns {{ candidates: GlobalCandidate[], examined: number, rejected: Record<string, number> }}
  */
-export function collectGlobalCandidates({
-  rows,
-  leagueIds,
-  now
-}: CollectCandidatesOptions): CollectCandidatesResult {
-  const allowedLeagues = new Set(leagueIds.map((id) => Number(id)));
+export function collectGlobalCandidates({ rows, leagueIds, now }) {
+  const allowedLeagues = new Set((leagueIds || []).map((id) => Number(id)));
   const rejected = emptyRejections();
-  const candidates: GlobalCandidate[] = [];
+  const candidates = [];
   let examined = 0;
 
   for (const row of rows || []) {
@@ -175,16 +146,16 @@ export function collectGlobalCandidates({
       const odds = finiteOrNull(market?.odds);
       const valueScore = finiteOrNull(market?.valueScore);
       const line = finiteOrNull(market?.line);
-      const side = parseOuSide(String(market?.type || ""));
-      const selection = buildSelectionLabel(String(market?.type || ""), side, line);
+      const side = parseOverUnder(market?.type)?.side ?? null;
+      const selection = buildSelectionLabel(market?.type, side, line);
 
       // Missing inputs are disqualifying, not defaultable. Confidence and data
       // quality come from the row, odds and value score from the market.
       if (
-        confidence == null ||
-        dataQuality == null ||
-        odds == null ||
-        valueScore == null ||
+        confidence === null ||
+        dataQuality === null ||
+        odds === null ||
+        valueScore === null ||
         !Number.isFinite(fixtureId) ||
         !selection
       ) {
@@ -204,7 +175,7 @@ export function collectGlobalCandidates({
         leagueId,
         kickoff: String(row.kickoff),
         fixtureLabel: `${row.teams?.home ?? "?"} – ${row.teams?.away ?? "?"}`,
-        market: resolveMarketFamilyKey(market?.type, market?.family),
+        market: resolveMarketFamily(market?.type, market?.family),
         selection,
         side,
         line,
@@ -223,8 +194,8 @@ export function collectGlobalCandidates({
 /**
  * Rank by `valueScore × dataQuality`.
  *
- * `valueScore` is NOT invented here: `server-utils/value/ValueEngine.js`
- * already blends expected value, edge, Kelly and confidence through configurable
+ * `valueScore` is NOT invented here: server-utils/value/ValueEngine.js already
+ * blends expected value, edge, Kelly and confidence through configurable
  * weights, and penalises non-positive EV. Re-deriving a second formula would
  * mean maintaining two opinions about the same thing, so this multiplies that
  * existing score by the one dimension it does not contain — how much the model
@@ -232,8 +203,11 @@ export function collectGlobalCandidates({
  *
  * Ties break by odds, then confidence, then fixtureId, so ordering is total and
  * reproducible rather than dependent on input order.
+ *
+ * @param {GlobalCandidate[]} candidates
+ * @returns {GlobalCandidate[]}
  */
-export function rankGlobalCandidates(candidates: GlobalCandidate[]): GlobalCandidate[] {
+export function rankGlobalCandidates(candidates) {
   return [...candidates].sort(
     (a, b) =>
       b.score - a.score ||
@@ -251,16 +225,19 @@ export function rankGlobalCandidates(candidates: GlobalCandidate[]): GlobalCandi
  * candidate from an unused league is taken ahead of a stronger one only while
  * it stays within LEAGUE_SPREAD_TOLERANCE of it, so spread never drags a weak
  * selection in and never prevents a bet from being built.
+ *
+ * @param {GlobalCandidate[]} ranked
+ * @returns {GlobalCandidate[]}
  */
-export function diversifyGlobalCandidates(ranked: GlobalCandidate[]): GlobalCandidate[] {
-  const bestPerFixture = new Map<number, GlobalCandidate>();
+export function diversifyGlobalCandidates(ranked) {
+  const bestPerFixture = new Map();
   for (const candidate of ranked) {
     if (!bestPerFixture.has(candidate.fixtureId)) bestPerFixture.set(candidate.fixtureId, candidate);
   }
 
   const remaining = [...bestPerFixture.values()];
-  const usedLeagues = new Set<number>();
-  const ordered: GlobalCandidate[] = [];
+  const usedLeagues = new Set();
+  const ordered = [];
 
   while (remaining.length > 0) {
     const best = remaining[0]; // `remaining` stays in ranked order
@@ -279,23 +256,7 @@ export function diversifyGlobalCandidates(ranked: GlobalCandidate[]): GlobalCand
   return ordered;
 }
 
-export type GlobalSpecialBet = {
-  variant: GlobalSpecialBetVariant;
-  selections: GlobalCandidate[];
-  totalOdds: number;
-  averageConfidence: number;
-};
-
-export type GlobalSpecialBetBuild = {
-  /** Built variants, keyed by size. A variant with too few candidates is absent. */
-  bets: Partial<Record<GlobalSpecialBetVariant, GlobalSpecialBet>>;
-  /** Variants that could not be built, with how many selections were available. */
-  unavailable: Array<{ variant: GlobalSpecialBetVariant; available: number; required: number }>;
-  /** The diversified pool every variant was sliced from. */
-  pool: GlobalCandidate[];
-};
-
-function toBet(variant: GlobalSpecialBetVariant, selections: GlobalCandidate[]): GlobalSpecialBet {
+function toBet(variant, selections) {
   const totalOdds = selections.reduce((acc, s) => acc * s.odds, 1);
   const averageConfidence = selections.reduce((acc, s) => acc + s.confidence, 0) / selections.length;
   return {
@@ -311,17 +272,17 @@ function toBet(variant: GlobalSpecialBetVariant, selections: GlobalCandidate[]):
  *
  * A variant with fewer eligible selections than it needs is NOT built and NOT
  * padded — an 8-fold assembled from six good selections and two fillers is a
- * worse product than no 8-fold, and the user asked for it to stay absent.
+ * worse product than no 8-fold.
+ *
+ * @param {{ rows: object[], leagueIds: number[], now: number }} options
+ * @param {number[]} [variants]
  */
-export function buildGlobalSpecialBets(
-  options: CollectCandidatesOptions,
-  variants: readonly GlobalSpecialBetVariant[] = GLOBAL_SPECIAL_BET_VARIANTS
-): GlobalSpecialBetBuild & CollectCandidatesResult {
+export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VARIANTS) {
   const collected = collectGlobalCandidates(options);
   const pool = diversifyGlobalCandidates(rankGlobalCandidates(collected.candidates));
 
-  const bets: Partial<Record<GlobalSpecialBetVariant, GlobalSpecialBet>> = {};
-  const unavailable: GlobalSpecialBetBuild["unavailable"] = [];
+  const bets = {};
+  const unavailable = [];
 
   for (const variant of variants) {
     if (pool.length >= variant) {
@@ -333,3 +294,13 @@ export function buildGlobalSpecialBets(
 
   return { ...collected, pool, bets, unavailable };
 }
+
+export default {
+  MIN_SELECTION_ODD,
+  GLOBAL_SPECIAL_BET_VARIANTS,
+  LEAGUE_SPREAD_TOLERANCE,
+  collectGlobalCandidates,
+  rankGlobalCandidates,
+  diversifyGlobalCandidates,
+  buildGlobalSpecialBets
+};
