@@ -169,8 +169,21 @@ function ouPickLabel(side, line) {
   return `${side} ${Number(line).toFixed(1)}`;
 }
 
-/** Evaluate over/under vs an observed total (corners, shots, goals). */
+/**
+ * Evaluate over/under vs an observed total (corners, shots, goals).
+ *
+ * Returns null when the observed total is UNKNOWN, so callers can hold the
+ * market pending instead of grading it.
+ *
+ * The absent check has to happen before Number(): `Number(null)` and
+ * `Number("")` are both 0, so a fixture whose corners statistic never arrived
+ * used to be graded as if it had finished with zero corners — turning "Over 7.5"
+ * into a confident LOSS built from data that does not exist. A real zero is
+ * still a real result and settles normally; the distinction is between "no
+ * corners" and "no answer".
+ */
 export function evaluateOuLine(side, line, actualTotal) {
+  if (actualTotal === null || actualTotal === undefined || actualTotal === "") return null;
   const total = Number(actualTotal);
   const thr = Number(line);
   if (!Number.isFinite(total) || !Number.isFinite(thr)) return null;
