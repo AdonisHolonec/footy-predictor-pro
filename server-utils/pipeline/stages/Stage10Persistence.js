@@ -3,7 +3,7 @@
  */
 
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../../supabaseAdmin.js";
-import { upsertPredictionsHistory } from "../../predictionsHistory.js";
+import { applyCanonicalPayloads, upsertPredictionsHistory } from "../../predictionsHistory.js";
 import { persistFeatureImportanceRows } from "../../importance/persistFeatureImportance.js";
 import { persistContextSnapshots } from "../../context/persistContextSnapshots.js";
 import { linkUserPredictionFixtures } from "../../linkUserPredictionFixtures.js";
@@ -117,6 +117,13 @@ export async function run(context) {
       : tierContext;
     context.tierContext = tierContext;
   }
+
+  // ONE SOURCE OF TRUTH for already-started fixtures. Nothing here re-predicts
+  // anything: the stage swaps the freshly computed row for the prediction of
+  // record that was frozen at kickoff, keeping only the live result fields from
+  // the fresh one. Every surface — admin, mobile, history — then renders the
+  // same prediction instead of whichever run it happened to be holding.
+  context.out = await applyCanonicalPayloads(out);
 
   if (!context.stageMarks) context.stageMarks = {};
   context.stageMarks[STAGE_ID] = { status: "ok", at: Date.now() };
