@@ -37,5 +37,12 @@ export const ELITE_LEAGUE_META: Array<{ id: number; name: string; country: strin
   { id: 253, name: "MLS", country: "USA" }
 ];
 
+/**
+ * Confidence (%) at or above which a recommendation counts as "high confidence".
+ * Shared by the Home shortlist, the Home filter chips and the dashboard's
+ * high-confidence toggle so the label, the count and the filter always agree.
+ */
+export const HIGH_CONFIDENCE_THRESHOLD = 70;
+
 export type FilterMode = "ALL" | "VALUE" | "SAFE" | "LOW";
 export type SortBy = "TIME" | "CONFIDENCE" | "VALUE";

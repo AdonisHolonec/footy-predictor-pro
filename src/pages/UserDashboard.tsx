@@ -10,7 +10,7 @@ import MatchesSection from "../components/ux/MatchesSection";
 import OnboardingCarousel from "../components/ux/OnboardingCarousel";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
-import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
+import { ELITE_LEAGUES, ELITE_LEAGUE_META, HIGH_CONFIDENCE_THRESHOLD } from "../constants/appConstants";
 import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
 import { useDateRollover } from "../hooks/useDateRollover";
@@ -184,6 +184,7 @@ export default function UserDashboard() {
     pendingAmongDisplayedPreds,
     visiblePreds,
     homePreds,
+    homeCounts,
     homeLiveCount,
     notificationItems,
     continueMatch,
@@ -540,6 +541,7 @@ export default function UserDashboard() {
       {navView === "home" && (
         <HomeSection
           matches={homePreds}
+          counts={homeCounts}
           analysisMatch={analysisMatch}
           liveCount={homeLiveCount}
           accessTier={userTier}
@@ -556,10 +558,11 @@ export default function UserDashboard() {
           valueOnly={prefs.valueOnly}
           onToggleValue={() => updateFilters({ valueOnly: !prefs.valueOnly })}
           highConfActive={prefs.minConfidence > 0}
-          onToggleHighConf={() => updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : 70 })}
+          onToggleHighConf={() =>
+            updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : HIGH_CONFIDENCE_THRESHOLD })
+          }
           trackerStats={trackerStats}
           history={history}
-          leagueBreakdown={userPerformanceByLeague}
         />
       )}
 
@@ -632,6 +635,7 @@ export default function UserDashboard() {
           wins={trackerStats.wins}
           losses={trackerStats.losses}
           history={history}
+          leagueBreakdown={userPerformanceByLeague}
         />
       )}
 
