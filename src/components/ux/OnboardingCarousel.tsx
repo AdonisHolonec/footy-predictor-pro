@@ -33,7 +33,9 @@ export default function OnboardingCarousel({ leagueOptions, initialLeagueIds, on
   };
 
   const finish = () => onComplete({ leagueIds, markets });
-  const skip = () => onComplete({ leagueIds: [], markets: [] });
+  // Skipping declines the questions — it must not wipe an existing league selection
+  // (the parent overwrites favorites with whatever we send back).
+  const skip = () => onComplete({ leagueIds: initialLeagueIds, markets: [] });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/60 p-4 backdrop-blur-sm">
@@ -126,9 +128,16 @@ export default function OnboardingCarousel({ leagueOptions, initialLeagueIds, on
           ))}
         </div>
 
-        <Button className="mt-4 w-full" onClick={() => (isLast ? finish() : setStep(1))}>
-          {isLast ? t("flow.onboardingGetStarted") : t("flow.onboardingNext")}
-        </Button>
+        <div className="mt-4 flex gap-2">
+          {isLast && (
+            <Button variant="ghost" className="shrink-0" onClick={() => setStep(0)}>
+              {t("flow.onboardingBack")}
+            </Button>
+          )}
+          <Button className="w-full" onClick={() => (isLast ? finish() : setStep(1))}>
+            {isLast ? t("flow.onboardingGetStarted") : t("flow.onboardingNext")}
+          </Button>
+        </div>
       </div>
     </div>
   );

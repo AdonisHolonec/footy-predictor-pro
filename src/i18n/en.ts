@@ -790,6 +790,7 @@ export const en: Dict = {
     onboardingSkip: "Skip",
     onboardingNext: "Next",
     onboardingGetStarted: "Get started",
+    onboardingBack: "Back",
     onboardingLeaguesTitle: "Which leagues do you follow?",
     onboardingLeaguesBody: "Pick your favorite leagues so we can filter your predictions feed around them.",
     onboardingLeaguesSelectAll: "Select all",
