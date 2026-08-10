@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * Shared E2E helpers. Navigation starts at "/" and proceeds through clicks —
@@ -125,6 +125,7 @@ export async function gotoWorkspace(page: Page) {
     { linkTimeout: 10_000, markerTimeout: 12_000 },
     { linkTimeout: 10_000, markerTimeout: 20_000 }
   ];
+  let lastError: unknown;
   for (let i = 0; i < attempts.length; i++) {
     try {
       await page.goto("/");
@@ -133,12 +134,30 @@ export async function gotoWorkspace(page: Page) {
         .first()
         .click({ timeout: attempts[i].linkTimeout });
       await expect(loggedInMarker(page)).toBeVisible({ timeout: attempts[i].markerTimeout });
-      break;
+      await settleWorkspaceOverlays(page);
+      return;
     } catch (err) {
-      if (i === attempts.length - 1) throw err;
+      lastError = err;
     }
   }
-  await settleWorkspaceOverlays(page);
+
+  // Both attempts saw a logged-out landing, so the stored session is gone
+  // rather than slow: Supabase rotates refresh tokens, and every spec opens a
+  // fresh context replaying the SAME saved token, so one late rotation revokes
+  // the family mid-run and every spec after it lands logged out. Observed in CI
+  // on 2026-08-10, where profile.spec failed at test 13 of 16 while the twelve
+  // before it passed.
+  //
+  // Entering the workspace is a PRECONDITION here, not the assertion — so
+  // recover the way a user would, by logging in again. Whether login itself
+  // works stays auth.spec's job, and the annotation keeps the recovery visible
+  // in the report instead of silently green.
+  if (!hasCreds) throw lastError;
+  test.info().annotations.push({
+    type: "session-recovered",
+    description: "stored session did not open the workspace; fell back to a UI login"
+  });
+  await loginViaUi(page);
 }
 
 /** Log out through the profile view and wait for the public site. */
