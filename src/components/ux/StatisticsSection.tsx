@@ -1,9 +1,10 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import type { HistoryEntry } from "../../types";
+import type { HistoryEntry, PerformanceLeagueBreakdown } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { StatTile } from "../../design-system";
 import Skeleton from "../../design-system/Skeleton";
 import CalibrationChart from "./CalibrationChart";
+import HistoryTrustSection from "./HistoryTrustSection";
 
 const TrackRecordSection = lazy(() => import("../TrackRecordSection"));
 
@@ -14,9 +15,18 @@ type Props = {
   wins: number;
   losses: number;
   history?: HistoryEntry[];
+  leagueBreakdown?: PerformanceLeagueBreakdown[];
 };
 
-export default function StatisticsSection({ trackerSlot, winRate, settled, wins, losses, history = [] }: Props) {
+export default function StatisticsSection({
+  trackerSlot,
+  winRate,
+  settled,
+  wins,
+  losses,
+  history = [],
+  leagueBreakdown = []
+}: Props) {
   const { t } = useLocale();
   return (
     <section className="space-y-4">
@@ -40,6 +50,11 @@ export default function StatisticsSection({ trackerSlot, winRate, settled, wins,
       {trackerSlot}
 
       <CalibrationChart history={history} />
+
+      {/* The per-day / per-league / per-market tables used to sit on Home, where
+          they answered a question Home does not ask. They belong beside the rest
+          of the track record. */}
+      <HistoryTrustSection history={history} leagueBreakdown={leagueBreakdown} />
 
       <Suspense fallback={<Skeleton className="h-48 w-full" />}>
         <TrackRecordSection days={45} showLinkToFull compact={false} />

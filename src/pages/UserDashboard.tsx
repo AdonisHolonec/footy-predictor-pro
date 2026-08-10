@@ -563,7 +563,6 @@ export default function UserDashboard() {
           }
           trackerStats={trackerStats}
           history={history}
-          leagueBreakdown={userPerformanceByLeague}
         />
       )}
 
@@ -636,6 +635,7 @@ export default function UserDashboard() {
           wins={trackerStats.wins}
           losses={trackerStats.losses}
           history={history}
+          leagueBreakdown={userPerformanceByLeague}
         />
       )}
 

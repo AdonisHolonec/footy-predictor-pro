@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { CardMarketValidations, HistoryEntry, HistoryStats, PerformanceLeagueBreakdown, PredictionRow } from "../../types";
+import type { CardMarketValidations, HistoryEntry, HistoryStats, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Card from "../../design-system/Card";
@@ -8,7 +8,6 @@ import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import PredictionFocusCard from "./PredictionFocusCard";
-import HistoryTrustSection from "./HistoryTrustSection";
 import { computeYesterdayAccuracy } from "../../utils/historyStats";
 import { getGreeting } from "../../utils/greeting";
 import { isFixtureInPlay } from "../../utils/appUtils";
@@ -46,7 +45,6 @@ type Props = {
   onToggleHighConf: () => void;
   trackerStats: HistoryStats;
   history: HistoryEntry[];
-  leagueBreakdown: PerformanceLeagueBreakdown[];
 };
 
 export default function HomeSection({
@@ -70,8 +68,7 @@ export default function HomeSection({
   highConfActive,
   onToggleHighConf,
   trackerStats,
-  history,
-  leagueBreakdown
+  history
 }: Props) {
   const { t, locale } = useLocale();
 
@@ -349,8 +346,6 @@ export default function HomeSection({
           </Button>
         </div>
       </Card>
-
-      <HistoryTrustSection history={history} leagueBreakdown={leagueBreakdown} />
     </section>
   );
 }
