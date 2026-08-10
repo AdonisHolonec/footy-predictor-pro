@@ -4,6 +4,7 @@ import type { MatchesSubFilterPref, UiPrefsV3 } from "../../hooks/useUiPrefs";
 import type { HistoryEntry, PredictionRow } from "../../types";
 import { deriveNotifications } from "../../utils/deriveNotifications";
 import { isFixtureInPlay } from "../../utils/appUtils";
+import { confidenceOf, isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
 import { hasDerivateMarkets, isFinalStatus, matchesPreferredMarkets } from "./helpers";
 
 type MatchesSubFilter = MatchesSubFilterPref;
@@ -98,7 +99,13 @@ export function useDerivedPredictions({
     prefs.preferredMarkets,
     matchSearch
   ]);
-  const homePreds = useMemo(() => {
+  /**
+   * Everything Home shows before the chip filters (value / high confidence) run.
+   * The chips display counts, so those counts have to come from the set the
+   * chips filter — counting inside `homePreds` would count the result of the
+   * filter and collapse to the list length as soon as one is active.
+   */
+  const homeBasePreds = useMemo(() => {
     let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
     if (showSettledMarketsOnly) {
       rows = rows.filter((row) => isFinalStatus(row.status) && hasDerivateMarkets(row));
@@ -110,22 +117,29 @@ export function useDerivedPredictions({
         return hay.includes(q);
       });
     }
-    if (prefs.minConfidence > 0) {
-      rows = rows.filter((row) => {
-        const c = Number(row.recommended?.confidence);
-        return Number.isFinite(c) && c >= prefs.minConfidence;
-      });
-    }
-    if (prefs.valueOnly) {
-      rows = rows.filter(
-        (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
-      );
-    }
     if (prefs.preferredMarkets.length) {
       rows = rows.filter((row) => matchesPreferredMarkets(row, prefs.preferredMarkets));
     }
     return rows;
-  }, [preds, showSettledMarketsOnly, prefs.minConfidence, prefs.valueOnly, prefs.preferredMarkets, matchSearch]);
+  }, [preds, showSettledMarketsOnly, prefs.preferredMarkets, matchSearch]);
+  const homePreds = useMemo(() => {
+    let rows = homeBasePreds;
+    if (prefs.minConfidence > 0) {
+      rows = rows.filter((row) => confidenceOf(row) >= prefs.minConfidence);
+    }
+    if (prefs.valueOnly) {
+      rows = rows.filter(isValueRow);
+    }
+    return rows;
+  }, [homeBasePreds, prefs.minConfidence, prefs.valueOnly]);
+  const homeCounts = useMemo(
+    () => ({
+      total: homeBasePreds.length,
+      value: homeBasePreds.filter(isValueRow).length,
+      highConfidence: homeBasePreds.filter(isHighConfidenceRow).length
+    }),
+    [homeBasePreds]
+  );
   const homeLiveCount = useMemo(() => preds.filter((row) => isFixtureInPlay(row.status)).length, [preds]);
   const notificationItems = useMemo(
     () =>
@@ -161,6 +175,7 @@ export function useDerivedPredictions({
     pendingAmongDisplayedPreds,
     visiblePreds,
     homePreds,
+    homeCounts,
     homeLiveCount,
     notificationItems,
     continueMatch,

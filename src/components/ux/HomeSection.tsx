@@ -6,19 +6,27 @@ import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
-import StatTile from "../../design-system/StatTile";
 import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import PredictionFocusCard from "./PredictionFocusCard";
 import HistoryTrustSection from "./HistoryTrustSection";
 import { computeYesterdayAccuracy } from "../../utils/historyStats";
 import { getGreeting } from "../../utils/greeting";
 import { isFixtureInPlay } from "../../utils/appUtils";
+import { confidenceOf, expectedValueOf, isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
 import { CHAMPIONS_LEAGUE_ID, EUROPA_LEAGUE_ID } from "../../constants/appConstants";
 
 type AccessTier = UpgradeTier | "free" | string;
 
+/** Sizes of the sets the filter chips select, taken before any chip is applied. */
+export type HomeCounts = {
+  total: number;
+  value: number;
+  highConfidence: number;
+};
+
 type Props = {
   matches: PredictionRow[];
+  counts: HomeCounts;
   analysisMatch: PredictionRow | null;
   liveCount: number;
   accessTier: AccessTier;
@@ -41,24 +49,9 @@ type Props = {
   leagueBreakdown: PerformanceLeagueBreakdown[];
 };
 
-const HIGH_CONFIDENCE_THRESHOLD = 70;
-
-function confOf(m: PredictionRow) {
-  const c = Number(m.recommended?.confidence);
-  return Number.isFinite(c) ? c : 0;
-}
-
-function evOf(m: PredictionRow) {
-  const e = Number(m.valueBet?.ev ?? m.valueEngine?.expectedValue);
-  return Number.isFinite(e) ? e : 0;
-}
-
-function isValueRow(m: PredictionRow) {
-  return Boolean(m.valueBet?.detected) || evOf(m) > 0;
-}
-
 export default function HomeSection({
   matches,
+  counts,
   analysisMatch,
   liveCount,
   accessTier,
@@ -96,16 +89,16 @@ export default function HomeSection({
   );
   const recentThree = sortedHistory.slice(0, 3);
 
-  const valueCount = matches.filter(isValueRow).length;
-  const avgConf = matches.length ? matches.reduce((s, m) => s + confOf(m), 0) / matches.length : 0;
   const liveMatches = useMemo(() => matches.filter((m) => isFixtureInPlay(m.status)), [matches]);
   const topPicks = useMemo(() => {
     // In-play rows own the "Live now" section at the top of the page — Top picks
     // stays the upcoming, still-actionable shortlist (no duplicate cards).
     const upcoming = matches.filter((m) => !isFixtureInPlay(m.status));
-    const eligible = upcoming.filter((m) => confOf(m) >= HIGH_CONFIDENCE_THRESHOLD || isValueRow(m));
+    const eligible = upcoming.filter((m) => isHighConfidenceRow(m) || isValueRow(m));
     const pool = eligible.length ? eligible : upcoming;
-    return [...pool].sort((a, b) => confOf(b) - confOf(a) || evOf(b) - evOf(a)).slice(0, 3);
+    return [...pool]
+      .sort((a, b) => confidenceOf(b) - confidenceOf(a) || expectedValueOf(b) - expectedValueOf(a))
+      .slice(0, 3);
   }, [matches]);
 
   const hasLiveChampionsLeague = useMemo(
@@ -140,13 +133,23 @@ export default function HomeSection({
     [locale]
   );
 
-  const chips: { id: string; label: string; active: boolean; onClick: () => void }[] = [
-    { id: "all", label: t("dash.filterAll"), active: !valueOnly && !highConfActive, onClick: () => {
+  // Each chip carries the size of the set it selects, so the numbers the page used
+  // to show as standalone KPI tiles now sit on the control that acts on them.
+  // The live chip navigates away instead of filtering, so it stays countless —
+  // the "Live now" section header already states how many are in play.
+  const chips: { id: string; label: string; count?: number; active: boolean; onClick: () => void }[] = [
+    { id: "all", label: t("dash.filterAll"), count: counts.total, active: !valueOnly && !highConfActive, onClick: () => {
       if (valueOnly) onToggleValue();
       if (highConfActive) onToggleHighConf();
     } },
-    { id: "value", label: t("dash.filterValue"), active: valueOnly, onClick: onToggleValue },
-    { id: "highConf", label: t("dash.filterHighConf"), active: highConfActive, onClick: onToggleHighConf },
+    { id: "value", label: t("dash.filterValue"), count: counts.value, active: valueOnly, onClick: onToggleValue },
+    {
+      id: "highConf",
+      label: t("dash.filterHighConf"),
+      count: counts.highConfidence,
+      active: highConfActive,
+      onClick: onToggleHighConf
+    },
     { id: "live", label: t("dash.filterLive"), active: false, onClick: onGoLive }
   ];
 
@@ -157,7 +160,9 @@ export default function HomeSection({
           {greeting.text}
         </h1>
         <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">
-          {todayLabel} · {t("dash.matchesAnalyzedToday", { n: matches.length })}
+          {/* How many were analysed is a fact about the day, not about the active
+              filter — read it from the unfiltered set so it agrees with the chips. */}
+          {todayLabel} · {t("dash.matchesAnalyzedToday", { n: counts.total })}
         </p>
       </header>
 
@@ -220,6 +225,15 @@ export default function HomeSection({
                 }`}
               >
                 {chip.label}
+                {chip.count != null && (
+                  <span
+                    className={`ml-1.5 tabular-nums font-extrabold ${
+                      chip.active ? "text-[var(--fp-accent)]" : "text-[var(--fp-text)]"
+                    }`}
+                  >
+                    {chip.count}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -253,29 +267,10 @@ export default function HomeSection({
         </>
       )}
 
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-        <StatTile label={t("dash.kpiToday")} value={String(matches.length)} tone="neutral" />
-        <StatTile label={t("dash.kpiAvgConfidence")} value={avgConf ? `${Math.round(avgConf)}%` : "—"} tone="neutral" />
-        <StatTile label={t("dash.kpiValue")} value={String(valueCount)} tone={valueCount > 0 ? "success" : "neutral"} />
-        <StatTile label={t("dash.kpiLive")} value={String(liveCount)} tone={liveCount > 0 ? "danger" : "neutral"} />
-      </div>
-
-      <Card className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
-            {t("dash.yesterdayAccuracyTitle")}
-          </p>
-          <p className="mt-1 font-display text-xl font-semibold tabular-nums text-[var(--fp-text)]">
-            {yesterdayStats.settled ? `${yesterdayStats.winRate.toFixed(0)}%` : "—"}
-          </p>
-        </div>
-        <Badge tone={!yesterdayStats.settled ? "neutral" : yesterdayStats.winRate >= 50 ? "success" : "danger"}>
-          {yesterdayStats.settled
-            ? `${yesterdayStats.wins}W – ${yesterdayStats.losses}L`
-            : t("dash.yesterdayAccuracyNoData")}
-        </Badge>
-      </Card>
-
+      {/* One trust block instead of three. The KPI tiles moved onto the filter
+          chips, and yesterday's result belongs next to the all-time rate it is a
+          sample of — two adjacent cards both answering "how are we doing?" was
+          the statistics-for-statistics'-sake pattern PRODUCT_DNA rules out. */}
       <Card>
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
@@ -286,6 +281,24 @@ export default function HomeSection({
           </Badge>
         </div>
         <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("dash.performanceSub")}</p>
+
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+            {t("dash.yesterdayAccuracyTitle")}
+          </span>
+          {yesterdayStats.settled ? (
+            <>
+              <span className="font-display text-lg font-semibold tabular-nums text-[var(--fp-text)]">
+                {yesterdayStats.winRate.toFixed(0)}%
+              </span>
+              <Badge tone={yesterdayStats.winRate >= 50 ? "success" : "danger"}>
+                {`${yesterdayStats.wins}W – ${yesterdayStats.losses}L`}
+              </Badge>
+            </>
+          ) : (
+            <span className="text-xs text-[var(--fp-text-muted)]">{t("dash.yesterdayAccuracyNoData")}</span>
+          )}
+        </div>
 
         {sparkBars.length > 0 && (
           <div
