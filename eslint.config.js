@@ -21,6 +21,9 @@ export default [
       "node_modules/**",
       "docs/**",
       "backups/**",
+      // Local Playwright artifacts (gitignored; a stale local report must not break lint).
+      "playwright-report/**",
+      "test-results/**",
       "supabase/**",
       "public/**",
       "server-utils/context/**",
