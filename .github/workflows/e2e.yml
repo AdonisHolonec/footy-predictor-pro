@@ -9,6 +9,15 @@ name: E2E Smoke
 # because preview deployments sit behind Vercel deployment protection. The
 # smoke is read-mostly by design: predict hits the warm cache, billing stops
 # at the checkout-session response and never completes a payment.
+# Serialised on purpose. The suite logs into shared test accounts, and Supabase
+# rate-limits password logins per account — so two overlapping runs spend double
+# the login budget and can take the account red for 30-60 minutes. That is not
+# hypothetical: on 2026-08-10 a main-push run and a PR run started 12 seconds
+# apart and together tripped the limit. Queue instead of overlapping.
+concurrency:
+  group: e2e-smoke
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   pull_request:
