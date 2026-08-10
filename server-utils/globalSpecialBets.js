@@ -13,6 +13,7 @@
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { buildGlobalSpecialBets, GLOBAL_SPECIAL_BET_VARIANTS } from "./globalSpecialBetEngine.js";
+import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
 
 const HISTORY_TABLE = "predictions_history";
 const BETS_TABLE = "special_bets";
@@ -232,9 +233,174 @@ export async function listGlobalSpecialBets({
   return { bets: bets.map((b) => ({ ...b, selections: byBetId.get(b.id) || [] })) };
 }
 
+/**
+ * Fixture state for the selections of the bets being settled: status, score and
+ * the official totals the history sync hydrated into `raw_payload.marketResults`.
+ */
+export async function loadFixtureStates(supabase, fixtureIds) {
+  const ids = [...new Set((fixtureIds || []).map((id) => Number(id)))].filter(Number.isFinite);
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from(HISTORY_TABLE)
+    .select("fixture_id, match_status, score_home, score_away, raw_payload")
+    .in("fixture_id", ids);
+  if (error) throw error;
+
+  const byFixtureId = new Map();
+  for (const row of data || []) {
+    byFixtureId.set(Number(row.fixture_id), {
+      status: row.match_status,
+      score: { home: row.score_home, away: row.score_away },
+      marketTotals: row.raw_payload?.marketResults || {}
+    });
+  }
+  return byFixtureId;
+}
+
+/**
+ * Write a settled bet, refusing to call a write that touched nothing a success.
+ *
+ * With RLS enabled and no UPDATE policy, Postgres does not raise — the statement
+ * succeeds having matched zero rows (proven in the 2.1 integration suite). So
+ * "no error" is not evidence of anything; every update asks for its rows back
+ * and compares the count against what it intended to change.
+ *
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export async function persistSettledBet(supabase, bet, settlement, now) {
+  const settledAt = new Date(now).toISOString();
+
+  // Selections grouped by target status: one statement per status, still exact
+  // about how many rows each is allowed to move.
+  const byStatus = new Map();
+  for (const change of settlement.selectionChanges) {
+    if (!byStatus.has(change.status)) byStatus.set(change.status, []);
+    byStatus.get(change.status).push(change.id);
+  }
+
+  for (const [status, ids] of byStatus) {
+    const isTerminal = status !== "pending";
+    const { data, error } = await supabase
+      .from(SELECTIONS_TABLE)
+      .update({ status, settled_at: isTerminal ? settledAt : null })
+      .in("id", ids)
+      .select("id");
+    if (error) return { ok: false, error: `selections update failed: ${error.message}` };
+
+    const affected = (data || []).length;
+    if (affected !== ids.length) {
+      return {
+        ok: false,
+        error:
+          `selections update touched ${affected} of ${ids.length} rows for status "${status}" ` +
+          `on bet ${bet.id} — refusing to report success (check the Supabase role and RLS policies)`
+      };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from(BETS_TABLE)
+    .update({
+      status: settlement.betStatus,
+      settled_total_odds: settlement.settledTotalOdds,
+      settled_at: settlement.isTerminal ? settledAt : null
+    })
+    .eq("id", bet.id)
+    .select("id");
+  if (error) return { ok: false, error: `bet update failed: ${error.message}` };
+
+  const affected = (data || []).length;
+  if (affected !== 1) {
+    return {
+      ok: false,
+      error: `bet update touched ${affected} rows for bet ${bet.id} — refusing to report success`
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Settle every bet that is still pending.
+ *
+ * Idempotent: a bet whose computed end state already matches what is stored
+ * issues no write at all, so a cron that runs twice produces the same rows and
+ * the same `settled_at`.
+ *
+ * @param {{ now?: number, limit?: number, supabase?: object }} params
+ */
+export async function settlePendingGlobalSpecialBets({
+  now = Date.now(),
+  limit = 200,
+  supabase = getSupabaseAdmin()
+} = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+
+  const summary = { scanned: 0, settled: 0, unchanged: 0, failures: [] };
+
+  const { data: bets, error } = await supabase
+    .from(BETS_TABLE)
+    .select("id, status, settled_total_odds")
+    .eq("status", "pending")
+    .order("bet_date", { ascending: true })
+    .limit(Math.max(1, Math.min(Number(limit) || 200, 1000)));
+  if (error) throw error;
+  if (!bets?.length) return summary;
+
+  summary.scanned = bets.length;
+
+  const { data: selections, error: selError } = await supabase
+    .from(SELECTIONS_TABLE)
+    .select("id, special_bet_id, fixture_id, market, selection, side, line, odds, status, kickoff_at")
+    .in(
+      "special_bet_id",
+      bets.map((b) => b.id)
+    );
+  if (selError) throw selError;
+
+  const byBetId = new Map();
+  for (const selection of selections || []) {
+    if (!byBetId.has(selection.special_bet_id)) byBetId.set(selection.special_bet_id, []);
+    byBetId.get(selection.special_bet_id).push(selection);
+  }
+
+  const fixturesById = await loadFixtureStates(
+    supabase,
+    (selections || []).map((s) => s.fixture_id)
+  );
+
+  for (const bet of bets) {
+    const betSelections = byBetId.get(bet.id) || [];
+    if (betSelections.length === 0) {
+      summary.unchanged += 1;
+      continue;
+    }
+
+    const settlement = settleGlobalSpecialBet({ bet, selections: betSelections, fixturesById, now });
+    if (!settlement.changed) {
+      summary.unchanged += 1;
+      continue;
+    }
+
+    const written = await persistSettledBet(supabase, bet, settlement, now);
+    if (written.ok) {
+      summary.settled += 1;
+    } else {
+      console.error("[global-special-bet-settlement]", written.error);
+      summary.failures.push({ betId: bet.id, error: written.error });
+    }
+  }
+
+  return summary;
+}
+
 export default {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
+  loadFixtureStates,
+  persistSettledBet,
+  settlePendingGlobalSpecialBets,
   isValidBetDate,
   isValidVariant,
   listGlobalSpecialBets,

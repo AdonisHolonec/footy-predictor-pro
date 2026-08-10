@@ -5,6 +5,7 @@ import { getWithCache } from "../server-utils/fetcher.js";
 import { resolveFixtureFirstHalfGoals } from "../server-utils/fixtureHalftimeGoals.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { settlePendingGlobalSpecialBets } from "../server-utils/globalSpecialBets.js";
 import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
   attachCardMarketsToPayload,
@@ -823,12 +824,26 @@ async function handleHistorySync(req, res) {
       }).catch((err) => ({ ok: false, error: err?.message || "closing capture failed" }));
     }
 
+    // Global Special Bet settlement runs last, on results this sync has just
+    // refreshed. It is driven from the BETS side (status = 'pending'), not from
+    // the finished-fixture scan above, which is why postponed and abandoned
+    // fixtures and the 48-hour missing-statistics rule need no separate pass:
+    // those bets are pending, so they are already in scope. Failures are
+    // reported, never swallowed — a settlement that moved no rows is a failure.
+    const globalSpecialBets = await settlePendingGlobalSpecialBets().catch((err) => ({
+      scanned: 0,
+      settled: 0,
+      unchanged: 0,
+      failures: [{ error: err?.message || "global special bet settlement failed" }]
+    }));
+
     return res.status(200).json({
       ok: true,
       scanned: candidates.length,
       updated: updatedTotal,
       resettled,
       cardResettled,
+      globalSpecialBets,
       cappedScan,
       estimatedCalls: estimatedCallsTotal,
       estimatedCallsBreakdown: {

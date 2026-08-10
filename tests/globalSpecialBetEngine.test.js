@@ -295,3 +295,56 @@ test("the same inputs always produce the same bet", () => {
   const options = { rows: poolOf(9), leagueIds: [39, 40, 41], now: NOW };
   assert.deepEqual(buildGlobalSpecialBets(options), buildGlobalSpecialBets(options));
 });
+
+// ── settleable market families ────────────────────────────────────────────
+
+test("a market the server cannot settle never enters the pool", () => {
+  const unsettleable = [
+    { type: "Over 3.5", family: "Cards", line: 3.5 },
+    { type: "2-1", family: "Correct Score", line: null },
+    { type: "Over 9.5", family: "Goals", line: 9.5 },
+    { type: "something", family: "Whatever", line: null }
+  ];
+
+  for (const spec of unsettleable) {
+    const rows = [fixture(1, 39, [goodMarket(spec)])];
+    const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+    assert.equal(candidates.length, 0, `${spec.family} must be rejected`);
+    assert.equal(rejected.marketNotSettleable, 1, `${spec.family} must be counted as unsettleable`);
+  }
+});
+
+test("every settleable family is accepted when the rest of the criteria hold", () => {
+  const settleable = [
+    { type: "Over 2.5", family: "Goals", line: 2.5, expected: "ou" },
+    { type: "Over 9.5", family: "Corners", line: 9.5, expected: "corners" },
+    { type: "Under 10.5", family: "Shots On Target", line: 10.5, expected: "shots" },
+    { type: "1", family: "1X2", line: null, expected: "1x2" },
+    { type: "1X", family: "Double Chance", line: null, expected: "dc" },
+    { type: "GG", family: "BTTS", line: null, expected: "btts" }
+  ];
+
+  for (const { expected, ...spec } of settleable) {
+    const rows = [fixture(1, 39, [goodMarket(spec)])];
+    const { candidates } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+    assert.equal(candidates.length, 1, `${expected} must be accepted`);
+    assert.equal(candidates[0].market, expected);
+  }
+});
+
+test("an unsettleable market is filtered before ranking, not after", () => {
+  // The cards market outscores everything; if the filter ran after ranking it
+  // would top the pool. It must not appear at all.
+  const rows = [
+    fixture(1, 39, [goodMarket({ type: "Over 3.5", family: "Cards", line: 3.5, valueScore: 99 })]),
+    fixture(2, 140, [goodMarket({ valueScore: 40 })])
+  ];
+
+  const built = buildGlobalSpecialBets({ rows, leagueIds: [39, 140], now: NOW }, [3]);
+
+  assert.equal(built.pool.length, 1);
+  assert.equal(built.pool[0].fixtureId, 2);
+  assert.equal(built.rejected.marketNotSettleable, 1);
+});
