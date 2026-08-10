@@ -85,7 +85,7 @@ export const ro: Dict = {
     kpiAccuracy: "Acuratețe",
     kpiRoi: "ROI",
     kpiWinRate: "Rată câștig",
-    topPicksTitle: "🔥 Top picks azi",
+    topPicksTitle: "Top picks azi",
     performanceTitle: "Performanță recentă",
     performanceSub: "Ultimele rezultate validate și rata de succes",
     sparklineLabel: "Ultimele 12 rezultate validate",

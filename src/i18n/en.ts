@@ -85,7 +85,7 @@ export const en: Dict = {
     kpiAccuracy: "Accuracy",
     kpiRoi: "ROI",
     kpiWinRate: "Win rate",
-    topPicksTitle: "🔥 Top picks today",
+    topPicksTitle: "Top picks today",
     performanceTitle: "Recent performance",
     performanceSub: "Your last settled results and success rate",
     sparklineLabel: "Last 12 settled results",
