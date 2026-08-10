@@ -110,6 +110,19 @@ export async function loginViaUi(page: Page, creds = CREDS) {
 const HYDRATION_GRACE_MS = 8_000;
 
 /**
+ * Recovery logins are real password logins on the shared account, and Supabase
+ * rate-limits those per ACCOUNT. Left uncapped, one early session death makes
+ * every remaining spec log in again — 10+ logins in a run — which trips the
+ * limit and takes the suite fully red for 30-60 minutes, main-push runs
+ * included. Observed on 2026-08-10: recoveries began working, then started
+ * failing inside loginViaUi with the limit's signature (the login screen simply
+ * never resolves). Two is enough to survive a normal late session death; past
+ * that, failing loudly is cheaper than poisoning the account.
+ */
+const MAX_SESSION_RECOVERIES = 2;
+let sessionRecoveries = 0;
+
+/**
  * Enter the workspace on a context that already carries a stored session
  * (see auth.setup.ts) — no password login, no rate-limit exposure.
  *
@@ -152,6 +165,14 @@ export async function gotoWorkspace(page: Page) {
   // works stays auth.spec's job, and the annotation keeps the recovery visible
   // in the report instead of silently green.
   if (!hasCreds) throw new Error("gotoWorkspace: no stored session and no credentials to recover with");
+  if (sessionRecoveries >= MAX_SESSION_RECOVERIES) {
+    throw new Error(
+      `gotoWorkspace: the stored session is gone and ${MAX_SESSION_RECOVERIES} recovery logins have already been ` +
+        "used this run. Refusing to log in again — repeated password logins trip Supabase's account-scoped rate " +
+        "limit, which would take the whole suite red for 30-60 minutes instead of just this spec."
+    );
+  }
+  sessionRecoveries += 1;
   test.info().annotations.push({
     type: "session-recovered",
     description: "stored session did not open the workspace; fell back to a UI login"
