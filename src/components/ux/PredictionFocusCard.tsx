@@ -477,12 +477,16 @@ export default function PredictionFocusCard({
 
       <div className="mt-2.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/40 p-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.mainPick")}</p>
-            <p className="flex items-center gap-1 truncate font-display text-sm font-bold text-[var(--fp-accent)]">
+            <p className="flex items-center gap-1 truncate font-display text-[15px] font-bold leading-tight text-[var(--fp-accent)]">
               <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
               {recommendedLabel.label}
             </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.colConfidence")}</p>
+            <p className="font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]">{confLabel}</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.colOdds")}</p>
