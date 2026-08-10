@@ -52,6 +52,10 @@ jobs:
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          # Dedicated account for the logout journey — its signOut is global and
+          # would otherwise revoke the sessions every other spec runs on.
+          E2E_LOGOUT_EMAIL: ${{ secrets.E2E_LOGOUT_EMAIL }}
+          E2E_LOGOUT_PASSWORD: ${{ secrets.E2E_LOGOUT_PASSWORD }}
           E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
         run: npx playwright test
 

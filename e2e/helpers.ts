@@ -20,8 +20,27 @@ export const ADMIN_CREDS = {
   password: process.env.E2E_ADMIN_PASSWORD || ""
 };
 
+/**
+ * The logout journey gets its own account. Supabase's signOut is global — it
+ * revokes EVERY session of the account it runs on — so performing it on the
+ * account the rest of the suite depends on is a session-destroying operation
+ * pointed at ourselves. Project ordering keeps that safe within one run, but
+ * nothing protects a run from ANOTHER run's logout: on 2026-08-10 a main-push
+ * run and a PR run started 12 seconds apart and killed each other's sessions.
+ *
+ * Falls back to the shared account when unset, so the suite still works before
+ * the E2E_LOGOUT_* secrets exist — just without the isolation.
+ */
+export const LOGOUT_CREDS = {
+  email: process.env.E2E_LOGOUT_EMAIL || CREDS.email,
+  password: process.env.E2E_LOGOUT_PASSWORD || CREDS.password
+};
+
 export const hasCreds = Boolean(CREDS.email && CREDS.password);
 export const hasAdminCreds = Boolean(ADMIN_CREDS.email && ADMIN_CREDS.password);
+export const hasDedicatedLogoutAccount = Boolean(
+  process.env.E2E_LOGOUT_EMAIL && process.env.E2E_LOGOUT_PASSWORD
+);
 
 /** Saved storage-state files written by auth.setup.ts (gitignored). */
 export const USER_STATE = "e2e/.auth/user.json";
