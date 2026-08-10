@@ -144,8 +144,13 @@ export function useDerivedPredictions({
   }, [prefs.recentFixtureIds, preds]);
   const analysisMatch = useMemo(() => {
     const playable = preds.filter((p) => !p.insufficientData);
+    // The featured "verdict of the day" is a pre-kickoff call — in-play rows
+    // already own the Home "Live now" section, so prefer upcoming ones and only
+    // fall back to any playable row when everything is live.
+    const upcoming = playable.filter((p) => !isFixtureInPlay(p.status));
+    const pool = upcoming.length ? upcoming : playable;
     return (
-      [...playable].sort(
+      [...pool].sort(
         (a, b) => Number(b.recommended?.confidence || 0) - Number(a.recommended?.confidence || 0)
       )[0] || preds[0] || null
     );

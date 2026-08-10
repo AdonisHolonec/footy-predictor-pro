@@ -45,7 +45,14 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
         </span>
       </div>
 
-      <div className="flex items-center gap-4 px-4 pb-1 pt-4">
+      {/* The hero's primary action is the analysis — the whole verdict area opens it,
+          matching every other card's tap-to-open contract; the "why" toggle below stays
+          a separate, secondary interaction. */}
+      <button
+        type="button"
+        onClick={onOpenAnalysis}
+        className="flex w-full items-center gap-4 px-4 pb-1 pt-4 text-left transition-colors hover:bg-[var(--fp-bg-muted)]/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+      >
         <ConfidenceAura value={confPct} className="shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-bold leading-tight text-[var(--fp-text)]">
@@ -62,7 +69,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
             {evLine ? ` · ${evLine}` : ""}
           </div>
         </div>
-      </div>
+      </button>
 
       <button
         type="button"
