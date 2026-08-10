@@ -1,28 +1,26 @@
 name: E2E Smoke
 
-# Promoted to a required branch-protection check (2026-08-09) after running
-# quietly since its introduction; the pull_request trigger exists so the check
-# can gate merges. Fork PRs would run without secrets and skip the credentialed
-# specs, but this repo takes no fork contributions today.
+# A POST-MERGE PRODUCTION SMOKE, not a PR gate. It runs against production (the
+# deployed default in playwright.config.ts) because preview deployments sit
+# behind Vercel deployment protection — so a run on a pull request never
+# exercised that PR's code. It could not fail because of the diff and could not
+# vouch for it; it only doubled the load.
 #
-# Runs against production (the deployed default in playwright.config.ts)
-# because preview deployments sit behind Vercel deployment protection. The
-# smoke is read-mostly by design: predict hits the warm cache, billing stops
-# at the checkout-session response and never completes a payment.
-# Serialised on purpose. The suite logs into shared test accounts, and Supabase
-# rate-limits password logins per account — so two overlapping runs spend double
-# the login budget and can take the account red for 30-60 minutes. That is not
-# hypothetical: on 2026-08-10 a main-push run and a PR run started 12 seconds
-# apart and together tripped the limit. Queue instead of overlapping.
+# That load is the constraint. Each run performs ~3 password logins, Supabase
+# rate-limits them, and the limit appears to be project-wide rather than
+# per-account: on 2026-08-10 the free-tier and admin setups failed together,
+# minutes after a clean run. Two runs per merge is what kept pushing us over.
+# Dropped the pull_request trigger on 2026-08-10 and removed `smoke` from the
+# required checks; `test` still gates every PR.
+#
+# The smoke stays read-mostly by design: predict hits the warm cache, billing
+# stops at the checkout-session response and never completes a payment.
 concurrency:
   group: e2e-smoke
   cancel-in-progress: false
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
