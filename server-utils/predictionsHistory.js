@@ -168,6 +168,101 @@ function isPreKickoff(prediction) {
   return ko > Date.now();
 }
 
+/**
+ * Fields that describe how the match ACTUALLY went. Everything else in a
+ * prediction was decided before kickoff and must not move afterwards.
+ */
+const LIVE_RESULT_FIELDS = [
+  "status",
+  "score",
+  "marketResults",
+  "cardMarketValidations",
+  "momentum",
+  "evaluation",
+  "elapsed"
+];
+
+/**
+ * Canonical prediction + live result.
+ *
+ * `isPreKickoff` already freezes the stored row at kickoff, so the persisted
+ * payload IS the prediction of record. What it cannot carry is the result,
+ * which only exists later — so the frozen prediction is the base and the live
+ * row contributes the handful of fields that describe the outcome.
+ *
+ * Without this, a fixture that has already started is re-predicted on every
+ * request and never written back, so each surface renders whichever run it
+ * happened to hold: odds move, lines snap differently, and the same fixture
+ * produces two different Special Bets (Admin "Under 10.5" vs Mobile "Over 6.5",
+ * 2026-08-09).
+ */
+export function mergeCanonicalPrediction(fresh, canonical) {
+  if (!canonical || typeof canonical !== "object") return fresh;
+  if (!fresh || typeof fresh !== "object") return canonical;
+
+  const merged = { ...canonical };
+  for (const field of LIVE_RESULT_FIELDS) {
+    if (fresh[field] !== undefined) merged[field] = fresh[field];
+  }
+
+  // The live nudge is a display-layer derivation of the CURRENT match state, so
+  // it belongs to the live row even though the engine around it is frozen.
+  if (canonical.confidenceEngine || fresh.confidenceEngine) {
+    merged.confidenceEngine = {
+      ...(canonical.confidenceEngine || {}),
+      liveAdjustment: fresh.confidenceEngine?.liveAdjustment ?? null
+    };
+  }
+
+  return merged;
+}
+
+/**
+ * Replace already-started fixtures with the prediction of record, so every
+ * surface renders the same one. Pre-kickoff rows are untouched: they are still
+ * being written, so the fresh computation IS canonical.
+ *
+ * Read-only against Supabase; never writes, and returns the input unchanged if
+ * the lookup fails — a fresh-but-consistent render beats a failed request.
+ */
+export async function applyCanonicalPayloads(predictions) {
+  if (!Array.isArray(predictions) || predictions.length === 0) return predictions;
+
+  const started = predictions.filter((p) => !isPreKickoff(p));
+  if (started.length === 0) return predictions;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return predictions;
+
+  const fixtureIds = started.map((p) => Number(p?.id)).filter((id) => Number.isFinite(id));
+  if (fixtureIds.length === 0) return predictions;
+
+  let canonicalById = new Map();
+  try {
+    const { data, error } = await supabase
+      .from(HISTORY_TABLE)
+      .select("fixture_id, raw_payload")
+      .in("fixture_id", fixtureIds);
+    if (error) throw error;
+    canonicalById = new Map(
+      (data || [])
+        .filter((row) => row?.raw_payload && typeof row.raw_payload === "object")
+        .map((row) => [Number(row.fixture_id), row.raw_payload])
+    );
+  } catch (err) {
+    console.warn("applyCanonicalPayloads: lookup failed, serving fresh rows", err?.message || err);
+    return predictions;
+  }
+
+  if (canonicalById.size === 0) return predictions;
+
+  return predictions.map((p) => {
+    const canonical = canonicalById.get(Number(p?.id));
+    if (!canonical || isPreKickoff(p)) return p;
+    return mergeCanonicalPrediction(p, canonical);
+  });
+}
+
 export async function upsertPredictionsHistory(predictions) {
   if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0, skipped: 0 };
   const supabase = getSupabaseAdmin();
