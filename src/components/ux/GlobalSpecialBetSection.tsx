@@ -7,6 +7,12 @@ import StatTile from "../../design-system/StatTile";
 import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
 import { useGlobalSpecialBet } from "../../hooks/useGlobalSpecialBet";
 import {
+  formatDateTime,
+  isUnderwaySelection,
+  orderSelectionsByKickoff,
+  readBetProgress,
+  readGlobalSpecialBet,
+  resolveSelectionLabel,
   statusLabelKey,
   statusTone,
   summarizeGlobalSpecialBet,
@@ -57,17 +63,40 @@ export default function GlobalSpecialBetSection({
     [state]
   );
 
-  const createdLabel = useMemo(() => {
-    if (!summary) return null;
-    const ms = Date.parse(summary.createdAt);
-    if (!Number.isFinite(ms)) return null;
-    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(new Date(ms));
-  }, [summary, locale]);
+  const createdLabel = useMemo(
+    () => (summary ? formatDateTime(summary.createdAt, locale) : null),
+    [summary, locale]
+  );
+
+  /**
+   * How the bet reads right now: what is settled, what is on, what is next.
+   *
+   * The clock is sampled here, once per state change, and no ticker refreshes
+   * it. That is deliberate — every time this card shows is absolute ("21:45"),
+   * so nothing counts down and nothing goes wrong by standing still. The single
+   * value that ages is which legs are marked as under way, and it resolves on
+   * the next fetch or the next visit.
+   */
+  const live = useMemo(() => {
+    if (state.phase !== "ready") return null;
+    const nowMs = Date.now();
+    const progress = readBetProgress(state.bet, nowMs);
+    const next = progress.next
+      ? {
+          label:
+            resolveSelectionLabel(progress.next, fixtureIndex).title ??
+            t("gsb.matchFallback", { id: progress.next.fixture_id }),
+          time: formatDateTime(progress.next.kickoff_at, locale)
+        }
+      : null;
+    return {
+      nowMs,
+      progress,
+      next,
+      reading: readGlobalSpecialBet(state.bet),
+      selections: orderSelectionsByKickoff(state.bet.selections)
+    };
+  }, [state, fixtureIndex, locale, t]);
 
   const shell = (children: ReactNode) => (
     <section
@@ -210,9 +239,27 @@ export default function GlobalSpecialBetSection({
         </div>
       )}
 
-      {state.phase === "ready" && summary && (
+      {state.phase === "ready" && summary && live && (
         <div className="mt-4">
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+          {/* The sentence comes before the tiles: "3 din 5 au intrat · 2 încă în
+              joc" is the answer, the tiles are the evidence. Same reading the
+              history shows, so one bet reads identically in both places. */}
+          <p className="text-[length:var(--fp-body)] font-semibold text-[var(--fp-text)]">
+            {t(live.reading.key, live.reading.vars)}
+          </p>
+          {live.next && live.next.time ? (
+            <p className="mt-0.5 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
+              {t("gsb.nextLeg", { label: live.next.label, time: live.next.time })}
+            </p>
+          ) : live.progress.underway > 0 ? (
+            <p className="mt-0.5 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
+              {/* No count here: the reading line above already says how many are
+                  still in play, and a second number would just restate it. */}
+              {t("gsb.allUnderway")}
+            </p>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
             <StatTile label={t("gsb.summarySelections")} value={String(summary.selectionCount)} />
             <StatTile
               label={t("gsb.summaryTotalOdds")}
@@ -236,12 +283,15 @@ export default function GlobalSpecialBetSection({
             <Badge tone={statusTone(summary.status)}>{t(statusLabelKey(summary.status))}</Badge>
           </div>
 
+          {/* Chronological, not by rank: while the bet runs the list is a
+              timeline, and the leg being played now should not sit last. */}
           <ul className="mt-2 space-y-2">
-            {state.bet.selections.map((selection) => (
+            {live.selections.map((selection) => (
               <GlobalSpecialBetSelectionRow
                 key={selection.id}
                 selection={selection}
                 fixtureIndex={fixtureIndex}
+                underway={isUnderwaySelection(selection, live.nowMs)}
               />
             ))}
           </ul>

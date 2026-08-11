@@ -3,6 +3,7 @@ import Badge from "../../design-system/Badge";
 import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 import {
   formatConfidencePercent,
+  formatDateTime,
   formatOdds,
   formatValueScore,
   marketIconKey,
@@ -27,6 +28,11 @@ type Props = {
    * failure instead of making the user scan eight badges to find it.
    */
   deciding?: boolean;
+  /**
+   * This leg has kicked off and is not graded yet. The status badge cannot say
+   * it: "În desfășurare" is what every pending leg reads, kicked off or not.
+   */
+  underway?: boolean;
 };
 
 /**
@@ -36,7 +42,12 @@ type Props = {
  * did not send is shown as a dash, never as a zero — `value_score` is optional
  * and a missing one must not read as "no value".
  */
-export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex, deciding = false }: Props) {
+export default function GlobalSpecialBetSelectionRow({
+  selection,
+  fixtureIndex,
+  deciding = false,
+  underway = false
+}: Props) {
   const { t, locale } = useLocale();
 
   const label: FixtureLabel = resolveSelectionLabel(selection, fixtureIndex);
@@ -51,30 +62,40 @@ export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex, 
   const value = formatValueScore(selection.value_score);
   const dash = "—";
 
-  const kickoff = (() => {
-    const ms = Date.parse(selection.kickoff_at);
-    if (!Number.isFinite(ms)) return null;
-    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(new Date(ms));
-  })();
+  const kickoff = formatDateTime(selection.kickoff_at, locale);
+
+  /* A leg cannot be both: `deciding` only ever applies to a lost bet, and a lost
+     leg is settled. Danger keeps precedence anyway — the failure outranks the
+     clock.
+     A running leg gets the accent border alone, no ring: the ring is reserved
+     for the failure, so the two states stay ranked, and DESIGN.md's One Accent
+     Rule keeps the accent off informational fills. */
+  const emphasis = deciding
+    ? "border-[var(--fp-danger)]/45 ring-1 ring-inset ring-[var(--fp-danger)]/20"
+    : underway
+      ? "border-[var(--fp-accent)]/45"
+      : "border-[var(--fp-border)]";
 
   return (
-    <li
-      className={`rounded-[var(--fp-radius-sm)] border bg-[var(--fp-bg-card)] p-3 ${
-        deciding
-          ? "border-[var(--fp-danger)]/45 ring-1 ring-inset ring-[var(--fp-danger)]/20"
-          : "border-[var(--fp-border)]"
-      }`}
-    >
+    <li className={`rounded-[var(--fp-radius-sm)] border bg-[var(--fp-bg-card)] p-3 ${emphasis}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {deciding && (
             <p className="mb-1 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-danger)]">
               {t("gsb.decidingLeg")}
+            </p>
+          )}
+          {/* Muted ink, not accent: the accent reads at ~4.2:1 on a white card,
+              under AA for text this small. The dot carries the colour signal and
+              clears the 3:1 a graphical element needs. */}
+          {!deciding && underway && (
+            <p className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+              {/* Same pulsing dot the Home "Live now" section uses for an in-play
+                  match, motion-reduce guard included: one visual language for
+                  "this is happening now". Accent, not danger — the card's own
+                  colour identity, and danger here would read as a failure. */}
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-accent)] motion-reduce:animate-none" />
+              {t("gsb.legUnderway")}
             </p>
           )}
           <p className="truncate font-semibold text-[var(--fp-text)]">{title}</p>

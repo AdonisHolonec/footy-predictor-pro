@@ -891,6 +891,10 @@ export const ro: Dict = {
     readingWonVoidMany: "Câștigat, cu {n} selecții anulate la cota 1.00",
     readingVoid: "Biletul nu a rulat: toate selecțiile au fost anulate",
     readingPending: "{won} din {total} au intrat · {pending} încă în joc",
-    decidingLeg: "Selecția care a pierdut biletul"
+    decidingLeg: "Selecția care a pierdut biletul",
+    // Biletul în desfășurare: ce urmează și ce se joacă chiar acum.
+    nextLeg: "Urmează {label} · {time}",
+    allUnderway: "Toate meciurile rămase au început",
+    legUnderway: "Se joacă acum"
   }
 };

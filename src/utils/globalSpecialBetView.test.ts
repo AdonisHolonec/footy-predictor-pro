@@ -3,10 +3,14 @@ import {
   buildFixtureLabelIndex,
   describeGlobalSpecialBetError,
   formatConfidencePercent,
+  formatDateTime,
   formatOdds,
   formatValueScore,
   isDecidingSelection,
+  isUnderwaySelection,
   lookupFixtureLabel,
+  orderSelectionsByKickoff,
+  readBetProgress,
   readGlobalSpecialBet,
   marketIconKey,
   marketLabelKey,
@@ -267,6 +271,107 @@ describe("reading what happened to a bet", () => {
     // would tell a story the settlement rules do not support.
     expect(isDecidingSelection("won", selection({ status: "won" }))).toBe(false);
     expect(isDecidingSelection("pending", lost)).toBe(false);
+  });
+});
+
+describe("a bet still running", () => {
+  const NOON = Date.parse("2026-08-11T12:00:00.000Z");
+  const at = (id: string, kickoff: string, status: GlobalSpecialBetSelection["status"] = "pending") =>
+    selection({ id, kickoff_at: kickoff, status });
+
+  it("counts settled, under way and waiting legs separately", () => {
+    const progress = readBetProgress(
+      bet({
+        selections: [
+          at("sel-1", "2026-08-11T09:00:00.000Z", "won"),
+          at("sel-2", "2026-08-11T11:30:00.000Z"),
+          at("sel-3", "2026-08-11T18:30:00.000Z")
+        ]
+      }),
+      NOON
+    );
+    expect(progress).toMatchObject({ settled: 1, underway: 1, waiting: 1, total: 3 });
+    expect(progress.next?.id).toBe("sel-3");
+  });
+
+  it("keeps a graded leg settled however long ago it kicked off", () => {
+    // The clock never overrules settlement: a match played this morning and
+    // already won must not be reported as still being decided.
+    const progress = readBetProgress(
+      bet({ selections: [at("sel-1", "2026-08-11T09:00:00.000Z", "won")] }),
+      NOON
+    );
+    expect(progress).toMatchObject({ settled: 1, underway: 0, waiting: 0 });
+  });
+
+  it("names the earliest leg still to come, not the first one stored", () => {
+    const progress = readBetProgress(
+      bet({
+        selections: [
+          at("late", "2026-08-11T21:00:00.000Z"),
+          at("early", "2026-08-11T19:00:00.000Z"),
+          at("mid", "2026-08-11T20:00:00.000Z")
+        ]
+      }),
+      NOON
+    );
+    expect(progress.next?.id).toBe("early");
+  });
+
+  it("has nothing next once every leg has started", () => {
+    const progress = readBetProgress(
+      bet({
+        selections: [at("sel-1", "2026-08-11T10:00:00.000Z"), at("sel-2", "2026-08-11T11:00:00.000Z")]
+      }),
+      NOON
+    );
+    expect(progress.next).toBeNull();
+    expect(progress.underway).toBe(2);
+  });
+
+  it("treats a kickoff it cannot parse as waiting and never offers it as next", () => {
+    // We cannot claim a match started without a time, and we have no time to
+    // show for it either — so it waits, silently.
+    const progress = readBetProgress(bet({ selections: [at("sel-1", "not-a-date")] }), NOON);
+    expect(progress).toMatchObject({ underway: 0, waiting: 1 });
+    expect(progress.next).toBeNull();
+  });
+
+  it("marks a leg as under way only while it is pending and started", () => {
+    expect(isUnderwaySelection(at("sel-1", "2026-08-11T11:00:00.000Z"), NOON)).toBe(true);
+    expect(isUnderwaySelection(at("sel-1", "2026-08-11T13:00:00.000Z"), NOON)).toBe(false);
+    expect(isUnderwaySelection(at("sel-1", "2026-08-11T11:00:00.000Z", "won"), NOON)).toBe(false);
+    expect(isUnderwaySelection(at("sel-1", "not-a-date"), NOON)).toBe(false);
+  });
+
+  it("orders the legs by kickoff and sinks the undated ones to the end", () => {
+    const ordered = orderSelectionsByKickoff([
+      at("late", "2026-08-11T21:00:00.000Z"),
+      at("undated", "not-a-date"),
+      at("early", "2026-08-11T19:00:00.000Z")
+    ]);
+    expect(ordered.map((s) => s.id)).toEqual(["early", "late", "undated"]);
+  });
+
+  it("keeps the server's order between legs kicking off together", () => {
+    const same = "2026-08-11T19:00:00.000Z";
+    const ordered = orderSelectionsByKickoff([at("first", same), at("second", same), at("third", same)]);
+    expect(ordered.map((s) => s.id)).toEqual(["first", "second", "third"]);
+  });
+
+  it("does not reorder the caller's array", () => {
+    const input = [at("late", "2026-08-11T21:00:00.000Z"), at("early", "2026-08-11T19:00:00.000Z")];
+    orderSelectionsByKickoff(input);
+    expect(input.map((s) => s.id)).toEqual(["late", "early"]);
+  });
+
+  it("returns null for a timestamp it cannot read rather than an Invalid Date", () => {
+    expect(formatDateTime("not-a-date", "ro")).toBeNull();
+    // The rendered text is timezone- and ICU-dependent, so this asserts only
+    // what the product depends on: a day and a clock time, never "Invalid Date".
+    const shown = formatDateTime("2026-08-11T18:30:00.000Z", "ro");
+    expect(shown).toMatch(/\d{1,2}/);
+    expect(shown).toMatch(/\d{1,2}[:.]\d{2}/);
   });
 });
 
