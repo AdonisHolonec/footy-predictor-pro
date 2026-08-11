@@ -61,6 +61,7 @@ function securityDefinerFunctions() {
            || '|' || has_function_privilege('anon', p.oid, 'EXECUTE')
            || '|' || has_function_privilege('authenticated', p.oid, 'EXECUTE')
            || '|' || has_function_privilege('service_role', p.oid, 'EXECUTE')
+           || '|' || (p.prorettype = 'pg_catalog.event_trigger'::regtype)
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef
@@ -70,7 +71,7 @@ function securityDefinerFunctions() {
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [name, args, anon, authenticated, serviceRole] = line.split("|");
+      const [name, args, anon, authenticated, serviceRole, isEventTrigger] = line.split("|");
       // `boolean || text` renders as 'true'/'false', not psql's display 't'/'f'.
       // Reading it as 't' silently made every verdict false, which turned the
       // guard below into a test that could not fail. Parse strictly instead.
@@ -84,7 +85,10 @@ function securityDefinerFunctions() {
         args,
         anon: bool(anon),
         authenticated: bool(authenticated),
-        serviceRole: bool(serviceRole)
+        serviceRole: bool(serviceRole),
+        // Returns the event_trigger pseudo-type: invoked by the engine, never
+        // callable from SQL by anyone, whatever EXECUTE says.
+        isEventTrigger: bool(isEventTrigger)
       };
     });
 }
@@ -181,12 +185,44 @@ test("the functions hardened by 032 are still restricted", () => {
   }
 });
 
-test("service_role keeps EXECUTE on every SECURITY DEFINER function", () => {
+test("service_role keeps EXECUTE on every callable SECURITY DEFINER function", () => {
   // 046 narrows client access; it must not have cost the server its own.
+  //
+  // Event trigger functions are exempt, and not as a convenience: they return a
+  // pseudo-type, so PostgreSQL will not invoke them from SQL for any role. The
+  // engine fires them without consulting EXECUTE at all, which makes a grant to
+  // service_role meaningless rather than useful. 047 deliberately grants none.
   const withoutServiceRole = securityDefinerFunctions()
-    .filter((fn) => !fn.serviceRole)
+    .filter((fn) => !fn.isEventTrigger && !fn.serviceRole)
     .map((fn) => fn.name);
   assert.deepEqual(withoutServiceRole, [], "service_role lost EXECUTE somewhere");
+});
+
+test("the ensure_rls event trigger is installed by the migrations", () => {
+  // The point of 047. Before it, rls_auto_enable and ensure_rls existed only in
+  // production: a database rebuilt from these migrations came up with no
+  // automatic RLS on new tables and nothing said so.
+  const row = psql(`
+    -- evtenabled is "char"; concatenating it without a cast is ambiguous.
+    select et.evtname || '|' || et.evtevent || '|' || et.evtenabled::text || '|' || p.proname
+    from pg_event_trigger et
+    join pg_proc p on p.oid = et.evtfoid
+    where et.evtname = 'ensure_rls';
+  `);
+  assert.equal(row, "ensure_rls|ddl_command_end|O|rls_auto_enable", "ensure_rls should be installed and enabled");
+});
+
+test("a table created after the migrations gets RLS without being asked", () => {
+  // Proves the mechanism works, not merely that it is installed. This is the
+  // behaviour production has always had and a rebuilt database silently lacked.
+  psql("create table if not exists public.rls_auto_enable_probe (id int);");
+  const enabled = psql(`
+    select c.relrowsecurity::text
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'rls_auto_enable_probe';
+  `);
+  psql("drop table if exists public.rls_auto_enable_probe;");
+  assert.equal(enabled, "true", "the event trigger should have enabled RLS on the new table");
 });
 
 test("046 changes nothing but function privileges", () => {
