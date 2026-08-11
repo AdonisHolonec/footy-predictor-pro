@@ -14,7 +14,12 @@ import { getOddsForFixture } from "./oddsPrefetch.js";
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 const HISTORY_TABLE = "predictions_history";
-const CANCELLED = new Set(["PST", "CANC", "ABD", "AWD", "WO"]);
+/**
+ * Fixtures that will never produce a result. Exported so Global Special Bet
+ * settlement voids its selections from the same list rather than keeping a
+ * second copy of it — the classification belongs in one place.
+ */
+export const CANCELLED = new Set(["PST", "CANC", "ABD", "AWD", "WO"]);
 
 function asOdd(n) {
   const x = Number(n);
