@@ -116,7 +116,13 @@ function mapPredictionToDbRow(prediction) {
       family: prediction.recommended?.family || null,
       status,
       score,
-      marketTotals: { cornersTotal: prediction.marketResults?.cornersTotal ?? null }
+      // All tracked totals, not just corners: a Shots / Shots-on-Target Recommended grades
+      // against its own market's total and would otherwise stay pending forever.
+      marketTotals: {
+        cornersTotal: prediction.marketResults?.cornersTotal ?? null,
+        shotsOnTargetTotal: prediction.marketResults?.shotsOnTargetTotal ?? null,
+        shotsTotal: prediction.marketResults?.shotsTotal ?? null
+      }
     }),
     value_bet_validation: valueBetValidation,
     model_version: modelVer,

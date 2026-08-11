@@ -1039,11 +1039,48 @@ test("Professional Value Engine covers families and highlights best market", () 
     bttsOdds: { yes: 1.85, no: 1.95 },
     goals25Odds: { over: 1.9, under: 1.95 },
     goals15Odds: { over: 1.25, under: 3.8 },
-    cornersQuote: { pick: "Over 9.5 Corners", line: 9.5, odd: 1.95 },
-    cornersProbPct: 56,
-    cardsOdds: { over: 1.9, under: 1.9, line: 3.5 },
-    cardsOverProbPct: 54,
-    cardsUnderProbPct: 46
+    // Corners and Cards now arrive already priced at the bookmaker's own line
+    // (repriceCandidateLine), so probability and odd can never describe different lines.
+    cornersSelections: [
+      {
+        side: "over",
+        requestedLine: 9.5,
+        bookLine: 9.5,
+        lineExact: true,
+        probabilityLine: 9.5,
+        probabilityPct: 56,
+        odd: 1.95,
+        bookmakersUsed: 4,
+        tradable: true,
+        repriced: false
+      }
+    ],
+    cardsSelections: [
+      {
+        side: "over",
+        requestedLine: 3.5,
+        bookLine: 3.5,
+        lineExact: true,
+        probabilityLine: 3.5,
+        probabilityPct: 54,
+        odd: 1.9,
+        bookmakersUsed: 4,
+        tradable: true,
+        repriced: false
+      },
+      {
+        side: "under",
+        requestedLine: 3.5,
+        bookLine: 3.5,
+        lineExact: true,
+        probabilityLine: 3.5,
+        probabilityPct: 46,
+        odd: 1.9,
+        bookmakersUsed: 4,
+        tradable: true,
+        repriced: false
+      }
+    ]
   });
 
   assert.ok(engine.markets.length >= 8);

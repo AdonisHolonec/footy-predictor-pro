@@ -71,7 +71,33 @@ export function resolveRecommendedValidation({ pick, family, status, score, mark
   if (!isFinalStatus(status)) return "pending";
   if (family === "Cards") return "pending"; // no cards totals tracked yet
 
+  // Total shots grades against the match's combined shot count. Like SOT below, it must
+  // never fall through to the goals path: "Shots Over 22.5" graded against goals scored
+  // would settle as a loss on essentially every fixture. Absent data stays pending —
+  // a missing total is not zero.
+  if (family === "Shots") {
+    const shotsOu = parseOuPickAnywhere(pick);
+    if (!shotsOu) return "pending";
+    const shotsTotal = marketTotals?.shotsTotal;
+    if (shotsTotal == null) return "pending";
+    const shotsHit = evaluateOuLine(shotsOu.side, shotsOu.line, shotsTotal);
+    return shotsHit == null ? "pending" : shotsHit ? "win" : "loss";
+  }
+
+  // Shots on target does have a tracked total, so it grades against that — never goals.
+  // Its label is prefixed ("SOT Over 8.5"), which the ^-anchored goals parser
+  // deliberately rejects, so side/line are read with the prefix-tolerant parser.
+  if (family === "Shots on Target") {
+    const sotOu = parseOuPickAnywhere(pick);
+    if (!sotOu) return "pending";
+    const sotTotal = marketTotals?.shotsOnTargetTotal;
+    if (sotTotal == null) return "pending";
+    const sotHit = evaluateOuLine(sotOu.side, sotOu.line, sotTotal);
+    return sotHit == null ? "pending" : sotHit ? "win" : "loss";
+  }
+
   const ou = parseGoalsOuPick(pick);
+
   const isCorners = family === "Corners" || (!family && ou != null && !GOALS_OU_LINES.has(ou.line));
 
   if (isCorners) {
@@ -122,6 +148,23 @@ function deriveAlignedOuPick(totalLines, quote, maxLineDelta = 1.5) {
     return { line: qLine, side, probability: side === "over" ? pOver : 100 - pOver };
   }
   return { line: qLine, side, probability: best.probability };
+}
+
+/**
+ * Side/line from a prefixed Over/Under label ("SOT Over 8.5", "Shots Under 22.5").
+ * Deliberately separate from parseGoalsOuPick, whose `^` anchor is what stops a prefixed
+ * label being mistaken for a goals pick — only callers that already know the market from
+ * `family` may use this looser parse.
+ */
+function parseOuPickAnywhere(pick) {
+  const m = String(pick || "")
+    .trim()
+    .toLowerCase()
+    .match(/\b(peste|over|sub|under)\s*(\d+(?:[.,]\d+)?)/);
+  if (!m) return null;
+  const line = Number(m[2].replace(",", "."));
+  if (!Number.isFinite(line)) return null;
+  return { side: m[1] === "peste" || m[1] === "over" ? "over" : "under", line };
 }
 
 function parseGoalsOuPick(pick) {
@@ -256,7 +299,8 @@ export function deriveCardMarketPicks(prediction) {
  * @param {string} opts.status
  * @param {{ home: number|null, away: number|null }} opts.score
  * @param {ReturnType<typeof deriveCardMarketPicks>} opts.picks
- * @param {{ cornersTotal?: number|null, shotsOnTargetTotal?: number|null }} [opts.marketTotals]
+ * @param {{ cornersTotal?: number|null, shotsOnTargetTotal?: number|null,
+ *   shotsTotal?: number|null }} [opts.marketTotals]
  */
 export function settleCardMarkets({ status, score, picks, marketTotals = {} }) {
   const out = {
@@ -318,6 +362,9 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
     cornersTotal: marketTotals?.cornersTotal ?? base.marketResults?.cornersTotal ?? null,
     shotsOnTargetTotal:
       marketTotals?.shotsOnTargetTotal ?? base.marketResults?.shotsOnTargetTotal ?? null,
+    // Combined match shots — settles a Recommended from the Shots family. Distinct from
+    // shotsOnTargetTotal: the two markets are graded against their own totals.
+    shotsTotal: marketTotals?.shotsTotal ?? base.marketResults?.shotsTotal ?? null,
     firstHalfGoals: marketTotals?.firstHalfGoals ?? base.marketResults?.firstHalfGoals ?? null
   };
   const validations = settleCardMarkets({ status: st, score: sc, picks, marketTotals: totals });
@@ -326,6 +373,7 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
   if (
     totals.cornersTotal != null ||
     totals.shotsOnTargetTotal != null ||
+    totals.shotsTotal != null ||
     totals.firstHalfGoals != null
   ) {
     base.marketResults = {

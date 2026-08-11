@@ -1,93 +1,30 @@
 /**
- * Tunable thresholds for the multi-market Recommendation Selector (selectRecommendation.js).
- * Mirrors the pattern used by ../../value/valueWeights.js — a single, overridable source
- * of truth so no magic number lives inline in the selection algorithm.
+ * Eligibility thresholds for the Recommendation Selector (selectRecommendation.js).
+ *
+ * Aug 2026 — this file used to also carry the *ranking* weights: a composite
+ * commercial score (0.72 confidence + 0.20 EV + 0.05 bookmaker-count + 0.03 market
+ * diversity) minus hard-coded penalties on Over 1.5 / Under 3.5. An audit showed
+ * that score could — and did — rank a 38% selection above a 49% one, and a 55%
+ * selection above a 71% one, because the EV term saturated at +20% EV and was worth
+ * 20 of 100 points (≈ 27.8 percentage points of probability).
+ *
+ * Product rule now: Recommended is the selection with the highest chance of winning,
+ * full stop. The ranking weights are therefore deleted rather than retuned — no
+ * weighting of a commercial factor is safe when the rule is "highest probability
+ * wins". EV/value optimisation lives exclusively in the Value Engine (Best Value).
+ *
+ * What remains here is eligibility only: the probability floor a candidate must
+ * clear before it is allowed to compete on probability at all. The odds floor is
+ * MIN_DISPLAY_ODDS (predictionDisplayGate.js), shared with every other surface.
  */
 
 export const DEFAULT_RECOMMENDATION_WEIGHTS = Object.freeze({
   /** Never recommend a pick below coin-flip probability. */
-  minProbabilityPct: 50,
-  /** Bookmaker consensus count that counts as "full" price-quality confidence. */
-  qualityFullBookmakerCount: 6,
-  /**
-   * Composite score weights (re-normalized to sum to 1 at runtime). Recalibrated Aug 2026
-   * after the v1 weights (confidence 0.55 / diversity 0.12) overcorrected — Over/Under
-   * collapsed from 85% to 2.8% of picks while 1X2 rose to 60.7%, one dominant family
-   * replacing another. A 570-fixture offline sweep across 4 weightings (0.55-0.72 confidence,
-   * 0.12-0.03 diversity) found 1X2's share IDENTICAL — 60.7% — at every weighting: it isn't
-   * a scoring-weight artifact. In the ~26% of fixtures where no candidate clears the 50%
-   * probability floor, 1X2 wins every relaxed-fallback case too (151/151 in the sweep),
-   * because "most likely of exactly three outcomes" is genuinely more defensible than an
-   * equally-uncertain BTTS/Corners side — that's a property of match-winner markets, not a
-   * bug. What the weight change actually buys: better balance *among* the other four
-   * families and a meaningfully better realized edge (win rate vs. break-even odds went
-   * from -7.3pp to +1.8pp in the replay) — confidence now carries the most weight of any
-   * component, as intended, without giving diversity enough leverage to overrule it.
-   */
-  scoreWeights: Object.freeze({
-    confidence: 0.72,
-    expectedValue: 0.2,
-    quality: 0.05,
-    diversity: 0.03
-  }),
-  /**
-   * Diversity bonus per market family, 0-1 scale — part of the composite score itself,
-   * not a post-hoc tie-break, so a different family can outrank a higher raw-confidence
-   * Over/Under candidate once the combined scores are close. Range compressed from the v1
-   * [0, 1] spread to [0.35, 0.6] alongside the lower diversity weight above — together they
-   * cut the diversity term's maximum swing roughly 7x (from up to ~12 score points to ~1.8),
-   * so it can still resolve genuine near-ties toward variety but can never overrule a clear
-   * confidence/EV leader.
-   *
-   * Over/Under kept slightly below other families so raw-confidence-heavy safe lines
-   * (1.5 / 3.5) do not re-dominate after the Aug 2026 confidence=0.72 recalibration —
-   * paired with safeOuScorePenalty below.
-   */
-  familyDiversityBonus: Object.freeze({
-    "Over/Under": 0.25,
-    "1X2": 0.45,
-    "Double Chance": 0.55,
-    BTTS: 0.6,
-    Corners: 0.6,
-    Cards: 0.6,
-    "Correct Score": 0.6
-  }),
-  /**
-   * Soft score-point penalties for statistically over-represented "safe" goals lines.
-   * Restores the UX intent of the old MARKET_BASELINES lift in selectTopPick (which made
-   * Peste 1.5 @~75% and Sub 3.5 @~70% non-informative) without changing PredictorV3
-   * probabilities, odds, or confidence stored on the row — only the Recommendation
-   * Selector ranking. Clear high-confidence leaders still win; typical 75–85% safe
-   * lines lose near-ties to BTTS / Corners / Double Chance / Goals 2.5.
-   */
-  safeOuScorePenalty: Object.freeze({
-    over_1_5: 9,
-    under_3_5: 8
-  })
+  minProbabilityPct: 50
 });
 
-function normalizeWeights(weights) {
-  const sum = Object.values(weights).reduce((a, b) => a + (Number(b) || 0), 0) || 1;
-  const out = {};
-  for (const [k, v] of Object.entries(weights)) out[k] = (Number(v) || 0) / sum;
-  return out;
-}
-
 export function getRecommendationWeights(overrides = {}) {
-  const base = { ...DEFAULT_RECOMMENDATION_WEIGHTS, ...(overrides || {}) };
-  const scoreWeights = normalizeWeights({
-    ...DEFAULT_RECOMMENDATION_WEIGHTS.scoreWeights,
-    ...(overrides?.scoreWeights || {})
-  });
-  const familyDiversityBonus = {
-    ...DEFAULT_RECOMMENDATION_WEIGHTS.familyDiversityBonus,
-    ...(overrides?.familyDiversityBonus || {})
-  };
-  const safeOuScorePenalty = {
-    ...DEFAULT_RECOMMENDATION_WEIGHTS.safeOuScorePenalty,
-    ...(overrides?.safeOuScorePenalty || {})
-  };
-  return { ...base, scoreWeights, familyDiversityBonus, safeOuScorePenalty };
+  return { ...DEFAULT_RECOMMENDATION_WEIGHTS, ...(overrides || {}) };
 }
 
 export default { DEFAULT_RECOMMENDATION_WEIGHTS, getRecommendationWeights };

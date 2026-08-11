@@ -58,10 +58,21 @@ test("applyValueEngine leaves valueDetected false when every candidate is negati
 });
 
 test("applyValueEngine falls back to an empty valueEngine on internal failure without throwing", () => {
+  // Cards probabilities are no longer derived here (Stage08 supplies already-repriced
+  // selections), so `leagueParams: null` is harmless now. Force a genuine failure inside
+  // candidate construction instead — the guarantee under test is that a value-engine
+  // fault can never fail predict.
+  const explodingProbs = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error("simulated internal failure");
+      }
+    }
+  );
   const out = applyValueEngine({
     ...baseInput,
-    leagueParams: null, // deriveCardsLambda dereferences leagueParams.cardsAvgTotal -> throws
-    pOut: { p1: 60, pX: 25, p2: 15 },
+    pOut: explodingProbs,
     odds: { home: 2.2, draw: 3.3, away: 4.0, bookmakersUsed: 5 }
   });
   assert.equal(out.valueDetected, false);

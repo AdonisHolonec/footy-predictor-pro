@@ -345,3 +345,72 @@ describe("specialBetLiveAdjustmentBadge", () => {
     expect(specialBetLiveAdjustmentBadge(undefined)).toBeNull();
   });
 });
+
+describe("Global Special Bet line integrity", () => {
+  /**
+   * A GSB leg is a real bet the user is expected to place. It must never carry a price
+   * belonging to another line — the raw `?? marketOdds.corners.odd` style escapes that
+   * allowed that are gone, and a leg with no price for its own line is dropped by the
+   * existing hasValidOdd filter rather than shown at someone else's odds.
+   */
+  it("drops a corners leg whose quote the server marked non-tradable", () => {
+    const row = baseRow({
+      marketOdds: {
+        ...baseRow().marketOdds,
+        corners: {
+          pick: "Over 8.5",
+          line: 8.5,
+          odd: null,
+          over: null,
+          under: null,
+          requestedLine: 8.5,
+          bookLine: 10.5,
+          lineExact: false,
+          tradable: false,
+          untradableReason: "no_model_probability_at_book_line"
+        }
+      }
+    });
+    const legs = buildSpecialBetLegs(row, labels, 3);
+    expect(legs.find((l) => l.id === "corners")).toBeUndefined();
+  });
+
+  it("drops a shots leg rather than borrowing the total-shots price", () => {
+    const row = baseRow({
+      marketOdds: {
+        ...baseRow().marketOdds,
+        shotsOnTarget: {
+          pick: "Over 4.5",
+          line: 4.5,
+          odd: null,
+          over: null,
+          tradable: false,
+          oddSource: "shots_total",
+          untradableReason: "cross_market_quote"
+        },
+        shotsTotal: { pick: "Over 20.5", line: 20.5, odd: 1.9, over: 1.9, tradable: true }
+      }
+    });
+    const legs = buildSpecialBetLegs(row, labels, 3);
+    expect(legs.find((l) => l.id === "shots")).toBeUndefined();
+  });
+
+  it("every emitted leg carries an odd that belongs to the line it displays", () => {
+    const row = baseRow();
+    const legs = buildSpecialBetLegs(row, labels, 3);
+    expect(legs.length).toBeGreaterThan(0);
+
+    const quoteFor: Record<string, { line?: number | null } | undefined> = {
+      corners: row.marketOdds?.corners,
+      shots: row.marketOdds?.shotsOnTarget,
+      ht: row.marketOdds?.firstHalfGoals
+    };
+    for (const leg of legs) {
+      expect(Number.isFinite(leg.odd)).toBe(true);
+      const quote = quoteFor[leg.id];
+      if (!quote?.line) continue;
+      const displayed = Number(String(leg.pick).match(/(\d+(?:\.\d+)?)/)?.[1]);
+      expect(displayed).toBe(Number(quote.line));
+    }
+  });
+});

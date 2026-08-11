@@ -8,10 +8,23 @@ import { buildPredictionExplanation } from "../../explanation/PredictionExplanat
 import { matchedCompetitionKeyword } from "../../PredictionEngine/MotivationEngine.js";
 import { resolveCorrectScoreOddsWithFallback } from "../decision/resolveCorrectScoreOdds.js";
 import { MODEL_VERSION } from "../../modelConstants.js";
-import { clampPct, buildTeamContext, extendProbsWithMarkets, applyStakePolicyV2 } from "../predictHelpers.js";
+import {
+  clampPct,
+  buildTeamContext,
+  extendProbsWithMarkets,
+  applyStakePolicyV2,
+  deriveCardsLambda
+} from "../predictHelpers.js";
 import { alignMarketProbsAndCalibrate } from "../decision/alignMarketProbsAndCalibrate.js";
 import { selectRecommendation } from "../decision/selectRecommendation.js";
 import { applyValueEngine } from "../decision/applyValueEngine.js";
+import { enumerateLineSelections } from "../decision/repriceCandidateLine.js";
+import { CORNERS_MARKET_NAMES, CARDS_MARKET_NAMES } from "../modelFusion/resolveSideMarketQuotes.js";
+import {
+  SHOTS_TOTAL_MARKET_NAMES,
+  SHOTS_SOT_MARKET_NAMES,
+  PREFERRED_SHOTS_BOOKMAKERS
+} from "../../marketOdds.js";
 
 
 export const STAGE_ID = "Stage08Decision";
@@ -186,13 +199,62 @@ export async function run(context) {
       debugMeta = null;
     }
 
+    // === TRADABLE LINE SELECTIONS FOR THE LINED SIDE MARKETS ===
+    // Every corners / cards line the bookmaker actually offers becomes its own
+    // candidate, priced at that line (ladder lookup, else analytic on the block's own
+    // lambdas). Lines the model cannot price are absent, so they can never be
+    // Recommended, Alternative or Best Value. Parses the odds payload already fetched
+    // in Stage07 — no new network call.
+    const oddsData = oddsReq?.ok ? oddsReq.data : null;
+    // Cards keep using deriveCardsLambda when the (opt-in) cardsBlock is absent, so the
+    // probability math is identical to before — only the set of lines widens.
+    const cardsLambda = deriveCardsLambda({ leagueParams, modularScores, cornersBlock });
+    const cardsPricingBlock =
+      cardsBlock ||
+      (cardsLambda > 0
+        ? { lambdaHome: cardsLambda, lambdaAway: 0, correlation: 0, total: {} }
+        : null);
+
+    const cornersSelections = enumerateLineSelections({
+      oddsData,
+      marketNames: CORNERS_MARKET_NAMES,
+      kind: "corners",
+      block: cornersBlock,
+      preferredLine: cornersPick?.line ?? null
+    });
+    const cardsSelections = enumerateLineSelections({
+      oddsData,
+      marketNames: CARDS_MARKET_NAMES,
+      kind: "generic",
+      block: cardsPricingBlock,
+      preferredLine: Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5)
+    });
+    // Shots markets are kept strictly apart: `kind` makes scoreMarketName reject
+    // on-target labels for the total-shots market and vice versa, so a total-shots price
+    // can never reach a shots-on-target selection even at the same line number.
+    const shotsTotalSelections = enumerateLineSelections({
+      oddsData,
+      marketNames: SHOTS_TOTAL_MARKET_NAMES,
+      kind: "shots_total",
+      block: shotsTotalBlock,
+      preferredLine: shotsTotalBlock ? Number(marketOdds?.shotsTotal?.requestedLine) || null : null,
+      preferredBookmakers: PREFERRED_SHOTS_BOOKMAKERS
+    });
+    const shotsOnTargetSelections = enumerateLineSelections({
+      oddsData,
+      marketNames: SHOTS_SOT_MARKET_NAMES,
+      kind: "shots_on_target",
+      block: shotsOnTargetBlock,
+      preferredLine: shotsOnTargetBlock ? Number(marketOdds?.shotsOnTarget?.requestedLine) || null : null,
+      preferredBookmakers: PREFERRED_SHOTS_BOOKMAKERS
+    });
+
     // === TOP PICK SELECTION + RECOMMENDED QUOTE ===
-    // Recommendation selection compares ALL markets with valid odds (1X2, Double Chance,
-    // BTTS, Over/Under, Corners, Cards — Correct Score is Phase 2) via the same candidate
-    // pool the Value Engine uses (buildValueCandidates), gated by MIN_DISPLAY_ODDS BEFORE
-    // scoring, and ranked by one composite score (confidence + EV + price quality + a
-    // bounded market-diversity term) so a different market can win a near-tie instead of
-    // Over/Under always dominating. See selectRecommendation.js for the full rationale.
+    // Recommendation compares ALL markets with valid odds (1X2, Double Chance, BTTS,
+    // Over/Under, Corners, Cards — Correct Score is Phase 2) via the same candidate pool
+    // the Value Engine uses (buildValueCandidates), and picks the highest calibrated
+    // probability among those that are tradable and clear MIN_DISPLAY_ODDS and the 50%
+    // floor. No EV, price or diversity term participates. See selectRecommendation.js.
     const recommendationResult = selectRecommendation({
       marketProbsAligned,
       p1Adj,
@@ -206,12 +268,10 @@ export async function run(context) {
       goals25Quote,
       goals35Quote,
       doubleChanceQuote,
-      marketOdds,
-      cornersPick,
-      cardsQuote,
-      leagueParams,
-      modularScores,
-      cornersBlock,
+      cornersSelections,
+      cardsSelections,
+      shotsTotalSelections,
+      shotsOnTargetSelections,
       debug: debugEnabled
     });
     topSelection = recommendationResult.topSelection;
@@ -271,10 +331,6 @@ export async function run(context) {
     // Re-evaluate across 1X2 · Double Chance · BTTS · O/U · Corners · Cards · Correct Score
     // using final coherent probs. Never recommend negative EV.
     ({ valueEngine, valueDetected, valueType, finalEv, finalKelly, stakingCompact, reasonCodes } = applyValueEngine({
-      cardsQuote,
-      leagueParams,
-      modularScores,
-      cornersBlock,
       pOut,
       odds,
       doubleChanceQuote,
@@ -282,8 +338,10 @@ export async function run(context) {
       goals15Quote,
       goals25Quote,
       goals35Quote,
-      marketOdds,
-      cornersPick,
+      cornersSelections,
+      cardsSelections,
+      shotsTotalSelections,
+      shotsOnTargetSelections,
       dataQuality,
       maxConf,
       leagueStakeCap,

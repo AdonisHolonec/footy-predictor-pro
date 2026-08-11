@@ -6,15 +6,14 @@
  * its own try/catch — value-engine failure must never fail predict.
  */
 
-import { poissonOverLine } from "../../math.js";
 import { buildValueEngine, buildProfessionalValueEngine } from "../../value/ValueEngine.js";
-import { deriveCardsLambda, clampPct, applyStakePolicyV2 } from "../predictHelpers.js";
+import { applyStakePolicyV2 } from "../predictHelpers.js";
 
 /**
- * @param {{ cardsQuote: object|null, leagueParams: object, modularScores: object|null,
- *   cornersBlock: object|null, pOut: object, odds: object|null, doubleChanceQuote: object|null,
+ * @param {{ pOut: object, odds: object|null, doubleChanceQuote: object|null,
  *   bttsQuote: object|null, goals15Quote: object|null, goals25Quote: object|null,
- *   goals35Quote: object|null, marketOdds: object|null, cornersPick: object|null,
+ *   goals35Quote: object|null, cornersSelections: Array<object>|null,
+ *   cardsSelections: Array<object>|null,
  *   dataQuality: number, maxConf: number, leagueStakeCap: number, cooldownCap: number,
  *   fixtureId: number, valueEngine: object|null, valueDetected: boolean, valueType: string,
  *   finalEv: number, finalKelly: number, stakingCompact: string, reasonCodes: string[],
@@ -23,10 +22,6 @@ import { deriveCardsLambda, clampPct, applyStakePolicyV2 } from "../predictHelpe
  *   finalEv: number, finalKelly: number, stakingCompact: string, reasonCodes: string[] }}
  */
 export function applyValueEngine({
-  cardsQuote,
-  leagueParams,
-  modularScores,
-  cornersBlock,
   pOut,
   odds,
   doubleChanceQuote,
@@ -34,8 +29,10 @@ export function applyValueEngine({
   goals15Quote,
   goals25Quote,
   goals35Quote,
-  marketOdds,
-  cornersPick,
+  cornersSelections,
+  cardsSelections,
+  shotsTotalSelections,
+  shotsOnTargetSelections,
   dataQuality,
   maxConf,
   leagueStakeCap,
@@ -52,18 +49,9 @@ export function applyValueEngine({
   correctScoreProbsPct
 }) {
   try {
-    const cardsLine = Number(cardsQuote?.line ?? process.env.VALUE_CARDS_LINE ?? 3.5);
-    const cardsLambda = deriveCardsLambda({
-      leagueParams,
-      modularScores,
-      cornersBlock
-    });
-    const pCardsOver =
-      Number.isFinite(cardsLine) && cardsLambda > 0
-        ? clampPct(poissonOverLine(cardsLine, cardsLambda) * 100)
-        : null;
-    const pCardsUnder = pCardsOver != null ? clampPct(100 - pCardsOver) : null;
-
+    // Corners and Cards arrive as selections already priced at the bookmaker's own
+    // lines (Stage08 -> enumerateLineSelections). Best Value still optimises EV — it
+    // simply can no longer do so against a probability that belongs to another line.
     valueEngine = buildProfessionalValueEngine({
       probs: pOut,
       matchWinnerOdds: odds
@@ -74,13 +62,10 @@ export function applyValueEngine({
       goals15Odds: goals15Quote,
       goals25Odds: goals25Quote,
       goals35Odds: goals35Quote,
-      cornersQuote: marketOdds?.corners || null,
-      cornersProbPct: cornersPick?.probability ?? null,
-      cardsOdds: cardsQuote
-        ? { over: cardsQuote.over, under: cardsQuote.under, line: cardsLine }
-        : null,
-      cardsOverProbPct: pCardsOver,
-      cardsUnderProbPct: pCardsUnder,
+      cornersSelections: cornersSelections || null,
+      cardsSelections: cardsSelections || null,
+      shotsTotalSelections: shotsTotalSelections || null,
+      shotsOnTargetSelections: shotsOnTargetSelections || null,
       correctScoreOdds: correctScoreOdds || null,
       correctScoreProbsPct: correctScoreProbsPct || null
     });

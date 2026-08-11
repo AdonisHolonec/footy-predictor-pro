@@ -10,8 +10,49 @@ export const VALUE_MARKET_FAMILIES = Object.freeze([
   "Over/Under",
   "Corners",
   "Cards",
+  "Shots",
+  "Shots on Target",
   "Correct Score"
 ]);
+
+/**
+ * Which families the app can actually grade after the match.
+ *
+ * A selection we can recommend but can never settle is not supportable: it stays pending
+ * forever, so the user never learns whether it won and accuracy measurement is silently
+ * corrupted. Settleability is therefore an *eligibility* condition alongside tradability
+ * — never a ranking term.
+ *
+ * This mirrors what resolveRecommendedValidation (server-utils/cardMarketSettlement.js)
+ * can actually do; tests/cardMarketSettlement.test.js asserts the two stay in sync, so a
+ * family flipped here without real grading support fails the suite.
+ *
+ *   1X2 / Double Chance / BTTS / Over-Under  -> graded from the final score
+ *   Corners                                  -> marketTotals.cornersTotal
+ *   Shots                                    -> marketTotals.shotsTotal
+ *   Shots on Target                          -> marketTotals.shotsOnTargetTotal
+ *   Cards                                    -> NO total exists in the statistics payload
+ *   Correct Score                            -> evaluateTopPick has no scoreline branch
+ *
+ * Flip a `false` to `true` in the same change that lands its settlement support, and the
+ * family rejoins the pool with no ranking change of any kind.
+ */
+export const SETTLEABLE_VALUE_FAMILIES = Object.freeze({
+  "1X2": true,
+  "Double Chance": true,
+  BTTS: true,
+  "Over/Under": true,
+  Corners: true,
+  Shots: true,
+  "Shots on Target": true,
+  Cards: false,
+  "Correct Score": false
+});
+
+/** True when a post-match result can be determined for this family. */
+export function isSettleableFamily(family) {
+  return SETTLEABLE_VALUE_FAMILIES[family] === true;
+}
 
 /**
  * Map a selection label → market family.
@@ -28,6 +69,9 @@ export function classifyMarketFamily(type) {
   if (t === "gg" || t === "ngg" || t.includes("btts")) return "BTTS";
   if (t.includes("corner")) return "Corners";
   if (t.includes("card")) return "Cards";
+  // Order matters: "shots on target" must not fall through to the broader shots check.
+  if (t.includes("on target") || t.includes("sot")) return "Shots on Target";
+  if (t.includes("shot")) return "Shots";
   if (t.includes("correct score") || /^\d+-\d+$/.test(t)) return "Correct Score";
   if (t.includes("peste") || t.includes("sub") || t.includes("over") || t.includes("under")) {
     return "Over/Under";
@@ -40,21 +84,91 @@ function isGoodOdd(o) {
   return Number.isFinite(n) && n > 1;
 }
 
-function pushCandidate(list, { type, family, probability, odds, confidencePct, line = null }) {
+/**
+ * Line metadata every candidate carries. For markets without a line (1X2 / Double
+ * Chance / BTTS) the line fields stay null and `lineExact` is true by construction —
+ * there is no line for the bookmaker and the model to disagree about.
+ *
+ * INVARIANT: `tradable === true` implies `probabilityLine === bookLine`, i.e. the
+ * probability and the odd describe the same event. Enforced here, the only place
+ * candidates are constructed, and asserted in tests.
+ */
+function pushCandidate(
+  list,
+  {
+    type,
+    family,
+    probability,
+    odds,
+    confidencePct,
+    line = null,
+    requestedLine = null,
+    bookLine = null,
+    lineExact = true,
+    probabilityLine = null,
+    bookmakersUsed = 0,
+    repriced = false
+  }
+) {
   if (!isGoodOdd(odds)) return;
   const p = Number(probability);
   if (!Number.isFinite(p) || p <= 0) return;
+  // A lined candidate may only exist when its probability was priced at the very line
+  // the odd belongs to. Anything else would be an odds transfer between lines.
+  if (bookLine != null && Number(probabilityLine) !== Number(bookLine)) return;
+  const resolvedFamily = family || classifyMarketFamily(type);
   list.push({
     type,
-    family: family || classifyMarketFamily(type),
+    family: resolvedFamily,
+    // Eligibility, not ranking: a family the app cannot grade after the match is filtered
+    // out before any comparison happens, in both Recommended and Best Value.
+    settleable: isSettleableFamily(resolvedFamily),
     probability: p,
     odds: Number(odds),
     confidencePct: Number.isFinite(Number(confidencePct)) ? Number(confidencePct) : p > 1 ? p : p * 100,
-    line
+    line,
+    requestedLine,
+    bookLine,
+    lineExact: Boolean(lineExact),
+    probabilityLine,
+    bookmakersUsed: Number(bookmakersUsed) || 0,
+    tradable: true,
+    repriced
   });
 }
 
+/**
+ * Candidates for a lined market (Corners / Cards) from already-repriced selections.
+ * Each selection is a repriceCandidateLine() result: priced at the bookmaker's own
+ * line, so non-tradable ones are simply absent from the pool and can never reach
+ * Recommended, Alternative or Best Value.
+ */
+function pushLineSelections(list, selections, family, labelPrefix = "") {
+  for (const sel of Array.isArray(selections) ? selections : []) {
+    if (!sel?.tradable) continue;
+    const side = sel.side === "under" ? "Under" : "Over";
+    pushCandidate(list, {
+      type: `${labelPrefix}${side} ${Number(sel.bookLine).toFixed(1)}`,
+      family,
+      probability: pct01(sel.probabilityPct),
+      odds: sel.odd,
+      confidencePct: Number(sel.probabilityPct),
+      line: sel.bookLine,
+      requestedLine: sel.requestedLine,
+      bookLine: sel.bookLine,
+      lineExact: sel.lineExact,
+      probabilityLine: sel.probabilityLine,
+      bookmakersUsed: sel.bookmakersUsed,
+      repriced: sel.repriced
+    });
+  }
+}
+
 function pct01(p) {
+  // null/undefined/"" must stay null, not become 0: Number(null) === 0 is finite, and a
+  // missing probability that reads as 0 turns the `1 - p` complements below into a phantom
+  // 100% candidate — which, under probability-first ranking, would win every time.
+  if (p == null || p === "") return null;
   const n = Number(p);
   if (!Number.isFinite(n)) return null;
   return n > 1.5 ? n / 100 : n;
@@ -90,11 +204,10 @@ function correctScoreProbabilityFraction(probPct) {
  * @param {{ over?: number, under?: number }|null} input.goals15Odds
  * @param {{ over?: number, under?: number }|null} input.goals25Odds
  * @param {{ over?: number, under?: number }|null} input.goals35Odds
- * @param {{ pick?: string, line?: number, odd?: number }|null} input.cornersQuote
- * @param {number|null} input.cornersProbPct - model % for the corners pick
- * @param {{ over?: number, under?: number, line?: number }|null} input.cardsOdds
- * @param {number|null} input.cardsOverProbPct
- * @param {number|null} input.cardsUnderProbPct
+ * @param {Array<object>|null} input.cornersSelections - repriceCandidateLine() results
+ * @param {Array<object>|null} input.cardsSelections - repriceCandidateLine() results
+ * @param {Array<object>|null} input.shotsTotalSelections - repriceCandidateLine() results
+ * @param {Array<object>|null} input.shotsOnTargetSelections - repriceCandidateLine() results
  * @param {Record<string, number>|null} input.correctScoreOdds - odds keyed by "home-away" scoreline (e.g. "2-1")
  * @param {Record<string, number>|null} input.correctScoreProbsPct - model % keyed the same way, from the already-computed score PMF
  */
@@ -178,16 +291,19 @@ export function buildValueCandidates(input = {}) {
     });
   }
 
+  // Goals lines are quoted exact-only (maxLineDelta 0 in resolveSideMarketQuotes), so
+  // the book line and the model line are the same by construction.
   const addOu = (line, overOdd, underOdd, pOver, pUnder) => {
     const po = pct01(pOver);
     const pu = pct01(pUnder) ?? (po != null ? 1 - po : null);
+    const lineMeta = { line, requestedLine: line, bookLine: line, probabilityLine: line, lineExact: true };
     pushCandidate(list, {
       type: `Peste ${line}`,
       family: "Over/Under",
       probability: po,
       odds: overOdd,
       confidencePct: po != null ? po * 100 : null,
-      line
+      ...lineMeta
     });
     pushCandidate(list, {
       type: `Sub ${line}`,
@@ -195,7 +311,7 @@ export function buildValueCandidates(input = {}) {
       probability: pu,
       odds: underOdd,
       confidencePct: pu != null ? pu * 100 : null,
-      line
+      ...lineMeta
     });
   };
 
@@ -210,38 +326,17 @@ export function buildValueCandidates(input = {}) {
     addOu(3.5, input.goals35Odds.over, input.goals35Odds.under, pO35, probs.pU35);
   }
 
-  const cq = input.cornersQuote;
-  if (cq && isGoodOdd(cq.odd) && input.cornersProbPct != null) {
-    pushCandidate(list, {
-      type: cq.pick || `Corners ${cq.line ?? ""}`.trim(),
-      family: "Corners",
-      probability: pct01(input.cornersProbPct),
-      odds: cq.odd,
-      confidencePct: Number(input.cornersProbPct),
-      line: cq.line ?? null
-    });
-  }
-
-  const cards = input.cardsOdds;
-  if (cards) {
-    const line = cards.line ?? 3.5;
-    pushCandidate(list, {
-      type: `Cards Over ${line}`,
-      family: "Cards",
-      probability: pct01(input.cardsOverProbPct),
-      odds: cards.over,
-      confidencePct: Number(input.cardsOverProbPct),
-      line
-    });
-    pushCandidate(list, {
-      type: `Cards Under ${line}`,
-      family: "Cards",
-      probability: pct01(input.cardsUnderProbPct),
-      odds: cards.under,
-      confidencePct: Number(input.cardsUnderProbPct),
-      line
-    });
-  }
+  // Corners and Cards arrive as selections already priced at the bookmaker's own
+  // lines (resolveSideMarketQuotes -> repriceCandidateLine). Every line the book
+  // actually offers competes on its own probability, so e.g. Under 4.5 and Under 5.5
+  // cards are separate candidates ranked on their real chances — not one model-chosen
+  // line wearing another line's price.
+  pushLineSelections(list, input.cornersSelections, "Corners");
+  pushLineSelections(list, input.cardsSelections, "Cards", "Cards ");
+  // Shots markets are distinct families: a total-shots price may never settle or price a
+  // shots-on-target selection, and the labels keep them apart for grading downstream.
+  pushLineSelections(list, input.shotsTotalSelections, "Shots", "Shots ");
+  pushLineSelections(list, input.shotsOnTargetSelections, "Shots on Target", "SOT ");
 
   // Correct Score — one candidate per scoreline with BOTH a consensus odd and an
   // already-computed model probability (from the score PMF). No recomputation here:

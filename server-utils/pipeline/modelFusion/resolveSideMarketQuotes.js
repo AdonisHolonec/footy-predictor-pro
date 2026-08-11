@@ -14,6 +14,30 @@ import {
   SHOTS_TOTAL_MARKET_NAMES
 } from "../../marketOdds.js";
 import { deriveBestOverUnderPick } from "../predictHelpers.js";
+import { repriceCandidateLine } from "../decision/repriceCandidateLine.js";
+
+/**
+ * Bookmaker labels for the lined side markets. Exported so the decision stage can
+ * enumerate every line the book offers for these markets without re-declaring the
+ * lists (Stage08Decision -> enumerateLineSelections).
+ */
+export const CORNERS_MARKET_NAMES = [
+  "Corners Over Under",
+  "Corners Over/Under",
+  "Total Corners",
+  "Total Corners Over/Under",
+  "Corner Over/Under",
+  "Corners"
+];
+
+export const CARDS_MARKET_NAMES = [
+  "Cards Over/Under",
+  "Total Cards",
+  "Bookings",
+  "Cards",
+  "Yellow Cards Over/Under",
+  "Total Bookings"
+];
 
 /** Under/sub first — never treat "under" as over via includes("over"). */
 function selectOddByPick(quote, pick) {
@@ -28,41 +52,76 @@ function selectOddByPick(quote, pick) {
   return null;
 }
 
-function shotsSourceLabel(sourceKind) {
-  if (sourceKind === "shots_total") return "total shots";
-  if (sourceKind === "team_home") return "home SOT";
-  if (sourceKind === "team_away") return "away SOT";
-  return "SOT";
-}
-
-/** Align stored pick/line to the quoted book line when nearest-line fallback was used. */
-function buildOuQuotePayload(pick, quote, sourceKind = null) {
+/**
+ * Build the stored quote for a lined Over/Under market under the tradability contract.
+ *
+ * The old implementation snapped the *label* to the book line for true SOT quotes but
+ * kept the model line for cross-market fallbacks — while attaching the book's odd in
+ * both cases. Either way the probability stayed the model line's. That produced rows
+ * like `Over 6.5 shots @ 1.75` where 1.75 was the book's Over 8.5 price (Aug 2026 audit).
+ *
+ * Now the line, the probability and the odd are resolved together, at the bookmaker's
+ * own line, or the quote is marked non-tradable and carries no odd at all:
+ *
+ *   tradable === true  =>  pick label, `line`, `probabilityLine` and `odd` all agree
+ *   tradable === false =>  odd/over/under are null; the UI must render "—"
+ *
+ * `expectSourceKind` guards cross-market substitution: a total-shots or team-SOT quote
+ * is a different market, so its price may never stand in for match SOT even when the
+ * line number happens to match. Those degrade to non-tradable rather than borrowing.
+ */
+function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSourceKind = null) {
   if (!pick) return undefined;
   const side = String(pick.pick || "").toLowerCase().includes("under") ? "under" : "over";
+  const sideLabel = side === "over" ? "Over" : "Under";
   const src = sourceKind || quote?.sourceKind || null;
-  // Cross-market fallbacks keep the model SOT line; only true SOT quotes may snap line.
-  const allowSnap = !src || src === "sot";
-  const matchedLine = Number(quote?.line);
-  const line = allowSnap && Number.isFinite(matchedLine) ? matchedLine : pick.line;
-  const pickLabel = `${side === "over" ? "Over" : "Under"} ${Number(line).toFixed(1)}`;
-  const odd = selectOddByPick(quote, side === "over" ? "Over" : "Under");
-  const bookLabel = quote
-    ? src && src !== "sot"
-      ? `${shotsSourceLabel(src)} · median(${quote.bookmakersUsed})`
-      : `median(${quote.bookmakersUsed})`
-    : null;
+  const crossMarket = Boolean(expectSourceKind && src && src !== expectSourceKind);
+
+  const priced = crossMarket
+    ? { tradable: false, bookLine: Number(quote?.line) || null, lineExact: false, reason: "cross_market_quote" }
+    : repriceCandidateLine({ block, side, requestedLine: pick.line, quote });
+
+  if (!priced.tradable) {
+    return {
+      // Model-only: the model's own line is still worth showing as a read, but it
+      // carries no price, because no price for it exists.
+      pick: `${sideLabel} ${Number(pick.line).toFixed(1)}`,
+      line: pick.line,
+      odd: null,
+      over: null,
+      under: null,
+      requestedLine: pick.line,
+      bookLine: priced.bookLine ?? null,
+      lineExact: priced.lineExact ?? null,
+      probabilityLine: null,
+      probabilityPct: null,
+      bookmaker: null,
+      bookmakersUsed: 0,
+      oddSource: src,
+      tradable: false,
+      repriced: false,
+      untradableReason: priced.reason || "not_tradable"
+    };
+  }
+
+  const bookLine = priced.bookLine;
   return {
-    pick: pickLabel,
-    line,
-    odd: odd ?? null,
+    pick: `${sideLabel} ${Number(bookLine).toFixed(1)}`,
+    line: bookLine,
+    odd: priced.odd,
+    // Both sides belong to this same book line, so they remain safe to expose.
     over: quote?.over ?? null,
     under: quote?.under ?? null,
     requestedLine: pick.line,
-    bookLine: Number.isFinite(matchedLine) ? matchedLine : null,
-    lineExact: quote ? Boolean(quote.lineExact) : null,
-    bookmaker: bookLabel,
-    bookmakersUsed: quote?.bookmakersUsed || 0,
-    oddSource: src
+    bookLine,
+    lineExact: priced.lineExact,
+    probabilityLine: priced.probabilityLine,
+    probabilityPct: priced.probabilityPct,
+    bookmaker: `median(${priced.bookmakersUsed})`,
+    bookmakersUsed: priced.bookmakersUsed,
+    oddSource: src,
+    tradable: true,
+    repriced: priced.repriced
   };
 }
 
@@ -100,14 +159,7 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
       const cornersQuote = cornersPick
         ? consensusOverUnderOddsAtLine(
             oddsReq.data,
-            [
-              "Corners Over Under",
-              "Corners Over/Under",
-              "Total Corners",
-              "Total Corners Over/Under",
-              "Corner Over/Under",
-              "Corners"
-            ],
+            CORNERS_MARKET_NAMES,
             cornersPick.line,
             { maxLineDelta: 1, kind: "corners" }
           )
@@ -149,72 +201,84 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
       bttsQuote = consensusBttsOdds(oddsReq.data);
       doubleChanceQuote = consensusDoubleChanceOdds(oddsReq.data);
       const cardsLine = Number(process.env.VALUE_CARDS_LINE || 3.5);
-      cardsQuote = consensusOverUnderOddsAtLine(
-        oddsReq.data,
-        ["Cards Over/Under", "Total Cards", "Bookings", "Cards", "Yellow Cards Over/Under", "Total Bookings"],
-        cardsLine
-      );
+      cardsQuote = consensusOverUnderOddsAtLine(oddsReq.data, CARDS_MARKET_NAMES, cardsLine);
       if (cardsQuote) cardsQuote.line = cardsLine;
 
+      // Goals lines are requested exact-only (maxLineDelta defaults to 0), so the book
+      // line always equals the model line — these are tradable by construction.
+      const exactGoalsPayload = (quote, line) =>
+        quote
+          ? {
+              pick: `Over ${line}`,
+              line,
+              odd: quote.over,
+              over: quote.over ?? null,
+              under: quote.under ?? null,
+              requestedLine: line,
+              bookLine: line,
+              lineExact: true,
+              probabilityLine: line,
+              bookmaker: `median(${quote.bookmakersUsed})`,
+              bookmakersUsed: quote.bookmakersUsed || 0,
+              tradable: true,
+              repriced: false
+            }
+          : undefined;
+
       marketOdds = {
-        goals15: goals15Quote
-          ? {
-              pick: "Over 1.5",
-              line: 1.5,
-              odd: goals15Quote.over,
-              over: goals15Quote.over ?? null,
-              under: goals15Quote.under ?? null,
-              bookmaker: `median(${goals15Quote.bookmakersUsed})`,
-              bookmakersUsed: goals15Quote.bookmakersUsed || 0
-            }
-          : undefined,
-        goals25: goals25Quote
-          ? {
-              pick: "Over 2.5",
-              line: 2.5,
-              odd: goals25Quote.over,
-              over: goals25Quote.over ?? null,
-              under: goals25Quote.under ?? null,
-              bookmaker: `median(${goals25Quote.bookmakersUsed})`,
-              bookmakersUsed: goals25Quote.bookmakersUsed || 0
-            }
-          : undefined,
-        goals35: goals35Quote
-          ? {
-              pick: "Over 3.5",
-              line: 3.5,
-              odd: goals35Quote.over,
-              over: goals35Quote.over ?? null,
-              under: goals35Quote.under ?? null,
-              bookmaker: `median(${goals35Quote.bookmakersUsed})`,
-              bookmakersUsed: goals35Quote.bookmakersUsed || 0
-            }
-          : undefined,
+        goals15: exactGoalsPayload(goals15Quote, 1.5),
+        goals25: exactGoalsPayload(goals25Quote, 2.5),
+        goals35: exactGoalsPayload(goals35Quote, 3.5),
         btts: bttsQuote
           ? {
               pick: "GG",
               odd: bttsQuote.yes,
               bookmaker: `median(${bttsQuote.bookmakersUsed})`,
-              bookmakersUsed: bttsQuote.bookmakersUsed || 0
+              bookmakersUsed: bttsQuote.bookmakersUsed || 0,
+              // No line exists for BTTS, so there is nothing to disagree about.
+              tradable: true,
+              lineExact: true,
+              repriced: false
             }
           : undefined,
-        corners: buildOuQuotePayload(cornersPick, cornersQuote),
+        corners: buildOuQuotePayload(cornersPick, cornersQuote, cornersBlock),
+        // Only a genuine match-SOT quote may price the SOT row. resolveShotsOnTargetMarketQuote
+        // still falls back to total-shots / team-SOT markets, but those are different markets:
+        // they are recorded as non-tradable rather than lending their price to SOT.
         shotsOnTarget: buildOuQuotePayload(
           shotsOnTargetPick,
           shotsOnTargetQuote,
-          shotsOnTargetQuote?.sourceKind || null
+          shotsOnTargetBlock,
+          shotsOnTargetQuote?.sourceKind || null,
+          "sot"
         ),
-        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote, "shots_total"),
+        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote, shotsTotalBlock, "shots_total"),
+        // First-half goals: the model only produces pO15, so a book line other than 1.5
+        // cannot be repriced. Rather than lend a 2.5 price to the 1.5 read, the row goes
+        // non-tradable and shows no odd.
         firstHalfGoals: firstHalfPick
-          ? {
-              pick: firstHalfPick.pick,
-              line: Number.isFinite(Number(firstHalfQuote?.line)) ? Number(firstHalfQuote.line) : firstHalfPick.line,
-              odd: selectOddByPick(firstHalfQuote, firstHalfPick.pick),
-              over: firstHalfQuote?.over ?? null,
-              under: firstHalfQuote?.under ?? null,
-              bookmaker: firstHalfQuote ? `median(${firstHalfQuote.bookmakersUsed})` : null,
-              bookmakersUsed: firstHalfQuote?.bookmakersUsed || 0
-            }
+          ? (() => {
+              const bookLine = Number(firstHalfQuote?.line);
+              const exact = Number.isFinite(bookLine) && Math.abs(bookLine - firstHalfPick.line) < 1e-9;
+              const odd = exact ? selectOddByPick(firstHalfQuote, firstHalfPick.pick) : null;
+              const tradable = Boolean(odd);
+              return {
+                pick: firstHalfPick.pick,
+                line: firstHalfPick.line,
+                odd: odd ?? null,
+                over: tradable ? firstHalfQuote?.over ?? null : null,
+                under: tradable ? firstHalfQuote?.under ?? null : null,
+                requestedLine: firstHalfPick.line,
+                bookLine: Number.isFinite(bookLine) ? bookLine : null,
+                lineExact: exact,
+                probabilityLine: tradable ? firstHalfPick.line : null,
+                bookmaker: tradable ? `median(${firstHalfQuote.bookmakersUsed})` : null,
+                bookmakersUsed: tradable ? firstHalfQuote?.bookmakersUsed || 0 : 0,
+                tradable,
+                repriced: false,
+                ...(tradable ? {} : { untradableReason: "no_model_probability_at_book_line" })
+              };
+            })()
           : undefined,
         doubleChance: doubleChanceQuote
           ? {
@@ -222,9 +286,14 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               homeAway: doubleChanceQuote.homeAway,
               drawAway: doubleChanceQuote.drawAway,
               bookmaker: `median(${doubleChanceQuote.bookmakersUsed})`,
-              bookmakersUsed: doubleChanceQuote.bookmakersUsed || 0
+              bookmakersUsed: doubleChanceQuote.bookmakersUsed || 0,
+              // No line exists for Double Chance.
+              tradable: true,
+              lineExact: true,
+              repriced: false
             }
           : undefined,
+        // Cards are requested exact-only at VALUE_CARDS_LINE, so book line == model line.
         cards: cardsQuote
           ? {
               pick: "Cards Over/Under",
@@ -232,8 +301,14 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               odd: cardsQuote.over,
               over: cardsQuote.over,
               under: cardsQuote.under,
+              requestedLine: cardsQuote.line ?? 3.5,
+              bookLine: cardsQuote.line ?? 3.5,
+              lineExact: true,
+              probabilityLine: cardsQuote.line ?? 3.5,
               bookmaker: `median(${cardsQuote.bookmakersUsed})`,
-              bookmakersUsed: cardsQuote.bookmakersUsed || 0
+              bookmakersUsed: cardsQuote.bookmakersUsed || 0,
+              tradable: true,
+              repriced: false
             }
           : undefined
       };

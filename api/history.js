@@ -43,7 +43,13 @@ function parseNumericStat(statistics, candidates) {
 async function fetchFixtureMarketTotals(fixtureId) {
   const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
   if (!statsReq.ok || !statsReq.data?.response || statsReq.data.response.length < 2) {
-    return { cornersTotal: null, shotsOnTargetTotal: null, firstHalfGoals: null, ok: false };
+    return {
+      cornersTotal: null,
+      shotsOnTargetTotal: null,
+      shotsTotal: null,
+      firstHalfGoals: null,
+      ok: false
+    };
   }
   const homeStats = statsReq.data.response[0].statistics;
   const awayStats = statsReq.data.response[1].statistics;
@@ -51,6 +57,11 @@ async function fetchFixtureMarketTotals(fixtureId) {
   const cornersAway = parseNumericStat(awayStats, ["Corner Kicks"]);
   const shotsOnTargetHome = parseNumericStat(homeStats, ["Shots on Goal", "Shots on Target"]);
   const shotsOnTargetAway = parseNumericStat(awayStats, ["Shots on Goal", "Shots on Target"]);
+  // Combined match shots, read from the SAME statistics response already fetched above —
+  // no extra provider call. Mirrors api/fixtures.js, which has parsed "Total Shots" from
+  // this payload all along; only the settlement path never picked it up.
+  const shotsTotalHome = parseNumericStat(homeStats, ["Total Shots"]);
+  const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
 
   let firstHalfGoals = null;
   try {
@@ -67,6 +78,9 @@ async function fetchFixtureMarketTotals(fixtureId) {
       shotsOnTargetHome != null && shotsOnTargetAway != null
         ? shotsOnTargetHome + shotsOnTargetAway
         : null,
+    // Both sides required: a half-known total would settle Over/Under lines wrongly.
+    shotsTotal:
+      shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
     firstHalfGoals
   };
 }
@@ -488,7 +502,11 @@ async function handleHistorySync(req, res) {
         family: raw.recommended?.family || null,
         status: matchStatus,
         score,
-        marketTotals: { cornersTotal: raw.marketResults?.cornersTotal ?? null }
+        marketTotals: {
+          cornersTotal: raw.marketResults?.cornersTotal ?? null,
+          shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
+          shotsTotal: raw.marketResults?.shotsTotal ?? null
+        }
       });
       const vbPick = resolveValueBetPick(raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type);
       const valueBetValidation = vbPick
@@ -566,7 +584,11 @@ async function handleHistorySync(req, res) {
                 family: raw.recommended?.family || null,
                 status: row.match_status,
                 score,
-                marketTotals: { cornersTotal: raw.marketResults?.cornersTotal ?? null }
+                marketTotals: {
+                  cornersTotal: raw.marketResults?.cornersTotal ?? null,
+                  shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
+                  shotsTotal: raw.marketResults?.shotsTotal ?? null
+                }
               });
         if (String(valueBetValidation) === String(row.value_bet_validation || "") &&
             String(validation) === String(row.validation || "")) {
@@ -684,6 +706,7 @@ async function handleHistorySync(req, res) {
         let marketTotals = {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
           shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
+          shotsTotal: raw.marketResults?.shotsTotal ?? null,
           firstHalfGoals: htKnown ? Number(raw.marketResults.firstHalfGoals) : null
         };
 
@@ -723,6 +746,7 @@ async function handleHistorySync(req, res) {
             marketTotals = {
               cornersTotal: totals.cornersTotal ?? marketTotals.cornersTotal,
               shotsOnTargetTotal: totals.shotsOnTargetTotal ?? marketTotals.shotsOnTargetTotal,
+              shotsTotal: totals.shotsTotal ?? marketTotals.shotsTotal,
               firstHalfGoals: totals.firstHalfGoals ?? marketTotals.firstHalfGoals
             };
           } else if (isRecommendedGap) {

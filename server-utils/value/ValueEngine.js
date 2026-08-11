@@ -188,6 +188,15 @@ export function evaluateValue(probability, odds, options = {}) {
     type: options.type || "",
     family,
     line,
+    // Line provenance travels with every evaluation so Best Value can never present an
+    // odd belonging to a different line than the probability it was scored on.
+    requestedLine: options.requestedLine ?? null,
+    bookLine: options.bookLine ?? null,
+    lineExact: options.lineExact ?? true,
+    probabilityLine: options.probabilityLine ?? null,
+    tradable: options.tradable !== false,
+    settleable: options.settleable !== false,
+    repriced: options.repriced ?? false,
     probability: round2(p),
     odds: Number.isFinite(o) ? round2(o) : 0,
     expectedValue,
@@ -228,6 +237,13 @@ export function selectBestValue(candidates, options = {}) {
       type: c.type,
       family: c.family,
       line: c.line,
+      requestedLine: c.requestedLine,
+      bookLine: c.bookLine,
+      lineExact: c.lineExact,
+      probabilityLine: c.probabilityLine,
+      tradable: c.tradable,
+      settleable: c.settleable,
+      repriced: c.repriced,
       confidencePct: c.confidencePct,
       weights: options.weights
     })
@@ -237,8 +253,12 @@ export function selectBestValue(candidates, options = {}) {
   const positiveMarkets = evaluated
     .filter((v) => v.positiveEV && v.expectedValue > 0)
     .sort((a, b) => b.valueScore - a.valueScore || b.expectedValue - a.expectedValue);
+  // Tradability and settleability are preconditions, not tie-breaks. A selection whose
+  // line the model cannot price at the bookmaker's own line is not a bet at all; one the
+  // app could never grade afterwards would sit pending forever and quietly distort the
+  // value track's own measured results.
   const eligible = evaluated
-    .filter((v) => v.recommendable)
+    .filter((v) => v.recommendable && v.tradable !== false && v.settleable !== false)
     .sort((a, b) => b.valueScore - a.valueScore || b.expectedValue - a.expectedValue);
 
   const best = eligible[0] || null;
@@ -298,7 +318,14 @@ export function buildValueEngine(candidates, options = {}) {
           recommendable: true,
           positiveEV: true,
           negativeEV: false,
-          line: best.line
+          line: best.line,
+          requestedLine: best.requestedLine ?? null,
+          bookLine: best.bookLine ?? null,
+          lineExact: best.lineExact ?? true,
+          probabilityLine: best.probabilityLine ?? null,
+          tradable: true,
+          settleable: true,
+          repriced: best.repriced ?? false
         }
       : null,
     highlighted: Boolean(best),
