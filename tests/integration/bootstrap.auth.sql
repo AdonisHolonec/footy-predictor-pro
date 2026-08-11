@@ -50,3 +50,22 @@ alter default privileges in schema public
   grant select, insert, update, delete on tables to authenticated;
 alter default privileges in schema public
   grant all on tables to service_role;
+
+-- Hosted Supabase also grants EXECUTE on every NEW function in `public` to
+-- anon, authenticated and service_role, explicitly — pg_default_acl in
+-- production reads:
+--
+--   postgres=X/postgres | anon=X/postgres | authenticated=X/postgres | service_role=X/postgres
+--
+-- This matters more than it looks. A migration ending in
+-- `revoke all on function ... from public` clears only the PUBLIC entry and
+-- leaves those explicit grants standing, so the function stays reachable by
+-- anon in production while looking locked down here. Without this line the
+-- suite was STRICTER than production and quietly certified a state that did not
+-- exist: create_global_special_bet has been anon-executable in production since
+-- 043 shipped, and every local run said otherwise.
+--
+-- Reproducing the platform default is what lets the privilege tests fail for
+-- the same reason production is wrong.
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;

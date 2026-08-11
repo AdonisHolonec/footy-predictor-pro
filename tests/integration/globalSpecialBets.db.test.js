@@ -123,8 +123,20 @@ function createBet({ userId = USER_A, variant = 3, leagues = "{39,140}", selecti
 before(() => {
   // Idempotent: the schema is rebuilt from the production migration each run, so
   // the suite proves the migration itself, not a hand-maintained copy of it.
+  // The container is shared with the other database suites, one of which keeps a
+  // cut-down stand-in for predictions_history. Start from an empty schema so
+  // this suite depends on nothing but the migrations, whatever ran before it.
+  psql("drop schema if exists public cascade; create schema public;");
   psql(fs.readFileSync("tests/integration/bootstrap.auth.sql", "utf8"));
-  psql(fs.readFileSync("supabase/migrations/043_global_special_bets.sql", "utf8"));
+  // The whole chain, not a hand-picked pair. Now that the bootstrap reproduces
+  // hosted Supabase's default EXECUTE grant, 043's `revoke ... from public` no
+  // longer locks the RPC down on its own — 046 is what completes it, exactly as
+  // in production. K2/K3 below assert the end state a deployed database has, so
+  // the suite has to be given that same state.
+  const migrations = fs.readdirSync("supabase/migrations").filter((f) => f.endsWith(".sql")).sort();
+  for (const file of migrations) {
+    psql(fs.readFileSync(`supabase/migrations/${file}`, "utf8"));
+  }
   psql(`insert into auth.users (id, email) values
         ('${USER_A}', 'a@test.local'), ('${USER_B}', 'b@test.local')
         on conflict (id) do nothing;`);
@@ -380,7 +392,10 @@ test("J1: a stored bet reads back with no prediction row behind it", () => {
   // Whether the table exists at all depends on which suites have run; what
   // matters is that nothing backs these fixtures and the snapshot still reads
   // back in full.
-  psql("drop table if exists public.predictions_history;");
+  // cascade, because the full migration chain gives predictions_history
+  // dependents. Without it the DROP errors and the assertion below never runs —
+  // the table has to actually go for this test to mean anything.
+  psql("drop table if exists public.predictions_history cascade;");
   assert.match(
     asUser(USER_A, "select count(*) from public.special_bet_selections;").stdout,
     /\b3\b/,
