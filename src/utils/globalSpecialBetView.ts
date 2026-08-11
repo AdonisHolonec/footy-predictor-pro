@@ -179,6 +179,75 @@ export function marketIconKey(market: string): MarketFamilyKey {
 }
 
 /**
+ * What actually happened to a bet, in one line.
+ *
+ * A lost 8-leg bet where seven legs won reads identically to one where five
+ * failed — both are just "Pierdut" — and the user cannot tell them apart without
+ * expanding and counting badges. This states the outcome the counts already
+ * imply.
+ *
+ * Every case below follows from aggregateBetStatus() in the settlement engine:
+ * ANY lost leg loses the bet, so when exactly one lost, that one ended it, and
+ * when several did there is no single culprit to name. A void leg settles at
+ * 1.00, which is why a won bet's settled odds can sit below what was promised.
+ *
+ * Deliberately absent: what the bet WOULD have paid without its losing leg. The
+ * number is computable, but a product that tells you what you nearly won is
+ * taunting the user, which PRODUCT_DNA rules out.
+ */
+export type GlobalSpecialBetReading = {
+  tally: { won: number; lost: number; void: number; pending: number };
+  total: number;
+  /** i18n key for the one-line reading, with the counts it interpolates. */
+  key: string;
+  vars: Record<string, number>;
+};
+
+/**
+ * Counts are exact; the copy never claims a partition.
+ *
+ * Romanian needs a separate singular, so the one-leg cases get their own keys.
+ * The 20+ form ("20 de selecții") is unreachable: a bet holds 3, 5 or 8 legs,
+ * enforced by the variant CHECK constraint and by GLOBAL_SPECIAL_BET_VARIANTS.
+ */
+export function readGlobalSpecialBet(bet: GlobalSpecialBet): GlobalSpecialBetReading {
+  const tally = { won: 0, lost: 0, void: 0, pending: 0 };
+  for (const selection of bet.selections || []) {
+    const status = isGlobalSpecialBetStatus(selection.status) ? selection.status : "pending";
+    tally[status] += 1;
+  }
+  const total = (bet.selections || []).length;
+  const status = isGlobalSpecialBetStatus(bet.status) ? bet.status : "pending";
+
+  if (status === "lost") {
+    return tally.lost === 1
+      ? { tally, total, key: "gsb.readingLostOne", vars: {} }
+      : { tally, total, key: "gsb.readingLostMany", vars: { n: tally.lost, total } };
+  }
+  if (status === "won") {
+    if (tally.void === 0) return { tally, total, key: "gsb.readingWonClean", vars: { total } };
+    return tally.void === 1
+      ? { tally, total, key: "gsb.readingWonVoidOne", vars: {} }
+      : { tally, total, key: "gsb.readingWonVoidMany", vars: { n: tally.void } };
+  }
+  if (status === "void") return { tally, total, key: "gsb.readingVoid", vars: {} };
+  return { tally, total, key: "gsb.readingPending", vars: { won: tally.won, pending: tally.pending, total } };
+}
+
+/**
+ * Whether a leg is one of those that ended the bet.
+ *
+ * Only meaningful on a lost bet: nothing "decides" a win, every leg does. Used
+ * to draw the eye straight to the failure instead of making it scan eight badges.
+ */
+export function isDecidingSelection(
+  betStatus: string,
+  selection: Pick<GlobalSpecialBetSelection, "status">
+): boolean {
+  return betStatus === "lost" && selection.status === "lost";
+}
+
+/**
  * The numbers shown in the card header, taken verbatim from the snapshot.
  *
  * `selectionCount` is the length of what the API returned — a fact about the

@@ -5,7 +5,9 @@ import {
   formatConfidencePercent,
   formatOdds,
   formatValueScore,
+  isDecidingSelection,
   lookupFixtureLabel,
+  readGlobalSpecialBet,
   marketIconKey,
   marketLabelKey,
   resolveSelectionLabel,
@@ -204,6 +206,67 @@ describe("naming a selection", () => {
       title: null,
       league: null
     });
+  });
+});
+
+describe("reading what happened to a bet", () => {
+  const legs = (...statuses: GlobalSpecialBetSelection["status"][]) =>
+    statuses.map((status, i) => selection({ id: `sel-${i}`, status }));
+
+  it("names the single selection that brought a bet down", () => {
+    // aggregateBetStatus() loses the bet on ANY lost leg, so with exactly one
+    // lost leg that leg is the whole reason — worth saying out loud.
+    const r = readGlobalSpecialBet(bet({ status: "lost", selections: legs("won", "won", "lost") }));
+    expect(r.key).toBe("gsb.readingLostOne");
+    expect(r.tally).toEqual({ won: 2, lost: 1, void: 0, pending: 0 });
+  });
+
+  it("counts them instead when several failed, because none of them decided it alone", () => {
+    const r = readGlobalSpecialBet(bet({ status: "lost", selections: legs("won", "lost", "lost") }));
+    expect(r.key).toBe("gsb.readingLostMany");
+    expect(r.vars).toEqual({ n: 2, total: 3 });
+  });
+
+  it("separates a clean win from one carried by a void", () => {
+    const clean = readGlobalSpecialBet(bet({ status: "won", selections: legs("won", "won", "won") }));
+    expect(clean.key).toBe("gsb.readingWonClean");
+    expect(clean.vars).toEqual({ total: 3 });
+
+    // A void settles at 1.00, which is why the settled odds sit below what was
+    // promised. Without this line the gap between the two numbers is unexplained.
+    const one = readGlobalSpecialBet(bet({ status: "won", selections: legs("won", "won", "void") }));
+    expect(one.key).toBe("gsb.readingWonVoidOne");
+
+    const many = readGlobalSpecialBet(bet({ status: "won", selections: legs("won", "void", "void") }));
+    expect(many.key).toBe("gsb.readingWonVoidMany");
+    expect(many.vars).toEqual({ n: 2 });
+  });
+
+  it("says a fully voided bet never ran", () => {
+    const r = readGlobalSpecialBet(bet({ status: "void", selections: legs("void", "void", "void") }));
+    expect(r.key).toBe("gsb.readingVoid");
+  });
+
+  it("reports progress while the bet is undecided", () => {
+    const r = readGlobalSpecialBet(bet({ status: "pending", selections: legs("won", "pending", "pending") }));
+    expect(r.key).toBe("gsb.readingPending");
+    expect(r.vars).toEqual({ won: 1, pending: 2, total: 3 });
+  });
+
+  it("treats a status it does not model as pending rather than miscounting it", () => {
+    const odd = [selection({ status: "weird" as GlobalSpecialBetSelection["status"] })];
+    const r = readGlobalSpecialBet(bet({ status: "pending", selections: odd }));
+    expect(r.tally.pending).toBe(1);
+    expect(r.total).toBe(1);
+  });
+
+  it("marks a losing leg only on a bet that actually lost", () => {
+    const lost = selection({ status: "lost" });
+    expect(isDecidingSelection("lost", lost)).toBe(true);
+    // Nothing "decides" a win — every leg had to land, so highlighting one
+    // would tell a story the settlement rules do not support.
+    expect(isDecidingSelection("won", selection({ status: "won" }))).toBe(false);
+    expect(isDecidingSelection("pending", lost)).toBe(false);
   });
 });
 

@@ -881,6 +881,14 @@ export const en: Dict = {
     historyErrorTitle: "Could not load the history",
     historyLoadMore: "Load more",
     expand: "Show selections",
-    collapse: "Hide selections"
+    collapse: "Hide selections",
+    readingLostOne: "One selection brought it down",
+    readingLostMany: "{n} of {total} selections failed",
+    readingWonClean: "All {total} selections landed",
+    readingWonVoidOne: "Won, with one selection voided at 1.00",
+    readingWonVoidMany: "Won, with {n} selections voided at 1.00",
+    readingVoid: "This bet never ran: every selection was voided",
+    readingPending: "{won} of {total} landed · {pending} still to play",
+    decidingLeg: "The selection that lost the bet"
   }
 };

@@ -881,6 +881,16 @@ export const ro: Dict = {
     historyErrorTitle: "Nu am putut încărca istoricul",
     historyLoadMore: "Încarcă mai multe",
     expand: "Vezi selecțiile",
-    collapse: "Ascunde selecțiile"
+    collapse: "Ascunde selecțiile",
+    // Ce s-a întâmplat cu biletul, nu doar cifrele. O selecție pierdută pică
+    // tot biletul, deci când a picat una singură merită numită.
+    readingLostOne: "A picat pe o singură selecție",
+    readingLostMany: "{n} din {total} selecții au picat",
+    readingWonClean: "Toate cele {total} selecții au intrat",
+    readingWonVoidOne: "Câștigat, cu o selecție anulată la cota 1.00",
+    readingWonVoidMany: "Câștigat, cu {n} selecții anulate la cota 1.00",
+    readingVoid: "Biletul nu a rulat: toate selecțiile au fost anulate",
+    readingPending: "{won} din {total} au intrat · {pending} încă în joc",
+    decidingLeg: "Selecția care a pierdut biletul"
   }
 };

@@ -138,6 +138,50 @@ describe("GlobalSpecialBetHistory", () => {
     expect(screen.queryByText("Meci #999001")).toBeNull();
   });
 
+  it("says what happened, not just that the bet was lost", async () => {
+    const base = storedBet();
+    const leg = (id: string, status: string) => ({ ...base.selections[0], id, status });
+    const lost = storedBet({
+      status: "lost",
+      settled_total_odds: null,
+      selections: [leg("sel-1", "won"), leg("sel-2", "won"), leg("sel-3", "lost")]
+    });
+    fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [lost] }));
+    await act(async () => {
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+    });
+
+    // Visible while collapsed: this is the thing the user opened the history for.
+    await waitFor(() => expect(screen.getByText("A picat pe o singură selecție")).toBeTruthy());
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+    });
+    expect(screen.getByText("Selecția care a pierdut biletul")).toBeTruthy();
+  });
+
+  it("does not single out a leg of a bet that won", async () => {
+    // Three legs, not one: a bet is always 3, 5 or 8, and "toate cele 1
+    // selecții" is not a sentence anyone would ship.
+    const base = storedBet();
+    const leg = (id: string) => ({ ...base.selections[0], id, status: "won" });
+    const won = storedBet({ selections: [leg("sel-1"), leg("sel-2"), leg("sel-3")] });
+    fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [won] }));
+    await act(async () => {
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Vezi selecțiile" })).toBeTruthy());
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+    });
+
+    // Every leg had to land, so naming one would tell a story settlement does
+    // not support.
+    expect(screen.queryByText("Selecția care a pierdut biletul")).toBeNull();
+    expect(screen.getByText("Toate cele 3 selecții au intrat")).toBeTruthy();
+  });
+
   it("withholds a settled odd the API did not send rather than showing a zero", async () => {
     fetchWithAuth.mockResolvedValue(
       jsonResponse(200, { ok: true, bets: [storedBet({ status: "lost", settled_total_odds: null })] })

@@ -22,6 +22,11 @@ type Props = {
    * own; newer ones name themselves and never need the lookup.
    */
   fixtureIndex?: Map<number, FixtureLabel>;
+  /**
+   * This leg is one of those that ended the bet. Draws the eye straight to the
+   * failure instead of making the user scan eight badges to find it.
+   */
+  deciding?: boolean;
 };
 
 /**
@@ -31,7 +36,7 @@ type Props = {
  * did not send is shown as a dash, never as a zero — `value_score` is optional
  * and a missing one must not read as "no value".
  */
-export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex }: Props) {
+export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex, deciding = false }: Props) {
   const { t, locale } = useLocale();
 
   const label: FixtureLabel = resolveSelectionLabel(selection, fixtureIndex);
@@ -58,9 +63,20 @@ export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex }
   })();
 
   return (
-    <li className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
+    <li
+      className={`rounded-[var(--fp-radius-sm)] border bg-[var(--fp-bg-card)] p-3 ${
+        deciding
+          ? "border-[var(--fp-danger)]/45 ring-1 ring-inset ring-[var(--fp-danger)]/20"
+          : "border-[var(--fp-border)]"
+      }`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
+          {deciding && (
+            <p className="mb-1 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-danger)]">
+              {t("gsb.decidingLeg")}
+            </p>
+          )}
           <p className="truncate font-semibold text-[var(--fp-text)]">{title}</p>
           <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {league}
