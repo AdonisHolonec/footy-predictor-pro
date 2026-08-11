@@ -5,8 +5,10 @@ import Badge from "../../design-system/Badge";
 import { StatTile } from "../../design-system";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
+import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
 import HistorySpecialBetCard from "./HistorySpecialBetCard";
 import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 
 type Props = {
   history: HistoryEntry[];
@@ -21,6 +23,10 @@ type Props = {
   /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
   canShowSpecialBet?: boolean;
   onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
+  /** fixture_id -> readable labels for the Global Special Bet snapshots. */
+  gsbFixtureIndex?: Map<number, FixtureLabel>;
+  /** Gate for the Global Special Bet history; fails closed. */
+  canUseGlobalSpecialBet?: boolean;
 };
 
 function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
@@ -44,7 +50,9 @@ export default function HistorySection({
   winRate,
   onOpenMatch,
   canShowSpecialBet = false,
-  onUpgradeRequired
+  onUpgradeRequired,
+  gsbFixtureIndex,
+  canUseGlobalSpecialBet = false
 }: Props) {
   const { t } = useLocale();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -87,6 +95,13 @@ export default function HistorySection({
         />
         <StatTile label={t("history.settled")} value={String(settled)} tone="neutral" />
       </div>
+
+      {/* A list of accumulators, kept above and apart from the per-match list
+          below it — the two are different products and must never read as one. */}
+      <GlobalSpecialBetHistory
+        fixtureIndex={gsbFixtureIndex}
+        canUseGlobalSpecialBet={canUseGlobalSpecialBet}
+      />
 
       {!rows.length ? (
         <Card>
