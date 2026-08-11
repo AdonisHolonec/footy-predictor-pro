@@ -145,6 +145,47 @@ test("every examined market is accounted for exactly once", () => {
   assert.equal(examined, 5);
 });
 
+// ── the readable snapshot a stored bet carries ─────────────────────────────
+
+test("a candidate carries the fixture and league names it was built from", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket()], { teams: { home: "Arsenal", away: "Chelsea" }, league: "Premier League" })
+  ];
+
+  const [candidate] = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW }).candidates;
+
+  // These are persisted (migration 048) so a bet stays readable years later,
+  // when the fixture it names is no longer loaded anywhere in the app.
+  assert.equal(candidate.fixtureLabel, "Arsenal – Chelsea");
+  assert.equal(candidate.leagueName, "Premier League");
+});
+
+test("a name the row does not have is null, never a placeholder", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket()], { teams: { home: "Arsenal" }, league: "  " }),
+    fixture(2, 39, [goodMarket()], { teams: undefined, league: undefined })
+  ];
+
+  const { candidates } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  // Half a fixture reads like data. Null lets the UI say "Meci #1" honestly.
+  assert.equal(candidates[0].fixtureLabel, null);
+  assert.equal(candidates[0].leagueName, null, "whitespace is not a league name");
+  assert.equal(candidates[1].fixtureLabel, null);
+  assert.equal(candidates[1].leagueName, null);
+});
+
+test("an unnamed fixture is still a valid candidate", () => {
+  const rows = [fixture(1, 39, [goodMarket()], { teams: undefined, league: undefined })];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  // A label is presentation. It must never decide whether a bet can be built —
+  // only odds, confidence, value and data quality do that.
+  assert.equal(candidates.length, 1);
+  assert.equal(rejected.missingData, 0);
+});
+
 // ── ranking is valueScore × dataQuality ────────────────────────────────────
 
 test("data quality can outrank a higher raw value score", () => {

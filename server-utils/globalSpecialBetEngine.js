@@ -58,7 +58,8 @@ export const LEAGUE_SPREAD_TOLERANCE = 0.85;
  * @property {number} fixtureId
  * @property {number} leagueId
  * @property {string} kickoff
- * @property {string} fixtureLabel   Home – Away, so a stored snapshot stays readable
+ * @property {string|null} fixtureLabel  Home – Away, so a stored snapshot stays readable
+ * @property {string|null} leagueName    the league as it read when the bet was built
  * @property {string} market         resolveMarketFamily() output
  * @property {string} selection      settled exactly as written, e.g. "Over 7.5"
  * @property {"over"|"under"|null} side
@@ -103,6 +104,26 @@ function finiteOrNull(value) {
 function buildSelectionLabel(type, side, line) {
   if (side && line != null) return `${side === "over" ? "Over" : "Under"} ${line.toFixed(1)}`;
   return String(type || "").trim();
+}
+
+/** A name we actually have, or null. Never the empty string a caller must retest. */
+function textOrNull(value) {
+  const text = String(value ?? "").trim();
+  return text === "" ? null : text;
+}
+
+/**
+ * The readable fixture name carried into the snapshot, or null when it is not
+ * fully known.
+ *
+ * Both halves are required, the same rule buildFixtureLabelIndex() applies on
+ * the client: half a fixture ("Arsenal – ?") reads like data, whereas null lets
+ * the UI fall back to the fixture id and say honestly that it does not know.
+ */
+function buildFixtureLabel(teams) {
+  const home = textOrNull(teams?.home);
+  const away = textOrNull(teams?.away);
+  return home && away ? `${home} – ${away}` : null;
 }
 
 /**
@@ -198,7 +219,8 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
         fixtureId,
         leagueId,
         kickoff: String(row.kickoff),
-        fixtureLabel: `${row.teams?.home ?? "?"} – ${row.teams?.away ?? "?"}`,
+        fixtureLabel: buildFixtureLabel(row.teams),
+        leagueName: textOrNull(row.league),
         market: family,
         selection,
         side,

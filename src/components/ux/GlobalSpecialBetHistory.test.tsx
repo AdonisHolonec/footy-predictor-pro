@@ -34,6 +34,9 @@ function storedBet(overrides: Record<string, unknown> = {}) {
         special_bet_id: "bet-1",
         fixture_id: 999001,
         league_id: 39,
+        // A bet stored before migration 048 — no names of its own.
+        fixture_label: null,
+        league_name: null,
         kickoff_at: "2026-08-10T18:30:00.000Z",
         market: "corners",
         selection: "Over 7.5",
@@ -102,12 +105,37 @@ describe("GlobalSpecialBetHistory", () => {
       screen.getByRole("button", { name: "Vezi selecțiile" }).click();
     });
     expect(screen.getByText("Over 7.5")).toBeTruthy();
+    // Pre-048 and no fixture loaded: the id is the honest answer.
     expect(screen.getByText("Meci #999001")).toBeTruthy();
 
     await act(async () => {
       screen.getByRole("button", { name: "Ascunde selecțiile" }).click();
     });
     expect(screen.queryByText("Over 7.5")).toBeNull();
+  });
+
+  it("names a leg from the bet's own snapshot, with no fixture loaded", async () => {
+    // The whole point of migration 048: history is read long after the fixtures
+    // it names have left the app, so the bet has to name itself.
+    const bet = storedBet();
+    const named = storedBet({
+      selections: [
+        { ...bet.selections[0], fixture_label: "Arsenal – Chelsea", league_name: "Premier League" }
+      ]
+    });
+    fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [named] }));
+    await act(async () => {
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Vezi selecțiile" })).toBeTruthy());
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+    });
+
+    expect(screen.getByText("Arsenal – Chelsea")).toBeTruthy();
+    expect(screen.getByText(/Premier League/)).toBeTruthy();
+    expect(screen.queryByText("Meci #999001")).toBeNull();
   });
 
   it("withholds a settled odd the API did not send rather than showing a zero", async () => {

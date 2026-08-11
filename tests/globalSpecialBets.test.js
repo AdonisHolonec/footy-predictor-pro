@@ -164,7 +164,9 @@ test("selection rows carry odds, confidence and value score unchanged", () => {
       line: 2.5,
       odds: 1.837,
       confidence: 72.5,
-      valueScore: 63.25
+      valueScore: 63.25,
+      fixtureLabel: "Arsenal – Chelsea",
+      leagueName: "Premier League"
     }
   ];
 
@@ -179,9 +181,31 @@ test("selection rows carry odds, confidence and value score unchanged", () => {
       line: 2.5,
       odds: 1.837,
       confidence: 72.5,
-      value_score: 63.25
+      value_score: 63.25,
+      fixture_label: "Arsenal – Chelsea",
+      league_name: "Premier League"
     }
   ]);
+});
+
+test("a candidate the engine could not name stores null, not a placeholder", () => {
+  const [row] = toSelectionRows([
+    {
+      fixtureId: 7,
+      leagueId: 39,
+      kickoff: KICKOFF,
+      market: "ou",
+      selection: "Over 2.5",
+      odds: 1.8,
+      confidence: 70,
+      fixtureLabel: null,
+      leagueName: null
+    }
+  ]);
+
+  // The UI falls back to "Meci #7"; a stored "? – ?" would read as a real name.
+  assert.equal(row.fixture_label, null);
+  assert.equal(row.league_name, null);
 });
 
 test("an unlined selection keeps null side and line rather than inventing them", () => {
@@ -236,6 +260,30 @@ test("payloads are read from raw_payload and keyed by the queried columns", asyn
   assert.equal(rows[0].kickoff, KICKOFF);
   assert.equal(payloadsByFixtureId.get(7).recommended.confidence, 80);
   assert.deepEqual(supabase.calls.from, ["predictions_history"]);
+});
+
+test("the league name column wins over the payload, and stays null when neither has one", async () => {
+  const supabase = fakeSupabase({
+    historyRows: [
+      {
+        fixture_id: 7,
+        league_id: 39,
+        league_name: "Premier League",
+        kickoff_at: KICKOFF,
+        raw_payload: { id: 7, league: "premier league (stale)" }
+      },
+      { fixture_id: 8, league_id: 39, kickoff_at: KICKOFF, raw_payload: { id: 8, league: "La Liga" } },
+      { fixture_id: 9, league_id: 39, kickoff_at: KICKOFF, raw_payload: { id: 9 } }
+    ]
+  });
+
+  const { rows } = await loadCandidatePayloads(supabase, BET_DATE, [39]);
+
+  // Same precedence /api/history applies to this field, so one bet and one
+  // history list never disagree about what a league is called.
+  assert.equal(rows[0].league, "Premier League");
+  assert.equal(rows[1].league, "La Liga", "the payload answers when the column is empty");
+  assert.equal(rows[2].league, null, "an unnamed league stays unnamed");
 });
 
 // ── calendar day: Europe/Bucharest, exactly as the rest of the app ────────
