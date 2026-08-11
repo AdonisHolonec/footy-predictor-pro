@@ -232,6 +232,92 @@ describe("GlobalSpecialBetSection", () => {
     expect(fetchWithAuth).not.toHaveBeenCalled();
   });
 
+  /**
+   * Increment 050 — a bet that is still running should say where it stands.
+   *
+   * The clock is stubbed rather than faked with timers: the component samples
+   * Date.now() once per state change, and fake timers would also swallow the
+   * promise scheduling these tests rely on.
+   */
+  describe("while the bet is running", () => {
+    const NOON = Date.parse("2026-08-11T12:00:00.000Z");
+
+    function runningBody(selections: Record<string, unknown>[]) {
+      return { ...READY_BODY, selections };
+    }
+
+    beforeEach(() => {
+      vi.spyOn(Date, "now").mockReturnValue(NOON);
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    async function generate(body: unknown) {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, body));
+      renderSection();
+      await act(async () => {
+        screen.getByRole("button", { name: "Generează" }).click();
+      });
+    }
+
+    it("says what has landed and which match comes next", async () => {
+      await generate(
+        runningBody([
+          selection({ id: "sel-1", fixture_id: 999001, kickoff_at: "2026-08-11T19:00:00.000Z" }),
+          selection({ id: "sel-2", fixture_id: 999002, kickoff_at: "2026-08-11T11:00:00.000Z" }),
+          selection({ id: "sel-3", fixture_id: 999003, kickoff_at: "2026-08-11T09:00:00.000Z", status: "won" })
+        ])
+      );
+
+      await waitFor(() => expect(screen.getByText("1 din 3 au intrat · 2 încă în joc")).toBeTruthy());
+      // The next leg is the earliest one still to come — not the first stored.
+      expect(screen.getByText(/Urmează Arsenal – Chelsea/)).toBeTruthy();
+    });
+
+    it("marks the leg being played right now, and only that one", async () => {
+      await generate(
+        runningBody([
+          selection({ id: "sel-1", fixture_id: 999001, kickoff_at: "2026-08-11T19:00:00.000Z" }),
+          selection({ id: "sel-2", fixture_id: 999002, kickoff_at: "2026-08-11T11:00:00.000Z" }),
+          selection({ id: "sel-3", fixture_id: 999003, kickoff_at: "2026-08-11T09:00:00.000Z", status: "won" })
+        ])
+      );
+
+      await waitFor(() => expect(screen.getAllByText("Se joacă acum")).toHaveLength(1));
+      // A graded leg is settled however long ago it kicked off, so the marker
+      // belongs to the started-but-ungraded one.
+      const marker = screen.getByText("Se joacă acum").closest("li");
+      expect(marker?.textContent).toContain("Betis – Sevilla");
+    });
+
+    it("lists the legs in kickoff order, so the live one is not buried last", async () => {
+      await generate(
+        runningBody([
+          selection({ id: "sel-1", fixture_id: 999001, kickoff_at: "2026-08-11T19:00:00.000Z" }),
+          selection({ id: "sel-2", fixture_id: 999002, kickoff_at: "2026-08-11T11:00:00.000Z" })
+        ])
+      );
+
+      await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(2));
+      const rows = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+      expect(rows[0]).toContain("Betis – Sevilla");
+      expect(rows[1]).toContain("Arsenal – Chelsea");
+    });
+
+    it("stops promising a next match once every leg has started", async () => {
+      await generate(
+        runningBody([
+          selection({ id: "sel-1", fixture_id: 999001, kickoff_at: "2026-08-11T10:00:00.000Z" }),
+          selection({ id: "sel-2", fixture_id: 999002, kickoff_at: "2026-08-11T11:00:00.000Z" })
+        ])
+      );
+
+      await waitFor(() => expect(screen.getByText("Toate meciurile rămase au început")).toBeTruthy());
+      expect(screen.queryByText(/Urmează/)).toBeNull();
+    });
+  });
+
   it("fails closed and reuses the existing upgrade prompt when access is withheld", () => {
     const onUpgradeRequired = vi.fn();
     render(

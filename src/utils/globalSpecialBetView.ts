@@ -121,6 +121,31 @@ function textOrNull(value: string | null | undefined): string | null {
 }
 
 /**
+ * A timestamp the user can read, or null when the API sent something we cannot
+ * parse.
+ *
+ * One formatter for every moment the Global Special Bet shows — kickoff on a
+ * leg, "generated at" on the card, the next leg to start — because three copies
+ * of the same Intl options drift the day one of them gains a weekday.
+ */
+export function formatDateTime(value: string, locale: string): string | null {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return null;
+  return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(ms));
+}
+
+/** Kickoff as epoch ms, or null when the field is not a date we can order by. */
+function kickoffMs(selection: Pick<GlobalSpecialBetSelection, "kickoff_at">): number | null {
+  const ms = Date.parse(selection.kickoff_at);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
  * How a leg is named, snapshot first.
  *
  * The stored `fixture_label` / `league_name` (migration 048) win over the
@@ -245,6 +270,96 @@ export function isDecidingSelection(
   selection: Pick<GlobalSpecialBetSelection, "status">
 ): boolean {
   return betStatus === "lost" && selection.status === "lost";
+}
+
+/**
+ * The legs in the order they are played.
+ *
+ * The API returns them in the order the engine ranked them, which is the right
+ * record for a finished bet but the wrong one for a bet still running: while it
+ * runs the list is a timeline, and the user is looking for what is on now and
+ * what comes next. Legs with an unreadable kickoff sink to the end rather than
+ * being dropped — sort is stable, so they keep the server's order among
+ * themselves.
+ */
+export function orderSelectionsByKickoff(
+  selections: readonly GlobalSpecialBetSelection[]
+): GlobalSpecialBetSelection[] {
+  return [...selections].sort((a, b) => {
+    const left = kickoffMs(a);
+    const right = kickoffMs(b);
+    if (left === null && right === null) return 0;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return left - right;
+  });
+}
+
+/**
+ * Where a bet stands at a given moment.
+ *
+ * Status wins over the clock: a leg the server has graded is settled no matter
+ * what its kickoff says, and only a *pending* leg is measured against `now`.
+ * That ordering matters because the two disagree constantly — a match kicked
+ * off an hour ago is under way, not lost, until settlement says so.
+ *
+ * A leg whose kickoff will not parse counts as waiting and is never offered as
+ * `next`: we cannot claim it started, and we have no time to show for it.
+ */
+export type GlobalSpecialBetProgress = {
+  /** Legs the server has graded — won, lost or void. */
+  settled: number;
+  total: number;
+  /** Pending legs already kicked off: being decided right now. */
+  underway: number;
+  /** Pending legs that have not started. */
+  waiting: number;
+  /** The next leg to kick off, or null once every leg has started. */
+  next: GlobalSpecialBetSelection | null;
+};
+
+export function readBetProgress(bet: GlobalSpecialBet, nowMs: number): GlobalSpecialBetProgress {
+  const selections = bet.selections || [];
+  let settled = 0;
+  let underway = 0;
+  let waiting = 0;
+  let next: GlobalSpecialBetSelection | null = null;
+  let nextMs = Number.POSITIVE_INFINITY;
+
+  for (const selection of selections) {
+    const status = isGlobalSpecialBetStatus(selection.status) ? selection.status : "pending";
+    if (status !== "pending") {
+      settled += 1;
+      continue;
+    }
+    const ms = kickoffMs(selection);
+    if (ms !== null && ms <= nowMs) {
+      underway += 1;
+      continue;
+    }
+    waiting += 1;
+    if (ms !== null && ms < nextMs) {
+      nextMs = ms;
+      next = selection;
+    }
+  }
+
+  return { settled, total: selections.length, underway, waiting, next };
+}
+
+/**
+ * Whether this leg is one of those being played right now.
+ *
+ * Same shape as isDecidingSelection(): the row stays dumb, and the rule lives
+ * where it can be tested without a DOM.
+ */
+export function isUnderwaySelection(
+  selection: Pick<GlobalSpecialBetSelection, "status" | "kickoff_at">,
+  nowMs: number
+): boolean {
+  if (selection.status !== "pending") return false;
+  const ms = kickoffMs(selection);
+  return ms !== null && ms <= nowMs;
 }
 
 /**

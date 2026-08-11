@@ -889,6 +889,10 @@ export const en: Dict = {
     readingWonVoidMany: "Won, with {n} selections voided at 1.00",
     readingVoid: "This bet never ran: every selection was voided",
     readingPending: "{won} of {total} landed · {pending} still to play",
-    decidingLeg: "The selection that lost the bet"
+    decidingLeg: "The selection that lost the bet",
+    // A bet still running: what is next and what is being played right now.
+    nextLeg: "Next up {label} · {time}",
+    allUnderway: "Every remaining match has kicked off",
+    legUnderway: "Under way now"
   }
 };
