@@ -12,6 +12,7 @@
  */
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
 import { buildGlobalSpecialBets, GLOBAL_SPECIAL_BET_VARIANTS } from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
 
@@ -87,27 +88,59 @@ export function unavailableResponse(variant, availableCandidates) {
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The UTC instants that safely bracket one Europe/Bucharest calendar day.
+ *
+ * Deliberately a SUPERSET, not the exact boundary: Bucharest runs UTC+2 in
+ * winter and UTC+3 in summer, so its day D begins at 21:00Z or 22:00Z on D-1.
+ * One UTC day of slack either side covers both offsets and every DST
+ * transition, and computing an exact boundary here would be the second
+ * timezone system this fix exists to avoid. The database only narrows the
+ * scan; what counts as "day D" is decided below by the same helper the rest of
+ * the app uses.
+ */
+export function candidateScanWindow(betDate) {
+  const base = Date.parse(`${betDate}T00:00:00.000Z`);
+  if (!Number.isFinite(base)) return null;
+  return {
+    from: new Date(base - DAY_MS).toISOString(),
+    to: new Date(base + DAY_MS).toISOString()
+  };
+}
+
 /**
  * Canonical prediction payloads for one calendar day and set of leagues.
  *
  * Reads `raw_payload` — the prediction of record, frozen at kickoff — rather
  * than recomputing anything.
+ *
+ * "One calendar day" means a Europe/Bucharest day, exactly as it does for
+ * /api/history's day grouping, Stage00Ingress and the warm-predict cron. This
+ * used to slice a raw UTC day instead, which put a 00:30 Bucharest kickoff in
+ * the previous day's bet and a late US fixture in the wrong day entirely — the
+ * bet then disagreed with the fixture list the user was looking at.
  */
 export async function loadCandidatePayloads(supabase, betDate, leagueIds) {
-  const dayStart = `${betDate}T00:00:00.000Z`;
-  const dayEnd = `${betDate}T23:59:59.999Z`;
+  const window = candidateScanWindow(betDate);
+  if (!window) return { rows: [], payloadsByFixtureId: new Map() };
 
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
     .select("fixture_id, league_id, kickoff_at, raw_payload")
     .in("league_id", leagueIds)
-    .gte("kickoff_at", dayStart)
-    .lte("kickoff_at", dayEnd);
+    .gte("kickoff_at", window.from)
+    .lte("kickoff_at", window.to);
   if (error) throw error;
 
   const payloadsByFixtureId = new Map();
   const rows = [];
   for (const row of data || []) {
+    // The single authority on which day a kickoff belongs to. `kickoff_at` is
+    // the column the query matched, and the same field api/history.js groups by.
+    if (calendarDateKeyEuropeBucharest(row?.kickoff_at) !== betDate) continue;
+
     const payload = row?.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : null;
     if (!payload) continue;
     // The columns win over the payload for identity fields: they are what the
@@ -396,6 +429,7 @@ export async function settlePendingGlobalSpecialBets({
 }
 
 export default {
+  candidateScanWindow,
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   loadFixtureStates,
