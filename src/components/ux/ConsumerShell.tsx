@@ -93,9 +93,36 @@ export default function ConsumerShell({
     </div>
   );
 
-  /** Desktop-only: duplicates bottom tabs / profile shortcuts on mobile. */
+  /**
+   * Desktop-only: duplicates bottom tabs / profile shortcuts on mobile.
+   *
+   * The destinations come first and are not decoration. The bottom tab bar is
+   * `lg:hidden`, so above that breakpoint these are the ONLY pointer route to
+   * History, Live and the rest — the command palette aside, which nobody
+   * discovers with a mouse. Until this existed, a desktop account with no
+   * settled picks could not open its own history at all: the one link lived on
+   * a Home card that hides itself on a first run.
+   */
   const desktopNavIcons = (
     <div className="hidden items-center gap-1 lg:flex">
+      {MOBILE_TAB_ITEMS.map((item) => {
+        const label = t(item.labelKey);
+        const isActive = activeNav === item.id;
+        return (
+          <Tooltip key={item.id} label={label} align="end">
+            <button
+              type="button"
+              onClick={() => onNavigate(item.id)}
+              aria-label={label}
+              aria-current={isActive ? "page" : undefined}
+              className={`${iconBtn} ${isActive ? "border-[var(--fp-accent)] bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]" : ""}`}
+            >
+              <NavIcon id={item.id} />
+            </button>
+          </Tooltip>
+        );
+      })}
+      <span aria-hidden className="mx-1 h-5 w-px bg-[var(--fp-border)]" />
       <Tooltip label={favoritesActive ? t("shell.favoritesOn") : t("shell.favoritesOff")} align="end">
         <button
           type="button"

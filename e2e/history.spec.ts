@@ -7,8 +7,10 @@ test.describe("history", () => {
   test("the history section renders entries or an honest empty state", async ({ page }) => {
     await gotoWorkspace(page);
 
-    // The board's "Istoric & Încredere" block exposes an "Istoric" control —
-    // that is the user's route into their history.
+    // Every viewport must expose a route into the history: the bottom tab bar
+    // below `lg`, the shell's destination icons above it. The old route was a
+    // Home card that hides itself on a first run, which is why a fresh account
+    // could not get here at all.
     const historyButton = page.getByRole("button", { name: "Istoric", exact: true }).first();
     await historyButton.scrollIntoViewIfNeeded();
     await historyButton.click();
