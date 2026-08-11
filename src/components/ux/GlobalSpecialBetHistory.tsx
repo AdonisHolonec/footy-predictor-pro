@@ -9,6 +9,8 @@ import { useGlobalSpecialBetHistory } from "../../hooks/useGlobalSpecialBetHisto
 import {
   formatConfidencePercent,
   formatOdds,
+  isDecidingSelection,
+  readGlobalSpecialBet,
   statusLabelKey,
   statusTone,
   type FixtureLabel
@@ -97,6 +99,7 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
               const totalOdds = formatOdds(bet.total_odds);
               const settledOdds = formatOdds(bet.settled_total_odds);
               const confidence = formatConfidencePercent(bet.average_confidence);
+              const reading = readGlobalSpecialBet(bet);
               return (
                 <div key={bet.id} className={!isLast || expanded ? "border-b border-[var(--fp-border)]" : ""}>
                   <button
@@ -119,6 +122,12 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
                         <span className="font-bold">{totalOdds ?? "—"}</span>
                         {settledOdds ? ` · ${t("gsb.summarySettledOdds")} ${settledOdds}` : ""}
                       </p>
+                      {/* The reading sits above the confidence digit on purpose:
+                          "a picat pe o singură selecție" is what the user came to
+                          find out, and it reads as a sentence, not as more data. */}
+                      <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text)]">
+                        {t(reading.key, reading.vars)}
+                      </p>
                       <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
                         {t("gsb.summaryAvgConfidence")} {confidence ?? "—"}
                       </p>
@@ -134,6 +143,7 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
                             key={selection.id}
                             selection={selection}
                             fixtureIndex={fixtureIndex}
+                            deciding={isDecidingSelection(bet.status, selection)}
                           />
                         ))}
                       </ul>
