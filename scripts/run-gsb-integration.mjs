@@ -28,6 +28,13 @@ if (SUITES.length === 0) SUITES.push("tests/integration/globalSpecialBets.db.tes
 const CONTAINER = process.env.GSB_TEST_CONTAINER || "fp-gsb-test";
 const IMAGE = process.env.GSB_TEST_IMAGE || "postgres:16-alpine";
 const KEEP = process.env.GSB_TEST_KEEP === "1";
+/**
+ * Published only for convenience — the suites reach Postgres through
+ * `docker exec`, never over TCP. Overridable because Windows reserves blocks of
+ * high ports for Hyper-V, and a machine that happens to have 55432 reserved
+ * would otherwise be unable to run these tests at all.
+ */
+const PORT = process.env.GSB_TEST_PORT || "55432";
 
 function run(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { encoding: "utf8", stdio: "pipe", ...opts });
@@ -59,7 +66,7 @@ if (!existing) {
     "-e",
     "POSTGRES_PASSWORD=postgres",
     "-p",
-    "55432:5432",
+    `${PORT}:5432`,
     IMAGE
   ]);
   if (started.status !== 0) fail(`Could not start the container:\n${started.stderr}`);

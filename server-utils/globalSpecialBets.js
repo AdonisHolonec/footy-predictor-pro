@@ -62,7 +62,17 @@ export function resolveModelVersion(payloadsByFixtureId, selections) {
   return null;
 }
 
-/** Engine candidate -> the row shape create_global_special_bet() expects. */
+/**
+ * Engine candidate -> the row shape create_global_special_bet() expects.
+ *
+ * `fixture_label` and `league_name` are the readable snapshot (migration 048).
+ * They are stored, not derived at read time, because the names a bet was built
+ * from are part of what was bet — the display join that used to stand in for
+ * them misses exactly on the old bets the history exists to show.
+ *
+ * A candidate the engine could not name sends null, never a placeholder: the UI
+ * already falls back to the fixture id, and "? – ?" would read as data.
+ */
 export function toSelectionRows(selections) {
   return (selections || []).map((s) => ({
     fixture_id: s.fixtureId,
@@ -74,7 +84,9 @@ export function toSelectionRows(selections) {
     line: s.line ?? null,
     odds: s.odds,
     confidence: s.confidence,
-    value_score: s.valueScore ?? null
+    value_score: s.valueScore ?? null,
+    fixture_label: s.fixtureLabel ?? null,
+    league_name: s.leagueName ?? null
   }));
 }
 
@@ -128,7 +140,7 @@ export async function loadCandidatePayloads(supabase, betDate, leagueIds) {
 
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
-    .select("fixture_id, league_id, kickoff_at, raw_payload")
+    .select("fixture_id, league_id, league_name, kickoff_at, raw_payload")
     .in("league_id", leagueIds)
     .gte("kickoff_at", window.from)
     .lte("kickoff_at", window.to);
@@ -149,7 +161,11 @@ export async function loadCandidatePayloads(supabase, betDate, leagueIds) {
       ...payload,
       id: payload.id ?? row.fixture_id,
       leagueId: payload.leagueId ?? row.league_id,
-      kickoff: payload.kickoff ?? row.kickoff_at
+      kickoff: payload.kickoff ?? row.kickoff_at,
+      // Same precedence /api/history uses for this field, minus its "Necunoscut"
+      // fallback: an unnamed league stays unnamed rather than being stored under
+      // a word that looks like a name.
+      league: row.league_name ?? payload.league ?? null
     };
     payloadsByFixtureId.set(Number(row.fixture_id), normalized);
     rows.push(normalized);

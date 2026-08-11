@@ -5,9 +5,9 @@ import {
   formatConfidencePercent,
   formatOdds,
   formatValueScore,
-  lookupFixtureLabel,
   marketIconKey,
   marketLabelKey,
+  resolveSelectionLabel,
   statusLabelKey,
   statusTone,
   type FixtureLabel
@@ -16,7 +16,11 @@ import type { GlobalSpecialBetSelection } from "../../types/globalSpecialBet";
 
 type Props = {
   selection: GlobalSpecialBetSelection;
-  /** fixture_id -> readable labels, from rows the app already loaded. */
+  /**
+   * fixture_id -> readable labels, from rows the app already loaded. Only used
+   * for selections stored before migration 048, which carry no names of their
+   * own; newer ones name themselves and never need the lookup.
+   */
   fixtureIndex?: Map<number, FixtureLabel>;
 };
 
@@ -30,7 +34,7 @@ type Props = {
 export default function GlobalSpecialBetSelectionRow({ selection, fixtureIndex }: Props) {
   const { t, locale } = useLocale();
 
-  const label: FixtureLabel = lookupFixtureLabel(fixtureIndex, selection.fixture_id);
+  const label: FixtureLabel = resolveSelectionLabel(selection, fixtureIndex);
   const title = label.title ?? t("gsb.matchFallback", { id: selection.fixture_id });
   const league = label.league ?? t("gsb.leagueFallback", { id: selection.league_id });
 

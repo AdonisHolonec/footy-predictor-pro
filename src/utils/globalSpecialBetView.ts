@@ -8,7 +8,11 @@
  */
 
 import type { MarketFamilyKey } from "./formatRecommendation";
-import type { GlobalSpecialBet, GlobalSpecialBetStatus } from "../types/globalSpecialBet";
+import type {
+  GlobalSpecialBet,
+  GlobalSpecialBetSelection,
+  GlobalSpecialBetStatus
+} from "../types/globalSpecialBet";
 
 /** Rows the app already holds; enough to name a fixture the snapshot only numbers. */
 type LabelSource = {
@@ -108,6 +112,35 @@ export function lookupFixtureLabel(
   fixtureId: number
 ): FixtureLabel {
   return index?.get(Number(fixtureId)) ?? { title: null, league: null };
+}
+
+/** Empty strings are not names; treat them as the absence they are. */
+function textOrNull(value: string | null | undefined): string | null {
+  const text = String(value ?? "").trim();
+  return text === "" ? null : text;
+}
+
+/**
+ * How a leg is named, snapshot first.
+ *
+ * The stored `fixture_label` / `league_name` (migration 048) win over the
+ * display index, because they are what the bet was actually built from — the
+ * index only knows fixtures still loaded in this session, which is precisely
+ * the wrong set for a bet from three weeks ago.
+ *
+ * The two fields fall back independently: a selection can carry a fixture label
+ * and no league, and there is no reason to discard the half we have. Both null
+ * leaves the caller to show the ids.
+ */
+export function resolveSelectionLabel(
+  selection: Pick<GlobalSpecialBetSelection, "fixture_id" | "fixture_label" | "league_name">,
+  index: Map<number, FixtureLabel> | undefined
+): FixtureLabel {
+  const joined = lookupFixtureLabel(index, selection.fixture_id);
+  return {
+    title: textOrNull(selection.fixture_label) ?? joined.title,
+    league: textOrNull(selection.league_name) ?? joined.league
+  };
 }
 
 /**

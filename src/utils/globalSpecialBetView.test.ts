@@ -8,6 +8,7 @@ import {
   lookupFixtureLabel,
   marketIconKey,
   marketLabelKey,
+  resolveSelectionLabel,
   statusLabelKey,
   statusTone,
   summarizeGlobalSpecialBet
@@ -20,6 +21,10 @@ function selection(overrides: Partial<GlobalSpecialBetSelection> = {}): GlobalSp
     special_bet_id: "bet-1",
     fixture_id: 999001,
     league_id: 39,
+    // The pre-048 default: a stored selection with no names of its own, which
+    // is what every fixture in this file wants unless it says otherwise.
+    fixture_label: null,
+    league_name: null,
     kickoff_at: "2026-08-11T18:30:00.000Z",
     market: "corners",
     selection: "Over 7.5",
@@ -145,6 +150,60 @@ describe("fixture label lookup", () => {
       [{ id: 1, league: "Second", teams: { home: "C", away: "D" } }]
     ]);
     expect(lookupFixtureLabel(index, 1).league).toBe("First");
+  });
+});
+
+describe("naming a selection", () => {
+  const index = buildFixtureLabelIndex([
+    [{ id: 999001, league: "Joined League", teams: { home: "Joined H", away: "Joined A" } }]
+  ]);
+
+  it("prefers what the bet stored over what the session happens to hold", () => {
+    const stored = selection({ fixture_label: "Arsenal – Chelsea", league_name: "Premier League" });
+    // Not a tie-break: the snapshot is what was actually bet on, and the index
+    // only knows fixtures still loaded — the wrong set for an old bet.
+    expect(resolveSelectionLabel(stored, index)).toEqual({
+      title: "Arsenal – Chelsea",
+      league: "Premier League"
+    });
+  });
+
+  it("names a selection with no fixture loaded anywhere", () => {
+    const stored = selection({
+      fixture_id: 424242,
+      fixture_label: "Arsenal – Chelsea",
+      league_name: "Premier League"
+    });
+    expect(resolveSelectionLabel(stored, index).title).toBe("Arsenal – Chelsea");
+    expect(resolveSelectionLabel(stored, undefined).league).toBe("Premier League");
+  });
+
+  it("falls back to the join for a selection stored before 048", () => {
+    expect(resolveSelectionLabel(selection(), index)).toEqual({
+      title: "Joined H – Joined A",
+      league: "Joined League"
+    });
+  });
+
+  it("falls back per field, keeping the half it has", () => {
+    const half = selection({ fixture_label: "Arsenal – Chelsea", league_name: null });
+    expect(resolveSelectionLabel(half, index)).toEqual({
+      title: "Arsenal – Chelsea",
+      league: "Joined League"
+    });
+  });
+
+  it("treats an empty stored name as no name at all", () => {
+    const blank = selection({ fixture_label: "   ", league_name: "" });
+    expect(resolveSelectionLabel(blank, index).title).toBe("Joined H – Joined A");
+    expect(resolveSelectionLabel(blank, index).league).toBe("Joined League");
+  });
+
+  it("degrades to null when neither the snapshot nor the join knows", () => {
+    expect(resolveSelectionLabel(selection({ fixture_id: 424242 }), index)).toEqual({
+      title: null,
+      league: null
+    });
   });
 });
 

@@ -19,15 +19,20 @@ export type GlobalSpecialBetVariant = (typeof GLOBAL_SPECIAL_BET_VARIANTS)[numbe
 /**
  * One leg of the accumulator, exactly as stored in `special_bet_selections`.
  *
- * Note the absence of team and league NAMES: the snapshot carries `fixture_id`
- * and `league_id` only. Labels are resolved for display from data the client
- * already holds, and fall back to the ids when that lookup misses.
+ * Since migration 048 the snapshot carries the names it was built from as well
+ * as the ids. They are nullable in both directions: null for every selection
+ * written before 048 (there is no backfill), and null for a fixture the engine
+ * could not name. A null falls back to the display join, then to the id — so
+ * the label chain degrades, and never invents.
  */
 export type GlobalSpecialBetSelection = {
   id: string;
   special_bet_id: string;
   fixture_id: number;
   league_id: number;
+  /** "Arsenal – Chelsea" as it read when the bet was generated. */
+  fixture_label: string | null;
+  league_name: string | null;
   kickoff_at: string;
   market: string;
   selection: string;

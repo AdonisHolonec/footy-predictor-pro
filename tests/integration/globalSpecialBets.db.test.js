@@ -93,7 +93,7 @@ function asUser(userId, statement, opts = {}) {
   );
 }
 
-function selectionsJson(count, { duplicateFixture = false, badOdds = false } = {}) {
+function selectionsJson(count, { duplicateFixture = false, badOdds = false, labels } = {}) {
   const rows = Array.from({ length: count }, (_, i) => ({
     fixture_id: duplicateFixture ? 900 : 900 + i,
     league_id: 39,
@@ -104,7 +104,10 @@ function selectionsJson(count, { duplicateFixture = false, badOdds = false } = {
     line: 2.5,
     odds: badOdds && i === count - 1 ? 0.5 : 1.8,
     confidence: 80,
-    value_score: 60
+    value_score: 60,
+    // Omitted entirely unless a test asks for them, so the default rows stay
+    // exactly what a pre-048 caller sends.
+    ...(labels ? labels(i) : {})
   }));
   return JSON.stringify(rows).replace(/'/g, "''");
 }
@@ -457,4 +460,68 @@ test("K4: the RPC validates its own inputs rather than trusting the caller", () 
   );
   assert.match(wrongCount.stdout, /selection_count_mismatch/);
   assert.equal(value("select count(*) from public.special_bets;"), "0");
+});
+
+// ── L. The readable snapshot (048) ────────────────────────────────────────
+
+test("L1: a selection can carry the names it was built from", () => {
+  const columns = value(
+    `select string_agg(column_name || ':' || is_nullable, ',' order by column_name)
+     from information_schema.columns
+     where table_name = 'special_bet_selections'
+       and column_name in ('fixture_label', 'league_name');`
+  );
+  assert.equal(columns, "fixture_label:YES,league_name:YES");
+});
+
+test("L2: the RPC stores the label the caller sent, verbatim", () => {
+  createBet({
+    selections: selectionsJson(3, {
+      labels: (i) => ({ fixture_label: `Arsenal – Chelsea ${i}`, league_name: "Premier League" })
+    })
+  });
+
+  assert.equal(
+    value(
+      `select fixture_label from public.special_bet_selections
+       where fixture_id = 900;`
+    ),
+    "Arsenal – Chelsea 0"
+  );
+  assert.equal(
+    value(`select count(*) from public.special_bet_selections where league_name = 'Premier League';`),
+    "3"
+  );
+});
+
+test("L3: a caller that sends no label writes NULL, not an empty string", () => {
+  // Both the pre-048 caller (field absent) and a caller with nothing to say
+  // (field empty) must land on NULL — the UI tests one thing, not two.
+  createBet({ selections: selectionsJson(3, { labels: (i) => (i === 0 ? { fixture_label: "" } : {}) }) });
+
+  assert.equal(
+    value(`select count(*) from public.special_bet_selections where fixture_label is null;`),
+    "3"
+  );
+  assert.equal(
+    value(`select count(*) from public.special_bet_selections where fixture_label = '';`),
+    "0"
+  );
+});
+
+test("L4: the reissued RPC keeps its SECURITY DEFINER hardening", () => {
+  // 048 replaces create_global_special_bet() in place. A CREATE OR REPLACE with
+  // an unchanged signature preserves the ACL 046 set — this asserts that it did,
+  // rather than trusting the rule.
+  const acl = value(
+    `select coalesce(array_to_string(proacl, ','), 'NONE') from pg_proc where proname = 'create_global_special_bet';`
+  );
+  assert.ok(!/(^|,)=X\//.test(acl), `PUBLIC must not hold EXECUTE after 048, got: ${acl}`);
+  assert.match(acl, /service_role=X/, `service_role must still hold EXECUTE, got: ${acl}`);
+
+  const definer = value(
+    `select prosecdef::text || '|' || coalesce(array_to_string(proconfig, ','), 'NONE')
+     from pg_proc where proname = 'create_global_special_bet';`
+  );
+  assert.equal(definer, "true|search_path=public", "the replacement must not drop the pinned search_path");
 });
