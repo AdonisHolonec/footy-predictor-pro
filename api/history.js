@@ -6,6 +6,7 @@ import { resolveFixtureFirstHalfGoals } from "../server-utils/fixtureHalftimeGoa
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { settlePendingGlobalSpecialBets } from "../server-utils/globalSpecialBets.js";
+import { handleGlobalSpecialBets } from "../server-utils/globalSpecialBetsApi.js";
 import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
   attachCardMarketsToPayload,
@@ -906,8 +907,16 @@ async function handleClosingOdds(req, res) {
  * GET /api/history?mine=1 — scoped to the authenticated user (Bearer required).
  * GET or POST /api/history?sync=1 — sync scores/validation (replaces former /api/history/sync).
  * GET or POST /api/history?closing=1 — capture near-kickoff closing odds for CLV.
+ * GET or POST /api/history?view=special-bets — Global Special Bet, reached as
+ *   /api/special-bets through the rewrite in vercel.json (Hobby function cap).
  */
 export default async function handler(req, res) {
+  // Checked first: Global Special Bet is its own resource, not a projection of
+  // predictions_history, and it must not inherit this handler's read defaults.
+  if (String(req.query.view || "") === "special-bets") {
+    return handleGlobalSpecialBets(req, res);
+  }
+
   const syncOn = String(req.query.sync || "") === "1" || String(req.query.sync || "").toLowerCase() === "true";
   const closingOn =
     String(req.query.closing || "") === "1" || String(req.query.closing || "").toLowerCase() === "true";

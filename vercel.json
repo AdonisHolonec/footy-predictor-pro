@@ -10,6 +10,7 @@
   "rewrites": [
     { "source": "/api/stripe-webhook", "destination": "/api/billing?view=webhook" },
     { "source": "/api/activate-trial", "destination": "/api/billing?view=trial" },
+    { "source": "/api/special-bets", "destination": "/api/history?view=special-bets" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

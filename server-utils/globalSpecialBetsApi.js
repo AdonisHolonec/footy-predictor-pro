@@ -1,25 +1,28 @@
 /**
- * api/special-bets.js — Global Special Bet: generate a snapshot, or read the
- * ones already stored.
+ * server-utils/globalSpecialBetsApi.js — HTTP layer for Global Special Bet:
+ * generate a snapshot, or read the ones already stored.
  *
  * The client sends intent only. It cannot supply selections, odds, confidence,
  * value scores or a user id: the server derives the user from the verified
  * session and rebuilds the pool from `predictions_history.raw_payload` through
  * server-utils/globalSpecialBetEngine.js.
  *
- * Settlement is deliberately not here — a stored bet stays 'pending' until the
- * settlement increment lands.
+ * This lives in server-utils rather than in its own api/ file because Vercel
+ * Hobby caps a deployment at 12 serverless functions and the project is at the
+ * cap. `/api/special-bets` is a rewrite onto `/api/history?view=special-bets`,
+ * the same consolidation `/api/stripe-webhook` uses onto api/billing.js. The
+ * public URL is unchanged; only the function count is.
  */
 
-import { getRequester } from "../server-utils/authAdmin.js";
-import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { getRequester } from "./authAdmin.js";
+import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 import {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   isValidBetDate,
   isValidVariant,
   listGlobalSpecialBets
-} from "../server-utils/globalSpecialBets.js";
+} from "./globalSpecialBets.js";
 
 /**
  * A user may only bet on leagues they actually follow. `profiles.favorite_leagues`
@@ -95,7 +98,11 @@ async function handleGet(req, res, userId) {
   return res.status(200).json({ ok: true, bets });
 }
 
-export default async function handler(req, res) {
+/**
+ * Entry point for `/api/special-bets`, reached through the rewrite in
+ * vercel.json. Behaves exactly as a standalone handler would.
+ */
+export async function handleGlobalSpecialBets(req, res) {
   if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
