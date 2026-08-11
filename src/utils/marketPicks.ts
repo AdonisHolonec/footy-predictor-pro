@@ -64,16 +64,34 @@ function lineToTotalKey(line: number): string {
 }
 
 /**
- * Prefer the book line when a quote exists within maxLineDelta of the model pick
- * (keeps side; refreshes probability at the snapped line when available).
+ * Align the displayed pick to the bookmaker's line — but only when the probability can
+ * follow it there.
+ *
+ * The server already resolves this (repriceCandidateLine) and publishes
+ * `probabilityLine` / `probabilityPct`, which are used directly when present. The local
+ * ladder path remains for rows persisted before this contract existed.
+ *
+ * The important change: when the book quotes a line the ladder cannot price, this used
+ * to return the book's line carrying the *model* line's probability — the same
+ * line-transfer bug the server had. It now falls back to the model's own line, which
+ * carries no bookmaker odd, so the UI shows a read without an unobtainable price.
  */
 export function deriveAlignedOuPick(
   totalLines?: Record<string, number>,
-  quote?: { pick?: string; line?: number | null; odd?: number | null } | null,
+  quote?: {
+    pick?: string;
+    line?: number | null;
+    odd?: number | null;
+    probabilityLine?: number | null;
+    probabilityPct?: number | null;
+    tradable?: boolean;
+  } | null,
   maxLineDelta = 1.5
 ): { line: number; side: "over" | "under"; probability: number } | null {
   const best = deriveBestOverUnderPick(totalLines);
   if (!best) return null;
+  if (quote?.tradable === false) return best;
+
   const odd = Number(quote?.odd);
   const qLine = Number(quote?.line);
   if (!Number.isFinite(odd) || odd <= 1 || !Number.isFinite(qLine)) return best;
@@ -81,6 +99,14 @@ export function deriveAlignedOuPick(
 
   const qPick = String(quote?.pick || "").toLowerCase();
   const qSide = qPick.includes("under") ? "under" : qPick.includes("over") ? "over" : best.side;
+
+  // Server-resolved probability, already priced at the bookmaker's line.
+  const serverLine = Number(quote?.probabilityLine);
+  const serverProb = Number(quote?.probabilityPct);
+  if (Number.isFinite(serverLine) && serverLine === qLine && Number.isFinite(serverProb)) {
+    return { line: qLine, side: qSide, probability: serverProb };
+  }
+
   const pOver = Number(totalLines?.[lineToTotalKey(qLine)]);
   if (Number.isFinite(pOver)) {
     return {
@@ -89,7 +115,9 @@ export function deriveAlignedOuPick(
       probability: qSide === "over" ? pOver : 100 - pOver
     };
   }
-  return { line: qLine, side: qSide, probability: best.probability };
+  // No probability at the book's line: keep the model's line rather than moving the
+  // line and leaving the probability behind.
+  return best;
 }
 
 export function listGoalsPickCandidates(row: PredictionRow): GoalsOuPick[] {
@@ -216,7 +244,18 @@ export function parseOuSide(pick: string | null | undefined): "over" | "under" |
   return null;
 }
 
-/** Prefer side-specific over/under when present on the quote. */
+/**
+ * Consensus odd for exactly this side and line — or null.
+ *
+ * The server resolves line, probability and price together (repriceCandidateLine) and
+ * publishes `tradable`. This helper must not go looking for a "close enough" price: a
+ * quote for another line is a price for another bet. Two escapes that used to live here
+ * are gone — a cross-market bypass that skipped the line check entirely for
+ * total-shots / team-SOT sources, and callers passing a 4.0-wide tolerance.
+ *
+ * `maxLineDelta` defaults to 0 (exact line only). It exists only so a caller can accept
+ * the server's already-repriced line; never to reach a line the server did not price.
+ */
 export function matchingMarketOdd(
   quote: {
     pick?: string;
@@ -225,20 +264,17 @@ export function matchingMarketOdd(
     over?: number | null;
     under?: number | null;
     oddSource?: string | null;
+    tradable?: boolean;
   } | null | undefined,
   side: "over" | "under",
   line: number,
-  maxLineDelta = 1.5
+  maxLineDelta = 0
 ): number | null {
   if (!quote) return null;
-  const src = String(quote.oddSource || "");
-  const crossMarket = src === "shots_total" || src === "team_home" || src === "team_away";
+  // The server already decided this selection has no usable price.
+  if (quote.tradable === false) return null;
   const qLine = Number(quote.line);
-  if (
-    !crossMarket &&
-    Number.isFinite(qLine) &&
-    Math.abs(qLine - line) > maxLineDelta + 1e-9
-  ) {
+  if (Number.isFinite(qLine) && Math.abs(qLine - line) > maxLineDelta + 1e-9) {
     return null;
   }
   const qSide = parseOuSide(quote.pick);
@@ -254,17 +290,21 @@ export function matchingMarketOdd(
   return Number.isFinite(odd) && odd > 1 ? odd : null;
 }
 
-/** Display odd for shots card: SOT quote, else total-shots quote on the same side. */
+/**
+ * Display odd for the shots card — the SOT quote for this exact side and line, or null.
+ *
+ * Previously this fell back twice: to `shotsOnTarget.odd` with no line check at all, and
+ * then to the total-shots quote with a 4.0-wide tolerance. Total shots is a different
+ * market from shots on target, and a line four shots away is a different bet, so both
+ * fallbacks could show a price the user could not get. The server now marks those cases
+ * `tradable: false`; there is nothing left to fall back to.
+ */
 export function shotsDisplayOdd(
   row: PredictionRow,
   side: "over" | "under",
   line: number
 ): number | null {
-  const sot = matchingMarketOdd(row.marketOdds?.shotsOnTarget, side, line);
-  if (sot != null) return sot;
-  const fromSotFallback = Number(row.marketOdds?.shotsOnTarget?.odd);
-  if (Number.isFinite(fromSotFallback) && fromSotFallback > 1) return fromSotFallback;
-  return matchingMarketOdd(row.marketOdds?.shotsTotal, side, line, 4);
+  return matchingMarketOdd(row.marketOdds?.shotsOnTarget, side, line);
 }
 
 /** HT goals total from marketResults or score.halftime. */

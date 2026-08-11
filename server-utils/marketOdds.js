@@ -499,6 +499,53 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
 }
 
 /**
+ * Every Over/Under line the bookmakers actually quote for one market.
+ *
+ * The bookmaker's board — not an internal list of lines we hope it offers — is the source
+ * of truth for what is tradable. Callers discover the real lines with this, then price the
+ * model at each one (see repriceCandidateLine.js). Purely additive: it reuses the same
+ * fuzzy market-name matching and label parsing the consensus resolvers already use, so a
+ * line found here is a line `consensusOverUnderOddsAtLine` can also quote.
+ *
+ * @param {object} oddsApiResponse
+ * @param {string[]} marketNames candidate market labels
+ * @param {{ kind?: string, preferredBookmakers?: string[] }} [options]
+ * @returns {number[]} lines with at least one usable over/under price, ascending
+ */
+export function listOverUnderLinesOffered(oddsApiResponse, marketNames, options = {}) {
+  const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
+  if (!Array.isArray(bookmakers) || bookmakers.length === 0) return [];
+  const kind = String(options?.kind || "generic");
+  const preferred = Array.isArray(options?.preferredBookmakers) ? options.preferredBookmakers : [];
+
+  const collect = (books) => {
+    const lines = new Set();
+    for (const b of books) {
+      const market = pickBestMarket(Array.isArray(b?.bets) ? b.bets : [], marketNames, kind);
+      if (!market?.values || !Array.isArray(market.values)) continue;
+      for (const v of market.values) {
+        const parsed = parseLineFromValueLabel(v?.value);
+        if (parsed == null || !valueKind(v?.value)) continue;
+        const odd = Number.parseFloat(String(v?.odd ?? ""));
+        if (!Number.isFinite(odd) || odd <= 1) continue;
+        lines.add(parsed);
+      }
+    }
+    return lines;
+  };
+
+  // Mirrors consensusOverUnderOddsAtLine: preferred books first, all books otherwise.
+  let lines = new Set();
+  if (preferred.length) {
+    const prefBooks = bookmakers.filter((b) => isPreferredBookmaker(b?.name, preferred));
+    if (prefBooks.length) lines = collect(prefBooks);
+  }
+  if (!lines.size) lines = collect(bookmakers);
+
+  return Array.from(lines).sort((a, b) => a - b);
+}
+
+/**
  * Best available shots quote for the card SOT row.
  * Order: match SOT → match total shots → home team SOT → away team SOT.
  */

@@ -245,7 +245,17 @@ export async function run(context) {
         confidence: maxConf,
         odd: Number.isFinite(Number(recommendedQuote.odd)) ? Number(recommendedQuote.odd) : null,
         oddSource: recommendedQuote.source || null,
-        bookmakersUsed: recommendedQuote.bookmakersUsed || 0
+        bookmakersUsed: recommendedQuote.bookmakersUsed || 0,
+        // Line contract (additive). For a tradable selection these agree by construction:
+        // `line` === `bookLine` === `probabilityLine`, and `odd` is that line's price.
+        // Consumers must treat `tradable: false` as "no price exists" and render nothing,
+        // rather than looking for a nearby line's odd.
+        line: recommendedQuote.line ?? null,
+        bookLine: recommendedQuote.bookLine ?? null,
+        lineExact: recommendedQuote.lineExact ?? null,
+        probabilityLine: recommendedQuote.probabilityLine ?? null,
+        tradable: recommendedQuote.tradable ?? false,
+        repriced: recommendedQuote.repriced ?? false
       },
       modelMeta: {
         method,

@@ -222,8 +222,9 @@ export default function PredictionFocusCard({
     ? matchingMarketOdd(row.marketOdds?.corners, corners.side, corners.line)
     : null;
   const shotsOdd = shots ? shotsDisplayOdd(row, shots.side, shots.line) : null;
+  // Exact line only — a total-shots price from a line four shots away is another bet.
   const shotsTotalOdd = shotsTotal
-    ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotal.side, shotsTotal.line, 4)
+    ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotal.side, shotsTotal.line)
     : null;
   const recOdd = recommendedOdd(row);
   const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);

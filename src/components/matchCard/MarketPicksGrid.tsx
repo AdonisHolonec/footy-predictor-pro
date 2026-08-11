@@ -75,10 +75,12 @@ export function MarketPicksGrid({ row, accessTier }: MarketPicksGridProps) {
           label: t("match.shotsTotalTitle"),
           data: shotsTotalPick,
           locked: shotsTotalLocked,
+          // Exact line only, and no raw `.odd` escape — a total-shots price four lines
+          // away is a different bet. A missing price renders as the empty label.
           odd:
             shotsTotalPick != null
-              ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotalPick.side, shotsTotalPick.line, 4)
-              : row.marketOdds?.shotsTotal?.odd,
+              ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotalPick.side, shotsTotalPick.line)
+              : null,
           source: row.marketOdds?.shotsTotal?.bookmaker,
           accentClass: "border-fuchsia-500/35 bg-fuchsia-500/10"
         },

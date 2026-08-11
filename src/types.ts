@@ -307,8 +307,25 @@ export type MarketOddQuote = {
   bookmakersUsed?: number;
   /** When odd comes from a fallback market (total shots / team SOT). */
   oddSource?: "sot" | "shots_total" | "team_home" | "team_away" | string | null;
-  /** Actual book line when different from model `line` (cross-market fallback). */
+  /** The model's original line, before the bookmaker's own line was resolved. */
+  requestedLine?: number | null;
+  /** The line the bookmaker actually quotes. Equals `line` whenever tradable. */
   bookLine?: number | null;
+  /** True when the bookmaker quotes exactly the line the model asked for. */
+  lineExact?: boolean | null;
+  /** The line `probabilityPct` was computed at. Equals `bookLine` whenever tradable. */
+  probabilityLine?: number | null;
+  /** Model probability at `probabilityLine`, in percentage points. */
+  probabilityPct?: number | null;
+  /**
+   * The server's tradability verdict. `false` means no bookmaker price exists for a line
+   * this model can price — render "—" and never substitute a nearby line's odd.
+   */
+  tradable?: boolean;
+  /** How the probability was obtained when the line moved. */
+  repriced?: "ladder" | "analytic" | false;
+  /** Why the selection is not tradable, when it isn't. */
+  untradableReason?: string | null;
 };
 
 /** Single data-backed reason for a pick (from PredictionExplanation). */

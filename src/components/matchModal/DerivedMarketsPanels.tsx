@@ -159,13 +159,10 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                         match.probs.shotsOnTarget.total,
                         match.marketOdds?.shotsOnTarget
                       );
-                      if (!pick) {
-                        return Number(match.marketOdds?.shotsOnTarget?.odd) > 1
-                          ? Number(match.marketOdds?.shotsOnTarget?.odd)
-                          : Number(match.marketOdds?.shotsTotal?.odd) > 1
-                            ? Number(match.marketOdds?.shotsTotal?.odd)
-                            : null;
-                      }
+                      // No pick means no line to price against, so there is no odd to
+                      // show. Falling back to a raw quote here would print a price
+                      // belonging to another line, or to the total-shots market entirely.
+                      if (!pick) return null;
                       return shotsDisplayOdd(match, pick.side, pick.line);
                     })()}
                     quoteSource={
@@ -194,12 +191,10 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                         match.probs.shotsTotal.total,
                         match.marketOdds?.shotsTotal
                       );
-                      if (!pick) {
-                        return Number(match.marketOdds?.shotsTotal?.odd) > 1
-                          ? Number(match.marketOdds?.shotsTotal?.odd)
-                          : null;
-                      }
-                      return matchingMarketOdd(match.marketOdds?.shotsTotal, pick.side, pick.line, 4);
+                      if (!pick) return null;
+                      // Exact line only: the shots-total ladder steps by 2.0, so a loose
+                      // tolerance here reliably priced the wrong bet.
+                      return matchingMarketOdd(match.marketOdds?.shotsTotal, pick.side, pick.line);
                     })()}
                     quoteSource={match.marketOdds?.shotsTotal?.bookmaker ?? null}
                     badgeTone="shots"

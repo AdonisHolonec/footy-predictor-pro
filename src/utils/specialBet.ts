@@ -274,12 +274,10 @@ export function listSpecialBetCandidates(
         ? `${cornersPick.side === "over" ? "Over" : "Under"} ${cornersPick.line.toFixed(1)}`
         : "",
       probability: Number(cornersPick?.probability || 0),
+      // No raw `?? marketOdds.corners.odd` escape: that odd may belong to another line.
+      // A leg with no price for its own line is dropped by the hasValidOdd filter below.
       odd: cornersPick
-        ? Number(
-            matchingMarketOdd(row.marketOdds?.corners, cornersPick.side, cornersPick.line) ??
-              row.marketOdds?.corners?.odd ??
-              NaN
-          )
+        ? Number(matchingMarketOdd(row.marketOdds?.corners, cornersPick.side, cornersPick.line) ?? NaN)
         : NaN,
       outcome: gradeLeg("corners", cornersPick),
       family: "CORNERS"
@@ -302,9 +300,7 @@ export function listSpecialBetCandidates(
       probability: Number(firstHalfPick?.probability || 0),
       odd: firstHalfPick
         ? Number(
-            matchingMarketOdd(row.marketOdds?.firstHalfGoals, firstHalfPick.side, firstHalfPick.line) ??
-              row.marketOdds?.firstHalfGoals?.odd ??
-              NaN
+            matchingMarketOdd(row.marketOdds?.firstHalfGoals, firstHalfPick.side, firstHalfPick.line) ?? NaN
           )
         : NaN,
       outcome: ((): MarketOutcome => {
