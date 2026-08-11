@@ -41,6 +41,7 @@ import {
   useLocalStorageState
 } from "../utils/appUtils";
 import { syncHistoryAfterPredict } from "../utils/predictFlowUtils";
+import { buildFixtureLabelIndex } from "../utils/globalSpecialBetView";
 import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
@@ -315,6 +316,16 @@ export default function UserDashboard() {
     return () => clearInterval(tm);
   }, [session?.access_token, refreshTierStatus]);
 
+  /**
+   * Readable labels for Global Special Bet snapshots.
+   *
+   * `special_bet_selections` stores fixture_id and league_id only, so the names
+   * are joined here from rows the app already loaded. Presentation only — it
+   * never influences which selections a bet contains — and a fixture missing
+   * from both sources degrades to its id rather than to an invented name.
+   */
+  const gsbFixtureIndex = useMemo(() => buildFixtureLabelIndex([preds, history]), [preds, history]);
+
   useEffect(() => {
     const safeCount = preds.filter((row) => !row.insufficientData && Number(row.recommended?.confidence) >= 70).length;
     const valueCount = preds.filter((row) => row.valueBet?.detected).length;
@@ -563,6 +574,14 @@ export default function UserDashboard() {
           }
           trackerStats={trackerStats}
           history={history}
+          betDate={date}
+          /* The profile's favourite leagues, not the local league filter: the
+             server validates the scope against profiles.favorite_leagues and
+             rejects anything outside it. */
+          favoriteLeagueIds={user?.favoriteLeagues ?? []}
+          gsbFixtureIndex={gsbFixtureIndex}
+          /* No tier gate exists for /api/special-bets, so the UI adds none. */
+          canUseGlobalSpecialBet={Boolean(user)}
         />
       )}
 
@@ -624,6 +643,8 @@ export default function UserDashboard() {
           onOpenMatch={openMatch}
           canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+          gsbFixtureIndex={gsbFixtureIndex}
+          canUseGlobalSpecialBet={Boolean(user)}
         />
       )}
 

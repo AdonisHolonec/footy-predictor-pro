@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  candidateScanWindow,
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   isValidBetDate,
@@ -11,6 +12,7 @@ import {
   toSelectionRows,
   unavailableResponse
 } from "../server-utils/globalSpecialBets.js";
+import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 
 /**
  * Global Special Bet — persistence layer.
@@ -234,6 +236,106 @@ test("payloads are read from raw_payload and keyed by the queried columns", asyn
   assert.equal(rows[0].kickoff, KICKOFF);
   assert.equal(payloadsByFixtureId.get(7).recommended.confidence, 80);
   assert.deepEqual(supabase.calls.from, ["predictions_history"]);
+});
+
+// ── calendar day: Europe/Bucharest, exactly as the rest of the app ────────
+
+/**
+ * A bet day is a Europe/Bucharest day, not a UTC one. These fixtures are
+ * expressed as the UTC instant the database actually stores, with the local
+ * time each one represents written next to it.
+ */
+const BUCHAREST_DAY = "2026-08-09";
+
+function historyRow(fixtureId, kickoffAt, leagueId = 39) {
+  return {
+    fixture_id: fixtureId,
+    league_id: leagueId,
+    kickoff_at: kickoffAt,
+    raw_payload: { id: fixtureId, leagueId, kickoff: kickoffAt, recommended: { confidence: 80 } }
+  };
+}
+
+test("a 00:30 Bucharest kickoff belongs to that Bucharest day, not the UTC one", async () => {
+  // 2026-08-08T21:30Z is 00:30 on 2026-08-09 in Bucharest (UTC+3 in summer).
+  const supabase = fakeSupabase({ historyRows: [historyRow(7, "2026-08-08T21:30:00.000Z")] });
+
+  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+
+  assert.equal(rows.length, 1, "the raw-UTC window used to drop this fixture from its own day");
+  assert.equal(rows[0].id, 7);
+});
+
+test("a 02:30 Bucharest kickoff belongs to that Bucharest day", async () => {
+  // 2026-08-08T23:30Z is 02:30 on 2026-08-09 in Bucharest.
+  const supabase = fakeSupabase({ historyRows: [historyRow(8, "2026-08-08T23:30:00.000Z")] });
+
+  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 8);
+});
+
+test("a 21:00 Bucharest kickoff stays in its own day", async () => {
+  // 2026-08-09T18:00Z is 21:00 on 2026-08-09 in Bucharest — the ordinary case.
+  const supabase = fakeSupabase({ historyRows: [historyRow(9, "2026-08-09T18:00:00.000Z")] });
+
+  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 9);
+});
+
+test("a US kickoff landing on a different UTC day is filed under its Bucharest day", async () => {
+  // 2026-08-09T23:00Z is an MLS evening kickoff on 2026-08-09 in the US, but
+  // 02:00 on 2026-08-10 in Bucharest — so it belongs to the 10th, not the 9th.
+  const supabase = fakeSupabase({ historyRows: [historyRow(10, "2026-08-09T23:00:00.000Z", 253)] });
+
+  const ninth = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [253]);
+  assert.equal(ninth.rows.length, 0, "a UTC-day filter would wrongly have kept it on the 9th");
+
+  const tenth = await loadCandidatePayloads(supabase, "2026-08-10", [253]);
+  assert.equal(tenth.rows.length, 1);
+  assert.equal(tenth.rows[0].id, 10);
+});
+
+test("the day boundary matches the helper the rest of the app groups by", async () => {
+  // Same source of truth as api/history.js's day grouping and the dashboard's
+  // kickoffLocalDateKey — one definition of "day", not two.
+  const kickoffs = [
+    "2026-08-08T20:59:00.000Z", // 23:59 Bucharest on the 8th — excluded
+    "2026-08-08T21:00:00.000Z", // 00:00 Bucharest on the 9th — included
+    "2026-08-09T18:00:00.000Z", // 21:00 Bucharest on the 9th — included
+    "2026-08-09T20:59:00.000Z", // 23:59 Bucharest on the 9th — included
+    "2026-08-09T21:00:00.000Z" // 00:00 Bucharest on the 10th — excluded
+  ];
+  const supabase = fakeSupabase({ historyRows: kickoffs.map((k, i) => historyRow(100 + i, k)) });
+
+  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+  const selected = rows.map((r) => r.id).sort((a, b) => a - b);
+
+  const expected = kickoffs
+    .map((k, i) => ({ id: 100 + i, day: calendarDateKeyEuropeBucharest(k) }))
+    .filter((r) => r.day === BUCHAREST_DAY)
+    .map((r) => r.id);
+
+  assert.deepEqual(selected, expected);
+  assert.deepEqual(selected, [101, 102, 103]);
+});
+
+test("the scan window brackets the Bucharest day without deciding what it is", () => {
+  const window = candidateScanWindow(BUCHAREST_DAY);
+  // A superset by one UTC day either side: enough for UTC+2 and UTC+3 alike.
+  assert.equal(window.from, "2026-08-08T00:00:00.000Z");
+  assert.equal(window.to, "2026-08-10T00:00:00.000Z");
+  assert.equal(candidateScanWindow("not-a-date"), null);
+});
+
+test("an unparseable bet date scans nothing rather than every row", async () => {
+  const supabase = fakeSupabase({ historyRows: [historyRow(11, "2026-08-09T18:00:00.000Z")] });
+  const { rows } = await loadCandidatePayloads(supabase, "nonsense", [39]);
+  assert.equal(rows.length, 0);
+  assert.deepEqual(supabase.calls.from, [], "no query is issued at all");
 });
 
 // ── generation ────────────────────────────────────────────────────────────

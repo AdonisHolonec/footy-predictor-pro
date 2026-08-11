@@ -1,4 +1,5 @@
 export type * from "../types";
+export type * from "./globalSpecialBet";
 
 export type { KickoffScope } from "../components/admin/AdminObservatory";
 

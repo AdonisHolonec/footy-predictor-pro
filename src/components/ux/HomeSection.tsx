@@ -5,8 +5,10 @@ import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import FeaturedPredictionCard from "./FeaturedPredictionCard";
+import GlobalSpecialBetSection from "./GlobalSpecialBetSection";
 import PredictionFocusCard from "./PredictionFocusCard";
 import RecentPerformanceCard from "./RecentPerformanceCard";
+import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 import { getGreeting } from "../../utils/greeting";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { confidenceOf, expectedValueOf, isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
@@ -43,6 +45,14 @@ type Props = {
   onToggleHighConf: () => void;
   trackerStats: HistoryStats;
   history: HistoryEntry[];
+  /** Calendar day the Global Special Bet is built from — the dashboard's active date. */
+  betDate: string;
+  /** The user's favourite leagues; the only scope /api/special-bets accepts. */
+  favoriteLeagueIds: number[];
+  /** fixture_id -> readable labels, so a snapshot that stores ids can still name its matches. */
+  gsbFixtureIndex?: Map<number, FixtureLabel>;
+  /** Fails closed, matching the per-match Special Bet convention. */
+  canUseGlobalSpecialBet?: boolean;
 };
 
 export default function HomeSection({
@@ -66,7 +76,11 @@ export default function HomeSection({
   highConfActive,
   onToggleHighConf,
   trackerStats,
-  history
+  history,
+  betDate,
+  favoriteLeagueIds,
+  gsbFixtureIndex,
+  canUseGlobalSpecialBet = false
 }: Props) {
   const { t, locale } = useLocale();
 
@@ -246,6 +260,17 @@ export default function HomeSection({
           )}
         </>
       )}
+
+      {/* Its own product, not a variation of the per-match Special Bet: an
+          accumulator across fixtures, so it sits outside the match list and is
+          driven entirely by the server rather than by the local prediction cache. */}
+      <GlobalSpecialBetSection
+        betDate={betDate}
+        favoriteLeagueIds={favoriteLeagueIds}
+        fixtureIndex={gsbFixtureIndex}
+        canUseGlobalSpecialBet={canUseGlobalSpecialBet}
+        onUpgradeRequired={(feature) => onUpgradeRequired(feature, "ultra")}
+      />
 
       <RecentPerformanceCard
         history={history}
