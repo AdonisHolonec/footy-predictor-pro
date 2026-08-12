@@ -51,11 +51,16 @@ export async function finalizeLambdasWithRollingXg(context) {
         liveRollingCache.set(cacheKey, built);
       }
     }
+    // Adoptăm rândul construit live DOAR dacă trece el însuşi pragul de sample —
+    // un rolling subţire (1-3 meciuri reale) nu are voie să înlocuiască prior-ul de
+    // ligă: mediile lui sunt zgomot şi au produs λ degenerat în producţie.
     if (!hasUsableRolling(rollingHome)) {
-      rollingHome = liveRollingCache.get(`${lId}:${season}:${Number(homeIdStr)}`) || rollingHome;
+      const builtHome = liveRollingCache.get(`${lId}:${season}:${Number(homeIdStr)}`);
+      if (hasUsableRolling(builtHome)) rollingHome = builtHome;
     }
     if (!hasUsableRolling(rollingAway)) {
-      rollingAway = liveRollingCache.get(`${lId}:${season}:${Number(awayIdStr)}`) || rollingAway;
+      const builtAway = liveRollingCache.get(`${lId}:${season}:${Number(awayIdStr)}`);
+      if (hasUsableRolling(builtAway)) rollingAway = builtAway;
     }
     liveRollingApplied = true;
   }

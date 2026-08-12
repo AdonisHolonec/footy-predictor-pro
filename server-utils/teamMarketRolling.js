@@ -6,19 +6,43 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 let cached = { fetchedAt: 0, byKey: new Map() };
 
 /**
+ * Minim de meciuri cu date REALE (nu blocuri structurale cu valori null) pentru ca
+ * rolling-ul unei echipe să fie folosit în locul prior-ului de ligă, per familie de
+ * piaţă. Aliniat cu LIVE_ROLLING_MIN_SAMPLE din predictHelpers (care importă de aici).
+ */
+export const MIN_MARKET_SAMPLES = 4;
+
+/**
+ * Sample-ul real pentru o familie de piaţă. Rândurile agregate in-memory au
+ * samples_by_market per familie; rândurile persistate (team_market_rolling) nu au
+ * coloana → cădem pe matches_sampled, cea mai bună informaţie disponibilă acolo.
+ */
+function marketSampleCount(row, marketKey) {
+  const s = Number(row?.samples_by_market?.[marketKey]);
+  if (Number.isFinite(s)) return s;
+  return Number(row?.matches_sampled) || 0;
+}
+
+/**
  * Găseşte valoarea numerică pentru un tip de statistică din payload-ul /fixtures/statistics.
  * API-Football returnează: `statistics: [{type: "Corner Kicks", value: 5}, ...]`.
  * Value poate fi număr, string cu "%" (ex. "45%" pentru posesie) sau null.
+ *
+ * MISSING ≠ ZERO: providerul trimite blocuri de statistici complete ca structură dar cu
+ * toate valorile null pentru meciuri neacoperite (tipic calificări UEFA). Un null tratat
+ * ca 0 otrăveşte mediile rolling şi produce λ degenerat. Doar un 0 explicit (număr sau
+ * "0") este producţie reală zero; null / undefined / "" înseamnă lipsă de date → null.
  */
 function readStat(statistics, type) {
   if (!Array.isArray(statistics)) return null;
   const row = statistics.find((s) => String(s?.type).toLowerCase() === type.toLowerCase());
   if (!row) return null;
   const v = row.value;
-  if (v == null) return 0;
+  if (v == null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string") {
     const cleaned = v.replace(/%/g, "").trim();
+    if (cleaned === "") return null;
     const n = Number(cleaned);
     return Number.isFinite(n) ? n : null;
   }
@@ -65,6 +89,7 @@ export function aggregateRollingForTeam(matches) {
   if (!Array.isArray(matches) || matches.length === 0) {
     return {
       matches_sampled: 0,
+      samples_by_market: { corners: 0, cards: 0, sot: 0, shots_total: 0 },
       corners_for_avg: null,
       corners_against_avg: null,
       corners_for_home_avg: null,
@@ -165,6 +190,16 @@ export function aggregateRollingForTeam(matches) {
       bag.shots_total_for.length,
       bag.cards_for.length
     ),
+    // Sample real per familie de piaţă (meciuri cu date observate pe AMBELE laturi
+    // for/against). Un meci cu statistici structurale dar valori null nu contează —
+    // readStat îl lasă null, push-ul îl sare. Câmp exclusiv in-memory: NU este o
+    // coloană în team_market_rolling; persistTeamMarketRolling îl elimină la upsert.
+    samples_by_market: {
+      corners: Math.min(bag.corners_for.length, bag.corners_against.length),
+      cards: Math.min(bag.cards_for.length, bag.cards_against.length),
+      sot: Math.min(bag.sot_for.length, bag.sot_against.length),
+      shots_total: Math.min(bag.shots_total_for.length, bag.shots_total_against.length)
+    },
     corners_for_avg: round(avg(bag.corners_for)),
     corners_against_avg: round(avg(bag.corners_against)),
     corners_for_home_avg: round(avg(bag.corners_for_home)),
@@ -227,8 +262,10 @@ export async function persistTeamMarketRolling(rows) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "Supabase nu este configurat" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
-  const payload = rows.map((r) => ({
-    ...r,
+  // samples_by_market este diagnostic in-memory (nu există coloană în schema
+  // team_market_rolling) — îl eliminăm ca upsert-ul să nu eşueze pe coloană necunoscută.
+  const payload = rows.map(({ samples_by_market: _samples, ...cols }) => ({
+    ...cols,
     updated_at: new Date().toISOString()
   }));
   const { error } = await supabase.from(TABLE).upsert(payload, {
@@ -283,24 +320,38 @@ export function deriveMarketLambdas({
       against: "shots_total_against_avg"
     }
   };
-  const f = fields[marketKey] || fields.corners;
+  const resolvedKey = fields[marketKey] ? marketKey : "corners";
+  const f = fields[resolvedKey];
 
   const atkH = Number(rollingHome?.[f.for]);
   const defA = Number(rollingAway?.[f.against]);
   const atkA = Number(rollingAway?.[f.for]);
   const defH = Number(rollingHome?.[f.against]);
 
-  const hasHome = Number.isFinite(atkH) && atkH > 0 && Number.isFinite(defH) && defH > 0;
-  const hasAway = Number.isFinite(atkA) && atkA > 0 && Number.isFinite(defA) && defA > 0;
-  // dacă amândouă sunt zero / null → fallback la baseSide pentru ambele
+  const sampleHome = marketSampleCount(rollingHome, resolvedKey);
+  const sampleAway = marketSampleCount(rollingAway, resolvedKey);
+
+  const fallbackResult = (reason) => ({
+    lambdaHome: baseSide * Math.pow(homeAdv, 0.5),
+    lambdaAway: baseSide * Math.pow(awayAdv, 0.5),
+    sampleHome,
+    sampleAway,
+    usedFallback: true,
+    fallbackReason: reason
+  });
+
+  // O latură e folosibilă doar cu medii finite pozitive ŞI un sample real suficient
+  // pe această familie de piaţă — sub prag, mediile sunt zgomot (1-3 meciuri) sau
+  // provin din date contaminate şi prior-ul ligii este estimatorul mai bun.
+  const hasHome =
+    Number.isFinite(atkH) && atkH > 0 && Number.isFinite(defH) && defH > 0 &&
+    sampleHome >= MIN_MARKET_SAMPLES;
+  const hasAway =
+    Number.isFinite(atkA) && atkA > 0 && Number.isFinite(defA) && defA > 0 &&
+    sampleAway >= MIN_MARKET_SAMPLES;
+  // dacă amândouă sunt zero / null / sub-eşantionate → fallback la baseSide pentru ambele
   if (!hasHome && !hasAway) {
-    return {
-      lambdaHome: baseSide * Math.pow(homeAdv, 0.5),
-      lambdaAway: baseSide * Math.pow(awayAdv, 0.5),
-      sampleHome: 0,
-      sampleAway: 0,
-      usedFallback: true
-    };
+    return fallbackResult("insufficient_data");
   }
 
   const hAtk = hasHome ? atkH : baseSide;
@@ -315,12 +366,21 @@ export function deriveMarketLambdas({
     baseSide * (aAtk / baseSide) * (hDef / baseSide) * Math.pow(awayAdv, 0.5)
   );
 
+  // Safety net: fallback-ul complet produce λTotal ≈ baseAvgTotal, deci un λTotal sub
+  // baseSide (= jumătate din baseline-ul propriu al ligii) nu poate proveni decât din
+  // rolling degenerat (ex. medii otrăvite de meciuri null persistate înainte de fix).
+  // Pragul scalează cu baseline-ul fiecărei ligi — nu e o constantă arbitrară.
+  if (lambdaHome + lambdaAway < baseSide) {
+    return fallbackResult("sanity_gate");
+  }
+
   return {
     lambdaHome: Number(lambdaHome.toFixed(3)),
     lambdaAway: Number(lambdaAway.toFixed(3)),
-    sampleHome: Number(rollingHome?.matches_sampled) || 0,
-    sampleAway: Number(rollingAway?.matches_sampled) || 0,
-    usedFallback: !hasHome || !hasAway
+    sampleHome,
+    sampleAway,
+    usedFallback: !hasHome || !hasAway,
+    fallbackReason: !hasHome || !hasAway ? "partial_data" : null
   };
 }
 

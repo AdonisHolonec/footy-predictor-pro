@@ -4,7 +4,7 @@
  */
 
 import { getWithCache } from "../fetcher.js";
-import { extractFixtureMarketStats, aggregateRollingForTeam } from "../teamMarketRolling.js";
+import { extractFixtureMarketStats, aggregateRollingForTeam, MIN_MARKET_SAMPLES } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
 import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, poissonOverLineCorrelated, clampLambda } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
@@ -426,7 +426,7 @@ function buildPoissonMarketBlock({ lambdaHome, lambdaAway, lines, teamLines = []
   };
 }
 
-const LIVE_ROLLING_MIN_SAMPLE = 4;
+const LIVE_ROLLING_MIN_SAMPLE = MIN_MARKET_SAMPLES;
 const LIVE_ROLLING_FIXTURES = 8;
 const LIVE_ROLLING_MAX_UNCACHED_STATS_CALLS = 18;
 
@@ -487,7 +487,9 @@ async function buildLiveRollingForTeam({
   // Attach real rolling xG (shots / SoT / big-chance / possession / recent xG),
   // in-memory only — never persisted by this path.
   const xg = computeRollingXg(enriched);
-  return { ...agg, ...xg };
+  // stats_blocks = blocuri structurale primite; matches_sampled numără doar meciurile
+  // cu valori reale — diferenţa este contaminarea null a istoricului echipei.
+  return { ...agg, ...xg, stats_blocks: enriched.length };
 }
 
 /**
@@ -737,7 +739,7 @@ function extendProbsWithMarkets(p) {
   };
 }
 
-function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
+function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds, marketRolling = null }) {
   let score = 0.35;
   if (hasTeamIds) score += 0.15;
   if (hasOdds) score += 0.2;
@@ -745,6 +747,15 @@ function dataQualityScore({ method, hasOdds, hasLuckStats, hasTeamIds }) {
   if (method === "strength-ratings" || method === "standings" || method === "modular-engine") score += 0.1;
   else if (method === "partial_stats_league_prior") score += 0.05;
   else if (method === "uefa_league_prior") score -= 0.1;
+  // Rolling-ul pieţelor: un fixture rezolvat pe prior de ligă (fallback) sau cu sample
+  // real sub MIN_MARKET_SAMPLES nu poate raporta aceeaşi calitate ca unul cu rolling
+  // plin — înainte de acest semnal, fixture-uri cu rolling otrăvit primeau scor 1.0.
+  if (marketRolling) {
+    const sampleHome = Number(marketRolling.sampleHome) || 0;
+    const sampleAway = Number(marketRolling.sampleAway) || 0;
+    const thinSample = Math.min(sampleHome, sampleAway) < MIN_MARKET_SAMPLES;
+    if (marketRolling.usedFallback || thinSample) score -= 0.1;
+  }
   return Math.max(0, Math.min(1, score));
 }
 

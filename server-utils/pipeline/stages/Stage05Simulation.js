@@ -157,6 +157,7 @@ export async function run(context) {
       sampleHome: cornersLambdas.sampleHome,
       sampleAway: cornersLambdas.sampleAway,
       usedFallback: cornersLambdas.usedFallback,
+      fallbackReason: cornersLambdas.fallbackReason ?? null,
       liveRollingApplied,
       leagueBaseline: leagueParams.cornersAvgTotal
     };
@@ -180,6 +181,7 @@ export async function run(context) {
       sampleHome: sotLambdas.sampleHome,
       sampleAway: sotLambdas.sampleAway,
       usedFallback: sotLambdas.usedFallback,
+      fallbackReason: sotLambdas.fallbackReason ?? null,
       liveRollingApplied,
       leagueBaseline: leagueParams.sotAvgTotal
     };
@@ -204,6 +206,7 @@ export async function run(context) {
       sampleHome: shotsLambdas.sampleHome,
       sampleAway: shotsLambdas.sampleAway,
       usedFallback: shotsLambdas.usedFallback,
+      fallbackReason: shotsLambdas.fallbackReason ?? null,
       liveRollingApplied
     };
 

@@ -630,6 +630,181 @@ test("deriveMarketLambdas: marketKey cards citeşte cards_for_avg/cards_against_
   assert.equal(fallback.usedFallback, true);
 });
 
+// ===== INCREMENT C — regression: missing-stats poisoning (λ degenerat) =====
+
+test("readStat via extractFixtureMarketStats: null/undefined/'' → null; 0 şi '0' → zero real", () => {
+  const payload = {
+    response: [
+      {
+        team: { id: 1 },
+        statistics: [
+          { type: "Corner Kicks", value: null },
+          { type: "Shots on Goal" },
+          { type: "Total Shots", value: "" },
+          { type: "Yellow Cards", value: 0 },
+          { type: "Red Cards", value: "0" },
+          { type: "Ball Possession", value: "45%" }
+        ]
+      }
+    ]
+  };
+  const out = extractFixtureMarketStats(payload);
+  assert.equal(out[0].corners, null);
+  assert.equal(out[0].sot, null);
+  assert.equal(out[0].shotsTotal, null);
+  assert.equal(out[0].yellowCards, 0);
+  assert.equal(out[0].redCards, 0);
+  assert.equal(out[0].possession, 45);
+});
+
+test("aggregateRollingForTeam: meci cu statistici integral null nu contează ca sample real", () => {
+  const realMatch = {
+    fixtureId: 1, date: "2026-08-06T18:00:00Z", isHome: true,
+    teamStats: { corners: 6, sot: 4, shotsTotal: 12 },
+    opponentStats: { corners: 3, sot: 2, shotsTotal: 9 }
+  };
+  const nullMatch = {
+    fixtureId: 2, date: "2026-07-23T18:00:00Z", isHome: false,
+    teamStats: { corners: null, sot: null, shotsTotal: null },
+    opponentStats: { corners: null, sot: null, shotsTotal: null }
+  };
+  const agg = aggregateRollingForTeam([realMatch, nullMatch]);
+  assert.equal(agg.matches_sampled, 1);
+  assert.equal(agg.samples_by_market.corners, 1);
+  assert.equal(agg.samples_by_market.sot, 1);
+  // media NU mai e trasă în jos de null→0 (înainte de fix ar fi fost (6+0)/2=3)
+  assert.equal(agg.corners_for_avg, 6);
+});
+
+test("aggregateRollingForTeam: 0 explicit de la provider este producţie reală, nu missing", () => {
+  const matches = [1, 2, 3, 4].map((i) => ({
+    fixtureId: i, date: `2026-08-0${i}T18:00:00Z`, isHome: i % 2 === 0,
+    teamStats: { corners: 0, sot: 2, shotsTotal: 8 },
+    opponentStats: { corners: 5, sot: 3, shotsTotal: 10 }
+  }));
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.corners, 4);
+  assert.equal(agg.corners_for_avg, 0);
+});
+
+test("deriveMarketLambdas: 3 meciuri reale (+2 null excluse) → sample insuficient → fallback", () => {
+  const rolling = {
+    corners_for_avg: 4,
+    corners_against_avg: 5,
+    matches_sampled: 3,
+    samples_by_market: { corners: 3, cards: 0, sot: 3, shots_total: 3 }
+  };
+  const r = deriveMarketLambdas({
+    rollingHome: rolling, rollingAway: rolling,
+    baseAvgTotal: 10, marketKey: "corners", homeAdv: 1.05, awayAdv: 0.97
+  });
+  assert.equal(r.usedFallback, true);
+  assert.equal(r.fallbackReason, "insufficient_data");
+  assert.ok(r.lambdaHome > 4 && r.lambdaHome < 6, `λH=${r.lambdaHome}`);
+  assert.ok(r.lambdaAway > 4 && r.lambdaAway < 6, `λA=${r.lambdaAway}`);
+  assert.equal(r.sampleHome, 3);
+});
+
+test("deriveMarketLambdas: 4+ meciuri reale → rolling folosit, fără fallback", () => {
+  const rolling = {
+    corners_for_avg: 5.5,
+    corners_against_avg: 4.5,
+    matches_sampled: 4,
+    samples_by_market: { corners: 4, cards: 4, sot: 4, shots_total: 4 }
+  };
+  const r = deriveMarketLambdas({
+    rollingHome: rolling, rollingAway: rolling,
+    baseAvgTotal: 10, marketKey: "corners", homeAdv: 1.05, awayAdv: 0.97
+  });
+  assert.equal(r.usedFallback, false);
+  assert.equal(r.fallbackReason, null);
+  assert.ok(r.lambdaHome > 4 && r.lambdaHome < 6, `λH=${r.lambdaHome}`);
+});
+
+test("deriveMarketLambdas: sample separat pe familie — corners reale, SOT lipsă", () => {
+  const rolling = {
+    corners_for_avg: 5,
+    corners_against_avg: 5,
+    sot_for_avg: null,
+    sot_against_avg: null,
+    matches_sampled: 5,
+    samples_by_market: { corners: 5, cards: 0, sot: 0, shots_total: 0 }
+  };
+  const corners = deriveMarketLambdas({
+    rollingHome: rolling, rollingAway: rolling, baseAvgTotal: 10, marketKey: "corners"
+  });
+  const sot = deriveMarketLambdas({
+    rollingHome: rolling, rollingAway: rolling, baseAvgTotal: 8, marketKey: "sot"
+  });
+  assert.equal(corners.usedFallback, false);
+  assert.equal(sot.usedFallback, true);
+  assert.equal(sot.fallbackReason, "insufficient_data");
+});
+
+test("deriveMarketLambdas: sanity gate — rând persistat otrăvit (medii minuscule, sample mare) → fallback", () => {
+  // Rând team_market_rolling persistat ÎNAINTE de fix: matches_sampled a numărat şi
+  // meciurile null→0, deci mediile sunt artificial mici dar sample-ul pare suficient.
+  // Reproduce cazul real 1607568 (CSKA Sofia vs Maccabi TA): λTotal era 0.2.
+  const poisonedHome = { corners_for_avg: 0.4, corners_against_avg: 0.6, matches_sampled: 8 };
+  const poisonedAway = { corners_for_avg: 1.0, corners_against_avg: 0.667, matches_sampled: 8 };
+  const r = deriveMarketLambdas({
+    rollingHome: poisonedHome, rollingAway: poisonedAway,
+    baseAvgTotal: 10.5, marketKey: "corners", homeAdv: 1.05, awayAdv: 0.97
+  });
+  assert.equal(r.usedFallback, true);
+  assert.equal(r.fallbackReason, "sanity_gate");
+  assert.ok(r.lambdaHome + r.lambdaAway > 9, `λTotal=${r.lambdaHome + r.lambdaAway}`);
+});
+
+test("deriveMarketLambdas: λ legitim mic (peste baseline/2) NU este respins de sanity gate", () => {
+  // Două echipe defensive reale: λTotal ≈ 6.4 la baseline 10 — sub medie, dar legitim.
+  const home = { corners_for_avg: 4, corners_against_avg: 4, matches_sampled: 8 };
+  const away = { corners_for_avg: 4, corners_against_avg: 4, matches_sampled: 8 };
+  const r = deriveMarketLambdas({
+    rollingHome: home, rollingAway: away,
+    baseAvgTotal: 10, marketKey: "corners", homeAdv: 1.05, awayAdv: 0.97
+  });
+  assert.equal(r.usedFallback, false);
+  assert.equal(r.fallbackReason, null);
+  const total = r.lambdaHome + r.lambdaAway;
+  assert.ok(total > 5 && total < 8, `total=${total}`);
+});
+
+test("estimateMatchXg: statistici integral null → null, nu floor artificial 0.05", () => {
+  const allNull = {
+    corners: null, sot: null, shotsTotal: null,
+    shotsInsideBox: null, shotsOutsideBox: null,
+    possession: null, xg: null, yellowCards: 6, redCards: 0
+  };
+  assert.equal(estimateMatchXg(allNull), null);
+  // Zero real (meci fără şuturi înregistrat explicit) rămâne estimare validă, nu missing.
+  const realZero = estimateMatchXg({ sot: 0, shotsTotal: 0 });
+  assert.ok(realZero != null && realZero > 0);
+});
+
+test("computeRollingXg: meciurile fără date de şuturi nu produc sample-uri xG", () => {
+  const nullStats = { sot: null, shotsTotal: null, shotsInsideBox: null, shotsOutsideBox: null, possession: null, xg: null };
+  const matches = [
+    { date: "2026-08-06", isHome: true, teamStats: { sot: 5, shotsTotal: 14 }, opponentStats: { sot: 3, shotsTotal: 9 } },
+    { date: "2026-07-30", isHome: false, teamStats: nullStats, opponentStats: nullStats },
+    { date: "2026-07-23", isHome: true, teamStats: nullStats, opponentStats: nullStats }
+  ];
+  const xg = computeRollingXg(matches);
+  assert.equal(xg.xg_samples, 1);
+});
+
+test("dataQualityScore: fallback sau sample subţire reduce scorul; rolling plin nu-l schimbă", async () => {
+  const { dataQualityScore } = await import("../server-utils/pipeline/predictHelpers.js");
+  const base = { method: "modular-engine", hasOdds: true, hasLuckStats: true, hasTeamIds: true };
+  const none = dataQualityScore(base);
+  const full = dataQualityScore({ ...base, marketRolling: { sampleHome: 8, sampleAway: 8, usedFallback: false } });
+  const thin = dataQualityScore({ ...base, marketRolling: { sampleHome: 3, sampleAway: 3, usedFallback: false } });
+  const fb = dataQualityScore({ ...base, marketRolling: { sampleHome: 8, sampleAway: 8, usedFallback: true } });
+  assert.equal(full, none);
+  assert.ok(thin < full, `thin=${thin} full=${full}`);
+  assert.ok(fb < full, `fb=${fb} full=${full}`);
+});
+
 test("getLeagueConfidenceMultiplier şi getLeagueStakeCap întorc valori plauzibile", () => {
   // EPL trebuie să aibă cel mai înalt multiplier (1.00) şi cel mai mare stake cap
   assert.equal(getLeagueConfidenceMultiplier(39), 1.0);
