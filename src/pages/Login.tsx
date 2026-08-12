@@ -19,7 +19,7 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [localError, setLocalError] = useState("");
-  const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
 

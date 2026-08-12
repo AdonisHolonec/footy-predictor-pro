@@ -17,14 +17,14 @@ export function useDashboardHistory({
   userId: string | undefined;
   accessToken: string | undefined;
 }) {
-  const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [historyStats, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const loadHistory = useCallback(async () => {
     try {
       if (!userId) {
         setHistory([]);
-        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
         return;
       }
       if (!accessToken) return;

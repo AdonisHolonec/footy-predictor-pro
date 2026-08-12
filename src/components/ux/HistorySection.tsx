@@ -30,9 +30,10 @@ type Props = {
 };
 
 function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
-  if (v === "win") return "success";
-  if (v === "loss") return "danger";
+  if (v === "win" || v === "half_win") return "success";
+  if (v === "loss" || v === "half_loss") return "danger";
   if (v === "pending") return "warning";
+  // push (stake returned) and anything unknown read as neutral.
   return "neutral";
 }
 
@@ -66,6 +67,9 @@ export default function HistorySection({
     if (v === "win") return t("history.win");
     if (v === "loss") return t("history.loss");
     if (v === "pending") return t("history.pendingBadge");
+    if (v === "push") return t("history.outcomePush");
+    if (v === "half_win") return t("history.outcomeHalfWin");
+    if (v === "half_loss") return t("history.outcomeHalfLoss");
     return String(v || "—").toUpperCase();
   };
 
