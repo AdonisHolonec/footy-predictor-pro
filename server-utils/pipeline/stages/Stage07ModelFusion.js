@@ -210,7 +210,16 @@ export async function run(context) {
       method,
       hasOdds: !!odds,
       hasLuckStats: !!luckStats,
-      hasTeamIds: !!homeIdStr && !!awayIdStr
+      hasTeamIds: !!homeIdStr && !!awayIdStr,
+      // Sample-ul real al rolling-ului de piaţă (Stage05) — un fixture pe fallback sau
+      // sub-eşantionat nu mai poate raporta dataQuality perfect.
+      marketRolling: cornersBlock
+        ? {
+            sampleHome: cornersBlock.sampleHome,
+            sampleAway: cornersBlock.sampleAway,
+            usedFallback: cornersBlock.usedFallback
+          }
+        : null
     });
     qualityPenalty = dataQuality < 0.6 ? 0.9 : 1;
 

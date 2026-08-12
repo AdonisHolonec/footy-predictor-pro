@@ -17,6 +17,9 @@
  */
 
 function num(v, fallback = null) {
+  // MISSING ≠ ZERO: Number(null) este 0 (finit), deci fără această gardă un stat
+  // lipsă devenea "0 şuturi" şi producea xG artificial la floor în loc de null.
+  if (v == null || v === "") return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
