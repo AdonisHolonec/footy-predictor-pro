@@ -109,12 +109,28 @@ export default function RecentPerformanceCard({
                 <span className="min-w-0 truncate font-semibold">
                   {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
                 </span>
-                <Badge tone={row.validation === "win" ? "success" : row.validation === "loss" ? "danger" : "warning"}>
+                <Badge
+                  tone={
+                    row.validation === "win" || row.validation === "half_win"
+                      ? "success"
+                      : row.validation === "loss" || row.validation === "half_loss"
+                        ? "danger"
+                        : row.validation === "push"
+                          ? "neutral"
+                          : "warning"
+                  }
+                >
                   {row.validation === "win"
                     ? t("history.win")
                     : row.validation === "loss"
                       ? t("history.loss")
-                      : t("history.pendingBadge")}
+                      : row.validation === "push"
+                        ? t("history.outcomePush")
+                        : row.validation === "half_win"
+                          ? t("history.outcomeHalfWin")
+                          : row.validation === "half_loss"
+                            ? t("history.outcomeHalfLoss")
+                            : t("history.pendingBadge")}
                 </Badge>
               </button>
             </li>

@@ -76,9 +76,9 @@ export function settleSelection(selection, fixture, now) {
   const market = String(selection?.market || "");
 
   if (TOTALS_FAMILIES.has(market)) {
-    // An absent total is rejected inside evaluateOuLine, which is the one place
-    // that decides what "no answer" means. This module previously guarded here
-    // as well; that duplicate is gone now the boundary itself is correct.
+    // An absent total is rejected inside settleOuValidation, which is the one
+    // place that decides what "no answer" means. This module previously guarded
+    // here as well; that duplicate is gone now the boundary itself is correct.
     outcome = validationFromOu(
       status,
       selection?.side,
@@ -97,6 +97,15 @@ export function settleSelection(selection, fixture, now) {
 
   if (outcome === "win") return SELECTION_STATUS.WON;
   if (outcome === "loss") return SELECTION_STATUS.LOST;
+  // Asian push: the stake is returned. VOID is exactly that here — the leg
+  // contributes 1.00 to settled odds and the bet continues on its other legs
+  // (aggregateBetStatus / computeSettledTotalOdds already treat VOID this way).
+  if (outcome === "push") return SELECTION_STATUS.VOID;
+  // half_win / half_loss cannot be represented by the status CHECK (043) or by
+  // a per-leg multiplier column, so quarter lines are refused at bet-generation
+  // time (globalSpecialBetEngine). A legacy quarter leg that somehow reaches a
+  // half outcome stays PENDING and falls to the 48-hour void below rather than
+  // being settled as a full win or loss it did not earn.
 
   // Still ungraded: the official statistic never arrived. Void it once the
   // window has passed so a bet cannot hang on a number that is not coming.

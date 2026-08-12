@@ -29,7 +29,7 @@ export function useAppController() {
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.selectedDates", [isoToday()]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+  const [, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
   const [status, setStatus] = useState<string>("");
   const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -122,7 +122,7 @@ export function useAppController() {
         setHistoryStats(result.stats);
       } catch (error) {
         setHistory([]);
-        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0 });
+        setHistoryStats({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
         setStatus((prev) => prev || `Istoric indisponibil: ${(error as { message?: string })?.message || "eroare necunoscută"}`);
       }
     },

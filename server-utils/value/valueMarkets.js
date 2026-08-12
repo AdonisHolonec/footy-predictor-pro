@@ -117,7 +117,10 @@ function pushCandidate(
     // through pushLineSelections, which refuses unknowns.
     betType = null,
     period = "full_match",
-    scope = "match"
+    scope = "match",
+    // Asian outcome distribution (fractions, sum 1) for integer/quarter lines.
+    // `probability` stays P(full win); EV reads push/half mass from here.
+    asian = null
   }
 ) {
   if (!isGoodOdd(odds)) return;
@@ -147,7 +150,8 @@ function pushCandidate(
     repriced,
     betType: resolvedBetType,
     period,
-    scope
+    scope,
+    asian: asian ?? null
   });
 }
 
@@ -190,7 +194,8 @@ function pushLineSelections(list, selections, family, labelPrefix = "") {
       repriced: sel.repriced,
       betType: sel.betType ?? "total",
       period: sel.period,
-      scope: sel.scope
+      scope: sel.scope,
+      asian: sel.asian ?? null
     });
   }
 }

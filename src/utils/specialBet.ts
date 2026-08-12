@@ -2,6 +2,7 @@ import type { CardMarketValidations, PredictionRow } from "../types";
 import {
   gradeOverUnder,
   isFinalMatchStatus,
+  isSettledOutcome,
   officialTotalFor,
   outcomeTextClass,
   resolveCardMarketOutcome,
@@ -232,7 +233,7 @@ export function listSpecialBetCandidates(
       return resolveCardMarketOutcome(marketId, enrichedRow, stored);
     }
     const local = gradeOverUnder(displayed.side, displayed.line, officialTotalFor(marketId, enrichedRow));
-    if (local === "win" || local === "loss") return local;
+    if (isSettledOutcome(local)) return local;
     return resolveCardMarketOutcome(marketId, enrichedRow, stored);
   };
 

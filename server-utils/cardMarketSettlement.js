@@ -8,6 +8,7 @@
  */
 
 import { formatLineLabel } from "./marketIdentity.js";
+import { settleOuAsian } from "./asianTotals.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const MARKET_KEYS = ["recommended", "goals", "corners", "shots"];
@@ -68,7 +69,9 @@ const GOALS_OU_LINES = new Set([1.5, 2.5, 3.5]);
  * @param {{ pick: string, family?: string|null, status: string,
  *   score: { home: number|null, away: number|null },
  *   marketTotals?: { cornersTotal?: number|null } }} params
- * @returns {"win"|"loss"|"pending"}
+ * @returns {"win"|"loss"|"pending"|"push"|"half_win"|"half_loss"} Asian
+ *   outcomes appear only on totals families (Corners / Shots / SOT) at
+ *   integer/quarter lines; 1X2-shaped picks keep the win/loss/pending set.
  */
 export function resolveRecommendedValidation({ pick, family, status, score, marketTotals }) {
   if (!isFinalStatus(status)) return "pending";
@@ -83,8 +86,7 @@ export function resolveRecommendedValidation({ pick, family, status, score, mark
     if (!shotsOu) return "pending";
     const shotsTotal = marketTotals?.shotsTotal;
     if (shotsTotal == null) return "pending";
-    const shotsHit = evaluateOuLine(shotsOu.side, shotsOu.line, shotsTotal);
-    return shotsHit == null ? "pending" : shotsHit ? "win" : "loss";
+    return settleOuValidation(shotsOu.side, shotsOu.line, shotsTotal) ?? "pending";
   }
 
   // Shots on target does have a tracked total, so it grades against that — never goals.
@@ -95,8 +97,7 @@ export function resolveRecommendedValidation({ pick, family, status, score, mark
     if (!sotOu) return "pending";
     const sotTotal = marketTotals?.shotsOnTargetTotal;
     if (sotTotal == null) return "pending";
-    const sotHit = evaluateOuLine(sotOu.side, sotOu.line, sotTotal);
-    return sotHit == null ? "pending" : sotHit ? "win" : "loss";
+    return settleOuValidation(sotOu.side, sotOu.line, sotTotal) ?? "pending";
   }
 
   const ou = parseGoalsOuPick(pick);
@@ -107,8 +108,7 @@ export function resolveRecommendedValidation({ pick, family, status, score, mark
     if (!ou) return "pending";
     const total = marketTotals?.cornersTotal;
     if (total == null) return "pending";
-    const hit = evaluateOuLine(ou.side, ou.line, total);
-    return hit == null ? "pending" : hit ? "win" : "loss";
+    return settleOuValidation(ou.side, ou.line, total) ?? "pending";
   }
 
   return validationFromMatch(status, pick, score);
@@ -217,7 +217,9 @@ function ouPickLabel(side, line) {
 }
 
 /**
- * Evaluate over/under vs an observed total (corners, shots, goals).
+ * Settle over/under vs an observed total (corners, shots, goals) with full
+ * Asian semantics — THE single O/U outcome evaluator (asianTotals.js) applied
+ * behind the same absent-total guard every settlement path shares.
  *
  * Returns null when the observed total is UNKNOWN, so callers can hold the
  * market pending instead of grading it.
@@ -228,22 +230,35 @@ function ouPickLabel(side, line) {
  * into a confident LOSS built from data that does not exist. A real zero is
  * still a real result and settles normally; the distinction is between "no
  * corners" and "no answer".
+ *
+ * @returns {"win"|"loss"|"push"|"half_win"|"half_loss"|null}
  */
-export function evaluateOuLine(side, line, actualTotal) {
+export function settleOuValidation(side, line, actualTotal) {
   if (actualTotal === null || actualTotal === undefined || actualTotal === "") return null;
   const total = Number(actualTotal);
   const thr = Number(line);
   if (!Number.isFinite(total) || !Number.isFinite(thr)) return null;
-  if (side === "over") return total > thr;
-  if (side === "under") return total < thr;
+  return settleOuAsian(side, thr, total);
+}
+
+/**
+ * Legacy boolean view of settleOuValidation, kept for consumers that can only
+ * express win/loss (backtest validation). Push and half outcomes return null —
+ * "not a boolean answer" — instead of being coerced into a loss, which was the
+ * pre-Asian bug on integer lines. Half lines behave exactly as before.
+ */
+export function evaluateOuLine(side, line, actualTotal) {
+  const outcome = settleOuValidation(side, line, actualTotal);
+  if (outcome === "win") return true;
+  if (outcome === "loss") return false;
   return null;
 }
 
+/** @returns {"pending"|"win"|"loss"|"push"|"half_win"|"half_loss"} */
 export function validationFromOu(status, side, line, actualTotal) {
   if (!isFinalStatus(status)) return "pending";
-  const hit = evaluateOuLine(side, line, actualTotal);
-  if (hit === null) return "pending";
-  return hit ? "win" : "loss";
+  const outcome = settleOuValidation(side, line, actualTotal);
+  return outcome ?? "pending";
 }
 
 /**

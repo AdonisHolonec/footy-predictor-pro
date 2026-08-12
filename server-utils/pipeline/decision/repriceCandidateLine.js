@@ -18,9 +18,9 @@
  * Pure and deterministic: no I/O, no clock, no randomness.
  */
 
-import { poissonOverLine, poissonOverLineCorrelated } from "../../math.js";
 import { consensusOverUnderOddsAtLine, listOverUnderLinesOffered } from "../../marketOdds.js";
 import { expectedIdentityForKind } from "../../marketIdentity.js";
+import { asianOuDistribution } from "../../asianTotals.js";
 
 /** Ladder keys are `o<line with . replaced by _>` (see buildPoissonMarketBlock). */
 export function ladderKeyForLine(line) {
@@ -47,14 +47,29 @@ function roundPct(n) {
 }
 
 /**
- * Model probability for one side of one line, taken from the market block.
+ * Model probability for one side of one line, taken from the market block —
+ * with full Asian semantics (Increment B).
+ *
+ * `probabilityPct` is P(FULL WIN), the product's approved ranking semantics:
+ * for a half line that is the familiar strict probability (no push exists);
+ * for an integer line the push mass P(X == L) is EXCLUDED (Under 10 no longer
+ * borrows P(X = 10), the audit's systematic integer-line inflation); for a
+ * quarter line it is the probability BOTH split components win. The complete
+ * outcome distribution rides along in `asian` so EV and settlement can use
+ * push / half-outcome mass without re-deriving it.
+ *
+ * Distribution source: the SAME discrete model, read only at .5 boundaries —
+ * ladder first, the block's own lambdas otherwise (asianTotals.js).
  *
  * @param {{ total?: Record<string, number>, lambdaHome?: number, lambdaAway?: number,
  *   correlation?: number }|null|undefined} block Poisson market block (corners / SOT /
  *   shots total / cards) as built by buildPoissonMarketBlock.
  * @param {"over"|"under"} side
  * @param {number} line the bookmaker's line — never the model's
- * @returns {{ probabilityPct: number, probabilityLine: number, source: "ladder"|"analytic" } | null}
+ * @returns {{ probabilityPct: number, probabilityLine: number,
+ *   source: "ladder"|"analytic"|"mixed",
+ *   asian: { pWin: number, pPush: number, pHalfWin: number, pHalfLoss: number,
+ *     pLoss: number } } | null}
  *   null when the model cannot price this line at all.
  */
 export function priceLineFromBlock(block, side, line) {
@@ -62,32 +77,14 @@ export function priceLineFromBlock(block, side, line) {
   if (!block || !Number.isFinite(target)) return null;
   const wantUnder = String(side).toLowerCase() === "under";
 
-  const key = ladderKeyForLine(target);
-  const fromLadder = key ? Number(block.total?.[key]) : NaN;
-  if (Number.isFinite(fromLadder)) {
-    return {
-      probabilityPct: roundPct(wantUnder ? 100 - fromLadder : fromLadder),
-      probabilityLine: target,
-      source: "ladder"
-    };
-  }
-
-  // Analytic fallback — identical math to the ladder, evaluated off-ladder.
-  const lh = Number(block.lambdaHome);
-  const la = Number(block.lambdaAway);
-  if (!Number.isFinite(lh) || !Number.isFinite(la) || lh + la <= 0) return null;
-  const corr = Number(block.correlation);
-  const pOver =
-    Number.isFinite(corr) && corr > 0
-      ? poissonOverLineCorrelated(target, lh, la, corr)
-      : poissonOverLine(target, lh + la);
-  if (!Number.isFinite(pOver)) return null;
-
-  const overPct = roundPct(pOver * 100);
+  const dist = asianOuDistribution(block, wantUnder ? "under" : "over", target);
+  if (!dist) return null;
+  const { source, ...asian } = dist;
   return {
-    probabilityPct: wantUnder ? roundPct(100 - overPct) : overPct,
+    probabilityPct: roundPct(asian.pWin * 100),
     probabilityLine: target,
-    source: "analytic"
+    source,
+    asian
   };
 }
 
@@ -200,6 +197,9 @@ export function repriceCandidateLine({ block, side, requestedLine, quote, expect
     // the line actually moved, so reporting can separate the two.
     repriced: lineExact ? false : priced.source,
     reason: null,
+    // Full Asian outcome distribution (fractions, sum 1). probabilityPct above is
+    // P(full win); EV and settlement read push / half-outcome mass from here.
+    asian: priced.asian,
     // Market identity travels with the selection so candidates, Stage09 and the
     // UI can all attest WHAT this is a price for (period/scope, not just a line).
     betType: identity?.betType ?? expectedMarket?.betType ?? null,

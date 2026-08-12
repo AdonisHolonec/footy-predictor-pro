@@ -1,4 +1,5 @@
 import { getValueWeights, normalizeScoreWeights } from "./valueWeights.js";
+import { asianExpectedValuePct } from "../asianTotals.js";
 import {
   VALUE_MARKET_FAMILIES,
   classifyMarketFamily,
@@ -15,6 +16,14 @@ import {
  * Highlights the best recommendable market across:
  * 1X2 · Double Chance · BTTS · Over/Under · Corners · Cards
  */
+
+/** A usable asian distribution: all five outcome masses present and finite. */
+function isUsableAsianDistribution(asian) {
+  if (!asian || typeof asian !== "object") return false;
+  return ["pWin", "pPush", "pHalfWin", "pHalfLoss", "pLoss"].every((k) =>
+    Number.isFinite(Number(asian[k]))
+  );
+}
 
 function clamp(n, lo, hi) {
   const x = Number(n);
@@ -140,6 +149,15 @@ function buildExplanation({
 
 /**
  * Core evaluation: predicted probability + bookmaker odds → full Value Engine result.
+ *
+ * ASIAN LINES (Increment B): when `options.asian` carries the outcome
+ * distribution ({pWin,pPush,pHalfWin,pHalfLoss,pLoss}), the binary p·odds−1 is
+ * WRONG — it either ignores push protection or (worse) inflates p with push
+ * mass. EV is computed from the full distribution instead, and edge / Kelly /
+ * fair odds derive from the payout-equivalent effective probability
+ * p_eff = (EV+1)/odds — the p that would produce the same EV in the binary
+ * formula, so every downstream threshold and score keeps its meaning. The
+ * displayed `probability` stays P(full win) — ranking semantics untouched.
  */
 export function evaluateValue(probability, odds, options = {}) {
   const weights = getValueWeights(options.weights);
@@ -150,14 +168,21 @@ export function evaluateValue(probability, odds, options = {}) {
   const family = options.family || classifyMarketFamily(options.type);
   const line = options.line != null && Number.isFinite(Number(options.line)) ? Number(options.line) : null;
 
-  const expectedValue = validOdds && p > 0 ? calculateExpectedValue(p, o) : 0;
-  const edge = validOdds && p > 0 ? round2(p * o) : 0;
+  const asian = isUsableAsianDistribution(options.asian) ? options.asian : null;
+  const asianEvPct = asian && validOdds ? asianExpectedValuePct(asian, o) : null;
+
+  const expectedValue =
+    asianEvPct != null ? round2(asianEvPct) : validOdds && p > 0 ? calculateExpectedValue(p, o) : 0;
+  // Payout-equivalent probability: for non-asian candidates this IS p.
+  const pEff =
+    asianEvPct != null && o > 0 ? clamp(asianEvPct / 100 / o + 1 / o, 0, 1) : p;
+  const edge = validOdds && pEff > 0 ? round2(pEff * o) : 0;
   const kellyPct =
-    validOdds && p > 0
-      ? calculateKellyPct(p, o, { confidencePct: options.confidencePct, weights })
+    validOdds && pEff > 0
+      ? calculateKellyPct(pEff, o, { confidencePct: options.confidencePct, weights })
       : 0;
   const impliedProb = validOdds && o > 0 ? round2(1 / o) : 0;
-  const fairOdds = p > 0 ? round2(1 / p) : 0;
+  const fairOdds = pEff > 0 ? round2(1 / pEff) : 0;
 
   const positiveEV = expectedValue > 0;
   const negativeEV = expectedValue < 0;
@@ -202,6 +227,7 @@ export function evaluateValue(probability, odds, options = {}) {
     betType: options.betType ?? null,
     period: options.period ?? null,
     scope: options.scope ?? null,
+    asian: asian ?? null,
     probability: round2(p),
     odds: Number.isFinite(o) ? round2(o) : 0,
     expectedValue,
@@ -252,6 +278,7 @@ export function selectBestValue(candidates, options = {}) {
       betType: c.betType,
       period: c.period,
       scope: c.scope,
+      asian: c.asian,
       confidencePct: c.confidencePct,
       weights: options.weights
     })

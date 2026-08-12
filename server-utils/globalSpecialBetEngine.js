@@ -22,6 +22,7 @@
 
 import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily.js";
 import { formatLineLabel } from "./marketIdentity.js";
+import { isQuarterLine } from "./asianTotals.js";
 
 /** A selection must be worth including at all — below this it is not a bet, it is a formality. */
 export const MIN_SELECTION_ODD = 1.25;
@@ -81,7 +82,8 @@ function emptyRejections() {
     notRecommendable: 0,
     oddBelowMinimum: 0,
     missingData: 0,
-    marketNotSettleable: 0
+    marketNotSettleable: 0,
+    quarterLineUnsupported: 0
   };
 }
 
@@ -215,6 +217,16 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
       const family = resolveMarketFamily(market?.type, market?.family);
       if (!SETTLEABLE_MARKET_FAMILIES.has(family)) {
         rejected.marketNotSettleable += 1;
+        continue;
+      }
+
+      // Quarter lines settle as half_win / half_loss, which the selection
+      // status CHECK (pending/won/lost/void) cannot represent. Until the schema
+      // can carry half outcomes per leg, a quarter-line leg is refused here —
+      // an explicit limitation, never an approximation to a full win or loss.
+      // (Integer lines are fine: their push maps to the existing VOID = 1.00.)
+      if (isQuarterLine(line)) {
+        rejected.quarterLineUnsupported += 1;
         continue;
       }
 

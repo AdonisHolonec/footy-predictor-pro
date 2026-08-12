@@ -419,12 +419,19 @@ export type MatchVenue = {
   lon?: number;
 };
 
+/**
+ * Settlement of one selection. Beyond pending/win/loss, Asian O/U lines settle
+ * as: push (integer line, actual == line, stake returned), half_win /
+ * half_loss (quarter lines, half the stake settles, half pushes).
+ */
+export type SettlementOutcome = "pending" | "win" | "loss" | "push" | "half_win" | "half_loss";
+
 /** Settled outcomes for FocusCard markets (recommended / goals / corners / shots). */
 export type CardMarketValidations = {
-  recommended?: "pending" | "win" | "loss" | null;
-  goals?: "pending" | "win" | "loss" | null;
-  corners?: "pending" | "win" | "loss" | null;
-  shots?: "pending" | "win" | "loss" | null;
+  recommended?: SettlementOutcome | null;
+  goals?: SettlementOutcome | null;
+  corners?: SettlementOutcome | null;
+  shots?: SettlementOutcome | null;
 };
 
 export type MomentumRawStats = {
@@ -768,14 +775,19 @@ export type PredictionRow = {
 
 export type HistoryEntry = PredictionRow & {
   savedAt: string;
-  validation: "pending" | "win" | "loss";
+  validation: SettlementOutcome;
 };
 
 export type HistoryStats = {
   wins: number;
   losses: number;
+  /** Full wins + full losses — the main win-rate denominator. Pushes and half
+   * outcomes are tracked separately and never folded into it. */
   settled: number;
   winRate: number;
+  pushes: number;
+  halfWins: number;
+  halfLosses: number;
 };
 
 /** Per-league settled/pending counts (global or scoped). */

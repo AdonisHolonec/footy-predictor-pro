@@ -1,8 +1,8 @@
-import type { CardMarketValidations, PredictionRow } from "../types";
+import type { CardMarketValidations, PredictionRow, SettlementOutcome } from "../types";
 import { deriveAlignedOuPick, deriveCardGoalsPick } from "./marketPicks";
 
 export type CardMarketId = "recommended" | "goals" | "corners" | "shots";
-export type MarketOutcome = "win" | "loss" | "pending" | null;
+export type MarketOutcome = SettlementOutcome | null;
 
 const FINAL = new Set(["FT", "AET", "PEN"]);
 
@@ -10,9 +10,25 @@ export function isFinalMatchStatus(status?: string): boolean {
   return FINAL.has(String(status || "").toUpperCase());
 }
 
+/** A settled (non-pending) outcome the UI can render as final. */
+export function isSettledOutcome(outcome: MarketOutcome): boolean {
+  return (
+    outcome === "win" ||
+    outcome === "loss" ||
+    outcome === "push" ||
+    outcome === "half_win" ||
+    outcome === "half_loss"
+  );
+}
+
 /**
- * The single Over/Under comparison in the app. Strict on both sides, which is
- * exact for the .5 lines every market here quotes (a total can never equal one).
+ * The single Over/Under comparison in the app, with full Asian semantics.
+ * Client-side mirror of server-utils/asianTotals.js `settleOuAsian` (kept in
+ * sync by tests; src/ never imports server-utils):
+ *   integer line — actual == line settles as "push" (stake returned)
+ *   half line    — strict over/under, no push (unchanged behaviour)
+ *   quarter line — 50/50 split over the neighbouring integer + half components;
+ *                  a push on one component yields "half_win" / "half_loss"
  */
 export function gradeOverUnder(
   side: "over" | "under",
@@ -21,8 +37,20 @@ export function gradeOverUnder(
 ): MarketOutcome {
   const value = Number(total);
   if (total == null || !Number.isFinite(value)) return "pending";
-  const ok = side === "over" ? value > line : value < line;
-  return ok ? "win" : "loss";
+  const q = Math.round(line * 4);
+  if (!Number.isFinite(line) || Math.abs(line * 4 - q) > 1e-9) return "pending";
+  const components = q % 2 === 0 ? [q / 4] : [q / 4 - 0.25, q / 4 + 0.25];
+
+  const settle = (component: number): "win" | "loss" | "push" => {
+    if (value === component) return "push"; // only reachable on integer components
+    if (side === "over") return value > component ? "win" : "loss";
+    return value < component ? "win" : "loss";
+  };
+  const outcomes = components.map(settle);
+  if (outcomes.length === 1) return outcomes[0];
+  const [a, b] = outcomes;
+  if (a === b) return a;
+  return a === "win" || b === "win" ? "half_win" : "half_loss";
 }
 
 /** The O/U selection each card market settles, derived once for every surface. */
@@ -60,8 +88,10 @@ export function officialTotalFor(
 
 /** Tailwind text color for settled / pending market lines. */
 export function outcomeTextClass(outcome: MarketOutcome): string {
-  if (outcome === "win") return "text-[var(--fp-success)]";
-  if (outcome === "loss") return "text-[var(--fp-danger)]";
+  if (outcome === "win" || outcome === "half_win") return "text-[var(--fp-success)]";
+  if (outcome === "loss" || outcome === "half_loss") return "text-[var(--fp-danger)]";
+  // Push reads as "stake returned" — informational, neither success nor danger.
+  if (outcome === "push") return "text-[var(--fp-text-muted)]";
   if (outcome === "pending") return "text-[var(--fp-text-muted)]";
   return "text-[var(--fp-text)]";
 }
@@ -99,10 +129,10 @@ export function resolveCardMarketOutcome(
   // fixture statistics land later, while the tiles graded the real total live. A stale
   // cache must not survive contact with the figure it was supposed to summarise.
   const local = gradeOverUnder(pick.side, pick.line, officialTotalFor(marketId, row));
-  if (local === "win" || local === "loss") return local;
+  if (isSettledOutcome(local)) return local;
 
   // No official total yet: fall back to whatever was persisted.
-  if (fromStore === "win" || fromStore === "loss") return fromStore;
+  if (isSettledOutcome(fromStore)) return fromStore;
   return "pending";
 }
 
