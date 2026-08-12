@@ -120,7 +120,7 @@ export function useMatchModalModel(args: UseMatchModalModelArgs) {
   const recommendedOutcome = resolveCardMarketOutcome("recommended", match);
   const finalPickResult =
     recommendedOutcome === "win" ? true : recommendedOutcome === "loss" ? false : null;
-  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, tr);
+  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, tr, match.recommended);
   const kickoffDate = new Date(match.kickoff);
   const hasExactConfidence =
     match.recommended?.confidence != null && Number.isFinite(Number(match.recommended?.confidence));

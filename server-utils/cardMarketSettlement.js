@@ -3,8 +3,11 @@
  * and success-rate counters. Mirrors src/utils/marketPicks.ts derivation.
  *
  * Kept separate from predictionsHistory.js to avoid circular imports; duplicates
- * only the small grade helpers needed here.
+ * only the small grade helpers needed here. marketIdentity.js is a leaf module
+ * (no imports), so pulling the lossless line formatter from it stays cycle-free.
  */
+
+import { formatLineLabel } from "./marketIdentity.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const MARKET_KEYS = ["recommended", "goals", "corners", "shots"];
@@ -209,7 +212,8 @@ function deriveBestGoalsPick(row, exclude = null) {
 }
 
 function ouPickLabel(side, line) {
-  return `${side} ${Number(line).toFixed(1)}`;
+  // Lossless: 10.25 stays "10.25" (toFixed(1) rendered the nonexistent "10.3").
+  return `${side} ${formatLineLabel(line)}`;
 }
 
 /**

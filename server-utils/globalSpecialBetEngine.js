@@ -21,6 +21,7 @@
  */
 
 import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily.js";
+import { formatLineLabel } from "./marketIdentity.js";
 
 /** A selection must be worth including at all — below this it is not a bet, it is a formality. */
 export const MIN_SELECTION_ODD = 1.25;
@@ -102,7 +103,9 @@ function finiteOrNull(value) {
  * shape the settlement layer compares against.
  */
 function buildSelectionLabel(type, side, line) {
-  if (side && line != null) return `${side === "over" ? "Over" : "Under"} ${line.toFixed(1)}`;
+  // formatLineLabel is lossless: a real 10.25 asian line stays "10.25" in the
+  // stored snapshot instead of the nonexistent "10.3" toFixed(1) produced.
+  if (side && line != null) return `${side === "over" ? "Over" : "Under"} ${formatLineLabel(line)}`;
   return String(type || "").trim();
 }
 

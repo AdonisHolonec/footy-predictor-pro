@@ -326,6 +326,9 @@ export type MarketOddQuote = {
   repriced?: "ladder" | "analytic" | false;
   /** Why the selection is not tradable, when it isn't. */
   untradableReason?: string | null;
+  /** Market Identity Contract (additive): what this quote is a price for. */
+  period?: string | null;
+  scope?: string | null;
 };
 
 /** Single data-backed reason for a pick (from PredictionExplanation). */
@@ -645,6 +648,21 @@ export type PredictionRow = {
     odd?: number | null;
     oddSource?: string | null;
     bookmakersUsed?: number;
+    /** Line contract (additive, see Stage09Explainability). Absent on older rows. */
+    line?: number | null;
+    bookLine?: number | null;
+    lineExact?: boolean | null;
+    probabilityLine?: number | null;
+    tradable?: boolean;
+    repriced?: "ladder" | "analytic" | false;
+    /**
+     * Market Identity Contract (additive): the period and scope the pick is a bet
+     * on ("full_match" / "first_half" / "second_half", "match" / "home" / "away").
+     * The UI renders these verbatim — it never re-guesses them from the label.
+     * Absent on rows persisted before the contract existed.
+     */
+    period?: string | null;
+    scope?: string | null;
   };
   insufficientData?: boolean;
   insufficientReason?: string;

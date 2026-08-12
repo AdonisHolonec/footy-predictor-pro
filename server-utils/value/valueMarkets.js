@@ -3,6 +3,8 @@
  * Families: 1X2 · Double Chance · BTTS · Over/Under · Corners · Cards · Correct Score
  */
 
+import { formatLineLabel, hasKnownIdentity } from "../marketIdentity.js";
+
 export const VALUE_MARKET_FAMILIES = Object.freeze([
   "1X2",
   "Double Chance",
@@ -107,7 +109,15 @@ function pushCandidate(
     lineExact = true,
     probabilityLine = null,
     bookmakersUsed = 0,
-    repriced = false
+    repriced = false,
+    // Market Identity Contract. The fixed-shape families built directly in this
+    // module (1X2 / DC / BTTS / exact goals lines / Correct Score) are full-match,
+    // match-scope by construction — that is what those markets ARE, not a guess.
+    // Lined side markets (Corners / Cards / Shots / SOT) pass their own identity
+    // through pushLineSelections, which refuses unknowns.
+    betType = null,
+    period = "full_match",
+    scope = "match"
   }
 ) {
   if (!isGoodOdd(odds)) return;
@@ -117,6 +127,7 @@ function pushCandidate(
   // the odd belongs to. Anything else would be an odds transfer between lines.
   if (bookLine != null && Number(probabilityLine) !== Number(bookLine)) return;
   const resolvedFamily = family || classifyMarketFamily(type);
+  const resolvedBetType = betType || BET_TYPE_BY_FAMILY[resolvedFamily] || "total";
   list.push({
     type,
     family: resolvedFamily,
@@ -133,9 +144,20 @@ function pushCandidate(
     probabilityLine,
     bookmakersUsed: Number(bookmakersUsed) || 0,
     tradable: true,
-    repriced
+    repriced,
+    betType: resolvedBetType,
+    period,
+    scope
   });
 }
+
+/** Structural bet type per family — for candidates built directly in this module. */
+const BET_TYPE_BY_FAMILY = Object.freeze({
+  "1X2": "1x2",
+  "Double Chance": "double_chance",
+  BTTS: "btts",
+  "Correct Score": "correct_score"
+});
 
 /**
  * Candidates for a lined market (Corners / Cards) from already-repriced selections.
@@ -146,9 +168,15 @@ function pushCandidate(
 function pushLineSelections(list, selections, family, labelPrefix = "") {
   for (const sel of Array.isArray(selections) ? selections : []) {
     if (!sel?.tradable) continue;
+    // Market Identity Contract: a lined selection must say what it is FOR
+    // (period + scope, both known). One that cannot is not a candidate at all —
+    // better an absent market than a present, wrong one.
+    if (!hasKnownIdentity(sel)) continue;
     const side = sel.side === "under" ? "Under" : "Over";
     pushCandidate(list, {
-      type: `${labelPrefix}${side} ${Number(sel.bookLine).toFixed(1)}`,
+      // formatLineLabel is lossless: the real bookmaker line 10.25 stays "10.25"
+      // (toFixed(1) used to display it as the nonexistent "10.3").
+      type: `${labelPrefix}${side} ${formatLineLabel(sel.bookLine)}`,
       family,
       probability: pct01(sel.probabilityPct),
       odds: sel.odd,
@@ -159,7 +187,10 @@ function pushLineSelections(list, selections, family, labelPrefix = "") {
       lineExact: sel.lineExact,
       probabilityLine: sel.probabilityLine,
       bookmakersUsed: sel.bookmakersUsed,
-      repriced: sel.repriced
+      repriced: sel.repriced,
+      betType: sel.betType ?? "total",
+      period: sel.period,
+      scope: sel.scope
     });
   }
 }

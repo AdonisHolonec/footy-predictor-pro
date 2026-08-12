@@ -37,7 +37,16 @@ function baseParams(overrides = {}) {
 }
 
 /** A repriceCandidateLine()-shaped selection, already priced at the book's own line. */
-function selection({ side, line, probabilityPct, odd, requestedLine = line, repriced = false }) {
+function selection({
+  side,
+  line,
+  probabilityPct,
+  odd,
+  requestedLine = line,
+  repriced = false,
+  period = "full_match",
+  scope = "match"
+}) {
   return {
     side,
     requestedLine,
@@ -49,7 +58,12 @@ function selection({ side, line, probabilityPct, odd, requestedLine = line, repr
     bookmakersUsed: 4,
     tradable: true,
     repriced,
-    reason: null
+    reason: null,
+    // Market Identity Contract: real selections carry these from discovery;
+    // one without a known identity never enters the candidate pool.
+    betType: "total",
+    period,
+    scope
   };
 }
 

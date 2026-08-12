@@ -255,7 +255,11 @@ export async function run(context) {
         lineExact: recommendedQuote.lineExact ?? null,
         probabilityLine: recommendedQuote.probabilityLine ?? null,
         tradable: recommendedQuote.tradable ?? false,
-        repriced: recommendedQuote.repriced ?? false
+        repriced: recommendedQuote.repriced ?? false,
+        // Market Identity Contract (additive): the period and scope this pick is a
+        // bet on. The UI renders these; it must never re-guess them from the label.
+        period: recommendedQuote.period ?? null,
+        scope: recommendedQuote.scope ?? null
       },
       modelMeta: {
         method,

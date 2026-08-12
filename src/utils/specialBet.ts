@@ -21,7 +21,7 @@ import {
   shotsDisplayOdd,
   type GoalsOuPick
 } from "./marketPicks";
-import { resolveMarketFamilyKey, type MarketFamilyKey } from "./formatRecommendation";
+import { formatLineLabel, resolveMarketFamilyKey, type MarketFamilyKey } from "./formatRecommendation";
 
 export type SpecialBetLegId = CardMarketId | "ht" | "gg" | "cards";
 
@@ -118,7 +118,7 @@ function deriveCardsPick(row: PredictionRow): {
     const veLine = Number(fromVe.line);
     const useLine = Number.isFinite(veLine) && veLine > 0 ? veLine : lineOk;
     return {
-      pick: `${side === "over" ? "Over" : "Under"} ${useLine.toFixed(1)}`,
+      pick: `${side === "over" ? "Over" : "Under"} ${formatLineLabel(useLine)}`,
       side,
       line: useLine,
       probability: Number(fromVe.probability)
@@ -149,7 +149,7 @@ function deriveCardsPick(row: PredictionRow): {
     if (hasValidOdd(over) && hasValidOdd(under)) {
       const side = over <= under ? "over" : "under";
       return {
-        pick: `${side === "over" ? "Over" : "Under"} ${lineOk.toFixed(1)}`,
+        pick: `${side === "over" ? "Over" : "Under"} ${formatLineLabel(lineOk)}`,
         side,
         line: lineOk,
         probability: 52
@@ -251,7 +251,7 @@ export function listSpecialBetCandidates(
       id: "goals",
       label: labels.goals,
       pick: goalsPick
-        ? `${goalsPick.side === "over" ? "Over" : "Under"} ${goalsPick.line.toFixed(1)}`
+        ? `${goalsPick.side === "over" ? "Over" : "Under"} ${formatLineLabel(goalsPick.line)}`
         : "",
       probability: Number(goalsPick?.probability || 0),
       odd: goalsPick ? Number(goalsOddForLine(row, goalsPick.line, goalsPick.side) ?? NaN) : NaN,
@@ -271,7 +271,7 @@ export function listSpecialBetCandidates(
       id: "corners",
       label: labels.corners,
       pick: cornersPick
-        ? `${cornersPick.side === "over" ? "Over" : "Under"} ${cornersPick.line.toFixed(1)}`
+        ? `${cornersPick.side === "over" ? "Over" : "Under"} ${formatLineLabel(cornersPick.line)}`
         : "",
       probability: Number(cornersPick?.probability || 0),
       // No raw `?? marketOdds.corners.odd` escape: that odd may belong to another line.
@@ -286,7 +286,7 @@ export function listSpecialBetCandidates(
       id: "shots",
       label: labels.shots,
       pick: shotsPick
-        ? `${shotsPick.side === "over" ? "Over" : "Under"} ${shotsPick.line.toFixed(1)}`
+        ? `${shotsPick.side === "over" ? "Over" : "Under"} ${formatLineLabel(shotsPick.line)}`
         : "",
       probability: Number(shotsPick?.probability || 0),
       odd: shotsPick ? Number(shotsDisplayOdd(row, shotsPick.side, shotsPick.line) ?? NaN) : NaN,

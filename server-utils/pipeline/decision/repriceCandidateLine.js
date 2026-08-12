@@ -20,6 +20,7 @@
 
 import { poissonOverLine, poissonOverLineCorrelated } from "../../math.js";
 import { consensusOverUnderOddsAtLine, listOverUnderLinesOffered } from "../../marketOdds.js";
+import { expectedIdentityForKind } from "../../marketIdentity.js";
 
 /** Ladder keys are `o<line with . replaced by _>` (see buildPoissonMarketBlock). */
 export function ladderKeyForLine(line) {
@@ -98,18 +99,29 @@ export function priceLineFromBlock(block, side, line) {
  * exact line and side. There is no path returning a tradable candidate whose
  * probability belongs to a different line.
  *
+ * MARKET IDENTITY GUARD: when `expectedMarket` ({ betType, period, scope }) is
+ * provided, the quote must carry a matching identity (`quote.market`, attached by
+ * consensusOverUnderOddsAtLine). A quote for another period, scope or bet
+ * structure is NOT this selection's price, whatever the line number says — it
+ * degrades to non-tradable with an explicit reason instead of being "close
+ * enough". Nearest-line logic only ever applies WITHIN one identity.
+ *
  * @param {{ block: object|null, side: "over"|"under", requestedLine: number,
  *   quote: { line?: number, over?: number|null, under?: number|null,
- *     bookmakersUsed?: number }|null|undefined }} params
+ *     bookmakersUsed?: number, market?: { betType?: string, period?: string,
+ *     scope?: string } }|null|undefined,
+ *   expectedMarket?: { betType?: string, period?: string, scope?: string }|null }} params
  * @returns {{ side: "over"|"under", requestedLine: number|null, bookLine: number|null,
  *   lineExact: boolean, probabilityLine: number|null, probabilityPct: number|null,
  *   odd: number|null, bookmakersUsed: number, tradable: boolean,
- *   repriced: "ladder"|"analytic"|false, reason: string|null }}
+ *   repriced: "ladder"|"analytic"|false, reason: string|null,
+ *   betType: string|null, period: string|null, scope: string|null }}
  */
-export function repriceCandidateLine({ block, side, requestedLine, quote } = {}) {
+export function repriceCandidateLine({ block, side, requestedLine, quote, expectedMarket = null } = {}) {
   const wantUnder = String(side).toLowerCase() === "under";
   const normalizedSide = wantUnder ? "under" : "over";
   const requested = Number(requestedLine);
+  const identity = quote?.market ?? null;
   const base = {
     side: normalizedSide,
     requestedLine: Number.isFinite(requested) ? requested : null,
@@ -121,7 +133,10 @@ export function repriceCandidateLine({ block, side, requestedLine, quote } = {})
     bookmakersUsed: 0,
     tradable: false,
     repriced: /** @type {"ladder"|"analytic"|false} */ (false),
-    reason: /** @type {string|null} */ (null)
+    reason: /** @type {string|null} */ (null),
+    betType: identity?.betType ?? null,
+    period: identity?.period ?? null,
+    scope: identity?.scope ?? null
   };
 
   const bookLine = Number(quote?.line);
@@ -130,6 +145,28 @@ export function repriceCandidateLine({ block, side, requestedLine, quote } = {})
   }
 
   const lineExact = Number.isFinite(requested) && Math.abs(bookLine - requested) < 1e-9;
+
+  if (expectedMarket) {
+    const unknownIdentity =
+      !identity ||
+      !identity.betType || identity.betType === "unknown" ||
+      !identity.period || identity.period === "unknown" ||
+      !identity.scope || identity.scope === "unknown";
+    if (unknownIdentity) {
+      // A quote that cannot say what market it belongs to is not a price for
+      // anything. Unknown may exist internally; it may never become tradable.
+      return { ...base, bookLine, lineExact, reason: "unknown_market_identity" };
+    }
+    if (expectedMarket.betType && identity.betType !== expectedMarket.betType) {
+      return { ...base, bookLine, lineExact, reason: "cross_market_quote" };
+    }
+    if (expectedMarket.period && identity.period !== expectedMarket.period) {
+      return { ...base, bookLine, lineExact, reason: "cross_period_quote" };
+    }
+    if (expectedMarket.scope && identity.scope !== expectedMarket.scope) {
+      return { ...base, bookLine, lineExact, reason: "cross_scope_quote" };
+    }
+  }
 
   const rawOdd = wantUnder ? quote.under : quote.over;
   const odd = Number(rawOdd);
@@ -162,7 +199,12 @@ export function repriceCandidateLine({ block, side, requestedLine, quote } = {})
     // Exact lines are still priced at the book line — flagged as repriced only when
     // the line actually moved, so reporting can separate the two.
     repriced: lineExact ? false : priced.source,
-    reason: null
+    reason: null,
+    // Market identity travels with the selection so candidates, Stage09 and the
+    // UI can all attest WHAT this is a price for (period/scope, not just a line).
+    betType: identity?.betType ?? expectedMarket?.betType ?? null,
+    period: identity?.period ?? expectedMarket?.period ?? null,
+    scope: identity?.scope ?? expectedMarket?.scope ?? null
   };
 }
 
@@ -192,6 +234,10 @@ export function enumerateLineSelections({
 } = {}) {
   if (!oddsData || !block) return [];
   const opts = preferredBookmakers ? { kind, preferredBookmakers } : { kind };
+  // Market Identity Contract: what this enumeration is FOR. Discovery and the
+  // consensus quotes already enforce it; repriceCandidateLine re-verifies it so
+  // no future caller can pair this block with a quote from another market.
+  const expectedMarket = expectedIdentityForKind(kind);
 
   const offeredLines = listOverUnderLinesOffered(oddsData, marketNames, opts);
   if (!offeredLines.length) return [];
@@ -215,7 +261,8 @@ export function enumerateLineSelections({
         block,
         side,
         requestedLine: requested ?? bookLine,
-        quote
+        quote,
+        expectedMarket
       });
       if (sel.tradable) selections.push(sel);
     }

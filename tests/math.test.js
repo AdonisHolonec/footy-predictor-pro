@@ -1052,7 +1052,10 @@ test("Professional Value Engine covers families and highlights best market", () 
         odd: 1.95,
         bookmakersUsed: 4,
         tradable: true,
-        repriced: false
+        repriced: false,
+        betType: "total",
+        period: "full_match",
+        scope: "match"
       }
     ],
     cardsSelections: [
@@ -1066,7 +1069,10 @@ test("Professional Value Engine covers families and highlights best market", () 
         odd: 1.9,
         bookmakersUsed: 4,
         tradable: true,
-        repriced: false
+        repriced: false,
+        betType: "total",
+        period: "full_match",
+        scope: "match"
       },
       {
         side: "under",
@@ -1078,7 +1084,10 @@ test("Professional Value Engine covers families and highlights best market", () 
         odd: 1.9,
         bookmakersUsed: 4,
         tradable: true,
-        repriced: false
+        repriced: false,
+        betType: "total",
+        period: "full_match",
+        scope: "match"
       }
     ]
   });
