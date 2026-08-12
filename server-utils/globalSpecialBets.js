@@ -12,7 +12,6 @@
  */
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
-import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
 import { buildGlobalSpecialBets, GLOBAL_SPECIAL_BET_VARIANTS } from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
 
@@ -100,58 +99,48 @@ export function unavailableResponse(variant, availableCandidates) {
   };
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /**
- * The UTC instants that safely bracket one Europe/Bucharest calendar day.
- *
- * Deliberately a SUPERSET, not the exact boundary: Bucharest runs UTC+2 in
- * winter and UTC+3 in summer, so its day D begins at 21:00Z or 22:00Z on D-1.
- * One UTC day of slack either side covers both offsets and every DST
- * transition, and computing an exact boundary here would be the second
- * timezone system this fix exists to avoid. The database only narrows the
- * scan; what counts as "day D" is decided below by the same helper the rest of
- * the app uses.
+ * Defensive query ceiling, NOT a product rule: the pool is naturally bounded by
+ * which upcoming fixtures actually have prediction rows in the user's leagues
+ * (warm cron covers today; users generate the dates they browse). The cap only
+ * protects the query if that assumption ever breaks. Ordered by kickoff, so if
+ * it is ever hit the nearest fixtures win.
  */
-export function candidateScanWindow(betDate) {
-  const base = Date.parse(`${betDate}T00:00:00.000Z`);
-  if (!Number.isFinite(base)) return null;
-  return {
-    from: new Date(base - DAY_MS).toISOString(),
-    to: new Date(base + DAY_MS).toISOString()
-  };
-}
+const CANDIDATE_POOL_LIMIT = 500;
 
 /**
- * Canonical prediction payloads for one calendar day and set of leagues.
+ * Canonical prediction payloads for the user's MULTI-DAY upcoming pool.
  *
  * Reads `raw_payload` — the prediction of record, frozen at kickoff — rather
  * than recomputing anything.
  *
- * "One calendar day" means a Europe/Bucharest day, exactly as it does for
- * /api/history's day grouping, Stage00Ingress and the warm-predict cron. This
- * used to slice a raw UTC day instead, which put a 00:30 Bucharest kickoff in
- * the previous day's bet and a late US fixture in the wrong day entirely — the
- * bet then disagreed with the fixture list the user was looking at.
+ * The pool is every fixture that (a) has a prediction row, (b) is in the given
+ * leagues, and (c) has not kicked off yet — regardless of calendar day. The
+ * previous behaviour sliced one Europe/Bucharest day around `bet_date`;
+ * `bet_date` is now generation metadata only (idempotency key + audit), it no
+ * longer filters candidates. Live and finished fixtures never enter: the query
+ * excludes them here and collectGlobalCandidates rejects them again
+ * (`alreadyStarted`) as a second, independent gate.
+ *
+ * One row per fixture: `payloadsByFixtureId` is the authority and `rows` is
+ * derived from it, so a duplicate history row can never seed two candidates.
  */
-export async function loadCandidatePayloads(supabase, betDate, leagueIds) {
-  const window = candidateScanWindow(betDate);
-  if (!window) return { rows: [], payloadsByFixtureId: new Map() };
+export async function loadCandidatePayloads(supabase, leagueIds, now = Date.now()) {
+  const nowIso = new Date(now).toISOString();
 
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
     .select("fixture_id, league_id, league_name, kickoff_at, raw_payload")
     .in("league_id", leagueIds)
-    .gte("kickoff_at", window.from)
-    .lte("kickoff_at", window.to);
+    .gt("kickoff_at", nowIso)
+    .order("kickoff_at", { ascending: true })
+    .limit(CANDIDATE_POOL_LIMIT);
   if (error) throw error;
 
   const payloadsByFixtureId = new Map();
-  const rows = [];
   for (const row of data || []) {
-    // The single authority on which day a kickoff belongs to. `kickoff_at` is
-    // the column the query matched, and the same field api/history.js groups by.
-    if (calendarDateKeyEuropeBucharest(row?.kickoff_at) !== betDate) continue;
+    const fixtureId = Number(row?.fixture_id);
+    if (!Number.isFinite(fixtureId) || payloadsByFixtureId.has(fixtureId)) continue;
 
     const payload = row?.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : null;
     if (!payload) continue;
@@ -167,11 +156,10 @@ export async function loadCandidatePayloads(supabase, betDate, leagueIds) {
       // a word that looks like a name.
       league: row.league_name ?? payload.league ?? null
     };
-    payloadsByFixtureId.set(Number(row.fixture_id), normalized);
-    rows.push(normalized);
+    payloadsByFixtureId.set(fixtureId, normalized);
   }
 
-  return { rows, payloadsByFixtureId };
+  return { rows: [...payloadsByFixtureId.values()], payloadsByFixtureId };
 }
 
 /**
@@ -196,7 +184,9 @@ export async function createGlobalSpecialBet({
   if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
 
   const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
-  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, betDate, canonicalLeagues);
+  // bet_date is generation metadata + the idempotency key — the pool itself is
+  // every upcoming fixture the user has predictions for, regardless of day.
+  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
 
   const built = buildGlobalSpecialBets({ rows, leagueIds: canonicalLeagues, now }, [Number(variant)]);
   const bet = built.bets[Number(variant)];
@@ -445,7 +435,6 @@ export async function settlePendingGlobalSpecialBets({
 }
 
 export default {
-  candidateScanWindow,
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   loadFixtureStates,
