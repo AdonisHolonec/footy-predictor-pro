@@ -3,7 +3,6 @@ import type { MatchLiveEvent, MatchLiveEventType, MatchScore, MomentumRawStats, 
 import { useLocale } from "../../context/LocaleContext";
 import Tooltip from "../../design-system/Tooltip";
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
-import { useLocalStorageState } from "../../utils/appUtils";
 
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
@@ -90,6 +89,45 @@ function eventGroup(kind: MatchLiveEventType): Exclude<EventFilter, "all"> {
 /** "45'" or, when extra time is known, "45+2'". */
 function formatMinute(minute: number, extra?: number | null): string {
   return extra ? `${minute}+${extra}'` : `${minute}'`;
+}
+
+/**
+ * One interval of the transparent momentum timeline. Pure presentation mapping —
+ * classification reuses the exact ±10pp threshold MomentumEngine already applies
+ * for `dominantTeam` (diff > 10 → home, < -10 → away, otherwise balanced), so the
+ * strip never invents a dominance rule of its own.
+ */
+export type MomentumSegment = {
+  /** Minute the interval starts at (previous point's minute, 0 for the first). */
+  fromMinute: number;
+  /** Minute the interval ends at (this point's minute). */
+  toMinute: number;
+  side: "home" | "away" | "neutral";
+  /** 0..1 dominance magnitude — drives opacity within the team colour, never the hue. */
+  magnitude: number;
+  homeMomentum: number;
+  awayMomentum: number;
+};
+
+/** Same threshold as MomentumEngine's dominantTeam — see server-utils/momentum/MomentumEngine.js. */
+const DOMINANCE_THRESHOLD_PP = 10;
+
+export function buildTimelineSegments(history: HistoryPoint[]): MomentumSegment[] {
+  const segments: MomentumSegment[] = [];
+  let from = 0;
+  for (const pt of history) {
+    const diff = pt.homeMomentum - pt.awayMomentum;
+    segments.push({
+      fromMinute: from,
+      toMinute: pt.minute,
+      side: diff > DOMINANCE_THRESHOLD_PP ? "home" : diff < -DOMINANCE_THRESHOLD_PP ? "away" : "neutral",
+      magnitude: Math.min(1, Math.abs(diff) / 100),
+      homeMomentum: pt.homeMomentum,
+      awayMomentum: pt.awayMomentum
+    });
+    from = pt.minute;
+  }
+  return segments;
 }
 
 const EVENT_FILTERS: Array<{ id: EventFilter; labelKey: string }> = [
@@ -316,10 +354,6 @@ export default function MatchMomentumTimeline({
   const feedRef = useRef<HTMLUListElement | null>(null);
   const stickToBottomRef = useRef(true);
 
-  // Opt-in "cinematic" display — same data, alternate visual (see the Pulse concept in the
-  // Match Momentum redesign proposal). Persisted like theme/locale, independent of them.
-  const [visualMode, setVisualMode] = useLocalStorageState<"rail" | "orb">("footy.momentum.visualMode", "rail");
-
   // Only a pure "NN%" label gets the count-up treatment — category/locked text (e.g. "Strong", "Locked")
   // cross-fades instead, since there's no number to animate toward.
   const confidenceNumericMatch = /^(\d+)%$/.exec(confidenceLabel);
@@ -461,31 +495,32 @@ export default function MatchMomentumTimeline({
   const whyChips = deriveWhyChips(t, homeTeam, awayTeam, raw);
   const recentMoments = displayEvents.slice(-RECENT_MOMENTS_COUNT);
 
-  // Orb mode only: position already encodes control (left = home share); size/glow encode how
-  // strongly one side dominates, so the same two numbers drive every visual cue, nothing invented.
-  const dominanceMagnitude = Math.abs(momentum.homeMomentum - momentum.awayMomentum);
-  const orbSize = Math.round(36 + Math.min(20, dominanceMagnitude * 0.3));
-  const orbFill = `color-mix(in srgb, var(--fp-accent) ${momentum.homeMomentum}%, var(--fp-danger) ${momentum.awayMomentum}%)`;
-  const orbGlowColor = `color-mix(in srgb, ${orbFill} 45%, transparent)`;
-  const orbGlowRadius = Math.round(14 + dominanceMagnitude * 0.25);
+  // Transparent segmented timeline — the approved momentum visual. Each segment is one
+  // observed interval, coloured by the team identity colour the whole app already uses
+  // for Home/Away (--fp-accent / --fp-danger — the same pair as the legend dots, StatRow
+  // and every other Home/Away cue); balanced intervals get a discreet neutral treatment.
+  const timelineSegments = buildTimelineSegments(history);
+  const stripEndMinute = Math.max(maxMinute, 1);
+
+  const segmentTitle = (seg: MomentumSegment) => {
+    const range =
+      seg.fromMinute === seg.toMinute
+        ? formatMinute(seg.toMinute)
+        : `${seg.fromMinute}–${seg.toMinute} min`;
+    const who =
+      seg.side === "home" ? homeTeam : seg.side === "away" ? awayTeam : t("match.momentumDominantBalanced");
+    return `${range} · ${who} · ${Math.round(seg.homeMomentum)}–${Math.round(seg.awayMomentum)}`;
+  };
 
   return (
     <>
-      <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4">
+      {/* Deliberately background-free: the momentum block inherits the match card's own
+          surface — no card-in-card, no opaque panel (see the approved transparent design). */}
+      <section data-testid="momentum-root" className="bg-transparent">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
             {t("card.momentum")}
           </p>
-          <button
-            type="button"
-            onClick={() => setVisualMode((m) => (m === "orb" ? "rail" : "orb"))}
-            aria-pressed={visualMode === "orb"}
-            title={visualMode === "orb" ? t("match.momentumSwitchToRail") : t("match.momentumSwitchToOrb")}
-            aria-label={visualMode === "orb" ? t("match.momentumSwitchToRail") : t("match.momentumSwitchToOrb")}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[11px] leading-none text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
-          >
-            {visualMode === "orb" ? "▬" : "◉"}
-          </button>
         </div>
 
         <div className="mb-2.5 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
@@ -499,40 +534,55 @@ export default function MatchMomentumTimeline({
           </span>
         </div>
 
-        {visualMode === "orb" ? (
-          <div
-            className="relative mt-1 h-9 w-full"
-            role="img"
-            aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
-          >
-            <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[var(--fp-border)]" />
+        <div
+          data-testid="momentum-strip"
+          role="img"
+          aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
+          className="flex h-3 w-full items-stretch bg-transparent"
+        >
+          {timelineSegments.map((seg, i) => (
             <div
-              className="absolute top-1/2 animate-orb-breathe rounded-full transition-[left,width,height] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none motion-reduce:transition-none"
+              key={`${seg.fromMinute}-${seg.toMinute}-${i}`}
+              data-side={seg.side}
+              title={segmentTitle(seg)}
+              aria-label={segmentTitle(seg)}
+              className={`h-full min-w-[2px] rounded-[1px] transition-opacity duration-300 motion-reduce:transition-none ${
+                seg.side === "home"
+                  ? "bg-[var(--fp-accent)]"
+                  : seg.side === "away"
+                    ? "bg-[var(--fp-danger)]"
+                    : "bg-[var(--fp-text-muted)]"
+              }`}
               style={{
-                left: `${momentum.homeMomentum}%`,
-                width: `${orbSize}px`,
-                height: `${orbSize}px`,
-                background: orbFill,
-                boxShadow: `0 0 ${orbGlowRadius}px 2px ${orbGlowColor}`
+                flexGrow: Math.max(1, seg.toMinute - seg.fromMinute),
+                flexBasis: 0,
+                // Opacity varies within the team colour by dominance strength — identity
+                // stays constant, intensity does the talking. Neutral stays discreet.
+                opacity: seg.side === "neutral" ? 0.22 : 0.45 + seg.magnitude * 0.55
               }}
             />
-          </div>
-        ) : (
-          <div
-            className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--fp-border)]"
-            role="img"
-            aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
-          >
+          ))}
+          {/* Un-played remainder of the axis: transparent spacer so segment widths keep
+              their true minute proportions against the tick row below. */}
+          {stripEndMinute > (history[history.length - 1]?.minute ?? 0) && (
             <div
-              className="absolute inset-y-0 left-0 bg-[var(--fp-accent)] transition-[width] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
-              style={{ width: `${momentum.homeMomentum}%` }}
+              aria-hidden
+              style={{ flexGrow: stripEndMinute - (history[history.length - 1]?.minute ?? 0), flexBasis: 0 }}
             />
-            <div
-              className="absolute inset-y-0 right-0 bg-[var(--fp-danger)] transition-[width] duration-[650ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
-              style={{ width: `${momentum.awayMomentum}%` }}
-            />
-          </div>
-        )}
+          )}
+        </div>
+
+        <div className="relative mt-1 h-3 w-full" aria-hidden>
+          {ticks.map((m) => (
+            <span
+              key={m}
+              className="absolute -translate-x-1/2 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]"
+              style={{ left: xPct(m) }}
+            >
+              {m}'
+            </span>
+          ))}
+        </div>
 
         <p
           key={anchorText}
@@ -609,7 +659,7 @@ export default function MatchMomentumTimeline({
             {confidenceNumeric != null ? `${animatedConfidence ?? confidenceNumeric}%` : confidenceLabel}
           </span>
         </div>
-      </div>
+      </section>
 
       <div className="mt-3">
         <CollapsiblePanel title={t("match.momentumDetails")} compact>
@@ -655,40 +705,9 @@ export default function MatchMomentumTimeline({
             </div>
           )}
 
-          <div className="relative h-24 w-full overflow-hidden rounded-[var(--fp-radius-sm)] sm:h-28">
-            <div className="absolute inset-x-0 top-0 h-1/2 bg-[var(--fp-accent)]/[0.04]" />
-            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[var(--fp-danger)]/[0.04]" />
-            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--fp-border)]" />
-            <div className="flex h-full w-full items-stretch gap-px">
-              {history.map((pt, i) => {
-                const homeUp = pt.homeMomentum >= pt.awayMomentum;
-                const magnitude = Math.abs(pt.homeMomentum - pt.awayMomentum) / 100;
-                const barLabel = `${pt.minute}' · ${homeTeam} ${Math.round(pt.homeMomentum)} – ${Math.round(pt.awayMomentum)} ${awayTeam}`;
-                return (
-                  <div key={`${pt.minute}-${i}`} title={barLabel} className="flex flex-1 flex-col justify-center">
-                    {homeUp ? (
-                      <>
-                        <div
-                          className="w-full self-end rounded-t-[1px] bg-[var(--fp-accent)] transition-opacity duration-150 hover:opacity-80"
-                          style={{ height: `${Math.max(4, magnitude * 100)}%` }}
-                        />
-                        <div className="w-full flex-1" />
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-full flex-1" />
-                        <div
-                          className="w-full rounded-b-[1px] bg-[var(--fp-danger)] transition-opacity duration-150 hover:opacity-80"
-                          style={{ height: `${Math.max(4, magnitude * 100)}%` }}
-                        />
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
+          {/* The momentum timeline itself now lives in the main (transparent) view above —
+              the detail panel keeps the event axis, stats, story and feed without
+              duplicating the chart in a second tinted panel. */}
           <div className="relative mt-1.5 h-3 w-full">
             {ticks.map((m) => (
               <span

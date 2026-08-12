@@ -349,8 +349,6 @@ export const en: Dict = {
     liveWinDraw: "Draw",
     liveWinShift: "{label} {delta} pp since kickoff",
     liveWinStable: "Largely unchanged since kickoff",
-    momentumSwitchToOrb: "Switch to orb view",
-    momentumSwitchToRail: "Switch to rail view",
     eventGoal: "Goal",
     eventOwnGoal: "Own goal",
     eventPenalty: "Penalty",
