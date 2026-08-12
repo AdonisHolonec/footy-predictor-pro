@@ -574,7 +574,9 @@ export default function UserDashboard() {
           }
           trackerStats={trackerStats}
           history={history}
-          betDate={date}
+          /* Generation date, not a pool filter: the GSB pool is every upcoming
+             predicted fixture, so the card no longer follows the browsed date. */
+          betDate={todayKey}
           /* The profile's favourite leagues, not the local league filter: the
              server validates the scope against profiles.favorite_leagues and
              rejects anything outside it. */

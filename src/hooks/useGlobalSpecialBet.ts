@@ -29,7 +29,10 @@ export type GlobalSpecialBetVariantState =
 const IDLE: GlobalSpecialBetVariantState = { phase: "idle" };
 
 export type UseGlobalSpecialBetOptions = {
-  /** Calendar day whose fixtures the bet is built from. */
+  /**
+   * Generation date (idempotency key + audit metadata). The candidate pool is
+   * every upcoming predicted fixture — it does NOT depend on this date.
+   */
   betDate: string;
   /** The user's favourite leagues — the only scope the server accepts. */
   leagueIds: number[];

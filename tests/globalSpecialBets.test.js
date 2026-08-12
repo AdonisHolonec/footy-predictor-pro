@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  candidateScanWindow,
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   isValidBetDate,
@@ -12,7 +11,6 @@ import {
   toSelectionRows,
   unavailableResponse
 } from "../server-utils/globalSpecialBets.js";
-import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 
 /**
  * Global Special Bet — persistence layer.
@@ -58,15 +56,19 @@ function fakeSupabase({ historyRows = [], rpcResult = null, bets = [], selection
     const chain = {
       select: () => chain,
       in: (col, val) => {
-        calls.filters.push({ col, val });
+        calls.filters.push({ op: "in", col, val });
         return chain;
       },
-      gte: (col, val) => {
-        calls.filters.push({ col, val });
+      gt: (col, val) => {
+        calls.filters.push({ op: "gt", col, val });
         return chain;
       },
-      lte: (col, val) => {
-        calls.filters.push({ col, val });
+      order: (col, opts) => {
+        calls.filters.push({ op: "order", col, val: opts });
+        return chain;
+      },
+      limit: (n) => {
+        calls.filters.push({ op: "limit", col: null, val: n });
         return chain;
       },
       then: (resolve) => resolve({ data: historyRows, error: null })
@@ -252,7 +254,7 @@ test("payloads are read from raw_payload and keyed by the queried columns", asyn
     ]
   });
 
-  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, BET_DATE, [39]);
+  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, [39], NOW);
 
   assert.equal(rows.length, 1, "a row without a payload contributes nothing");
   assert.equal(rows[0].id, 7);
@@ -277,7 +279,7 @@ test("the league name column wins over the payload, and stays null when neither 
     ]
   });
 
-  const { rows } = await loadCandidatePayloads(supabase, BET_DATE, [39]);
+  const { rows } = await loadCandidatePayloads(supabase, [39], NOW);
 
   // Same precedence /api/history applies to this field, so one bet and one
   // history list never disagree about what a league is called.
@@ -286,14 +288,7 @@ test("the league name column wins over the payload, and stays null when neither 
   assert.equal(rows[2].league, null, "an unnamed league stays unnamed");
 });
 
-// ── calendar day: Europe/Bucharest, exactly as the rest of the app ────────
-
-/**
- * A bet day is a Europe/Bucharest day, not a UTC one. These fixtures are
- * expressed as the UTC instant the database actually stores, with the local
- * time each one represents written next to it.
- */
-const BUCHAREST_DAY = "2026-08-09";
+// ── multi-day pool: every upcoming predicted fixture, no calendar-day slice ──
 
 function historyRow(fixtureId, kickoffAt, leagueId = 39) {
   return {
@@ -304,86 +299,90 @@ function historyRow(fixtureId, kickoffAt, leagueId = 39) {
   };
 }
 
-test("a 00:30 Bucharest kickoff belongs to that Bucharest day, not the UTC one", async () => {
-  // 2026-08-08T21:30Z is 00:30 on 2026-08-09 in Bucharest (UTC+3 in summer).
-  const supabase = fakeSupabase({ historyRows: [historyRow(7, "2026-08-08T21:30:00.000Z")] });
+test("the pool spans multiple days: D, D+1 and D+2 rows are all candidates", async () => {
+  const supabase = fakeSupabase({
+    historyRows: [
+      historyRow(1, "2026-08-09T18:00:00.000Z"),
+      historyRow(2, "2026-08-10T18:00:00.000Z"),
+      historyRow(3, "2026-08-11T18:00:00.000Z")
+    ]
+  });
 
-  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+  const { rows } = await loadCandidatePayloads(supabase, [39], NOW);
 
-  assert.equal(rows.length, 1, "the raw-UTC window used to drop this fixture from its own day");
-  assert.equal(rows[0].id, 7);
+  assert.deepEqual(rows.map((r) => r.id), [1, 2, 3], "no day filter drops future fixtures");
 });
 
-test("a 02:30 Bucharest kickoff belongs to that Bucharest day", async () => {
-  // 2026-08-08T23:30Z is 02:30 on 2026-08-09 in Bucharest.
-  const supabase = fakeSupabase({ historyRows: [historyRow(8, "2026-08-08T23:30:00.000Z")] });
+test("the query itself excludes started fixtures and is bounded, ordered and league-scoped", async () => {
+  const supabase = fakeSupabase({ historyRows: [] });
 
-  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+  await loadCandidatePayloads(supabase, [39, 140], NOW);
 
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].id, 8);
+  const ops = Object.fromEntries(supabase.calls.filters.map((f) => [f.op, f]));
+  assert.deepEqual(ops.in.val, [39, 140], "leagueIds stay a hard query filter");
+  assert.equal(ops.gt.col, "kickoff_at");
+  assert.equal(ops.gt.val, new Date(NOW).toISOString(), "only fixtures that have not kicked off");
+  assert.equal(ops.order.col, "kickoff_at", "nearest kickoffs win if the cap is ever hit");
+  assert.equal(ops.limit.val, 500, "defensive ceiling, not a product rule");
 });
 
-test("a 21:00 Bucharest kickoff stays in its own day", async () => {
-  // 2026-08-09T18:00Z is 21:00 on 2026-08-09 in Bucharest — the ordinary case.
-  const supabase = fakeSupabase({ historyRows: [historyRow(9, "2026-08-09T18:00:00.000Z")] });
+test("a duplicate history row for the same fixture seeds exactly one candidate", async () => {
+  const supabase = fakeSupabase({
+    historyRows: [
+      historyRow(7, "2026-08-09T18:00:00.000Z"),
+      historyRow(7, "2026-08-10T18:00:00.000Z")
+    ]
+  });
 
-  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
+  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, [39], NOW);
 
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].id, 9);
+  assert.equal(rows.length, 1, "rows are derived from the per-fixture map, never duplicated");
+  assert.equal(payloadsByFixtureId.size, 1);
+  assert.equal(rows[0].kickoff, "2026-08-09T18:00:00.000Z", "the first (earliest) row wins");
 });
 
-test("a US kickoff landing on a different UTC day is filed under its Bucharest day", async () => {
-  // 2026-08-09T23:00Z is an MLS evening kickoff on 2026-08-09 in the US, but
-  // 02:00 on 2026-08-10 in Bucharest — so it belongs to the 10th, not the 9th.
-  const supabase = fakeSupabase({ historyRows: [historyRow(10, "2026-08-09T23:00:00.000Z", 253)] });
-
-  const ninth = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [253]);
-  assert.equal(ninth.rows.length, 0, "a UTC-day filter would wrongly have kept it on the 9th");
-
-  const tenth = await loadCandidatePayloads(supabase, "2026-08-10", [253]);
-  assert.equal(tenth.rows.length, 1);
-  assert.equal(tenth.rows[0].id, 10);
-});
-
-test("the day boundary matches the helper the rest of the app groups by", async () => {
-  // Same source of truth as api/history.js's day grouping and the dashboard's
-  // kickoffLocalDateKey — one definition of "day", not two.
-  const kickoffs = [
-    "2026-08-08T20:59:00.000Z", // 23:59 Bucharest on the 8th — excluded
-    "2026-08-08T21:00:00.000Z", // 00:00 Bucharest on the 9th — included
-    "2026-08-09T18:00:00.000Z", // 21:00 Bucharest on the 9th — included
-    "2026-08-09T20:59:00.000Z", // 23:59 Bucharest on the 9th — included
-    "2026-08-09T21:00:00.000Z" // 00:00 Bucharest on the 10th — excluded
+test("multi-day pool builds a variant from fixtures on three different days", async () => {
+  const historyRows = [
+    { ...historyRow(1, "2026-08-09T18:00:00.000Z"), raw_payload: payload(1, 39, { kickoff: "2026-08-09T18:00:00.000Z" }) },
+    { ...historyRow(2, "2026-08-10T18:00:00.000Z"), raw_payload: payload(2, 39, { kickoff: "2026-08-10T18:00:00.000Z" }) },
+    { ...historyRow(3, "2026-08-11T18:00:00.000Z"), raw_payload: payload(3, 39, { kickoff: "2026-08-11T18:00:00.000Z" }) }
   ];
-  const supabase = fakeSupabase({ historyRows: kickoffs.map((k, i) => historyRow(100 + i, k)) });
+  const supabase = fakeSupabase({
+    historyRows,
+    rpcResult: { ok: true, created: true, bet: { id: "bet-md", variant: 3 }, selections: [] }
+  });
 
-  const { rows } = await loadCandidatePayloads(supabase, BUCHAREST_DAY, [39]);
-  const selected = rows.map((r) => r.id).sort((a, b) => a - b);
+  const result = await createGlobalSpecialBet({
+    userId: USER,
+    betDate: BET_DATE,
+    variant: 3,
+    leagueIds: [39],
+    now: NOW,
+    supabase
+  });
 
-  const expected = kickoffs
-    .map((k, i) => ({ id: 100 + i, day: calendarDateKeyEuropeBucharest(k) }))
-    .filter((r) => r.day === BUCHAREST_DAY)
-    .map((r) => r.id);
-
-  assert.deepEqual(selected, expected);
-  assert.deepEqual(selected, [101, 102, 103]);
+  assert.equal(result.available, true);
+  const kicks = supabase.calls.rpc[0].params.p_selections.map((s) => s.kickoff_at.slice(0, 10)).sort();
+  assert.deepEqual(kicks, ["2026-08-09", "2026-08-10", "2026-08-11"], "one leg per day, all three days");
 });
 
-test("the scan window brackets the Bucharest day without deciding what it is", () => {
-  const window = candidateScanWindow(BUCHAREST_DAY);
-  // A superset by one UTC day either side: enough for UTC+2 and UTC+3 alike.
-  assert.equal(window.from, "2026-08-08T00:00:00.000Z");
-  assert.equal(window.to, "2026-08-10T00:00:00.000Z");
-  assert.equal(candidateScanWindow("not-a-date"), null);
-});
+test("a fixture that already kicked off is rejected by the engine even if a stale query returns it", async () => {
+  // Second, independent gate: collectGlobalCandidates' alreadyStarted check.
+  const started = { ...historyRow(4, "2026-08-09T09:00:00.000Z"), raw_payload: payload(4, 39, { kickoff: "2026-08-09T09:00:00.000Z" }) };
+  const upcoming = [1, 2].map((id) => ({ ...historyRow(id, KICKOFF), raw_payload: payload(id, 39) }));
+  const supabase = fakeSupabase({ historyRows: [started, ...upcoming] });
 
-test("an unparseable bet date scans nothing rather than every row", async () => {
-  const supabase = fakeSupabase({ historyRows: [historyRow(11, "2026-08-09T18:00:00.000Z")] });
-  const { rows } = await loadCandidatePayloads(supabase, "nonsense", [39]);
-  assert.equal(rows.length, 0);
-  assert.deepEqual(supabase.calls.from, [], "no query is issued at all");
+  const result = await createGlobalSpecialBet({
+    userId: USER,
+    betDate: BET_DATE,
+    variant: 3,
+    leagueIds: [39],
+    now: NOW, // 10:00Z — fixture 4 kicked off at 09:00Z
+    supabase
+  });
+
+  assert.equal(result.available, false, "only the two upcoming fixtures are candidates");
+  assert.equal(result.availableCandidates, 2);
 });
 
 // ── generation ────────────────────────────────────────────────────────────

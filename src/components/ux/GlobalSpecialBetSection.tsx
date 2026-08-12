@@ -149,7 +149,7 @@ export default function GlobalSpecialBetSection({
     <>
       <p className="mt-2 text-xs text-[var(--fp-text-muted)]">
         {t("gsb.basedOnLeagues", { n: favoriteLeagueIds.length })}
-        {betDate ? ` · ${t("gsb.forDate", { date: betDate })}` : ""}
+        {betDate ? ` · ${t("gsb.poolScope", { date: betDate })}` : ""}
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
