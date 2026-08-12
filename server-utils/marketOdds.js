@@ -1,4 +1,10 @@
 import { removeBookmakerMargin } from "./advancedMath.js";
+import {
+  normalizeMarketName,
+  classifyOuMarketName,
+  expectedIdentityForKind,
+  identityMatches
+} from "./marketIdentity.js";
 
 function median(nums) {
   const a = nums.filter((n) => Number.isFinite(n) && n > 1).sort((x, y) => x - y);
@@ -158,15 +164,8 @@ function valueKind(label) {
   return null;
 }
 
-function normalizeMarketName(name) {
-  return String(name || "")
-    // API-Football uses camel compounds like "Total ShotOnGoal"
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .replace(/[-_/]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// Market-name normalization + structural classification live in marketIdentity.js
+// (single source of truth for the Market Identity Contract).
 
 /** Bookmakers that more often list specialty shot markets — tried first. */
 export const PREFERRED_SHOTS_BOOKMAKERS = [
@@ -251,11 +250,23 @@ function isPreferredBookmaker(name, preferredList) {
 /**
  * Score how well an API market name matches candidate labels.
  * Skips player props. Team props only for *_home / *_away kinds.
+ *
+ * When `expectedIdentity` is provided (every Over/Under flow provides it), the
+ * market's structural identity — betType / period / scope, classified from its
+ * name — must match exactly or the market scores 0. This is what stops
+ * "Home Corners Over/Under" or "Total Corners (1st Half)" from ever standing in
+ * for the full-match corners market just because the word "corners" matches
+ * (the production bug behind Recommended "Over 3.5 Corners" priced off 1xBet's
+ * home-corners board).
  */
-function scoreMarketName(apiName, candidates, kind = "generic") {
+function scoreMarketName(apiName, candidates, kind = "generic", expectedIdentity = null) {
   const n = normalizeMarketName(apiName);
   if (!n) return 0;
   if (/\bplayer\b/.test(n)) return 0;
+
+  if (expectedIdentity && !identityMatches(classifyOuMarketName(apiName), expectedIdentity)) {
+    return 0;
+  }
 
   const teamKind = kind === "shots_on_target_home" || kind === "shots_on_target_away";
   if (!teamKind && (/\bhome team\b/.test(n) || /\baway team\b/.test(n))) return 0;
@@ -306,11 +317,11 @@ function scoreMarketName(apiName, candidates, kind = "generic") {
   return best;
 }
 
-function pickBestMarket(bets, candidates, kind = "generic") {
+function pickBestMarket(bets, candidates, kind = "generic", expectedIdentity = null) {
   let best = null;
   let bestScore = 0;
   for (const bet of bets || []) {
-    const score = scoreMarketName(bet?.name, candidates, kind);
+    const score = scoreMarketName(bet?.name, candidates, kind, expectedIdentity);
     if (score > bestScore) {
       bestScore = score;
       best = bet;
@@ -396,14 +407,17 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
   const maxLineDelta = Number(options?.maxLineDelta);
   const delta = Number.isFinite(maxLineDelta) && maxLineDelta >= 0 ? maxLineDelta : 0;
   const kind = String(options?.kind || "generic");
+  // Market Identity Contract: every O/U consensus states the identity it wants
+  // (betType/period/scope); markets whose names classify differently score 0.
+  const expectedIdentity = expectedIdentityForKind(kind);
   const preferred = Array.isArray(options?.preferredBookmakers) ? options.preferredBookmakers : [];
 
   const collect = (books) => {
-    /** @type {Map<number, { over: number[], under: number[], names: string[] }>} */
+    /** @type {Map<number, { over: number[], under: number[], names: string[], marketNames: Set<string> }>} */
     const byLine = new Map();
     for (const b of books) {
       const bets = Array.isArray(b?.bets) ? b.bets : [];
-      const market = pickBestMarket(bets, marketNames, kind);
+      const market = pickBestMarket(bets, marketNames, kind, expectedIdentity);
       if (!market?.values || !Array.isArray(market.values)) continue;
 
       /** @type {Map<number, { over?: number, under?: number }>} */
@@ -424,13 +438,14 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
         if (Math.abs(lineKey - requestedLine) > delta + 1e-9) continue;
         let bucket = byLine.get(lineKey);
         if (!bucket) {
-          bucket = { over: [], under: [], names: [] };
+          bucket = { over: [], under: [], names: [], marketNames: new Set() };
           byLine.set(lineKey, bucket);
         }
         if (Number.isFinite(slot.over)) bucket.over.push(slot.over);
         if (Number.isFinite(slot.under)) bucket.under.push(slot.under);
         if (Number.isFinite(slot.over) || Number.isFinite(slot.under)) {
           bucket.names.push(b.name || "?");
+          bucket.marketNames.add(String(market.name || "?"));
         }
       }
     }
@@ -494,7 +509,12 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
     over: medOver,
     under: medUnder,
     bookmakersUsed: Math.max(chosenBucket.over.length, chosenBucket.under.length),
-    bookmakerNames: chosenBucket.names.slice(0, 8)
+    bookmakerNames: chosenBucket.names.slice(0, 8),
+    // Market Identity Contract: identity is enforced above (pickBestMarket scores
+    // any mismatching market 0), so the quote can attest what it is a quote FOR.
+    // `marketNames` is the evidence: the exact feed market name(s) that priced it.
+    market: { ...expectedIdentity },
+    marketNames: Array.from(chosenBucket.marketNames).slice(0, 8)
   };
 }
 
@@ -513,36 +533,81 @@ export function consensusOverUnderOddsAtLine(oddsApiResponse, marketNames, targe
  * @returns {number[]} lines with at least one usable over/under price, ascending
  */
 export function listOverUnderLinesOffered(oddsApiResponse, marketNames, options = {}) {
+  return listOfferedOuMarkets(oddsApiResponse, marketNames, options).map((d) => d.line);
+}
+
+/**
+ * Market Identity Contract discovery: every Over/Under line the bookmakers quote
+ * for one market, as a DESCRIPTOR instead of a bare number.
+ *
+ * The old Set<number> collapse was the point of no return for identity: after it,
+ * nothing downstream could tell whose board a line came from — which is how a
+ * home-corners 3.5 was priced as full-match corners in production. Descriptors
+ * keep the evidence: which feed market name(s) and which bookmaker(s) actually
+ * quote each line, plus the enforced structural identity (betType/period/scope).
+ *
+ * Identity is enforced at match time (pickBestMarket scores mismatching markets
+ * 0 for the expected identity of `kind`), so every descriptor returned here is
+ * exactly what the caller asked for — or absent.
+ *
+ * @param {object} oddsApiResponse
+ * @param {string[]} marketNames candidate market labels
+ * @param {{ kind?: string, preferredBookmakers?: string[] }} [options]
+ * @returns {Array<{ line: number, betType: string, period: string, scope: string,
+ *   marketNames: string[], bookmakers: string[], hasOver: boolean, hasUnder: boolean }>}
+ *   ascending by line; only lines with at least one usable over/under price
+ */
+export function listOfferedOuMarkets(oddsApiResponse, marketNames, options = {}) {
   const bookmakers = oddsApiResponse?.response?.[0]?.bookmakers;
   if (!Array.isArray(bookmakers) || bookmakers.length === 0) return [];
   const kind = String(options?.kind || "generic");
+  const expectedIdentity = expectedIdentityForKind(kind);
   const preferred = Array.isArray(options?.preferredBookmakers) ? options.preferredBookmakers : [];
 
   const collect = (books) => {
-    const lines = new Set();
+    /** @type {Map<number, { marketNames: Set<string>, bookmakers: Set<string>, hasOver: boolean, hasUnder: boolean }>} */
+    const byLine = new Map();
     for (const b of books) {
-      const market = pickBestMarket(Array.isArray(b?.bets) ? b.bets : [], marketNames, kind);
+      const market = pickBestMarket(Array.isArray(b?.bets) ? b.bets : [], marketNames, kind, expectedIdentity);
       if (!market?.values || !Array.isArray(market.values)) continue;
       for (const v of market.values) {
         const parsed = parseLineFromValueLabel(v?.value);
-        if (parsed == null || !valueKind(v?.value)) continue;
+        const side = valueKind(v?.value);
+        if (parsed == null || !side) continue;
         const odd = Number.parseFloat(String(v?.odd ?? ""));
         if (!Number.isFinite(odd) || odd <= 1) continue;
-        lines.add(parsed);
+        let entry = byLine.get(parsed);
+        if (!entry) {
+          entry = { marketNames: new Set(), bookmakers: new Set(), hasOver: false, hasUnder: false };
+          byLine.set(parsed, entry);
+        }
+        entry.marketNames.add(String(market.name || "?"));
+        entry.bookmakers.add(String(b.name || "?"));
+        if (side === "over") entry.hasOver = true;
+        if (side === "under") entry.hasUnder = true;
       }
     }
-    return lines;
+    return byLine;
   };
 
   // Mirrors consensusOverUnderOddsAtLine: preferred books first, all books otherwise.
-  let lines = new Set();
+  let byLine = new Map();
   if (preferred.length) {
     const prefBooks = bookmakers.filter((b) => isPreferredBookmaker(b?.name, preferred));
-    if (prefBooks.length) lines = collect(prefBooks);
+    if (prefBooks.length) byLine = collect(prefBooks);
   }
-  if (!lines.size) lines = collect(bookmakers);
+  if (!byLine.size) byLine = collect(bookmakers);
 
-  return Array.from(lines).sort((a, b) => a - b);
+  return Array.from(byLine.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([line, entry]) => ({
+      line,
+      ...expectedIdentity,
+      marketNames: Array.from(entry.marketNames),
+      bookmakers: Array.from(entry.bookmakers),
+      hasOver: entry.hasOver,
+      hasUnder: entry.hasUnder
+    }));
 }
 
 /**

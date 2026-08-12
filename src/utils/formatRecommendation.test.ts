@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { resolveMarketFamilyKey } from "./formatRecommendation";
+import { beforeAll, describe, expect, it } from "vitest";
+import { formatLineLabel, formatRecommendedPick, resolveMarketFamilyKey } from "./formatRecommendation";
+import { ensureCatalog, translate } from "../i18n/translate";
+
+// EN registers lazily; without this the fallback chain serves RO.
+beforeAll(() => ensureCatalog("en"));
+const t = (key: string, params?: Record<string, string | number>) => translate("en", key, params);
 
 describe("resolveMarketFamilyKey", () => {
   it("maps explicit Corners family and pick tokens to CORNERS", () => {
@@ -45,5 +50,84 @@ describe("resolveMarketFamilyKey", () => {
     expect(resolveMarketFamilyKey("Over 2.5", null)).toBe("GOALS");
     expect(resolveMarketFamilyKey("", "Corners")).toBe("CORNERS");
     expect(resolveMarketFamilyKey(undefined, undefined)).toBe("OTHER");
+  });
+});
+
+describe("formatLineLabel (lossless)", () => {
+  it("keeps integer, quarter and half lines exact — never toFixed(1)", () => {
+    expect(formatLineLabel(10)).toBe("10");
+    expect(formatLineLabel(10.25)).toBe("10.25");
+    expect(formatLineLabel(10.5)).toBe("10.5");
+    expect(formatLineLabel(10.75)).toBe("10.75");
+    expect(formatLineLabel(3.5)).toBe("3.5");
+  });
+});
+
+describe("formatRecommendedPick — Market Identity Contract labels", () => {
+  it('renders "Over 3.5 Corners · Full Match" from structural meta (test 16)', () => {
+    const out = formatRecommendedPick("Over 3.5", "Corners", t, {
+      period: "full_match",
+      scope: "match",
+      bookLine: 3.5
+    });
+    expect(out.label).toBe("Over 3.5 Corners · Full Match");
+    expect(out.familyKey).toBe("CORNERS");
+  });
+
+  it('renders "Over 3.5 Home Corners · Full Match" for home scope (test 17)', () => {
+    const out = formatRecommendedPick("Over 3.5", "Corners", t, {
+      period: "full_match",
+      scope: "home",
+      bookLine: 3.5
+    });
+    expect(out.label).toBe("Over 3.5 Home Corners · Full Match");
+  });
+
+  it('renders "Over 4.5 Corners · 1st Half" for a first-half pick (test 18)', () => {
+    const out = formatRecommendedPick("Over 4.5", "Corners", t, {
+      period: "first_half",
+      scope: "match",
+      bookLine: 4.5
+    });
+    expect(out.label).toBe("Over 4.5 Corners · 1st Half");
+  });
+
+  it('renders "Under 10.25 Corners · Full Match" — quarter line stays exact (test 19)', () => {
+    const out = formatRecommendedPick("Under 10.25", "Corners", t, {
+      period: "full_match",
+      scope: "match",
+      bookLine: 10.25
+    });
+    expect(out.label).toBe("Under 10.25 Corners · Full Match");
+  });
+
+  it("prefers the structural bookLine over the label — a lossy legacy label is repaired", () => {
+    // Legacy persisted label "Under 10.3" (toFixed damage), but bookLine 10.25 is stored.
+    const out = formatRecommendedPick("Under 10.3", "Corners", t, {
+      period: "full_match",
+      scope: "match",
+      bookLine: 10.25
+    });
+    expect(out.label).toBe("Under 10.25 Corners · Full Match");
+  });
+
+  it("never invents a period: legacy rows without meta render exactly as before", () => {
+    const out = formatRecommendedPick("Under 10.5", "Corners", t);
+    expect(out.label).toBe("Under 10.5 Corners");
+    expect(out.label).not.toContain("·");
+    const unknown = formatRecommendedPick("Under 10.5", "Corners", t, {
+      period: null,
+      scope: null
+    });
+    expect(unknown.label).toBe("Under 10.5 Corners");
+  });
+
+  it("integer lines render lossless in labels (Under 10, not Under 10.0)", () => {
+    const out = formatRecommendedPick("Under 10.0", "Corners", t, {
+      period: "full_match",
+      scope: "match",
+      bookLine: 10
+    });
+    expect(out.label).toBe("Under 10 Corners · Full Match");
   });
 });

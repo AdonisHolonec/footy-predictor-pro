@@ -206,7 +206,7 @@ export default function MainBoardSection({
                   engine={analysisMatch.confidenceEngine}
                   recommendationPick={
                     analysisMatch.recommended?.pick
-                      ? formatRecommendedPick(analysisMatch.recommended.pick, analysisMatch.recommended.family, t)
+                      ? formatRecommendedPick(analysisMatch.recommended.pick, analysisMatch.recommended.family, t, analysisMatch.recommended)
                           .label
                       : null
                   }

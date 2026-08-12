@@ -153,7 +153,7 @@ export default function HistorySection({
                       <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
                         {t("history.topPick")}{" "}
                         <span className="text-[var(--fp-text)]">
-                          {formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t).label}
+                          {formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended).label}
                         </span>
                         {row.score?.home != null && row.score?.away != null
                           ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`

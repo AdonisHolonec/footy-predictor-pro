@@ -197,6 +197,11 @@ export function evaluateValue(probability, odds, options = {}) {
     tradable: options.tradable !== false,
     settleable: options.settleable !== false,
     repriced: options.repriced ?? false,
+    // Market Identity Contract — travels with every evaluation so Best Value and
+    // the persisted valueEngine.markets can attest period/scope, not just a line.
+    betType: options.betType ?? null,
+    period: options.period ?? null,
+    scope: options.scope ?? null,
     probability: round2(p),
     odds: Number.isFinite(o) ? round2(o) : 0,
     expectedValue,
@@ -244,6 +249,9 @@ export function selectBestValue(candidates, options = {}) {
       tradable: c.tradable,
       settleable: c.settleable,
       repriced: c.repriced,
+      betType: c.betType,
+      period: c.period,
+      scope: c.scope,
       confidencePct: c.confidencePct,
       weights: options.weights
     })
@@ -256,9 +264,17 @@ export function selectBestValue(candidates, options = {}) {
   // Tradability and settleability are preconditions, not tie-breaks. A selection whose
   // line the model cannot price at the bookmaker's own line is not a bet at all; one the
   // app could never grade afterwards would sit pending forever and quietly distort the
-  // value track's own measured results.
+  // value track's own measured results. Likewise a selection whose market identity is
+  // explicitly unknown (period/scope) — we cannot say what it is a bet ON.
   const eligible = evaluated
-    .filter((v) => v.recommendable && v.tradable !== false && v.settleable !== false)
+    .filter(
+      (v) =>
+        v.recommendable &&
+        v.tradable !== false &&
+        v.settleable !== false &&
+        v.period !== "unknown" &&
+        v.scope !== "unknown"
+    )
     .sort((a, b) => b.valueScore - a.valueScore || b.expectedValue - a.expectedValue);
 
   const best = eligible[0] || null;
@@ -325,7 +341,10 @@ export function buildValueEngine(candidates, options = {}) {
           probabilityLine: best.probabilityLine ?? null,
           tradable: true,
           settleable: true,
-          repriced: best.repriced ?? false
+          repriced: best.repriced ?? false,
+          betType: best.betType ?? null,
+          period: best.period ?? null,
+          scope: best.scope ?? null
         }
       : null,
     highlighted: Boolean(best),

@@ -102,7 +102,7 @@ export default function MatchCard({
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive, t);
   const tier = modelTierBadge(row);
   const recommendedOdd = deriveRecommendedOdd(row);
-  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
   const isPickHot = hasExactConfidence && confPct >= 85;
 
   if (row.insufficientData) {

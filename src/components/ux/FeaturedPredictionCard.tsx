@@ -17,7 +17,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
 
   if (!match) return null;
 
-  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, t);
+  const recommendedLabel = formatRecommendedPick(match.recommended?.pick, match.recommended?.family, t, match.recommended);
   const confPct =
     match.recommended?.confidence != null && Number.isFinite(Number(match.recommended.confidence))
       ? Math.round(Number(match.recommended.confidence))

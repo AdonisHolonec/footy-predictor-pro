@@ -195,11 +195,14 @@ export function selectRecommendation({
     bookmakersUsed: bookmakersForCandidate(c, ctx)
   }));
 
-  // Four independent gates, all eligibility — none of them ranks anything. A selection the
-  // user cannot place, or that the app could never grade afterwards, is not a candidate at
-  // all, whatever its probability.
+  // Five independent gates, all eligibility — none of them ranks anything. A selection the
+  // user cannot place, whose market identity is unknown, or that the app could never grade
+  // afterwards, is not a candidate at all, whatever its probability.
   const rejectionReason = (c) => {
     if (c.tradable === false) return "not_tradable";
+    // Market Identity Contract: a candidate that cannot say what period/scope it
+    // is a bet on may exist internally but can never be Recommended.
+    if (c.period === "unknown" || c.scope === "unknown") return "unknown_market_identity";
     if (c.settleable === false) return "not_settleable";
     if (!Number.isFinite(c.odds) || c.odds < MIN_DISPLAY_ODDS) return "below_min_odds";
     if (!(c.confidencePct >= weights.minProbabilityPct)) return "below_min_probability";
@@ -250,7 +253,10 @@ export function selectRecommendation({
       lineExact: null,
       probabilityLine: null,
       tradable: false,
-      repriced: false
+      repriced: false,
+      // 1X2 is definitionally the full-match, match-scope market.
+      period: "full_match",
+      scope: "match"
     };
   } else {
     const alternates = ranked.slice(1, 4).map((c) => ({
@@ -284,7 +290,11 @@ export function selectRecommendation({
       lineExact: winner.lineExact ?? null,
       probabilityLine: winner.probabilityLine ?? null,
       tradable: true,
-      repriced: winner.repriced ?? false
+      repriced: winner.repriced ?? false,
+      // Market Identity Contract — persisted so settlement and the UI can attest
+      // WHAT the pick is (period/scope), not re-guess it from the label.
+      period: winner.period ?? null,
+      scope: winner.scope ?? null
     };
   }
 
@@ -301,7 +311,9 @@ export function selectRecommendation({
       lineExact: c.lineExact ?? null,
       probabilityLine: c.probabilityLine ?? null,
       repriced: c.repriced ?? false,
-      bookmakersUsed: c.bookmakersUsed || 0
+      bookmakersUsed: c.bookmakersUsed || 0,
+      period: c.period ?? null,
+      scope: c.scope ?? null
     });
     diagnostics = {
       rule: "argmax_calibrated_probability",
@@ -313,7 +325,8 @@ export function selectRecommendation({
         minProbabilityPct: weights.minProbabilityPct,
         minDisplayOdds: MIN_DISPLAY_ODDS,
         requiresTradable: true,
-        requiresSettleable: true
+        requiresSettleable: true,
+        requiresKnownMarketIdentity: true
       },
       explanation: buildDiagnosticsExplanation({ winner, ranked, rejected, fallbackTier })
     };

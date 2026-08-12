@@ -33,6 +33,43 @@ export type FormattedRecommendation = {
   familyKey: MarketFamilyKey;
 };
 
+/**
+ * Structural metadata for a recommended pick, straight from the server's Market
+ * Identity Contract (recommended.period / scope / bookLine). The UI renders it —
+ * it never invents a period or re-derives a line from the label string.
+ */
+export type RecommendedLabelMeta = {
+  period?: string | null;
+  scope?: string | null;
+  bookLine?: number | null;
+  line?: number | null;
+};
+
+/**
+ * Lossless line label: 10 → "10", 10.25 → "10.25", 10.5 → "10.5".
+ * `toFixed(1)` displayed the real bookmaker line 10.25 as the nonexistent "10.3".
+ */
+export function formatLineLabel(line: number | null | undefined): string {
+  const n = Number(line);
+  if (!Number.isFinite(n)) return String(line ?? "");
+  return String(n);
+}
+
+/** i18n suffix for a known period; null when absent/unknown (never invented). */
+function periodSuffix(period: string | null | undefined, t: TranslateFn): string | null {
+  if (period === "full_match") return t("match.periodFullMatch");
+  if (period === "first_half") return t("match.periodFirstHalf");
+  if (period === "second_half") return t("match.periodSecondHalf");
+  return null;
+}
+
+/** i18n scope word ("Home" / "Away") for team-scoped markets; null for match scope. */
+function scopeWord(scope: string | null | undefined, t: TranslateFn): string | null {
+  if (scope === "home") return t("match.scopeHome");
+  if (scope === "away") return t("match.scopeAway");
+  return null;
+}
+
 /** Goals lines the model ever recommends at (1.5 / 2.5 / 3.5) — mirrors GOALS_OU_LINES in server-utils/cardMarketSettlement.js. */
 const GOALS_LINES = new Set([1.5, 2.5, 3.5]);
 
@@ -148,13 +185,18 @@ export function resolveMarketFamilyKey(
 export function formatRecommendedPick(
   pick: string | null | undefined,
   family: string | null | undefined,
-  t: TranslateFn
+  t: TranslateFn,
+  meta?: RecommendedLabelMeta | null
 ): FormattedRecommendation {
   const raw = String(pick || "").trim();
   if (!raw) return { label: "—", familyKey: "OTHER" };
 
   const familyKey = resolveMarketFamilyKey(raw, family);
   const upper = raw.toUpperCase();
+  // Structural period suffix — appended only when the server sent one. Legacy
+  // rows without the Market Identity Contract render exactly as before.
+  const suffix = periodSuffix(meta?.period, t);
+  const withPeriod = (label: string) => (suffix ? `${label} · ${suffix}` : label);
 
   switch (familyKey) {
     case "1X2": {
@@ -173,22 +215,28 @@ export function formatRecommendedPick(
     case "CORNERS":
     case "CARDS": {
       const ou = parseOuPick(raw);
-      if (!ou) return { label: raw, familyKey };
+      if (!ou) return { label: withPeriod(raw), familyKey };
+      // Prefer the structural line (server bookLine) over the one re-parsed from
+      // the label; format losslessly either way (10.25 must never render "10.3").
+      const structuralLine = Number(meta?.bookLine ?? meta?.line);
+      const line = Number.isFinite(structuralLine) ? structuralLine : ou.line;
       const sideLabel = t(ou.side === "over" ? "match.overLine" : "match.underLine", {
-        line: ou.line.toFixed(1)
+        line: formatLineLabel(line)
       });
+      const scope = scopeWord(meta?.scope, t);
       const marketWord =
         familyKey === "GOALS"
           ? t("card.marketGoals")
           : familyKey === "CORNERS"
             ? t("match.featCorners")
             : t("match.cards");
-      return { label: `${sideLabel} ${marketWord}`, familyKey };
+      const scopedMarket = scope ? `${scope} ${marketWord}` : marketWord;
+      return { label: withPeriod(`${sideLabel} ${scopedMarket}`), familyKey };
     }
     case "CORRECT_SCORE": {
       return { label: `${t("recommendation.correctScore")} ${raw}`, familyKey };
     }
     default:
-      return { label: raw, familyKey: "OTHER" };
+      return { label: withPeriod(raw), familyKey: "OTHER" };
   }
 }

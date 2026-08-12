@@ -92,7 +92,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
       : "—";
   const odd = recommendedOdd(row);
   const oddLabel = formatBookOdd(odd, t("card.noBookOdd"));
-  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
 
   const pool = listSpecialBetCandidates(
     enrichedRow,

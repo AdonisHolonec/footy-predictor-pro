@@ -227,7 +227,7 @@ export default function PredictionFocusCard({
     ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotal.side, shotsTotal.line)
     : null;
   const recOdd = recommendedOdd(row);
-  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t);
+  const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
 
   // Value Edge: EV = (AI probability × odd) − 1, using the AI's own confidence for the
   // recommended pick — only ever shown when both are real numbers and EV is positive.

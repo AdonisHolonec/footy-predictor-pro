@@ -15,6 +15,7 @@ import {
 } from "../../marketOdds.js";
 import { deriveBestOverUnderPick } from "../predictHelpers.js";
 import { repriceCandidateLine } from "../decision/repriceCandidateLine.js";
+import { expectedIdentityForKind, formatLineLabel } from "../../marketIdentity.js";
 
 /**
  * Bookmaker labels for the lined side markets. Exported so the decision stage can
@@ -70,22 +71,25 @@ function selectOddByPick(quote, pick) {
  * is a different market, so its price may never stand in for match SOT even when the
  * line number happens to match. Those degrade to non-tradable rather than borrowing.
  */
-function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSourceKind = null) {
+function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSourceKind = null, expectedMarket = null) {
   if (!pick) return undefined;
   const side = String(pick.pick || "").toLowerCase().includes("under") ? "under" : "over";
   const sideLabel = side === "over" ? "Over" : "Under";
   const src = sourceKind || quote?.sourceKind || null;
   const crossMarket = Boolean(expectSourceKind && src && src !== expectSourceKind);
+  // Structural identity this row is FOR. The quote's own identity (attached by
+  // consensusOverUnderOddsAtLine) is verified against it inside repriceCandidateLine.
+  const expected = expectedMarket ?? expectedIdentityForKind("generic");
 
   const priced = crossMarket
     ? { tradable: false, bookLine: Number(quote?.line) || null, lineExact: false, reason: "cross_market_quote" }
-    : repriceCandidateLine({ block, side, requestedLine: pick.line, quote });
+    : repriceCandidateLine({ block, side, requestedLine: pick.line, quote, expectedMarket: expected });
 
   if (!priced.tradable) {
     return {
       // Model-only: the model's own line is still worth showing as a read, but it
       // carries no price, because no price for it exists.
-      pick: `${sideLabel} ${Number(pick.line).toFixed(1)}`,
+      pick: `${sideLabel} ${formatLineLabel(pick.line)}`,
       line: pick.line,
       odd: null,
       over: null,
@@ -100,13 +104,15 @@ function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSource
       oddSource: src,
       tradable: false,
       repriced: false,
-      untradableReason: priced.reason || "not_tradable"
+      untradableReason: priced.reason || "not_tradable",
+      period: expected.period,
+      scope: expected.scope
     };
   }
 
   const bookLine = priced.bookLine;
   return {
-    pick: `${sideLabel} ${Number(bookLine).toFixed(1)}`,
+    pick: `${sideLabel} ${formatLineLabel(bookLine)}`,
     line: bookLine,
     odd: priced.odd,
     // Both sides belong to this same book line, so they remain safe to expose.
@@ -121,7 +127,10 @@ function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSource
     bookmakersUsed: priced.bookmakersUsed,
     oddSource: src,
     tradable: true,
-    repriced: priced.repriced
+    repriced: priced.repriced,
+    // Market Identity Contract: what this quote is a price for.
+    period: priced.period ?? expected.period,
+    scope: priced.scope ?? expected.scope
   };
 }
 
@@ -221,7 +230,9 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               bookmaker: `median(${quote.bookmakersUsed})`,
               bookmakersUsed: quote.bookmakersUsed || 0,
               tradable: true,
-              repriced: false
+              repriced: false,
+              period: "full_match",
+              scope: "match"
             }
           : undefined;
 
@@ -238,10 +249,19 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               // No line exists for BTTS, so there is nothing to disagree about.
               tradable: true,
               lineExact: true,
-              repriced: false
+              repriced: false,
+              period: "full_match",
+              scope: "match"
             }
           : undefined,
-        corners: buildOuQuotePayload(cornersPick, cornersQuote, cornersBlock),
+        corners: buildOuQuotePayload(
+          cornersPick,
+          cornersQuote,
+          cornersBlock,
+          null,
+          null,
+          expectedIdentityForKind("corners")
+        ),
         // Only a genuine match-SOT quote may price the SOT row. resolveShotsOnTargetMarketQuote
         // still falls back to total-shots / team-SOT markets, but those are different markets:
         // they are recorded as non-tradable rather than lending their price to SOT.
@@ -250,9 +270,17 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
           shotsOnTargetQuote,
           shotsOnTargetBlock,
           shotsOnTargetQuote?.sourceKind || null,
-          "sot"
+          "sot",
+          expectedIdentityForKind("shots_on_target")
         ),
-        shotsTotal: buildOuQuotePayload(shotsTotalPick, shotsTotalQuote, shotsTotalBlock, "shots_total"),
+        shotsTotal: buildOuQuotePayload(
+          shotsTotalPick,
+          shotsTotalQuote,
+          shotsTotalBlock,
+          "shots_total",
+          null,
+          expectedIdentityForKind("shots_total")
+        ),
         // First-half goals: the model only produces pO15, so a book line other than 1.5
         // cannot be repriced. Rather than lend a 2.5 price to the 1.5 read, the row goes
         // non-tradable and shows no odd.
@@ -276,6 +304,9 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
                 bookmakersUsed: tradable ? firstHalfQuote?.bookmakersUsed || 0 : 0,
                 tradable,
                 repriced: false,
+                // The one row whose period is NOT full_match — and it says so.
+                period: "first_half",
+                scope: "match",
                 ...(tradable ? {} : { untradableReason: "no_model_probability_at_book_line" })
               };
             })()
@@ -290,7 +321,9 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               // No line exists for Double Chance.
               tradable: true,
               lineExact: true,
-              repriced: false
+              repriced: false,
+              period: "full_match",
+              scope: "match"
             }
           : undefined,
         // Cards are requested exact-only at VALUE_CARDS_LINE, so book line == model line.
@@ -308,7 +341,9 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               bookmaker: `median(${cardsQuote.bookmakersUsed})`,
               bookmakersUsed: cardsQuote.bookmakersUsed || 0,
               tradable: true,
-              repriced: false
+              repriced: false,
+              period: "full_match",
+              scope: "match"
             }
           : undefined
       };
