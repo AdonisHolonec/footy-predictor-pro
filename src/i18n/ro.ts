@@ -349,8 +349,6 @@ export const ro: Dict = {
     liveWinDraw: "Egal",
     liveWinShift: "{label} {delta} pp față de kickoff",
     liveWinStable: "Aproape neschimbat față de kickoff",
-    momentumSwitchToOrb: "Comută la vizualizarea orb",
-    momentumSwitchToRail: "Comută la vizualizarea bară",
     eventGoal: "Gol",
     eventOwnGoal: "Autogol",
     eventPenalty: "Penalty",
