@@ -5,6 +5,7 @@ import {
   formatConfidencePercent,
   formatDateTime,
   formatOdds,
+  formatProbabilityPercent,
   formatValueScore,
   marketIconKey,
   marketLabelKey,
@@ -60,6 +61,9 @@ export default function GlobalSpecialBetSelectionRow({
   const odds = formatOdds(selection.odds);
   const confidence = formatConfidencePercent(selection.confidence);
   const value = formatValueScore(selection.value_score);
+  // The leg's own P(full win) — the number the ranking used (migration 050).
+  // Null for pre-050 snapshots: a dash, never a fake 0%.
+  const probability = formatProbabilityPercent(selection.probability);
   const dash = "—";
 
   const kickoff = formatDateTime(selection.kickoff_at, locale);
@@ -117,9 +121,26 @@ export default function GlobalSpecialBetSelectionRow({
         </span>
       </div>
 
-      {/* Three columns at 390px too: the numbers are what the user scans, so they
-          stay on one readable row instead of wrapping into a list. */}
-      <dl className="mt-2.5 grid grid-cols-3 gap-2 border-t border-[var(--fp-border)] pt-2">
+      {/* One readable row at 390px too: the numbers are what the user scans, so
+          they stay on one line instead of wrapping into a list. Probability
+          leads — it is the metric the probability-first engine ranked this leg
+          on; odds, confidence and value score are context, not the headline. */}
+      <dl className="mt-2.5 grid grid-cols-4 gap-1.5 border-t border-[var(--fp-border)] pt-2 sm:gap-2">
+        <div>
+          <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+            {t("gsb.probability")}
+          </dt>
+          <dd
+            className="mt-0.5 font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]"
+            aria-label={
+              probability
+                ? t("gsb.legProbabilityAria", { value: probability.replace("%", "") })
+                : undefined
+            }
+          >
+            {probability ?? dash}
+          </dd>
+        </div>
         <div>
           <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("gsb.odds")}

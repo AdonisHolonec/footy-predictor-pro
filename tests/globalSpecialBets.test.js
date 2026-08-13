@@ -41,7 +41,19 @@ function payload(id, leagueId, overrides = {}) {
     modelMeta: { dataQuality: 0.8 },
     valueEngine: {
       markets: [
-        { type: "Over 2.5", family: "Goals", line: 2.5, odds: 1.8, valueScore: 70 - id, recommendable: true }
+        {
+          type: "Over 2.5",
+          family: "Goals",
+          line: 2.5,
+          odds: 1.8,
+          probability: 0.7,
+          valueScore: 70 - id,
+          recommendable: true,
+          tradable: true,
+          betType: "over_under",
+          period: "full_match",
+          scope: "match"
+        }
       ]
     },
     ...overrides
@@ -167,6 +179,7 @@ test("selection rows carry odds, confidence and value score unchanged", () => {
       odds: 1.837,
       confidence: 72.5,
       valueScore: 63.25,
+      probability: 0.7423,
       fixtureLabel: "Arsenal – Chelsea",
       leagueName: "Premier League"
     }
@@ -185,7 +198,8 @@ test("selection rows carry odds, confidence and value score unchanged", () => {
       confidence: 72.5,
       value_score: 63.25,
       fixture_label: "Arsenal – Chelsea",
-      league_name: "Premier League"
+      league_name: "Premier League",
+      probability: 0.7423
     }
   ]);
 });
@@ -227,6 +241,7 @@ test("an unlined selection keeps null side and line rather than inventing them",
   assert.equal(row.side, null);
   assert.equal(row.line, null);
   assert.equal(row.value_score, null);
+  assert.equal(row.probability, null, "a missing probability is stored as NULL, never invented");
 });
 
 test("model version comes from the payload, never a constant", () => {
@@ -447,7 +462,8 @@ test("an unbuildable variant writes nothing and says why", async () => {
     supabase
   });
 
-  assert.deepEqual(result, {
+  const { examined, rejected, ...rest } = result;
+  assert.deepEqual(rest, {
     ok: true,
     created: false,
     available: false,
@@ -455,7 +471,109 @@ test("an unbuildable variant writes nothing and says why", async () => {
     required: 8,
     availableCandidates: 2
   });
+  // The rejection breakdown is what lets the UI explain WHY the pool is thin.
+  assert.equal(examined, 2);
+  assert.equal(typeof rejected.probabilityBelowFloor, "number");
+  assert.equal(typeof rejected.modelMarketDivergence, "number");
   assert.equal(supabase.calls.rpc.length, 0, "nothing may be written for an unbuildable variant");
+});
+
+test("a created bet reports Π p as estimatedTicketProbability (ephemeral until migration 050)", async () => {
+  const historyRows = [1, 2, 3].map((id) => ({
+    fixture_id: id,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    raw_payload: payload(id, 39)
+  }));
+  const supabase = fakeSupabase({
+    historyRows,
+    rpcResult: { ok: true, created: true, bet: { id: "bet-1", variant: 3 }, selections: [] }
+  });
+
+  const result = await createGlobalSpecialBet({
+    userId: USER,
+    betDate: BET_DATE,
+    variant: 3,
+    leagueIds: [39],
+    now: NOW,
+    supabase
+  });
+
+  // Three legs at p = 0.7 each: 0.7³ = 0.343, rounded at 4 decimals.
+  assert.equal(result.estimatedTicketProbability, 0.343);
+  assert.equal(typeof result.rejected, "object", "the breakdown ships on success too");
+});
+
+test("the RPC receives per-leg probability and Π p as p_ticket_probability (050 contract)", async () => {
+  const historyRows = [1, 2, 3].map((id) => ({
+    fixture_id: id,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    raw_payload: payload(id, 39)
+  }));
+  const supabase = fakeSupabase({
+    historyRows,
+    rpcResult: { ok: true, created: true, bet: { id: "bet-1", variant: 3 }, selections: [] }
+  });
+
+  await createGlobalSpecialBet({ userId: USER, betDate: BET_DATE, variant: 3, leagueIds: [39], now: NOW, supabase });
+
+  const { params } = supabase.calls.rpc[0];
+  // The exact P(full win) the ranking used, per leg — never confidence.
+  for (const row of params.p_selections) {
+    assert.equal(row.probability, 0.7);
+    assert.notEqual(row.probability, row.confidence / 100, "probability is not confidence in disguise");
+  }
+  assert.equal(params.p_ticket_probability, 0.343, "0.7³ at the engine's 4-decimal rounding");
+});
+
+test("distinct leg probabilities persist as their exact product: 0.9 × 0.8 × 0.7 = 0.504", async () => {
+  const probs = { 1: 0.9, 2: 0.8, 3: 0.7 };
+  const historyRows = [1, 2, 3].map((id) => ({
+    fixture_id: id,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    raw_payload: payload(id, 39, {
+      valueEngine: {
+        markets: [
+          {
+            type: "Over 2.5",
+            family: "Goals",
+            line: 2.5,
+            odds: 1.8,
+            probability: probs[id],
+            valueScore: 60,
+            recommendable: true,
+            tradable: true,
+            betType: "over_under",
+            period: "full_match",
+            scope: "match"
+          }
+        ]
+      }
+    })
+  }));
+  const supabase = fakeSupabase({
+    historyRows,
+    rpcResult: { ok: true, created: true, bet: { id: "bet-1", variant: 3 }, selections: [] }
+  });
+
+  const result = await createGlobalSpecialBet({
+    userId: USER,
+    betDate: BET_DATE,
+    variant: 3,
+    leagueIds: [39],
+    now: NOW,
+    supabase
+  });
+
+  const { params } = supabase.calls.rpc[0];
+  assert.equal(params.p_ticket_probability, 0.504);
+  assert.deepEqual(
+    params.p_selections.map((s) => s.probability).sort((a, b) => b - a),
+    [0.9, 0.8, 0.7]
+  );
+  assert.equal(result.estimatedTicketProbability, 0.504);
 });
 
 test("a repeat request returns the existing bet instead of creating a second one", async () => {
@@ -482,6 +600,42 @@ test("a repeat request returns the existing bet instead of creating a second one
 
   assert.equal(result.created, false);
   assert.equal(result.bet.id, "bet-1");
+  // The stored bet predates 050 (no ticket_probability): a repeat answers null
+  // honestly rather than attributing a fresh Π p to selections it was not
+  // computed from.
+  assert.equal(result.estimatedTicketProbability, null);
+});
+
+test("a repeat request echoes the STORED ticket probability, not a recomputed one", async () => {
+  const historyRows = [1, 2, 3].map((id) => ({
+    fixture_id: id,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    raw_payload: payload(id, 39)
+  }));
+  // The stored value (0.6) deliberately differs from the engine's current pool
+  // product (0.343) — the snapshot must win.
+  const supabase = fakeSupabase({
+    historyRows,
+    rpcResult: {
+      ok: true,
+      created: false,
+      bet: { id: "bet-1", ticket_probability: 0.6 },
+      selections: [{ fixture_id: 1, probability: 0.9 }]
+    }
+  });
+
+  const result = await createGlobalSpecialBet({
+    userId: USER,
+    betDate: BET_DATE,
+    variant: 3,
+    leagueIds: [39],
+    now: NOW,
+    supabase
+  });
+
+  assert.equal(result.estimatedTicketProbability, 0.6);
+  assert.equal(result.selections[0].probability, 0.9, "stored per-leg probability is returned verbatim");
 });
 
 test("league order and duplicates cannot produce two different identities", async () => {
@@ -563,4 +717,27 @@ test("listing is always scoped to the calling user", async () => {
 test("no stored bets yields an empty list rather than an error", async () => {
   const supabase = fakeSupabase({ bets: [] });
   assert.deepEqual(await listGlobalSpecialBets({ userId: USER, supabase }), { bets: [] });
+});
+
+test("GET returns stored probability fields verbatim; legacy nulls survive unharmed", async () => {
+  const supabase = fakeSupabase({
+    bets: [
+      { id: "bet-new", user_id: USER, variant: 3, ticket_probability: 0.504 },
+      { id: "bet-old", user_id: USER, variant: 3, ticket_probability: null }
+    ],
+    selections: [
+      { special_bet_id: "bet-new", fixture_id: 1, odds: 1.8, probability: 0.9 },
+      { special_bet_id: "bet-old", fixture_id: 2, odds: 2.1, probability: null }
+    ]
+  });
+
+  const { bets } = await listGlobalSpecialBets({ userId: USER, supabase });
+
+  const fresh = bets.find((b) => b.id === "bet-new");
+  const legacy = bets.find((b) => b.id === "bet-old");
+  assert.equal(fresh.ticket_probability, 0.504);
+  assert.equal(fresh.selections[0].probability, 0.9);
+  // Pre-050 rows read back exactly as stored: null, never a retro-invented value.
+  assert.equal(legacy.ticket_probability, null);
+  assert.equal(legacy.selections[0].probability, null);
 });

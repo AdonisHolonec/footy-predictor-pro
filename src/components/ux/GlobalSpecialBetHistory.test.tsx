@@ -94,6 +94,30 @@ describe("GlobalSpecialBetHistory", () => {
     expect(screen.queryByText("Over 7.5")).toBeNull();
   });
 
+  it("a post-050 bet shows its stored ticket chance instead of the confidence line", async () => {
+    fetchWithAuth.mockResolvedValue(
+      jsonResponse(200, { ok: true, bets: [storedBet({ ticket_probability: 0.3256 })] })
+    );
+    await act(async () => {
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+    });
+
+    await waitFor(() => expect(screen.getByText(/Șansă estimată bilet: 33%/)).toBeTruthy());
+    expect(screen.queryByText(/Încredere medie/)).toBeNull();
+  });
+
+  it("a legacy bet keeps its confidence line and invents no ticket chance", async () => {
+    // storedBet() carries no ticket_probability — exactly a pre-050 row.
+    fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [storedBet()] }));
+    await act(async () => {
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+    });
+
+    await waitFor(() => expect(screen.getByText(/Încredere medie/)).toBeTruthy());
+    expect(screen.queryByText(/Șansă estimată bilet/)).toBeNull();
+    expect(screen.queryByText(/0%/)).toBeNull();
+  });
+
   it("expands and collapses an item's selections", async () => {
     fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [storedBet()] }));
     await act(async () => {

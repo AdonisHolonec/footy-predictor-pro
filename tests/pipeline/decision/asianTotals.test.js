@@ -264,8 +264,13 @@ test("GSB engine refuses quarter-line legs explicitly (no approximation)", () =>
           family: "Corners",
           line,
           odds: 1.9,
+          probability: 0.7,
           valueScore: 70,
-          recommendable: true
+          recommendable: true,
+          tradable: true,
+          betType: "corners",
+          period: "full_match",
+          scope: "match"
         }
       ]
     }

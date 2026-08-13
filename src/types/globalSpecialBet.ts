@@ -41,6 +41,13 @@ export type GlobalSpecialBetSelection = {
   odds: number;
   confidence: number;
   value_score: number | null;
+  /**
+   * Model P(full win) this leg was ranked on, as a 0–1 fraction (migration 050).
+   * NULL for selections stored before 050 — there is no backfill, and the UI
+   * renders a dash rather than inventing a number. Distinct from `confidence`,
+   * which is fixture-level metadata and never a probability.
+   */
+  probability: number | null;
   status: GlobalSpecialBetStatus;
   settled_at: string | null;
 };
@@ -57,6 +64,13 @@ export type GlobalSpecialBetRow = {
   total_odds: number;
   average_confidence: number;
   model_version: string | null;
+  /**
+   * Engine-estimated ticket chance (migration 050): the product of the legs'
+   * P(full win), 0–1, under an explicit independence assumption. NULL for bets
+   * stored before 050. The persisted value is the source of truth — the client
+   * never recomputes it from the selections.
+   */
+  ticket_probability: number | null;
   created_at: string;
   settled_at: string | null;
   /**

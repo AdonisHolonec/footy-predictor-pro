@@ -106,18 +106,30 @@ function selectionsJson(count, { duplicateFixture = false, badOdds = false, labe
     confidence: 80,
     value_score: 60,
     // Omitted entirely unless a test asks for them, so the default rows stay
-    // exactly what a pre-048 caller sends.
+    // exactly what a pre-048 (labels) / pre-050 (probability) caller sends.
     ...(labels ? labels(i) : {})
   }));
   return JSON.stringify(rows).replace(/'/g, "''");
 }
 
-function createBet({ userId = USER_A, variant = 3, leagues = "{39,140}", selections, expectFailure = false } = {}) {
+function createBet({
+  userId = USER_A,
+  variant = 3,
+  leagues = "{39,140}",
+  selections,
+  ticketProbability,
+  expectFailure = false
+} = {}) {
   const sel = selections ?? selectionsJson(variant);
+  // Without ticketProbability the call keeps the exact 8-argument shape every
+  // pre-050 caller uses — the default-NULL parameter is what makes that legal,
+  // and most tests exercising it here is the deploy-window compatibility proof.
+  const tail =
+    ticketProbability === undefined ? "" : `, ${ticketProbability === null ? "null" : ticketProbability}`;
   return psql(
     `select public.create_global_special_bet(
        '${userId}'::uuid, '${BET_DATE}'::date, ${variant}::smallint, '${leagues}'::int[],
-       5.832, 80.00, 'predictor-v3.1-test', '${sel}'::jsonb
+       5.832, 80.00, 'predictor-v3.1-test', '${sel}'::jsonb${tail}
      );`,
     { expectFailure }
   );
@@ -510,9 +522,9 @@ test("L3: a caller that sends no label writes NULL, not an empty string", () => 
 });
 
 test("L4: the reissued RPC keeps its SECURITY DEFINER hardening", () => {
-  // 048 replaces create_global_special_bet() in place. A CREATE OR REPLACE with
-  // an unchanged signature preserves the ACL 046 set — this asserts that it did,
-  // rather than trusting the rule.
+  // 048 replaced in place; 050 dropped and recreated with a new signature. In
+  // both cases the deployed end state must be the one 046 established — this
+  // asserts that it is, rather than trusting either mechanism.
   const acl = value(
     `select coalesce(array_to_string(proacl, ','), 'NONE') from pg_proc where proname = 'create_global_special_bet';`
   );
@@ -524,4 +536,111 @@ test("L4: the reissued RPC keeps its SECURITY DEFINER hardening", () => {
      from pg_proc where proname = 'create_global_special_bet';`
   );
   assert.equal(definer, "true|search_path=public", "the replacement must not drop the pinned search_path");
+});
+
+// ── M. The probability snapshot (050) ─────────────────────────────────────
+
+test("M1: probability and ticket_probability exist, nullable, at the agreed precision", () => {
+  assert.equal(
+    value(
+      `select column_name || ':' || is_nullable || ':' || numeric_precision || ',' || numeric_scale
+       from information_schema.columns
+       where table_name = 'special_bet_selections' and column_name = 'probability';`
+    ),
+    "probability:YES:5,4"
+  );
+  assert.equal(
+    value(
+      `select column_name || ':' || is_nullable || ':' || numeric_precision || ',' || numeric_scale
+       from information_schema.columns
+       where table_name = 'special_bets' and column_name = 'ticket_probability';`
+    ),
+    "ticket_probability:YES:6,4"
+  );
+});
+
+test("M2: the RPC persists per-leg probability and the ticket product verbatim", () => {
+  createBet({
+    ticketProbability: 0.504,
+    selections: selectionsJson(3, { labels: (i) => ({ probability: [0.9, 0.8, 0.7][i] }) })
+  });
+
+  assert.equal(
+    value(`select ticket_probability::text from public.special_bets;`),
+    "0.5040",
+    "numeric(6,4) stores the engine's 4-decimal product exactly"
+  );
+  assert.equal(
+    value(
+      `select string_agg(probability::text, ',' order by fixture_id) from public.special_bet_selections;`
+    ),
+    "0.9000,0.8000,0.7000"
+  );
+});
+
+test("M3: a pre-050 caller (8 arguments, no probability keys) writes NULL and still works", () => {
+  // The exact call shape deployed server code used before this migration.
+  const r = createBet();
+  assert.equal(JSON.parse(r.stdout).ok, true);
+
+  assert.equal(value(`select count(*) from public.special_bets where ticket_probability is null;`), "1");
+  assert.equal(
+    value(`select count(*) from public.special_bet_selections where probability is null;`),
+    "3",
+    "legacy rows stay NULL — no value is invented retroactively"
+  );
+});
+
+test("M4: exactly one create_global_special_bet exists — the drop left no overload behind", () => {
+  // CREATE with a changed signature beside the old one would leave TWO callable
+  // functions, the old one still writing pre-050 rows. The drop must have been
+  // real.
+  assert.equal(value(`select count(*) from pg_proc where proname = 'create_global_special_bet';`), "1");
+  assert.equal(
+    value(
+      `select pg_get_function_identity_arguments(oid) from pg_proc where proname = 'create_global_special_bet';`
+    ),
+    "p_user_id uuid, p_bet_date date, p_variant smallint, p_league_ids integer[], " +
+      "p_total_odds numeric, p_average_confidence numeric, p_model_version text, " +
+      "p_selections jsonb, p_ticket_probability numeric"
+  );
+});
+
+test("M5: a probability outside (0,1] is rejected by the schema, NULL is not", () => {
+  const bad = createBet({
+    selections: selectionsJson(3, { labels: () => ({ probability: 1.2 }) }),
+    expectFailure: true
+  });
+  assert.equal(bad.ok, false);
+  assert.match(bad.stderr, /special_bet_selections_probability_range/);
+  assert.equal(value("select count(*) from public.special_bets;"), "0", "the whole bet rolls back");
+
+  const badTicket = createBet({ ticketProbability: 1.5, expectFailure: true });
+  assert.equal(badTicket.ok, false);
+  assert.match(badTicket.stderr, /special_bets_ticket_probability_range/);
+});
+
+test("M6: the probability snapshot is owner-isolated like everything else", () => {
+  createBet({
+    userId: USER_A,
+    ticketProbability: 0.504,
+    selections: selectionsJson(3, { labels: () => ({ probability: 0.8 }) })
+  });
+
+  assert.match(
+    asUser(USER_A, "select count(*) from public.special_bets where ticket_probability = 0.504;").stdout,
+    /\b1\b/,
+    "the owner reads their own stored probability"
+  );
+  assert.match(
+    asUser(USER_B, "select count(*) from public.special_bets;").stdout,
+    /\b0\b/,
+    "another user sees nothing — 050 added columns, not access"
+  );
+  const forged = asUser(
+    USER_A,
+    `with upd as (update public.special_bets set ticket_probability = 0.99 returning 1)
+     select count(*) from upd;`
+  );
+  assert.equal(rowsAffected(forged), 0, "the stored probability is as immutable as the rest of the snapshot");
 });

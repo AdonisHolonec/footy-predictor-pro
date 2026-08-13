@@ -84,6 +84,21 @@ export function formatValueScore(value: unknown): string | null {
 }
 
 /**
+ * A stored probability (0–1 fraction, migration 050) as a whole percentage.
+ *
+ * Null in, null out: a pre-050 snapshot has no probability, and rendering "0%"
+ * there would turn an honest absence into a fake certainty of failure. The
+ * fraction→percent conversion lives ONLY here, so "0.3256 → 33%" cannot drift
+ * between the card, the history and the tests.
+ */
+export function formatProbabilityPercent(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return `${Math.round(n * 100)}%`;
+}
+
+/**
  * fixture_id -> readable labels, built from prediction and history rows the
  * client already loaded.
  *
@@ -373,7 +388,13 @@ export type GlobalSpecialBetSummary = {
   selectionCount: number;
   totalOdds: string | null;
   settledTotalOdds: string | null;
+  /** Secondary metadata since Increment 3 — never the headline metric. */
   averageConfidence: string | null;
+  /**
+   * The persisted `ticket_probability` (migration 050), formatted. Null for
+   * legacy snapshots — the summary never recomputes it from the legs.
+   */
+  ticketProbability: string | null;
   status: GlobalSpecialBetStatus;
   createdAt: string;
 };
@@ -385,6 +406,7 @@ export function summarizeGlobalSpecialBet(bet: GlobalSpecialBet): GlobalSpecialB
     totalOdds: formatOdds(bet.total_odds),
     settledTotalOdds: formatOdds(bet.settled_total_odds),
     averageConfidence: formatConfidencePercent(bet.average_confidence),
+    ticketProbability: formatProbabilityPercent(bet.ticket_probability),
     status: isGlobalSpecialBetStatus(bet.status) ? bet.status : "pending",
     createdAt: bet.created_at
   };

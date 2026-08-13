@@ -259,17 +259,41 @@ export default function GlobalSpecialBetSection({
             </p>
           ) : null}
 
+          {/* Ticket chance is the headline metric (probability-first contract):
+              accent tone moves here from total odds, keeping One Accent Rule —
+              exactly one accent number in the grid. averageConfidence is
+              demoted to a hint on its tile: the audit showed it read as the
+              ticket's chance while being neither a probability nor a product.
+              A legacy bet (pre-050) shows a dash — the number was never stored
+              and is not recomputed. */}
           <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-            <StatTile label={t("gsb.summarySelections")} value={String(summary.selectionCount)} />
+            <div
+              role="group"
+              aria-label={
+                summary.ticketProbability
+                  ? t("gsb.ticketChanceAria", { value: summary.ticketProbability.replace("%", "") })
+                  : t("gsb.ticketChance")
+              }
+            >
+              <StatTile
+                label={t("gsb.ticketChance")}
+                value={summary.ticketProbability ?? "—"}
+                tone="accent"
+                hint={
+                  summary.averageConfidence
+                    ? `${t("gsb.summaryAvgConfidence")}: ${summary.averageConfidence}`
+                    : undefined
+                }
+              />
+            </div>
             <StatTile
               label={t("gsb.summaryTotalOdds")}
               value={summary.totalOdds ?? "—"}
-              tone="accent"
               hint={
                 summary.settledTotalOdds ? `${t("gsb.summarySettledOdds")}: ${summary.settledTotalOdds}` : undefined
               }
             />
-            <StatTile label={t("gsb.summaryAvgConfidence")} value={summary.averageConfidence ?? "—"} />
+            <StatTile label={t("gsb.summarySelections")} value={String(summary.selectionCount)} />
             <StatTile
               label={t("gsb.summaryStatus")}
               value={t(statusLabelKey(summary.status))}
@@ -277,6 +301,11 @@ export default function GlobalSpecialBetSection({
               hint={createdLabel ? `${t("gsb.summaryCreated")}: ${createdLabel}` : undefined}
             />
           </div>
+          {/* Visible but quiet, and only when a chance is actually shown: a
+              disclaimer under a dash would explain a number that is not there. */}
+          {summary.ticketProbability && (
+            <p className="mt-1.5 text-[11px] text-[var(--fp-text-muted)]">{t("gsb.ticketChanceDisclaimer")}</p>
+          )}
 
           <div className="mt-4 flex items-center justify-between gap-2">
             <h3 className="font-display text-sm font-semibold text-[var(--fp-text)]">{t("gsb.selectionsTitle")}</h3>
