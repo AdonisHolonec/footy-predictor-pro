@@ -422,6 +422,7 @@ export const en: Dict = {
     periodFullMatch: "Full Match",
     periodFirstHalf: "1st Half",
     periodSecondHalf: "2nd Half",
+    periodExtraTime: "Extra Time",
     scopeHome: "Home",
     scopeAway: "Away",
     over15: "Over 1.5",
@@ -811,6 +812,8 @@ export const en: Dict = {
     doubleChance: "Double Chance",
     bttsYes: "Both Teams To Score – Yes",
     bttsNo: "Both Teams To Score – No",
+    bttsYesShort: "BTTS",
+    bttsNoShort: "No BTTS",
     correctScore: "Correct Score"
   },
   common: {

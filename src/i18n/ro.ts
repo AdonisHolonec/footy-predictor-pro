@@ -422,6 +422,7 @@ export const ro: Dict = {
     periodFullMatch: "Meci întreg",
     periodFirstHalf: "Repriza 1",
     periodSecondHalf: "Repriza 2",
+    periodExtraTime: "Prelungiri",
     scopeHome: "Gazde",
     scopeAway: "Oaspeți",
     over15: "Peste 1.5",
@@ -811,6 +812,8 @@ export const ro: Dict = {
     doubleChance: "Șansă Dublă",
     bttsYes: "Ambele Echipe Marchează – Da",
     bttsNo: "Ambele Echipe Marchează – Nu",
+    bttsYesShort: "GG",
+    bttsNoShort: "NGG",
     correctScore: "Scor Exact"
   },
   common: {

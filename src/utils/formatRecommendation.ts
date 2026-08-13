@@ -31,6 +31,12 @@ export type MarketFamilyKey =
 export type FormattedRecommendation = {
   label: string;
   familyKey: MarketFamilyKey;
+  /**
+   * Same label with the VERBOSE period name ("Full Match" instead of "FT") —
+   * for aria-labels/tooltips, so compact visual labels never cost accessibility.
+   * Equals `label` when the pick carries no period.
+   */
+  ariaLabel: string;
 };
 
 /**
@@ -55,16 +61,39 @@ export function formatLineLabel(line: number | null | undefined): string {
   return String(n);
 }
 
-/** i18n suffix for a known period; null when absent/unknown (never invented). */
+/**
+ * Compact UI abbreviation for a known period — product rule: FT / FH / SH / ET.
+ * Presentation only: the internal descriptors (full_match / first_half /
+ * second_half / extra_time…) are the Market Identity Contract and are never
+ * touched here. Unknown periods get NO invented abbreviation — callers fall
+ * back to no suffix at all, exactly as before.
+ * FH is the Market-Identity abbreviation; legacy "HT" wording elsewhere in the
+ * app is deliberately left alone (no global terminology refactor here).
+ */
+export function formatMarketPeriodShort(period: string | null | undefined): string | null {
+  if (period === "full_match") return "FT";
+  if (period === "first_half") return "FH";
+  if (period === "second_half") return "SH";
+  if (period === "extra_time") return "ET";
+  return null;
+}
+
+/** Verbose i18n name for a known period; null when absent/unknown (never invented). */
 function periodSuffix(period: string | null | undefined, t: TranslateFn): string | null {
   if (period === "full_match") return t("match.periodFullMatch");
   if (period === "first_half") return t("match.periodFirstHalf");
   if (period === "second_half") return t("match.periodSecondHalf");
+  if (period === "extra_time") return t("match.periodExtraTime");
   return null;
 }
 
-/** i18n scope word ("Home" / "Away") for team-scoped markets; null for match scope. */
-function scopeWord(scope: string | null | undefined, t: TranslateFn): string | null {
+/**
+ * Compact scope label — single source of truth for scope display. Product rule:
+ * `match` gets no suffix; `home`/`away` keep the full i18n words ("Home"/"Gazde",
+ * "Away"/"Oaspeți") — NEVER single letters (no invented "H"/"A"). Unknown scopes
+ * get nothing, so a value outside the contract is never mislabeled.
+ */
+export function formatMarketScopeShort(scope: string | null | undefined, t: TranslateFn): string | null {
   if (scope === "home") return t("match.scopeHome");
   if (scope === "away") return t("match.scopeAway");
   return null;
@@ -189,33 +218,58 @@ export function formatRecommendedPick(
   meta?: RecommendedLabelMeta | null
 ): FormattedRecommendation {
   const raw = String(pick || "").trim();
-  if (!raw) return { label: "—", familyKey: "OTHER" };
+  if (!raw) return { label: "—", ariaLabel: "—", familyKey: "OTHER" };
 
   const familyKey = resolveMarketFamilyKey(raw, family);
   const upper = raw.toUpperCase();
   // Structural period suffix — appended only when the server sent one. Legacy
   // rows without the Market Identity Contract render exactly as before.
-  const suffix = periodSuffix(meta?.period, t);
-  const withPeriod = (label: string) => (suffix ? `${label} · ${suffix}` : label);
+  // Visual: compact FT/FH/ET; periods without a defined abbreviation
+  // (second_half) keep their verbose label. Aria: always verbose.
+  const verboseSuffix = periodSuffix(meta?.period, t);
+  const shortSuffix = formatMarketPeriodShort(meta?.period) ?? verboseSuffix;
+  const withPeriod = (label: string) => (shortSuffix ? `${label} · ${shortSuffix}` : label);
+  const withVerbosePeriod = (label: string) =>
+    verboseSuffix ? `${label} · ${verboseSuffix}` : withPeriod(label);
+  // `verboseBase` lets a market with a compact display name ("GG", "DC 1X",
+  // "CS 2-1") keep its full name in aria ("Ambele marchează (GG)", …).
+  const periodized = (label: string, verboseBase: string = label): FormattedRecommendation => ({
+    label: withPeriod(label),
+    ariaLabel: withVerbosePeriod(verboseBase),
+    familyKey
+  });
+  const plain = (label: string, key: MarketFamilyKey = familyKey): FormattedRecommendation => ({
+    label,
+    ariaLabel: label,
+    familyKey: key
+  });
 
   switch (familyKey) {
     case "1X2": {
-      if (upper === "1") return { label: t("recommendation.homeWin"), familyKey };
-      if (upper === "2") return { label: t("recommendation.awayWin"), familyKey };
-      return { label: t("recommendation.draw"), familyKey };
+      if (upper === "1") return plain(t("recommendation.homeWin"));
+      if (upper === "2") return plain(t("recommendation.awayWin"));
+      return plain(t("recommendation.draw"));
     }
     case "DOUBLE_CHANCE": {
       const code = upper === "1X" || upper === "12" || upper === "X2" ? upper : raw;
-      return { label: `${t("recommendation.doubleChance")} ${code}`, familyKey };
+      // Compact "DC 1X" — the "dc" alias already exists server-side (GSB families,
+      // normalizeServerFamily). Aria keeps the full "Double chance 1X".
+      return periodized(`DC ${code}`, `${t("recommendation.doubleChance")} ${code}`);
     }
     case "BTTS": {
-      return { label: t(upper === "NGG" ? "recommendation.bttsNo" : "recommendation.bttsYes"), familyKey };
+      // Locale-native compact forms, reusing the app's own conventions:
+      // RO "GG"/"NGG", EN "BTTS"/"No BTTS". Aria keeps the full sentence.
+      const isNo = upper === "NGG";
+      return periodized(
+        t(isNo ? "recommendation.bttsNoShort" : "recommendation.bttsYesShort"),
+        t(isNo ? "recommendation.bttsNo" : "recommendation.bttsYes")
+      );
     }
     case "GOALS":
     case "CORNERS":
     case "CARDS": {
       const ou = parseOuPick(raw);
-      if (!ou) return { label: withPeriod(raw), familyKey };
+      if (!ou) return periodized(raw);
       // Prefer the structural line (server bookLine) over the one re-parsed from
       // the label; format losslessly either way (10.25 must never render "10.3").
       const structuralLine = Number(meta?.bookLine ?? meta?.line);
@@ -223,7 +277,7 @@ export function formatRecommendedPick(
       const sideLabel = t(ou.side === "over" ? "match.overLine" : "match.underLine", {
         line: formatLineLabel(line)
       });
-      const scope = scopeWord(meta?.scope, t);
+      const scope = formatMarketScopeShort(meta?.scope, t);
       const marketWord =
         familyKey === "GOALS"
           ? t("card.marketGoals")
@@ -231,12 +285,13 @@ export function formatRecommendedPick(
             ? t("match.featCorners")
             : t("match.cards");
       const scopedMarket = scope ? `${scope} ${marketWord}` : marketWord;
-      return { label: withPeriod(`${sideLabel} ${scopedMarket}`), familyKey };
+      return periodized(`${sideLabel} ${scopedMarket}`);
     }
     case "CORRECT_SCORE": {
-      return { label: `${t("recommendation.correctScore")} ${raw}`, familyKey };
+      // Compact "CS 2-1"; aria keeps the full "Correct score 2-1".
+      return periodized(`CS ${raw}`, `${t("recommendation.correctScore")} ${raw}`);
     }
     default:
-      return { label: withPeriod(raw), familyKey: "OTHER" };
+      return periodized(raw);
   }
 }

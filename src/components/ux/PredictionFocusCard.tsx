@@ -480,7 +480,12 @@ export default function PredictionFocusCard({
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.mainPick")}</p>
-            <p className="flex items-center gap-1 truncate font-display text-[15px] font-bold leading-tight text-[var(--fp-accent)]">
+            {/* Visual label is compact (FT/FH/ET); aria keeps the verbose period name. */}
+            <p
+              aria-label={recommendedLabel.ariaLabel}
+              title={recommendedLabel.ariaLabel}
+              className="flex items-center gap-1 truncate font-display text-[15px] font-bold leading-tight text-[var(--fp-accent)]"
+            >
               <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0" />
               {recommendedLabel.label}
             </p>
