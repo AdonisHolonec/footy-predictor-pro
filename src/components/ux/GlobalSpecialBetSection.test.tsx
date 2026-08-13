@@ -172,9 +172,94 @@ describe("GlobalSpecialBetSection", () => {
     });
 
     await waitFor(() => expect(screen.getByText("4.81")).toBeTruthy());
-    expect(screen.getByText("78%")).toBeTruthy();
+    // Confidence is secondary metadata now: a hint under the headline metric,
+    // never a tile of its own and never named as the ticket's chance.
+    expect(screen.getByText(/Încredere medie: 78%/)).toBeTruthy();
+    expect(screen.queryByText("Încredere medie")).toBeNull();
     // settled_total_odds is null while pending — no hint, and certainly no 0.00.
     expect(screen.queryByText(/Cotă la decontare/)).toBeNull();
+  });
+
+  it("legacy snapshot: ticket chance reads as a dash — no 0%, no disclaimer, no crash", async () => {
+    // READY_BODY predates migration 050: no ticket_probability, no per-leg
+    // probability. The card must stay honest rather than inventing numbers.
+    fetchWithAuth.mockResolvedValue(jsonResponse(201, READY_BODY));
+    renderSection();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Generează" }).click();
+    });
+
+    await waitFor(() => expect(screen.getByText("Șansă estimată bilet")).toBeTruthy());
+    const tile = screen.getByText("Șansă estimată bilet").parentElement;
+    expect(tile?.textContent).toContain("—");
+    expect(screen.queryByText(/independența selecțiilor/)).toBeNull();
+    expect(screen.queryByText("0%")).toBeNull();
+  });
+
+  it("shows the STORED ticket probability with its disclaimer, and per-leg probability", async () => {
+    fetchWithAuth.mockResolvedValue(
+      jsonResponse(201, {
+        ...READY_BODY,
+        bet: { ...READY_BODY.bet, ticket_probability: 0.3256 },
+        selections: [
+          selection({ probability: 0.83 }),
+          selection({ id: "sel-2", fixture_id: 999002, probability: 0.81, odds: 1.9 }),
+          selection({ id: "sel-3", fixture_id: 999003, probability: 0.77, odds: 1.75 })
+        ]
+      })
+    );
+    renderSection();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Generează" }).click();
+    });
+
+    // The headline is the persisted product — not confidence, not a client-side
+    // recomputation (0.83 × 0.81 × 0.77 would be 52%, and must NOT appear).
+    await waitFor(() => expect(screen.getByText("33%")).toBeTruthy());
+    expect(screen.queryByText("52%")).toBeNull();
+    expect(screen.getByText("Pe baza probabilităților modelului; presupune independența selecțiilor.")).toBeTruthy();
+    // Every leg names its own probability, so 83% cannot read as the ticket's.
+    expect(screen.getByText("83%")).toBeTruthy();
+    expect(screen.getByText("81%")).toBeTruthy();
+    expect(screen.getByText("77%")).toBeTruthy();
+    expect(screen.getAllByText("Probabilitate").length).toBe(3);
+    // The descriptive aria names both the number and the assumption.
+    expect(
+      screen.getByRole("group", {
+        name: "Șansă estimată bilet: 33 la sută. Pe baza probabilităților modelului; presupune independența selecțiilor."
+      })
+    ).toBeTruthy();
+  });
+
+  it("each variant shows its own stored ticket probability, never the previous one", async () => {
+    fetchWithAuth.mockResolvedValueOnce(
+      jsonResponse(201, { ...READY_BODY, bet: { ...READY_BODY.bet, ticket_probability: 0.5 } })
+    );
+    renderSection();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Generează" }).click();
+    });
+    await waitFor(() => expect(screen.getByText("50%")).toBeTruthy());
+
+    // Variant 5 is a different snapshot with a different stored product.
+    fetchWithAuth.mockResolvedValueOnce(
+      jsonResponse(201, {
+        ...READY_BODY,
+        bet: { ...READY_BODY.bet, id: "bet-5", variant: 5, ticket_probability: 0.33 }
+      })
+    );
+    await act(async () => {
+      screen.getByRole("button", { name: "5 selecții" }).click();
+    });
+    await act(async () => {
+      screen.getByRole("button", { name: "Generează" }).click();
+    });
+
+    await waitFor(() => expect(screen.getByText("33%")).toBeTruthy());
+    expect(screen.queryByText("50%")).toBeNull();
   });
 
   it("states an unavailable variant explicitly and never pads it", async () => {
@@ -199,6 +284,27 @@ describe("GlobalSpecialBetSection", () => {
     );
     expect(screen.getByText("6 din 8 selecții eligibile disponibile")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
+    // No snapshot exists, so no ticket probability may be shown for it.
+    expect(screen.queryByText("Șansă estimată bilet")).toBeNull();
+  });
+
+  it("speaks probability vocabulary in both locales, and never as confidence", async () => {
+    const { en } = await import("../../i18n/en");
+    const { ro } = await import("../../i18n/ro");
+    const gsbEn = (en as Record<string, Record<string, string>>).gsb;
+    const gsbRo = (ro as Record<string, Record<string, string>>).gsb;
+
+    expect(gsbEn.ticketChance).toBe("Estimated ticket chance");
+    expect(gsbRo.ticketChance).toBe("Șansă estimată bilet");
+    expect(gsbEn.ticketChanceDisclaimer).toBe("Based on model probabilities; assumes independent selections.");
+    expect(gsbRo.ticketChanceDisclaimer).toBe(
+      "Pe baza probabilităților modelului; presupune independența selecțiilor."
+    );
+    expect(gsbEn.probability).toBe("Probability");
+    expect(gsbRo.probability).toBe("Probabilitate");
+    // Probability is not confidence in either language.
+    expect(gsbEn.probability).not.toBe(gsbEn.confidence);
+    expect(gsbRo.probability).not.toBe(gsbRo.confidence);
   });
 
   it("shows the server's own reason on failure, with no retry where retrying cannot help", async () => {

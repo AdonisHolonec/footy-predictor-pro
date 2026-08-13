@@ -9,6 +9,7 @@ import { useGlobalSpecialBetHistory } from "../../hooks/useGlobalSpecialBetHisto
 import {
   formatConfidencePercent,
   formatOdds,
+  formatProbabilityPercent,
   isDecidingSelection,
   readGlobalSpecialBet,
   statusLabelKey,
@@ -99,6 +100,10 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
               const totalOdds = formatOdds(bet.total_odds);
               const settledOdds = formatOdds(bet.settled_total_odds);
               const confidence = formatConfidencePercent(bet.average_confidence);
+              // The STORED ticket chance (migration 050) — never recomputed
+              // from the legs. Null on legacy rows, which keep the old
+              // confidence line instead of a dash that explains nothing.
+              const ticketChance = formatProbabilityPercent(bet.ticket_probability);
               const reading = readGlobalSpecialBet(bet);
               return (
                 <div key={bet.id} className={!isLast || expanded ? "border-b border-[var(--fp-border)]" : ""}>
@@ -128,9 +133,18 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
                       <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text)]">
                         {t(reading.key, reading.vars)}
                       </p>
-                      <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
-                        {t("gsb.summaryAvgConfidence")} {confidence ?? "—"}
-                      </p>
+                      {ticketChance ? (
+                        <p
+                          className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]"
+                          aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}
+                        >
+                          {t("gsb.ticketChance")}: {ticketChance}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
+                          {t("gsb.summaryAvgConfidence")} {confidence ?? "—"}
+                        </p>
+                      )}
                     </div>
                     <Badge tone={statusTone(bet.status)}>{t(statusLabelKey(bet.status))}</Badge>
                   </button>

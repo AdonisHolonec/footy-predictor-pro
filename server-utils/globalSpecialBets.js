@@ -85,7 +85,11 @@ export function toSelectionRows(selections) {
     confidence: s.confidence,
     value_score: s.valueScore ?? null,
     fixture_label: s.fixtureLabel ?? null,
-    league_name: s.leagueName ?? null
+    league_name: s.leagueName ?? null,
+    // The exact P(full win) the probability-first ranking used — never
+    // confidence, never implied probability. Stored at the column's own
+    // numeric(5,4) precision (migration 050).
+    probability: s.probability ?? null
   }));
 }
 
@@ -191,9 +195,18 @@ export async function createGlobalSpecialBet({
   const built = buildGlobalSpecialBets({ rows, leagueIds: canonicalLeagues, now }, [Number(variant)]);
   const bet = built.bets[Number(variant)];
 
-  // Not enough eligible selections: say so, and write nothing. A padded
-  // accumulator would be a worse product than an absent one.
-  if (!bet) return { ok: true, created: false, ...unavailableResponse(variant, built.pool.length) };
+  // Not enough SAFE selections: say so, write nothing, and say WHY the pool is
+  // thin — the rejection counters are what lets the UI explain "doar 6 selecții
+  // îndeplinesc criteriile de siguranță" instead of a bare unavailable.
+  if (!bet) {
+    return {
+      ok: true,
+      created: false,
+      ...unavailableResponse(variant, built.pool.length),
+      examined: built.examined,
+      rejected: built.rejected
+    };
+  }
 
   const { data, error } = await supabase.rpc("create_global_special_bet", {
     p_user_id: userId,
@@ -203,7 +216,9 @@ export async function createGlobalSpecialBet({
     p_total_odds: bet.totalOdds,
     p_average_confidence: bet.averageConfidence,
     p_model_version: resolveModelVersion(payloadsByFixtureId, bet.selections),
-    p_selections: toSelectionRows(bet.selections)
+    p_selections: toSelectionRows(bet.selections),
+    // Π p_i exactly as the engine computed it (4 decimals) — migration 050.
+    p_ticket_probability: bet.estimatedTicketProbability
   });
   if (error) throw error;
   if (!data?.ok) throw new Error(`create_global_special_bet: ${data?.error || "unknown_error"}`);
@@ -213,7 +228,19 @@ export async function createGlobalSpecialBet({
     available: true,
     created: Boolean(data.created),
     bet: data.bet,
-    selections: data.selections || []
+    selections: data.selections || [],
+    // Π P(full win) under the independence assumption the UI must disclaim.
+    // For a bet created by THIS request it is the engine's own product; for a
+    // repeat request it is what migration 050 stored with the bet — never a
+    // freshly computed number attributed to selections it was not computed
+    // from. Legacy bets stored before 050 answer null honestly.
+    estimatedTicketProbability: data.created
+      ? bet.estimatedTicketProbability
+      : data.bet?.ticket_probability != null
+        ? Number(data.bet.ticket_probability)
+        : null,
+    examined: built.examined,
+    rejected: built.rejected
   };
 }
 

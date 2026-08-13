@@ -849,6 +849,16 @@ export const ro: Dict = {
     summaryAvgConfidence: "Încredere medie",
     summaryStatus: "Status",
     summaryCreated: "Generat",
+    // Vocabular probability-first (Increment 3): șansa biletului este
+    // ticket_probability STOCAT, iar „Probabilitate" per selecție este
+    // P(câștig integral) — niciuna nu este încredere, iar textele nu le
+    // confundă niciodată.
+    ticketChance: "Șansă estimată bilet",
+    ticketChanceDisclaimer: "Pe baza probabilităților modelului; presupune independența selecțiilor.",
+    ticketChanceAria:
+      "Șansă estimată bilet: {value} la sută. Pe baza probabilităților modelului; presupune independența selecțiilor.",
+    probability: "Probabilitate",
+    legProbabilityAria: "Probabilitatea selecției: {value} la sută.",
     selectionsTitle: "Selecții",
     market: "Piață",
     odds: "Cotă",

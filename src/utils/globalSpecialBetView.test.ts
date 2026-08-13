@@ -5,6 +5,7 @@ import {
   formatConfidencePercent,
   formatDateTime,
   formatOdds,
+  formatProbabilityPercent,
   formatValueScore,
   isDecidingSelection,
   isUnderwaySelection,
@@ -39,6 +40,8 @@ function selection(overrides: Partial<GlobalSpecialBetSelection> = {}): GlobalSp
     odds: 1.32,
     confidence: 82,
     value_score: 12.4,
+    // Pre-050 default: no stored probability, exactly like every legacy row.
+    probability: null,
     status: "pending",
     settled_at: null,
     ...overrides
@@ -57,6 +60,8 @@ function bet(overrides: Partial<GlobalSpecialBet> = {}): GlobalSpecialBet {
     total_odds: 4.812,
     average_confidence: 78.5,
     model_version: "v3",
+    // Pre-050 default: legacy bets carry no stored ticket probability.
+    ticket_probability: null,
     created_at: "2026-08-11T09:00:00.000Z",
     settled_at: null,
     settled_total_odds: null,
@@ -108,6 +113,18 @@ describe("numeric formatting", () => {
 
   it("rejects a non-numeric value rather than coercing it", () => {
     expect(formatOdds("abc")).toBeNull();
+  });
+
+  it("formats a stored 0-1 probability as a whole percent, and null as null", () => {
+    // 050 stores fractions; the UI speaks percentages. A legacy NULL must stay
+    // null — "0%" would turn an honest absence into a fake certainty.
+    expect(formatProbabilityPercent(0.3256)).toBe("33%");
+    expect(formatProbabilityPercent(0.9)).toBe("90%");
+    expect(formatProbabilityPercent(1)).toBe("100%");
+    expect(formatProbabilityPercent(null)).toBeNull();
+    expect(formatProbabilityPercent(undefined)).toBeNull();
+    expect(formatProbabilityPercent("")).toBeNull();
+    expect(formatProbabilityPercent("abc")).toBeNull();
   });
 });
 
@@ -395,6 +412,16 @@ describe("summary", () => {
 
   it("keeps settled odds absent for a lost bet", () => {
     expect(summarizeGlobalSpecialBet(bet({ status: "lost" })).settledTotalOdds).toBeNull();
+  });
+
+  it("surfaces the STORED ticket probability, formatted, and never recomputes it", () => {
+    // The legs would multiply to something else entirely — the snapshot wins.
+    const summary = summarizeGlobalSpecialBet(bet({ ticket_probability: 0.3256 }));
+    expect(summary.ticketProbability).toBe("33%");
+  });
+
+  it("keeps ticket probability null on a legacy snapshot — no fake 0%", () => {
+    expect(summarizeGlobalSpecialBet(bet()).ticketProbability).toBeNull();
   });
 });
 

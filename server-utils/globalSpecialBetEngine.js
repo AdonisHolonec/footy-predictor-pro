@@ -1,23 +1,30 @@
 /**
- * Global Special Bet — candidate pool, ranking and diversification.
+ * Global Special Bet — candidate pool, safety gates, ranking and diversification.
+ *
+ * PRODUCT CONTRACT (approved Aug 2026): GSB is a BEST-CHANCE accumulator, not a
+ * best-value one. It builds the 3/5/8 ticket with the highest realistic chance
+ * of winning as a whole:
+ *
+ *     safety gates → probability DESC → diversity constraint → slice 3/5/8
+ *
+ * The probability used is `valueEngine.markets[].probability` — P(full win),
+ * the exact semantics Recommended ranks by. valueScore / EV / Kelly / edge are
+ * carried as metadata for audit but NEVER influence selection: the previous
+ * `valueScore × dataQuality` ranking let a 68%@5.00 Double Chance outrank an
+ * 82%@1.40 leg purely on commercial saturation, which contradicted the product.
+ * Best Value keeps EV optimisation; Recommended keeps single-pick argmax(P);
+ * GSB is the best safe COMBINATION of P(full win) legs.
  *
  * Distinct product from the per-match "Special Bet · Top signals"
- * (src/utils/specialBet.ts), which stays exactly as it is: that one combines
- * markets WITHIN one fixture, this one combines the best selections ACROSS the
- * fixtures of a user's favourite leagues.
+ * (src/utils/specialBet.ts), which stays exactly as it is.
  *
- * Server-side ONLY, and deliberately so. The server reconstructs the candidate
- * pool from the canonical `predictions_history.raw_payload` and never trusts a
- * client-supplied selection, so a browser copy of this engine would be a second
- * opinion with no authority — the exact shape of the Admin/Mobile divergence
- * this product already had to fix once.
- *
- * Pure and deterministic by construction — no clock, no I/O. `now` is an
+ * Server-side ONLY, pure and deterministic — no clock, no I/O. `now` is an
  * argument so the same inputs always produce the same bet, which is what makes
  * an immutable snapshot meaningful.
  *
  * One pool feeds every variant: 3, 5 and 8 are slices of the SAME ranked and
- * diversified list, never three separate algorithms.
+ * diversified list, never three separate algorithms. A variant the safe pool
+ * cannot fill is UNAVAILABLE — never padded with legs below the safety floor.
  */
 
 import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily.js";
@@ -26,6 +33,42 @@ import { isQuarterLine } from "./asianTotals.js";
 
 /** A selection must be worth including at all — below this it is not a bet, it is a formality. */
 export const MIN_SELECTION_ODD = 1.25;
+
+/**
+ * Minimum P(full win) for a GSB leg.
+ *
+ * Evidence (Aug 2026 read-only audit): the legs that killed real tickets had
+ * P = 0.44–0.52; every production pool examined still built all three variants
+ * at this floor with 4× headroom. The floor does not pick the ticket — the
+ * probability sort does — it guarantees no leg below it can ever be used to
+ * fill a variant on a thin day. Strictly above Recommended's 50% bar on
+ * purpose: an accumulator multiplies its legs' fragility. Re-evaluate against
+ * settled tickets once the sample grows.
+ */
+export const PROB_FLOOR = 0.6;
+
+/**
+ * Maximum model-vs-market divergence, expressed as p × odds (the same "edge"
+ * ValueEngine computes). Above 2.0 the model claims at least twice the market
+ * consensus — on liquid markets that is far more likely a degenerate model
+ * probability than genuine value. Evidence: every settled GSB leg with
+ * edge > 2.0 lost (DC 1X @2.90 p=0.71, Corners U6.5 @4.69 p=0.99); no winner
+ * exceeded it. This is also the gate that keeps probability-first ranking
+ * safe: a degenerate p=0.99 would otherwise SORT FIRST. Together with
+ * PROB_FLOOR it implies an effective odds ceiling of 2.0/0.6 ≈ 3.33, which is
+ * why no separate MAX_ODDS exists (approved decision).
+ */
+export const MAX_MODEL_EDGE = 2.0;
+
+/**
+ * League spread is a CONSTRAINT band, not a commercial reward: a candidate
+ * from a not-yet-used league may be preferred only while its probability is
+ * within this many percentage points of the best remaining candidate. A 55%
+ * leg can never jump an 82% one for the sake of variety. 3pp is empirically
+ * costless on production pools (0–10pp produced identical tickets) and keeps
+ * the invariant tight.
+ */
+export const LEAGUE_SPREAD_MAX_PP = 3;
 
 /**
  * Families the server can actually settle today, as `resolveMarketFamily`
@@ -46,16 +89,6 @@ export const SETTLEABLE_MARKET_FAMILIES = new Set(["ou", "corners", "shots", "1x
 export const GLOBAL_SPECIAL_BET_VARIANTS = [3, 5, 8];
 
 /**
- * How much ranking strength league spread is allowed to cost.
- *
- * A candidate from a not-yet-used league is preferred only while it scores at
- * least this fraction of the best remaining candidate. Spread is a preference,
- * never a reason to carry a weak selection, and never a reason to fail to build
- * a bet — a policy knob, deliberately not part of the score itself.
- */
-export const LEAGUE_SPREAD_TOLERANCE = 0.85;
-
-/**
  * @typedef {object} GlobalCandidate
  * @property {number} fixtureId
  * @property {number} leagueId
@@ -66,11 +99,11 @@ export const LEAGUE_SPREAD_TOLERANCE = 0.85;
  * @property {string} selection      settled exactly as written, e.g. "Over 7.5"
  * @property {"over"|"under"|null} side
  * @property {number|null} line
+ * @property {number} probability    P(full win), 0–1 — the ONLY ranking signal
  * @property {number} odds
- * @property {number} confidence
- * @property {number} valueScore
- * @property {number} dataQuality
- * @property {number} score          valueScore × dataQuality
+ * @property {number} confidence     fixture-level metadata; never ranks
+ * @property {number} valueScore     audit metadata; never ranks
+ * @property {number} dataQuality    audit metadata; never ranks
  */
 
 /** Why a market never made it into the pool. Counted, never silently dropped. */
@@ -83,13 +116,17 @@ function emptyRejections() {
     oddBelowMinimum: 0,
     missingData: 0,
     marketNotSettleable: 0,
-    quarterLineUnsupported: 0
+    quarterLineUnsupported: 0,
+    identityUnknown: 0,
+    notTradable: 0,
+    probabilityBelowFloor: 0,
+    modelMarketDivergence: 0
   };
 }
 
 /**
  * Missing means missing. `Number(null)` is 0 and `Number("")` is 0, so a plain
- * Number()/isFinite() check silently turns an absent odd or value score into a
+ * Number()/isFinite() check silently turns an absent odd or probability into a
  * real-looking zero — which is precisely the "missing data as fallback" this
  * product must never do.
  */
@@ -132,13 +169,31 @@ function buildFixtureLabel(teams) {
 }
 
 /**
- * Every eligible selection across the given fixtures, with hard filters applied
- * and every rejection counted.
+ * Market Identity Contract (#63): a GSB leg must be able to attest WHAT it is
+ * a bet on. `unknown` is an explicit "we could not tell"; null/absent is a
+ * legacy payload from before the contract. Both are unverifiable, so both are
+ * rejected — the approved rule is known-or-out, never guessed.
+ */
+function hasKnownIdentity(market) {
+  for (const field of [market?.betType, market?.period, market?.scope]) {
+    if (field == null || field === "unknown") return false;
+  }
+  return true;
+}
+
+/**
+ * Every eligible selection across the given fixtures, with the full SAFETY
+ * CONTRACT applied and every rejection counted:
  *
- * Nothing is invented and nothing falls back: a market missing odds, confidence,
- * value score or data quality is rejected, not defaulted. A high-confidence
- * market that fails the odds floor is rejected too — confidence never buys an
- * exemption.
+ *   recommendable AND data complete AND odds >= MIN_SELECTION_ODD
+ *   AND settleable family AND no quarter line
+ *   AND identity known (betType/period/scope) AND tradable
+ *   AND probability >= PROB_FLOOR AND probability × odds <= MAX_MODEL_EDGE
+ *
+ * Nothing is invented and nothing falls back: a market missing odds,
+ * probability, confidence, value score or data quality is rejected, not
+ * defaulted. A high-confidence market that fails any gate is rejected too —
+ * confidence never buys an exemption, and neither does EV.
  *
  * @param {{ rows: object[], leagueIds: number[], now: number }} options
  * @returns {{ candidates: GlobalCandidate[], examined: number, rejected: Record<string, number> }}
@@ -188,17 +243,22 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
 
       const odds = finiteOrNull(market?.odds);
       const valueScore = finiteOrNull(market?.valueScore);
+      const probability = finiteOrNull(market?.probability);
       const line = finiteOrNull(market?.line);
       const side = parseOverUnder(market?.type)?.side ?? null;
       const selection = buildSelectionLabel(market?.type, side, line);
 
-      // Missing inputs are disqualifying, not defaultable. Confidence and data
-      // quality come from the row, odds and value score from the market.
+      // Missing inputs are disqualifying, not defaultable. Probability must be
+      // a real chance in (0, 1] — a zero or an out-of-range value is not a
+      // probability, it is a data defect.
       if (
         confidence === null ||
         dataQuality === null ||
         odds === null ||
         valueScore === null ||
+        probability === null ||
+        probability <= 0 ||
+        probability > 1 ||
         !Number.isFinite(fixtureId) ||
         !selection
       ) {
@@ -214,8 +274,10 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
       }
 
       // A market we cannot settle must never reach ranking, let alone a bet.
+      // The family set is the structural gate; `settleable: false` on the
+      // market itself is the evaluation-level one — either alone rejects.
       const family = resolveMarketFamily(market?.type, market?.family);
-      if (!SETTLEABLE_MARKET_FAMILIES.has(family)) {
+      if (!SETTLEABLE_MARKET_FAMILIES.has(family) || market?.settleable === false) {
         rejected.marketNotSettleable += 1;
         continue;
       }
@@ -230,6 +292,31 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
         continue;
       }
 
+      if (!hasKnownIdentity(market)) {
+        rejected.identityUnknown += 1;
+        continue;
+      }
+
+      // Tradable is REQUIRED, exactly as Recommended and Best Value require it.
+      // Strict === true: an absent flag is a legacy payload that cannot attest
+      // the line is actually offered, so it is rejected, not assumed.
+      if (market?.tradable !== true) {
+        rejected.notTradable += 1;
+        continue;
+      }
+
+      if (probability < PROB_FLOOR) {
+        rejected.probabilityBelowFloor += 1;
+        continue;
+      }
+
+      // Sanity gate against degenerate model probabilities: p=0.99 against a
+      // 4.69 market would otherwise sort FIRST in a probability-first pool.
+      if (probability * odds > MAX_MODEL_EDGE) {
+        rejected.modelMarketDivergence += 1;
+        continue;
+      }
+
       candidates.push({
         fixtureId,
         leagueId,
@@ -240,11 +327,11 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
         selection,
         side,
         line,
+        probability,
         odds,
         confidence,
         valueScore,
-        dataQuality,
-        score: valueScore * dataQuality
+        dataQuality
       });
     }
   }
@@ -253,17 +340,13 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
 }
 
 /**
- * Rank by `valueScore × dataQuality`.
- *
- * `valueScore` is NOT invented here: server-utils/value/ValueEngine.js already
- * blends expected value, edge, Kelly and confidence through configurable
- * weights, and penalises non-positive EV. Re-deriving a second formula would
- * mean maintaining two opinions about the same thing, so this multiplies that
- * existing score by the one dimension it does not contain — how much the model
- * trusts the data behind the fixture (`modelMeta.dataQuality`, 0..1).
- *
- * Ties break by odds, then confidence, then fixtureId, so ordering is total and
- * reproducible rather than dependent on input order.
+ * Rank by P(full win), descending. Nothing commercial participates: not
+ * valueScore, not EV, not Kelly, not edge. Odds appear only as the FIRST
+ * tie-break at exactly equal probability — and ascending, because when the
+ * model cannot separate two legs, the one the market prices shorter is the one
+ * the market agrees with more. Odds can therefore never promote a lower
+ * probability over a higher one. fixtureId closes the order so ranking is
+ * total and reproducible rather than dependent on input order.
  *
  * @param {GlobalCandidate[]} candidates
  * @returns {GlobalCandidate[]}
@@ -271,21 +354,21 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
 export function rankGlobalCandidates(candidates) {
   return [...candidates].sort(
     (a, b) =>
-      b.score - a.score ||
-      b.odds - a.odds ||
-      b.confidence - a.confidence ||
+      b.probability - a.probability ||
+      a.odds - b.odds ||
       a.fixtureId - b.fixtureId
   );
 }
 
 /**
- * One selection per fixture (hard), spread across leagues (soft).
+ * One selection per fixture (hard), spread across leagues (bounded).
  *
  * The fixture rule is absolute: two selections from the same match are one
- * correlated bet wearing two labels. The league rule is a preference — a
- * candidate from an unused league is taken ahead of a stronger one only while
- * it stays within LEAGUE_SPREAD_TOLERANCE of it, so spread never drags a weak
- * selection in and never prevents a bet from being built.
+ * correlated bet wearing two labels. The league rule is a constraint band, not
+ * a reward: a candidate from an unused league is taken ahead of a stronger one
+ * only while it is within LEAGUE_SPREAD_MAX_PP percentage points of it, so
+ * spread can reorder near-equals but can never drag a meaningfully weaker
+ * probability up the ticket and never prevents a bet from being built.
  *
  * @param {GlobalCandidate[]} ranked
  * @returns {GlobalCandidate[]}
@@ -299,13 +382,15 @@ export function diversifyGlobalCandidates(ranked) {
   const remaining = [...bestPerFixture.values()];
   const usedLeagues = new Set();
   const ordered = [];
+  // Float guard: probabilities are round2 payload values, but the subtraction
+  // must not turn an exact 3.00pp gap into 3.0000000004pp.
+  const tolerance = LEAGUE_SPREAD_MAX_PP / 100 + 1e-9;
 
   while (remaining.length > 0) {
     const best = remaining[0]; // `remaining` stays in ranked order
-    const threshold = best.score * LEAGUE_SPREAD_TOLERANCE;
 
     const freshLeagueIndex = remaining.findIndex(
-      (c) => !usedLeagues.has(c.leagueId) && c.score >= threshold
+      (c) => !usedLeagues.has(c.leagueId) && best.probability - c.probability <= tolerance
     );
     const pickIndex = freshLeagueIndex >= 0 ? freshLeagueIndex : 0;
 
@@ -320,20 +405,27 @@ export function diversifyGlobalCandidates(ranked) {
 function toBet(variant, selections) {
   const totalOdds = selections.reduce((acc, s) => acc * s.odds, 1);
   const averageConfidence = selections.reduce((acc, s) => acc + s.confidence, 0) / selections.length;
+  // Π p_i under an EXPLICIT independence assumption. One-leg-per-fixture
+  // removes the dominant correlation; residual same-league / same-family
+  // correlation across fixtures exists and is knowingly unmodelled, which is
+  // why every surface displaying this number carries the disclaimer.
+  const estimatedTicketProbability = selections.reduce((acc, s) => acc * s.probability, 1);
   return {
     variant,
     selections,
     totalOdds: Number(totalOdds.toFixed(3)),
-    averageConfidence: Number(averageConfidence.toFixed(2))
+    averageConfidence: Number(averageConfidence.toFixed(2)),
+    estimatedTicketProbability: Number(estimatedTicketProbability.toFixed(4))
   };
 }
 
 /**
- * Build the 3 / 5 / 8 variants from one pool.
+ * Build the 3 / 5 / 8 variants from one safe pool.
  *
- * A variant with fewer eligible selections than it needs is NOT built and NOT
- * padded — an 8-fold assembled from six good selections and two fillers is a
- * worse product than no 8-fold.
+ * A variant with fewer SAFE selections than it needs is NOT built and NOT
+ * padded — an 8-fold assembled from six good selections and two sub-floor
+ * fillers is a worse product than no 8-fold. "Varianta 8 indisponibilă" is the
+ * honest answer, and the rejection counters say exactly why the pool is thin.
  *
  * @param {{ rows: object[], leagueIds: number[], now: number }} options
  * @param {number[]} [variants]
@@ -358,8 +450,10 @@ export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VA
 
 export default {
   MIN_SELECTION_ODD,
+  PROB_FLOOR,
+  MAX_MODEL_EDGE,
+  LEAGUE_SPREAD_MAX_PP,
   GLOBAL_SPECIAL_BET_VARIANTS,
-  LEAGUE_SPREAD_TOLERANCE,
   collectGlobalCandidates,
   rankGlobalCandidates,
   diversifyGlobalCandidates,

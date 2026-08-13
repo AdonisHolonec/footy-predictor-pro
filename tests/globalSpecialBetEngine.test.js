@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  LEAGUE_SPREAD_TOLERANCE,
+  LEAGUE_SPREAD_MAX_PP,
+  MAX_MODEL_EDGE,
   MIN_SELECTION_ODD,
+  PROB_FLOOR,
   buildGlobalSpecialBets,
   collectGlobalCandidates,
   diversifyGlobalCandidates,
@@ -10,12 +12,12 @@ import {
 } from "../server-utils/globalSpecialBetEngine.js";
 
 /**
- * Global Special Bet engine — the 20 behaviours the selection layer guarantees.
+ * Global Special Bet engine — the behaviours the selection layer guarantees.
  *
- * Ported verbatim from the TypeScript prototype (src/utils/globalSpecialBet.ts,
- * commit d1fed8bc) when the engine moved server-side, because the server is the
- * only authority on which selections a bet contains. Same cases, same
- * expectations — the port is a change of language and location, not of rules.
+ * Rewritten for the probability-first contract (approved Aug 2026): GSB is a
+ * best-CHANCE accumulator. The safety-contract scenarios A–N from the approval
+ * live here, alongside the hard-filter and snapshot regressions carried over
+ * from the valueScore era — those rules did not change, only the ranking did.
  */
 
 const NOW = Date.parse("2026-08-09T10:00:00.000Z");
@@ -35,29 +37,34 @@ function fixture(id, leagueId, markets, overrides = {}) {
   };
 }
 
-/** A market that passes every hard filter, so tests only vary what they mean to. */
+/** A market that passes every safety gate, so tests only vary what they mean to. */
 function goodMarket(overrides = {}) {
   return {
     type: "Over 2.5",
     family: "Goals",
     line: 2.5,
     odds: 1.9,
+    probability: 0.7,
     valueScore: 60,
     recommendable: true,
+    tradable: true,
+    betType: "over_under",
+    period: "full_match",
+    scope: "match",
     ...overrides
   };
 }
 
 const poolOf = (count) =>
   Array.from({ length: count }, (_, i) =>
-    fixture(i + 1, 39 + (i % 3), [goodMarket({ valueScore: 80 - i, odds: 1.5 })])
+    fixture(i + 1, 39 + (i % 3), [goodMarket({ probability: 0.9 - i * 0.005, odds: 1.5 })])
   );
 
 // ── hard filters reject rather than default ────────────────────────────────
 
-test("an odd below the floor is rejected even at high confidence", () => {
+test("an odd below the floor is rejected even at high probability (scenario B)", () => {
   const rows = [
-    fixture(1, 39, [goodMarket({ odds: 1.24, valueScore: 99 })], {
+    fixture(1, 39, [goodMarket({ odds: 1.2, probability: 0.9 })], {
       recommended: { pick: "1", family: "1X2", confidence: 95 }
     })
   ];
@@ -81,18 +88,31 @@ test("a market the engine does not recommend is rejected", () => {
   assert.equal(rejected.notRecommendable, 1);
 });
 
-test("missing odds, value score, confidence or data quality are all disqualifying", () => {
+test("missing odds, value score, probability, confidence or data quality all disqualify", () => {
   const rows = [
     fixture(1, 39, [goodMarket({ odds: null })]),
     fixture(2, 39, [goodMarket({ valueScore: null })]),
-    fixture(3, 39, [goodMarket()], { recommended: { pick: "x", confidence: null } }),
-    fixture(4, 39, [goodMarket()], { modelMeta: {} })
+    fixture(3, 39, [goodMarket({ probability: null })]),
+    fixture(4, 39, [goodMarket()], { recommended: { pick: "x", confidence: null } }),
+    fixture(5, 39, [goodMarket()], { modelMeta: {} })
   ];
 
   const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
 
   assert.equal(candidates.length, 0);
-  assert.equal(rejected.missingData, 4);
+  assert.equal(rejected.missingData, 5);
+});
+
+test("a probability outside (0, 1] is a data defect, not a candidate", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: 0 })]),
+    fixture(2, 39, [goodMarket({ probability: 1.7 })])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.missingData, 2);
 });
 
 test("fixtures outside the user's leagues never enter the pool", () => {
@@ -129,7 +149,13 @@ test("a row flagged insufficientData contributes nothing", () => {
 
 test("every examined market is accounted for exactly once", () => {
   const rows = [
-    fixture(1, 39, [goodMarket(), goodMarket({ odds: 1.1 }), goodMarket({ recommendable: false })]),
+    fixture(1, 39, [
+      goodMarket(),
+      goodMarket({ odds: 1.1 }),
+      goodMarket({ recommendable: false }),
+      goodMarket({ probability: 0.5 }),
+      goodMarket({ probability: 0.68, odds: 5 })
+    ]),
     fixture(2, 140, [goodMarket()]),
     fixture(3, 39, [goodMarket()], { kickoff: PAST })
   ];
@@ -142,7 +168,159 @@ test("every examined market is accounted for exactly once", () => {
 
   const totalRejected = Object.values(rejected).reduce((a, b) => a + b, 0);
   assert.equal(candidates.length + totalRejected, examined);
-  assert.equal(examined, 5);
+  assert.equal(examined, 7);
+});
+
+// ── safety contract: identity, tradable, floor, divergence ─────────────────
+
+test("unknown or null market identity is rejected (scenario J)", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ period: "unknown" })]),
+    fixture(2, 39, [goodMarket({ scope: null })]),
+    fixture(3, 39, [goodMarket({ betType: undefined })])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.identityUnknown, 3);
+});
+
+test("a non-tradable or unattested-tradable market is rejected (scenario K)", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ tradable: false })]),
+    fixture(2, 39, [goodMarket({ tradable: undefined })])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.notTradable, 2);
+});
+
+test("a probability below the safety floor is rejected, never used as filler", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: PROB_FLOOR - 0.01 })]),
+    fixture(2, 39, [goodMarket({ probability: PROB_FLOOR })])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 1, "the floor is inclusive");
+  assert.equal(candidates[0].fixtureId, 2);
+  assert.equal(rejected.probabilityBelowFloor, 1);
+});
+
+test("68%@5.00 is rejected by the divergence gate (scenario C)", () => {
+  const rows = [
+    fixture(1, 39, [
+      goodMarket({ type: "1X", family: "Double Chance", line: null, betType: "double_chance", probability: 0.68, odds: 5 })
+    ])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.modelMarketDivergence, 1);
+});
+
+test("a degenerate 95%@4.69 is rejected by the divergence gate (scenario D)", () => {
+  const rows = [
+    fixture(1, 39, [
+      goodMarket({ type: "Under 6.5", family: "Corners", line: 6.5, betType: "corners", probability: 0.95, odds: 4.69 })
+    ])
+  ];
+
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.modelMarketDivergence, 1);
+});
+
+test("the divergence gate is inclusive at exactly MAX_MODEL_EDGE", () => {
+  // 0.8 × 2.5 = 2.0 exactly — the model claiming exactly twice the market is
+  // the boundary we still accept.
+  const rows = [fixture(1, 39, [goodMarket({ probability: 0.8, odds: 2.5 })])];
+  const { candidates } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(MAX_MODEL_EDGE, 2.0);
+  assert.equal(candidates.length, 1);
+});
+
+// ── ranking is probability-first ───────────────────────────────────────────
+
+test("82%@1.40 outranks 68%@2.50 whatever their value scores say (scenario A)", () => {
+  // The lower-probability leg gets the maximum value score and the bigger odds;
+  // under the old valueScore × dataQuality ranking it would have won. It must
+  // not: probability is the only ranking signal.
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: 0.82, odds: 1.4, valueScore: 10 })]),
+    fixture(2, 140, [goodMarket({ probability: 0.68, odds: 2.5, valueScore: 100 })])
+  ];
+
+  const ranked = rankGlobalCandidates(
+    collectGlobalCandidates({ rows, leagueIds: [39, 140], now: NOW }).candidates
+  );
+
+  assert.deepEqual(
+    ranked.map((c) => c.fixtureId),
+    [1, 2]
+  );
+});
+
+test("EV, valueScore and dataQuality have zero influence on the order", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: 0.75, odds: 1.6, valueScore: 1 })], {
+      modelMeta: { dataQuality: 0.1 }
+    }),
+    fixture(2, 140, [goodMarket({ probability: 0.74, odds: 2.6, valueScore: 100 })], {
+      modelMeta: { dataQuality: 1 }
+    })
+  ];
+
+  const ranked = rankGlobalCandidates(
+    collectGlobalCandidates({ rows, leagueIds: [39, 140], now: NOW }).candidates
+  );
+
+  assert.deepEqual(
+    ranked.map((c) => c.fixtureId),
+    [1, 2],
+    "0.75 beats 0.74 even against maximal commercial metadata"
+  );
+});
+
+test("equal probability breaks ties deterministically: odds ASC, then fixtureId (scenario E)", () => {
+  const rows = [
+    fixture(3, 39, [goodMarket({ probability: 0.75, odds: 1.8 })]),
+    fixture(1, 140, [goodMarket({ probability: 0.75, odds: 1.6 })]),
+    fixture(2, 135, [goodMarket({ probability: 0.75, odds: 1.8 })])
+  ];
+
+  const rank = (input) =>
+    rankGlobalCandidates(
+      collectGlobalCandidates({ rows: input, leagueIds: [39, 140, 135], now: NOW }).candidates
+    ).map((c) => c.fixtureId);
+
+  // Lower odds first (the market agrees more), then fixtureId closes the order.
+  assert.deepEqual(rank(rows), [1, 2, 3]);
+  assert.deepEqual(rank([...rows].reverse()), [1, 2, 3], "independent of input order");
+});
+
+test("odds never promote a lower probability over a higher one", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: 0.76, odds: 2.6 })]),
+    fixture(2, 140, [goodMarket({ probability: 0.75, odds: 1.3 })])
+  ];
+
+  const ranked = rankGlobalCandidates(
+    collectGlobalCandidates({ rows, leagueIds: [39, 140], now: NOW }).candidates
+  );
+
+  assert.deepEqual(
+    ranked.map((c) => c.fixtureId),
+    [1, 2],
+    "odds are a tie-break only — 0.76 stays above 0.75 despite the worse price"
+  );
 });
 
 // ── the readable snapshot a stored bet carries ─────────────────────────────
@@ -180,56 +358,32 @@ test("an unnamed fixture is still a valid candidate", () => {
 
   const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
 
-  // A label is presentation. It must never decide whether a bet can be built —
-  // only odds, confidence, value and data quality do that.
+  // A label is presentation. It must never decide whether a bet can be built.
   assert.equal(candidates.length, 1);
   assert.equal(rejected.missingData, 0);
 });
 
-// ── ranking is valueScore × dataQuality ────────────────────────────────────
+test("a candidate keeps probability alongside its audit metadata", () => {
+  const [candidate] = collectGlobalCandidates({
+    rows: [fixture(1, 39, [goodMarket({ probability: 0.72, valueScore: 55 })])],
+    leagueIds: [39],
+    now: NOW
+  }).candidates;
 
-test("data quality can outrank a higher raw value score", () => {
-  const rows = [
-    fixture(1, 39, [goodMarket({ valueScore: 70 })], { modelMeta: { dataQuality: 0.5 } }), // 35
-    fixture(2, 140, [goodMarket({ valueScore: 50 })], { modelMeta: { dataQuality: 0.9 } }) // 45
-  ];
-
-  const ranked = rankGlobalCandidates(
-    collectGlobalCandidates({ rows, leagueIds: [39, 140], now: NOW }).candidates
-  );
-
-  assert.deepEqual(
-    ranked.map((c) => c.fixtureId),
-    [2, 1]
-  );
-  assert.ok(Math.abs(ranked[0].score - 45) < 1e-9);
-});
-
-test("ordering is total and independent of input order", () => {
-  const specs = [
-    [1, 39, 60],
-    [2, 140, 55],
-    [3, 135, 70]
-  ];
-  const build = (order) =>
-    rankGlobalCandidates(
-      collectGlobalCandidates({
-        rows: order.map(([id, league, vs]) => fixture(id, league, [goodMarket({ valueScore: vs })])),
-        leagueIds: [39, 140, 135],
-        now: NOW
-      }).candidates
-    ).map((c) => c.fixtureId);
-
-  assert.deepEqual(build(specs), build([...specs].reverse()));
+  assert.equal(candidate.probability, 0.72);
+  // Metadata survives for audit/debug; the ranking tests above prove it is inert.
+  assert.equal(candidate.valueScore, 55);
+  assert.equal(candidate.confidence, 80);
+  assert.equal(candidate.dataQuality, 0.8);
 });
 
 // ── diversification ────────────────────────────────────────────────────────
 
-test("only the best selection of a fixture survives", () => {
+test("only the best selection of a fixture survives (scenario F)", () => {
   const rows = [
     fixture(1, 39, [
-      goodMarket({ type: "Over 2.5", valueScore: 40 }),
-      goodMarket({ type: "Under 3.5", line: 3.5, valueScore: 80 })
+      goodMarket({ type: "Over 2.5", probability: 0.85 }),
+      goodMarket({ type: "Under 3.5", line: 3.5, probability: 0.9 })
     ])
   ];
 
@@ -241,12 +395,11 @@ test("only the best selection of a fixture survives", () => {
   assert.equal(pool[0].selection, "Under 3.5");
 });
 
-test("a comparable candidate from a fresh league is preferred", () => {
-  // 60 and 55 sit within the tolerance, so spread decides between them.
+test("a fresh league within the probability band is preferred (scenario H, positive)", () => {
   const rows = [
-    fixture(1, 39, [goodMarket({ valueScore: 60 })]),
-    fixture(2, 39, [goodMarket({ valueScore: 58 })]),
-    fixture(3, 140, [goodMarket({ valueScore: 55 })])
+    fixture(1, 39, [goodMarket({ probability: 0.82 })]),
+    fixture(2, 39, [goodMarket({ probability: 0.815 })]),
+    fixture(3, 140, [goodMarket({ probability: 0.8 })])
   ];
 
   const pool = diversifyGlobalCandidates(
@@ -255,19 +408,19 @@ test("a comparable candidate from a fresh league is preferred", () => {
     )
   );
 
+  // 0.815 vs 0.80 is inside the 3pp band, so spread may prefer the new league.
+  assert.equal(LEAGUE_SPREAD_MAX_PP, 3);
   assert.deepEqual(
-    pool.map((c) => c.leagueId),
-    [39, 140, 39]
+    pool.map((c) => c.fixtureId),
+    [1, 3, 2]
   );
 });
 
-test("spread never drags in a clearly weaker selection", () => {
-  // 20 × 0.8 = 16 is far below the tolerance of 60 × 0.8 = 48, so the second
-  // strong same-league candidate wins the slot instead.
+test("league diversity can never promote a meaningfully lower probability (scenario H)", () => {
   const rows = [
-    fixture(1, 39, [goodMarket({ valueScore: 60 })]),
-    fixture(2, 39, [goodMarket({ valueScore: 58 })]),
-    fixture(3, 140, [goodMarket({ valueScore: 20 })])
+    fixture(1, 39, [goodMarket({ probability: 0.82 })]),
+    fixture(2, 39, [goodMarket({ probability: 0.8 })]),
+    fixture(3, 140, [goodMarket({ probability: 0.65 })])
   ];
 
   const pool = diversifyGlobalCandidates(
@@ -276,16 +429,16 @@ test("spread never drags in a clearly weaker selection", () => {
     )
   );
 
+  // 0.65 is 17pp behind — far outside the band. Strict probability order holds.
   assert.deepEqual(
     pool.map((c) => c.fixtureId),
     [1, 2, 3]
   );
-  assert.equal(LEAGUE_SPREAD_TOLERANCE, 0.85);
 });
 
 test("a single league still produces a full bet", () => {
   const rows = Array.from({ length: 4 }, (_, i) =>
-    fixture(i + 1, 39, [goodMarket({ valueScore: 70 - i })])
+    fixture(i + 1, 39, [goodMarket({ probability: 0.9 - i * 0.05 })])
   );
 
   const pool = diversifyGlobalCandidates(
@@ -295,9 +448,9 @@ test("a single league still produces a full bet", () => {
   assert.equal(pool.length, 4);
 });
 
-// ── variants come from one pool ────────────────────────────────────────────
+// ── variants come from one safe pool ───────────────────────────────────────
 
-test("3 / 5 / 8 are prefixes of the same ordering", () => {
+test("3 / 5 / 8 are prefixes of the same ordering (scenario N)", () => {
   const built = buildGlobalSpecialBets({ rows: poolOf(10), leagueIds: [39, 40, 41], now: NOW });
 
   assert.deepEqual(built.unavailable, []);
@@ -306,20 +459,50 @@ test("3 / 5 / 8 are prefixes of the same ordering", () => {
   assert.deepEqual(built.bets[8].selections.slice(0, 5), built.bets[5].selections);
 });
 
-test("totals are the product of the odds and the mean confidence", () => {
-  const built = buildGlobalSpecialBets({ rows: poolOf(3), leagueIds: [39, 40, 41], now: NOW });
+test("totals are the product of odds, the mean confidence, and Π p (scenario M)", () => {
+  const rows = [
+    fixture(1, 39, [goodMarket({ probability: 0.9, odds: 1.5 })]),
+    fixture(2, 40, [goodMarket({ probability: 0.8, odds: 1.5 })]),
+    fixture(3, 41, [goodMarket({ probability: 0.7, odds: 1.5 })])
+  ];
+
+  const built = buildGlobalSpecialBets({ rows, leagueIds: [39, 40, 41], now: NOW });
 
   assert.ok(Math.abs(built.bets[3].totalOdds - 1.5 ** 3) < 1e-3);
   assert.equal(built.bets[3].averageConfidence, 80);
+  // Π p_i regardless of the order diversification chose: 0.9 × 0.8 × 0.7.
+  assert.equal(built.bets[3].estimatedTicketProbability, 0.504);
 });
 
-test("a variant with too few selections is absent, not padded", () => {
-  const built = buildGlobalSpecialBets({ rows: poolOf(6), leagueIds: [39, 40, 41], now: NOW });
+test("a variant with too few SAFE selections is absent, not padded (scenario G)", () => {
+  for (const [safeCount, unavailableVariants] of [
+    [2, [3, 5, 8]],
+    [4, [5, 8]],
+    [7, [8]]
+  ]) {
+    const built = buildGlobalSpecialBets({ rows: poolOf(safeCount), leagueIds: [39, 40, 41], now: NOW });
 
-  assert.ok(built.bets[3]);
-  assert.ok(built.bets[5]);
+    assert.deepEqual(
+      built.unavailable.map((u) => u.variant),
+      unavailableVariants,
+      `${safeCount} safe candidates`
+    );
+    for (const u of built.unavailable) assert.equal(u.available, safeCount);
+  }
+});
+
+test("sub-floor legs cannot fill an 8-fold: 7 safe + 3 unsafe stays unavailable", () => {
+  const safe = poolOf(7);
+  const unsafe = [8, 9, 10].map((id) =>
+    fixture(id, 39 + (id % 3), [goodMarket({ probability: 0.45 })])
+  );
+
+  const built = buildGlobalSpecialBets({ rows: [...safe, ...unsafe], leagueIds: [39, 40, 41], now: NOW });
+
+  assert.ok(built.bets[5], "the safe pool still builds what it can");
   assert.equal(built.bets[8], undefined);
-  assert.deepEqual(built.unavailable, [{ variant: 8, available: 6, required: 8 }]);
+  assert.deepEqual(built.unavailable, [{ variant: 8, available: 7, required: 8 }]);
+  assert.equal(built.rejected.probabilityBelowFloor, 3);
 });
 
 test("too thin a pool leaves every variant unbuilt", () => {
@@ -339,7 +522,7 @@ test("the same inputs always produce the same bet", () => {
 
 // ── settleable market families ────────────────────────────────────────────
 
-test("a market the server cannot settle never enters the pool", () => {
+test("a market the server cannot settle never enters the pool (scenario L)", () => {
   const unsettleable = [
     { type: "Over 3.5", family: "Cards", line: 3.5 },
     { type: "2-1", family: "Correct Score", line: null },
@@ -356,7 +539,15 @@ test("a market the server cannot settle never enters the pool", () => {
   }
 });
 
-test("every settleable family is accepted when the rest of the criteria hold", () => {
+test("an explicit settleable=false rejects even a settleable family", () => {
+  const rows = [fixture(1, 39, [goodMarket({ settleable: false })])];
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.marketNotSettleable, 1);
+});
+
+test("every settleable family is accepted when the safety contract holds", () => {
   const settleable = [
     { type: "Over 2.5", family: "Goals", line: 2.5, expected: "ou" },
     { type: "Over 9.5", family: "Corners", line: 9.5, expected: "corners" },
@@ -375,12 +566,24 @@ test("every settleable family is accepted when the rest of the criteria hold", (
   }
 });
 
-test("an unsettleable market is filtered before ranking, not after", () => {
-  // The cards market outscores everything; if the filter ran after ranking it
-  // would top the pool. It must not appear at all.
+test("a quarter line is rejected, per Increment B (scenario I)", () => {
+  // A quarter GOALS line already dies at the family gate (ou_other). Corners
+  // keep their settleable family, so this is the line the quarter gate guards.
   const rows = [
-    fixture(1, 39, [goodMarket({ type: "Over 3.5", family: "Cards", line: 3.5, valueScore: 99 })]),
-    fixture(2, 140, [goodMarket({ valueScore: 40 })])
+    fixture(1, 39, [goodMarket({ type: "Over 10.25", family: "Corners", line: 10.25, betType: "corners" })])
+  ];
+  const { candidates, rejected } = collectGlobalCandidates({ rows, leagueIds: [39], now: NOW });
+
+  assert.equal(candidates.length, 0);
+  assert.equal(rejected.quarterLineUnsupported, 1);
+});
+
+test("an unsettleable market is filtered before ranking, not after", () => {
+  // The cards market carries the highest probability; if the filter ran after
+  // ranking it would top the pool. It must not appear at all.
+  const rows = [
+    fixture(1, 39, [goodMarket({ type: "Over 3.5", family: "Cards", line: 3.5, probability: 0.95, odds: 1.9 })]),
+    fixture(2, 140, [goodMarket({ probability: 0.7 })])
   ];
 
   const built = buildGlobalSpecialBets({ rows, leagueIds: [39, 140], now: NOW }, [3]);
@@ -388,4 +591,44 @@ test("an unsettleable market is filtered before ranking, not after", () => {
   assert.equal(built.pool.length, 1);
   assert.equal(built.pool[0].fixtureId, 2);
   assert.equal(built.rejected.marketNotSettleable, 1);
+});
+
+// ── production regression: the audited Aug 2026 legs ───────────────────────
+
+test("the audited production legs are rejected; only the safe ones remain", () => {
+  // Real legs from the read-only audit, reconstructed: two divergence rejects
+  // (the DC 1X @5.00 and the degenerate Corners U6.5 @4.69 that lost), two
+  // floor rejects (the 44–46% legs that killed the settled 8-fold), and the
+  // two safe short-priced legs that the old ranking placed BELOW all of them.
+  const rows = [
+    fixture(1607622, 39, [
+      goodMarket({ type: "1X", family: "Double Chance", line: null, betType: "double_chance", probability: 0.68, odds: 5 })
+    ]),
+    fixture(1607609, 40, [
+      goodMarket({ type: "Under 6.5", family: "Corners", line: 6.5, betType: "corners", probability: 0.99, odds: 4.69 })
+    ]),
+    fixture(1607169, 41, [
+      goodMarket({ type: "X2", family: "Double Chance", line: null, betType: "double_chance", probability: 0.46, odds: 3.45 })
+    ]),
+    fixture(1607174, 39, [
+      goodMarket({ type: "1", family: "1X2", line: null, betType: "match_winner", probability: 0.44, odds: 3.77 })
+    ]),
+    fixture(1607603, 40, [
+      goodMarket({ type: "Over 7.5", family: "Corners", line: 7.5, betType: "corners", probability: 0.83, odds: 1.38 })
+    ]),
+    fixture(1607566, 41, [
+      goodMarket({ type: "Under 27.5", family: "Shots", line: 27.5, betType: "shots", probability: 0.83, odds: 1.87 })
+    ])
+  ];
+
+  const built = buildGlobalSpecialBets({ rows, leagueIds: [39, 40, 41], now: NOW }, [3]);
+
+  assert.equal(built.rejected.modelMarketDivergence, 2, "DC@5.00 and Corners U6.5@4.69");
+  assert.equal(built.rejected.probabilityBelowFloor, 2, "the 44% and 46% legs");
+  assert.deepEqual(
+    built.pool.map((c) => c.fixtureId).sort((a, b) => a - b),
+    [1607566, 1607603],
+    "only the two safe legs survive"
+  );
+  assert.deepEqual(built.unavailable, [{ variant: 3, available: 2, required: 3 }]);
 });

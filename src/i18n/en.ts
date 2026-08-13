@@ -849,6 +849,15 @@ export const en: Dict = {
     summaryAvgConfidence: "Average confidence",
     summaryStatus: "Status",
     summaryCreated: "Created",
+    // Probability-first vocabulary (Increment 3): the ticket chance is the
+    // STORED ticket_probability, and per-leg "Probability" is P(full win) —
+    // neither is confidence, and the copy never conflates them.
+    ticketChance: "Estimated ticket chance",
+    ticketChanceDisclaimer: "Based on model probabilities; assumes independent selections.",
+    ticketChanceAria:
+      "Estimated ticket chance: {value} percent. Based on model probabilities; assumes independent selections.",
+    probability: "Probability",
+    legProbabilityAria: "Selection probability: {value} percent.",
     selectionsTitle: "Selections",
     market: "Market",
     odds: "Odds",
