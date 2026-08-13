@@ -1,10 +1,18 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { formatLineLabel, formatRecommendedPick, resolveMarketFamilyKey } from "./formatRecommendation";
+import {
+  formatLineLabel,
+  formatMarketPeriodShort,
+  formatMarketScopeShort,
+  formatRecommendedPick,
+  resolveMarketFamilyKey
+} from "./formatRecommendation";
 import { ensureCatalog, translate } from "../i18n/translate";
 
-// EN registers lazily; without this the fallback chain serves RO.
+// EN registers lazily; without awaiting this the fallback chain serves RO.
+// (RO is eager — no ensure needed for tRo.)
 beforeAll(() => ensureCatalog("en"));
 const t = (key: string, params?: Record<string, string | number>) => translate("en", key, params);
+const tRo = (key: string, params?: Record<string, string | number>) => translate("ro", key, params);
 
 describe("resolveMarketFamilyKey", () => {
   it("maps explicit Corners family and pick tokens to CORNERS", () => {
@@ -64,41 +72,41 @@ describe("formatLineLabel (lossless)", () => {
 });
 
 describe("formatRecommendedPick — Market Identity Contract labels", () => {
-  it('renders "Over 3.5 Corners · Full Match" from structural meta (test 16)', () => {
+  it('renders "Over 3.5 Corners · FT" from structural meta (test 16)', () => {
     const out = formatRecommendedPick("Over 3.5", "Corners", t, {
       period: "full_match",
       scope: "match",
       bookLine: 3.5
     });
-    expect(out.label).toBe("Over 3.5 Corners · Full Match");
+    expect(out.label).toBe("Over 3.5 Corners · FT");
     expect(out.familyKey).toBe("CORNERS");
   });
 
-  it('renders "Over 3.5 Home Corners · Full Match" for home scope (test 17)', () => {
+  it('renders "Over 3.5 Home Corners · FT" for home scope (test 17)', () => {
     const out = formatRecommendedPick("Over 3.5", "Corners", t, {
       period: "full_match",
       scope: "home",
       bookLine: 3.5
     });
-    expect(out.label).toBe("Over 3.5 Home Corners · Full Match");
+    expect(out.label).toBe("Over 3.5 Home Corners · FT");
   });
 
-  it('renders "Over 4.5 Corners · 1st Half" for a first-half pick (test 18)', () => {
+  it('renders "Over 4.5 Corners · FH" for a first-half pick (test 18)', () => {
     const out = formatRecommendedPick("Over 4.5", "Corners", t, {
       period: "first_half",
       scope: "match",
       bookLine: 4.5
     });
-    expect(out.label).toBe("Over 4.5 Corners · 1st Half");
+    expect(out.label).toBe("Over 4.5 Corners · FH");
   });
 
-  it('renders "Under 10.25 Corners · Full Match" — quarter line stays exact (test 19)', () => {
+  it('renders "Under 10.25 Corners · FT" — quarter line stays exact (test 19)', () => {
     const out = formatRecommendedPick("Under 10.25", "Corners", t, {
       period: "full_match",
       scope: "match",
       bookLine: 10.25
     });
-    expect(out.label).toBe("Under 10.25 Corners · Full Match");
+    expect(out.label).toBe("Under 10.25 Corners · FT");
   });
 
   it("prefers the structural bookLine over the label — a lossy legacy label is repaired", () => {
@@ -108,7 +116,7 @@ describe("formatRecommendedPick — Market Identity Contract labels", () => {
       scope: "match",
       bookLine: 10.25
     });
-    expect(out.label).toBe("Under 10.25 Corners · Full Match");
+    expect(out.label).toBe("Under 10.25 Corners · FT");
   });
 
   it("never invents a period: legacy rows without meta render exactly as before", () => {
@@ -128,6 +136,130 @@ describe("formatRecommendedPick — Market Identity Contract labels", () => {
       scope: "match",
       bookLine: 10
     });
-    expect(out.label).toBe("Under 10 Corners · Full Match");
+    expect(out.label).toBe("Under 10 Corners · FT");
+  });
+});
+
+describe("formatMarketPeriodShort — compact period abbreviations (product rule)", () => {
+  it("maps the four defined periods and nothing else", () => {
+    expect(formatMarketPeriodShort("full_match")).toBe("FT");
+    expect(formatMarketPeriodShort("first_half")).toBe("FH");
+    expect(formatMarketPeriodShort("second_half")).toBe("SH");
+    expect(formatMarketPeriodShort("extra_time")).toBe("ET");
+  });
+
+  it("never invents an abbreviation for unknown or undefined periods", () => {
+    expect(formatMarketPeriodShort("weird_period")).toBeNull();
+    expect(formatMarketPeriodShort(null)).toBeNull();
+    expect(formatMarketPeriodShort(undefined)).toBeNull();
+  });
+});
+
+describe("compact period labels in recommended picks", () => {
+  it('renders "Over 0.5 Goals · ET" for an extra-time pick', () => {
+    const out = formatRecommendedPick("Over 0.5 Goals", "Over/Under", t, {
+      period: "extra_time",
+      scope: "match",
+      bookLine: 0.5
+    });
+    expect(out.label).toContain("· ET");
+  });
+
+  it("keeps the verbose period in ariaLabel while the visual label is compact", () => {
+    const out = formatRecommendedPick("Over 4.5", "Corners", t, {
+      period: "full_match",
+      scope: "match",
+      bookLine: 4.5
+    });
+    expect(out.label).toBe("Over 4.5 Corners · FT");
+    expect(out.ariaLabel).toBe("Over 4.5 Corners · Full Match");
+  });
+
+  it('renders "Over 4.5 Corners · SH" for a second-half pick, verbose in aria', () => {
+    const out = formatRecommendedPick("Over 4.5", "Corners", t, {
+      period: "second_half",
+      scope: "match",
+      bookLine: 4.5
+    });
+    expect(out.label).toBe("Over 4.5 Corners · SH");
+    expect(out.ariaLabel).toBe("Over 4.5 Corners · 2nd Half");
+  });
+
+  it("does not mutate the internal period descriptor it renders from", () => {
+    const meta = { period: "full_match", scope: "match", bookLine: 4.5 };
+    formatRecommendedPick("Over 4.5", "Corners", t, meta);
+    expect(meta.period).toBe("full_match");
+  });
+
+  it("ariaLabel stays verbose for compact market names even without a period", () => {
+    const out = formatRecommendedPick("GG", "BTTS", t);
+    expect(out.label).toBe("BTTS");
+    expect(out.ariaLabel).toBe("Both Teams To Score – Yes");
+  });
+});
+
+describe("compact market labels — approved mapping (STEP 2)", () => {
+  const ftMeta = { period: "full_match", scope: "match", bookLine: null };
+
+  it("BTTS is locale-native: GG/NGG in RO, BTTS/No BTTS in EN", () => {
+    expect(formatRecommendedPick("GG", "BTTS", tRo, ftMeta).label).toBe("GG · FT");
+    expect(formatRecommendedPick("NGG", "BTTS", tRo, ftMeta).label).toBe("NGG · FT");
+    expect(formatRecommendedPick("GG", "BTTS", t, ftMeta).label).toBe("BTTS · FT");
+    expect(formatRecommendedPick("NGG", "BTTS", t, ftMeta).label).toBe("No BTTS · FT");
+  });
+
+  it("BTTS aria keeps the full sentence in each locale", () => {
+    expect(formatRecommendedPick("GG", "BTTS", tRo, ftMeta).ariaLabel).toBe(
+      "Ambele Echipe Marchează – Da · Meci întreg"
+    );
+    expect(formatRecommendedPick("GG", "BTTS", t, ftMeta).ariaLabel).toBe(
+      "Both Teams To Score – Yes · Full Match"
+    );
+  });
+
+  it("Double Chance compacts to DC 1X / DC 12 / DC X2 with verbose aria", () => {
+    for (const code of ["1X", "12", "X2"] as const) {
+      const out = formatRecommendedPick(code, "Double Chance", t, ftMeta);
+      expect(out.label).toBe(`DC ${code} · FT`);
+      expect(out.ariaLabel).toBe(`Double Chance ${code} · Full Match`);
+    }
+  });
+
+  it("1X2 stays verbose — never compacted to bare 1/X/2", () => {
+    expect(formatRecommendedPick("1", "1X2", t).label).toBe("Home Win");
+    expect(formatRecommendedPick("X", "1X2", t).label).toBe("Draw");
+    expect(formatRecommendedPick("2", "1X2", t).label).toBe("Away Win");
+    expect(formatRecommendedPick("1", "1X2", tRo).label).toBe("Victorie Gazde");
+  });
+
+  it('Correct Score compacts to "CS 2-1" with verbose aria', () => {
+    const out = formatRecommendedPick("2-1", "Correct Score", t, ftMeta);
+    expect(out.label).toBe("CS 2-1 · FT");
+    expect(out.ariaLabel).toBe("Correct Score 2-1 · Full Match");
+  });
+
+  it("scope keeps full words (Home/Gazde, Away/Oaspeți) — never single letters", () => {
+    const home = formatRecommendedPick("Over 3.5", "Corners", t, { period: "full_match", scope: "home", bookLine: 3.5 });
+    expect(home.label).toBe("Over 3.5 Home Corners · FT");
+    const awayRo = formatRecommendedPick("Sub 3.5", "Corners", tRo, { period: "full_match", scope: "away", bookLine: 3.5 });
+    expect(awayRo.label).toBe("Sub 3.5 Oaspeți Cornere · FT");
+    expect(formatMarketScopeShort("home", t)).toBe("Home");
+    expect(formatMarketScopeShort("away", tRo)).toBe("Oaspeți");
+  });
+
+  it("match scope adds no suffix; unknown scope adds nothing", () => {
+    const out = formatRecommendedPick("Over 3.5", "Corners", t, { period: "full_match", scope: "match", bookLine: 3.5 });
+    expect(out.label).toBe("Over 3.5 Corners · FT");
+    expect(formatMarketScopeShort("match", t)).toBeNull();
+    expect(formatMarketScopeShort("weird", t)).toBeNull();
+    expect(formatMarketScopeShort(null, t)).toBeNull();
+  });
+
+  it("compact branches leave internal metadata untouched", () => {
+    const meta = { period: "full_match", scope: "match", bookLine: null };
+    formatRecommendedPick("GG", "BTTS", tRo, meta);
+    formatRecommendedPick("1X", "Double Chance", t, meta);
+    formatRecommendedPick("2-1", "Correct Score", t, meta);
+    expect(meta).toEqual({ period: "full_match", scope: "match", bookLine: null });
   });
 });
