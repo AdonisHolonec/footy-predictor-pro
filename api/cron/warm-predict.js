@@ -1,6 +1,6 @@
 import { isAuthorizedCronOrInternalRequest } from "../../server-utils/cronRequestAuth.js";
 import { todayCalendarEuropeBucharest } from "../../server-utils/fixtureCalendarDateKey.js";
-import { TOP_LEAGUE_IDS } from "../../server-utils/modelConstants.js";
+import { parseCronLeagueIds } from "../../server-utils/cronLeagueIds.js";
 import { getApiUsage, getWithCache } from "../../server-utils/fetcher.js";
 import {
   extractFixtureMarketStats,
@@ -159,14 +159,6 @@ function inferSeason(dateISO) {
   return m >= 7 ? y : y - 1;
 }
 
-function parseLeagueIds(raw) {
-  const src = String(raw || "")
-    .split(",")
-    .map((v) => Number(String(v).trim()))
-    .filter((v) => Number.isFinite(v));
-  return src.length ? Array.from(new Set(src)) : TOP_LEAGUE_IDS.slice();
-}
-
 function resolvePublicBaseUrl() {
   const explicit = String(process.env.CRON_WARM_PREDICT_BASE_URL || "").trim().replace(/\/$/, "");
   if (explicit) return explicit;
@@ -211,7 +203,11 @@ export default async function handler(req, res) {
     0,
     10
   );
-  const leagueIds = parseLeagueIds(process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS);
+  // Processing ORDER, not the supported set — see cronLeagueIds.js. Unset or malformed
+  // falls back to the canonical list in full, so the cron can never be narrowed by a typo.
+  const leagueIds = parseCronLeagueIds(
+    process.env.CRON_WARM_PREDICT_LEAGUE_IDS || process.env.PREWARM_LEAGUE_IDS
+  );
   const season = Number(req.query.season || process.env.PREWARM_SEASON || inferSeason(dateRaw));
   const syncDays = Math.max(1, Math.min(Number(req.query.syncDays || process.env.CRON_HISTORY_SYNC_DAYS || 45), 120));
   const base = resolvePublicBaseUrl();
