@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { useLocale } from "../../context/LocaleContext";
 import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
+import SupportEntry from "../../components/support/SupportEntry";
 import type { useAuth } from "../../hooks/useAuth";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 
@@ -19,10 +20,8 @@ type SettingsViewProps = {
   cycleTheme: () => void;
   downloadPersonalDataExport: () => void;
   exportBusy: boolean;
-  /** Opens the support ticket dialog owned by UserDashboard. */
-  onOpenSupport: () => void;
-  /** Opens the feedback dialog owned by UserDashboard. */
-  onOpenFeedback: () => void;
+  /** Raised with an i18n key when a support or feedback submission succeeds. */
+  onSupportSubmitted?: (messageKey: string) => void;
 };
 
 export default function SettingsView(props: SettingsViewProps) {
@@ -33,8 +32,7 @@ export default function SettingsView(props: SettingsViewProps) {
     cycleTheme,
     downloadPersonalDataExport,
     exportBusy,
-    onOpenSupport,
-    onOpenFeedback
+    onSupportSubmitted
   } = props;
   const { t } = useLocale();
   return (
@@ -98,23 +96,8 @@ export default function SettingsView(props: SettingsViewProps) {
             </Button>
           </Card>
 
-          {/* Support and Feedback live here rather than in the nav: the nav already
-              carries nine sections and none of them is a place you visit twice a
-              week. Settings is where you go when something needs sorting out. */}
-          <Card>
-            <h2 className="font-display text-[length:var(--fp-section)] font-semibold">
-              {t("support.sectionTitle")}
-            </h2>
-            <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("support.sectionHint")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={onOpenSupport}>
-                {t("support.openSupport")}
-              </Button>
-              <Button variant="ghost" onClick={onOpenFeedback}>
-                {t("support.openFeedback")}
-              </Button>
-            </div>
-          </Card>
+          {/* One component, mounted by both authenticated trees — see SupportEntry. */}
+          <SupportEntry onSubmitted={onSupportSubmitted} />
 
           <Card>
             <Button variant="danger" onClick={() => void logout()}>
