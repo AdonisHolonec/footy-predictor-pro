@@ -29,6 +29,7 @@ import {
   resolveAuthenticatedUsageContext
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import { calculateSyntheticXG } from "../server-utils/advancedMath.js";
+import { computeCardTotals } from "../server-utils/fixtureCardTotals.js";
 import {
   USER_TIERS,
   getTierPredictCountToday,
@@ -705,6 +706,8 @@ async function handleXg(req, res) {
             cornersTotal: null,
             shotsOnTargetTotal: null,
             shotsTotal: null,
+            cardsTotal: null,
+            cardsPoints: null,
             firstHalfGoals
           },
           updatedAt: new Date().toISOString()
@@ -725,6 +728,8 @@ async function handleXg(req, res) {
             cornersTotal: null,
             shotsOnTargetTotal: null,
             shotsTotal: null,
+            cardsTotal: null,
+            cardsPoints: null,
             firstHalfGoals
           },
           updatedAt: new Date().toISOString()
@@ -743,6 +748,9 @@ async function handleXg(req, res) {
     const shotsOnTargetAway = parseNumericStat(awayStats, ["Shots on Goal", "Shots on Target"]);
     const shotsTotalHome = parseNumericStat(homeStats, ["Total Shots"]);
     const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
+    // Cards read from the same already-fetched statistics payload. See
+    // fixtureCardTotals.js for the known-vs-unknown rule and the two units.
+    const { cardsTotal, cardsPoints } = computeCardTotals(homeStats, awayStats);
 
     return res.status(200).json({
       fixtureId: fid,
@@ -755,6 +763,8 @@ async function handleXg(req, res) {
             ? shotsOnTargetHome + shotsOnTargetAway
             : null,
         shotsTotal: shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
+        cardsTotal,
+        cardsPoints,
         firstHalfGoals
       },
       updatedAt: new Date().toISOString()

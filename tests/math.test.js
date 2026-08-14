@@ -527,23 +527,34 @@ test("aggregateRollingForTeam produce medii corecte pe cornere şi SoT", () => {
   assert.equal(agg.last_fixture_id, 3);
 });
 
-test("aggregateRollingForTeam agregă cartonaşe ca puncte ponderate (roşu×2 + galben)", () => {
+test("aggregateRollingForTeam separă cartonaşe brute (cards_*) de puncte ponderate (cards_points_*)", () => {
+  // Acelaşi set de date, ambele unităţi. cards_*_avg este numărul BRUT de cartonaşe
+  // (cardsTotal), cards_points_*_avg păstrează convenţia ponderată roşu×2 + galben —
+  // aserţiunile pe puncte de mai jos sunt exact cele dinaintea separării unităţilor.
   const matches = [
-    // teamStats: 2 galbene + 1 roşu = 2*1 + 1*2 = 4 puncte. opponentStats: 1 galben = 1 punct.
+    // team: 2 galbene + 1 roşu = 3 cartonaşe / 4 puncte. opponent: 1 galben = 1 / 1.
     { fixtureId: 1, date: "2024-01-01T15:00:00Z", isHome: true,
       teamStats: { yellowCards: 2, redCards: 1 },
       opponentStats: { yellowCards: 1, redCards: 0 } },
-    // teamStats: 3 galbene = 3 puncte. opponentStats: 2 galbene + 1 roşu = 4 puncte.
+    // team: 3 galbene = 3 cartonaşe / 3 puncte. opponent: 2 galbene + 1 roşu = 3 / 4.
     { fixtureId: 2, date: "2024-01-08T15:00:00Z", isHome: false,
       teamStats: { yellowCards: 3, redCards: 0 },
       opponentStats: { yellowCards: 2, redCards: 1 } }
   ];
   const agg = aggregateRollingForTeam(matches);
   const approxEq = (a, b) => Math.abs(a - b) < 0.005;
-  assert.ok(approxEq(agg.cards_for_avg, (4 + 3) / 2), `for=${agg.cards_for_avg}`);
-  assert.ok(approxEq(agg.cards_against_avg, (1 + 4) / 2), `against=${agg.cards_against_avg}`);
-  assert.ok(approxEq(agg.cards_for_home_avg, 4), `home=${agg.cards_for_home_avg}`);
+
+  // Cartonaşe brute — unitatea rolling-ului Cards.
+  assert.ok(approxEq(agg.cards_for_avg, (3 + 3) / 2), `for=${agg.cards_for_avg}`);
+  assert.ok(approxEq(agg.cards_against_avg, (1 + 3) / 2), `against=${agg.cards_against_avg}`);
+  assert.ok(approxEq(agg.cards_for_home_avg, 3), `home=${agg.cards_for_home_avg}`);
   assert.ok(approxEq(agg.cards_for_away_avg, 3), `away=${agg.cards_for_away_avg}`);
+
+  // Puncte ponderate — pistă separată, roşul valorează dublu.
+  assert.ok(approxEq(agg.cards_points_for_avg, (4 + 3) / 2), `pFor=${agg.cards_points_for_avg}`);
+  assert.ok(approxEq(agg.cards_points_against_avg, (1 + 4) / 2), `pAgainst=${agg.cards_points_against_avg}`);
+  assert.ok(approxEq(agg.cards_points_for_home_avg, 4), `pHome=${agg.cards_points_for_home_avg}`);
+  assert.ok(approxEq(agg.cards_points_for_away_avg, 3), `pAway=${agg.cards_points_for_away_avg}`);
 });
 
 test("aggregateRollingForTeam tratează lista goală", () => {
@@ -674,6 +685,209 @@ test("aggregateRollingForTeam: meci cu statistici integral null nu contează ca 
   assert.equal(agg.samples_by_market.sot, 1);
   // media NU mai e trasă în jos de null→0 (înainte de fix ar fi fost (6+0)/2=3)
   assert.equal(agg.corners_for_avg, 6);
+});
+
+// -------------------- Cards rolling (Increment B) --------------------
+// Unitatea rolling-ului Cards este cardsTotal (număr brut yellow + red). Convenţia
+// ponderată (red*2 + yellow) trăieşte separat în cards_points_*_avg şi nu trebuie să se
+// amestece niciodată cu prima.
+
+/** Un meci în forma consumată de aggregateRollingForTeam. */
+function cardsMatch({ id, isHome, teamY, teamR, oppY, oppR, date }) {
+  return {
+    fixtureId: id,
+    date: date || `2026-08-${String(id).padStart(2, "0")}T18:00:00Z`,
+    isHome,
+    teamStats: { corners: 5, sot: 3, shotsTotal: 10, yellowCards: teamY, redCards: teamR },
+    opponentStats: { corners: 4, sot: 2, shotsTotal: 9, yellowCards: oppY, redCards: oppR }
+  };
+}
+
+test("cards rolling [A]: cardsTotal = yellow + red, nu puncte ponderate", () => {
+  // 3 galbene + 1 roşu = 4 cartonaşe brute, dar 5 puncte ponderate.
+  const matches = [1, 2].map((i) =>
+    cardsMatch({ id: i, isHome: i === 1, teamY: 3, teamR: 1, oppY: 2, oppR: 0 })
+  );
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.cards_for_avg, 4, "media rolling trebuie să fie în cartonaşe brute");
+  assert.equal(agg.cards_against_avg, 2);
+});
+
+test("cards rolling [I]: cardsTotal şi cardsPoints sunt piste separate, niciodată amestecate", () => {
+  const matches = [1, 2].map((i) =>
+    cardsMatch({ id: i, isHome: i === 1, teamY: 3, teamR: 1, oppY: 1, oppR: 1 })
+  );
+  const agg = aggregateRollingForTeam(matches);
+  // for: 4 cartonaşe / 5 puncte · against: 2 cartonaşe / 3 puncte
+  assert.equal(agg.cards_for_avg, 4);
+  assert.equal(agg.cards_points_for_avg, 5);
+  assert.equal(agg.cards_against_avg, 2);
+  assert.equal(agg.cards_points_against_avg, 3);
+  // Dacă unităţile s-ar confunda, aceste două ar fi egale.
+  assert.notEqual(agg.cards_for_avg, agg.cards_points_for_avg);
+});
+
+test("cards rolling [C]: 0 cartonaşe dintr-un bloc real este observaţie validă", () => {
+  const matches = [1, 2, 3].map((i) =>
+    cardsMatch({ id: i, isHome: i % 2 === 1, teamY: 0, teamR: null, oppY: 2, oppR: null })
+  );
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 3, "un 0 real NU trebuie exclus din sample");
+  assert.equal(agg.cards_for_avg, 0);
+  assert.equal(agg.cards_points_for_avg, 0);
+});
+
+test("cards rolling [H]: dataset mixt [4,5,null,3,null,6] → sample 4, media pe cele 4 valide", () => {
+  const values = [4, 5, null, 3, null, 6];
+  const matches = values.map((v, i) =>
+    cardsMatch({ id: i + 1, isHome: true, teamY: v, teamR: v == null ? null : 0, oppY: 1, oppR: 0 })
+  );
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 4, "doar observaţiile valide intră în sample");
+  // (4+5+3+6)/4 = 4.5 — NU (4+5+0+3+0+6)/6 = 3, care ar fi rezultatul dacă null→0.
+  assert.equal(agg.cards_for_avg, 4.5);
+  assert.notEqual(agg.cards_for_avg, 3);
+});
+
+test("cards rolling [E]: home şi away sunt calculate şi eşantionate separat", () => {
+  const matches = [
+    cardsMatch({ id: 1, isHome: true, teamY: 6, teamR: 0, oppY: 1, oppR: 0 }),
+    cardsMatch({ id: 2, isHome: true, teamY: 4, teamR: 0, oppY: 3, oppR: 0 }),
+    cardsMatch({ id: 3, isHome: false, teamY: 2, teamR: 0, oppY: 5, oppR: 0 })
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.cards_for_home_avg, 5, "(6+4)/2");
+  assert.equal(agg.cards_for_away_avg, 2);
+  assert.equal(agg.samples_by_market.cards_home, 2);
+  assert.equal(agg.samples_by_market.cards_away, 1);
+  // Pooled rămâne media tuturor celor trei, nu media mediilor.
+  assert.equal(agg.cards_for_avg, 4);
+});
+
+test("cards rolling [F]: latura 'against' urmăreşte adversarul, pe aceleaşi observaţii", () => {
+  // Infrastructura pentru adversar este perechea for/against, exact ca la cornere —
+  // nu se adaugă o a doua metodologie.
+  const matches = [
+    cardsMatch({ id: 1, isHome: true, teamY: 2, teamR: 0, oppY: 5, oppR: 1 }),
+    cardsMatch({ id: 2, isHome: false, teamY: 2, teamR: 0, oppY: 3, oppR: 1 })
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.cards_for_avg, 2);
+  assert.equal(agg.cards_against_avg, 5, "(6+4)/2 cartonaşe primite");
+  assert.equal(agg.cards_against_home_avg, 6);
+  assert.equal(agg.cards_against_away_avg, 4);
+});
+
+test("cards rolling [G]: un adversar UNKNOWN scoate meciul din sample-ul perechii", () => {
+  const matches = [
+    cardsMatch({ id: 1, isHome: true, teamY: 3, teamR: 0, oppY: 2, oppR: 0 }),
+    // Latura echipei e observată, a adversarului nu — perechea for/against e incompletă.
+    cardsMatch({ id: 2, isHome: true, teamY: 5, teamR: 0, oppY: null, oppR: null })
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 1, "sample = min(for, against)");
+  assert.equal(agg.cards_against_avg, 2, "media 'against' NU include un 0 fantomă");
+});
+
+test("cards rolling [B/D]: null explicit rămâne UNKNOWN şi în pista de puncte", () => {
+  // Aceeaşi regresie Number(null)→0, verificată pe ambele unităţi deodată.
+  const matches = [
+    cardsMatch({ id: 1, isHome: true, teamY: 4, teamR: 0, oppY: 2, oppR: 0 }),
+    cardsMatch({ id: 2, isHome: true, teamY: null, teamR: null, oppY: null, oppR: null })
+  ];
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 1);
+  assert.equal(agg.cards_for_avg, 4);
+  assert.equal(agg.cards_points_for_avg, 4);
+});
+
+test("cards rolling: câmpurile in-memory nu se scurg în setul de coloane persistate", () => {
+  // Coloanele reale din team_market_rolling (migrările 015 + 038). Un câmp nou lăsat în
+  // afara listei de stripping ar face upsert-ul să eşueze pe "coloană necunoscută" abia
+  // la rulare — acest test prinde asta la build.
+  const DB_COLUMNS = new Set([
+    "matches_sampled",
+    "corners_for_avg", "corners_against_avg",
+    "corners_for_home_avg", "corners_against_home_avg",
+    "corners_for_away_avg", "corners_against_away_avg",
+    "sot_for_avg", "sot_against_avg",
+    "shots_total_for_avg", "shots_total_against_avg",
+    "cards_for_avg", "cards_against_avg",
+    "cards_for_home_avg", "cards_against_home_avg",
+    "cards_for_away_avg", "cards_against_away_avg",
+    "last_fixture_id", "last_fixture_date"
+  ]);
+  const IN_MEMORY_ONLY = new Set([
+    "samples_by_market",
+    "cards_points_for_avg", "cards_points_against_avg",
+    "cards_points_for_home_avg", "cards_points_against_home_avg",
+    "cards_points_for_away_avg", "cards_points_against_away_avg"
+  ]);
+
+  const agg = aggregateRollingForTeam([
+    cardsMatch({ id: 1, isHome: true, teamY: 2, teamR: 0, oppY: 1, oppR: 0 })
+  ]);
+  const leaked = Object.keys(agg).filter((k) => !DB_COLUMNS.has(k) && !IN_MEMORY_ONLY.has(k));
+  assert.deepEqual(leaked, [], `câmpuri fără coloană şi fără stripping: ${leaked.join(", ")}`);
+
+  // Şi invers: forma goală trebuie să expună exact aceleaşi chei ca forma populată.
+  assert.deepEqual(Object.keys(aggregateRollingForTeam([])).sort(), Object.keys(agg).sort());
+});
+
+test("cards rolling: lista goală întoarce null pe ambele unităţi, nu 0", () => {
+  const agg = aggregateRollingForTeam([]);
+  assert.equal(agg.cards_for_avg, null);
+  assert.equal(agg.cards_points_for_avg, null);
+  assert.equal(agg.samples_by_market.cards_home, 0);
+  assert.equal(agg.samples_by_market.cards_away, 0);
+});
+
+test("aggregateRollingForTeam: cartonaşe null NU intră ca 0 în medie (regresie null→0)", () => {
+  // Regresia exactă: garda citea `Number(stats.yellowCards)` ÎNAINTE de a verifica null,
+  // iar `Number(null) === 0` este finit — deci un bloc de statistici integral null trecea
+  // ca meci-fantomă cu 0 cartonaşe şi trăgea media în jos. Testul vecin foloseşte câmpuri
+  // ABSENTE (undefined → NaN), care erau respinse corect; doar `null` explicit declanşa
+  // bug-ul, aşa că valorile de aici sunt null intenţionat.
+  const realMatch = {
+    fixtureId: 1, date: "2026-08-06T18:00:00Z", isHome: true,
+    teamStats: { corners: 6, sot: 4, shotsTotal: 12, yellowCards: 4, redCards: 0 },
+    opponentStats: { corners: 3, sot: 2, shotsTotal: 9, yellowCards: 2, redCards: 0 }
+  };
+  const nullMatch = {
+    fixtureId: 2, date: "2026-07-23T18:00:00Z", isHome: false,
+    teamStats: { corners: null, sot: null, shotsTotal: null, yellowCards: null, redCards: null },
+    opponentStats: { corners: null, sot: null, shotsTotal: null, yellowCards: null, redCards: null }
+  };
+  const agg = aggregateRollingForTeam([realMatch, nullMatch]);
+  // Înainte de fix: samples 2, cards_for_avg = (4+0)/2 = 2.
+  assert.equal(agg.samples_by_market.cards, 1);
+  assert.equal(agg.cards_for_avg, 4);
+  assert.equal(agg.cards_against_avg, 2);
+});
+
+test("aggregateRollingForTeam: red null lângă yellow cunoscut este zero real", () => {
+  // Forma reală a payload-ului: un meci cu galbene şi fără eliminări raportează
+  // Yellow Cards = 2 şi Red Cards = null. Acesta NU trebuie exclus.
+  const matches = [1, 2, 3, 4].map((i) => ({
+    fixtureId: i, date: `2026-08-0${i}T18:00:00Z`, isHome: i % 2 === 0,
+    teamStats: { corners: 5, sot: 3, shotsTotal: 10, yellowCards: 3, redCards: null },
+    opponentStats: { corners: 4, sot: 2, shotsTotal: 9, yellowCards: 1, redCards: null }
+  }));
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 4);
+  assert.equal(agg.cards_for_avg, 3);
+  assert.equal(agg.cards_against_avg, 1);
+});
+
+test("aggregateRollingForTeam: 0 galbene explicit rămâne producţie reală", () => {
+  const matches = [1, 2, 3, 4].map((i) => ({
+    fixtureId: i, date: `2026-08-0${i}T18:00:00Z`, isHome: i % 2 === 0,
+    teamStats: { corners: 5, sot: 3, shotsTotal: 10, yellowCards: 0, redCards: 0 },
+    opponentStats: { corners: 4, sot: 2, shotsTotal: 9, yellowCards: 2, redCards: 0 }
+  }));
+  const agg = aggregateRollingForTeam(matches);
+  assert.equal(agg.samples_by_market.cards, 4);
+  assert.equal(agg.cards_for_avg, 0);
 });
 
 test("aggregateRollingForTeam: 0 explicit de la provider este producţie reală, nu missing", () => {
