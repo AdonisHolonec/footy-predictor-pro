@@ -1,6 +1,7 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { handleSupportApi } from "../server-utils/supportApi.js";
 
 function asNum(n) {
   const x = Number(n);
@@ -16,6 +17,19 @@ function reasonCodesFromRow(row) {
 }
 
 export default async function handler(req, res) {
+  // Support / feedback / prediction-report are consolidated here rather than
+  // added as their own files: the api/ directory sits at the plan's twelve
+  // function limit (tests/vercelFunctionBudget.test.js). They keep their public
+  // URLs through rewrites in vercel.json, exactly as /api/special-bets does.
+  //
+  // Checked first and returned from immediately: these are user-authenticated
+  // write paths, and the ops-alert gate below is admin/cron only. A request
+  // without ?view= reaches that gate unchanged.
+  const view = String(req.query.view || "");
+  if (view === "support" || view === "feedback" || view === "prediction-report") {
+    return handleSupportApi(req, res);
+  }
+
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
