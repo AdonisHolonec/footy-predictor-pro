@@ -8,6 +8,10 @@ import {
   loadTeamMarketRolling,
   persistTeamMarketRolling
 } from "../../server-utils/teamMarketRolling.js";
+import {
+  buildSeasonTransitionWindow,
+  DEFAULT_TRANSITION_TARGET
+} from "../../server-utils/rolling/seasonTransitionWindow.js";
 
 const MARKET_REFRESH_BUDGET_CALLS = Math.max(
   0,
@@ -15,6 +19,124 @@ const MARKET_REFRESH_BUDGET_CALLS = Math.max(
 );
 const MARKET_REFRESH_WINDOW_DAYS = Math.max(1, Math.min(Number(process.env.CRON_MARKET_REFRESH_WINDOW_DAYS || 3), 7));
 const MARKET_REFRESH_ROLLING_WINDOW = 15;
+
+/**
+ * Season transition rolling. OFF by default — the mechanism ships inert and is switched on
+ * only by an explicit deployment decision, so this change cannot move a single published
+ * prediction on its own.
+ */
+const SEASON_TRANSITION_ENABLED = String(process.env.ROLLING_SEASON_TRANSITION || "").trim() === "1";
+const SEASON_TRANSITION_TARGET = DEFAULT_TRANSITION_TARGET;
+
+/** Match statuses that count as played, shared by both season paths. */
+const ROLLING_FINAL_STATUSES = ["FT", "AET", "PEN"];
+
+/**
+ * Finished fixtures belonging to ONE competition.
+ *
+ * Both filters have to be applied together and in one place. A team-scoped provider query
+ * returns every competition the team appears in, so without the league check a domestic
+ * rolling average quietly absorbs cup ties and European fixtures — matches played against
+ * different opposition strength, often with rotated sides. For a promoted team the previous
+ * season is an entirely different division.
+ *
+ * `leagueId` is compared numerically because the provider and the caller disagree about
+ * string vs number often enough for `===` on raw values to silently drop everything.
+ *
+ * @param {Array<object>|null|undefined} fixtures provider-shaped fixtures
+ * @param {number|string} leagueId
+ * @returns {Array<object>}
+ */
+export function selectLeagueRollingFixtures(fixtures, leagueId) {
+  const target = Number(leagueId);
+  if (!Number.isFinite(target)) return [];
+  return (Array.isArray(fixtures) ? fixtures : []).filter(
+    (fx) =>
+      ROLLING_FINAL_STATUSES.includes(fx?.fixture?.status?.short || "") &&
+      Number(fx?.league?.id) === target
+  );
+}
+
+/**
+ * Collect one team's rolling inputs — ALL OR NOTHING.
+ *
+ * The API budget is spent per uncached /fixtures/statistics call, so it can run out partway
+ * through a team's window. Before this guard, the loop simply `break`ed and the caller went
+ * on to aggregate and persist whatever had been gathered — a team's 15-match rolling row
+ * could be overwritten by an average of 2 matches. That row then falls below
+ * MIN_MARKET_SAMPLES and demotes the team from "real signal" to "league fallback", and it
+ * does so silently. Production already carries this damage: Champions League rows with
+ * matches_sampled of 1-2 and three teams recorded at corners_for_avg = 0.00.
+ *
+ * So an incomplete collection returns NO matches at all. A partial aggregate is not
+ * something the caller has to remember to reject — there is nothing to aggregate. The team
+ * keeps its previous snapshot and gets a full pass on the next run: better stale than
+ * corrupt.
+ *
+ * The budget check sits at the TOP of each iteration, so a budget that reaches zero exactly
+ * as the last fixture is consumed still leaves the team complete — the loop ends because
+ * there is nothing left to fetch, not because it ran out.
+ *
+ * @param {object} p
+ * @param {number} p.teamId
+ * @param {Array<object>} p.teamFixtures finished fixtures, provider shape
+ * @param {number} p.budget remaining uncached-call allowance
+ * @param {(fixtureId: number) => Promise<{ok: boolean, data?: object, fromCache?: boolean}>} p.fetchStats
+ * @returns {Promise<{matches: Array<object>, budget: number, complete: boolean,
+ *   requested: number, processed: number, reason: string|null}>}
+ */
+export async function collectTeamRollingMatches({ teamId, teamFixtures, budget, fetchStats }) {
+  const fixtures = Array.isArray(teamFixtures) ? teamFixtures : [];
+  const matches = [];
+  let remaining = Number(budget) || 0;
+  let processed = 0;
+
+  for (const fx of fixtures) {
+    if (remaining <= 0) {
+      return {
+        matches: [],
+        budget: remaining,
+        complete: false,
+        requested: fixtures.length,
+        processed,
+        reason: "budget_exhausted_mid_team"
+      };
+    }
+    const fixtureId = Number(fx?.fixture?.id);
+    if (!fixtureId) continue;
+
+    const statReq = await fetchStats(fixtureId);
+    if (!statReq?.fromCache) remaining -= 1;
+    processed += 1;
+    if (!statReq?.ok) continue;
+
+    const stats = extractFixtureMarketStats(statReq.data);
+    const mapByTeam = new Map();
+    for (const s of stats) if (s.teamId) mapByTeam.set(s.teamId, s);
+    const teamStats = mapByTeam.get(teamId);
+    const isHome = Number(fx?.teams?.home?.id) === teamId;
+    const opponentId = isHome ? Number(fx?.teams?.away?.id) : Number(fx?.teams?.home?.id);
+    const oppStats = mapByTeam.get(opponentId);
+    if (!teamStats || !oppStats) continue;
+
+    matches.push({
+      fixtureId,
+      date: fx?.fixture?.date,
+      isHome,
+      teamStats,
+      opponentStats: oppStats
+    });
+  }
+
+  return {
+    matches,
+    budget: remaining,
+    complete: true,
+    requested: fixtures.length,
+    processed,
+    reason: null
+  };
+}
 const MARKET_REFRESH_STALE_HOURS = 36;
 
 /**
@@ -38,6 +160,9 @@ async function refreshMarketRolling({ leagueIds, season }) {
     leaguesProcessed: 0,
     fixturesFetched: 0,
     teamsUpdated: 0,
+    teamsSkippedBudget: 0,
+    skipped: [],
+    seasonTransition: [],
     errors: []
   };
 
@@ -92,43 +217,86 @@ async function refreshMarketRolling({ leagueIds, season }) {
         summary.errors.push({ where: "fixtures_by_team", teamId, error: histReq.error });
         continue;
       }
-      const teamFixtures = (histReq.data?.response || []).filter((fx) =>
-        ["FT", "AET", "PEN"].includes(fx?.fixture?.status?.short || "")
-      );
-      if (teamFixtures.length === 0) continue;
+      // TEAM FIXTURE HISTORY — competition-agnostic, exactly as the provider returns it.
+      // /fixtures?team=X&season=Y is scoped to a team, not a competition, so this list also
+      // holds domestic cup ties and continental nights.
+      const teamFixtureHistory = histReq.data?.response || [];
 
-      // fetch statistics pentru fiecare fixture (cache agresiv TTL 30 zile — imuabile)
-      const enriched = [];
-      for (const fx of teamFixtures) {
-        if (budget <= 0) break;
-        const fixtureId = Number(fx?.fixture?.id);
-        if (!fixtureId) continue;
-        const statReq = await getWithCache(
-          "/fixtures/statistics",
-          { fixture: fixtureId },
-          30 * 24 * 60 * 60
-        );
-        if (!statReq.fromCache) budget -= 1;
-        summary.fixturesFetched += 1;
-        if (!statReq.ok) continue;
-        const stats = extractFixtureMarketStats(statReq.data);
-        const mapByTeam = new Map();
-        for (const s of stats) if (s.teamId) mapByTeam.set(s.teamId, s);
-        const teamStats = mapByTeam.get(teamId);
-        const isHome = Number(fx?.teams?.home?.id) === teamId;
-        const opponentId = isHome ? Number(fx?.teams?.away?.id) : Number(fx?.teams?.home?.id);
-        const oppStats = mapByTeam.get(opponentId);
-        if (!teamStats || !oppStats) continue;
-        enriched.push({
-          fixtureId,
-          date: fx?.fixture?.date,
-          isHome,
-          teamStats,
-          opponentStats: oppStats
+      // LEAGUE-SCOPED TEAM ROLLING HISTORY — the only list allowed to reach rolling.
+      // A `team_market_rolling` row answers "how does this team behave in THIS competition";
+      // a Champions League night or a cup tie against lower-division opposition answers a
+      // different question and was silently being averaged in. This is the single
+      // consumer of the list, so narrowing it here cannot affect anything else.
+      const currentInLeague = selectLeagueRollingFixtures(teamFixtureHistory, leagueId);
+
+      // Season transition window. INACTIVE unless ROLLING_SEASON_TRANSITION=1. League
+      // scoping applies either way — it is a correctness rule, not part of the flag.
+      let windowResult = {
+        matches: currentInLeague,
+        fromCurrent: currentInLeague.length,
+        fromPrevious: 0,
+        source: "current_only"
+      };
+
+      if (SEASON_TRANSITION_ENABLED) {
+        let previousInLeague = [];
+        if (currentInLeague.length < SEASON_TRANSITION_TARGET) {
+          const prevReq = await getWithCache(
+            "/fixtures",
+            { team: teamId, season: Number(season) - 1, last: MARKET_REFRESH_ROLLING_WINDOW },
+            6 * 60 * 60
+          );
+          if (prevReq.ok) {
+            // Same rule for the previous season. For a promoted side this is what keeps
+            // second-division form out of a top-flight rolling average.
+            previousInLeague = selectLeagueRollingFixtures(prevReq.data?.response, leagueId);
+          }
+        }
+        windowResult = buildSeasonTransitionWindow(currentInLeague, previousInLeague, {
+          target: SEASON_TRANSITION_TARGET
+        });
+        summary.seasonTransition.push({
+          team_id: teamId,
+          league_id: Number(leagueId),
+          season: Number(season),
+          from_current: windowResult.fromCurrent,
+          from_previous: windowResult.fromPrevious,
+          source: windowResult.source
         });
       }
-      if (enriched.length === 0) continue;
-      const agg = aggregateRollingForTeam(enriched);
+
+      const teamFixtures = windowResult.matches;
+      if (teamFixtures.length === 0) continue;
+
+      const collected = await collectTeamRollingMatches({
+        teamId,
+        teamFixtures,
+        budget,
+        fetchStats: (fixtureId) =>
+          getWithCache("/fixtures/statistics", { fixture: fixtureId }, 30 * 24 * 60 * 60)
+      });
+      budget = collected.budget;
+      summary.fixturesFetched += collected.processed;
+
+      if (!collected.complete) {
+        // Better stale than corrupt: this team keeps whatever snapshot it already had.
+        summary.teamsSkippedBudget += 1;
+        const skip = {
+          rolling_refresh_skip_reason: collected.reason,
+          team_id: teamId,
+          league_id: Number(leagueId),
+          season: Number(season),
+          requested_fixture_count: collected.requested,
+          processed_fixture_count: collected.processed,
+          remaining_budget: budget
+        };
+        summary.skipped.push(skip);
+        console.warn("[rolling-refresh]", JSON.stringify(skip));
+        continue;
+      }
+
+      if (collected.matches.length === 0) continue;
+      const agg = aggregateRollingForTeam(collected.matches);
       if (agg.matches_sampled === 0) continue;
       updatedRows.push({
         team_id: teamId,
