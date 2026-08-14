@@ -51,6 +51,9 @@ import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import MainBoardSection from "./userDashboard/MainBoardSection";
+import SupportDialog from "../components/support/SupportDialog";
+import FeedbackDialog from "../components/support/FeedbackDialog";
+import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
 import { useLeagueSelection } from "./userDashboard/useLeagueSelection";
@@ -97,6 +100,12 @@ export default function UserDashboard() {
   });
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  // The three support surfaces are owned here, next to the toast they raise on
+  // success: a dialog rendered inside a card would be unmounted by the same
+  // re-render that closes it, and the confirmation would never be seen.
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -597,6 +606,7 @@ export default function UserDashboard() {
           onToggleWatch={toggleWatchlist}
           onOpenMatch={openMatch}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+          onReportMatch={setReportRow}
           onPredict={() => void warmAndPredict()}
           matchesFilter={matchesFilter === "favorites" ? "favorites" : "all"}
           onSetFilter={(f) => updateFilters({ matchesFilter: f })}
@@ -716,6 +726,8 @@ export default function UserDashboard() {
           cycleTheme={cycleTheme}
           downloadPersonalDataExport={downloadPersonalDataExport}
           exportBusy={exportBusy}
+          onOpenSupport={() => setSupportOpen(true)}
+          onOpenFeedback={() => setFeedbackOpen(true)}
         />
       )}
 
@@ -768,6 +780,22 @@ export default function UserDashboard() {
         onPredict={() => void warmAndPredict()}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} />
+      <SupportDialog
+        open={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        onSubmitted={() => setToast(t("support.successMessage"))}
+      />
+      <FeedbackDialog
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        onSubmitted={() => setToast(t("feedback.successMessage"))}
+      />
+      <ReportPredictionDialog
+        open={Boolean(reportRow)}
+        row={reportRow}
+        onClose={() => setReportRow(null)}
+        onSubmitted={() => setToast(t("predictionReport.successMessage"))}
+      />
       {isLeaguesOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-end bg-[var(--fp-navy)]/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
           <div
