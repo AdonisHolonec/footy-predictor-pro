@@ -17,6 +17,8 @@ type Props = {
   onToggleWatch: (fixtureId: number) => void;
   onOpenMatch: (row: PredictionRow) => void;
   onUpgradeRequired: (feature: string, requiredTier: UpgradeTier) => void;
+  /** Opens the prediction report dialog for a row. Absent = no report button. */
+  onReportMatch?: (row: PredictionRow) => void;
   onPredict: () => void;
   matchesFilter?: MatchesSubFilter;
   onSetFilter?: (filter: MatchesSubFilter) => void;
@@ -36,6 +38,7 @@ export default function MatchesSection({
   onToggleWatch,
   onOpenMatch,
   onUpgradeRequired,
+  onReportMatch,
   onPredict,
   matchesFilter = "all",
   onSetFilter,
@@ -156,6 +159,7 @@ export default function MatchesSection({
               onToggleWatch={() => onToggleWatch(Number(row.id))}
               onOpen={() => onOpenMatch(row)}
               onUpgradeRequired={onUpgradeRequired}
+              onReport={onReportMatch ? () => onReportMatch(row) : undefined}
             />
           ))}
         </div>

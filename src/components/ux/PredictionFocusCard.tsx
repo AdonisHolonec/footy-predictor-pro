@@ -33,6 +33,8 @@ type Props = {
   onToggleWatch?: () => void;
   onOpen: () => void;
   onUpgradeRequired?: (feature: string, requiredTier: UpgradeTier) => void;
+  /** Opens the prediction report dialog for this row. Absent = no report button. */
+  onReport?: () => void;
 };
 
 type MarketRow = {
@@ -166,7 +168,8 @@ export default function PredictionFocusCard({
   watched,
   onToggleWatch,
   onOpen,
-  onUpgradeRequired
+  onUpgradeRequired,
+  onReport
 }: Props) {
   const { t } = useLocale();
   const { weather, loading: weatherLoading } = useKickoffWeather(row.venue, row.kickoff);
@@ -373,6 +376,22 @@ export default function PredictionFocusCard({
             aria-pressed={watched}
           >
             ★
+          </button>
+        )}
+        {/* Reporting is rare and corrective: it sits last, unfilled, and only
+            colours on hover so it never competes with the pick itself. */}
+        {onReport && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReport();
+            }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover-fine:border-[var(--fp-danger)]/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+            title={t("predictionReport.cardAction")}
+            aria-label={t("predictionReport.cardAction")}
+          >
+            ⚑
           </button>
         )}
       </div>
