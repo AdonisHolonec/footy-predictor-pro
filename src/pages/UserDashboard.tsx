@@ -51,8 +51,6 @@ import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import MainBoardSection from "./userDashboard/MainBoardSection";
-import SupportDialog from "../components/support/SupportDialog";
-import FeedbackDialog from "../components/support/FeedbackDialog";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
@@ -100,11 +98,8 @@ export default function UserDashboard() {
   });
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  // The three support surfaces are owned here, next to the toast they raise on
-  // success: a dialog rendered inside a card would be unmounted by the same
-  // re-render that closes it, and the confirmation would never be seen.
-  const [supportOpen, setSupportOpen] = useState(false);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Support and Feedback are owned by SupportEntry inside SettingsView; only the
+  // prediction report stays here, because it is opened from a card in a list.
   const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
@@ -726,8 +721,7 @@ export default function UserDashboard() {
           cycleTheme={cycleTheme}
           downloadPersonalDataExport={downloadPersonalDataExport}
           exportBusy={exportBusy}
-          onOpenSupport={() => setSupportOpen(true)}
-          onOpenFeedback={() => setFeedbackOpen(true)}
+          onSupportSubmitted={(key) => setToast(t(key))}
         />
       )}
 
@@ -780,16 +774,6 @@ export default function UserDashboard() {
         onPredict={() => void warmAndPredict()}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} />
-      <SupportDialog
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        onSubmitted={() => setToast(t("support.successMessage"))}
-      />
-      <FeedbackDialog
-        open={feedbackOpen}
-        onClose={() => setFeedbackOpen(false)}
-        onSubmitted={() => setToast(t("feedback.successMessage"))}
-      />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}
