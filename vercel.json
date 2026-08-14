@@ -11,6 +11,9 @@
     { "source": "/api/stripe-webhook", "destination": "/api/billing?view=webhook" },
     { "source": "/api/activate-trial", "destination": "/api/billing?view=trial" },
     { "source": "/api/special-bets", "destination": "/api/history?view=special-bets" },
+    { "source": "/api/support", "destination": "/api/alerts?view=support" },
+    { "source": "/api/feedback", "destination": "/api/alerts?view=feedback" },
+    { "source": "/api/prediction-report", "destination": "/api/alerts?view=prediction-report" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
