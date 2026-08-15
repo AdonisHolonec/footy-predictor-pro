@@ -1,4 +1,5 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
+import { handleAdminInbox } from "../server-utils/adminInboxApi.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { parseUsageDayFromQuery } from "../server-utils/userDailyWarmPredictUsage.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
@@ -28,10 +29,15 @@ import { resolveTrustedAppOrigin } from "../server-utils/publicBaseUrl.js";
  *   /api/admin?view=ml&sub=elo&leagueId=39           → team elo ratings
  *   POST /api/admin?view=ml&action=invalidate-cache  → soft refresh of in-memory caches
  *   POST /api/admin?view=ml&action=train-now&mode=auto-calibration → run auto calib
+ *   /api/admin?view=inbox&kind=support|report|feedback → read-only Support/Report/Feedback
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();
   if (view === "ml") return handleMl(req, res);
+  // Read-only inbox over Support / Reports / Feedback. Its own module because that one
+  // reads every user's messages while supportApi.js writes the caller's own — opposite
+  // trust models, kept in opposite files.
+  if (view === "inbox") return handleAdminInbox(req, res);
   return handleProfiles(req, res);
 }
 

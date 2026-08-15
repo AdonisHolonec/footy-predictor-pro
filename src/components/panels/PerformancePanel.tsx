@@ -16,6 +16,9 @@ const ModelLabPanel = lazy(() => import("../modelLab/ModelLabPanel"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 const BenchmarkPanel = lazy(() => import("../admin/BenchmarkPanel"));
 const MetaDataHealthPanel = lazy(() => import("../admin/MetaDataHealthPanel"));
+// Lazy like every other admin panel: the inbox is opened rarely, and its service should not
+// sit in the bundle every workspace user downloads.
+const AdminInboxPanel = lazy(() => import("../admin/AdminInboxPanel"));
 
 type TrackerProps = {
   stats: HistoryStats;
@@ -152,6 +155,11 @@ export default function PerformancePanel({
         {section === "diagnostics" && (
           <Suspense fallback={<LabFallback label="Diagnostics" />}>
             <DiagnosticsDashboard />
+          </Suspense>
+        )}
+        {section === "inbox" && (
+          <Suspense fallback={<LabFallback label="Inbox" />}>
+            <AdminInboxPanel />
           </Suspense>
         )}
         {section === "users" && (
