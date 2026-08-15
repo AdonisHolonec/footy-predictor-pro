@@ -8,6 +8,7 @@ export type AdminSection =
   | "meta-learning"
   | "health"
   | "diagnostics"
+  | "inbox"
   | "users"
   | "workspace";
 
@@ -19,6 +20,7 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "meta-learning", label: "Meta Learning" },
   { id: "health", label: "Health" },
   { id: "diagnostics", label: "Diagnostics" },
+  { id: "inbox", label: "Inbox" },
   { id: "users", label: "Users" },
   { id: "workspace", label: "← Workspace" }
 ];
