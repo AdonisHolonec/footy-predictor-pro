@@ -846,6 +846,15 @@ export const ro: Dict = {
     summarySelections: "Selecții",
     summaryTotalOdds: "Cotă totală",
     summarySettledOdds: "Cotă la decontare",
+    // Forma biletului. Varianta singură nu o poate numi: un Combo 5 și Sistemele
+    // 3/5, 4/5 și 5/5 au toate variant 5.
+    shapeCombo: "Combo · {n} selecții",
+    shapeSystem: "Sistem {k}/{n}",
+    summaryCombinations: "Combinații",
+    // La un sistem, produsul cotelor este returnarea combinației cu TOATE
+    // picioarele — una dintre C(n,k) — nu prețul biletului. Numit ca atare, ca să
+    // nu poată fi citit drept câștig.
+    summaryAllLegsOdds: "Cota celor {n}",
     summaryAvgConfidence: "Încredere medie",
     summaryStatus: "Status",
     summaryCreated: "Generat",

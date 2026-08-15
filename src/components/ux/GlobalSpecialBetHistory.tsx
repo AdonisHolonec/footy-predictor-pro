@@ -7,13 +7,13 @@ import Skeleton from "../../design-system/Skeleton";
 import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
 import { useGlobalSpecialBetHistory } from "../../hooks/useGlobalSpecialBetHistory";
 import {
+  describeTicketOutcome,
+  describeTicketShape,
   formatConfidencePercent,
   formatOdds,
   formatProbabilityPercent,
   isDecidingSelection,
   readGlobalSpecialBet,
-  statusLabelKey,
-  statusTone,
   type FixtureLabel
 } from "../../utils/globalSpecialBetView";
 
@@ -97,8 +97,13 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
             {state.bets.map((bet, idx) => {
               const expanded = expandedId === bet.id;
               const isLast = idx === state.bets.length - 1;
+              const shape = describeTicketShape(bet);
+              const isSystem = bet.bet_kind === "system";
               const totalOdds = formatOdds(bet.total_odds);
-              const settledOdds = formatOdds(bet.settled_total_odds);
+              // What actually came back, and whether it beat the stake. One helper
+              // answers it for both products, so a System that won under its stake
+              // cannot be reported the way a Combo win is.
+              const outcome = describeTicketOutcome(bet);
               const confidence = formatConfidencePercent(bet.average_confidence);
               // The STORED ticket chance (migration 050) — never recomputed
               // from the legs. Null on legacy rows, which keep the old
@@ -118,15 +123,34 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
                   >
                     <div className="min-w-0">
                       <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-                        {formatDay(bet.bet_date)} · {t("gsb.variantOption", { n: bet.variant })}
+                        {formatDay(bet.bet_date)} · {t(shape.key, shape.vars)}
                       </p>
-                      {/* The numbers stay on the collapsed row: status and price are
-                          what the user scans a history for. */}
+                      {/* The numbers stay on the collapsed row: shape and price are
+                          what the user scans a history for. For a system the product
+                          of the odds is the ALL-legs combination, not the ticket's
+                          price, so it is labelled as such and sits next to how many
+                          combinations the ticket actually covers. */}
                       <p className="mt-0.5 font-mono text-sm tabular-nums text-[var(--fp-text)]">
-                        {t("gsb.summarySelections")} {bet.selections.length} · {t("gsb.summaryTotalOdds")}{" "}
+                        {t("gsb.summarySelections")} {bet.selections.length} ·{" "}
+                        {isSystem
+                          ? t("gsb.summaryAllLegsOdds", { n: bet.variant })
+                          : t("gsb.summaryTotalOdds")}{" "}
                         <span className="font-bold">{totalOdds ?? "—"}</span>
-                        {settledOdds ? ` · ${t("gsb.summarySettledOdds")} ${settledOdds}` : ""}
+                        {isSystem && shape.combinationCount
+                          ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}`
+                          : ""}
                       </p>
+                      {/* The settled figure is a sentence, not a bare odd: "returned
+                          0.80× · net −20%" is the answer to the question a history is
+                          opened to ask, and a bare 0.80 next to "settled odds" is not. */}
+                      <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
+                        {t(outcome.detailKey, outcome.vars)}
+                      </p>
+                      {outcome.warningKey ? (
+                        <p className="mt-0.5 text-[11px] font-semibold text-[var(--fp-warning)]">
+                          {t(outcome.warningKey)}
+                        </p>
+                      ) : null}
                       {/* The reading sits above the confidence digit on purpose:
                           "a picat pe o singură selecție" is what the user came to
                           find out, and it reads as a sentence, not as more data. */}
@@ -146,7 +170,7 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
                         </p>
                       )}
                     </div>
-                    <Badge tone={statusTone(bet.status)}>{t(statusLabelKey(bet.status))}</Badge>
+                    <Badge tone={outcome.tone}>{t(outcome.labelKey)}</Badge>
                   </button>
 
                   {expanded && (

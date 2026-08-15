@@ -234,4 +234,111 @@ describe("GlobalSpecialBetHistory", () => {
     expect(container.firstChild).toBeNull();
     expect(fetchWithAuth).not.toHaveBeenCalled();
   });
+
+  describe("kind, not variant", () => {
+    // A Combo 5 and Systems 3/5, 4/5 and 5/5 share variant 5. Rendered on the
+    // variant alone they are four identical rows for four different tickets.
+    it("tells a Combo 5 and the three Systems apart on one day", async () => {
+      const day = [
+        storedBet({ id: "b-combo", variant: 5, bet_kind: "combo", system_k: null }),
+        storedBet({ id: "b-3", variant: 5, bet_kind: "system", system_k: 3 }),
+        storedBet({ id: "b-4", variant: 5, bet_kind: "system", system_k: 4 }),
+        storedBet({ id: "b-5", variant: 5, bet_kind: "system", system_k: 5 })
+      ];
+      fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: day }));
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+
+      expect(await screen.findByText(/Combo · 5/)).toBeTruthy();
+      expect(screen.getByText(/Sistem 3\/5/)).toBeTruthy();
+      expect(screen.getByText(/Sistem 4\/5/)).toBeTruthy();
+      expect(screen.getByText(/Sistem 5\/5/)).toBeTruthy();
+    });
+
+    it("does not present a System's product of odds as the ticket price", async () => {
+      // total_odds is the ALL-legs combination, one of C(5,3) = 10.
+      fetchWithAuth.mockResolvedValue(
+        jsonResponse(200, {
+          ok: true,
+          bets: [storedBet({ variant: 5, bet_kind: "system", system_k: 3, total_odds: 18.9 })]
+        })
+      );
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+
+      expect(await screen.findByText(/Cota celor 5/)).toBeTruthy();
+      expect(screen.getByText(/Combinații 10/)).toBeTruthy();
+      expect(screen.queryByText(/Cotă totală/)).toBeNull();
+    });
+
+    it("keeps calling a Combo's product of odds the total odds", async () => {
+      fetchWithAuth.mockResolvedValue(
+        jsonResponse(200, { ok: true, bets: [storedBet({ bet_kind: "combo", system_k: null })] })
+      );
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+      expect(await screen.findByText(/Cotă totală/)).toBeTruthy();
+      expect(screen.queryByText(/Cota celor/)).toBeNull();
+    });
+  });
+
+  describe("a won ticket is not automatically a profitable one", () => {
+    it("warns when a win came back under the stake", async () => {
+      // A 3/5 whose three winners were each at 2.00 pays one combination in ten:
+      // 0.80 back for every 1.00 staked. Won, and down twenty percent.
+      fetchWithAuth.mockResolvedValue(
+        jsonResponse(200, {
+          ok: true,
+          bets: [
+            storedBet({
+              variant: 5,
+              bet_kind: "system",
+              system_k: 3,
+              status: "won",
+              settled_total_odds: 0.8
+            })
+          ]
+        })
+      );
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+
+      expect(await screen.findByText(/Returnarea este sub miză/)).toBeTruthy();
+      expect(screen.getByText(/0\.80×/)).toBeTruthy();
+      expect(screen.getByText(/-20%/)).toBeTruthy();
+      // The status word still says WON — the shortfall is stated beside it, not
+      // instead of it.
+      expect(screen.getByText("Câștigat")).toBeTruthy();
+    });
+
+    it("says nothing about a shortfall when the win beat the stake", async () => {
+      fetchWithAuth.mockResolvedValue(
+        jsonResponse(200, {
+          ok: true,
+          bets: [
+            storedBet({
+              variant: 5,
+              bet_kind: "system",
+              system_k: 4,
+              status: "won",
+              settled_total_odds: 3.2
+            })
+          ]
+        })
+      );
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+
+      expect(await screen.findByText(/3\.20×/)).toBeTruthy();
+      expect(screen.getByText(/\+220%/)).toBeTruthy();
+      expect(screen.queryByText(/sub miză/)).toBeNull();
+    });
+
+    it("reports a lost ticket as no return rather than as a missing figure", async () => {
+      fetchWithAuth.mockResolvedValue(
+        jsonResponse(200, {
+          ok: true,
+          bets: [storedBet({ status: "lost", settled_total_odds: null })]
+        })
+      );
+      render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+      expect(await screen.findByText(/Fără returnare/)).toBeTruthy();
+    });
+  });
+
 });

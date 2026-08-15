@@ -32,6 +32,18 @@ export function isValidVariant(variant) {
   return GLOBAL_SPECIAL_BET_VARIANTS.includes(Number(variant));
 }
 
+/**
+ * The two products stored in `special_bets`, spelled as the `bet_kind` column spells them.
+ *
+ * Kept as its own list rather than derived from the variant, because the variant cannot
+ * tell them apart: a Combo 5 and all three Systems are variant 5.
+ */
+export const GLOBAL_SPECIAL_BET_KINDS = ["combo", "system"];
+
+export function isValidBetKind(betKind) {
+  return GLOBAL_SPECIAL_BET_KINDS.includes(String(betKind));
+}
+
 export function isValidBetDate(betDate) {
   const raw = String(betDate || "");
   if (!DATE_PATTERN.test(raw)) return false;
@@ -373,6 +385,7 @@ export async function createGlobalSystemBets({
 export async function listGlobalSpecialBets({
   userId,
   variant,
+  betKind,
   betDate,
   limit = 20,
   offset = 0,
@@ -394,6 +407,11 @@ export async function listGlobalSpecialBets({
     .range(safeOffset, safeOffset + safeLimit - 1);
 
   if (variant !== undefined && variant !== null && variant !== "") query = query.eq("variant", Number(variant));
+  // Variant does NOT imply kind: a Combo 5 and Systems 3/5, 4/5 and 5/5 all carry
+  // variant 5, so filtering on variant alone returns four different products under
+  // one heading. Kind is the only thing that separates them, and it is optional so
+  // that a caller asking for everything still gets everything.
+  if (betKind !== undefined && betKind !== null && betKind !== "") query = query.eq("bet_kind", String(betKind));
   if (betDate) query = query.eq("bet_date", betDate);
 
   const { data: bets, error } = await query;

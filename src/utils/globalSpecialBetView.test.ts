@@ -3,6 +3,7 @@ import {
   buildFixtureLabelIndex,
   describeGlobalSpecialBetError,
   describeTicketOutcome,
+  describeTicketShape,
   formatConfidencePercent,
   formatDateTime,
   formatOdds,
@@ -57,6 +58,11 @@ function bet(overrides: Partial<GlobalSpecialBet> = {}): GlobalSpecialBet {
     league_ids: [39, 140],
     league_scope: "39,140",
     variant: 3,
+    // What every row reads back as: the column defaults to 'combo', so a bet that
+    // says nothing about its kind is a combo — including every row written before
+    // migration 052 introduced the column.
+    bet_kind: "combo",
+    system_k: null,
     status: "pending",
     total_odds: 4.812,
     average_confidence: 78.5,
@@ -551,5 +557,105 @@ describe("describeTicketOutcome", () => {
       describeTicketOutcome(bet("pending", null))
     ];
     expect(outcomes.map((o) => o.profitable)).toEqual([true, false, false, false, false, false]);
+  });
+});
+
+describe("describeTicketShape", () => {
+  // variant alone cannot name a ticket: these four are all variant 5.
+  it("names a combo by its size", () => {
+    const shape = describeTicketShape(bet({ variant: 5, bet_kind: "combo", system_k: null }));
+    expect(shape.key).toBe("gsb.shapeCombo");
+    expect(shape.vars).toEqual({ n: 5 });
+    expect(shape.combinationCount).toBeNull();
+  });
+
+  it("names each System by its k, and they are all different", () => {
+    const shapes = ([3, 4, 5] as const).map((k) =>
+      describeTicketShape(bet({ variant: 5, bet_kind: "system", system_k: k }))
+    );
+    for (const shape of shapes) expect(shape.key).toBe("gsb.shapeSystem");
+    expect(shapes.map((s) => s.vars)).toEqual([
+      { k: 3, n: 5 },
+      { k: 4, n: 5 },
+      { k: 5, n: 5 }
+    ]);
+    // The four tickets a user can hold on one day must not render alike.
+    const combo = describeTicketShape(bet({ variant: 5, bet_kind: "combo", system_k: null }));
+    const rendered = [combo, ...shapes].map((s) => `${s.key}:${JSON.stringify(s.vars)}`);
+    expect(new Set(rendered).size).toBe(4);
+  });
+
+  it("counts the combinations a System actually covers", () => {
+    // C(5,3) = 10, C(5,4) = 5, C(5,5) = 1.
+    const counts = ([3, 4, 5] as const).map(
+      (k) => describeTicketShape(bet({ variant: 5, bet_kind: "system", system_k: k })).combinationCount
+    );
+    expect(counts).toEqual([10, 5, 1]);
+  });
+
+  // The k contract, end to end. Each invalid value below would otherwise have been
+  // printed as a real ticket: `Number(null)` is 0 and finite, so a coerce-first
+  // helper renders "System 0/5"; "3" would sail through the same way; and 0, 2, 6
+  // and -1 are perfectly good integers that are simply not products we sell.
+  const shapeOf = (system_k: unknown) =>
+    describeTicketShape({ variant: 5, bet_kind: "system", system_k } as unknown as Parameters<
+      typeof describeTicketShape
+    >[0]);
+
+  it.each([
+    [3, 10],
+    [4, 5],
+    [5, 1]
+  ])("system_k %i is the System the product sells, covering %i combinations", (k, combinations) => {
+    const shape = shapeOf(k);
+    expect(shape.key).toBe("gsb.shapeSystem");
+    expect(shape.vars).toEqual({ k, n: 5 });
+    expect(shape.combinationCount).toBe(combinations);
+  });
+
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["NaN", Number.NaN],
+    ["an empty string", ""],
+    ['the string "3"', "3"],
+    ["0", 0],
+    ["2, which the CHECK allows but the product does not sell", 2],
+    ["6, more winners than legs", 6],
+    ["-1", -1],
+    ["3.5", 3.5]
+  ])("system_k %s is refused and falls back to a combo", (_label, k) => {
+    const shape = shapeOf(k);
+    // The real desired behaviour, not merely "does not throw": an unsellable shape
+    // is read as the thing that promises least, and claims no combinations.
+    expect(shape.key).toBe("gsb.shapeCombo");
+    expect(shape.vars).toEqual({ n: 5 });
+    expect(shape.combinationCount).toBeNull();
+    // And it must never leak a k into the label vars — that is what printed "0/5".
+    expect(shape.vars).not.toHaveProperty("k");
+  });
+
+  it("validates membership, not a range", () => {
+    // 2 and 6 sit either side of the sold set and are both integers, so a bounds
+    // check alone would have let one of them through.
+    expect(shapeOf(2).key).toBe("gsb.shapeCombo");
+    expect(shapeOf(6).key).toBe("gsb.shapeCombo");
+    expect(shapeOf(4).key).toBe("gsb.shapeSystem");
+  });
+
+  it("the three System outcomes that matter are told apart by return, not by status", () => {
+    // The whole reason describeTicketOutcome exists: all three WON.
+    const below = describeTicketOutcome(bet({ status: "won", settled_total_odds: 0.8 }));
+    const above4 = describeTicketOutcome(bet({ status: "won", settled_total_odds: 3.2 }));
+    const above5 = describeTicketOutcome(bet({ status: "won", settled_total_odds: 32 }));
+
+    expect([below.status, above4.status, above5.status]).toEqual(["won", "won", "won"]);
+    expect(below.profitable).toBe(false);
+    expect(above4.profitable).toBe(true);
+    expect(above5.profitable).toBe(true);
+    expect(below.warningKey).toBe("gsb.outcomeBelowStakeNote");
+    expect(above4.warningKey).toBeNull();
+    expect(above5.warningKey).toBeNull();
+    expect(below.netFraction).toBeCloseTo(-0.2, 6);
   });
 });

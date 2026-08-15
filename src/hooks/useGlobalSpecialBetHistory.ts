@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GlobalSpecialBetApiError, listGlobalSpecialBets } from "../services/globalSpecialBetService";
 import { describeGlobalSpecialBetError, type GlobalSpecialBetErrorView } from "../utils/globalSpecialBetView";
-import type { GlobalSpecialBet } from "../types/globalSpecialBet";
+import type { GlobalSpecialBet, GlobalSpecialBetKind } from "../types/globalSpecialBet";
 
 /** How many stored bets one page of the history holds. */
 export const GLOBAL_SPECIAL_BET_PAGE_SIZE = 10;
@@ -18,7 +18,10 @@ export type GlobalSpecialBetHistoryState =
  * full page back means there may be another one — the API returns rows, not a
  * total, so "has more" is inferred from the page being full and nothing else.
  */
-export function useGlobalSpecialBetHistory({ enabled = true }: { enabled?: boolean } = {}) {
+export function useGlobalSpecialBetHistory({
+  enabled = true,
+  kind
+}: { enabled?: boolean; kind?: GlobalSpecialBetKind } = {}) {
   const [state, setState] = useState<GlobalSpecialBetHistoryState>({ phase: "loading" });
   const [offset, setOffset] = useState(0);
   const mounted = useRef(true);
@@ -34,6 +37,7 @@ export function useGlobalSpecialBetHistory({ enabled = true }: { enabled?: boole
     setState((prev) => (append && prev.phase === "ready" ? prev : { phase: "loading" }));
     try {
       const page = await listGlobalSpecialBets({
+        kind,
         limit: GLOBAL_SPECIAL_BET_PAGE_SIZE,
         offset: nextOffset
       });
@@ -55,7 +59,7 @@ export function useGlobalSpecialBetHistory({ enabled = true }: { enabled?: boole
           : describeGlobalSpecialBetError(0, null);
       setState({ phase: "error", error: view });
     }
-  }, []);
+  }, [kind]);
 
   useEffect(() => {
     if (!enabled) return;
