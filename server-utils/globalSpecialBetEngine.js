@@ -667,6 +667,67 @@ function toSystemBet(systemK, selections) {
 }
 
 /**
+ * Is this a shape the System product actually offers?
+ *
+ * THE PRODUCT CONTRACT IS EXACTLY FIVE SELECTIONS, of which 3, 4 or 5 must win.
+ * Nothing else. The settlement engine is deliberately more general — it grades
+ * any k-of-n it is handed, and it has to be, because refusing a row it could
+ * settle would leave that row pending forever. This function is the other end:
+ * the gate a ticket must pass BEFORE it is created, so a shape outside the
+ * product never reaches the database in the first place.
+ *
+ * Returns a verdict rather than throwing. An out-of-contract shape is an
+ * ordinary answer to an ordinary question — the caller decides whether it is a
+ * refusal to the user, a skipped ticket, or a logged defect — and exceptions
+ * would force every caller to wrap a try/catch to ask it.
+ *
+ * The two rejection reasons for k are different failures and are kept apart:
+ *   invalid_k      it is not an integer at all — missing, fractional, a string,
+ *                  NaN. There is no k here to consider.
+ *   unsupported_k  it IS an integer, just not one this product sells: 0, -1, 2,
+ *                  6. A k the schema might even accept (system_k >= 2), but the
+ *                  product does not.
+ *
+ * Selection count is checked first: a 3-selection ticket asking for 3 winners is
+ * wrong because of its size, and reporting "unsupported k" there would send the
+ * caller after the wrong field.
+ *
+ * @param {{ selections?: unknown[], systemK?: unknown }} [shape]
+ * @returns {{ valid: boolean, reason: null|"invalid_selection_count"|"invalid_k"|"unsupported_k",
+ *             selectionCount: number, requiredSelectionCount: number,
+ *             systemK: number|null, supportedK: number[], combinationCount: number|null }}
+ */
+export function validateSystemShape({ selections, systemK } = {}) {
+  const list = Array.isArray(selections) ? selections : null;
+  const selectionCount = list ? list.length : 0;
+  const base = {
+    selectionCount,
+    requiredSelectionCount: SYSTEM_SELECTION_COUNT,
+    supportedK: [...SYSTEM_K_VALUES],
+    systemK: null,
+    combinationCount: null
+  };
+
+  if (!list || selectionCount !== SYSTEM_SELECTION_COUNT) {
+    return { ...base, valid: false, reason: "invalid_selection_count" };
+  }
+  if (!Number.isInteger(systemK)) {
+    return { ...base, valid: false, reason: "invalid_k" };
+  }
+  if (!SYSTEM_K_VALUES.includes(systemK)) {
+    return { ...base, valid: false, reason: "unsupported_k", systemK };
+  }
+
+  return {
+    ...base,
+    valid: true,
+    reason: null,
+    systemK,
+    combinationCount: combinations(SYSTEM_SELECTION_COUNT, systemK)
+  };
+}
+
+/**
  * Build System 3/5, 4/5 and 5/5 from one safe pool.
  *
  * ORDER OF OPERATIONS — the same shape buildGlobalSpecialBets uses, with only
@@ -737,5 +798,6 @@ export default {
   selectionExpectedValue,
   rankSystemCandidates,
   systemTicketProbability,
+  validateSystemShape,
   buildGlobalSystemBets
 };

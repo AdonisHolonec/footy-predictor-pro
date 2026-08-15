@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildFixtureLabelIndex,
   describeGlobalSpecialBetError,
+  describeTicketOutcome,
   formatConfidencePercent,
   formatDateTime,
   formatOdds,
@@ -455,5 +456,100 @@ describe("error mapping", () => {
 
   it("maps 409 to the conflict story the contract describes", () => {
     expect(describeGlobalSpecialBetError(409, null).titleKey).toBe("gsb.errorConflictTitle");
+  });
+});
+
+describe("describeTicketOutcome", () => {
+  const bet = (status: string, settled: number | string | null) =>
+    ({ status, settled_total_odds: settled }) as never;
+
+  it("[17] a win above the stake is the only case marked profitable", () => {
+    const out = describeTicketOutcome(bet("won", 3.2));
+    expect(out.kind).toBe("won_above_stake");
+    expect(out.profitable).toBe(true);
+    expect(out.returnMultiple).toBe(3.2);
+    expect(out.netFraction).toBe(2.2);
+    expect(out.vars).toEqual({ multiple: "3.20", net: "+220%" });
+    expect(out.warningKey).toBeNull();
+    expect(out.tone).toBe("success");
+  });
+
+  it("[18] breaking even is a win that made nothing", () => {
+    const out = describeTicketOutcome(bet("won", 1));
+    expect(out.kind).toBe("won_at_stake");
+    expect(out.profitable).toBe(false);
+    expect(out.netFraction).toBe(0);
+    expect(out.vars.net).toBe("0%");
+    expect(out.warningKey).toBeNull();
+  });
+
+  it("[19] a win that returned less than the stake stays WON and is never called profit", () => {
+    // The 3/5 case: three winners at 2.00 pays one combination in ten.
+    const out = describeTicketOutcome(bet("won", 0.8));
+    expect(out.status).toBe("won");
+    expect(out.kind).toBe("won_below_stake");
+    expect(out.profitable).toBe(false);
+    expect(out.netFraction).toBe(-0.2);
+    expect(out.vars).toEqual({ multiple: "0.80", net: "-20%" });
+    expect(out.warningKey).toBe("gsb.outcomeBelowStakeNote");
+    expect(out.tone).toBe("warning");
+    expect(out.labelKey).toBe("gsb.statusWon");
+  });
+
+  it("[20] a lost ticket returned nothing, definitely", () => {
+    const out = describeTicketOutcome(bet("lost", null));
+    expect(out.kind).toBe("lost");
+    expect(out.returnMultiple).toBe(0);
+    expect(out.netFraction).toBe(-1);
+    expect(out.profitable).toBe(false);
+    expect(out.detailKey).toBe("gsb.outcomeNoReturn");
+    expect(out.tone).toBe("danger");
+  });
+
+  it("[21] a void ticket returns exactly the stake", () => {
+    const out = describeTicketOutcome(bet("void", 1));
+    expect(out.kind).toBe("void");
+    expect(out.returnMultiple).toBe(1);
+    expect(out.netFraction).toBe(0);
+    expect(out.profitable).toBe(false);
+    expect(out.detailKey).toBe("gsb.outcomeVoidReturn");
+  });
+
+  it("[22] a pending ticket has no return, and no invented zero", () => {
+    const out = describeTicketOutcome(bet("pending", null));
+    expect(out.kind).toBe("pending");
+    expect(out.returnMultiple).toBeNull();
+    expect(out.netFraction).toBeNull();
+    expect(out.profitable).toBe(false);
+    expect(out.vars).toEqual({});
+  });
+
+  it("says so when a won ticket carries no recorded return", () => {
+    const out = describeTicketOutcome(bet("won", null));
+    expect(out.kind).toBe("won_return_unknown");
+    expect(out.returnMultiple).toBeNull();
+    expect(out.detailKey).toBe("gsb.outcomeReturnUnknown");
+    expect(out.profitable).toBe(false);
+  });
+
+  it("reads a numeric string, the shape PostgREST returns for numeric columns", () => {
+    expect(describeTicketOutcome(bet("won", "0.800")).kind).toBe("won_below_stake");
+    expect(describeTicketOutcome(bet("won", "3.200")).returnMultiple).toBe(3.2);
+  });
+
+  it("an unrecognised status is read as pending rather than guessed", () => {
+    expect(describeTicketOutcome(bet("settled", 2)).kind).toBe("pending");
+  });
+
+  it("profitable is true only above the stake, on every kind", () => {
+    const outcomes = [
+      describeTicketOutcome(bet("won", 3.2)),
+      describeTicketOutcome(bet("won", 1)),
+      describeTicketOutcome(bet("won", 0.8)),
+      describeTicketOutcome(bet("void", 1)),
+      describeTicketOutcome(bet("lost", null)),
+      describeTicketOutcome(bet("pending", null))
+    ];
+    expect(outcomes.map((o) => o.profitable)).toEqual([true, false, false, false, false, false]);
   });
 });

@@ -261,15 +261,152 @@ test("S15: the selection count must still equal the variant", () => {
 
 // ── The foundation gate ───────────────────────────────────────────────────
 
-test("S16: the RPC refuses to generate a system ticket", () => {
-  // The whole point of shipping the schema before the engine. Settlement still
-  // turns any lost leg into a lost bet, so a 3/5 that actually won would be
-  // reported as a loss. Until that is fixed, nothing may write one.
+test("S16: migration 053 lifted the gate — a System is created, and stored as one", () => {
+  // 052 shipped the schema and refused to fill it, because settlement could not
+  // grade k-of-n. It can now, so 053 dropped that branch. This is the assertion
+  // that flipped: the same three calls that used to return system_not_enabled
+  // must now write three rows.
   for (const k of [3, 4, 5]) {
     const out = createBet({ variant: 5, kind: "system", k });
-    assert.match(out.stdout, /"system_not_enabled"/, `system 5/${k} must be refused`);
+    assert.match(out.stdout, /"created"\s*:\s*true/, `system 5/${k} must be created`);
+    assert.doesNotMatch(out.stdout, /system_not_enabled/, "the gate is gone");
   }
+
+  assert.equal(value(`select count(*) from public.special_bets;`), "3");
+  assert.equal(
+    value(`select string_agg(bet_kind || '/' || system_k, ',' order by system_k) from public.special_bets;`),
+    "system/3,system/4,system/5"
+  );
+  assert.equal(
+    value(`select count(*) from public.special_bets where variant = 5;`),
+    "3",
+    "variant keeps meaning the number of selections"
+  );
+  assert.equal(
+    value(`select count(*) from public.special_bet_selections;`),
+    "15",
+    "five legs on each of the three tickets"
+  );
+});
+
+test("S16b: the three tickets carry the same five legs", () => {
+  for (const k of [3, 4, 5]) createBet({ variant: 5, kind: "system", k });
+
+  assert.equal(
+    value(
+      `select count(*) from (
+         select legs from (
+           select special_bet_id, string_agg(fixture_id::text, ',' order by fixture_id) as legs
+           from public.special_bet_selections group by special_bet_id
+         ) per_bet group by legs
+       ) distinct_leg_sets;`
+    ),
+    "1",
+    "all three bets share one leg set"
+  );
+});
+
+test("S16c: an invalid k never becomes a ticket", () => {
+  // The CHECK constraint accepts 2..variant; the product sells only 3, 4 and 5,
+  // and the function is where that is said.
+  for (const k of [2, 6, 0, 1]) {
+    const out = createBet({ variant: 5, kind: "system", k });
+    assert.match(out.stdout, /"invalid_system_k"/, `k=${k} must be refused`);
+  }
+  // A missing k is the same refusal: a system without one has no payout rule.
+  assert.match(createBet({ variant: 5, kind: "system", k: null }).stdout, /"invalid_system_k"/);
   assert.equal(value(`select count(*) from public.special_bets;`), "0");
+});
+
+// ── 053: the real System, end to end ──────────────────────────────────────
+
+/** Five legs at 1.80 with a stored probability of 0.70 each. */
+function systemSelections() {
+  const rows = Array.from({ length: 5 }, (_, i) => ({
+    fixture_id: 950 + i,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    market: "ou",
+    selection: "Over 2.5",
+    side: "over",
+    line: 2.5,
+    odds: 1.8,
+    confidence: 80,
+    value_score: 60,
+    probability: 0.7
+  }));
+  return JSON.stringify(rows).replace(/'/g, "''");
+}
+
+/** The exact call the server makes for one System ticket. */
+function createSystem(k, probability, { betDate = BET_DATE, expectFailure = false } = {}) {
+  return psql(
+    `select public.create_global_special_bet(
+       '${USER_A}'::uuid, '${betDate}'::date, 5::smallint, '${LEAGUES}'::int[],
+       18.89568, 80.00, 'predictor-v3.1-test', '${systemSelections()}'::jsonb,
+       ${probability}, 'system'::text, ${k}::smallint
+     );`,
+    { expectFailure }
+  );
+}
+
+test("S20: a System is persisted with P(X >= k) and the product of the five odds", () => {
+  // The mandated figures for five legs at 0.70. The columns round to their own
+  // precision: ticket_probability is numeric(6,4), total_odds numeric(10,3).
+  const expected = { 3: "0.8369", 4: "0.5282", 5: "0.1681" };
+
+  for (const k of [3, 4, 5]) {
+    assert.match(createSystem(k, expected[k]).stdout, /"created"\s*:\s*true/, `5/${k}`);
+  }
+
+  assert.equal(
+    value(
+      `select string_agg(system_k || ':' || ticket_probability, ' ' order by system_k) from public.special_bets;`
+    ),
+    "3:0.8369 4:0.5282 5:0.1681"
+  );
+  assert.equal(
+    value(`select string_agg(distinct total_odds::text, ',') from public.special_bets;`),
+    "18.896",
+    "1.8^5 = 18.89568, stored at the column's three decimals"
+  );
+  assert.equal(value(`select count(*) from public.special_bets where variant = 5 and bet_kind = 'system';`), "3");
+  assert.equal(value(`select count(*) from public.special_bet_selections;`), "15");
+});
+
+test("S21: creating the same System twice returns the first row", () => {
+  for (const k of [3, 4, 5]) {
+    const first = createSystem(k, "0.8369");
+    const second = createSystem(k, "0.8369");
+    assert.match(first.stdout, /"created"\s*:\s*true/, `5/${k} first`);
+    assert.match(second.stdout, /"created"\s*:\s*false/, `5/${k} repeat`);
+
+    const idOf = (out) => /"id"\s*:\s*"([0-9a-f-]+)"/.exec(out)?.[1];
+    assert.equal(idOf(first.stdout), idOf(second.stdout), `5/${k} converges on one row`);
+  }
+  assert.equal(value(`select count(*) from public.special_bets;`), "3", "no duplicates");
+});
+
+test("S22: a Combo and the three Systems coexist on one user, date, variant and scope", () => {
+  createBet({ variant: 5 }); // the legacy nine-argument call: combo, no k
+  for (const k of [3, 4, 5]) createSystem(k, "0.8369");
+
+  assert.equal(value(`select count(*) from public.special_bets;`), "4");
+  assert.equal(
+    value(
+      `select string_agg(bet_kind || '/' || coalesce(system_k::text, '-'), ' ' order by bet_kind, system_k) from public.special_bets;`
+    ),
+    "combo/- system/3 system/4 system/5"
+  );
+  // One identity each: every one of the four collides only with itself.
+  assert.equal(value(`select count(distinct (variant, league_scope, bet_date)) from public.special_bets;`), "1");
+});
+
+test("S23: the legacy nine-argument Combo call still works and stays a combo", () => {
+  const out = createBet({ variant: 3 });
+  assert.match(out.stdout, /"created"\s*:\s*true/);
+  assert.equal(value(`select bet_kind from public.special_bets;`), "combo", "the default still applies");
+  assert.equal(value(`select coalesce(system_k::text, 'NULL') from public.special_bets;`), "NULL");
 });
 
 test("S17: the RPC rejects an unknown kind and a combo carrying a k", () => {

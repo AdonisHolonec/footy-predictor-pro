@@ -911,7 +911,15 @@ export const en: Dict = {
     // A bet still running: what is next and what is being played right now.
     nextLeg: "Next up {label} · {time}",
     allUnderway: "Every remaining match has kicked off",
-    legUnderway: "Under way now"
+    legUnderway: "Under way now",
+    // What a settled ticket returned. Factual, and deliberately never phrased as
+    // profit: a System can win and still come back short of the stake.
+    outcomeReturn: "Returned {multiple}× the stake · net {net}",
+    outcomeBelowStakeNote: "The return is below the stake",
+    outcomeNoReturn: "No return",
+    outcomeVoidReturn: "Stake returned in full",
+    outcomeReturnUnknown: "The return was not recorded",
+    outcomePending: "Not settled yet"
   },
   // Three separate surfaces on purpose: solving a problem, improving the product,
   // and flagging one prediction are different asks and read differently.
