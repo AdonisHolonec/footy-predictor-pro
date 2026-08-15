@@ -154,11 +154,15 @@ test("[guard] the contract layer neither creates a System nor unlocks one", () =
   // The database still refuses to store a System.
   assert.ok(migration.includes("system_not_enabled"), "the creation guard must remain in place");
 
-  // Nothing built a System, and nothing sent one to the RPC.
-  assert.ok(!persistence.includes("buildGlobalSystemBets"), "persistence must not build a System");
-  assert.ok(!persistence.includes("validateSystemShape"), "creation is the NEXT increment, not this one");
-  assert.ok(!persistence.includes("p_bet_kind"), "no bet kind reaches the RPC");
-  assert.ok(!persistence.includes("p_system_k"), "no k reaches the RPC");
+  // Creation is now wired in code — the persistence layer builds a System,
+  // validates its shape and sends it to the RPC. What still stops one from
+  // existing is the database, which is where the guard belongs: a check in
+  // JavaScript could be bypassed by any other caller, a check inside the
+  // function cannot. Whoever lifts it must lift it there, deliberately.
+  assert.ok(persistence.includes("validateSystemShape"), "creation must validate the shape before the RPC");
+  assert.ok(persistence.includes("p_system_k"), "creation must send the k through the existing parameter");
+
+  // And the product is still not exposed: no HTTP route accepts a k.
   assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
 
   // Validation is a pure verdict: no I/O, no database client, no fetch.

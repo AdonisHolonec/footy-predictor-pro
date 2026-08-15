@@ -402,7 +402,7 @@ test("[19d] the ticket probability is P(X >= k), not the product", () => {
 
 // ── 20. System cannot reach production ─────────────────────────────────────
 
-test("[20] nothing in the persistence layer can CREATE a System ticket", () => {
+test("[20] System is built and validated in code, and still refused by the database", () => {
   // The database refuses one too (migration 052 returns system_not_enabled,
   // asserted by S16 in tests/integration/gsbSystemFoundation.db.test.js). This
   // is the other half: the server never even asks. A unit test on the engine
@@ -416,17 +416,18 @@ test("[20] nothing in the persistence layer can CREATE a System ticket", () => {
   const persistence = fs.readFileSync("server-utils/globalSpecialBets.js", "utf8");
   const api = fs.readFileSync("server-utils/globalSpecialBetsApi.js", "utf8");
 
-  for (const [name, source] of [
-    ["globalSpecialBets.js", persistence],
-    ["globalSpecialBetsApi.js", api]
-  ]) {
-    assert.ok(!source.includes("buildGlobalSystemBets"), `${name} must not build a System ticket`);
-    assert.ok(!source.includes("rankSystemCandidates"), `${name} must not use the System ranking`);
-    // The RPC parameters are the door into the database. Neither may be sent.
-    assert.ok(!source.includes("p_bet_kind"), `${name} must not send a bet kind to the RPC`);
-    assert.ok(!source.includes("p_system_k"), `${name} must not send a k to the RPC`);
-  }
+  // What is left is the invariant that actually keeps System off the product,
+  // and it deliberately lives in SQL rather than JavaScript: the RPC returns
+  // system_not_enabled. A check in application code could be sidestepped by any
+  // other caller; a check inside the function cannot. Whoever ships System must
+  // lift it there, on purpose.
+  const migration = fs.readFileSync("supabase/migrations/052_gsb_system_tickets.sql", "utf8");
+  assert.ok(migration.includes("system_not_enabled"), "the database guard must still be in place");
+  assert.ok(persistence.includes("validateSystemShape"), "creation validates the shape before the RPC");
+  assert.ok(persistence.includes("p_system_k"), "creation sends the k through 052's own parameter");
 
-  // The API is untouched by settlement, so it still may not mention a k at all.
+  // The HTTP layer is still untouched: no route accepts a k, so no user can ask
+  // for a System even though the server now knows how to build one.
   assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
+  assert.ok(!api.includes("createGlobalSystemBets"), "no route creates a System");
 });

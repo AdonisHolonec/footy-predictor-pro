@@ -12,7 +12,13 @@
  */
 
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
-import { buildGlobalSpecialBets, GLOBAL_SPECIAL_BET_VARIANTS } from "./globalSpecialBetEngine.js";
+import {
+  buildGlobalSpecialBets,
+  buildGlobalSystemBets,
+  GLOBAL_SPECIAL_BET_VARIANTS,
+  SYSTEM_K_VALUES,
+  validateSystemShape
+} from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
 
 const HISTORY_TABLE = "predictions_history";
@@ -239,6 +245,120 @@ export async function createGlobalSpecialBet({
       : data.bet?.ticket_probability != null
         ? Number(data.bet.ticket_probability)
         : null,
+    examined: built.examined,
+    rejected: built.rejected
+  };
+}
+
+/**
+ * Generate (or return) all three System tickets for one user/date/league scope.
+ *
+ * ONE POOL, ONE BUILD, THREE ROWS. The five legs are chosen once and the same
+ * five are written for 3/5, 4/5 and 5/5 — only k differs. Three separate calls
+ * would each re-read the pool at a slightly later `now`, and a fixture kicking
+ * off between them would silently give the three tickets different legs, which
+ * is exactly the inconsistency the product must not have.
+ *
+ * Everything below the build is the Combo path, reused rather than rebuilt:
+ * canonicalizeLeagueScope, loadCandidatePayloads, resolveModelVersion,
+ * toSelectionRows and the same RPC. The only additions are the two parameters
+ * migration 052 already provides.
+ *
+ * `total_odds` carries the PRODUCT of the five odds, the schema's existing
+ * required field. It is not the payout of a 3/5 or a 4/5 — that is derived at
+ * settlement, from the combinations that actually won — and no surface may
+ * present it as one.
+ *
+ * `ticket_probability` is P(X >= k), never Πp. The engine computed it in
+ * toSystemBet through the single Poisson-binomial implementation; nothing is
+ * recalculated here.
+ *
+ * @param {{ userId: string, betDate: string, leagueIds: number[], now?: number, supabase?: object }} params
+ */
+export async function createGlobalSystemBets({
+  userId,
+  betDate,
+  leagueIds,
+  now = Date.now(),
+  supabase = getSupabaseAdmin()
+}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+
+  const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
+  const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
+  const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now });
+
+  // Fewer than five safe candidates: nothing is written, and the counters say
+  // why the pool was thin. No padding, no relaxed gate, no duplicated fixture.
+  if (built.selections.length === 0) {
+    return {
+      ok: true,
+      created: false,
+      available: false,
+      unavailable: built.unavailable,
+      examined: built.examined,
+      rejected: built.rejected
+    };
+  }
+
+  const modelVersion = resolveModelVersion(payloadsByFixtureId, built.selections);
+  const bets = {};
+
+  for (const systemK of SYSTEM_K_VALUES) {
+    const bet = built.bets[systemK];
+
+    // The application refuses a malformed ticket BEFORE the RPC. The CHECK
+    // constraints in 052 are the second lock, not the first: a database error is
+    // a worse diagnosis than a named reason, and relying on it would mean the
+    // only description of the product contract lived in SQL.
+    const shape = validateSystemShape({ selections: bet.selections, systemK });
+    if (!shape.valid) {
+      throw new Error(
+        `refusing to persist a system ticket: ${shape.reason} ` +
+          `(selections=${shape.selectionCount}, system_k=${systemK})`
+      );
+    }
+
+    const { data, error } = await supabase.rpc("create_global_special_bet", {
+      p_user_id: userId,
+      p_bet_date: betDate,
+      p_variant: bet.variant,
+      p_league_ids: canonicalLeagues,
+      // The product of the five odds — the schema's field, not the system payout.
+      p_total_odds: bet.productOdds,
+      p_average_confidence: bet.averageConfidence,
+      p_model_version: modelVersion,
+      // Its own row set per ticket, so no two bets share a mutable array.
+      p_selections: toSelectionRows(bet.selections),
+      // P(X >= k) from the Poisson-binomial tail, never the product.
+      p_ticket_probability: bet.estimatedTicketProbability,
+      p_bet_kind: "system",
+      p_system_k: systemK
+    });
+    if (error) throw error;
+    if (!data?.ok) throw new Error(`create_global_special_bet: ${data?.error || "unknown_error"}`);
+
+    bets[systemK] = {
+      created: Boolean(data.created),
+      bet: data.bet,
+      selections: data.selections || [],
+      systemK,
+      combinationCount: shape.combinationCount,
+      // As stored for a repeat request, as computed for a fresh one — never a
+      // number attributed to selections it was not computed from.
+      ticketProbability: data.created
+        ? bet.estimatedTicketProbability
+        : data.bet?.ticket_probability != null
+          ? Number(data.bet.ticket_probability)
+          : null
+    };
+  }
+
+  return {
+    ok: true,
+    available: true,
+    bets,
+    selections: built.selections,
     examined: built.examined,
     rejected: built.rejected
   };
@@ -477,6 +597,7 @@ export async function settlePendingGlobalSpecialBets({
 export default {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
+  createGlobalSystemBets,
   loadFixtureStates,
   persistSettledBet,
   settlePendingGlobalSpecialBets,
