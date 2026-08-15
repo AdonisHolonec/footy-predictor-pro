@@ -19,6 +19,24 @@ import { SELECTION_STATUS, settleTicket } from "../server-utils/globalSpecialBet
  * The tests below hold both ends of that at once.
  */
 
+/**
+ * The migration that defines the function the database ends up with — the last
+ * one to reissue it, whatever it is called. Named migrations in a guard go
+ * stale the moment the next reissue lands, which has already happened once.
+ */
+function activeFunctionMigration() {
+  const found = fs
+    .readdirSync("supabase/migrations")
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .reverse()
+    .find((f) =>
+      fs.readFileSync(`supabase/migrations/${f}`, "utf8").includes("create function public.create_global_special_bet")
+    );
+  if (!found) throw new Error("no migration defines create_global_special_bet");
+  return found;
+}
+
 const legs = (count) =>
   Array.from({ length: count }, (_, i) => ({ fixtureId: 900 + i, odds: 2.0, status: SELECTION_STATUS.WON }));
 
@@ -155,9 +173,15 @@ test("[guard] the contract layer neither creates a System nor unlocks one", () =
   // without the gate, while 052 keeps its historical body untouched. What is
   // left standing between a System and a user is the HTTP layer, asserted below.
   assert.ok(migration.includes("system_not_enabled"), "052 keeps its historical body");
-  const enable = fs.readFileSync("supabase/migrations/053_gsb_system_enable.sql", "utf8");
-  assert.ok(!/error', 'system_not_enabled/.test(enable), "053 lifts the gate from the active function");
-  assert.ok(enable.includes("invalid_system_k"), "and replaces it with the product's own k check");
+
+  // Read whichever migration last reissues the function rather than naming one:
+  // this assertion has already gone stale once, when 053 superseded 052, and it
+  // would go stale again at every reissue. The claim is about the function the
+  // database ends up with, so it is made against the migration that defines it.
+  const enable = fs.readFileSync(`supabase/migrations/${activeFunctionMigration()}`, "utf8");
+  assert.ok(!/error', 'system_not_enabled/.test(enable), "the active function has no gate");
+  assert.ok(enable.includes("invalid_system_k"), "and keeps the product's own k check");
+  assert.ok(enable.includes("invalid_system_variant"), "and sells a System at one variant only");
 
   // Creation is now wired in code — the persistence layer builds a System,
   // validates its shape and sends it to the RPC. What still stops one from

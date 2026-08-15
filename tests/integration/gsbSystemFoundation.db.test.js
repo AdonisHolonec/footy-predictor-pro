@@ -436,3 +436,104 @@ test("S19: the reissued function is still service-role only", () => {
   assert.ok(!/\banon=X/.test(acl), `anon must not execute, got: ${acl}`);
   assert.ok(!/\bauthenticated=X/.test(acl), `authenticated must not execute, got: ${acl}`);
 });
+
+// ── 054: a System is sold in exactly one size ──────────────────────────────
+
+/**
+ * A System call at an arbitrary variant, with a matching number of legs.
+ *
+ * The legs match the variant on purpose. The function checks the variant before
+ * it counts the selections, so a mismatched count would never be reached — but
+ * then a test asserting `invalid_system_variant` would pass even if the guard
+ * were deleted and the count check answered instead. Sending the right number
+ * leaves the kind/variant pairing as the only thing wrong.
+ */
+function createSystemAtVariant(variant, k, { expectFailure = false } = {}) {
+  const rows = Array.from({ length: variant }, (_, i) => ({
+    fixture_id: 970 + i,
+    league_id: 39,
+    kickoff_at: KICKOFF,
+    market: "ou",
+    selection: "Over 2.5",
+    side: "over",
+    line: 2.5,
+    odds: 1.8,
+    confidence: 80,
+    value_score: 60,
+    probability: 0.7
+  }));
+  const sel = JSON.stringify(rows).replace(/'/g, "''");
+  return psql(
+    `select public.create_global_special_bet(
+       '${USER_A}'::uuid, '${BET_DATE}'::date, ${variant}::smallint, '${LEAGUES}'::int[],
+       18.89568, 80.00, 'predictor-v3.1-test', '${sel}'::jsonb,
+       0.8369, 'system'::text, ${k === null ? "null" : `${k}::smallint`}
+     );`,
+    { expectFailure }
+  );
+}
+
+test("S24: the three Systems the product sells are still created at variant 5", () => {
+  for (const k of [3, 4, 5]) {
+    assert.match(createSystemAtVariant(5, k).stdout, /"created"\s*:\s*true/, `5/${k}`);
+  }
+  assert.equal(value(`select count(*) from public.special_bets where bet_kind = 'system';`), "3");
+});
+
+test("S25: a System at variant 3 is refused, and writes nothing", () => {
+  for (const k of [3, 4]) {
+    const out = createSystemAtVariant(3, k, { expectFailure: false });
+    assert.match(out.stdout, /"invalid_system_variant"/, `variant 3, k=${k}`);
+  }
+  assert.equal(value(`select count(*) from public.special_bets;`), "0");
+  assert.equal(value(`select count(*) from public.special_bet_selections;`), "0");
+});
+
+test("S26: a System at variant 8 is refused, and writes nothing", () => {
+  for (const k of [3, 4, 5]) {
+    const out = createSystemAtVariant(8, k);
+    assert.match(out.stdout, /"invalid_system_variant"/, `variant 8, k=${k}`);
+  }
+  assert.equal(value(`select count(*) from public.special_bets;`), "0");
+  assert.equal(value(`select count(*) from public.special_bet_selections;`), "0");
+});
+
+test("S27: the k is still judged before the variant, and both before anything else", () => {
+  // Order matters for the diagnosis, not just the refusal. A k the product does
+  // not sell is reported as such even at a variant that is also wrong, because
+  // the caller has to fix the k either way.
+  assert.match(createSystemAtVariant(3, 6).stdout, /"invalid_system_k"/, "k=6 at variant 3");
+  assert.match(createSystemAtVariant(5, 2).stdout, /"invalid_system_k"/, "k=2 at variant 5");
+  assert.match(createSystemAtVariant(5, null).stdout, /"invalid_system_k"/, "no k at all");
+
+  // And a variant nobody sells stays invalid_variant whatever the kind: the
+  // general allow-list answers first, so "we don't sell 4-folds" is not
+  // reported as "systems aren't sold at 4".
+  assert.match(createSystemAtVariant(4, 3).stdout, /"invalid_variant"/, "variant 4 is not a product at all");
+  assert.equal(value(`select count(*) from public.special_bets;`), "0");
+});
+
+test("S28: Combo is untouched at every variant it is sold in", () => {
+  // The new branch is guarded on bet_kind, so a combo never reaches it — at any
+  // variant, including the two a system may not use.
+  for (const variant of [3, 5, 8]) {
+    assert.match(createBet({ variant }).stdout, /"created"\s*:\s*true/, `combo ${variant}`);
+  }
+  assert.equal(value(`select count(*) from public.special_bets where bet_kind = 'combo';`), "3");
+  assert.equal(value(`select count(*) from public.special_bets where system_k is not null;`), "0");
+});
+
+test("S29: the table CHECK stays looser than the function, on purpose", () => {
+  // 052's constraint accepts any k from 2 to variant, so the schema alone would
+  // still store an 8-leg system. That is deliberate: the product contract lives
+  // in the function, which is the only path any writer takes, and tightening a
+  // constraint on a live table is a heavier operation than reissuing a function.
+  // This test exists so the gap is a recorded decision rather than a surprise.
+  assert.equal(insertRow({ variant: 8, kind: "system", k: 3 }).ok, true, "the CHECK still allows it");
+  assert.equal(value(`select count(*) from public.special_bets;`), "1");
+
+  // The lock is the function, and it holds.
+  psql("truncate table public.special_bets cascade;");
+  assert.match(createSystemAtVariant(8, 3).stdout, /"invalid_system_variant"/);
+  assert.equal(value(`select count(*) from public.special_bets;`), "0");
+});
