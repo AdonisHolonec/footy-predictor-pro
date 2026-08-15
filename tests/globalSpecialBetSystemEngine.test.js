@@ -421,8 +421,19 @@ test("[20] System is built and validated in code, and still refused by the datab
   // system_not_enabled. A check in application code could be sidestepped by any
   // other caller; a check inside the function cannot. Whoever ships System must
   // lift it there, on purpose.
-  const enable = fs.readFileSync("supabase/migrations/053_gsb_system_enable.sql", "utf8");
-  assert.ok(!/error', 'system_not_enabled/.test(enable), "053 removed the gate from the active function");
+  // Whichever migration last reissues the function, not a named one: a guard
+  // that points at 053 keeps passing after 054 supersedes it while describing a
+  // function the database no longer has.
+  const active = fs
+    .readdirSync("supabase/migrations")
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .reverse()
+    .find((f) =>
+      fs.readFileSync(`supabase/migrations/${f}`, "utf8").includes("create function public.create_global_special_bet")
+    );
+  const enable = fs.readFileSync(`supabase/migrations/${active}`, "utf8");
+  assert.ok(!/error', 'system_not_enabled/.test(enable), "the active function has no gate");
   assert.ok(persistence.includes("createGlobalSystemBets"), "the server can create a System");
   assert.ok(persistence.includes("validateSystemShape"), "creation validates the shape before the RPC");
   assert.ok(persistence.includes("p_system_k"), "creation sends the k through 052's own parameter");
