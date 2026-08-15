@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveSideMarketQuotes } from "../../../server-utils/pipeline/modelFusion/resolveSideMarketQuotes.js";
+import {
+  BOOKING_POINTS_MARKET_NAMES,
+  CARDS_MARKET_NAMES,
+  MARKET_UNIT,
+  classifyDisciplineMarketUnit,
+  resolveSideMarketQuotes
+} from "../../../server-utils/pipeline/modelFusion/resolveSideMarketQuotes.js";
 
 function oddsPayload(bets) {
   return { response: [{ bookmakers: [{ name: "BetA", bets }] }] };
@@ -296,4 +302,92 @@ test("resolveSideMarketQuotes builds a first-half-goals quote from firstHalfProb
   });
   assert.equal(under.marketOdds.firstHalfGoals.pick, "Under 1.5 FH");
   assert.equal(under.marketOdds.firstHalfGoals.odd, 1.3);
+});
+
+// -------------------- MARKET UNIT SEPARATION (MUST FIX #2) --------------------
+//
+// "Total Cards" counts physical cards, so its line sits around 3.5-6.5. "Bookings" counts
+// booking POINTS on the industry 10/25 scale, so the same match is quoted around 25.5-45.5.
+// Both were in CARDS_MARKET_NAMES, which meant a bookings quote could be priced against a
+// cards lambda of roughly 3-5 as if the two numbers meant the same thing. Nothing
+// downstream applies a magnitude filter, so nothing would have caught it.
+
+test("[market unit] CARDS_MARKET_NAMES holds only raw card-count markets", () => {
+  assert.deepEqual(CARDS_MARKET_NAMES, [
+    "Cards Over/Under",
+    "Total Cards",
+    "Cards",
+    "Yellow Cards Over/Under"
+  ]);
+  for (const name of CARDS_MARKET_NAMES) {
+    assert.equal(classifyDisciplineMarketUnit(name), MARKET_UNIT.CARDS_COUNT, name);
+  }
+});
+
+test("[market unit] Bookings markets are classified apart and are NOT cards candidates", () => {
+  for (const name of BOOKING_POINTS_MARKET_NAMES) {
+    assert.equal(classifyDisciplineMarketUnit(name), MARKET_UNIT.BOOKING_POINTS, name);
+    assert.ok(!CARDS_MARKET_NAMES.includes(name), `${name} must not be a cards-count candidate`);
+  }
+});
+
+test("[market unit] classification is deterministic and never substring-guesses", () => {
+  // "Total Bookings" contains "Bookings" and "Total Cards" contains "Cards", so a loose
+  // test would classify by whichever list was consulted first.
+  assert.equal(classifyDisciplineMarketUnit("Total Bookings"), MARKET_UNIT.BOOKING_POINTS);
+  assert.equal(classifyDisciplineMarketUnit("Total Cards"), MARKET_UNIT.CARDS_COUNT);
+  // Case and spacing are normalised; anything else is unknown rather than assumed.
+  assert.equal(classifyDisciplineMarketUnit("  total   CARDS "), MARKET_UNIT.CARDS_COUNT);
+  for (const unknown of ["Corners Over/Under", "Total Goals", "", null, undefined, "Cards Handicap"]) {
+    assert.equal(classifyDisciplineMarketUnit(unknown), null, String(unknown));
+  }
+  // The two sets are disjoint: no name can be both.
+  const overlap = CARDS_MARKET_NAMES.filter((n) => BOOKING_POINTS_MARKET_NAMES.includes(n));
+  assert.deepEqual(overlap, []);
+});
+
+test("[market unit] a 25.5 bookings line is never matched into the cards path", () => {
+  // Behavioural, not a list assertion: a book offering ONLY bookings-points lines yields no
+  // cards quote at all, so no 25.5 line can reach a lambda of ~4.
+  const odds = oddsPayload([
+    {
+      name: "Total Bookings",
+      values: [
+        { value: "Over 25.5", odd: "1.90" },
+        { value: "Under 25.5", odd: "1.90" }
+      ]
+    }
+  ]);
+  const out = resolveSideMarketQuotes({
+    oddsReq: { ok: true, data: odds },
+    cornersBlock: null,
+    shotsOnTargetBlock: null,
+    shotsTotalBlock: null,
+    firstHalfProbs: null,
+    cardsLine: 3.5
+  });
+  assert.equal(out.cardsQuote, null, "a bookings-points quote must not become a cards quote");
+});
+
+test("[market unit] a genuine Total Cards line still resolves", () => {
+  // The other half of the contract: narrowing the list must not cost the real market.
+  const odds = oddsPayload([
+    {
+      name: "Total Cards",
+      values: [
+        { value: "Over 3.5", odd: "1.80" },
+        { value: "Under 3.5", odd: "2.00" }
+      ]
+    }
+  ]);
+  const out = resolveSideMarketQuotes({
+    oddsReq: { ok: true, data: odds },
+    cornersBlock: null,
+    shotsOnTargetBlock: null,
+    shotsTotalBlock: null,
+    firstHalfProbs: null,
+    cardsLine: 3.5
+  });
+  assert.ok(out.cardsQuote, "Total Cards must still be found");
+  assert.equal(Number(out.cardsQuote.line), 3.5);
 });
