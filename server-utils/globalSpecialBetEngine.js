@@ -552,6 +552,67 @@ export function rankSystemCandidates(candidates) {
   );
 }
 
+/**
+ * P(at least k of these selections win) — the Poisson-binomial tail.
+ *
+ * THE PRODUCT OF THE PROBABILITIES IS THE WRONG ANSWER for k < n, and not
+ * approximately: Πp is P(ALL win), which is P(X >= n). A 3/5 wins in any of the
+ * 26 outcome patterns with three or more winners; Πp counts one of them. Five
+ * legs at 0.70 give Πp = 0.168 against P(X>=3) = 0.837 — a five-fold
+ * understatement that would make the safest product look like the riskiest.
+ *
+ * Exact, by convolution, because n is 5: no normal approximation, no Poisson
+ * approximation, and no assumption that the probabilities are equal.
+ *
+ *     dp[0] = 1
+ *     for each p:  dp'[j] = dp[j-1]·p + dp[j]·(1-p)
+ *     answer = sum of dp[k..n]
+ *
+ * Independence is assumed, exactly as the combo's Πp assumes it. One leg per
+ * fixture removes the dominant correlation; residual same-league and
+ * same-family correlation is knowingly unmodelled, which is why every surface
+ * showing this number carries the disclaimer.
+ *
+ * @param {Array<number|null|undefined>} probabilities each in (0, 1]
+ * @param {number} k
+ * @returns {number|null} null for any input that is not a usable ticket
+ */
+export function systemTicketProbability(probabilities, k) {
+  if (!Array.isArray(probabilities) || probabilities.length === 0) return null;
+  const n = probabilities.length;
+  if (!Number.isInteger(k) || k < 1 || k > n) return null;
+
+  const ps = [];
+  for (const raw of probabilities) {
+    // A missing probability is not a zero-chance leg, it is an unanswerable
+    // question — so the whole ticket has no probability rather than a wrong one.
+    const p = finiteOrNull(raw);
+    if (p === null || p <= 0 || p > 1) return null;
+    ps.push(p);
+  }
+
+  let dp = [1];
+  for (const p of ps) {
+    const next = new Array(dp.length + 1).fill(0);
+    for (let j = 0; j < dp.length; j += 1) {
+      next[j] += dp[j] * (1 - p);
+      next[j + 1] += dp[j] * p;
+    }
+    dp = next;
+  }
+
+  // The distribution must still be a distribution. Drifting mass would mean the
+  // convolution is wrong, and a silently wrong probability is worse than none.
+  const mass = dp.reduce((acc, value) => acc + value, 0);
+  if (!Number.isFinite(mass) || Math.abs(mass - 1) > 1e-9) return null;
+
+  let tail = 0;
+  for (let j = k; j < dp.length; j += 1) tail += dp[j];
+  // Float noise can push a tail a hair past 1 or below 0; the answer is a
+  // probability, so it is clamped to being one.
+  return Math.min(1, Math.max(0, tail));
+}
+
 /** C(n, k), exact for the sizes this product uses. */
 function combinations(n, k) {
   if (k < 0 || k > n) return 0;
@@ -563,21 +624,19 @@ function combinations(n, k) {
 /**
  * One system ticket over an already-chosen list of selections.
  *
- * WHAT IS DELIBERATELY ABSENT: `totalOdds` and `estimatedTicketProbability`.
- * Both exist on a combo and both are WRONG for a k-of-n ticket:
+ * `totalOdds` IS DELIBERATELY ABSENT. Π odds is the payout of ONE combination —
+ * the all-five one. A 3/5 that wins pays the product of its three winning legs,
+ * summed over every winning combination, divided by the C(5,3) stakes it was
+ * placed with. Publishing Π odds as the ticket's odds would overstate a 3/5
+ * payout by roughly the odds of the two legs that lost. `productOdds` below
+ * carries the number under a name that says what it is, so the audit trail
+ * keeps it without any surface mistaking it for a payout; it coincides with the
+ * payout only when k = n.
  *
- *   · Π odds is the payout of ONE combination — the all-five one. A 3/5 that
- *     wins pays the product of its three winning legs, summed over every
- *     winning combination, divided by the C(5,3) stakes it was placed with.
- *     Reporting Π odds as the ticket's odds would overstate a 3/5 payout by
- *     roughly the odds of the two legs that lost.
- *   · Π p_i is P(ALL five win). A 3/5 wins when at least three do, which is a
- *     Poisson-binomial tail, not a product. Π p_i understates it — badly: five
- *     legs at 0.70 give Π p = 0.168 while P(>=3) = 0.837.
- *
- * `productOdds` below is exposed under a name that says what it is, so the
- * audit trail keeps the number without any surface being able to mistake it for
- * a payout. It coincides with the payout only when k = n.
+ * `estimatedTicketProbability` keeps the combo's field name because it keeps the
+ * combo's MEANING — P(this ticket wins). What changes is that the right formula
+ * is now available: P(X >= k) rather than Π p, which is only correct at k = n.
+ * The combo path is untouched and still computes its own Π p directly.
  *
  * @param {number} systemK
  * @param {GlobalCandidate[]} selections
@@ -585,6 +644,10 @@ function combinations(n, k) {
 function toSystemBet(systemK, selections) {
   const averageConfidence = selections.reduce((acc, s) => acc + s.confidence, 0) / selections.length;
   const productOdds = selections.reduce((acc, s) => acc * s.odds, 1);
+  const ticketProbability = systemTicketProbability(
+    selections.map((s) => s.probability),
+    systemK
+  );
   return {
     // `variant` keeps its one meaning across both kinds: how many selections the
     // ticket holds. The k lives in its own field, exactly as migration 052 stores it.
@@ -596,7 +659,10 @@ function toSystemBet(systemK, selections) {
     selections: [...selections],
     combinationCount: combinations(SYSTEM_SELECTION_COUNT, systemK),
     averageConfidence: Number(averageConfidence.toFixed(2)),
-    productOdds: Number(productOdds.toFixed(3))
+    productOdds: Number(productOdds.toFixed(3)),
+    // Four decimals, the precision special_bets.ticket_probability carries.
+    // Null stays null: an unanswerable probability is never rounded into 0.0000.
+    estimatedTicketProbability: ticketProbability === null ? null : Number(ticketProbability.toFixed(4))
   };
 }
 
@@ -670,5 +736,6 @@ export default {
   buildGlobalSpecialBets,
   selectionExpectedValue,
   rankSystemCandidates,
+  systemTicketProbability,
   buildGlobalSystemBets
 };

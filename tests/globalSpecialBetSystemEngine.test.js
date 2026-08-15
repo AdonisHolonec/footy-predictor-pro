@@ -11,7 +11,8 @@ import {
   collectGlobalCandidates,
   rankGlobalCandidates,
   rankSystemCandidates,
-  selectionExpectedValue
+  selectionExpectedValue,
+  systemTicketProbability
 } from "../server-utils/globalSpecialBetEngine.js";
 
 /**
@@ -373,16 +374,30 @@ test("[19b] the combination count is C(5,k) — 10, 5 and 1", () => {
   assert.equal(built.bets[5].combinationCount, 1);
 });
 
-test("[19c] a System ticket carries no combo payout fields", () => {
-  // Π odds is the payout of one combination and Π p is P(all five win); both are
-  // wrong for k < 5, so neither is published under a combo's field name. See the
-  // comment on toSystemBet.
+test("[19c] a System ticket carries no combo payout field", () => {
+  // Π odds is the payout of ONE combination, so it is not published under the
+  // combo's field name. See the comment on toSystemBet.
   const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
   const bet = built.bets[3];
 
   assert.equal(bet.totalOdds, undefined, "a 3/5 does not pay Π odds");
-  assert.equal(bet.estimatedTicketProbability, undefined, "a 3/5 does not win with probability Π p");
   assert.ok(Number.isFinite(bet.productOdds), "the product is kept, under a name that says what it is");
+});
+
+test("[19d] the ticket probability is P(X >= k), not the product", () => {
+  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
+  const probabilities = built.selections.map((s) => s.probability);
+  const product = probabilities.reduce((acc, p) => acc * p, 1);
+
+  for (const k of SYSTEM_K_VALUES) {
+    const expected = systemTicketProbability(probabilities, k);
+    assert.equal(built.bets[k].estimatedTicketProbability, Number(expected.toFixed(4)), `k=${k}`);
+  }
+  // 5/5 IS the product; 3/5 and 4/5 are strictly likelier, which is the whole
+  // reason a system exists.
+  assert.equal(built.bets[5].estimatedTicketProbability, Number(product.toFixed(4)));
+  assert.ok(built.bets[3].estimatedTicketProbability > built.bets[4].estimatedTicketProbability);
+  assert.ok(built.bets[4].estimatedTicketProbability > built.bets[5].estimatedTicketProbability);
 });
 
 // ── 20. System cannot reach production ─────────────────────────────────────

@@ -199,6 +199,115 @@ export function settleGlobalSpecialBet({ bet, selections, fixturesById, now }) {
   };
 }
 
+// ── k-of-n tickets ─────────────────────────────────────────────────────────
+//
+// A system ticket is n selections of which any k must win, staked across every
+// k-sized combination of them. Combo is the k = n case of exactly this model,
+// and the equality is asserted rather than claimed in a comment: the suite
+// enumerates all 4^5 status combinations and requires settleTicket at k = n to
+// agree with aggregateBetStatus + computeSettledTotalOdds on every one.
+//
+// Nothing below is reachable from production. The persistence layer neither
+// reads bet_kind nor passes a k, and the database refuses to store a system
+// ticket at all (migration 052, `system_not_enabled`).
+
+/** C(n, k), exact at the sizes a ticket uses. */
+export function ticketCombinationCount(n, k) {
+  if (!Number.isInteger(n) || !Number.isInteger(k) || k < 0 || k > n) return 0;
+  let result = 1;
+  for (let i = 1; i <= k; i += 1) result = (result * (n - k + i)) / i;
+  return Math.round(result);
+}
+
+/** Every k-sized subset of `items`, in index order. n is 5, so at most 10 subsets. */
+function subsetsOfSize(items, k) {
+  const out = [];
+  const pick = (start, chosen) => {
+    if (chosen.length === k) {
+      out.push(chosen);
+      return;
+    }
+    for (let i = start; i < items.length; i += 1) pick(i + 1, [...chosen, items[i]]);
+  };
+  pick(0, []);
+  return out;
+}
+
+/**
+ * A leg's multiplier inside a combination.
+ *
+ * VOID contributes 1.00 — the stake for that leg comes back. This is not a new
+ * rule invented for systems: computeSettledTotalOdds has always treated a void
+ * leg this way, and applying it per combination is what makes Combo fall out of
+ * the general model unchanged.
+ *
+ * The alternative considered and rejected was reducing the ticket (3/5 becomes
+ * 3/4 once a leg voids). It changes the number of combinations AFTER the bet
+ * was placed, which retroactively rewrites the stake each combination carries,
+ * and it pays nothing for a fixture the punter actually got right — a 3/5 with
+ * two winners, one void and two losers returns 4.00 under this model and 0.00
+ * under that one.
+ */
+function legMultiplier(selection) {
+  return selection?.status === SELECTION_STATUS.VOID ? 1 : Number(selection?.odds);
+}
+
+/**
+ * Settle a k-of-n ticket from its already-settled legs.
+ *
+ * @param {{ selections: Array<{status: string, odds: number}>, k: number }} params
+ * @returns {{ status: string, returnMultiple: number|null, winningCombinationCount: number,
+ *             combinationCount: number }|null} null when the shape is not a ticket
+ *
+ * `returnMultiple` is GROSS RETURN PER UNIT OF TOTAL STAKE, which is the same
+ * quantity `settled_total_odds` already holds for a combo — no column changes
+ * meaning. It is null for LOST and PENDING, matching the existing convention: a
+ * lost bet has no payout to express and a pending one has no answer yet.
+ *
+ * Stake is not a parameter because the multiple is invariant to it. A caller
+ * that has a stake multiplies; the product currently has none.
+ */
+export function settleTicket({ selections, k } = {}) {
+  const legs = Array.isArray(selections) ? selections : null;
+  if (!legs || legs.length === 0) return null;
+  const n = legs.length;
+  if (!Number.isInteger(k) || k < 1 || k > n) return null;
+
+  const combinationCount = ticketCombinationCount(n, k);
+  const lost = legs.filter((s) => s?.status === SELECTION_STATUS.LOST).length;
+
+  // Decided early, exactly as a combo decides early on its first lost leg: once
+  // too few legs survive to reach k, no later result can change the answer.
+  // At k = n this reduces to "one lost leg loses the bet".
+  if (n - lost < k) {
+    return { status: BET_STATUS.LOST, returnMultiple: null, winningCombinationCount: 0, combinationCount };
+  }
+  if (legs.some((s) => s?.status === SELECTION_STATUS.PENDING)) {
+    return { status: BET_STATUS.PENDING, returnMultiple: null, winningCombinationCount: 0, combinationCount };
+  }
+
+  // A combination wins when none of its legs lost. Voids ride along at 1.00.
+  const surviving = legs.filter((s) => s?.status !== SELECTION_STATUS.LOST);
+  const winners = subsetsOfSize(surviving, k);
+  const stakePerCombination = 1 / combinationCount;
+  const gross = winners.reduce(
+    (acc, combo) => acc + combo.reduce((product, leg) => product * legMultiplier(leg), 1) * stakePerCombination,
+    0
+  );
+
+  // Every leg void means every combination returns exactly its own stake, so the
+  // ticket returns the stake and nothing was really played. The general formula
+  // produces that on its own — this branch only names it.
+  const status = legs.every((s) => s?.status === SELECTION_STATUS.VOID) ? BET_STATUS.VOID : BET_STATUS.WON;
+
+  return {
+    status,
+    returnMultiple: Number.isFinite(gross) ? Number(gross.toFixed(3)) : null,
+    winningCombinationCount: winners.length,
+    combinationCount
+  };
+}
+
 export default {
   MISSING_STATS_VOID_AFTER_MS,
   SELECTION_STATUS,
@@ -207,5 +316,7 @@ export default {
   computeSettledTotalOdds,
   officialTotalForFamily,
   settleGlobalSpecialBet,
-  settleSelection
+  settleSelection,
+  ticketCombinationCount,
+  settleTicket
 };
