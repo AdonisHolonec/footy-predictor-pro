@@ -8,10 +8,15 @@
  */
 
 import type { MarketFamilyKey } from "./formatRecommendation";
+// The k values the product sells, imported rather than re-listed: the engine and
+// migration 054 validate against the same three, and a second literal here would
+// be free to drift away from both.
+import { SYSTEM_K_VALUES } from "../types/globalSpecialBet";
 import type {
   GlobalSpecialBet,
   GlobalSpecialBetSelection,
   GlobalSpecialBetStatus,
+  SystemK,
   TicketOutcome,
   TicketOutcomeKind
 } from "../types/globalSpecialBet";
@@ -139,18 +144,36 @@ export function describeTicketShape(
   bet: Pick<GlobalSpecialBet, "bet_kind" | "system_k" | "variant">
 ): { key: string; vars: Record<string, string | number>; combinationCount: number | null } {
   const n = Number(bet?.variant);
-  // Absent BEFORE coercion, as everywhere else in this file: `Number(null)` is 0
-  // and 0 is finite, so coercing first would render a system with no k as "0/5"
-  // — a shape that does not exist, printed with total confidence.
-  const rawK: unknown = bet?.system_k;
-  const k = rawK === null || rawK === undefined || rawK === "" ? null : Number(rawK);
-  // Anything that is not an explicit system reads as a combo: the column defaults
-  // to 'combo', so an unrecognised value means a shape we do not sell, and the
-  // safe reading of an unknown shape is the one that promises least.
-  if (bet?.bet_kind !== "system" || k === null || !Number.isFinite(k) || !Number.isFinite(n)) {
+  // Anything that is not a System the product actually sells reads as a combo: the
+  // column defaults to 'combo', so an unrecognised shape is one we do not offer,
+  // and the safe reading of an unknown shape is the one that promises least.
+  if (bet?.bet_kind !== "system" || !isSystemK(bet?.system_k) || !Number.isFinite(n)) {
     return { key: "gsb.shapeCombo", vars: { n: Number.isFinite(n) ? n : 0 }, combinationCount: null };
   }
+  const k = bet.system_k;
   return { key: "gsb.shapeSystem", vars: { k, n }, combinationCount: binomial(n, k) };
+}
+
+/**
+ * Is this a k the product actually sells?
+ *
+ * Order matters, and each step exists for a value that would otherwise slip past:
+ *
+ *   1. TYPE first, never `Number()` first. `Number(null)` is 0 and 0 is finite, so
+ *      coercing up front would render a system with no k as "0/5" — a shape that
+ *      does not exist, printed with total confidence. Requiring a real number also
+ *      refuses the string "3": `system_k` is a smallint, which arrives as a JSON
+ *      number, so a string here means something upstream changed and guessing its
+ *      intent would hide that.
+ *   2. INTEGER, which removes NaN and 3.5 in one check.
+ *   3. MEMBERSHIP in SYSTEM_K_VALUES — the product contract, not a range. 0, 2, 6
+ *      and -1 are all integers and all not tickets we sell. This mirrors the same
+ *      list the engine validates against and migration 054 enforces in SQL, so the
+ *      three layers cannot drift apart.
+ */
+function isSystemK(value: unknown): value is SystemK {
+  if (typeof value !== "number" || !Number.isInteger(value)) return false;
+  return (SYSTEM_K_VALUES as readonly number[]).includes(value);
 }
 
 /** C(n, k) for the small n this product uses. Exact in integers, no factorials to overflow. */

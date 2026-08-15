@@ -593,16 +593,54 @@ describe("describeTicketShape", () => {
     expect(counts).toEqual([10, 5, 1]);
   });
 
-  it("reads anything that is not an explicit system as a combo", () => {
-    // The column defaults to 'combo', so an unknown shape is one we do not sell —
-    // and the safe reading of an unknown shape promises least.
-    const kindless = describeTicketShape({
-      variant: 5,
-      bet_kind: "system",
-      system_k: null
-    } as unknown as Parameters<typeof describeTicketShape>[0]);
-    expect(kindless.key).toBe("gsb.shapeCombo");
-    expect(kindless.combinationCount).toBeNull();
+  // The k contract, end to end. Each invalid value below would otherwise have been
+  // printed as a real ticket: `Number(null)` is 0 and finite, so a coerce-first
+  // helper renders "System 0/5"; "3" would sail through the same way; and 0, 2, 6
+  // and -1 are perfectly good integers that are simply not products we sell.
+  const shapeOf = (system_k: unknown) =>
+    describeTicketShape({ variant: 5, bet_kind: "system", system_k } as unknown as Parameters<
+      typeof describeTicketShape
+    >[0]);
+
+  it.each([
+    [3, 10],
+    [4, 5],
+    [5, 1]
+  ])("system_k %i is the System the product sells, covering %i combinations", (k, combinations) => {
+    const shape = shapeOf(k);
+    expect(shape.key).toBe("gsb.shapeSystem");
+    expect(shape.vars).toEqual({ k, n: 5 });
+    expect(shape.combinationCount).toBe(combinations);
+  });
+
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["NaN", Number.NaN],
+    ["an empty string", ""],
+    ['the string "3"', "3"],
+    ["0", 0],
+    ["2, which the CHECK allows but the product does not sell", 2],
+    ["6, more winners than legs", 6],
+    ["-1", -1],
+    ["3.5", 3.5]
+  ])("system_k %s is refused and falls back to a combo", (_label, k) => {
+    const shape = shapeOf(k);
+    // The real desired behaviour, not merely "does not throw": an unsellable shape
+    // is read as the thing that promises least, and claims no combinations.
+    expect(shape.key).toBe("gsb.shapeCombo");
+    expect(shape.vars).toEqual({ n: 5 });
+    expect(shape.combinationCount).toBeNull();
+    // And it must never leak a k into the label vars — that is what printed "0/5".
+    expect(shape.vars).not.toHaveProperty("k");
+  });
+
+  it("validates membership, not a range", () => {
+    // 2 and 6 sit either side of the sold set and are both integers, so a bounds
+    // check alone would have let one of them through.
+    expect(shapeOf(2).key).toBe("gsb.shapeCombo");
+    expect(shapeOf(6).key).toBe("gsb.shapeCombo");
+    expect(shapeOf(4).key).toBe("gsb.shapeSystem");
   });
 
   it("the three System outcomes that matter are told apart by return, not by status", () => {
