@@ -600,9 +600,11 @@ test("M4: exactly one create_global_special_bet exists — the drop left no over
     value(
       `select pg_get_function_identity_arguments(oid) from pg_proc where proname = 'create_global_special_bet';`
     ),
+    // 052 reissued it again, adding p_bet_kind and p_system_k. Both carry
+    // defaults, which is what keeps this suite's own 9-argument calls resolving.
     "p_user_id uuid, p_bet_date date, p_variant smallint, p_league_ids integer[], " +
       "p_total_odds numeric, p_average_confidence numeric, p_model_version text, " +
-      "p_selections jsonb, p_ticket_probability numeric"
+      "p_selections jsonb, p_ticket_probability numeric, p_bet_kind text, p_system_k smallint"
   );
 });
 
