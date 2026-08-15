@@ -190,7 +190,8 @@ before(() => {
     "044_global_special_bet_settlement.sql",
     "048_special_bet_selection_labels.sql",
     "050_gsb_probability_snapshot.sql",
-    "052_gsb_system_tickets.sql"
+    "052_gsb_system_tickets.sql",
+    "053_gsb_system_enable.sql"
   ]) {
     psql(fs.readFileSync(`supabase/migrations/${migration}`, "utf8"));
   }
