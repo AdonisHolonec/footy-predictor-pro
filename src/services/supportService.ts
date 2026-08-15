@@ -110,6 +110,7 @@ type ApiEnvelope = {
   error?: string;
   retryAfterSec?: number;
   ticket?: unknown;
+  tickets?: unknown;
   feedback?: unknown;
 };
 
@@ -139,6 +140,60 @@ async function post(path: string, body: unknown): Promise<ApiEnvelope> {
     );
   }
   return envelope;
+}
+
+async function get(path: string): Promise<ApiEnvelope> {
+  const res = await fetchWithAuth(path);
+  const envelope = await readEnvelope(res);
+  if (!res.ok || envelope.ok === false) {
+    throw new SupportApiError(res.status, typeof envelope.error === "string" ? envelope.error : null, null);
+  }
+  return envelope;
+}
+
+/** One message on a ticket, as `GET /api/support` returns it. */
+export type SupportMessage = {
+  id: string;
+  ticket_id: string;
+  /** Who wrote it. The server writes this literal; it is never client-supplied. */
+  author_role: "user" | "admin";
+  body: string;
+  created_at: string;
+};
+
+/**
+ * A ticket belonging to the signed-in user.
+ *
+ * There is no `is_internal_note` here because the server never sends one: an
+ * internal note is filtered out by `handleSupportList` AND by the RLS policy in
+ * migration 051. The absence is deliberate — a field the client never receives
+ * is a field the client cannot leak.
+ */
+export type SupportTicket = {
+  id: string;
+  category: string;
+  subject: string;
+  /** open | in_progress | waiting_user | resolved | closed — displayed, never set. */
+  status: string;
+  priority: string;
+  contact_requested: boolean;
+  created_at: string;
+  updated_at: string;
+  messages: SupportMessage[];
+};
+
+/**
+ * The signed-in user's own tickets, newest first, each with its visible thread.
+ *
+ * NO USER ID IS SENT. The server derives the owner from the verified session and
+ * scopes the query with it; a client-supplied id would be a request to be trusted
+ * about whose messages these are. That is why this takes no parameters at all.
+ *
+ * Read-only: there is no reply, no status change and no delete in this module.
+ */
+export async function listSupportTickets(): Promise<SupportTicket[]> {
+  const envelope = await get("/api/support");
+  return Array.isArray(envelope.tickets) ? (envelope.tickets as SupportTicket[]) : [];
 }
 
 /** Opens a support ticket. Resolves on 201; throws SupportApiError otherwise. */
