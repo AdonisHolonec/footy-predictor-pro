@@ -403,8 +403,8 @@ test("[19d] the ticket probability is P(X >= k), not the product", () => {
 // ── 20. System cannot reach production ─────────────────────────────────────
 
 test("[20] System is built and validated in code, and still refused by the database", () => {
-  // The database refuses one too (migration 052 returns system_not_enabled,
-  // asserted by S16 in tests/integration/gsbSystemFoundation.db.test.js). This
+  // The database now accepts one (migration 053 lifted the gate; S16 in
+  // tests/integration/gsbSystemFoundation.db.test.js proves the creation). This
   // is the other half: the server never even asks. A unit test on the engine
   // alone would pass while an unwired capability quietly became reachable.
   //
@@ -421,8 +421,9 @@ test("[20] System is built and validated in code, and still refused by the datab
   // system_not_enabled. A check in application code could be sidestepped by any
   // other caller; a check inside the function cannot. Whoever ships System must
   // lift it there, on purpose.
-  const migration = fs.readFileSync("supabase/migrations/052_gsb_system_tickets.sql", "utf8");
-  assert.ok(migration.includes("system_not_enabled"), "the database guard must still be in place");
+  const enable = fs.readFileSync("supabase/migrations/053_gsb_system_enable.sql", "utf8");
+  assert.ok(!/error', 'system_not_enabled/.test(enable), "053 removed the gate from the active function");
+  assert.ok(persistence.includes("createGlobalSystemBets"), "the server can create a System");
   assert.ok(persistence.includes("validateSystemShape"), "creation validates the shape before the RPC");
   assert.ok(persistence.includes("p_system_k"), "creation sends the k through 052's own parameter");
 

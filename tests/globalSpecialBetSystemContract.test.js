@@ -151,8 +151,13 @@ test("[guard] the contract layer neither creates a System nor unlocks one", () =
   const migration = fs.readFileSync("supabase/migrations/052_gsb_system_tickets.sql", "utf8");
   const view = fs.readFileSync("src/utils/globalSpecialBetView.ts", "utf8");
 
-  // The database still refuses to store a System.
-  assert.ok(migration.includes("system_not_enabled"), "the creation guard must remain in place");
+  // The database now ACCEPTS a System: migration 053 recreated the function
+  // without the gate, while 052 keeps its historical body untouched. What is
+  // left standing between a System and a user is the HTTP layer, asserted below.
+  assert.ok(migration.includes("system_not_enabled"), "052 keeps its historical body");
+  const enable = fs.readFileSync("supabase/migrations/053_gsb_system_enable.sql", "utf8");
+  assert.ok(!/error', 'system_not_enabled/.test(enable), "053 lifts the gate from the active function");
+  assert.ok(enable.includes("invalid_system_k"), "and replaces it with the product's own k check");
 
   // Creation is now wired in code — the persistence layer builds a System,
   // validates its shape and sends it to the RPC. What still stops one from
