@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { useLocale } from "../../context/LocaleContext";
 import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
+import SupportEntry from "../../components/support/SupportEntry";
 import type { useAuth } from "../../hooks/useAuth";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 
@@ -19,10 +20,20 @@ type SettingsViewProps = {
   cycleTheme: () => void;
   downloadPersonalDataExport: () => void;
   exportBusy: boolean;
+  /** Raised with an i18n key when a support or feedback submission succeeds. */
+  onSupportSubmitted?: (messageKey: string) => void;
 };
 
 export default function SettingsView(props: SettingsViewProps) {
-  const { prefs, updateFilters, logout, cycleTheme, downloadPersonalDataExport, exportBusy } = props;
+  const {
+    prefs,
+    updateFilters,
+    logout,
+    cycleTheme,
+    downloadPersonalDataExport,
+    exportBusy,
+    onSupportSubmitted
+  } = props;
   const { t } = useLocale();
   return (
         <section className="space-y-6">
@@ -84,6 +95,9 @@ export default function SettingsView(props: SettingsViewProps) {
               {t("dash.downloadExport")}
             </Button>
           </Card>
+
+          {/* One component, mounted by both authenticated trees — see SupportEntry. */}
+          <SupportEntry onSubmitted={onSupportSubmitted} />
 
           <Card>
             <Button variant="danger" onClick={() => void logout()}>

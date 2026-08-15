@@ -45,6 +45,8 @@ type MatchCardProps = {
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
   onShare?: (message: string) => void;
+  /** Opens the prediction report dialog for this row. Absent = no report button. */
+  onReport?: () => void;
   /** Effective access tier (free / premium / ultra) — drives lock vs missing-data UI. */
   accessTier?: string;
 };
@@ -62,7 +64,8 @@ export default function MatchCard({
   onToggleWatch,
   bookmarked = false,
   onToggleBookmark,
-  onShare
+  onShare,
+  onReport
 }: MatchCardProps) {
   const { t } = useLocale();
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
@@ -205,6 +208,22 @@ export default function MatchCard({
           >
             ↗
           </button>
+          {/* Deliberately last and unfilled: reporting is rare, and a loud button
+              would compete with the prediction the card exists to show. */}
+          {onReport && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReport();
+              }}
+              className="flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[11px] text-[var(--fp-text-muted)] hover-fine:border-[var(--fp-danger)]/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+              aria-label={t("predictionReport.cardAction")}
+              title={t("predictionReport.cardAction")}
+            >
+              ⚑
+            </button>
+          )}
           <span className="inline-flex items-center gap-1 truncate max-w-[9rem] rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:max-w-[12rem]">
             {row.logos?.league ? <img src={row.logos.league} className="h-3.5 w-3.5 shrink-0 object-contain" alt="" /> : null}
             {row.league}

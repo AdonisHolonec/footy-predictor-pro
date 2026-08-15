@@ -21,6 +21,8 @@ type PredictionListProps = {
   logoColors: Record<string, string>;
   hashColor: (seed: string) => string;
   onSelectMatch: (match: PredictionRow) => void;
+  /** Opens the prediction report dialog. Absent = no report button. */
+  onReportMatch?: (row: PredictionRow) => void;
   onOpenAuth: () => void;
   showDossierLabel?: boolean;
 };
@@ -38,6 +40,7 @@ export default function PredictionList({
   logoColors,
   hashColor,
   onSelectMatch,
+  onReportMatch,
   onOpenAuth,
   showDossierLabel = false
 }: PredictionListProps) {
@@ -171,6 +174,7 @@ export default function PredictionList({
                     canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
                     accessTier={user?.tier}
                     onClick={() => onSelectMatch(m)}
+                    onReport={onReportMatch ? () => onReportMatch(m) : undefined}
                   />
                 ))}
               </div>

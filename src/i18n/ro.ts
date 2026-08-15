@@ -915,5 +915,92 @@ export const ro: Dict = {
     nextLeg: "Urmează {label} · {time}",
     allUnderway: "Toate meciurile rămase au început",
     legUnderway: "Se joacă acum"
+  },
+  // Trei suprafețe separate, intenționat: rezolvarea unei probleme, îmbunătățirea
+  // produsului și semnalarea unei predicții sunt cereri diferite și se citesc altfel.
+  support: {
+    sectionTitle: "Ajutor și support",
+    sectionHint: "Ceva nu merge sau ai o idee pentru noi — citim tot.",
+    openSupport: "Raportează o problemă",
+    openFeedback: "Trimite feedback",
+    title: "Raportează o problemă",
+    subtitle: "Spune-ne ce s-a întâmplat și revenim cu un răspuns.",
+    category: "Categorie",
+    categoryPlaceholder: "Alege o categorie",
+    categories: {
+      general: "Întrebare generală",
+      prediction: "Predicție sau rezultat",
+      gsb: "Special Bet",
+      technical: "Problemă tehnică",
+      billing: "Abonament sau plată",
+      account: "Autentificare sau cont",
+      other: "Altceva"
+    },
+    subject: "Subiect",
+    subjectPlaceholder: "Pe scurt, despre ce e vorba",
+    message: "Ce s-a întâmplat",
+    messagePlaceholder: "Ce făceai, ce te așteptai să se întâmple și ce s-a întâmplat de fapt.",
+    messageHint: "Cu cât e mai concret, cu atât te putem ajuta mai repede.",
+    contactRequested: "Aș vrea un răspuns",
+    send: "Trimite",
+    cancel: "Renunță",
+    done: "Închide",
+    successMessage: "Mesajul tău a fost trimis. Îți mulțumim.",
+    errorCategoryRequired: "Alege o categorie.",
+    errorSubjectRequired: "Adaugă un subiect.",
+    errorMessageTooShort: "Scrie te rog cel puțin {min} caractere.",
+    errorInvalid: "Unele date nu sunt valide. Verifică formularul și încearcă din nou.",
+    errorAuth: "Sesiunea a expirat. Autentifică-te și încearcă din nou.",
+    errorForbidden: "Nu ai acces la această acțiune.",
+    errorClient: "Ceva nu a mers bine la noi. Încearcă din nou.",
+    errorRateLimited: "Ai trimis prea multe solicitări. Încearcă din nou puțin mai târziu.",
+    errorServer: "Serverul nu a putut procesa cererea. Încearcă din nou în scurt timp.",
+    errorGeneric: "Cererea nu a putut fi trimisă. Încearcă din nou.",
+    errorNetwork: "Fără conexiune. Verifică rețeaua și încearcă din nou."
+  },
+  feedback: {
+    title: "Trimite feedback",
+    subtitle: "O idee, ceva ce îți place, ceva ce te enervează.",
+    category: "Subiect",
+    categoryPlaceholder: "Alege un subiect",
+    categories: {
+      feature: "Idee de funcționalitate",
+      ux: "Design și utilizare",
+      prediction: "Predicții",
+      gsb: "Special Bet",
+      performance: "Viteză și performanță",
+      other: "Altceva"
+    },
+    message: "Feedback-ul tău",
+    messagePlaceholder: "Spune-ne în una-două propoziții.",
+    rating: "Cum ai nota aplicația?",
+    ratingValue: "{value} din 5",
+    ratingHint: "Opțional.",
+    send: "Trimite feedback",
+    successMessage: "Îți mulțumim — feedback-ul a fost trimis.",
+    errorCategoryRequired: "Alege un subiect.",
+    errorMessageTooShort: "Scrie te rog cel puțin {min} caractere."
+  },
+  predictionReport: {
+    cardAction: "Raportează această predicție",
+    title: "Raportează predicția",
+    subtitle: "Spune-ne ce nu e în regulă. Detaliile meciului sunt incluse automat.",
+    reason: "Ce nu e în regulă",
+    reasonPlaceholder: "Alege un motiv",
+    reasons: {
+      wrong_result: "Rezultatul afișat este greșit",
+      wrong_odds: "Cotele sunt greșite",
+      missing_data: "Lipsesc date",
+      wrong_recommendation: "Recomandarea nu are sens",
+      other: "Altceva"
+    },
+    details: "Mai multe detalii",
+    detailsPlaceholder: "Opțional — orice ne ajută să reproducem problema.",
+    detailsHint: "Opțional.",
+    contextPick: "Pick",
+    contextNote: "Detaliile meciului, ligii și predicției sunt trimise odată cu raportul.",
+    send: "Trimite raportul",
+    successMessage: "Raport trimis. Îți mulțumim că ne ajuți să îmbunătățim.",
+    errorReasonRequired: "Alege un motiv."
   }
 };

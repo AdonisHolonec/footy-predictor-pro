@@ -50,6 +50,8 @@ type ObservatoryBodyProps = {
   logoColors: Record<string, string>;
   hashColor: (seed: string) => string;
   onSelectMatch: (match: PredictionRow) => void;
+  /** Opens the prediction report dialog. Absent = no report button. */
+  onReportMatch?: (row: PredictionRow) => void;
   insightSample: PredictionRow | null;
 } & AdminUsersProps;
 
@@ -144,6 +146,7 @@ export default function ObservatoryBody({
             logoColors={rest.logoColors}
             hashColor={rest.hashColor}
             onSelectMatch={rest.onSelectMatch}
+            onReportMatch={rest.onReportMatch}
             onOpenAuth={onOpenAuth}
           />
         </div>

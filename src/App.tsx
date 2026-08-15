@@ -11,11 +11,18 @@ import PerformanceCounterModal from "./components/PerformanceCounterModal";
 import MatchModal from "./components/MatchModal";
 import SuccessRateTracker from "./components/SuccessRateTracker";
 import { BRAND_IMAGES } from "./constants/brandAssets";
+import SupportEntry from "./components/support/SupportEntry";
+import ReportPredictionDialog from "./components/support/ReportPredictionDialog";
 import { useAppController } from "./hooks/useAppController";
 import { hashColor, isoToday, normalizeSelectedDates } from "./utils/appUtils";
+import { useState } from "react";
+import type { PredictionRow } from "./types";
 
 export default function App() {
   const c = useAppController();
+  // Owned at the top of the tree: the dialog is opened from a card inside a
+  // list, and a dialog rendered by that card would unmount with it.
+  const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
 
   return (
     <div className="lab-page relative min-h-screen font-sans">
@@ -82,11 +89,15 @@ export default function App() {
 
         <ApiStatus status={c.status} />
 
+        {/* Same component the workspace mounts in Settings — see SupportEntry. */}
+        <SupportEntry variant="inline" className="mt-2" />
+
         {c.observatoryShell ? (
           <ObservatoryBody
             {...c.sharedListProps}
             trackerProps={c.trackerProps}
             statisticsProps={c.statisticsProps}
+            onReportMatch={setReportRow}
             usageCount={c.calls.usageCount}
             usageLimit={c.calls.usageLimit}
             usagePct={c.calls.usagePct}
@@ -136,6 +147,7 @@ export default function App() {
           onClose={() => c.predictions.setSelectedMatch(null)}
         />
       )}
+      <ReportPredictionDialog open={Boolean(reportRow)} row={reportRow} onClose={() => setReportRow(null)} />
       <PerformanceCounterModal
         open={c.perfCounterModalOpen}
         onClose={() => c.setPerfCounterModalOpen(false)}
