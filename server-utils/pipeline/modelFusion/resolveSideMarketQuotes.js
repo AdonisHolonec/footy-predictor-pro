@@ -31,14 +31,70 @@ export const CORNERS_MARKET_NAMES = [
   "Corners"
 ];
 
+/**
+ * Two markets, two units, and they are not interchangeable.
+ *
+ * A "Total Cards" line counts physical cards — a yellow is 1 and a red is 1 — so the line
+ * sits where the card model lives, roughly 3.5 to 6.5. A "Bookings" line counts BOOKING
+ * POINTS on the industry scale, where a yellow is 10 and a red is 25, so the same match is
+ * quoted around 25.5 to 45.5. The two were listed together, which meant a bookings quote
+ * could be priced against a cards λ of about 3 to 5 as though the numbers meant the same
+ * thing. `enumerateLineSelections` applies no magnitude filter, so nothing downstream would
+ * have caught it: P(under 25.5) against λ≈4 is ~100%, and a near-certainty is exactly what
+ * a value engine is built to notice.
+ *
+ * This is not the old `red*2 + yellow` convention either. That weighting matched neither
+ * market — booking points weight a red 2.5x, not 2x — which is part of why it had no
+ * consumer.
+ */
 export const CARDS_MARKET_NAMES = [
   "Cards Over/Under",
   "Total Cards",
-  "Bookings",
   "Cards",
-  "Yellow Cards Over/Under",
-  "Total Bookings"
+  "Yellow Cards Over/Under"
 ];
+
+/**
+ * Booking-points markets. DEFINED, NOT PRICED: nothing builds a λ in booking points, so
+ * these names are deliberately wired to no pricing path. They are named here so the
+ * exclusion is a recorded decision rather than a silent deletion, and so a future
+ * booking-points model has one place to claim.
+ *
+ * Do not convert between the two units. Reconstructing 10/25 points from a card total
+ * would require the yellow/red split, which a total does not carry.
+ */
+export const BOOKING_POINTS_MARKET_NAMES = ["Bookings", "Total Bookings"];
+
+/** The unit a discipline market is quoted in. */
+export const MARKET_UNIT = Object.freeze({
+  CARDS_COUNT: "cards_count",
+  BOOKING_POINTS: "booking_points"
+});
+
+const normalizeDisciplineName = (name) => String(name ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+const CARDS_COUNT_LOOKUP = new Set(CARDS_MARKET_NAMES.map(normalizeDisciplineName));
+const BOOKING_POINTS_LOOKUP = new Set(BOOKING_POINTS_MARKET_NAMES.map(normalizeDisciplineName));
+
+/**
+ * Which unit a discipline market is quoted in, or null when it is neither.
+ *
+ * Exact match on the normalised name, never substring: "Total Bookings" contains
+ * "Bookings" and "Total Cards" contains "Cards", so a loose test would classify by
+ * whichever list happened to be consulted first. Unknown returns null rather than a guess —
+ * an unclassifiable market is not a permitted market, the same rule marketIdentity.js
+ * applies to bet shape.
+ *
+ * @param {string|null|undefined} marketName
+ * @returns {"cards_count"|"booking_points"|null}
+ */
+export function classifyDisciplineMarketUnit(marketName) {
+  const n = normalizeDisciplineName(marketName);
+  if (!n) return null;
+  if (CARDS_COUNT_LOOKUP.has(n)) return MARKET_UNIT.CARDS_COUNT;
+  if (BOOKING_POINTS_LOOKUP.has(n)) return MARKET_UNIT.BOOKING_POINTS;
+  return null;
+}
 
 /** Under/sub first — never treat "under" as over via includes("over"). */
 function selectOddByPick(quote, pick) {

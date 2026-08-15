@@ -618,8 +618,22 @@ test("deriveMarketLambdas respectă marketKey (sot vs corners folosesc câmpuri 
 });
 
 test("deriveMarketLambdas: marketKey cards citeşte cards_for_avg/cards_against_avg", () => {
-  const rollingHome = { cards_for_avg: 6, cards_against_avg: 3, matches_sampled: 12 };
-  const rollingAway = { cards_for_avg: 3, cards_against_avg: 5, matches_sampled: 12 };
+  // The cards counter is explicit because cards no longer borrow `matches_sampled`: that
+  // field is the maximum across market families, so it cannot say how many matches carried
+  // discipline data. This test is about WHICH FIELDS the cards key reads, which is
+  // unchanged — the fixture just has to state its cards evidence now instead of implying it.
+  const rollingHome = {
+    cards_for_avg: 6,
+    cards_against_avg: 3,
+    matches_sampled: 12,
+    samples_by_market: { cards: 12 }
+  };
+  const rollingAway = {
+    cards_for_avg: 3,
+    cards_against_avg: 5,
+    matches_sampled: 12,
+    samples_by_market: { cards: 12 }
+  };
   const r = deriveMarketLambdas({
     rollingHome,
     rollingAway,

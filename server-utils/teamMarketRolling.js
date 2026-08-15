@@ -14,13 +14,38 @@ let cached = { fetchedAt: 0, byKey: new Map() };
 export const MIN_MARKET_SAMPLES = 4;
 
 /**
+ * Families that may NOT borrow another market's evidence to satisfy their own gate.
+ *
+ * `matches_sampled` is the MAXIMUM across the families a team was observed in, so using it
+ * as a stand-in answers "how many matches did we see" when the question was "how many
+ * matches did we see THIS statistic in". For corners and shots the two nearly coincide:
+ * the provider ships those figures for essentially every fixture it covers at all. Cards
+ * do not — a fixture can carry corners and no discipline data — so for cards the
+ * substitution turns an absence into a satisfied threshold, which is the same
+ * missing-is-not-zero mistake in a different place.
+ */
+const OWN_SAMPLE_ONLY_MARKETS = new Set(["cards"]);
+
+/**
  * Sample-ul real pentru o familie de piaţă. Rândurile agregate in-memory au
  * samples_by_market per familie; rândurile persistate (team_market_rolling) nu au
  * coloana → cădem pe matches_sampled, cea mai bună informaţie disponibilă acolo.
+ *
+ * CARDS IS THE EXCEPTION, AND IT FAILS CLOSED. When the cards counter is absent the honest
+ * answer is "unknown", and an unknown sample count must not clear a threshold — so cards
+ * report 0 and `deriveMarketLambdas` returns its existing `insufficient_data` fallback to
+ * the league prior. That is an already-tested path, not new behaviour. A persisted row
+ * carries no cards counter today, so cards rolling is trusted only where the count is
+ * known; restoring it for persisted rows means persisting the count, which needs its own
+ * column and is deliberately not done here.
+ *
+ * `Number(null)` is 0 and finite, so an explicit null counter reads as zero observations —
+ * which is the correct reading: none were recorded.
  */
 function marketSampleCount(row, marketKey) {
   const s = Number(row?.samples_by_market?.[marketKey]);
   if (Number.isFinite(s)) return s;
+  if (OWN_SAMPLE_ONLY_MARKETS.has(marketKey)) return 0;
   return Number(row?.matches_sampled) || 0;
 }
 
