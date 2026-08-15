@@ -26,6 +26,9 @@ export const INBOX_PAGE_SIZE = 20;
 export const TICKET_STATUSES = ["open", "in_progress", "waiting_user", "resolved", "closed"] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
+/** Mirrors the CHECK on support_messages.body in migration 051. The server revalidates. */
+export const MAX_REPLY_LENGTH = 5000;
+
 /**
  * A ticket's context after the server has narrowed it to known keys and primitives.
  *
@@ -145,6 +148,40 @@ export async function fetchInboxPage(params: {
  * Returns the ticket as stored afterwards, so the caller shows what the database holds
  * rather than what was asked for.
  */
+/**
+ * Reply to a ticket, as the team.
+ *
+ * The server owns the authorship: `author_role` and `is_internal_note` are literals it
+ * writes itself, and there is no parameter here that could influence either. This sends a
+ * ticket id and some text, and nothing else.
+ *
+ * Returns the row the database created — the caller appends that, never a locally
+ * constructed stand-in, so what appears in the thread is what was actually stored.
+ */
+export async function replyToTicket(params: {
+  kind: "support" | "report";
+  id: string;
+  body: string;
+}): Promise<InboxMessage> {
+  const qs = new URLSearchParams({ view: "inbox", kind: params.kind });
+  const res = await fetchWithAuth(`/api/admin?${qs.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: params.id, body: params.body })
+  });
+
+  let json: { ok?: boolean; error?: string; item?: unknown };
+  try {
+    json = await res.json();
+  } catch {
+    throw new AdminInboxError(res.status, "");
+  }
+  if (!res.ok || json?.ok !== true || !json.item) {
+    throw new AdminInboxError(res.status, String(json?.error || ""));
+  }
+  return json.item as InboxMessage;
+}
+
 export async function updateTicketStatus(params: {
   kind: "support" | "report";
   id: string;

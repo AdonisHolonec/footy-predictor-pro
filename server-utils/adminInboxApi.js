@@ -13,10 +13,10 @@
  * database where every client inherits it. Instead the service role reads, and `assertAdmin`
  * decides who may ask. The same shape api/admin.js already uses for profiles.
  *
- * READS EVERYTHING, WRITES ONE COLUMN. The only mutation this module can perform is setting
- * `support_tickets.status` to one of the five values migration 051 already allows. It cannot
- * insert a ticket, delete one, reply to one, or touch feedback — `feedback_entries` has no
- * status, and PATCH refuses that kind rather than pretending otherwise.
+ * READS EVERYTHING, WRITES TWO THINGS. It can set `support_tickets.status` to one of the
+ * five values migration 051 allows, and it can append one message to a ticket's thread. It
+ * cannot create a ticket, delete anything, or touch feedback — `feedback_entries` has no
+ * status and no thread, so both mutations refuse that kind rather than pretending otherwise.
  *
  * THREE KINDS, TWO TABLES:
  *
@@ -306,7 +306,85 @@ async function handleStatusPatch(req, res, { supabase, kind }) {
 }
 
 /**
+ * Longest reply the database will store: migration 051 constrains `body` to 1..5000 after
+ * btrim. Checked here so an over-long message is a named 400 rather than a constraint
+ * violation, and never truncated — silently shortening someone's answer is worse than
+ * refusing it.
+ */
+export const MAX_REPLY_LENGTH = 5000;
+
+/**
+ * POST /api/admin?view=inbox&kind=support|report   body: { id, body }
+ *
+ * Writes one message to a ticket, authored by the team.
+ *
+ * ORDER IS THE SAFETY PROPERTY. The ticket is looked up ALREADY SCOPED to the requested
+ * kind, so a cross-kind id finds nothing and answers 404 — indistinguishable from an id
+ * that never existed. Only then is the status inspected. Doing it the other way round
+ * would let a 409 confirm that a ticket exists under a kind the caller was not asking
+ * about.
+ *
+ * CLOSED IS FINAL, FOR BOTH SIDES. `handleSupportReply` already refuses a user's reply on
+ * a closed ticket with 409; an admin gets the same answer and the same words. Reopening is
+ * an explicit status change through PATCH, so this endpoint never touches
+ * `support_tickets` at all — no status, no priority, no side effect.
+ */
+async function handleReplyPost(req, res, { supabase, kind }) {
+  if (!isTicketKind(kind)) {
+    // Feedback is write-once and has no thread to reply to.
+    return res.status(400).json({ ok: false, error: "Doar tichetele pot primi răspuns." });
+  }
+
+  const payload = parseBody(req);
+  const id = typeof payload.id === "string" ? payload.id.trim() : "";
+  if (!id) return res.status(400).json({ ok: false, error: "id este obligatoriu." });
+
+  // A non-string body is refused before trimming: String(42) would turn a mistake into a
+  // message, and Number-ish coercion has caused enough trouble in this codebase already.
+  const body = typeof payload.body === "string" ? payload.body.trim() : "";
+  if (!body) return res.status(400).json({ ok: false, error: "Mesajul nu poate fi gol." });
+  if (body.length > MAX_REPLY_LENGTH) {
+    return res
+      .status(400)
+      .json({ ok: false, error: `Mesajul depășește ${MAX_REPLY_LENGTH} de caractere.` });
+  }
+
+  // Identity AND category in the lookup itself — never a global fetch followed by a check.
+  const { data: tickets, error: lookupError } = await scopeToKind(
+    supabase.from("support_tickets").select("id, status").eq("id", id),
+    kind
+  );
+  if (lookupError) throw lookupError;
+  const ticket = tickets?.[0] || null;
+  if (!ticket) return res.status(404).json({ ok: false, error: "Tichetul nu a fost găsit." });
+
+  if (ticket.status === "closed") {
+    // The same words handleSupportReply gives a user. One vocabulary, one rule.
+    return res.status(409).json({ ok: false, error: "Tichetul este închis." });
+  }
+
+  // Exactly four fields. `author_role` and `is_internal_note` are literals, never client
+  // input — the same discipline supportApi.js applies on the user's side — and `ticket_id`
+  // comes from the row the scoped lookup returned, not from the request. `created_at` is
+  // left to the column default, so the database owns the clock.
+  const { data: message, error } = await supabase
+    .from("support_messages")
+    .insert({
+      ticket_id: ticket.id,
+      author_role: "admin",
+      body,
+      is_internal_note: false
+    })
+    .select("id, ticket_id, author_role, body, is_internal_note, created_at")
+    .single();
+  if (error) throw error;
+
+  return res.status(201).json({ ok: true, kind, item: message });
+}
+
+/**
  * GET   /api/admin?view=inbox&kind=support|report|feedback&limit=&offset=
+ * POST  /api/admin?view=inbox&kind=support|report   body: { id, body }
  * PATCH /api/admin?view=inbox&kind=support|report   body: { id, status }
  *
  * Order is the contract: method, configuration, THEN authorisation, and only after that is
@@ -323,7 +401,7 @@ export async function handleAdminInbox(req, res, deps = {}) {
   // GET reads, PATCH sets a ticket's status. Nothing else: POST would mean creating a
   // ticket on a user's behalf and DELETE would mean destroying their message, and neither
   // is something an inbox should be able to do.
-  if (method !== "GET" && method !== "PATCH") {
+  if (method !== "GET" && method !== "POST" && method !== "PATCH") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
@@ -346,6 +424,7 @@ export async function handleAdminInbox(req, res, deps = {}) {
   try {
     const supabase = client();
 
+    if (method === "POST") return await handleReplyPost(req, res, { supabase, kind });
     if (method === "PATCH") return await handleStatusPatch(req, res, { supabase, kind });
 
     const items =

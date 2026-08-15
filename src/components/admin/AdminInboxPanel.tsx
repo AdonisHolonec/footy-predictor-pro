@@ -6,12 +6,15 @@ import EmptyState from "../../design-system/EmptyState";
 import ErrorState from "../../design-system/ErrorState";
 import Skeleton from "../../design-system/Skeleton";
 import Select from "../../design-system/Select";
+import Textarea from "../../design-system/Textarea";
 import {
   AdminInboxError,
   INBOX_PAGE_SIZE,
+  MAX_REPLY_LENGTH,
   TICKET_STATUSES,
   fetchInboxPage,
   isInboxTicket,
+  replyToTicket,
   updateTicketStatus,
   type InboxItem,
   type InboxKind,
@@ -83,6 +86,10 @@ export default function AdminInboxPanel() {
   /** The ticket whose status is in flight — one at a time, so the control can disable itself. */
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Draft text per ticket, so switching rows does not lose what was typed. */
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const load = useCallback(async (nextKind: InboxKind, nextOffset: number, append: boolean) => {
     if (append) setLoadingMore(true);
@@ -145,9 +152,55 @@ export default function AdminInboxPanel() {
     []
   );
 
+  /**
+   * Send a reply, then show what the server stored.
+   *
+   * NOT OPTIMISTIC. The message appended to the thread is the row the database created —
+   * never a locally built stand-in — so what is on screen is what a user will read.
+   */
+  const sendReply = useCallback(
+    async (ticket: InboxTicket) => {
+      const draft = (drafts[ticket.id] || "").trim();
+      if (!draft) return;
+      setSendingId(ticket.id);
+      setSendError(null);
+      try {
+        const message = await replyToTicket({ kind: ticket.kind, id: ticket.id, body: draft });
+        setState((prev) =>
+          prev.phase === "ready"
+            ? {
+                ...prev,
+                items: prev.items.map((item) =>
+                  item.id === ticket.id && isInboxTicket(item)
+                    ? { ...item, messages: [...item.messages, message] }
+                    : item
+                )
+              }
+            : prev
+        );
+        setDrafts((prev) => ({ ...prev, [ticket.id]: "" }));
+      } catch (error) {
+        const httpStatus = error instanceof AdminInboxError ? error.status : 0;
+        setSendError(
+          httpStatus === 401 || httpStatus === 403
+            ? "Admin access is required to reply."
+            : httpStatus === 409
+              ? "This ticket is closed and cannot receive a reply."
+              : httpStatus === 404
+                ? "That ticket no longer matches this list."
+                : "The reply could not be sent."
+        );
+      } finally {
+        setSendingId(null);
+      }
+    },
+    [drafts]
+  );
+
   useEffect(() => {
     setExpandedId(null);
     setSaveError(null);
+    setSendError(null);
     void load(kind, 0, false);
   }, [kind, load]);
 
@@ -156,8 +209,8 @@ export default function AdminInboxPanel() {
       <div>
         <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">Inbox</h2>
         <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
-          What users have sent. A ticket's status can be changed; nothing else here can be edited,
-          and feedback is read-only.
+          What users have sent. A ticket's status can be changed and an open ticket can be replied
+          to; nothing else here can be edited, and feedback is read-only.
         </p>
       </div>
 
@@ -191,6 +244,7 @@ export default function AdminInboxPanel() {
 
       {/* A failed save is its own message: the list is still valid, only the write failed. */}
       {saveError && <ErrorState title="Status not saved" message={saveError} />}
+      {sendError && <ErrorState title="Reply not sent" message={sendError} />}
 
       {state.phase === "ready" && state.items.length === 0 && (
         <EmptyState title="Nothing here yet" description="No messages of this kind have been submitted." />
@@ -279,6 +333,41 @@ export default function AdminInboxPanel() {
                             </li>
                           ))}
                         </ul>
+                        {/* Closed is final for both sides: handleSupportReply refuses a
+                            user's reply on a closed ticket, and the server refuses ours the
+                            same way. So there is no composer here at all — a disabled Send
+                            would advertise a reply that cannot happen. Reopening is an
+                            explicit status change above. */}
+                        {ticket.status === "closed" ? (
+                          <p className="text-[11px] text-[var(--fp-text-muted)]">
+                            This ticket is closed. Change its status to reply.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            <Textarea
+                              label="Reply"
+                              rows={3}
+                              maxLength={MAX_REPLY_LENGTH}
+                              value={drafts[ticket.id] || ""}
+                              disabled={sendingId === ticket.id}
+                              onChange={(event) =>
+                                setDrafts((prev) => ({ ...prev, [ticket.id]: event.target.value }))
+                              }
+                            />
+                            <div className="flex items-center gap-3">
+                              <Button
+                                size="sm"
+                                disabled={sendingId === ticket.id || !(drafts[ticket.id] || "").trim()}
+                                onClick={() => void sendReply(ticket)}
+                              >
+                                {sendingId === ticket.id ? "Sending…" : "Send reply"}
+                              </Button>
+                              <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">
+                                {(drafts[ticket.id] || "").length}/{MAX_REPLY_LENGTH}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         {(ticket.page_route || ticket.app_version) && (
                           <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
                             {ticket.page_route ? `route ${ticket.page_route}` : ""}
