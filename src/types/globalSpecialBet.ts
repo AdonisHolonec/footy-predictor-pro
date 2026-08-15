@@ -27,6 +27,22 @@ export const SYSTEM_K_VALUES = [3, 4, 5] as const;
 export type SystemK = (typeof SYSTEM_K_VALUES)[number];
 
 /**
+ * Which product a stored bet is — the discriminator, and the only one.
+ *
+ * `variant` cannot answer this: a Combo 5 and all three Systems carry variant 5,
+ * so a row read on variant alone is four different tickets wearing one label.
+ * The pair (bet_kind, system_k) is the contract migration 052 introduced and 054
+ * narrowed, and it is what the UI has to branch on.
+ *
+ * Not optional. The column carries `default 'combo'`, so every row ever written
+ * — including every row from before 052 — reads back with a kind. A missing
+ * value would mean the API stopped returning the column, which is a bug rather
+ * than a state to model.
+ */
+export const GLOBAL_SPECIAL_BET_KINDS = ["combo", "system"] as const;
+export type GlobalSpecialBetKind = (typeof GLOBAL_SPECIAL_BET_KINDS)[number];
+
+/**
  * What happened to a settled ticket, as a fact rather than a feeling.
  *
  * The distinction that forces this type to exist: for a combo, WON implies the
@@ -108,7 +124,20 @@ export type GlobalSpecialBetRow = {
   league_ids: number[];
   league_scope: string;
   variant: number;
+  /** combo, or system — see GLOBAL_SPECIAL_BET_KINDS. Never inferred from `variant`. */
+  bet_kind: GlobalSpecialBetKind;
+  /** How many of the five legs must win. NULL for every combo, by constraint. */
+  system_k: SystemK | null;
   status: GlobalSpecialBetStatus;
+  /**
+   * The product of every leg's odds.
+   *
+   * For a combo this IS the ticket price: win all the legs and this is what
+   * comes back. For a system it is NOT — it is the return of the single
+   * all-legs combination, one of C(5, k), and presenting it as the ticket's
+   * price would overstate a 3/5 by an order of magnitude. What a system
+   * actually returned is `settled_total_odds`, computed at settlement.
+   */
   total_odds: number;
   average_confidence: number;
   model_version: string | null;

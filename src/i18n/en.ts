@@ -846,6 +846,15 @@ export const en: Dict = {
     summarySelections: "Selections",
     summaryTotalOdds: "Total odds",
     summarySettledOdds: "Settled odds",
+    // A ticket's shape. Variant alone cannot name it: a Combo 5 and Systems 3/5,
+    // 4/5 and 5/5 all carry variant 5.
+    shapeCombo: "Combo · {n} selections",
+    shapeSystem: "System {k}/{n}",
+    summaryCombinations: "Combinations",
+    // For a system, the product of the odds is the return of the ALL-legs
+    // combination — one of C(n,k) — not the price of the ticket. Named for what
+    // it is so it cannot be read as a payout.
+    summaryAllLegsOdds: "All-{n} odds",
     summaryAvgConfidence: "Average confidence",
     summaryStatus: "Status",
     summaryCreated: "Created",

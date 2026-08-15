@@ -2,6 +2,7 @@ import { fetchWithAuth } from "../utils/apiAuth";
 import type {
   GlobalSpecialBet,
   GlobalSpecialBetGenerateResult,
+  GlobalSpecialBetKind,
   GlobalSpecialBetSelection
 } from "../types/globalSpecialBet";
 
@@ -119,12 +120,16 @@ export async function generateGlobalSpecialBet(params: {
  */
 export async function listGlobalSpecialBets(params?: {
   variant?: number;
+  /** Narrow to one product. Omitted returns every kind — the existing behaviour. */
+  kind?: GlobalSpecialBetKind;
   betDate?: string;
   limit?: number;
   offset?: number;
 }): Promise<GlobalSpecialBet[]> {
   const qs = new URLSearchParams();
   if (params?.variant != null) qs.set("variant", String(params.variant));
+  // Variant cannot stand in for kind — Combo 5 and Systems 3/5, 4/5 and 5/5 share it.
+  if (params?.kind) qs.set("kind", params.kind);
   if (params?.betDate) qs.set("bet_date", params.betDate);
   if (params?.limit != null) qs.set("limit", String(params.limit));
   if (params?.offset != null) qs.set("offset", String(params.offset));

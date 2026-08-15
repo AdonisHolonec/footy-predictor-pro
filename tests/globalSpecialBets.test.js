@@ -4,6 +4,7 @@ import {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   isValidBetDate,
+  isValidBetKind,
   isValidVariant,
   listGlobalSpecialBets,
   loadCandidatePayloads,
@@ -740,4 +741,62 @@ test("GET returns stored probability fields verbatim; legacy nulls survive unhar
   // Pre-050 rows read back exactly as stored: null, never a retro-invented value.
   assert.equal(legacy.ticket_probability, null);
   assert.equal(legacy.selections[0].probability, null);
+});
+
+// ── history: kind is the discriminator, variant is not ────────────────────
+//
+// A Combo 5 and Systems 3/5, 4/5 and 5/5 all carry variant 5. Filtering a history
+// on variant alone therefore returns four different products under one heading —
+// same day, same five legs, four rows that look identical.
+
+test("only combo and system are valid kinds", () => {
+  assert.equal(isValidBetKind("combo"), true);
+  assert.equal(isValidBetKind("system"), true);
+  for (const bad of ["", "COMBO", "sistem", "combi", null, undefined, 5]) {
+    assert.equal(isValidBetKind(bad), false, `${String(bad)} must be refused`);
+  }
+});
+
+test("the history query filters on bet_kind alongside variant, not instead of it", async () => {
+  const supabase = fakeSupabase({ bets: [], selections: [] });
+  await listGlobalSpecialBets({ userId: USER, variant: 5, betKind: "system", supabase });
+
+  const filters = supabase.calls.filters.filter((f) => f.col);
+  assert.ok(
+    filters.some((f) => f.col === "bet_kind" && f.val === "system"),
+    `expected a bet_kind filter, got ${JSON.stringify(filters)}`
+  );
+  assert.ok(
+    filters.some((f) => f.col === "variant" && f.val === 5),
+    "variant must still narrow the query"
+  );
+});
+
+test("asking for combos cannot return systems, and vice versa", async () => {
+  for (const kind of ["combo", "system"]) {
+    const supabase = fakeSupabase({ bets: [], selections: [] });
+    await listGlobalSpecialBets({ userId: USER, betKind: kind, supabase });
+    assert.ok(
+      supabase.calls.filters.some((f) => f.col === "bet_kind" && f.val === kind),
+      `${kind} must reach the query as its own filter`
+    );
+  }
+});
+
+test("omitting the kind lists every product, exactly as before", async () => {
+  // The parameter is inert unless asked for: existing callers keep their behaviour.
+  const supabase = fakeSupabase({ bets: [], selections: [] });
+  await listGlobalSpecialBets({ userId: USER, supabase });
+  assert.equal(
+    supabase.calls.filters.filter((f) => f.col === "bet_kind").length,
+    0,
+    "no kind filter when none was requested"
+  );
+});
+
+test("an empty kind is treated as absent rather than as a value", async () => {
+  // A query string carries "" for an omitted field, and "" is not a product.
+  const supabase = fakeSupabase({ bets: [], selections: [] });
+  await listGlobalSpecialBets({ userId: USER, betKind: "", supabase });
+  assert.equal(supabase.calls.filters.filter((f) => f.col === "bet_kind").length, 0);
 });

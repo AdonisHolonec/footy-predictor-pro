@@ -20,6 +20,7 @@ import {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   isValidBetDate,
+  isValidBetKind,
   isValidVariant,
   listGlobalSpecialBets
 } from "./globalSpecialBets.js";
@@ -85,16 +86,23 @@ async function handlePost(req, res, userId) {
 }
 
 async function handleGet(req, res, userId) {
-  const { variant, bet_date: betDate, limit, offset } = req.query || {};
+  const { variant, kind, bet_date: betDate, limit, offset } = req.query || {};
 
   if (variant !== undefined && variant !== "" && !isValidVariant(variant)) {
     return res.status(400).json({ ok: false, error: "variant invalid (permise: 3, 5, 8)." });
+  }
+  // READ-ONLY NARROWING. `kind` chooses which product to list. It cannot ask for one to
+  // be built — no route accepts a k, and nothing here calls the system builder — so this
+  // is not an entry point for System. Omitted, the behaviour is exactly what it was:
+  // every kind, newest first.
+  if (kind !== undefined && kind !== "" && !isValidBetKind(kind)) {
+    return res.status(400).json({ ok: false, error: "kind invalid (permise: combo, system)." });
   }
   if (betDate && !isValidBetDate(betDate)) {
     return res.status(400).json({ ok: false, error: "bet_date invalid (aşteptat YYYY-MM-DD)." });
   }
 
-  const { bets } = await listGlobalSpecialBets({ userId, variant, betDate, limit, offset });
+  const { bets } = await listGlobalSpecialBets({ userId, variant, betKind: kind, betDate, limit, offset });
   return res.status(200).json({ ok: true, bets });
 }
 

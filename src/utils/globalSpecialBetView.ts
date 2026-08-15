@@ -123,6 +123,44 @@ export function describeTicketOutcome(
   return shape("won_below_stake", settled, "gsb.outcomeReturn", "warning", "gsb.outcomeBelowStakeNote");
 }
 
+/**
+ * What KIND of ticket this is, as a translatable label.
+ *
+ * `variant` alone cannot say: a Combo 5 and Systems 3/5, 4/5 and 5/5 all carry
+ * variant 5, so a history that reads the variant shows four different products
+ * under one heading — same day, same five legs, four identical rows. The kind is
+ * the discriminator, and `system_k` is what separates the three Systems.
+ *
+ * `combinationCount` is C(n, k), derived rather than stored: it is a property of
+ * the shape, so recomputing it cannot drift from a persisted copy. Null for a
+ * combo, which has exactly one combination and no need to say so.
+ */
+export function describeTicketShape(
+  bet: Pick<GlobalSpecialBet, "bet_kind" | "system_k" | "variant">
+): { key: string; vars: Record<string, string | number>; combinationCount: number | null } {
+  const n = Number(bet?.variant);
+  // Absent BEFORE coercion, as everywhere else in this file: `Number(null)` is 0
+  // and 0 is finite, so coercing first would render a system with no k as "0/5"
+  // — a shape that does not exist, printed with total confidence.
+  const rawK: unknown = bet?.system_k;
+  const k = rawK === null || rawK === undefined || rawK === "" ? null : Number(rawK);
+  // Anything that is not an explicit system reads as a combo: the column defaults
+  // to 'combo', so an unrecognised value means a shape we do not sell, and the
+  // safe reading of an unknown shape is the one that promises least.
+  if (bet?.bet_kind !== "system" || k === null || !Number.isFinite(k) || !Number.isFinite(n)) {
+    return { key: "gsb.shapeCombo", vars: { n: Number.isFinite(n) ? n : 0 }, combinationCount: null };
+  }
+  return { key: "gsb.shapeSystem", vars: { k, n }, combinationCount: binomial(n, k) };
+}
+
+/** C(n, k) for the small n this product uses. Exact in integers, no factorials to overflow. */
+function binomial(n: number, k: number): number {
+  if (k < 0 || k > n) return 0;
+  let out = 1;
+  for (let i = 1; i <= Math.min(k, n - k); i += 1) out = (out * (n - i + 1)) / i;
+  return Math.round(out);
+}
+
 /** Net result as a signed whole percentage: 3.2 -> "+220%", 0.8 -> "-20%". */
 function formatNetPercent(returnMultiple: number): string {
   const pct = Math.round((returnMultiple - 1) * 100);
