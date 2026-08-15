@@ -178,8 +178,22 @@ const reset = () => psql("truncate table public.special_bets cascade; truncate t
 
 before(() => {
   psql(fs.readFileSync("tests/integration/bootstrap.auth.sql", "utf8"));
-  psql(fs.readFileSync("supabase/migrations/043_global_special_bets.sql", "utf8"));
-  psql(fs.readFileSync("supabase/migrations/044_global_special_bet_settlement.sql", "utf8"));
+  // Every migration that touches special_bets, not just the two that created it.
+  // The suite had been running against a schema frozen at 044, which only held
+  // because no code path selected a column added later; the settlement query now
+  // reads bet_kind and system_k, and a stale schema would have hidden that.
+  //
+  // 049 is deliberately absent: it alters predictions_history, which this suite
+  // replaces with the cut-down stand-in created below.
+  for (const migration of [
+    "043_global_special_bets.sql",
+    "044_global_special_bet_settlement.sql",
+    "048_special_bet_selection_labels.sql",
+    "050_gsb_probability_snapshot.sql",
+    "052_gsb_system_tickets.sql"
+  ]) {
+    psql(fs.readFileSync(`supabase/migrations/${migration}`, "utf8"));
+  }
   psql(`insert into auth.users (id, email) values ('${USER_A}', 'a@test.local') on conflict (id) do nothing;`);
   // Minimal stand-in for the table settlement reads fixture state from.
   psql(`create table if not exists public.predictions_history (
