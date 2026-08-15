@@ -17,6 +17,54 @@ export const GLOBAL_SPECIAL_BET_VARIANTS = [3, 5, 8] as const;
 export type GlobalSpecialBetVariant = (typeof GLOBAL_SPECIAL_BET_VARIANTS)[number];
 
 /**
+ * A System ticket is exactly five selections of which k must win — 3/5, 4/5 or
+ * 5/5, and nothing else. Mirrors the server contract in
+ * server-utils/globalSpecialBetEngine.js, the same way the variants above mirror
+ * GLOBAL_SPECIAL_BET_VARIANTS.
+ */
+export const SYSTEM_SELECTION_COUNT = 5;
+export const SYSTEM_K_VALUES = [3, 4, 5] as const;
+export type SystemK = (typeof SYSTEM_K_VALUES)[number];
+
+/**
+ * What happened to a settled ticket, as a fact rather than a feeling.
+ *
+ * The distinction that forces this type to exist: for a combo, WON implies the
+ * ticket returned more than it cost — every leg's odds exceed 1, so the product
+ * does too. For a System it does NOT. A 3/5 with exactly three winners at 2.00
+ * returns 0.80 for every 1.00 staked: won, and down twenty percent. The status
+ * alone can no longer answer "did I make money", so the kinds below split WON by
+ * what actually came back.
+ */
+export type TicketOutcomeKind =
+  | "pending"
+  | "void"
+  | "lost"
+  | "won_above_stake"
+  | "won_at_stake"
+  | "won_below_stake"
+  | "won_return_unknown";
+
+export type TicketOutcome = {
+  kind: TicketOutcomeKind;
+  status: GlobalSpecialBetStatus;
+  /** Gross return per unit of total stake. Null only when there is no answer yet. */
+  returnMultiple: number | null;
+  /** returnMultiple − 1, as a fraction of stake. Negative is a loss. Null when unsettled. */
+  netFraction: number | null;
+  /** True ONLY when more came back than went in. A won ticket can be false here. */
+  profitable: boolean;
+  /** The status word, via the existing gsb.status* keys. */
+  labelKey: string;
+  /** One factual sentence about the return. */
+  detailKey: string;
+  /** Extra line shown only when a won ticket returned less than its stake. */
+  warningKey: string | null;
+  vars: Record<string, string | number>;
+  tone: "success" | "danger" | "warning" | "neutral";
+};
+
+/**
  * One leg of the accumulator, exactly as stored in `special_bet_selections`.
  *
  * Since migration 048 the snapshot carries the names it was built from as well

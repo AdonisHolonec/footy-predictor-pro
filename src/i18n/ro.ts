@@ -914,7 +914,15 @@ export const ro: Dict = {
     // Biletul în desfășurare: ce urmează și ce se joacă chiar acum.
     nextLeg: "Urmează {label} · {time}",
     allUnderway: "Toate meciurile rămase au început",
-    legUnderway: "Se joacă acum"
+    legUnderway: "Se joacă acum",
+    // Ce a returnat un bilet decontat. Factual, și niciodată formulat ca profit:
+    // un System poate câștiga și totuși să întoarcă mai puțin decât miza.
+    outcomeReturn: "A returnat {multiple}× din miză · net {net}",
+    outcomeBelowStakeNote: "Returnarea este sub miză",
+    outcomeNoReturn: "Fără returnare",
+    outcomeVoidReturn: "Miza returnată integral",
+    outcomeReturnUnknown: "Returnarea nu a fost înregistrată",
+    outcomePending: "Încă nedecontat"
   },
   // Trei suprafețe separate, intenționat: rezolvarea unei probleme, îmbunătățirea
   // produsului și semnalarea unei predicții sunt cereri diferite și se citesc altfel.

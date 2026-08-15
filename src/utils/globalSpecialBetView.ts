@@ -11,7 +11,9 @@ import type { MarketFamilyKey } from "./formatRecommendation";
 import type {
   GlobalSpecialBet,
   GlobalSpecialBetSelection,
-  GlobalSpecialBetStatus
+  GlobalSpecialBetStatus,
+  TicketOutcome,
+  TicketOutcomeKind
 } from "../types/globalSpecialBet";
 
 /** Rows the app already holds; enough to name a fixture the snapshot only numbers. */
@@ -44,6 +46,87 @@ const STATUS_KEY: Record<GlobalSpecialBetStatus, string> = {
 /** The four statuses the API can return. Anything else is data we do not model. */
 export function isGlobalSpecialBetStatus(value: unknown): value is GlobalSpecialBetStatus {
   return value === "pending" || value === "won" || value === "lost" || value === "void";
+}
+
+/**
+ * What a settled ticket actually returned — the single place that decides it.
+ *
+ * WON NO LONGER IMPLIES PROFIT. For a combo it did: every leg is priced above
+ * 1.00, so winning all of them always returns more than the stake. A System
+ * breaks that. A 3/5 whose three winners are each at 2.00 pays one combination
+ * out of ten, which is 0.80 back for every 1.00 staked — the ticket won and the
+ * punter is down twenty percent. The status is still WON and must stay WON; what
+ * changes is that the status alone can no longer answer "did I make money", so
+ * that question is answered here instead, once, by a number.
+ *
+ * Three values are kept strictly apart because they are routinely confused:
+ *   · ticket probability — the model's chance the ticket wins, e.g. 0.83692.
+ *     NOT a confidence, and never shown as one.
+ *   · return multiple — gross return per unit staked, e.g. 0.80×. NOT a profit.
+ *   · net fraction — return minus stake, e.g. −20%. This is the profit or loss.
+ *
+ * A LOST ticket is given a return of 0 rather than null: the database stores
+ * null there, but "lost" is a definite answer and a definite answer means the
+ * return is definitely nothing. PENDING keeps null, because there the number is
+ * genuinely unknown — the same null-means-unknown discipline used everywhere
+ * else in this file.
+ *
+ * The copy is factual and carries no marketing: the caller renders `labelKey`
+ * for the status word, `detailKey` for the return, and `warningKey` only when a
+ * win came back short. Nothing here implies profit for a ticket that made none.
+ */
+export function describeTicketOutcome(
+  bet: Pick<GlobalSpecialBet, "status" | "settled_total_odds">
+): TicketOutcome {
+  const status: GlobalSpecialBetStatus = isGlobalSpecialBetStatus(bet?.status) ? bet.status : "pending";
+  // Read as unknown, not as the declared number: PostgREST hands numeric columns
+  // back as strings often enough that the empty string has to be rejected before
+  // Number() sees it — `Number("")` is 0, and a 0 here would read as "returned
+  // nothing", which is a very different answer from "no figure was stored".
+  const raw: unknown = bet?.settled_total_odds;
+  const parsed = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+  const settled = parsed !== null && Number.isFinite(parsed) ? parsed : null;
+
+  const shape = (
+    kind: TicketOutcomeKind,
+    returnMultiple: number | null,
+    detailKey: string,
+    tone: TicketOutcome["tone"],
+    warningKey: string | null = null
+  ): TicketOutcome => ({
+    kind,
+    status,
+    returnMultiple,
+    netFraction: returnMultiple === null ? null : Number((returnMultiple - 1).toFixed(4)),
+    profitable: returnMultiple !== null && returnMultiple > 1,
+    labelKey: statusLabelKey(status),
+    detailKey,
+    warningKey,
+    vars:
+      returnMultiple === null
+        ? {}
+        : { multiple: returnMultiple.toFixed(2), net: formatNetPercent(returnMultiple) },
+    tone
+  });
+
+  if (status === "pending") return shape("pending", null, "gsb.outcomePending", "warning");
+  // Every leg voided: each combination returned its own stake, so the ticket
+  // returned exactly what it cost.
+  if (status === "void") return shape("void", 1, "gsb.outcomeVoidReturn", "neutral");
+  if (status === "lost") return shape("lost", 0, "gsb.outcomeNoReturn", "danger");
+
+  // Won, but a legacy row may carry no settled figure at all. Say so instead of
+  // rendering a confident zero.
+  if (settled === null) return shape("won_return_unknown", null, "gsb.outcomeReturnUnknown", "neutral");
+  if (settled > 1) return shape("won_above_stake", settled, "gsb.outcomeReturn", "success");
+  if (settled === 1) return shape("won_at_stake", settled, "gsb.outcomeReturn", "neutral");
+  return shape("won_below_stake", settled, "gsb.outcomeReturn", "warning", "gsb.outcomeBelowStakeNote");
+}
+
+/** Net result as a signed whole percentage: 3.2 -> "+220%", 0.8 -> "-20%". */
+function formatNetPercent(returnMultiple: number): string {
+  const pct = Math.round((returnMultiple - 1) * 100);
+  return `${pct > 0 ? "+" : ""}${pct}%`;
 }
 
 export function statusTone(status: string): "success" | "danger" | "warning" | "neutral" {
