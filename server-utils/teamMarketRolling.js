@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { clampLambda } from "./math.js";
+import { cardsFromCounts } from "./fixtureCardTotals.js";
 
 const TABLE = "team_market_rolling";
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -76,20 +77,35 @@ export function extractFixtureMarketStats(fixtureStatsPayload) {
 /**
  * Agregă o listă de fixturi (cu statistici atașate) în medii rolling pentru o echipă specifică.
  * Fiecare element `match` are forma:
- *   { fixtureId, date, isHome, teamStats: {corners, sot, shotsTotal}, opponentStats: {corners, sot, shotsTotal} }
+ *   { fixtureId, date, isHome,
+ *     teamStats: {corners, sot, shotsTotal, yellowCards, redCards},
+ *     opponentStats: {corners, sot, shotsTotal, yellowCards, redCards} }
  *
- * @returns {{ matches_sampled: number, corners_for_avg: number|null, corners_against_avg: number|null,
+ * Cards: `cards_*_avg` sunt în NUMĂR BRUT de cartonaşe (cardsTotal = yellow + red), aceeaşi
+ * unitate pe care settlement-ul o înregistrează ca marketResults.cardsTotal. Convenţia
+ * ponderată (red*2 + yellow) trăieşte separat în `cards_points_*_avg`, in-memory.
+ *
+ * @returns {{ matches_sampled: number,
+ *             samples_by_market: { corners: number, cards: number, cards_home: number,
+ *                                  cards_away: number, sot: number, shots_total: number },
+ *             corners_for_avg: number|null, corners_against_avg: number|null,
  *             corners_for_home_avg: number|null, corners_against_home_avg: number|null,
  *             corners_for_away_avg: number|null, corners_against_away_avg: number|null,
  *             sot_for_avg: number|null, sot_against_avg: number|null,
  *             shots_total_for_avg: number|null, shots_total_against_avg: number|null,
+ *             cards_for_avg: number|null, cards_against_avg: number|null,
+ *             cards_for_home_avg: number|null, cards_against_home_avg: number|null,
+ *             cards_for_away_avg: number|null, cards_against_away_avg: number|null,
+ *             cards_points_for_avg: number|null, cards_points_against_avg: number|null,
+ *             cards_points_for_home_avg: number|null, cards_points_against_home_avg: number|null,
+ *             cards_points_for_away_avg: number|null, cards_points_against_away_avg: number|null,
  *             last_fixture_id: number|null, last_fixture_date: string|null }}
  */
 export function aggregateRollingForTeam(matches) {
   if (!Array.isArray(matches) || matches.length === 0) {
     return {
       matches_sampled: 0,
-      samples_by_market: { corners: 0, cards: 0, sot: 0, shots_total: 0 },
+      samples_by_market: { corners: 0, cards: 0, cards_home: 0, cards_away: 0, sot: 0, shots_total: 0 },
       corners_for_avg: null,
       corners_against_avg: null,
       corners_for_home_avg: null,
@@ -106,6 +122,12 @@ export function aggregateRollingForTeam(matches) {
       cards_against_home_avg: null,
       cards_for_away_avg: null,
       cards_against_away_avg: null,
+      cards_points_for_avg: null,
+      cards_points_against_avg: null,
+      cards_points_for_home_avg: null,
+      cards_points_against_home_avg: null,
+      cards_points_for_away_avg: null,
+      cards_points_against_away_avg: null,
       last_fixture_id: null,
       last_fixture_date: null
     };
@@ -127,20 +149,35 @@ export function aggregateRollingForTeam(matches) {
     cards_for_home: [],
     cards_against_home: [],
     cards_for_away: [],
-    cards_against_away: []
+    cards_against_away: [],
+    cards_points_for: [],
+    cards_points_against: [],
+    cards_points_for_home: [],
+    cards_points_against_home: [],
+    cards_points_for_away: [],
+    cards_points_against_away: []
   };
 
   let lastFixtureId = null;
   let lastFixtureDate = null;
 
-  // Cards use a "weighted points" convention (red=2, yellow=1), not a raw card count —
-  // matches the same convention documented on team_market_rolling.cards_for_avg.
-  const cardsPoints = (stats) => {
-    const y = Number(stats?.yellowCards);
-    const r = Number(stats?.redCards);
-    if (!Number.isFinite(y) || !Number.isFinite(r)) return null;
-    return r * 2 + y;
-  };
+  // UNIT: the cards rolling is built on cardsTotal — the RAW CARD COUNT (yellow + red) —
+  // the same unit the settlement path records as marketResults.cardsTotal. The weighted
+  // "points" convention (red*2 + yellow) is computed alongside it, into separate
+  // cards_points_* fields, and never mixed in: which of the two the bookmaker's line
+  // actually refers to is an open question, answered empirically later, and a rolling
+  // average is worthless if you cannot say what it counts.
+  //
+  // The known/unknown decision is delegated to cardsFromCounts so it is made in exactly
+  // one place, shared with the settlement path. It has to happen BEFORE any Number()
+  // coercion: this guard used to read `Number(stats?.yellowCards)` first, and because
+  // `Number(null) === 0` is finite, a statistics block with every value null — the
+  // payload API-Football returns for uncovered fixtures, the same one that poisoned the
+  // corners averages in #65 — passed the guard as a phantom 0-card match and dragged the
+  // rolling average toward zero. The `push` helper below cannot catch it either: by then
+  // the value is a legitimate-looking 0, not a null. Corners never had this hole because
+  // readStat hands them a real null straight through.
+  const cardsOf = (stats) => cardsFromCounts(stats?.yellowCards, stats?.redCards);
 
   for (const m of matches) {
     const teamStats = m?.teamStats || {};
@@ -151,25 +188,36 @@ export function aggregateRollingForTeam(matches) {
       if (v != null && Number.isFinite(Number(v))) arr.push(Number(v));
     };
 
+    // One resolution per side per match: an UNKNOWN side yields null for BOTH units, so
+    // count and points can never disagree about which matches were observed.
+    const teamCards = cardsOf(teamStats);
+    const oppCards = cardsOf(oppStats);
+
     push(bag.corners_for, teamStats.corners);
     push(bag.corners_against, oppStats.corners);
     push(bag.sot_for, teamStats.sot);
     push(bag.sot_against, oppStats.sot);
     push(bag.shots_total_for, teamStats.shotsTotal);
     push(bag.shots_total_against, oppStats.shotsTotal);
-    push(bag.cards_for, cardsPoints(teamStats));
-    push(bag.cards_against, cardsPoints(oppStats));
+    push(bag.cards_for, teamCards?.count ?? null);
+    push(bag.cards_against, oppCards?.count ?? null);
+    push(bag.cards_points_for, teamCards?.points ?? null);
+    push(bag.cards_points_against, oppCards?.points ?? null);
 
     if (isHome) {
       push(bag.corners_for_home, teamStats.corners);
       push(bag.corners_against_home, oppStats.corners);
-      push(bag.cards_for_home, cardsPoints(teamStats));
-      push(bag.cards_against_home, cardsPoints(oppStats));
+      push(bag.cards_for_home, teamCards?.count ?? null);
+      push(bag.cards_against_home, oppCards?.count ?? null);
+      push(bag.cards_points_for_home, teamCards?.points ?? null);
+      push(bag.cards_points_against_home, oppCards?.points ?? null);
     } else {
       push(bag.corners_for_away, teamStats.corners);
       push(bag.corners_against_away, oppStats.corners);
-      push(bag.cards_for_away, cardsPoints(teamStats));
-      push(bag.cards_against_away, cardsPoints(oppStats));
+      push(bag.cards_for_away, teamCards?.count ?? null);
+      push(bag.cards_against_away, oppCards?.count ?? null);
+      push(bag.cards_points_for_away, teamCards?.points ?? null);
+      push(bag.cards_points_against_away, oppCards?.points ?? null);
     }
 
     const d = m?.date ? new Date(m.date).getTime() : 0;
@@ -197,6 +245,13 @@ export function aggregateRollingForTeam(matches) {
     samples_by_market: {
       corners: Math.min(bag.corners_for.length, bag.corners_against.length),
       cards: Math.min(bag.cards_for.length, bag.cards_against.length),
+      // Venue-split card samples. A team's cards average can rest almost entirely on one
+      // venue (an away-heavy window in a cup run, say), and the pooled `cards` count hides
+      // that — so the venue averages carry their own sample counts, and whoever consumes
+      // cards_for_home_avg can see how many matches it actually rests on. No sample GATE
+      // is applied here: this increment produces the evidence, it does not set thresholds.
+      cards_home: Math.min(bag.cards_for_home.length, bag.cards_against_home.length),
+      cards_away: Math.min(bag.cards_for_away.length, bag.cards_against_away.length),
       sot: Math.min(bag.sot_for.length, bag.sot_against.length),
       shots_total: Math.min(bag.shots_total_for.length, bag.shots_total_against.length)
     },
@@ -216,6 +271,16 @@ export function aggregateRollingForTeam(matches) {
     cards_against_home_avg: round(avg(bag.cards_against_home)),
     cards_for_away_avg: round(avg(bag.cards_for_away)),
     cards_against_away_avg: round(avg(bag.cards_against_away)),
+    // Weighted-points twin of the six cards_* averages above, over exactly the same
+    // observations. In-memory only — team_market_rolling has no columns for these, and
+    // persistTeamMarketRolling strips them, the same way it strips samples_by_market.
+    // Kept so the count-vs-points question can be answered from one rebuild instead of two.
+    cards_points_for_avg: round(avg(bag.cards_points_for)),
+    cards_points_against_avg: round(avg(bag.cards_points_against)),
+    cards_points_for_home_avg: round(avg(bag.cards_points_for_home)),
+    cards_points_against_home_avg: round(avg(bag.cards_points_against_home)),
+    cards_points_for_away_avg: round(avg(bag.cards_points_for_away)),
+    cards_points_against_away_avg: round(avg(bag.cards_points_against_away)),
     last_fixture_id: lastFixtureId,
     last_fixture_date: lastFixtureDate
   };
@@ -262,12 +327,25 @@ export async function persistTeamMarketRolling(rows) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "Supabase nu este configurat" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
-  // samples_by_market este diagnostic in-memory (nu există coloană în schema
-  // team_market_rolling) — îl eliminăm ca upsert-ul să nu eşueze pe coloană necunoscută.
-  const payload = rows.map(({ samples_by_market: _samples, ...cols }) => ({
-    ...cols,
-    updated_at: new Date().toISOString()
-  }));
+  // Câmpuri exclusiv in-memory (nu există coloane în schema team_market_rolling) — le
+  // eliminăm ca upsert-ul să nu eşueze pe coloană necunoscută. samples_by_market e
+  // diagnostic; cards_points_* sunt unitatea alternativă păstrată pentru analiza care va
+  // decide empiric unitatea corectă, şi ar avea nevoie de propria migrare ca să persiste.
+  const payload = rows.map(
+    ({
+      samples_by_market: _samples,
+      cards_points_for_avg: _cpFor,
+      cards_points_against_avg: _cpAgainst,
+      cards_points_for_home_avg: _cpForHome,
+      cards_points_against_home_avg: _cpAgainstHome,
+      cards_points_for_away_avg: _cpForAway,
+      cards_points_against_away_avg: _cpAgainstAway,
+      ...cols
+    }) => ({
+      ...cols,
+      updated_at: new Date().toISOString()
+    })
+  );
   const { error } = await supabase.from(TABLE).upsert(payload, {
     onConflict: "team_id,league_id,season"
   });

@@ -319,7 +319,9 @@ export function deriveCardMarketPicks(prediction) {
  * @param {{ home: number|null, away: number|null }} opts.score
  * @param {ReturnType<typeof deriveCardMarketPicks>} opts.picks
  * @param {{ cornersTotal?: number|null, shotsOnTargetTotal?: number|null,
- *   shotsTotal?: number|null }} [opts.marketTotals]
+ *   shotsTotal?: number|null, cardsTotal?: number|null, cardsPoints?: number|null }}
+ *   [opts.marketTotals] cardsTotal/cardsPoints are carried for persistence only — no
+ *   market grades against them yet (Cards short-circuits to "pending" above).
  */
 export function settleCardMarkets({ status, score, picks, marketTotals = {} }) {
   const out = {
@@ -384,6 +386,14 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
     // Combined match shots — settles a Recommended from the Shots family. Distinct from
     // shotsOnTargetTotal: the two markets are graded against their own totals.
     shotsTotal: marketTotals?.shotsTotal ?? base.marketResults?.shotsTotal ?? null,
+    // Observed card totals. RECORDED, NOT GRADED AGAINST: resolveRecommendedValidation
+    // still returns "pending" for the Cards family and SETTLEABLE_VALUE_FAMILIES.Cards
+    // stays false, so no selection's outcome depends on these yet. They are captured now
+    // because the observed total is the prerequisite for the settlement, the rolling
+    // averages and the backtest that come later — and it is only readable from the
+    // statistics payload, which is cheapest to take while it is already in hand.
+    cardsTotal: marketTotals?.cardsTotal ?? base.marketResults?.cardsTotal ?? null,
+    cardsPoints: marketTotals?.cardsPoints ?? base.marketResults?.cardsPoints ?? null,
     firstHalfGoals: marketTotals?.firstHalfGoals ?? base.marketResults?.firstHalfGoals ?? null
   };
   const validations = settleCardMarkets({ status: st, score: sc, picks, marketTotals: totals });
@@ -393,6 +403,8 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
     totals.cornersTotal != null ||
     totals.shotsOnTargetTotal != null ||
     totals.shotsTotal != null ||
+    totals.cardsTotal != null ||
+    totals.cardsPoints != null ||
     totals.firstHalfGoals != null
   ) {
     base.marketResults = {

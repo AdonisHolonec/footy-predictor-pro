@@ -2,6 +2,7 @@ import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../server-utils/fetcher.js";
+import { computeCardTotals } from "../server-utils/fixtureCardTotals.js";
 import { resolveFixtureFirstHalfGoals } from "../server-utils/fixtureHalftimeGoals.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
@@ -47,6 +48,8 @@ async function fetchFixtureMarketTotals(fixtureId) {
       cornersTotal: null,
       shotsOnTargetTotal: null,
       shotsTotal: null,
+      cardsTotal: null,
+      cardsPoints: null,
       firstHalfGoals: null,
       ok: false
     };
@@ -62,6 +65,10 @@ async function fetchFixtureMarketTotals(fixtureId) {
   // this payload all along; only the settlement path never picked it up.
   const shotsTotalHome = parseNumericStat(homeStats, ["Total Shots"]);
   const shotsTotalAway = parseNumericStat(awayStats, ["Total Shots"]);
+  // Cards come from the SAME statistics response already fetched above — no extra
+  // provider call. See fixtureCardTotals.js for the known-vs-unknown rule and for why
+  // the raw count and the weighted points are both recorded.
+  const { cardsTotal, cardsPoints } = computeCardTotals(homeStats, awayStats);
 
   let firstHalfGoals = null;
   try {
@@ -81,6 +88,8 @@ async function fetchFixtureMarketTotals(fixtureId) {
     // Both sides required: a half-known total would settle Over/Under lines wrongly.
     shotsTotal:
       shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
+    cardsTotal,
+    cardsPoints,
     firstHalfGoals
   };
 }
@@ -707,6 +716,11 @@ async function handleHistorySync(req, res) {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
           shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
           shotsTotal: raw.marketResults?.shotsTotal ?? null,
+          // Recorded, not yet graded against: Cards still short-circuits to "pending" in
+          // resolveRecommendedValidation. Capturing the observed total is what makes the
+          // later settlement/backtest work possible — it changes no outcome today.
+          cardsTotal: raw.marketResults?.cardsTotal ?? null,
+          cardsPoints: raw.marketResults?.cardsPoints ?? null,
           firstHalfGoals: htKnown ? Number(raw.marketResults.firstHalfGoals) : null
         };
 
@@ -747,6 +761,8 @@ async function handleHistorySync(req, res) {
               cornersTotal: totals.cornersTotal ?? marketTotals.cornersTotal,
               shotsOnTargetTotal: totals.shotsOnTargetTotal ?? marketTotals.shotsOnTargetTotal,
               shotsTotal: totals.shotsTotal ?? marketTotals.shotsTotal,
+              cardsTotal: totals.cardsTotal ?? marketTotals.cardsTotal,
+              cardsPoints: totals.cardsPoints ?? marketTotals.cardsPoints,
               firstHalfGoals: totals.firstHalfGoals ?? marketTotals.firstHalfGoals
             };
           } else if (isRecommendedGap) {
