@@ -29,7 +29,8 @@ import { resolveTrustedAppOrigin } from "../server-utils/publicBaseUrl.js";
  *   /api/admin?view=ml&sub=elo&leagueId=39           → team elo ratings
  *   POST /api/admin?view=ml&action=invalidate-cache  → soft refresh of in-memory caches
  *   POST /api/admin?view=ml&action=train-now&mode=auto-calibration → run auto calib
- *   /api/admin?view=inbox&kind=support|report|feedback → read-only Support/Report/Feedback
+ *   /api/admin?view=inbox&kind=support|report|feedback → Support/Report/Feedback inbox
+ *   PATCH /api/admin?view=inbox&kind=support|report  { id, status } → set a ticket's status
  */
 export default async function handler(req, res) {
   const view = String(req.query.view || "").toLowerCase();

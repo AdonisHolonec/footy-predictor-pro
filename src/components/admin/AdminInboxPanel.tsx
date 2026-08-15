@@ -5,21 +5,26 @@ import Card from "../../design-system/Card";
 import EmptyState from "../../design-system/EmptyState";
 import ErrorState from "../../design-system/ErrorState";
 import Skeleton from "../../design-system/Skeleton";
+import Select from "../../design-system/Select";
 import {
   AdminInboxError,
   INBOX_PAGE_SIZE,
+  TICKET_STATUSES,
   fetchInboxPage,
   isInboxTicket,
+  updateTicketStatus,
   type InboxItem,
-  type InboxKind
+  type InboxKind,
+  type InboxTicket,
+  type TicketStatus
 } from "../../services/adminInboxService";
 
 /**
  * What users have sent us: support requests, prediction/GSB reports, and product feedback.
  *
- * READ ONLY. There is no status control, no reply box and no send button, because this
- * increment deliberately ships none: managing a ticket is a separate change with its own
- * endpoint. Status is displayed as a fact about the row.
+ * ONE CONTROL, ONE COLUMN. A ticket's status can be moved between the five values migration
+ * 051 defines. There is no reply box, no send button, no delete, no priority editing and no
+ * bulk action — and feedback carries no status at all, so its cards have no control either.
  *
  * THE TABS ARE FILTERS, not routes — each is a separate server query for its own kind, and
  * they are separate because the kinds are genuinely different shapes. A support request and
@@ -75,6 +80,9 @@ export default function AdminInboxPanel() {
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** The ticket whose status is in flight — one at a time, so the control can disable itself. */
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = useCallback(async (nextKind: InboxKind, nextOffset: number, append: boolean) => {
     if (append) setLoadingMore(true);
@@ -102,8 +110,44 @@ export default function AdminInboxPanel() {
     }
   }, []);
 
+  /**
+   * Save a status, then show what the server stored.
+   *
+   * NOT OPTIMISTIC. The row is replaced only once the server has confirmed it, and with the
+   * server's own copy rather than the value that was requested — the database is what decides
+   * whether the change happened, and this project has no optimistic-update pattern to follow.
+   */
+  const changeStatus = useCallback(
+    async (ticket: InboxTicket, status: TicketStatus) => {
+      if (status === ticket.status) return;
+      setSavingId(ticket.id);
+      setSaveError(null);
+      try {
+        const saved = await updateTicketStatus({ kind: ticket.kind, id: ticket.id, status });
+        setState((prev) =>
+          prev.phase === "ready"
+            ? { ...prev, items: prev.items.map((item) => (item.id === saved.id ? saved : item)) }
+            : prev
+        );
+      } catch (error) {
+        const httpStatus = error instanceof AdminInboxError ? error.status : 0;
+        setSaveError(
+          httpStatus === 401 || httpStatus === 403
+            ? "Admin access is required to change a status."
+            : httpStatus === 404
+              ? "That ticket no longer matches this list."
+              : "The status could not be saved."
+        );
+      } finally {
+        setSavingId(null);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     setExpandedId(null);
+    setSaveError(null);
     void load(kind, 0, false);
   }, [kind, load]);
 
@@ -112,7 +156,8 @@ export default function AdminInboxPanel() {
       <div>
         <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">Inbox</h2>
         <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
-          What users have sent. Read-only — status is shown as stored and cannot be changed here.
+          What users have sent. A ticket's status can be changed; nothing else here can be edited,
+          and feedback is read-only.
         </p>
       </div>
 
@@ -143,6 +188,9 @@ export default function AdminInboxPanel() {
       )}
 
       {state.phase === "error" && <ErrorState message={state.message} onRetry={() => void load(kind, 0, false)} />}
+
+      {/* A failed save is its own message: the list is still valid, only the write failed. */}
+      {saveError && <ErrorState title="Status not saved" message={saveError} />}
 
       {state.phase === "ready" && state.items.length === 0 && (
         <EmptyState title="Nothing here yet" description="No messages of this kind have been submitted." />
@@ -187,6 +235,23 @@ export default function AdminInboxPanel() {
 
                     {ticket ? (
                       <>
+                        {/* The only control in this panel. Tickets only — feedback has no
+                            status column, so there is nothing here to offer for it. */}
+                        <Select
+                          label="Status"
+                          className="max-w-xs"
+                          value={ticket.status}
+                          disabled={savingId === ticket.id}
+                          options={TICKET_STATUSES.map((value) => ({ value, label: value }))}
+                          onChange={(event) =>
+                            void changeStatus(ticket, event.target.value as TicketStatus)
+                          }
+                        />
+                        {savingId === ticket.id && (
+                          <p className="text-[11px] text-[var(--fp-text-muted)]" role="status">
+                            Saving…
+                          </p>
+                        )}
                         {ticket.context && (
                           <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 font-mono text-[11px]">
                             {Object.entries(ticket.context).map(([key, value]) => (
