@@ -165,7 +165,22 @@ export function computeSettledTotalOdds(selectionStatuses, betStatus) {
  * settled bet produces exactly the same object, which is what makes the cron
  * safe to run twice.
  *
+ * PER-LEG SETTLEMENT IS SHARED. A leg is a leg: settleSelection grades it the
+ * same way whichever kind of ticket it belongs to. Only the aggregation differs,
+ * and the branch is on `bet.bet_kind` alone:
+ *
+ *   combo (or absent)  aggregateBetStatus + computeSettledTotalOdds — untouched
+ *   system             settleTicket({ selections, k: bet.system_k })
+ *
+ * Absent is combo on purpose: every row written before migration 052 carries no
+ * kind, and reading one of those as a system would grade it against a k it never
+ * had. `settled_total_odds` means the same thing on both branches — gross return
+ * per unit staked — so no column changes meaning.
+ *
  * @param {{ bet: object, selections: object[], fixturesById: Map<number, object>, now: number }} params
+ * @returns {{ selections: object[], betStatus: string, settledTotalOdds: number|null,
+ *             selectionChanges: object[], changed: boolean, isTerminal: boolean,
+ *             error?: string }} `error` means nothing may be written for this bet
  */
 export function settleGlobalSpecialBet({ bet, selections, fixturesById, now }) {
   const settledSelections = (selections || []).map((selection) => {
@@ -178,8 +193,39 @@ export function settleGlobalSpecialBet({ bet, selections, fixturesById, now }) {
     return { id: selection.id, odds: Number(selection.odds), status, previousStatus: selection.status };
   });
 
-  const betStatus = aggregateBetStatus(settledSelections.map((s) => s.status));
-  const settledTotalOdds = computeSettledTotalOdds(settledSelections, betStatus);
+  // Which grader answers for the whole ticket. Absent or unrecognised bet_kind
+  // is a COMBO: every row written before migration 052 has no kind at all, and
+  // guessing "system" for one of them would grade it against a k it never had.
+  const isSystem = bet?.bet_kind === "system";
+
+  let betStatus;
+  let settledTotalOdds;
+  if (isSystem) {
+    const outcome = settleTicket({ selections: settledSelections, k: Number(bet?.system_k) });
+    if (!outcome) {
+      // A system row whose shape cannot be settled — a k that is missing, not an
+      // integer, or outside 1..n. Refusing is the only safe answer: writing a
+      // status derived from a k we do not have would be a corrupt settlement,
+      // and leaving it pending keeps it visible for the next run and for the
+      // failure list the caller reports.
+      return {
+        selections: settledSelections,
+        betStatus: BET_STATUS.PENDING,
+        settledTotalOdds: null,
+        selectionChanges: [],
+        changed: false,
+        isTerminal: false,
+        error:
+          `system bet ${bet?.id} has an unsettleable shape ` +
+          `(system_k=${bet?.system_k}, selections=${settledSelections.length})`
+      };
+    }
+    betStatus = outcome.status;
+    settledTotalOdds = outcome.returnMultiple;
+  } else {
+    betStatus = aggregateBetStatus(settledSelections.map((s) => s.status));
+    settledTotalOdds = computeSettledTotalOdds(settledSelections, betStatus);
+  }
 
   const selectionChanges = settledSelections.filter((s) => s.status !== s.previousStatus);
   const betChanged =

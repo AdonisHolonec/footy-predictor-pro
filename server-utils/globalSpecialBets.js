@@ -407,7 +407,11 @@ export async function settlePendingGlobalSpecialBets({
 
   const { data: bets, error } = await supabase
     .from(BETS_TABLE)
-    .select("id, status, settled_total_odds")
+    // bet_kind and system_k decide WHICH grader answers for the ticket. They are
+    // read, never written here: creating a system bet is still refused by
+    // create_global_special_bet (migration 052, `system_not_enabled`). This
+    // layer only has to know how to settle one that already exists.
+    .select("id, status, settled_total_odds, bet_kind, system_k")
     .eq("status", "pending")
     .order("bet_date", { ascending: true })
     .limit(Math.max(1, Math.min(Number(limit) || 200, 1000)));
@@ -444,6 +448,15 @@ export async function settlePendingGlobalSpecialBets({
     }
 
     const settlement = settleGlobalSpecialBet({ bet, selections: betSelections, fixturesById, now });
+    // A ticket the grader refuses to settle — today only a system row whose k is
+    // missing or out of range. It writes nothing and stays pending, but it is
+    // reported rather than counted as "unchanged", because silence here would
+    // hide a corrupt row for as long as the cron keeps running.
+    if (settlement.error) {
+      console.error("[global-special-bet-settlement]", settlement.error);
+      summary.failures.push({ betId: bet.id, error: settlement.error });
+      continue;
+    }
     if (!settlement.changed) {
       summary.unchanged += 1;
       continue;

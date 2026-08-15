@@ -402,11 +402,17 @@ test("[19d] the ticket probability is P(X >= k), not the product", () => {
 
 // ── 20. System cannot reach production ─────────────────────────────────────
 
-test("[20] nothing in the persistence layer can build or store a System ticket", () => {
+test("[20] nothing in the persistence layer can CREATE a System ticket", () => {
   // The database refuses one too (migration 052 returns system_not_enabled,
   // asserted by S16 in tests/integration/gsbSystemFoundation.db.test.js). This
   // is the other half: the server never even asks. A unit test on the engine
   // alone would pass while an unwired capability quietly became reachable.
+  //
+  // Narrowed in the settlement-integration increment: the persistence layer now
+  // READS bet_kind and system_k, because it has to know which grader answers for
+  // a ticket that already exists. What it still must not do is build one or send
+  // one to the RPC — which is the invariant that actually keeps System off the
+  // product.
   const persistence = fs.readFileSync("server-utils/globalSpecialBets.js", "utf8");
   const api = fs.readFileSync("server-utils/globalSpecialBetsApi.js", "utf8");
 
@@ -416,7 +422,11 @@ test("[20] nothing in the persistence layer can build or store a System ticket",
   ]) {
     assert.ok(!source.includes("buildGlobalSystemBets"), `${name} must not build a System ticket`);
     assert.ok(!source.includes("rankSystemCandidates"), `${name} must not use the System ranking`);
-    assert.ok(!source.includes("system_k"), `${name} must not send a k`);
-    assert.ok(!/["']system["']/.test(source), `${name} must not send bet_kind system`);
+    // The RPC parameters are the door into the database. Neither may be sent.
+    assert.ok(!source.includes("p_bet_kind"), `${name} must not send a bet kind to the RPC`);
+    assert.ok(!source.includes("p_system_k"), `${name} must not send a k to the RPC`);
   }
+
+  // The API is untouched by settlement, so it still may not mention a k at all.
+  assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
 });
