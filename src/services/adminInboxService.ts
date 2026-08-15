@@ -19,6 +19,14 @@ export type InboxKind = (typeof INBOX_KINDS)[number];
 export const INBOX_PAGE_SIZE = 20;
 
 /**
+ * The ticket lifecycle, mirroring the CHECK constraint in migration 051 and the server's own
+ * TICKET_STATUSES. The server remains the authority — it revalidates every value — but the
+ * list lives here so the UI can offer exactly these five and never a sixth.
+ */
+export const TICKET_STATUSES = ["open", "in_progress", "waiting_user", "resolved", "closed"] as const;
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+
+/**
  * A ticket's context after the server has narrowed it to known keys and primitives.
  *
  * Values are user-supplied. They are rendered as text and never as markup — see
@@ -41,8 +49,7 @@ export type InboxTicket = {
   user_id: string;
   category: string;
   subject: string;
-  /** open | in_progress | waiting_user | resolved | closed — shown, never set from here. */
-  status: string;
+  status: TicketStatus;
   priority: string;
   contact_requested: boolean;
   page_route: string | null;
@@ -125,4 +132,39 @@ export async function fetchInboxPage(params: {
     items: Array.isArray(json.items) ? (json.items as InboxItem[]) : [],
     hasMore: Boolean(json.hasMore)
   };
+}
+
+/**
+ * Set a ticket's status. The only mutation this client can perform.
+ *
+ * `kind` travels with the request because the server scopes the update by category as well
+ * as by id — a support id sent as a report matches no row and comes back 404 rather than
+ * quietly changing the wrong ticket. Feedback has no status, so its kind is not accepted
+ * here at all.
+ *
+ * Returns the ticket as stored afterwards, so the caller shows what the database holds
+ * rather than what was asked for.
+ */
+export async function updateTicketStatus(params: {
+  kind: "support" | "report";
+  id: string;
+  status: TicketStatus;
+}): Promise<InboxTicket> {
+  const qs = new URLSearchParams({ view: "inbox", kind: params.kind });
+  const res = await fetchWithAuth(`/api/admin?${qs.toString()}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: params.id, status: params.status })
+  });
+
+  let json: { ok?: boolean; error?: string; item?: unknown };
+  try {
+    json = await res.json();
+  } catch {
+    throw new AdminInboxError(res.status, "");
+  }
+  if (!res.ok || json?.ok !== true || !json.item) {
+    throw new AdminInboxError(res.status, String(json?.error || ""));
+  }
+  return json.item as InboxTicket;
 }

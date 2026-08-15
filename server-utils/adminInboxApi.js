@@ -13,9 +13,10 @@
  * database where every client inherits it. Instead the service role reads, and `assertAdmin`
  * decides who may ask. The same shape api/admin.js already uses for profiles.
  *
- * READ ONLY, STRUCTURALLY. Nothing here inserts, updates or deletes. `status` is returned so
- * it can be shown and never so it can be changed; managing it is a later increment and will
- * need its own handler, not a flag on this one.
+ * READS EVERYTHING, WRITES ONE COLUMN. The only mutation this module can perform is setting
+ * `support_tickets.status` to one of the five values migration 051 already allows. It cannot
+ * insert a ticket, delete one, reply to one, or touch feedback — `feedback_entries` has no
+ * status, and PATCH refuses that kind rather than pretending otherwise.
  *
  * THREE KINDS, TWO TABLES:
  *
@@ -47,8 +48,48 @@ export const REPORT_CATEGORIES = ["prediction", "gsb"];
 export const INBOX_DEFAULT_LIMIT = 20;
 export const INBOX_MAX_LIMIT = 50;
 
+/**
+ * The ticket lifecycle, copied from the CHECK constraint in migration 051 and from nowhere
+ * else. Not a new enum, not a superset, not a set of UI labels — the database refuses
+ * anything outside these five, so a sixth value here would be a 500 waiting to happen.
+ *
+ * Feedback has no status at all: `feedback_entries` carries no such column, which is why
+ * PATCH refuses that kind rather than pretending to update something.
+ */
+export const TICKET_STATUSES = ["open", "in_progress", "waiting_user", "resolved", "closed"];
+
+/**
+ * Exact membership, no coercion.
+ *
+ * `typeof` first, so a number, an object or an array cannot reach `includes` as a
+ * stringified near-miss. No case folding either: the constraint is lowercase, so "OPEN" is
+ * not a status this product has, and accepting it would mean the application and the
+ * database disagree about what was asked for.
+ */
+export function isValidTicketStatus(status) {
+  return typeof status === "string" && TICKET_STATUSES.includes(status);
+}
+
 export function isValidInboxKind(kind) {
   return INBOX_KINDS.includes(String(kind));
+}
+
+/** Kinds that live in `support_tickets` and therefore have a status to manage. */
+export function isTicketKind(kind) {
+  return kind === "support" || kind === "report";
+}
+
+/** Mirrors api/admin.js — a body may arrive parsed, as a string, or not at all. */
+function parseBody(req) {
+  if (!req?.body) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
 }
 
 /**
@@ -108,16 +149,14 @@ const FEEDBACK_COLUMNS =
  * swallow an entire page.
  */
 async function listTickets(supabase, { kind, limit, offset }) {
-  let query = supabase
-    .from("support_tickets")
-    .select(TICKET_COLUMNS)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  query =
-    kind === "report"
-      ? query.in("category", REPORT_CATEGORIES)
-      : query.not("category", "in", `(${REPORT_CATEGORIES.join(",")})`);
+  const query = scopeToKind(
+    supabase
+      .from("support_tickets")
+      .select(TICKET_COLUMNS)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1),
+    kind
+  );
 
   const { data: tickets, error } = await query;
   if (error) throw error;
@@ -136,28 +175,7 @@ async function listTickets(supabase, { kind, limit, offset }) {
   const byTicket = new Map(tickets.map((t) => [t.id, []]));
   for (const message of messages || []) byTicket.get(message.ticket_id)?.push(message);
 
-  return tickets.map((ticket) => ({
-    id: ticket.id,
-    kind,
-    user_id: ticket.user_id,
-    category: ticket.category,
-    subject: ticket.subject,
-    status: ticket.status,
-    priority: ticket.priority,
-    contact_requested: ticket.contact_requested,
-    page_route: ticket.page_route,
-    app_version: ticket.app_version,
-    created_at: ticket.created_at,
-    updated_at: ticket.updated_at,
-    context: normalizeInboxContext(ticket.context),
-    messages: (byTicket.get(ticket.id) || []).map((m) => ({
-      id: m.id,
-      author_role: m.author_role,
-      body: m.body,
-      is_internal_note: m.is_internal_note,
-      created_at: m.created_at
-    }))
-  }));
+  return tickets.map((ticket) => toTicketItem(ticket, kind, byTicket.get(ticket.id) || []));
 }
 
 /**
@@ -189,20 +207,123 @@ async function listFeedback(supabase, { limit, offset }) {
 }
 
 /**
- * GET /api/admin?view=inbox&kind=support|report|feedback&limit=&offset=
+ * A stored ticket as the inbox exposes it. One shape for the list and for the row a PATCH
+ * returns, so the client never has to reconcile two versions of the same ticket.
+ */
+function toTicketItem(ticket, kind, messages = []) {
+  return {
+    id: ticket.id,
+    kind,
+    user_id: ticket.user_id,
+    category: ticket.category,
+    subject: ticket.subject,
+    status: ticket.status,
+    priority: ticket.priority,
+    contact_requested: ticket.contact_requested,
+    page_route: ticket.page_route,
+    app_version: ticket.app_version,
+    created_at: ticket.created_at,
+    updated_at: ticket.updated_at,
+    context: normalizeInboxContext(ticket.context),
+    messages: messages.map((m) => ({
+      id: m.id,
+      author_role: m.author_role,
+      body: m.body,
+      is_internal_note: m.is_internal_note,
+      created_at: m.created_at
+    }))
+  };
+}
+
+/**
+ * Narrow a ticket query to one kind. The same predicate serves reads and the update, so the
+ * two can never disagree about what "a report" means.
+ */
+function scopeToKind(query, kind) {
+  return kind === "report"
+    ? query.in("category", REPORT_CATEGORIES)
+    : query.not("category", "in", `(${REPORT_CATEGORIES.join(",")})`);
+}
+
+/**
+ * Set a ticket's status.
+ *
+ * IDENTITY AND CATEGORY IN ONE STATEMENT. The category predicate sits on the UPDATE itself
+ * rather than on a lookup before it: fetching by id and then comparing the category in
+ * JavaScript would leave a window between the check and the write, and would make the
+ * boundary a decision the application remembers to make rather than one the database
+ * enforces. A cross-kind id therefore matches zero rows and changes nothing — there is no
+ * path where the wrong ticket is updated and the mismatch is noticed afterwards.
+ *
+ * ONLY `status` IS WRITTEN. `updated_at` moves because migration 051 installs a BEFORE
+ * UPDATE trigger for exactly that purpose; setting it here would be a second opinion about
+ * a value the database already owns. Everything else — subject, category, priority,
+ * context, user_id, contact_requested, page_route, app_version, created_at — is absent from
+ * the payload and so cannot be touched.
+ *
+ * @returns the updated row, or null when nothing matched
+ */
+async function updateTicketStatus(supabase, { kind, id, status }) {
+  const { data, error } = await scopeToKind(
+    supabase.from("support_tickets").update({ status }).eq("id", id),
+    kind
+  ).select(TICKET_COLUMNS);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+/**
+ * PATCH /api/admin?view=inbox&kind=support|report   body: { id, status }
+ *
+ * Idempotent: setting the status a ticket already has is a 200 with the row, not an error.
+ * The trigger still moves `updated_at`, which is what an UPDATE means — the row was touched,
+ * and saying otherwise would require reading before writing purely to avoid a timestamp.
+ */
+async function handleStatusPatch(req, res, { supabase, kind }) {
+  if (!isTicketKind(kind)) {
+    // feedback_entries has no status column. Refusing is honest; silently succeeding would
+    // report a change that never happened.
+    return res.status(400).json({ ok: false, error: "Doar tichetele au status." });
+  }
+
+  const body = parseBody(req);
+  const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (!id) return res.status(400).json({ ok: false, error: "id este obligatoriu." });
+  if (!isValidTicketStatus(body.status)) {
+    return res
+      .status(400)
+      .json({ ok: false, error: `status invalid (permise: ${TICKET_STATUSES.join(", ")}).` });
+  }
+
+  const updated = await updateTicketStatus(supabase, { kind, id, status: body.status });
+  if (!updated) {
+    // Same answer for "no such ticket" and "that ticket is not this kind": distinguishing
+    // them would confirm the existence of a row the caller asked for under the wrong kind.
+    return res.status(404).json({ ok: false, error: "Tichetul nu a fost găsit." });
+  }
+
+  return res.status(200).json({ ok: true, kind, item: toTicketItem(updated, kind, []) });
+}
+
+/**
+ * GET   /api/admin?view=inbox&kind=support|report|feedback&limit=&offset=
+ * PATCH /api/admin?view=inbox&kind=support|report   body: { id, status }
  *
  * Order is the contract: method, configuration, THEN authorisation, and only after that is
- * a parameter parsed or a row touched. A validation error returned before assertAdmin would
- * tell an anonymous caller which parameters this endpoint accepts.
+ * a parameter parsed, a body read, or a row touched. A validation error returned before
+ * assertAdmin would tell an anonymous caller which parameters this endpoint accepts — and
+ * for PATCH it would also disclose the status vocabulary.
  */
 export async function handleAdminInbox(req, res, deps = {}) {
   const admin = deps.assertAdmin || assertAdmin;
   const configured = deps.assertSupabaseConfigured || assertSupabaseConfigured;
   const client = deps.getSupabaseAdmin || getSupabaseAdmin;
 
-  if (String(req.method || "GET").toUpperCase() !== "GET") {
-    // Read-only by construction: status management is a later increment with its own
-    // handler, so there is no verb here to grow one accidentally.
+  const method = String(req.method || "GET").toUpperCase();
+  // GET reads, PATCH sets a ticket's status. Nothing else: POST would mean creating a
+  // ticket on a user's behalf and DELETE would mean destroying their message, and neither
+  // is something an inbox should be able to do.
+  if (method !== "GET" && method !== "PATCH") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
@@ -224,6 +345,9 @@ export async function handleAdminInbox(req, res, deps = {}) {
 
   try {
     const supabase = client();
+
+    if (method === "PATCH") return await handleStatusPatch(req, res, { supabase, kind });
+
     const items =
       kind === "feedback"
         ? await listFeedback(supabase, { limit, offset })
