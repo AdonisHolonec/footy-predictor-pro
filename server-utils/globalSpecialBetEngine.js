@@ -448,14 +448,227 @@ export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VA
   return { ...collected, pool, bets, unavailable };
 }
 
+// ── System tickets ─────────────────────────────────────────────────────────
+//
+// A system ticket is the SAME product as a combo, priced differently: five
+// selections out of which any k must win. Everything above this line is shared
+// — the candidate pool, all twelve gates, one-leg-per-fixture, the league band.
+// Only the ORDER in which the safe pool is consumed differs, and it differs on
+// purpose: a combo is the safest COMBINATION, a system is the best VALUE among
+// legs that already passed every safety gate.
+//
+// Nothing below is reachable from production. The engine can build a system
+// ticket; create_global_special_bet refuses to store one (migration 052,
+// `system_not_enabled`), because settlement cannot grade k-of-n yet.
+
+/** Five selections, always. The k varies; the ticket size does not. */
+export const SYSTEM_SELECTION_COUNT = 5;
+
+/** The three products, sharing one list of five. */
+export const SYSTEM_K_VALUES = [3, 4, 5];
+
+/**
+ * Expected value of one selection, as a fraction of the stake.
+ *
+ *     ev = probability × odds − 1
+ *
+ * Raw against the offered price: no de-vigging, no margin removal, no
+ * calibration. `probability` is the model's P(full win) exactly as the payload
+ * carries it and `odds` is the snapshot price — neither is recomputed here.
+ * A 0.60 chance at 2.00 returns 0.20: twenty percent of the stake, in
+ * expectation.
+ *
+ * Returns null rather than 0 when either input is unusable. Every candidate
+ * that reaches ranking has already passed the data-completeness gate, so null
+ * cannot occur in the production path; it exists so a caller that hands over
+ * something else gets an absence instead of a fake break-even.
+ *
+ * @param {{ probability: number, odds: number }} candidate
+ * @returns {number|null}
+ */
+export function selectionExpectedValue(candidate) {
+  // finiteOrNull, not Number(): `Number(null)` is 0 and `Number.isFinite(0)` is
+  // true, so a Number()-first guard turns a missing probability into a real
+  // -1.00 EV — an absence wearing the costume of the worst possible value. The
+  // rule already has one implementation in this module; this uses it.
+  const p = finiteOrNull(candidate?.probability);
+  const o = finiteOrNull(candidate?.odds);
+  if (p === null || o === null) return null;
+  return p * o - 1;
+}
+
+/**
+ * EV quantised to nine decimals, as an integer.
+ *
+ * Comparing raw floats with a tolerance breaks transitivity — a < b, b < c and
+ * a == c can all hold at once, and Array.sort with an intransitive comparator
+ * is free to produce anything. Quantising first gives "practically equal" a
+ * meaning that IS transitive: two candidates tie when they land in the same
+ * 1e-9 bucket. Nine decimals is far below any price or probability resolution
+ * the product carries, so it only ever collapses float noise.
+ */
+function evBucket(candidate) {
+  const ev = selectionExpectedValue(candidate);
+  return ev === null ? Number.NEGATIVE_INFINITY : Math.round(ev * 1e9);
+}
+
+/**
+ * Rank by EV, descending — the System order.
+ *
+ * SEPARATE FROM rankGlobalCandidates BY DESIGN. Combo stays probability-first
+ * and is not touched by anything here; the two functions never call each other
+ * and share no state, so a change to the System order cannot move a combo leg.
+ *
+ * This is NOT the pre-#69 ranking. That one sorted on `valueScore × dataQuality`
+ * — a composite of EV, edge, Kelly and confidence — and it let a 68%@5.00 leg
+ * outrank an 82%@1.40 one. Two things stop that here: the ranking is EV alone,
+ * with valueScore playing no part whatsoever, and it runs AFTER the twelve
+ * gates, so PROB_FLOOR (p >= 0.60) and MAX_MODEL_EDGE (p × o <= 2.0) have
+ * already removed the long-priced legs that ranking could otherwise reward. The
+ * edge ceiling in particular is what bounds EV: p × o <= 2.0 means ev <= 1.0 by
+ * construction, and no gate is relaxed to widen the pool.
+ *
+ * Tie-breaks, in order, all deterministic and all reproducible from the payload:
+ *   1. EV bucket, descending      — the product rule
+ *   2. probability, descending    — at equal value, take the likelier leg
+ *   3. confidence, descending     — then the better-evidenced fixture
+ *   4. dataQuality, descending    — then the better-evidenced model input
+ *   5. fixtureId, ascending       — a total order, so the result never depends
+ *                                   on the order rows arrived from the database
+ *
+ * No clock, no randomness, no input order. Same pool in, same list out.
+ *
+ * @param {GlobalCandidate[]} candidates
+ * @returns {GlobalCandidate[]}
+ */
+export function rankSystemCandidates(candidates) {
+  return [...candidates].sort(
+    (a, b) =>
+      evBucket(b) - evBucket(a) ||
+      b.probability - a.probability ||
+      b.confidence - a.confidence ||
+      b.dataQuality - a.dataQuality ||
+      a.fixtureId - b.fixtureId
+  );
+}
+
+/** C(n, k), exact for the sizes this product uses. */
+function combinations(n, k) {
+  if (k < 0 || k > n) return 0;
+  let result = 1;
+  for (let i = 1; i <= k; i += 1) result = (result * (n - k + i)) / i;
+  return Math.round(result);
+}
+
+/**
+ * One system ticket over an already-chosen list of selections.
+ *
+ * WHAT IS DELIBERATELY ABSENT: `totalOdds` and `estimatedTicketProbability`.
+ * Both exist on a combo and both are WRONG for a k-of-n ticket:
+ *
+ *   · Π odds is the payout of ONE combination — the all-five one. A 3/5 that
+ *     wins pays the product of its three winning legs, summed over every
+ *     winning combination, divided by the C(5,3) stakes it was placed with.
+ *     Reporting Π odds as the ticket's odds would overstate a 3/5 payout by
+ *     roughly the odds of the two legs that lost.
+ *   · Π p_i is P(ALL five win). A 3/5 wins when at least three do, which is a
+ *     Poisson-binomial tail, not a product. Π p_i understates it — badly: five
+ *     legs at 0.70 give Π p = 0.168 while P(>=3) = 0.837.
+ *
+ * `productOdds` below is exposed under a name that says what it is, so the
+ * audit trail keeps the number without any surface being able to mistake it for
+ * a payout. It coincides with the payout only when k = n.
+ *
+ * @param {number} systemK
+ * @param {GlobalCandidate[]} selections
+ */
+function toSystemBet(systemK, selections) {
+  const averageConfidence = selections.reduce((acc, s) => acc + s.confidence, 0) / selections.length;
+  const productOdds = selections.reduce((acc, s) => acc * s.odds, 1);
+  return {
+    // `variant` keeps its one meaning across both kinds: how many selections the
+    // ticket holds. The k lives in its own field, exactly as migration 052 stores it.
+    variant: SYSTEM_SELECTION_COUNT,
+    betKind: "system",
+    systemK,
+    // Own array per ticket: identical content, no shared reference a consumer
+    // could mutate and corrupt the other two tickets through.
+    selections: [...selections],
+    combinationCount: combinations(SYSTEM_SELECTION_COUNT, systemK),
+    averageConfidence: Number(averageConfidence.toFixed(2)),
+    productOdds: Number(productOdds.toFixed(3))
+  };
+}
+
+/**
+ * Build System 3/5, 4/5 and 5/5 from one safe pool.
+ *
+ * ORDER OF OPERATIONS — the same shape buildGlobalSpecialBets uses, with only
+ * the ranking swapped:
+ *
+ *   collect (12 gates) -> rank by EV -> diversify -> slice 5
+ *
+ * Diversification runs AFTER ranking here because that is where it runs for
+ * combos today, and this increment reuses `diversifyGlobalCandidates` unchanged
+ * rather than inventing a second rule. Feeding it an EV-ordered list keeps both
+ * of its guarantees: one selection per fixture (the highest-EV one now, since
+ * "first seen" follows the incoming order), and the league band still measured
+ * in PROBABILITY percentage points. The band stays probability-based on
+ * purpose — it is a safety constraint, not a value one, and its job is to stop
+ * variety from dragging a materially weaker leg into the ticket whatever the
+ * ranking rewards.
+ *
+ * ALL THREE TICKETS SHARE ONE LIST. The top five are computed once; k selects
+ * how many of them must win. Recomputing a separate top five per k would let
+ * 3/5 and 4/5 disagree about which matches the product is even betting on.
+ *
+ * Fewer than five safe candidates means NO system ticket — no padding, no
+ * relaxed gate, no duplicated fixture. The refusal carries the pool size and
+ * the rejection counters, so the caller can say why the pool was thin.
+ *
+ * @param {{ rows: object[], leagueIds: number[], now: number }} options
+ */
+export function buildGlobalSystemBets(options) {
+  const collected = collectGlobalCandidates(options);
+  const pool = diversifyGlobalCandidates(rankSystemCandidates(collected.candidates));
+
+  if (pool.length < SYSTEM_SELECTION_COUNT) {
+    return {
+      ...collected,
+      pool,
+      selections: [],
+      bets: {},
+      unavailable: [
+        {
+          betKind: "system",
+          reason: "insufficient_system_candidates",
+          available: pool.length,
+          required: SYSTEM_SELECTION_COUNT
+        }
+      ]
+    };
+  }
+
+  const selections = pool.slice(0, SYSTEM_SELECTION_COUNT);
+  const bets = {};
+  for (const systemK of SYSTEM_K_VALUES) bets[systemK] = toSystemBet(systemK, selections);
+
+  return { ...collected, pool, selections, bets, unavailable: [] };
+}
+
 export default {
   MIN_SELECTION_ODD,
   PROB_FLOOR,
   MAX_MODEL_EDGE,
   LEAGUE_SPREAD_MAX_PP,
   GLOBAL_SPECIAL_BET_VARIANTS,
+  SYSTEM_SELECTION_COUNT,
+  SYSTEM_K_VALUES,
   collectGlobalCandidates,
   rankGlobalCandidates,
   diversifyGlobalCandidates,
-  buildGlobalSpecialBets
+  buildGlobalSpecialBets,
+  selectionExpectedValue,
+  rankSystemCandidates,
+  buildGlobalSystemBets
 };
