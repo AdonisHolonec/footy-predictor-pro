@@ -837,7 +837,12 @@ export const ro: Dict = {
     basedOnLeagues: "Pe baza ligilor tale favorite · {n}",
     poolScope: "Din predicțiile tale viitoare · generat {date}",
     variantOption: "{n} selecții",
-    variantGroupLabel: "Numărul de selecții",
+    // Grupul alege acum un PRODUS, nu doar un număr: trei Combo şi Biletul
+    // Sistem. Sistemul apare o singură dată — 3/5 este definiţia produsului,
+    // stabilită de server, nu o variantă pe care o alege utilizatorul.
+    variantGroupLabel: "Tipul biletului",
+    productSystem: "Bilet Sistem",
+    productSystemHint: "5 selecții · câștigi cu minimum 3 corecte",
     generate: "Generează",
     regenerate: "Regenerează",
     generating: "Îți construim Global Special Bet…",

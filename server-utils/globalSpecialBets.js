@@ -358,11 +358,14 @@ export async function createGlobalSystemBets({
     available: true,
     created: Boolean(data.created),
     bet: data.bet,
-    // The five legs the engine chose, as before. What the database echoed back
-    // is kept separately: they answer different questions, and collapsing them
-    // would make an empty echo look like an empty ticket.
-    selections: built.selections,
-    storedSelections: data.selections || [],
+    // Same shape createGlobalSpecialBet returns, so the HTTP layer can answer
+    // for both products without knowing which one it just built: `selections`
+    // is what the database stored. The engine's own five legs are kept beside
+    // it under a name that says so — they answer a different question (what was
+    // chosen, with probabilities) and collapsing the two would make an empty
+    // echo look like an empty ticket.
+    selections: data.selections || [],
+    engineSelections: built.selections,
     systemK: bet.systemK,
     combinationCount: shape.combinationCount,
     // As stored for a repeat request, as computed for a fresh one — never a

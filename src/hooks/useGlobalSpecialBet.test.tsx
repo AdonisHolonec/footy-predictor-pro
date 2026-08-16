@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useGlobalSpecialBet } from "./useGlobalSpecialBet";
+import { SYSTEM_PRODUCT, comboProduct, useGlobalSpecialBet } from "./useGlobalSpecialBet";
 
 const fetchWithAuth = vi.fn();
 vi.mock("../utils/apiAuth", () => ({
@@ -49,7 +49,7 @@ describe("useGlobalSpecialBet", () => {
 
   it("starts idle on the 3-selection variant and asks for nothing", () => {
     const { result } = setup();
-    expect(result.current.variant).toBe(3);
+    expect(result.current.product).toEqual({ kind: "combo", variant: 3 });
     expect(result.current.state.phase).toBe("idle");
     expect(fetchWithAuth).not.toHaveBeenCalled();
   });
@@ -58,7 +58,7 @@ describe("useGlobalSpecialBet", () => {
     fetchWithAuth.mockResolvedValue(jsonResponse(201, SNAPSHOT));
     const { result } = setup();
 
-    act(() => result.current.setVariant(5));
+    act(() => result.current.setProduct(comboProduct(5)));
     await act(async () => {
       await result.current.generate();
     });
@@ -138,7 +138,7 @@ describe("useGlobalSpecialBet", () => {
     );
     const { result } = setup();
 
-    act(() => result.current.setVariant(8));
+    act(() => result.current.setProduct(comboProduct(8)));
     await act(async () => {
       await result.current.generate();
     });
@@ -157,10 +157,10 @@ describe("useGlobalSpecialBet", () => {
     await act(async () => {
       await result.current.generate();
     });
-    act(() => result.current.setVariant(5));
+    act(() => result.current.setProduct(comboProduct(5)));
     expect(result.current.state.phase).toBe("idle");
 
-    act(() => result.current.setVariant(3));
+    act(() => result.current.setProduct(comboProduct(3)));
     expect(result.current.state.phase).toBe("ready");
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
   });
@@ -198,5 +198,95 @@ describe("useGlobalSpecialBet", () => {
       await result.current.generate();
     });
     expect(fetchWithAuth).not.toHaveBeenCalled();
+  });
+
+  describe("Bilet Sistem", () => {
+    it("asks for the System by kind, and never sends a k", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SNAPSHOT));
+      const { result } = setup();
+
+      act(() => result.current.setProduct(SYSTEM_PRODUCT));
+      await act(async () => {
+        await result.current.generate();
+      });
+
+      const [, init] = fetchWithAuth.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      expect(body).toEqual({ bet_date: "2026-08-11", variant: 5, leagueIds: [39, 140], bet_kind: "system" });
+      // The k is the server's. Sending one would be refused with 400, and the
+      // product would be a lie either way.
+      expect(Object.keys(body)).not.toContain("system_k");
+      expect(Object.keys(body)).not.toContain("systemK");
+    });
+
+    it("the System product is five selections and carries no k", () => {
+      expect(SYSTEM_PRODUCT).toEqual({ kind: "system", variant: 5 });
+      expect(Object.keys(SYSTEM_PRODUCT)).not.toContain("systemK");
+    });
+
+    it("a Combo request is byte-identical to the one sent before System existed", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SNAPSHOT));
+      const { result } = setup();
+
+      act(() => result.current.setProduct(comboProduct(5)));
+      await act(async () => {
+        await result.current.generate();
+      });
+
+      const [, init] = fetchWithAuth.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(String(init.body));
+      // No bet_kind at all: absent means combo, so nothing about the legacy
+      // request changed when the System was added beside it.
+      expect(body).toEqual({ bet_date: "2026-08-11", variant: 5, leagueIds: [39, 140] });
+    });
+
+    it("Combo 5 and the System never share a slot", async () => {
+      // Both are five selections. Keyed on the number alone, one would overwrite
+      // the other's state and the user would see a system's snapshot under the
+      // combo heading.
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SNAPSHOT));
+      const { result } = setup();
+
+      act(() => result.current.setProduct(comboProduct(5)));
+      await act(async () => {
+        await result.current.generate();
+      });
+      expect(result.current.state.phase).toBe("ready");
+
+      act(() => result.current.setProduct(SYSTEM_PRODUCT));
+      expect(result.current.state.phase).toBe("idle");
+      expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await result.current.generate();
+      });
+      expect(result.current.state.phase).toBe("ready");
+      expect(fetchWithAuth).toHaveBeenCalledTimes(2);
+
+      // And the combo's own answer survived the trip.
+      act(() => result.current.setProduct(comboProduct(5)));
+      expect(result.current.state.phase).toBe("ready");
+      expect(fetchWithAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it("an error on the System leaves the Combo's state alone", async () => {
+      fetchWithAuth.mockResolvedValueOnce(jsonResponse(201, SNAPSHOT));
+      const { result } = setup();
+      act(() => result.current.setProduct(comboProduct(5)));
+      await act(async () => {
+        await result.current.generate();
+      });
+      expect(result.current.state.phase).toBe("ready");
+
+      fetchWithAuth.mockResolvedValue(jsonResponse(500, { ok: false, error: "boom" }));
+      act(() => result.current.setProduct(SYSTEM_PRODUCT));
+      await act(async () => {
+        await result.current.generate();
+      });
+      expect(result.current.state.phase).toBe("error");
+
+      act(() => result.current.setProduct(comboProduct(5)));
+      expect(result.current.state.phase).toBe("ready");
+    });
   });
 });

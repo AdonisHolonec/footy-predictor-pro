@@ -84,21 +84,36 @@ describe("GlobalSpecialBetSection", () => {
   });
   afterEach(cleanup);
 
-  it("offers exactly the three server-built variants, with 3 selected", () => {
+  it("offers the three Combo sizes and the System, with Combo 3 selected", () => {
+    // Was three options under "Numărul de selecții". The group now chooses a
+    // PRODUCT: the same three combos, plus one System. There is deliberately no
+    // 3/5–4/5–5/5 choice — the public System is 3/5 and the server fixes it.
     renderSection();
-    const group = screen.getByRole("group", { name: "Numărul de selecții" });
+    const group = screen.getByRole("group", { name: "Tipul biletului" });
     const options = group.querySelectorAll("button");
-    expect(options).toHaveLength(3);
-    expect([...options].map((b) => b.textContent)).toEqual(["3 selecții", "5 selecții", "8 selecții"]);
+    expect(options).toHaveLength(4);
+    expect([...options].map((b) => b.textContent)).toEqual([
+      "3 selecții",
+      "5 selecții",
+      "8 selecții",
+      "Bilet Sistem"
+    ]);
     expect(options[0].getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("keeps the variant selector thumb-sized and wrappable at 390px", () => {
+  it("offers no k selector anywhere", () => {
+    renderSection();
+    for (const label of [/3\/5/, /4\/5/, /5\/5/, /system_k/i]) {
+      expect(screen.queryByRole("button", { name: label })).toBeNull();
+    }
+  });
+
+  it("keeps the product selector thumb-sized and wrappable at 390px", () => {
     // jsdom has no layout, so the responsive decision is asserted where it is
     // actually made: a wrapping row of touch-target-sized options, which is what
     // stops the selector overflowing a 390px viewport.
     renderSection();
-    const group = screen.getByRole("group", { name: "Numărul de selecții" });
+    const group = screen.getByRole("group", { name: "Tipul biletului" });
     expect(group.className).toContain("flex-wrap");
     for (const option of group.querySelectorAll("button")) {
       expect(option.className).toContain("min-h-[var(--fp-touch)]");
@@ -436,5 +451,51 @@ describe("GlobalSpecialBetSection", () => {
     expect(screen.queryByRole("group")).toBeNull();
     screen.getByRole("button", { name: /Deblochează/ }).click();
     expect(onUpgradeRequired).toHaveBeenCalledWith("Global Special Bet", "ultra");
+  });
+
+  describe("Bilet Sistem", () => {
+    it("asks the server for a System, and sends no k", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, READY_BODY));
+      renderSection();
+
+      await act(async () => {
+        screen.getByRole("button", { name: "Bilet Sistem" }).click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: /Generează|Regenerează/ }).click();
+      });
+
+      const [url, init] = fetchWithAuth.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("/api/special-bets");
+      const body = JSON.parse(String(init.body));
+      expect(body.bet_kind).toBe("system");
+      expect(body.variant).toBe(5);
+      // The product is 3/5 and the server decides that. The UI has no k to send
+      // and no control that could produce one.
+      expect(Object.keys(body)).not.toContain("system_k");
+      expect(Object.keys(body)).not.toContain("systemK");
+    });
+
+    it("selecting the System does not disturb the Combo the user already built", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, READY_BODY));
+      renderSection();
+
+      await act(async () => {
+        screen.getByRole("button", { name: "5 selecții" }).click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: /Generează/ }).click();
+      });
+      const callsAfterCombo = fetchWithAuth.mock.calls.length;
+
+      // Switching to the System shows an untouched product, not the combo's
+      // snapshot — the two are keyed apart even though both are variant 5.
+      await act(async () => {
+        screen.getByRole("button", { name: "Bilet Sistem" }).click();
+      });
+      expect(fetchWithAuth.mock.calls.length).toBe(callsAfterCombo);
+      expect(screen.getByRole("button", { name: "Bilet Sistem" }).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByRole("button", { name: "5 selecții" }).getAttribute("aria-pressed")).toBe("false");
+    });
   });
 });

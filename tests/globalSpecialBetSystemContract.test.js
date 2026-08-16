@@ -191,8 +191,17 @@ test("[guard] the contract layer neither creates a System nor unlocks one", () =
   assert.ok(persistence.includes("validateSystemShape"), "creation must validate the shape before the RPC");
   assert.ok(persistence.includes("p_system_k"), "creation must send the k through the existing parameter");
 
-  // And the product is still not exposed: no HTTP route accepts a k.
-  assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
+  // NARROWED. This used to assert the HTTP layer was unaware of System, which
+  // held right up to the increment that shipped the public product. The route
+  // now creates one — what it must never do is let the caller choose the k.
+  // `system_k` appears in this file only inside the check that REFUSES a request
+  // carrying it; the value itself is a server constant.
+  assert.ok(api.includes("const SYSTEM_PRODUCT_K = 3"), "the k is fixed by the server");
+  assert.ok(!/body\.system_k|body\.systemK/.test(api), "and is never read from the request body");
+  assert.ok(
+    api.includes('hasOwnProperty.call(body, "system_k")'),
+    "a request that sends one is refused, not silently downgraded"
+  );
 
   // Validation is a pure verdict: no I/O, no database client, no fetch.
   assert.ok(!engine.includes("getSupabaseAdmin"), "the engine stays free of a database client");

@@ -837,7 +837,12 @@ export const en: Dict = {
     basedOnLeagues: "Based on your favorite leagues · {n}",
     poolScope: "From your upcoming predictions · generated {date}",
     variantOption: "{n} selections",
-    variantGroupLabel: "Number of selections",
+    // The group now picks a PRODUCT, not just a number: three Combos and the
+    // System ticket. The System appears once — 3/5 is the product's definition,
+    // fixed by the server, not a variant the user chooses.
+    variantGroupLabel: "Ticket type",
+    productSystem: "System ticket",
+    productSystemHint: "5 selections · wins with at least 3 correct",
     generate: "Generate",
     regenerate: "Regenerate",
     generating: "Generating your Global Special Bet…",

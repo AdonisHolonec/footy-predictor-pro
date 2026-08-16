@@ -408,7 +408,7 @@ test("[19d] the ticket probability is P(X >= k), not the product", () => {
 
 // ── 20. System cannot reach production ─────────────────────────────────────
 
-test("[20] System is built and validated in code, and still refused by the database", () => {
+test("[20] the server builds and validates a System, and the k never comes from the request", () => {
   // The database now accepts one (migration 053 lifted the gate; S16 in
   // tests/integration/gsbSystemFoundation.db.test.js proves the creation). This
   // is the other half: the server never even asks. A unit test on the engine
@@ -444,8 +444,17 @@ test("[20] System is built and validated in code, and still refused by the datab
   assert.ok(persistence.includes("validateSystemShape"), "creation validates the shape before the RPC");
   assert.ok(persistence.includes("p_system_k"), "creation sends the k through 052's own parameter");
 
-  // The HTTP layer is still untouched: no route accepts a k, so no user can ask
-  // for a System even though the server now knows how to build one.
-  assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
-  assert.ok(!api.includes("createGlobalSystemBets"), "no route creates a System");
+  // NARROWED, not dropped. This used to assert the HTTP layer knew nothing of
+  // System — true until the public product shipped, and the whole point of this
+  // increment is that it now does. What replaces it is the invariant that
+  // actually protects the product: the route may CREATE a System, but the k is
+  // never taken from the request. A source guard rather than a behavioural one
+  // for the same reason as above — a body-read reintroduced here would pass
+  // every unit test while quietly handing the product back to the client.
+  assert.ok(api.includes("createGlobalSystemBets"), "the public route can create a System");
+  assert.ok(api.includes("SYSTEM_PRODUCT_K = 3"), "the k is a server-side constant");
+  assert.ok(
+    !/body\.system_k|body\.systemK|\bsystemK\s*=\s*(?!SYSTEM_PRODUCT_K)/.test(api),
+    "the k is never read from the request body"
+  );
 });

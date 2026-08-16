@@ -18,7 +18,21 @@ import {
   summarizeGlobalSpecialBet,
   type FixtureLabel
 } from "../../utils/globalSpecialBetView";
-import { GLOBAL_SPECIAL_BET_VARIANTS, type GlobalSpecialBetVariant } from "../../types/globalSpecialBet";
+import { GLOBAL_SPECIAL_BET_VARIANTS } from "../../types/globalSpecialBet";
+import { SYSTEM_PRODUCT, comboProduct, type GlobalSpecialBetProduct } from "../../hooks/useGlobalSpecialBet";
+
+/**
+ * What the user can ask for: the three Combo sizes, then the Bilet Sistem.
+ *
+ * The System appears once, as a product — there is no 3/5, 4/5, 5/5 choice to
+ * make. The public System IS 3/5: five selections of which at least three must
+ * win, with the k fixed by the server. A row in the history may say "Sistem 3/5"
+ * because that describes the ticket; the user never picks the 3.
+ */
+const PRODUCT_OPTIONS: GlobalSpecialBetProduct[] = [
+  ...GLOBAL_SPECIAL_BET_VARIANTS.map((n) => comboProduct(n)),
+  SYSTEM_PRODUCT
+];
 
 type Props = {
   /** Calendar day the bet is built from — the date the dashboard is showing. */
@@ -53,7 +67,7 @@ export default function GlobalSpecialBetSection({
   onUpgradeRequired
 }: Props) {
   const { t, locale } = useLocale();
-  const { variant, setVariant, state, isGenerating, generate } = useGlobalSpecialBet({
+  const { product, setProduct, state, isGenerating, generate } = useGlobalSpecialBet({
     betDate,
     leagueIds: favoriteLeagueIds
   });
@@ -158,15 +172,15 @@ export default function GlobalSpecialBetSection({
           aria-label={t("gsb.variantGroupLabel")}
           className="inline-flex flex-wrap gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-1"
         >
-          {GLOBAL_SPECIAL_BET_VARIANTS.map((option) => {
-            const active = variant === option;
+          {PRODUCT_OPTIONS.map((option) => {
+            const active = product.kind === option.kind && product.variant === option.variant;
             return (
               <button
-                key={option}
+                key={`${option.kind}:${option.variant}`}
                 type="button"
                 aria-pressed={active}
                 disabled={isGenerating}
-                onClick={() => setVariant(option as GlobalSpecialBetVariant)}
+                onClick={() => setProduct(option)}
                 /* min-h-[var(--fp-touch)] keeps every option thumb-sized at 390px. */
                 className={`min-h-[var(--fp-touch)] rounded-md px-3 text-xs font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] disabled:opacity-50 ${
                   active
@@ -174,7 +188,9 @@ export default function GlobalSpecialBetSection({
                     : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
                 }`}
               >
-                {t("gsb.variantOption", { n: option })}
+                {option.kind === "system"
+                  ? t("gsb.productSystem")
+                  : t("gsb.variantOption", { n: option.variant })}
               </button>
             );
           })}

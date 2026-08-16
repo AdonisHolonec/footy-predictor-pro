@@ -130,7 +130,7 @@ test("[A1] System reads the same candidate pool as Combo and takes exactly five"
   const out = await systemOf(supabase, 3);
 
   assert.equal(out.available, true);
-  assert.equal(out.selections.length, 5, "six candidates, five selected");
+  assert.equal(out.engineSelections.length, 5, "six candidates, five selected");
   // Was 3, "one row per k, from one build". That WAS the defect: one five-leg
   // opinion became three stored tickets and three stakes.
   assert.equal(supabase.calls.rpc.length, 1, "one invocation writes exactly one ticket");
@@ -179,7 +179,7 @@ test("[A4] one selection per fixture: two markets on one match cannot both be ta
   });
   const out = await systemOf(fakeSupabase({ historyRows: rows, rpcResult: created }), 3);
 
-  const ids = out.selections.map((s) => s.fixtureId);
+  const ids = out.engineSelections.map((s) => s.fixtureId);
   assert.equal(new Set(ids).size, 5, "no fixture appears twice");
 });
 
@@ -256,7 +256,7 @@ test("[C4] the persisted value comes from the single implementation, not a secon
   const all = await eachK();
 
   for (const k of SYSTEM_K_VALUES) {
-    const probabilities = all[k].result.selections.map((s) => s.probability);
+    const probabilities = all[k].result.engineSelections.map((s) => s.probability);
     const expected = Number(systemTicketProbability(probabilities, k).toFixed(4));
     assert.equal(all[k].params.p_ticket_probability, expected, `k=${k}`);
   }
@@ -395,8 +395,8 @@ test("[H2] the response envelope is consumed without assuming Combo-only fields"
     const out = await build(6, thin, k);
     assert.equal(out.bet.id, `bet-${k}`);
     assert.equal(out.systemK, k);
-    assert.deepEqual(out.storedSelections, [], "an empty echo is not an empty ticket");
-    assert.equal(out.selections.length, 5, "the engine's legs survive a thin echo");
+    assert.deepEqual(out.selections, [], "an empty echo is not an empty ticket");
+    assert.equal(out.engineSelections.length, 5, "the engine's legs survive a thin echo");
     combinationsByK[k] = out.combinationCount;
   }
   assert.deepEqual(combinationsByK, { 3: 10, 4: 5, 5: 1 });
