@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import ThemeBoot from "./design-system/ThemeBoot";
 import { useAuth } from "./hooks/useAuth";
 
 // Route-level code splitting: every page is its own chunk, so a visitor on the
@@ -17,7 +18,7 @@ function RouteFallback() {
   return (
     <div className="lab-page grid min-h-screen place-items-center">
       <div className="lab-bg" aria-hidden />
-      <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+      <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
         Se încarcă…
       </div>
     </div>
@@ -31,7 +32,7 @@ function AuthGate() {
     return (
       <div className="lab-page grid min-h-screen place-items-center">
         <div className="lab-bg" aria-hidden />
-        <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+        <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           Se încarcă sesiunea…
         </div>
       </div>
@@ -43,7 +44,7 @@ function AuthGate() {
     return (
       <div className="lab-page grid min-h-screen place-items-center p-6">
         <div className="lab-bg" aria-hidden />
-        <div className="relative z-10 max-w-md rounded-2xl border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 p-6 text-center text-[var(--fp-text)]">
+        <div className="relative z-10 max-w-md rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 p-6 text-center text-[var(--fp-text)]">
           <h1 className="font-display text-xl font-semibold text-[var(--fp-danger)]">Account blocat</h1>
           <p className="mt-2 text-sm text-[var(--fp-text-muted)]">
             Contul tau este momentan blocat. Contacteaza un administrator pentru reactivare.
@@ -58,6 +59,9 @@ function AuthGate() {
 export default function RootRouter() {
   return (
     <BrowserRouter>
+      {/* Theme is an application responsibility: applied for every route,
+          before any page decides anything — never owned by a dashboard. */}
+      <ThemeBoot />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingAccess />} />

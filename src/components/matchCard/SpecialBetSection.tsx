@@ -28,7 +28,7 @@ export function SpecialBetSection({
 
   if (!canShowSpecialBet) {
     return (
-      <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
+      <div className="mt-2.5 min-w-0 rounded-lg border border-fp-warning/35 bg-fp-warning/10 px-2.5 py-2 shadow-fp-sm">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
             {t("card.specialBet")}
@@ -61,7 +61,7 @@ export function SpecialBetSection({
   if (!hasExactConfidence || specialBetLegs.length < 2) return null;
 
   return (
-    <div className="mt-2.5 min-w-0 rounded-lg border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 px-2.5 py-2 shadow-[var(--fp-shadow-sm)]">
+    <div className="mt-2.5 min-w-0 rounded-lg border border-fp-success/45 bg-fp-success/10 px-2.5 py-2 shadow-fp-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
           {t("card.specialBet")}
@@ -136,7 +136,7 @@ export function SpecialBetSection({
         </span>
         {specialCombinedOutcome === "win" || specialCombinedOutcome === "loss" ? (
           <span
-            className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+            className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
               specialCombinedOutcome === "win"
                 ? "bg-[var(--fp-success)] text-white"
                 : "bg-[var(--fp-danger)] text-white"

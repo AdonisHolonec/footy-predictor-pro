@@ -24,8 +24,8 @@ export function SignalLens({ confidence, edge, className = "" }: SignalLensProps
   const e = Math.max(0, Math.min(100, edge));
   return (
     <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
-        <span className="font-semibold text-[var(--fp-accent)]/90">{t("panels.signalLens")}</span>
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
+        <span className="font-semibold text-fp-accent/90">{t("panels.signalLens")}</span>
         <span className="font-mono text-[var(--fp-text)] tabular-nums">
           C {Math.round(c)}% · E {Math.round(e)}%
         </span>
@@ -42,7 +42,7 @@ export function SignalLens({ confidence, edge, className = "" }: SignalLensProps
         </div>
         <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]" title={t("panels.edgeBar")}>
           <div
-            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-success)]/70 to-[var(--fp-success)] transition-transform duration-700 ease-out"
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-fp-success/70 to-[var(--fp-success)] transition-transform duration-700 ease-out"
             style={{ transform: `scaleX(${e / 100})` }}
           />
         </div>
@@ -68,8 +68,8 @@ export function FormRibbon({ p1, pX, p2, homeTint, awayTint, className = "" }: F
   const w2 = (p2 / sum) * 100;
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
-        <span className="font-semibold text-[var(--fp-accent)]/80">{t("panels.formRibbon")}</span>
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
+        <span className="font-semibold text-fp-accent/80">{t("panels.formRibbon")}</span>
         <span className="font-mono tabular-nums text-[var(--fp-text)]">1 · X · 2</span>
       </div>
       <div className="flex h-2 w-full overflow-hidden rounded-md bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
@@ -110,7 +110,7 @@ export function EdgeCompass({ dataQuality, valueDetected, className = "" }: Edge
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <div
-        className="relative h-12 w-12 shrink-0 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/80 shadow-inner ring-1 ring-[var(--fp-accent)]/10"
+        className="relative h-12 w-12 shrink-0 rounded-xl border border-[var(--fp-border)] bg-fp-bg-muted/80 shadow-inner ring-1 ring-fp-accent/10"
         aria-hidden
       >
         <svg viewBox="0 0 48 48" className="h-full w-full">
@@ -141,7 +141,7 @@ export function EdgeCompass({ dataQuality, valueDetected, className = "" }: Edge
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">{t("panels.edgeCompass")}</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">{t("panels.edgeCompass")}</div>
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[10px]">
           <span className="font-mono tabular-nums text-[var(--fp-accent)]">DQ {(dq * 100).toFixed(0)}%</span>
           <span
@@ -166,10 +166,10 @@ type ModelPulseStripProps = {
 export function ModelPulseStrip({ status, tone = "healthy", className = "" }: ModelPulseStripProps) {
   const ring =
     tone === "alert"
-      ? "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 shadow-[0_0_24px_rgba(239,68,68,0.15)]"
+      ? "border-fp-danger/40 bg-fp-danger/10 shadow-[0_0_24px_rgba(239,68,68,0.15)]"
       : tone === "watch"
-      ? "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/8 shadow-[0_0_20px_rgba(245,158,11,0.1)]"
-      : "border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/8 shadow-[var(--fp-shadow-sm)]";
+      ? "border-fp-warning/35 bg-fp-warning/8 shadow-[0_0_20px_rgba(245,158,11,0.1)]"
+      : "border-fp-accent/30 bg-fp-accent/8 shadow-fp-sm";
   const dot =
     tone === "alert" ? "bg-[var(--fp-danger)] shadow-[0_0_8px_#ef4444]" : tone === "watch" ? "bg-[var(--fp-warning)]" : "bg-[var(--fp-success)]";
   return (
@@ -178,7 +178,7 @@ export function ModelPulseStrip({ status, tone = "healthy", className = "" }: Mo
       title={status}
     >
       <span className={`h-2 w-2 shrink-0 rounded-full ${dot} motion-reduce:animate-none animate-pulse-soft`} />
-      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/90">Model pulse</span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/90">Model pulse</span>
       <span className="truncate text-[var(--fp-text)]">{status}</span>
     </div>
   );
@@ -201,16 +201,16 @@ export function ModelPulseWave({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-[var(--fp-border)] bg-gradient-to-r from-[var(--fp-bg-muted)]/90 via-[var(--fp-bg-card)]/80 to-[var(--fp-bg-muted)]/90 px-4 py-3 shadow-inner backdrop-blur-md ${className}`}
+      className={`relative overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-gradient-to-r from-fp-bg-muted/90 via-fp-bg-card/80 to-fp-bg-muted/90 px-4 py-3 shadow-inner backdrop-blur-md ${className}`}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(37,99,235,0.1),transparent)]" />
       <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-[var(--fp-accent)]/95">Model pulse</span>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fp-accent/95">Model pulse</span>
           <span className="hidden h-3 w-px bg-[var(--fp-border)] sm:block" aria-hidden />
-          <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-success)]/95">{status}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-fp-success/95">{status}</span>
         </div>
-        <div className="font-mono text-[9px] tabular-nums text-[var(--fp-text-muted)] sm:text-right">
+        <div className="font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)] sm:text-right">
           <span className="text-[var(--fp-success)]">●</span> stream active
         </div>
       </div>
@@ -301,7 +301,7 @@ export function ConfidenceAura({ value, className = "", size = "default" }: Conf
         >
           {Math.round(v)}
         </span>
-        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[8px]" : "text-[9px]"}`}>
+        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[10px]" : "text-[10px]"}`}>
           conf
         </span>
       </div>
@@ -331,8 +331,8 @@ export function SignalScanStrip({
     >
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Edge</span>
-          <span className="font-mono text-[9px] tabular-nums text-[var(--fp-accent)]/90">{Math.round(e)}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Edge</span>
+          <span className="font-mono text-[10px] tabular-nums text-fp-accent/90">{Math.round(e)}</span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
@@ -343,26 +343,26 @@ export function SignalScanStrip({
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Lens</span>
-          <span className="font-mono text-[9px] tabular-nums text-[var(--fp-text)]">{Math.round(dq)}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Lens</span>
+          <span className="font-mono text-[10px] tabular-nums text-[var(--fp-text)]">{Math.round(dq)}</span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
-            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-border-strong)] to-[var(--fp-success)]/80 transition-transform duration-500"
+            className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--fp-border-strong)] to-fp-success/80 transition-transform duration-500"
             style={{ transform: `scaleX(${dq / 100})` }}
           />
         </div>
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Value</span>
-          <span className={`font-mono text-[9px] tabular-nums ${valueDetected ? "text-[var(--fp-warning)]" : "text-[var(--fp-text-muted)]"}`}>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Value</span>
+          <span className={`font-mono text-[10px] tabular-nums ${valueDetected ? "text-[var(--fp-warning)]" : "text-[var(--fp-text-muted)]"}`}>
             {valueDetected ? "ON" : "—"}
           </span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
-            className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${valueDetected ? "bg-[var(--fp-warning)]/90" : "bg-[var(--fp-border)]/40"}`}
+            className={`h-full w-full origin-left rounded-full transition-transform duration-500 ${valueDetected ? "bg-fp-warning/90" : "bg-[var(--fp-border)]"}`}
             style={{ transform: `scaleX(${vPulse / 100})` }}
           />
         </div>
@@ -380,13 +380,13 @@ type PredictionDossierShellProps = {
 /** Editorial frame: corners + ref line — “prediction dossier”. */
 export function PredictionDossierShell({ children, dossierId, className = "" }: PredictionDossierShellProps) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl ${className}`}>
-      <div className="pointer-events-none absolute left-3 top-3 h-4 w-4 border-l border-t border-[var(--fp-accent)]/35" />
-      <div className="pointer-events-none absolute right-3 top-3 h-4 w-4 border-r border-t border-[var(--fp-accent)]/35" />
-      <div className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 border-b border-l border-[var(--fp-accent)]/20" />
-      <div className="pointer-events-none absolute bottom-3 right-3 h-4 w-4 border-b border-r border-[var(--fp-accent)]/20" />
+    <div className={`relative overflow-hidden rounded-[var(--fp-radius)] ${className}`}>
+      <div className="pointer-events-none absolute left-3 top-3 h-4 w-4 border-l border-t border-fp-accent/35" />
+      <div className="pointer-events-none absolute right-3 top-3 h-4 w-4 border-r border-t border-fp-accent/35" />
+      <div className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 border-b border-l border-fp-accent/20" />
+      <div className="pointer-events-none absolute bottom-3 right-3 h-4 w-4 border-b border-r border-fp-accent/20" />
       {dossierId && (
-        <div className="absolute right-4 top-4 font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--fp-text-muted)]/80">
+        <div className="absolute right-4 top-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-text-muted/80">
           {dossierId}
         </div>
       )}

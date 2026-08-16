@@ -8,7 +8,7 @@ export default function ApiStatus({ status }: ApiStatusProps) {
     <div
       role="status"
       aria-live="polite"
-      className="mb-6 rounded-xl border border-[var(--fp-success)]/25 bg-[var(--fp-bg-card)]/50 p-3 font-mono text-xs text-[var(--fp-accent)]/90 shadow-inner backdrop-blur-sm"
+      className="mb-6 rounded-xl border border-fp-success/25 bg-fp-bg-card/50 p-3 font-mono text-xs text-fp-accent/90 shadow-inner backdrop-blur-sm"
     >
       {"> "}
       {status}

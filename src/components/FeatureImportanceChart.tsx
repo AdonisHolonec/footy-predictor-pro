@@ -37,13 +37,13 @@ export default function FeatureImportanceChart({
     const top = items.slice(0, 4);
     return (
       <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
-        <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--fp-accent)]/75">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/75">
           {t("panels.keyFactors")}
         </div>
         {top.map((item, i) => (
-          <div key={item.key} className="flex items-center gap-2 font-mono text-[9px]">
+          <div key={item.key} className="flex items-center gap-2 font-mono text-[10px]">
             <span className="w-16 shrink-0 truncate text-[var(--fp-text-muted)]">{item.label}</span>
-            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--fp-bg)]/60">
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-fp-bg/60">
               <div
                 className={`h-full rounded-full ${barColor(i, top.length)}`}
                 style={{ width: `${Math.max(3, Math.min(100, item.contribution))}%` }}
@@ -61,7 +61,7 @@ export default function FeatureImportanceChart({
       {framed ? (
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
             <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.keyFactorsSub")}</p>
           </div>
           <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
@@ -99,7 +99,7 @@ export default function FeatureImportanceChart({
   if (!framed) return <div>{body}</div>;
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
       {body}
     </section>
   );

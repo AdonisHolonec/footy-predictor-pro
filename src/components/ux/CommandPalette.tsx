@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PredictionRow } from "../../types";
 import type { AppNavView } from "./appNav";
 import { useLocale } from "../../context/LocaleContext";
 import { APP_NAV_ITEMS } from "./appNav";
+import Overlay from "../../design-system/Overlay";
 
 type Props = {
   open: boolean;
@@ -28,6 +29,7 @@ export default function CommandPalette({
   const { t } = useLocale();
   const [q, setQ] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -36,6 +38,11 @@ export default function CommandPalette({
     }
   }, [open]);
 
+  /*
+   * ⌘K / Ctrl+K is the palette's global OPENER, so this listener must live on
+   * window — it is the one legitimate window keydown outside overlayInfra.
+   * Escape handling moved to the shared overlay stack (PR 5).
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -43,7 +50,6 @@ export default function CommandPalette({
         if (open) onClose();
         else onOpen?.();
       }
-      if (e.key === "Escape" && open) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -89,66 +95,63 @@ export default function CommandPalette({
     setActiveIndex(0);
   }, [q, actions.length]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh]"
-      role="dialog"
-      aria-modal
+    <Overlay
+      open={open}
+      onClose={onClose}
+      presentation="palette"
+      closeOnBackdrop
+      zClassName="z-[var(--fp-z-palette)]"
       aria-label="Global search"
-      onClick={onClose}
+      initialFocusRef={inputRef}
+      backdropClassName="bg-black/60"
+      panelClassName="w-full max-w-lg overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-xl"
     >
-      <div
-        className="w-full max-w-lg overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          autoFocus
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setActiveIndex((i) => Math.min(i + 1, Math.max(actions.length - 1, 0)));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setActiveIndex((i) => Math.max(i - 1, 0));
-            } else if (e.key === "Enter" && actions[activeIndex]) {
-              e.preventDefault();
-              actions[activeIndex].run();
-              onClose();
-            }
-          }}
-          placeholder="Search team, competition, prediction, history…"
-          className="w-full border-b border-[var(--fp-border)] bg-transparent px-4 py-3 text-sm text-[var(--fp-text)] outline-none placeholder:text-[var(--fp-text-faint)]"
-          aria-label="Search"
-        />
-        <ul className="max-h-72 overflow-y-auto py-2" role="listbox">
-          {actions.map((a, idx) => (
-            <li key={a.id} role="option" aria-selected={idx === activeIndex}>
-              <button
-                type="button"
-                className={`flex min-h-[var(--fp-touch)] w-full items-center px-4 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                  idx === activeIndex
-                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
-                    : "text-[var(--fp-text)] hover:bg-[var(--fp-accent-muted)]"
-                }`}
-                onMouseEnter={() => setActiveIndex(idx)}
-                onClick={() => {
-                  a.run();
-                  onClose();
-                }}
-              >
-                {a.label}
-              </button>
-            </li>
-          ))}
-          {!actions.length && (
-            <li className="px-4 py-3 text-sm text-[var(--fp-text-muted)]">No results — try another team or league.</li>
-          )}
-        </ul>
-      </div>
-    </div>
+      <input
+        ref={inputRef}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActiveIndex((i) => Math.min(i + 1, Math.max(actions.length - 1, 0)));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActiveIndex((i) => Math.max(i - 1, 0));
+          } else if (e.key === "Enter" && actions[activeIndex]) {
+            e.preventDefault();
+            actions[activeIndex].run();
+            onClose();
+          }
+        }}
+        placeholder="Search team, competition, prediction, history…"
+        className="w-full border-b border-[var(--fp-border)] bg-transparent px-4 py-3 text-sm text-[var(--fp-text)] outline-none placeholder:text-[var(--fp-text-faint)]"
+        aria-label="Search"
+      />
+      <ul className="max-h-72 overflow-y-auto py-2" role="listbox">
+        {actions.map((a, idx) => (
+          <li key={a.id} role="option" aria-selected={idx === activeIndex}>
+            <button
+              type="button"
+              className={`flex min-h-[var(--fp-touch)] w-full items-center px-4 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+                idx === activeIndex
+                  ? "bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
+                  : "text-[var(--fp-text)] hover:bg-[var(--fp-accent-muted)]"
+              }`}
+              onMouseEnter={() => setActiveIndex(idx)}
+              onClick={() => {
+                a.run();
+                onClose();
+              }}
+            >
+              {a.label}
+            </button>
+          </li>
+        ))}
+        {!actions.length && (
+          <li className="px-4 py-3 text-sm text-[var(--fp-text-muted)]">No results — try another team or league.</li>
+        )}
+      </ul>
+    </Overlay>
   );
 }

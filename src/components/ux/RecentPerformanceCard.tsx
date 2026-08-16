@@ -67,7 +67,7 @@ export default function RecentPerformanceCard({
       <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("dash.performanceSub")}</p>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           {t("dash.yesterdayAccuracyTitle")}
         </span>
         {yesterdayStats.settled ? (

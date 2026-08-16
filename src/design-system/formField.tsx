@@ -43,10 +43,10 @@ export function useFieldIds(id: string | undefined, hasDescription: boolean, has
 /** Shared control classes. `glass-input` is the app's existing form surface — see index.css. */
 export const FIELD_CONTROL_CLASS =
   "glass-input w-full rounded-xl px-3 py-2.5 text-sm text-[var(--fp-text)] outline-none transition duration-[var(--fp-ease)] " +
-  "focus:ring-2 focus:ring-[var(--fp-accent)]/35 disabled:cursor-not-allowed disabled:opacity-50";
+  "focus:ring-2 focus:ring-fp-accent/35 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Applied on top of the base class when the field is in an error state. */
-export const FIELD_ERROR_CLASS = "border-[var(--fp-danger)]/60 focus:ring-[var(--fp-danger)]/35";
+export const FIELD_ERROR_CLASS = "border-fp-danger/60 focus:ring-fp-danger/35";
 
 export function FieldLabel({
   htmlFor,

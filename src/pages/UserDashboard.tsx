@@ -21,8 +21,10 @@ import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
+import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
+import Overlay from "../design-system/Overlay";
 import { useLocale } from "../context/LocaleContext";
 
 
@@ -519,38 +521,39 @@ export default function UserDashboard() {
       }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
-        <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
+        <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-accent)] motion-reduce:animate-none" />
           {t("dash.loading")}
         </span>
       )}
       {dateSyncBadgeUntil > Date.now() && (
-        <span className="mb-3 ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-success)]">
+        <span className="mb-3 ml-2 inline-flex items-center gap-1 rounded-full border border-fp-success/35 bg-fp-success/10 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-success)]">
           {t("dash.dataSynced")}
         </span>
       )}
       {status && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] px-3 py-2.5 text-sm font-semibold text-[var(--fp-text)]"
-        >
+        <Banner tone="info" live="status" className="mb-3 font-semibold">
           {status}
-        </div>
+        </Banner>
       )}
       {rehydratedNotice && (
-        <div className="mb-3 rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-3 py-2 text-xs">
+        <Banner tone="info" className="mb-3 !text-xs">
           <span className="font-semibold text-[var(--fp-accent)]">Date vechi actualizate.</span>{" "}
           <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
-        </div>
+        </Banner>
       )}
       {userTier !== "free" && preds.length > 0 && hasLegacyPredictionShape(preds, userTier) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-2.5 text-sm">
-          <p className="min-w-0 flex-1 font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</p>
-          <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
-            {t("shell.predict")}
-          </Button>
-        </div>
+        <Banner
+          tone="warning"
+          className="mb-3"
+          action={
+            <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
+              {t("shell.predict")}
+            </Button>
+          }
+        >
+          <span className="font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</span>
+        </Banner>
       )}
 
       {navView === "home" && (
@@ -773,44 +776,43 @@ export default function UserDashboard() {
         onNavigate={handleNav}
         onPredict={() => void warmAndPredict()}
       />
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+      <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}
         onClose={() => setReportRow(null)}
         onSubmitted={() => setToast(t("predictionReport.successMessage"))}
       />
-      {isLeaguesOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-end bg-[var(--fp-navy)]/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
-          <div
-            className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--fp-shadow-lg)] sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal
-            aria-label="League filter"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">{t("dash.leaguesTitle")}</h2>
-              <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
-                {t("dash.close")}
-              </Button>
-            </div>
-            <LeaguePanel
-              leaguesSorted={leaguesSorted}
-              selectedSet={new Set(selectedLeagueIds)}
-              selectedLeagueIds={selectedLeagueIds}
-              isLeaguesOpen
-              searchLeague={searchLeague}
-              eliteLeagues={ELITE_LEAGUES}
-              setIsLeaguesOpen={setIsLeaguesOpen}
-              setSearchLeague={setSearchLeague}
-              setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
-              clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
-            />
-          </div>
+      <Overlay
+        open={isLeaguesOpen}
+        onClose={() => setIsLeaguesOpen(false)}
+        presentation="drawer"
+        closeOnBackdrop
+        zClassName="z-[var(--fp-z-drawer)]"
+        aria-label="League filter"
+        backdropClassName="bg-fp-navy/30 backdrop-blur-[1px]"
+        panelClassName="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-fp-lg sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold">{t("dash.leaguesTitle")}</h2>
+          <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
+            {t("dash.close")}
+          </Button>
         </div>
-      )}
+        <LeaguePanel
+          leaguesSorted={leaguesSorted}
+          selectedSet={new Set(selectedLeagueIds)}
+          selectedLeagueIds={selectedLeagueIds}
+          isLeaguesOpen
+          searchLeague={searchLeague}
+          eliteLeagues={ELITE_LEAGUES}
+          setIsLeaguesOpen={setIsLeaguesOpen}
+          setSearchLeague={setSearchLeague}
+          setSelectedLeagueIds={setSelectedLeagueIdsLimited}
+          selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
+          clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
+        />
+      </Overlay>
       {user && !user.onboardingCompleted && (
         <OnboardingCarousel
           leagueOptions={ELITE_LEAGUE_META}

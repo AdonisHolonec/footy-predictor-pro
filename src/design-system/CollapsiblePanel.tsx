@@ -31,7 +31,7 @@ export default function CollapsiblePanel({
 
   return (
     <section
-      className={`overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] ${className}`}
+      className={`overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm ${className}`}
     >
       <button
         type="button"
@@ -50,7 +50,7 @@ export default function CollapsiblePanel({
             <h2
               className={
                 compact
-                  ? "text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--fp-accent)]"
+                  ? "text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]"
                   : "font-display text-base font-semibold text-[var(--fp-text)] sm:text-[length:var(--fp-section)]"
               }
             >

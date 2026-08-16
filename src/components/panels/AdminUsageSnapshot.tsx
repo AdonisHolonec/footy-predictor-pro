@@ -15,7 +15,7 @@ export default function AdminUsageSnapshot({ usageSnapshot, usageLoading, onLoad
           type="button"
           onClick={() => void onLoad()}
           disabled={usageLoading}
-          className="rounded-md border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
+          className="rounded-md border border-fp-success/35 bg-fp-success/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
         >
           {usageLoading ? "Se încarcă..." : "Încarcă utilizarea"}
         </button>

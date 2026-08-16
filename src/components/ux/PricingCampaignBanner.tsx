@@ -17,7 +17,7 @@ export default function PricingCampaignBanner({ compact = false, className = "" 
   if (compact) {
     return (
       <p
-        className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-3 py-2 text-xs font-semibold leading-snug text-[var(--fp-text)] ${className}`}
+        className={`rounded-[var(--fp-radius-sm)] border border-fp-warning/35 bg-fp-warning/10 px-3 py-2 text-xs font-semibold leading-snug text-[var(--fp-text)] ${className}`}
       >
         <span className="mr-1.5 inline-flex items-center rounded-md bg-[var(--fp-warning)] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
           −{pct}%
@@ -29,14 +29,14 @@ export default function PricingCampaignBanner({ compact = false, className = "" 
 
   return (
     <div
-      className={`rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/40 bg-gradient-to-r from-[var(--fp-warning)]/15 via-[var(--fp-accent-muted)] to-[var(--fp-warning)]/10 px-3 py-3 sm:px-4 ${className}`}
+      className={`rounded-[var(--fp-radius)] border border-fp-warning/40 bg-gradient-to-r from-fp-warning/15 via-[var(--fp-accent-muted)] to-fp-warning/10 px-3 py-3 sm:px-4 ${className}`}
       role="status"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center rounded-md bg-[var(--fp-warning)] px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
           {t("pricing.badge", { pct })}
         </span>
-        <span className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent-text)]">
+        <span className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-fp-bg-card/80 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-[var(--fp-accent-text)]">
           {t("pricing.limited")}
         </span>
       </div>
@@ -81,7 +81,7 @@ export function PlanCampaignPrice({ tier, className = "" }: PlanPriceProps) {
     <div className={`mt-2 ${className}`}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className="text-base font-semibold text-[var(--fp-text-muted)] line-through decoration-2 decoration-[var(--fp-danger)]/80"
+          className="text-base font-semibold text-[var(--fp-text-muted)] line-through decoration-2 decoration-fp-danger/80"
           title={t("pricing.vsStandard")}
         >
           {formatLocalEur(list)}

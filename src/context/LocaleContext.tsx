@@ -76,7 +76,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     return (
       <div className="lab-page grid min-h-screen place-items-center">
         <div className="lab-bg" aria-hidden />
-        <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+        <div className="relative z-10 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           Loading…
         </div>
       </div>

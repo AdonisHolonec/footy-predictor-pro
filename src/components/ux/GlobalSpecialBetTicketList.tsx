@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import Badge from "../../design-system/Badge";
+import Banner from "../../design-system/Banner";
 import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import Skeleton from "../../design-system/Skeleton";
@@ -71,10 +72,7 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props
 
   if (state.phase === "error") {
     return (
-      <div
-        role="alert"
-        className="rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
-      >
+      <Banner tone="danger" live="alert" className="!px-4 !py-3">
         <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{t("gsb.historyErrorTitle")}</p>
         <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
           {state.error.message || t(state.error.messageKey)}
@@ -84,7 +82,7 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props
             {t("gsb.retry")}
           </Button>
         )}
-      </div>
+      </Banner>
     );
   }
 

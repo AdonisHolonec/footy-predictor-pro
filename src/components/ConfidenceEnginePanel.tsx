@@ -23,15 +23,15 @@ const DIMENSION_KEYS: Array<keyof NonNullable<ConfidenceEngineData["scores"]>> =
 function categoryTone(category?: string): string {
   switch (category) {
     case "Very High":
-      return "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]";
+      return "border-fp-success/40 bg-fp-success/15 text-[var(--fp-success)]";
     case "High":
-      return "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]";
+      return "border-fp-accent/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]";
     case "Medium":
       return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
     case "Low":
-      return "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
+      return "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]";
     case "Very Low":
-      return "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]";
+      return "border-fp-danger/40 bg-fp-danger/10 text-[var(--fp-danger)]";
     default:
       return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
   }
@@ -107,7 +107,7 @@ export default function ConfidenceEnginePanel({
             title={isAvailable ? undefined : t("panels.dimUnavailable")}
           >
             <div className="flex items-center justify-between gap-1">
-              <div className="truncate text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+              <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                 {translateDimensionLabel(t, key)}
               </div>
               <div className={`text-sm font-bold tabular-nums ${scoreToneClass(score, isAvailable)}`}>
@@ -121,7 +121,7 @@ export default function ConfidenceEnginePanel({
               />
             </div>
             {!isAvailable && (
-              <div className="mt-0.5 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
+              <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]">
                 {t("common.na")}
               </div>
             )}
@@ -143,7 +143,7 @@ export default function ConfidenceEnginePanel({
         }
         badge={
           <span
-            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${categoryTone(category)}`}
           >
             {categoryLabel} · {overall}%
           </span>
@@ -152,13 +152,13 @@ export default function ConfidenceEnginePanel({
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <p className="text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.confidenceSub")}</p>
           <div className="text-right">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
               {t("panels.confidence")}
             </div>
             <div className={`font-display text-2xl font-bold tabular-nums ${overallToneClass(overall)}`}>{overall}%</div>
             {liveAdjustedLabel && (
               <div
-                className={`mt-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                className={`mt-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                   liveAdjustment?.reason === "aligned"
                     ? "text-[var(--fp-success)]"
                     : liveAdjustment?.reason === "contradicted"

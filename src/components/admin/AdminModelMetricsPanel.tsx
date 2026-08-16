@@ -1,4 +1,5 @@
 import { StatTile } from "../../design-system";
+import Button from "../../design-system/Button";
 import { HistorySyncMonitor } from "./HistorySyncMonitor";
 import { useModelMetrics } from "./useModelMetrics";
 
@@ -54,17 +55,17 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const ece = metrics?.ece1x2 ?? null;
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] md:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm md:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
-          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Model metrics</h2>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">Model metrics</h2>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             window {days}d · {metrics?.nProb ?? 0} settled cu probabilităţi
           </p>
         </div>
         <div className="flex items-center gap-2">
           {mlStatus && (
-            <div className="hidden font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text)] sm:block">
+            <div className="hidden font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text)] sm:block">
               cal · {mlStatus.calibrationMaps ?? 0} · stk · {mlStatus.activeStackerWeights ?? 0} · elo · {mlStatus.eloTeams ?? 0}
             </div>
           )}
@@ -72,43 +73,45 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={trainNow}
             disabled={training}
-            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-fp-success/25 bg-fp-success/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-fp-success/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează acum agentul de antrenare ML (calibration + stacker) pe baza istoricului."
           >
             {training ? "Training…" : "Train now"}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={refreshing}
             onClick={invalidate}
-            disabled={refreshing}
-            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="!min-h-0 !px-3 !py-1.5 !text-[10px] uppercase tracking-wide !text-[var(--fp-accent)]"
             title="Invalidează cache-ul de calibrare/stacker/elo (le reîncarcă la următorul predict)"
           >
-            {refreshing ? "…" : "Refresh cache"}
-          </button>
+            Refresh cache
+          </Button>
           <button
             type="button"
             onClick={runHistorySyncNow}
             disabled={syncingHistoryNow}
-            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-fp-success/25 bg-fp-success/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-fp-success/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează manual /api/history?sync=1 și reîncarcă monitorizarea."
           >
             {syncingHistoryNow ? "Syncing…" : "Run history sync"}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={loading}
             onClick={() => void load()}
-            disabled={loading}
-            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="!min-h-0 !px-3 !py-1.5 !text-[10px] uppercase tracking-wide"
           >
-            {loading ? "…" : "Reload"}
-          </button>
+            Reload
+          </Button>
         </div>
       </div>
 
-      {err && <div className="mb-3 rounded-lg border border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 px-3 py-2 text-[11px] text-[var(--fp-danger)]">{err}</div>}
+      {err && <div className="mb-3 rounded-lg border border-fp-danger/25 bg-fp-danger/5 px-3 py-2 text-[11px] text-[var(--fp-danger)]">{err}</div>}
       {trainReport && (
-        <div className="mb-3 rounded-lg border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-2">
+        <div className="mb-3 rounded-lg border border-fp-success/35 bg-fp-success/10 px-3 py-2">
           <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-success)]">Last training run</div>
           <div className="mt-1 grid grid-cols-1 gap-1 font-mono text-[10px] text-[var(--fp-accent)] sm:grid-cols-2">
             <div>Mode: <span className="text-[var(--fp-text)]">{trainReport.mode || "all"}</span></div>
@@ -116,7 +119,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             <div>Calibration: <span className="text-[var(--fp-text)]">{trainReport.calibrationRows || 0} rows · {trainReport.calibrationSummary || 0} maps</span></div>
             <div>Stacker: <span className="text-[var(--fp-text)]">{trainReport.stackerRows || 0} rows · {trainReport.stackerSamples || 0} samples · {trainReport.stackerTrained || 0} weights</span></div>
           </div>
-          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+          <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             finished {trainReport.finishedAt ? new Date(trainReport.finishedAt).toLocaleString() : "—"}
           </div>
         </div>
@@ -158,8 +161,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       {metrics?.calibration1x2 && metrics.calibration1x2.length > 0 && (
         <div className="mt-5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">Calibration buckets</span>
-            <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">confidence vs accuracy</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent-hover)]">Calibration buckets</span>
+            <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">confidence vs accuracy</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[380px] font-mono text-[10px] tabular-nums">
@@ -224,7 +227,7 @@ function BreakdownTable({
 }) {
   return (
     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
-      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">{title}</div>
+      <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent-hover)]">{title}</div>
       <table className="w-full font-mono text-[10px] tabular-nums">
         <thead className="text-left text-[var(--fp-text-muted)]">
           <tr>

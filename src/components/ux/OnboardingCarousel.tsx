@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import Button from "../../design-system/Button";
+import Overlay from "../../design-system/Overlay";
 import type { MarketPref } from "../../hooks/useUiPrefs";
 
 type LeagueOption = { id: number; name: string; country: string };
@@ -38,8 +39,20 @@ export default function OnboardingCarousel({ leagueOptions, initialLeagueIds, on
   const skip = () => onComplete({ leagueIds: initialLeagueIds, markets: [] });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/60 p-4 backdrop-blur-sm">
-      <div className="flex w-full max-w-md flex-col rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-[var(--fp-shadow)] sm:p-8">
+    <Overlay
+      open
+      /* Blocking by design: Escape and backdrop have never dismissed
+         onboarding, and must not start to — the only exits stay Skip and
+         Get started. Overlay still supplies trap/portal/lock/role. */
+      onClose={skip}
+      closeOnEscape={false}
+      closeOnBackdrop={false}
+      aria-label={t("flow.onboardingSkip")}
+      zClassName="z-[var(--fp-z-overlay)]"
+      backdropClassName="bg-fp-navy/60 backdrop-blur-sm"
+      panelClassName="flex w-full max-w-md flex-col rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-fp sm:p-8"
+    >
+      <>
         <button
           type="button"
           onClick={skip}
@@ -138,7 +151,7 @@ export default function OnboardingCarousel({ leagueOptions, initialLeagueIds, on
             {isLast ? t("flow.onboardingGetStarted") : t("flow.onboardingNext")}
           </Button>
         </div>
-      </div>
-    </div>
+      </>
+    </Overlay>
   );
 }

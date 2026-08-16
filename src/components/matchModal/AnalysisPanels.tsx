@@ -57,8 +57,8 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           ) : null}
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["overview", "analysis", "markets"])}`}>
-            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["analysis"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.xgLuck")}</h3>
+            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["analysis"])}`}>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.xgLuck")}</h3>
               <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
@@ -71,8 +71,8 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
               )}
             </section>
 
-            <section className={`rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["overview", "markets"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">{tr("match.oddsValue")}</h3>
+            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["overview", "markets"])}`}>
+              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
                   <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">1</div>
@@ -106,7 +106,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
                     <div className="overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]">
                       <table className="w-full min-w-[360px] border-collapse text-left text-[10px]">
                         <thead>
-                          <tr className="border-b border-[var(--fp-border)] text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+                          <tr className="border-b border-[var(--fp-border)] text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
                             <th className="px-2.5 py-2">{tr("panels.colScoreline")}</th>
                             <th className="px-2.5 py-2 text-right">{tr("panels.colProbability")}</th>
                             <th className="px-2.5 py-2 text-right">{tr("panels.colOdds")}</th>
@@ -127,7 +127,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
                               <tr
                                 key={`${m.type || "cs"}-${idx}`}
                                 className={`border-b border-[var(--fp-border)] last:border-0 ${
-                                  m.bestMarket ? "bg-[var(--fp-success)]/10" : "bg-[var(--fp-bg-card)]"
+                                  m.bestMarket ? "bg-fp-success/10" : "bg-[var(--fp-bg-card)]"
                                 }`}
                               >
                                 <td className="px-2.5 py-1.5 font-semibold text-[var(--fp-text)]">
@@ -161,7 +161,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
               )}
               {match.valueBet?.detected && match.valueBet.stakePlan && (
                 <div className="mt-3 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                  <div className="text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.stakePlan")}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.stakePlan")}</div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 tabular-nums">
                     <span>{match.valueBet.type}</span>
                     <span>EV +{match.valueBet.ev ?? 0}%</span>
@@ -218,10 +218,10 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           )}
 
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["markets"])}`}>
-            <section className="rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
+            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--fp-accent)]/80">04 — Piețe & scor</h3>
-                <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">04 — Piețe & scor</h3>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                   probabilitate · încredere
                 </span>
               </div>
@@ -275,7 +275,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
                 return (
                   <>
                     {tossCount > 0 && (
-                      <div className="mb-3 rounded-lg border border-[var(--fp-warning)]/25 bg-[var(--fp-warning)]/5 px-3 py-2 text-[10px] leading-snug text-[var(--fp-warning)]">
+                      <div className="mb-3 rounded-lg border border-fp-warning/25 bg-fp-warning/5 px-3 py-2 text-[10px] leading-snug text-[var(--fp-warning)]">
                         {tr("match.tossWarn", { n: tossCount })}
                       </div>
                     )}

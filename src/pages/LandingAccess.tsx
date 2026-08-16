@@ -39,7 +39,7 @@ export default function LandingAccess() {
 
   return (
     <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-fp-bg-card/95 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-3 sm:px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2.5">
             <img
@@ -73,10 +73,10 @@ export default function LandingAccess() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-3 py-6 sm:px-4 sm:py-8">
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         {/* Hero */}
         <section className="text-center sm:text-left">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>
           <h1 className="mt-2 font-display text-[length:var(--fp-hero)] font-semibold leading-tight tracking-tight">
             {t("landing.headline")}
           </h1>
@@ -140,7 +140,7 @@ export default function LandingAccess() {
 
         {/* Preview + benefits */}
         <section className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <Card padding="sm" className="border-[var(--fp-accent)]/25 shadow-[var(--fp-shadow)]">
+          <Card padding="sm" className="border-fp-accent/25 shadow-fp">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                 {t("landing.previewEyebrow")}
@@ -221,7 +221,7 @@ export default function LandingAccess() {
         {/* Pricing */}
         <section id="pricing" className="scroll-mt-20 space-y-3">
           <header>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.pricingKicker")}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent-text)]">{t("landing.pricingKicker")}</p>
             <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold">{t("landing.pricingTitle")}</h2>
             <p className="mt-1 max-w-2xl text-sm text-[var(--fp-text-muted)]">{t("landing.pricingSub")}</p>
           </header>
@@ -303,7 +303,7 @@ export default function LandingAccess() {
                 key={plan.key}
                 padding="sm"
                 className={`relative flex h-full flex-col ${
-                  plan.highlight ? "border-[var(--fp-warning)]/45 ring-1 ring-[var(--fp-warning)]/25" : ""
+                  plan.highlight ? "border-fp-warning/45 ring-1 ring-fp-warning/25" : ""
                 }`}
               >
                 {plan.key !== "free" && PRICING_CAMPAIGN.active ? (

@@ -17,14 +17,14 @@ export default function TeamSnapshotCard({
   const { t } = useLocale();
   if (!snap) {
     return (
-      <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center shadow-[var(--fp-shadow-sm)]">
+      <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center shadow-fp-sm">
         <div className="text-[10px] font-bold uppercase text-[var(--fp-text-muted)]">{title}</div>
         <p className="mt-1.5 text-sm text-[var(--fp-text-muted)]">{t("match.noStandings")}</p>
       </div>
     );
   }
   return (
-    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+    <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{title}</div>
       <div className="flex flex-wrap items-baseline gap-2">
         {snap.rank != null && (
@@ -62,9 +62,9 @@ export default function TeamSnapshotCard({
                 key={`${ch}-${i}`}
                 className={`inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md border text-[10px] font-bold ${
                   ch === "W"
-                    ? "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
+                    ? "border-fp-success/40 bg-fp-success/15 text-[var(--fp-success)]"
                     : ch === "L"
-                      ? "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/15 text-[var(--fp-danger)]"
+                      ? "border-fp-danger/40 bg-fp-danger/15 text-[var(--fp-danger)]"
                       : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"
                 }`}
               >

@@ -264,7 +264,7 @@ export default function MainBoardSection({
         <button
           type="button"
           onClick={() => openMatch(continueMatch)}
-          className="flex w-full min-h-[var(--fp-touch)] items-center justify-between rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/25 bg-[var(--fp-accent-muted)] px-4 py-3 text-left"
+          className="flex w-full min-h-[var(--fp-touch)] items-center justify-between rounded-[var(--fp-radius)] border border-fp-accent/25 bg-[var(--fp-accent-muted)] px-4 py-3 text-left"
         >
           <span>
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Continue</span>

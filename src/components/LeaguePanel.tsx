@@ -31,7 +31,7 @@ export default function LeaguePanel({
   const { t } = useLocale();
 
   return (
-    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] lg:sticky lg:top-5">
+    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm lg:sticky lg:top-5">
       <div className="border-b border-[var(--fp-border)] px-3 py-2.5">
         <button
           type="button"
@@ -42,11 +42,11 @@ export default function LeaguePanel({
         >
           <div className="min-w-0">
             <h2 className="font-display text-base font-semibold text-[var(--fp-text)]">{t("leagues.title")}</h2>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-accent)]">{t("leagues.eyebrow")}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("leagues.eyebrow")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {selectedSet.size > 0 && (
-              <span className="rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] px-2 py-0.5 text-[10px] font-bold tabular-nums text-[var(--fp-accent)]">
+              <span className="rounded-full border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-2 py-0.5 text-[10px] font-bold tabular-nums text-[var(--fp-accent)]">
                 {selectedSet.size}
               </span>
             )}
@@ -75,7 +75,7 @@ export default function LeaguePanel({
                 e.stopPropagation();
                 selectEliteLeagues();
               }}
-              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-2.5 text-[11px] font-bold text-[var(--fp-accent)]"
+              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-[var(--fp-accent-muted)] px-2.5 text-[11px] font-bold text-[var(--fp-accent)]"
             >
               {t("leagues.eliteAll")}
             </button>
@@ -86,7 +86,7 @@ export default function LeaguePanel({
                 e.stopPropagation();
                 clearLeagueSelection();
               }}
-              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2.5 text-[11px] font-bold text-[var(--fp-danger)]"
+              className="min-h-[var(--fp-touch)] rounded-[var(--fp-radius-sm)] border border-fp-danger/30 bg-fp-danger/10 px-2.5 text-[11px] font-bold text-[var(--fp-danger)]"
             >
               {t("leagues.clear")}
             </button>
@@ -104,7 +104,7 @@ export default function LeaguePanel({
                 }}
                 className={`flex min-h-[var(--fp-touch)] w-full items-center justify-between gap-2 rounded-[var(--fp-radius-sm)] border px-2.5 text-left text-sm touch-manipulation ${
                   selectedSet.has(lg.id)
-                    ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)]"
+                    ? "border-fp-accent/40 bg-[var(--fp-accent-muted)]"
                     : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] hover:bg-[var(--fp-bg-muted)]"
                 }`}
               >

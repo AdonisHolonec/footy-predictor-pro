@@ -65,15 +65,13 @@
   --success: var(--fp-success);
   --info: var(--fp-accent);
 
-  /* Spacing (8pt) — unchanged, already conformant */
-  --fp-space-1: 4px;
-  --fp-space-2: 8px;
-  --fp-space-3: 12px;
-  --fp-space-4: 16px;
-  --fp-space-5: 24px;
-  --fp-space-6: 32px;
-  --fp-space-7: 40px;
-  --fp-space-8: 48px;
+  /* Spacing — deliberately NO spacing tokens (PR 3). The previous eight-step
+     "8pt scale" had ZERO consumers while the app's real
+     rhythm is Tailwind's 4px grid with half-steps below 8px (py-1.5, px-2.5,
+     gap-1.5 — ~470 uses). A declared scale nobody uses is worse than none:
+     it reads as the system while the code follows another. The real rule,
+     now written down where the fiction lived: 2/4/6/8px for micro-spacing,
+     12/16/20/24/32px for layout, no new arbitrary values. */
 
   /* Radius — unchanged */
   --fp-radius-sm: 10px;
@@ -83,11 +81,11 @@
   /* Type — unchanged */
   --fp-hero: clamp(1.75rem, 2.5vw, 2.25rem);
   --fp-section: 1.25rem;
-  --fp-card-title: 1.05rem;
   --fp-body: 0.9375rem;
-  --fp-caption: 0.75rem;
   --fp-badge: 0.6875rem;
-  --fp-num: 1.25rem;
+  /* The caption, card-title and num type tokens were removed (PR 3): declared
+     for two sprints, consumed by nothing — text-xs, ad-hoc titles and
+     StatTile's own tabular value styling are what the app actually uses. */
 
   /* Motion — unchanged */
   --fp-ease: 200ms cubic-bezier(0.33, 1, 0.68, 1);
@@ -106,6 +104,42 @@
   --fp-z-dropdown: 50;
   --fp-z-modal: 60;
   --fp-z-toast: 70;
+
+  /* RGB triplets — same colours as above, exposed as raw channels so Tailwind
+     can compose opacity (`bg-fp-danger/10`). Tailwind 3.4 drops any
+     `<util>-[var(--fp-x)]/NN` class silently, which is how 600 semantic tints
+     shipped as no-ops; `rgb(var(--fp-x-rgb) / <alpha-value>)` in
+     tailwind.config.js is the root fix. A guard test asserts each triplet
+     matches its hex twin per theme, so the two spellings cannot drift. */
+  --fp-bg-rgb: 243 242 242;
+  --fp-bg-elevated-rgb: 234 233 233;
+  --fp-bg-card-rgb: 255 255 255;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 236 48 19;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 210 43 17;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 32 30 29;
+  --fp-text-muted-rgb: 96 93 93;
+  --fp-text-faint-rgb: 125 121 121;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+
+  /* Semantic split (foundation only): "live" is not "loss" and "value" is not
+     "warning", even though today they share hues. These tokens carry the
+     CURRENT colours so adopting them is visually a no-op; separating the hues
+     themselves is a later, deliberate design decision — not this PR. */
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+
+  /* Focus ring — themed, replaces the hardcoded teal rgba(62,207,191,…) that
+     ignored all three themes. Two intensities mirror the old 0.55/0.4 pair. */
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 /* Light — mirrors :root explicitly so the theme block is self-contained
@@ -136,6 +170,28 @@ html.theme-light {
   --fp-glass-border: rgba(32, 30, 29, 0.08);
   --fp-gradient-primary: linear-gradient(135deg, rgba(236, 48, 19, 0.1), rgba(180, 83, 9, 0.06));
   --fp-gradient-surface: linear-gradient(180deg, rgba(32, 30, 29, 0.02), rgba(32, 30, 29, 0));
+
+  --fp-bg-rgb: 243 242 242;
+  --fp-bg-elevated-rgb: 234 233 233;
+  --fp-bg-card-rgb: 255 255 255;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 236 48 19;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 210 43 17;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 32 30 29;
+  --fp-text-muted-rgb: 96 93 93;
+  --fp-text-faint-rgb: 125 121 121;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 /* Dark — now the opt-in alternative (was default pre-Sprint-2), reachable via Settings */
@@ -165,6 +221,28 @@ html.theme-dark {
   --fp-glass-border: rgba(255, 255, 255, 0.1);
   --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.16), rgba(240, 178, 61, 0.08));
   --fp-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+
+  --fp-bg-rgb: 10 13 11;
+  --fp-bg-elevated-rgb: 16 20 15;
+  --fp-bg-card-rgb: 22 27 23;
+  --fp-bg-muted-rgb: 29 35 30;
+  --fp-navy-rgb: 13 21 18;
+  --fp-accent-rgb: 31 174 107;
+  --fp-accent-hover-rgb: 41 201 122;
+  --fp-accent-text-rgb: 31 174 107;
+  --fp-purple-rgb: 167 139 250;
+  --fp-text-rgb: 243 245 243;
+  --fp-text-muted-rgb: 159 175 166;
+  --fp-text-faint-rgb: 168 181 172;
+  --fp-success-rgb: 34 208 110;
+  --fp-danger-rgb: 240 69 58;
+  --fp-warning-rgb: 240 178 61;
+  --fp-live: #f0453a;
+  --fp-live-rgb: 240 69 58;
+  --fp-value: #f0b23d;
+  --fp-value-rgb: 240 178 61;
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 html.theme-contrast {
@@ -178,10 +256,62 @@ html.theme-contrast {
   --fp-accent: #3ddc84;
   --fp-accent-muted: rgba(61, 220, 132, 0.25);
   --fp-accent-text: var(--fp-accent);
+
+  /* Triplets mirror the values this theme actually RESOLVES to today: tokens
+     the block never overrode (bg-muted, navy, success, danger, warning, purple,
+     accent-hover…) inherit :root's light values, and the triplets say so
+     explicitly rather than silently. Documented inheritance, zero visual change. */
+  --fp-bg-rgb: 0 0 0;
+  --fp-bg-elevated-rgb: 10 10 10;
+  --fp-bg-card-rgb: 17 17 17;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 61 220 132;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 61 220 132;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 255 255 255;
+  --fp-text-muted-rgb: 226 232 240;
+  --fp-text-faint-rgb: 212 212 212;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+  /* Contrast theme: ring stays near-opaque so it never washes out on black. */
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 85%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 70%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --fp-ease: 0ms;
   }
+}
+
+/* ================================================================== */
+/* Geometry foundation (PR 3) — appended as its own block so parallel  */
+/* foundation branches editing the main :root merge without conflict.  */
+/* ================================================================== */
+:root {
+  /* The consumer content column. One width, one spelling — this replaces the
+     max-w-[1280px] / max-w-7xl split that made half the surfaces miss any
+     future change. Marketing pages (landing 5xl, privacy 6xl) and the admin
+     shell (1680px) keep their own deliberate widths. */
+  --fp-container: 80rem;
+
+  /* Overlay stack, exactly as the app ALREADY layers it — same numbers, now
+     named. Order (bottom→top): overlay 50 (legacy full-screen shells) <
+     modal 60 < drawer 70 < palette 80 < toast 90 < prompt 95 < tooltip 100.
+     PR 5 may flatten this stack; PR 3 only makes the existing order legible. */
+  --fp-z-overlay: 50;
+  --fp-z-drawer: 70;
+  --fp-z-palette: 80;
+  /* Correction, not a change: the Toast component has always rendered at 90;
+     the old 70 had zero consumers. Declared value now matches reality. */
+  --fp-z-toast: 90;
+  --fp-z-prompt: 95;
+  --fp-z-tooltip: 100;
 }

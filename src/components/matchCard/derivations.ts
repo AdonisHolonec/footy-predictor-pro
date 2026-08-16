@@ -83,23 +83,23 @@ export function statusChip(
   if (isLive) {
     return {
       label: t("card.live").toUpperCase(),
-      className: "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+      className: "border-fp-danger/35 bg-fp-danger/10 text-[var(--fp-danger)]"
     };
   }
   if (hasFinalScore) {
     if (finalPickResult === true) {
-      return { label: t("card.chipWin"), className: "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 text-[var(--fp-success)]" };
+      return { label: t("card.chipWin"), className: "border-fp-success/35 bg-fp-success/10 text-[var(--fp-success)]" };
     }
     if (finalPickResult === false) {
-      return { label: t("card.chipLose"), className: "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]" };
+      return { label: t("card.chipLose"), className: "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]" };
     }
     return { label: t("card.chipFinal"), className: "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]" };
   }
   if (row.valueBet?.detected) {
-    return { label: t("card.chipValue"), className: "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]" };
+    return { label: t("card.chipValue"), className: "border-fp-warning/35 bg-fp-warning/10 text-[var(--fp-warning)]" };
   }
   if (confPct >= 70) {
-    return { label: t("card.chipLowRisk"), className: "border-[var(--fp-success)]/25 bg-[var(--fp-success)]/8 text-[var(--fp-success)]" };
+    return { label: t("card.chipLowRisk"), className: "border-fp-success/25 bg-fp-success/8 text-[var(--fp-success)]" };
   }
   return { label: t("card.chipOpen"), className: "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]" };
 }
@@ -117,14 +117,14 @@ export function modelTierBadge(row: PredictionRow): { label: string; title: stri
     return {
       label: "ML",
       title: `Stacker ML activ${meta.stackerSampleSize ? ` · n=${meta.stackerSampleSize}` : ""}`,
-      className: "border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
+      className: "border-fp-success/45 bg-fp-success/10 text-[var(--fp-success)]"
     };
   }
   if (meta.calibrationApplied) {
     return {
       label: "CAL",
       title: `Isotonic calibration aplicată${meta.calibrationSampleSize ? ` · n=${meta.calibrationSampleSize}` : ""}`,
-      className: "border-[var(--fp-accent)]/45 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
+      className: "border-fp-accent/45 bg-fp-accent/10 text-[var(--fp-accent)]"
     };
   }
   return {

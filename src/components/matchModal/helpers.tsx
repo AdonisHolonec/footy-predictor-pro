@@ -7,15 +7,15 @@ import type { MarketTier, MarketTierInfo, MatchScore, PredictionRow } from "../.
 export function tierToneClass(tier: MarketTier | undefined): string {
   switch (tier) {
     case "strong":
-      return "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/8 text-[var(--fp-success)]";
+      return "border-fp-success/35 bg-fp-success/8 text-[var(--fp-success)]";
     case "lean":
-      return "border-[var(--fp-accent)]/35 bg-[var(--fp-accent)]/8 text-[var(--fp-accent)]";
+      return "border-fp-accent/35 bg-fp-accent/8 text-[var(--fp-accent)]";
     case "toss":
-      return "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/8 text-[var(--fp-warning)]";
+      return "border-fp-warning/30 bg-fp-warning/8 text-[var(--fp-warning)]";
     case "lean_off":
-      return "border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 text-[var(--fp-danger)]/90";
+      return "border-fp-danger/25 bg-fp-danger/5 text-fp-danger/90";
     case "strong_off":
-      return "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]";
+      return "border-fp-danger/40 bg-fp-danger/10 text-[var(--fp-danger)]";
     default:
       return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
   }
@@ -126,17 +126,17 @@ export function marketResultBadge(
   const isHot = probability >= 85;
   const toneClass =
     tone === "corners"
-      ? "border-[var(--fp-accent)]/45 bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
+      ? "border-fp-accent/45 bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
       : tone === "shots"
         ? "border-violet-500/40 bg-violet-500/10 text-[var(--fp-text)]"
         : tone === "ht"
-          ? "border-[var(--fp-warning)]/45 bg-[var(--fp-warning)]/10 text-[var(--fp-text)]"
+          ? "border-fp-warning/45 bg-fp-warning/10 text-[var(--fp-text)]"
           : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
   const pulseClass = isHot ? " animate-pulse motion-reduce:animate-none ring-1 ring-white/35" : "";
   if (verdict === true) {
     return (
       <span
-        className={`${base} border-[var(--fp-success)]/60 bg-[var(--fp-success)]/20 text-[var(--fp-success)]${pulseClass}`}
+        className={`${base} border-fp-success/60 bg-fp-success/20 text-[var(--fp-success)]${pulseClass}`}
       >
         {pred} · WIN
       </span>
@@ -145,7 +145,7 @@ export function marketResultBadge(
   if (verdict === false) {
     return (
       <span
-        className={`${base} border-[var(--fp-danger)]/60 bg-[var(--fp-danger)]/20 text-[var(--fp-danger)]${pulseClass}`}
+        className={`${base} border-fp-danger/60 bg-fp-danger/20 text-[var(--fp-danger)]${pulseClass}`}
       >
         {pred} · LOSE
       </span>
@@ -195,8 +195,8 @@ export function evaluateScoreDerivedPick(pick: string, score?: MatchScore): bool
 }
 
 export function finalScoreBadgeClass(result: boolean | null) {
-  if (result === true) return "text-[var(--fp-success)] border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10";
-  if (result === false) return "text-[var(--fp-danger)] border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10";
+  if (result === true) return "text-[var(--fp-success)] border-fp-success/35 bg-fp-success/10";
+  if (result === false) return "text-[var(--fp-danger)] border-fp-danger/30 bg-fp-danger/10";
   return "text-[var(--fp-text-muted)] border-[var(--fp-border)] bg-[var(--fp-bg-muted)]";
 }
 

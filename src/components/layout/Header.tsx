@@ -26,7 +26,7 @@ export default function Header({ date, modelPulse, children, childrenRight }: He
             <img
               src={BRAND_IMAGES.logoPrimary}
               alt="Footy Predictor"
-              className="h-14 w-14 rounded-card border border-[var(--fp-accent)]/40 object-contain p-1 shadow-card sm:h-16 sm:w-16 lg:h-[4.5rem] lg:w-[4.5rem]"
+              className="h-14 w-14 rounded-[var(--fp-radius)] border border-fp-accent/40 object-contain p-1 shadow-card sm:h-16 sm:w-16 lg:h-[4.5rem] lg:w-[4.5rem]"
             />
             <span>
               Observator de semnale <span className="text-[var(--fp-accent)]">fotbal</span>
@@ -43,7 +43,7 @@ export default function Header({ date, modelPulse, children, childrenRight }: He
             <BrandArtboard
               src={BRAND_IMAGES.refDossier}
               alt="Referință vizuală — prediction dossier (admin workspace)"
-              frameClassName="max-h-[140px] rounded-card"
+              frameClassName="max-h-[140px] rounded-[var(--fp-radius)]"
             />
           </div>
           {children}

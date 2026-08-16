@@ -51,7 +51,7 @@ export default function LeagueSelector({
   }
 
   return (
-    <div className="rounded-3xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/45 p-5 shadow-[var(--fp-shadow-sm)] backdrop-blur-sm">
+    <div className="rounded-3xl border border-[var(--fp-border)] bg-fp-bg-card/45 p-5 shadow-fp-sm backdrop-blur-sm">
       <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Personalizare blocată</h3>
       <p className="mt-2 text-xs leading-relaxed text-[var(--fp-text-muted)]">
         Selecția ligilor și predicțiile personalizate sunt disponibile după autentificare.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { BacktestAnalyticsResponse, BacktestFilters, BacktestMetrics } from "../../types";
 import { fetchAnalyticsExport, loadAnalytics } from "../../services/backtestService";
-import { StatTile, Button } from "../../design-system";
+import { StatTile, Button, FilterChip } from "../../design-system";
 import {
   BreakdownBarChart,
   DailyPnlChart,
@@ -118,7 +118,7 @@ export default function BacktestAnalyticsPanel() {
   }
 
   return (
-    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] sm:mt-5">
+    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm sm:mt-5">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--fp-border)] px-3.5 py-3 sm:px-5">
         <div>
           <h3 className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
@@ -159,18 +159,13 @@ export default function BacktestAnalyticsPanel() {
               { key: "season" as const, label: "Season" }
             ] as const
           ).map((p) => (
-            <button
+            <FilterChip
               key={p.key}
-              type="button"
+              selected={period === p.key}
               onClick={() => setPeriod(p.key)}
-              className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
-                period === p.key
-                  ? "border-[var(--fp-accent)]/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-              }`}
-            >
-              {p.label}
-            </button>
+              >
+                {p.label}
+              </FilterChip>
           ))}
         </div>
 
@@ -282,7 +277,7 @@ export default function BacktestAnalyticsPanel() {
       </div>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
+        <div className="mx-4 mt-3 rounded-lg border border-fp-danger/30 bg-fp-danger/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
           {error}
         </div>
       ) : null}
@@ -290,8 +285,8 @@ export default function BacktestAnalyticsPanel() {
       {/* Metrics grid — Settled kept as first-class tile (do not remove) */}
       <div className="px-4 py-4 sm:px-5">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">Performance metrics</div>
-          <div className="font-mono text-[9px] text-[var(--fp-text-muted)]">
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Performance metrics</div>
+          <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">
             {loading ? "…" : `${report?.totalsUnfiltered?.filtered ?? 0} / ${report?.totalsUnfiltered?.settled ?? 0} bets`}
           </div>
         </div>
@@ -327,7 +322,7 @@ export default function BacktestAnalyticsPanel() {
         </div>
 
         {/* Professional quant metrics */}
-        <div className="mb-2 mt-4 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+        <div className="mb-2 mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           Quantitative metrics
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -395,12 +390,12 @@ export default function BacktestAnalyticsPanel() {
 
       {/* Recent bets table */}
       <div className="border-t border-[var(--fp-border)] px-4 py-4 sm:px-5">
-        <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           Settled bets (filtered)
         </div>
         <div className="max-h-64 overflow-auto rounded-xl border border-[var(--fp-border)]">
           <table className="min-w-full text-left font-mono text-[10px]">
-            <thead className="sticky top-0 bg-[var(--fp-bg-card)]/95 text-[var(--fp-text-muted)]">
+            <thead className="sticky top-0 bg-fp-bg-card/95 text-[var(--fp-text-muted)]">
               <tr>
                 <th className="px-2 py-1.5 font-semibold">Date</th>
                 <th className="px-2 py-1.5 font-semibold">Match</th>
@@ -448,7 +443,7 @@ type LoadableFilters = Partial<BacktestFilters>;
 function FilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block font-mono text-[8px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+      <span className="mb-1 block font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
         {label}
       </span>
       {children}
@@ -461,7 +456,7 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text)]">{title}</div>
-        {subtitle ? <div className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</div> : null}
+        {subtitle ? <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">{subtitle}</div> : null}
       </div>
       {children}
     </div>

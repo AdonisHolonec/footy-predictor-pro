@@ -2,6 +2,8 @@ import { useMemo, type ReactNode } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import Badge from "../../design-system/Badge";
 import Button from "../../design-system/Button";
+import SectionHeader from "../../design-system/SectionHeader";
+import SegmentedControl from "../../design-system/SegmentedControl";
 import Skeleton from "../../design-system/Skeleton";
 import StatTile from "../../design-system/StatTile";
 import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
@@ -125,18 +127,10 @@ export default function GlobalSpecialBetSection({
   const shell = (children: ReactNode) => (
     <section
       aria-labelledby="gsb-heading"
-      className="rounded-[var(--fp-radius-lg)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5"
+      className="rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] p-4 shadow-fp-sm sm:p-5"
     >
       <header className="min-w-0">
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
-          {t("gsb.eyebrow")}
-        </p>
-        <h2
-          id="gsb-heading"
-          className="mt-1 font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]"
-        >
-          {t("gsb.subtitle")}
-        </h2>
+        <SectionHeader id="gsb-heading" eyebrow={t("gsb.eyebrow")} title={t("gsb.subtitle")} />
       </header>
       {children}
     </section>
@@ -177,34 +171,26 @@ export default function GlobalSpecialBetSection({
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <div
-          role="group"
+        {/* toggle semantics (a product FILTER, not tabs); size="touch" keeps every
+            option thumb-sized at 390px — same contract the tests pin. */}
+        <SegmentedControl
+          mode="toggle"
+          variant="solid"
+          size="touch"
           aria-label={t("gsb.variantGroupLabel")}
-          className="inline-flex flex-wrap gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-1"
-        >
-          {PRODUCT_OPTIONS.map((option) => {
-            const active = product.kind === option.kind && product.variant === option.variant;
-            return (
-              <button
-                key={`${option.kind}:${option.variant}`}
-                type="button"
-                aria-pressed={active}
-                disabled={isGenerating}
-                onClick={() => setProduct(option)}
-                /* min-h-[var(--fp-touch)] keeps every option thumb-sized at 390px. */
-                className={`min-h-[var(--fp-touch)] rounded-md px-3 text-xs font-bold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] disabled:opacity-50 ${
-                  active
-                    ? "bg-[var(--fp-accent)] text-white shadow-sm"
-                    : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-                }`}
-              >
-                {option.kind === "system"
-                  ? t("gsb.productSystem")
-                  : t("gsb.variantOption", { n: option.variant })}
-              </button>
-            );
-          })}
-        </div>
+          disabled={isGenerating}
+          optionClassName="px-3 text-xs"
+          options={PRODUCT_OPTIONS.map((option) => ({
+            value: `${option.kind}:${option.variant}`,
+            label:
+              option.kind === "system" ? t("gsb.productSystem") : t("gsb.variantOption", { n: option.variant })
+          }))}
+          value={`${product.kind}:${product.variant}`}
+          onChange={(next) => {
+            const found = PRODUCT_OPTIONS.find((option) => `${option.kind}:${option.variant}` === next);
+            if (found) setProduct(found);
+          }}
+        />
 
         <Button
           size="sm"
@@ -242,7 +228,7 @@ export default function GlobalSpecialBetSection({
       )}
 
       {state.phase === "unavailable" && (
-        <div className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-4 py-3">
+        <div className="mt-4 rounded-[var(--fp-radius)] border border-fp-warning/35 bg-fp-warning/10 px-4 py-3">
           <p className="font-display text-sm font-semibold text-[var(--fp-text)]">{t("gsb.unavailableTitle")}</p>
           <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.unavailableDesc")}</p>
           {/* Shown only because the API supplies both numbers; never inferred. */}
@@ -258,7 +244,7 @@ export default function GlobalSpecialBetSection({
       {state.phase === "error" && (
         <div
           role="alert"
-          className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
+          className="mt-4 rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 px-4 py-3"
         >
           <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{t(state.error.titleKey)}</p>
           {/* The server's own reason wins whenever it sent one. */}

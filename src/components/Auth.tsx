@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Banner from "../design-system/Banner";
+import Overlay from "../design-system/Overlay";
 
 type AuthProps = {
   isOpen: boolean;
@@ -28,9 +30,13 @@ export default function Auth({
   const [localError, setLocalError] = useState<string>("");
   const [localSuccess, setLocalSuccess] = useState<string>("");
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const modalRef = useRef<HTMLDivElement | null>(null);
-  const prevFocusRef = useRef<HTMLElement | null>(null);
 
+  /*
+   * Only Auth-specific state survives here: form reset on close, recovery-mode
+   * detection on open. Focus trap, focus restore and Escape all moved to the
+   * shared Overlay engine (PR 5) — this file used to carry its own copy-pasted
+   * trap/ESC listeners.
+   */
   useEffect(() => {
     if (!isOpen) {
       setPassword("");
@@ -39,54 +45,12 @@ export default function Auth({
       setLocalSuccess("");
       return;
     }
-    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery") {
       setMode("reset");
       setLocalSuccess("Seteaza o parola noua pentru contul tau.");
     }
-    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
-    return () => clearTimeout(tm);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const root = modalRef.current;
-      if (!root) return;
-      const focusable = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && (active === first || !root.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
-    if (isOpen) return;
-    prevFocusRef.current?.focus?.();
-  }, [isOpen]);
-
-  if (!isOpen) return null;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -139,28 +103,26 @@ export default function Auth({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--fp-navy)]/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
-      role="presentation"
+    <Overlay
+      open={isOpen}
+      onClose={onClose}
+      presentation="sheet"
+      zClassName="z-[var(--fp-z-overlay)]"
+      aria-labelledby="auth-modal-title"
+      aria-describedby="auth-modal-desc"
+      initialFocusRef={closeBtnRef}
+      backdropClassName="bg-fp-navy/80 backdrop-blur-md"
+      panelClassName="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-[var(--fp-radius)] border border-white/[0.09] bg-gradient-to-b from-fp-bg-card/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
     >
-      <div
-        ref={modalRef}
-        className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-2xl border border-white/[0.09] bg-gradient-to-b from-[var(--fp-bg-card)]/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auth-modal-title"
-        aria-describedby="auth-modal-desc"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div
           className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1"
           aria-hidden
         >
-          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-accent)]/60 to-transparent" />
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">
+          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-accent/60 to-transparent" />
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             Model pulse
           </span>
-          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-success)]/35 to-transparent" />
+          <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-success/35 to-transparent" />
         </div>
 
         <div className="p-6">
@@ -183,7 +145,7 @@ export default function Auth({
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full border border-white/10 bg-[var(--fp-bg-card)]/90 px-3 py-1.5 text-xs font-semibold text-[var(--fp-text-muted)] transition hover:border-[var(--fp-border)] hover:bg-[var(--fp-bg-card)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
+              className="shrink-0 rounded-full border border-white/10 bg-fp-bg-card/90 px-3 py-1.5 text-xs font-semibold text-[var(--fp-text-muted)] transition hover:border-[var(--fp-border)] hover:bg-[var(--fp-bg-card)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
             >
               Close
             </button>
@@ -197,7 +159,7 @@ export default function Auth({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={mode === "reset"}
-                className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -210,7 +172,7 @@ export default function Auth({
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                   placeholder="******"
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                 />
@@ -224,7 +186,7 @@ export default function Auth({
                   type="password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                  className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                   placeholder="******"
                   autoComplete="new-password"
                 />
@@ -232,20 +194,20 @@ export default function Auth({
             )}
 
             {(localError || authError) && (
-              <div role="alert" aria-live="assertive" className="rounded-xl border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
+              <Banner tone="danger" live="alert" className="!px-3 !py-2 !text-xs font-semibold !text-[var(--fp-danger)]">
                 {localError || authError}
-              </div>
+              </Banner>
             )}
             {localSuccess && (
-              <div role="status" aria-live="polite" className="rounded-xl border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-success)]">
+              <Banner tone="success" live="status" className="!px-3 !py-2 !text-xs font-semibold !text-[var(--fp-success)]">
                 {localSuccess}
-              </div>
+              </Banner>
             )}
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl bg-[var(--fp-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-frost transition hover:bg-[var(--fp-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
+              className="w-full rounded-xl bg-[var(--fp-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-frost transition hover:bg-[var(--fp-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
             >
               {isSubmitting
                 ? "Se proceseaza..."
@@ -264,7 +226,7 @@ export default function Auth({
               <button
                 type="button"
                 onClick={() => setMode((prev) => (prev === "login" ? "signup" : "login"))}
-                className="text-xs font-semibold text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/35 rounded-sm"
+                className="text-xs font-semibold text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/35 rounded-sm"
               >
                 {mode === "login"
                   ? "Nu ai cont? Creeaza unul."
@@ -275,7 +237,7 @@ export default function Auth({
               <button
                 type="button"
                 onClick={() => setMode("forgot")}
-                className="text-xs font-semibold text-[var(--fp-warning)]/90 transition hover:text-[var(--fp-warning)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-warning)]/40 rounded-sm"
+                className="text-xs font-semibold text-fp-warning/90 transition hover:text-[var(--fp-warning)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-warning/40 rounded-sm"
               >
                 Ai uitat parola?
               </button>
@@ -288,14 +250,13 @@ export default function Auth({
                   setLocalError("");
                   setLocalSuccess("");
                 }}
-                className="text-xs font-semibold text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/35 rounded-sm"
+                className="text-xs font-semibold text-[var(--fp-accent)] transition hover:text-[var(--fp-accent-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/35 rounded-sm"
               >
                 Inapoi la login
               </button>
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }

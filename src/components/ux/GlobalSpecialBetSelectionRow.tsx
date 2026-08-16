@@ -75,9 +75,9 @@ export default function GlobalSpecialBetSelectionRow({
      for the failure, so the two states stay ranked, and DESIGN.md's One Accent
      Rule keeps the accent off informational fills. */
   const emphasis = deciding
-    ? "border-[var(--fp-danger)]/45 ring-1 ring-inset ring-[var(--fp-danger)]/20"
+    ? "border-fp-danger/45 ring-1 ring-inset ring-fp-danger/20"
     : underway
-      ? "border-[var(--fp-accent)]/45"
+      ? "border-fp-accent/45"
       : "border-[var(--fp-border)]";
 
   return (
@@ -85,7 +85,7 @@ export default function GlobalSpecialBetSelectionRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {deciding && (
-            <p className="mb-1 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-danger)]">
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-danger)]">
               {t("gsb.decidingLeg")}
             </p>
           )}
@@ -93,7 +93,7 @@ export default function GlobalSpecialBetSelectionRow({
               under AA for text this small. The dot carries the colour signal and
               clears the 3:1 a graphical element needs. */}
           {!deciding && underway && (
-            <p className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+            <p className="mb-1 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
               {/* Same pulsing dot the Home "Live now" section uses for an in-play
                   match, motion-reduce guard included: one visual language for
                   "this is happening now". Accent, not danger — the card's own
@@ -127,7 +127,7 @@ export default function GlobalSpecialBetSelectionRow({
           on; odds, confidence and value score are context, not the headline. */}
       <dl className="mt-2.5 grid grid-cols-4 gap-1.5 border-t border-[var(--fp-border)] pt-2 sm:gap-2">
         <div>
-          <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+          <dt className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("gsb.probability")}
           </dt>
           <dd
@@ -142,13 +142,13 @@ export default function GlobalSpecialBetSelectionRow({
           </dd>
         </div>
         <div>
-          <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+          <dt className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("gsb.odds")}
           </dt>
           <dd className="mt-0.5 font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]">{odds ?? dash}</dd>
         </div>
         <div>
-          <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+          <dt className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("gsb.confidence")}
           </dt>
           <dd className="mt-0.5 font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]">
@@ -156,7 +156,7 @@ export default function GlobalSpecialBetSelectionRow({
           </dd>
         </div>
         <div>
-          <dt className="font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+          <dt className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("gsb.value")}
           </dt>
           <dd className="mt-0.5 font-mono text-sm font-bold tabular-nums text-[var(--fp-text)]">{value ?? dash}</dd>

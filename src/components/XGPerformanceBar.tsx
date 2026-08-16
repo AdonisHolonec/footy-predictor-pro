@@ -15,9 +15,9 @@ export default function XGPerformanceBar({ xg }: XGPerformanceBarProps) {
   const aW = Math.min((safeAwayXG / 4) * 100, 100);
 
   return (
-    <div className="relative w-full rounded-2xl border border-white/10 bg-[var(--fp-bg)]/60 px-4 py-5 sm:px-6 sm:py-6">
+    <div className="relative w-full rounded-[var(--fp-radius)] border border-white/10 bg-fp-bg/60 px-4 py-5 sm:px-6 sm:py-6">
       <div className="mb-4 flex justify-center">
-        <span className="text-center font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent)] sm:text-xs">
+        <span className="text-center font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)] sm:text-xs">
           xG intensity
         </span>
       </div>

@@ -120,7 +120,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
 
   if (!canShowSpecialBet) {
     return (
-      <article className="rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 p-3 shadow-[var(--fp-shadow-sm)] sm:p-4">
+      <article className="rounded-[var(--fp-radius)] border border-fp-warning/35 bg-fp-warning/10 p-3 shadow-fp-sm sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
             {t("card.specialBet")}
@@ -139,7 +139,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
             e.stopPropagation();
             onUpgradeRequired?.(t("card.specialBet"), "ultra");
           }}
-          className="mt-3 inline-flex items-center gap-1 rounded border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-2 py-1 text-[10px] font-bold text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20"
+          className="mt-3 inline-flex items-center gap-1 rounded border border-fp-warning/35 bg-fp-warning/10 px-2 py-1 text-[10px] font-bold text-[var(--fp-text)] hover:bg-fp-warning/20"
         >
           🔒 {t("card.unlock")}
         </button>
@@ -148,7 +148,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
   }
 
   return (
-    <article className="rounded-[var(--fp-radius)] border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/10 p-3 shadow-[var(--fp-shadow-sm)] sm:p-4">
+    <article className="rounded-[var(--fp-radius)] border border-fp-success/45 bg-fp-success/10 p-3 shadow-fp-sm sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
           {t("card.specialBet")}
@@ -211,7 +211,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
         </div>
       </div>
 
-      <div className="mt-3 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/80 px-3 py-2.5">
+      <div className="mt-3 rounded-md border border-[var(--fp-border)] bg-fp-bg-card/80 px-3 py-2.5">
         <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
           {t("card.topPick")}
         </p>
@@ -265,7 +265,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
             </span>
             {combinedOutcome === "win" || combinedOutcome === "loss" ? (
               <span
-                className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+                className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
                   combinedOutcome === "win"
                     ? "bg-[var(--fp-success)] text-white"
                     : "bg-[var(--fp-danger)] text-white"
@@ -284,7 +284,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
         <button
           type="button"
           onClick={() => onOpenDetails(enrichedRow)}
-          className="mt-3 w-full rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 text-xs font-semibold text-[var(--fp-text)] transition-colors hover:border-[var(--fp-accent)]/40"
+          className="mt-3 w-full rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 text-xs font-semibold text-[var(--fp-text)] transition-colors hover:border-fp-accent/40"
         >
           {t("history.openFullAnalysis")}
         </button>

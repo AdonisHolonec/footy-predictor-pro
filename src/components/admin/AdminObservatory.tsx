@@ -22,13 +22,13 @@ export function addCalendarDayIso(isoDate: string, deltaDays: number): string {
 
 function toggleClass(active: boolean) {
   return active
-    ? "border-[var(--fp-accent)]/55 bg-[var(--fp-accent)]/15 text-[var(--fp-accent)] shadow-[var(--fp-shadow-sm)]"
-    : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-accent)]/90";
+    ? "border-fp-accent/55 bg-fp-accent/15 text-[var(--fp-accent)] shadow-fp-sm"
+    : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] hover:border-fp-accent/40 hover:text-fp-accent/90";
 }
 
 export function AdminIconRail() {
   const item =
-    "flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] shadow-[var(--fp-shadow-sm)] transition hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-accent)]";
+    "flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] shadow-fp-sm transition hover:border-fp-accent/40 hover:text-[var(--fp-accent)]";
   return (
     <nav
       className="hidden shrink-0 flex-col items-center gap-2 py-2 lg:flex"
@@ -67,7 +67,7 @@ export function AdminBrandLockup({ editorialDate }: { editorialDate: string }) {
     <div className="min-w-0">
       <div className="flex items-center gap-3">
         <div
-          className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/40 shadow-[var(--fp-shadow-sm)]"
+          className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--fp-radius)] border border-fp-accent/40 shadow-fp-sm"
           aria-hidden
         >
           <img
@@ -80,7 +80,7 @@ export function AdminBrandLockup({ editorialDate }: { editorialDate: string }) {
           <div className="font-display text-lg font-bold uppercase tracking-[0.14em] text-[var(--fp-text)] md:text-xl">
             Footy <span className="text-[var(--fp-accent)]">Predictor</span>
           </div>
-          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--fp-text-muted)]">{editorialDate}</p>
+          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">{editorialDate}</p>
         </div>
       </div>
     </div>
@@ -106,7 +106,7 @@ export function AdminObservatoryHeader({
 }: AdminObservatoryHeaderProps) {
   const roleLabel = user ? "ADMIN" : "GUEST";
   return (
-    <header className="mb-6 rounded-card border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
+    <header className="mb-6 rounded-[var(--fp-radius)] border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1.4fr)_minmax(0,1fr)] lg:items-center">
         <AdminBrandLockup editorialDate={editorialDate} />
         <div className="min-w-0 space-y-2">
@@ -117,7 +117,7 @@ export function AdminObservatoryHeader({
         </div>
         <div className="flex flex-col items-start gap-2 lg:items-end">
           {authLoading ? (
-            <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-xs font-semibold text-[var(--fp-text-muted)] shadow-[var(--fp-shadow-sm)]">
+            <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-xs font-semibold text-[var(--fp-text-muted)] shadow-fp-sm">
               Verific sesiunea…
             </div>
           ) : user ? (
@@ -127,9 +127,9 @@ export function AdminObservatoryHeader({
                   <div className="max-w-[220px] truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-text)]">
                     {user.email}
                   </div>
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-accent-hover)]">{roleLabel}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">{roleLabel}</div>
                 </div>
-                <div className="h-10 w-10 shrink-0 rounded-full border border-[var(--fp-accent)]/35 bg-gradient-to-br from-[var(--fp-accent)]/25 to-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)]" />
+                <div className="h-10 w-10 shrink-0 rounded-full border border-fp-accent/35 bg-gradient-to-br from-fp-accent/25 to-[var(--fp-bg-card)] shadow-fp-sm" />
               </div>
               <button
                 type="button"
@@ -143,7 +143,7 @@ export function AdminObservatoryHeader({
             <button
               type="button"
               onClick={onOpenAuth}
-              className="rounded-xl border border-[var(--fp-accent)]/25 bg-[var(--fp-accent)]/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-accent)]/15"
+              className="rounded-xl border border-fp-accent/25 bg-fp-accent/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-fp-accent/15"
             >
               Login / Signup
             </button>
@@ -187,7 +187,7 @@ export function AdminToolbarStrip({
 }: AdminToolbarStripProps) {
   const dates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
   return (
-    <div className="mb-4 flex flex-col gap-2.5 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)] sm:mb-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-3">
+    <div className="mb-4 flex flex-col gap-2.5 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-fp-sm sm:mb-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-3">
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="date"
@@ -200,7 +200,7 @@ export function AdminToolbarStrip({
               return normalizeSelectedDates([next, ...filtered]);
             });
           }}
-          className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 py-2 text-sm text-[var(--fp-text)] outline-none focus:ring-2 focus:ring-[var(--fp-success)]/35"
+          className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] px-3 py-2 text-sm text-[var(--fp-text)] outline-none focus:ring-2 focus:ring-fp-success/35"
         />
         <button
           type="button"
@@ -233,7 +233,7 @@ export function AdminToolbarStrip({
           type="button"
           onClick={onPredict}
           disabled={!user}
-          className="touch-manipulation rounded-xl bg-[var(--fp-accent)] px-4 py-2 text-xs font-semibold text-white shadow-[var(--fp-shadow-sm)] hover:bg-[var(--fp-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="touch-manipulation rounded-xl bg-[var(--fp-accent)] px-4 py-2 text-xs font-semibold text-white shadow-fp-sm hover:bg-[var(--fp-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Predict
         </button>
@@ -253,7 +253,7 @@ export function AdminToolbarStrip({
             }}
             className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${
               d === date
-                ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]"
+                ? "border-fp-accent/40 bg-fp-accent/15 text-[var(--fp-accent)]"
                 : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"
             }`}
             title="Elimină ziua"
@@ -264,7 +264,7 @@ export function AdminToolbarStrip({
         ))}
       </div>
       <div className="flex w-full max-w-[200px] flex-col sm:ml-auto">
-        <div className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
+        <div className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
           API{" "}
           <span className={usagePct > 80 ? "text-[var(--fp-danger)]" : "text-[var(--fp-success)]"}>
             {usageCount} / {usageLimit}
@@ -304,10 +304,10 @@ export function AdminFilterDeck({
   const guarded = filterMode === "LOW";
 
   return (
-    <div className="mt-4 space-y-4 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">Filtre</p>
+    <div className="mt-4 space-y-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Filtre</p>
       <div>
-        <p className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Kickoff</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Kickoff</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`${deckBtn} ${toggleClass(kickoffScope === "ALL")}`} onClick={() => setKickoffScope("ALL")}>
             All
@@ -321,7 +321,7 @@ export function AdminFilterDeck({
         </div>
       </div>
       <div>
-        <p className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Confidence</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Confidence</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`${deckBtn} ${toggleClass(high)}`} onClick={() => setFilterMode("SAFE")}>
             High
@@ -336,7 +336,7 @@ export function AdminFilterDeck({
       </div>
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">xG differential</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">xG differential</p>
           <span className="font-mono text-[10px] tabular-nums text-[var(--fp-accent)]">≥ {minXgSpread.toFixed(2)}</span>
         </div>
         <input
@@ -363,13 +363,13 @@ export function AdminInsightColumn({ sample }: AdminInsightColumnProps) {
   const conf = sample?.recommended.confidence ?? 42;
 
   return (
-    <aside className="space-y-4 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">Insight observatory</p>
+    <aside className="space-y-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Insight observatory</p>
       {sample ? (
         <>
           <EdgeCompass dataQuality={dq} valueDetected={!!sample.valueBet?.detected} className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3" />
           <SignalLens confidence={conf} edge={edge} className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3" />
-          <div className="space-y-2 rounded-xl border border-[var(--fp-accent)]/15 bg-[var(--fp-accent)]/5 p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
+          <div className="space-y-2 rounded-xl border border-fp-accent/15 bg-fp-accent/5 p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
             <div className="flex justify-between gap-2">
               <span>Integrity</span>
               <span className="text-[var(--fp-accent)]">{sample.insufficientData ? "thin" : "nominal"}</span>
@@ -402,11 +402,11 @@ type AdminPerformanceObservatoryProps = {
 export function AdminPerformanceObservatory({ children, className = "mt-10" }: AdminPerformanceObservatoryProps) {
   return (
     <section
-      className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-5 md:p-6 ${className}`}
+      className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 shadow-fp-sm sm:p-5 md:p-6 ${className}`}
     >
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Performance observatory</h2>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">settled stream</span>
+        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">Performance observatory</h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">settled stream</span>
       </div>
       {children}
     </section>

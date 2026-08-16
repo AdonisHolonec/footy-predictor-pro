@@ -98,7 +98,7 @@ export default function AppShell({
         </div>
       </aside>
 
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[var(--fp-border)] bg-[var(--fp-bg)]/95 px-3 backdrop-blur-md lg:hidden">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[var(--fp-border)] bg-fp-bg/95 px-3 backdrop-blur-md lg:hidden">
         <button
           type="button"
           onClick={() => onNavigate("home")}
@@ -136,11 +136,11 @@ export default function AppShell({
       </header>
 
       <main className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:ml-60 lg:pb-8">
-        <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</div>
+        <div className="mx-auto max-w-[var(--fp-container)] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</div>
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-[var(--fp-bg-elevated)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-fp-bg-elevated/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
         aria-label={t("nav.home")}
       >
         {MOBILE_TAB_ITEMS.map((item) => {

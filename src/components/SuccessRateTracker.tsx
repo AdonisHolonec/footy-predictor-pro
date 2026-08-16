@@ -98,7 +98,7 @@ export default function SuccessRateTracker({
               {excludedLossDays.slice(0, 3).map((d) => (
                 <span
                   key={d.day}
-                  className="rounded-full border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--fp-danger)]"
+                  className="rounded-full border border-fp-danger/30 bg-fp-danger/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--fp-danger)]"
                 >
                   {d.day} · L{d.losses}/{d.settled}
                 </span>
@@ -109,20 +109,20 @@ export default function SuccessRateTracker({
       )}
 
       <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
+        <div className="rounded-[var(--fp-radius-sm)] border border-fp-success/35 bg-fp-success/10 px-2 py-3 sm:px-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedWins}</p>
         </div>
-        <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">{t("tracker.losses")}</p>
+        <div className="rounded-[var(--fp-radius-sm)] border border-fp-danger/35 bg-fp-danger/10 px-2 py-3 sm:px-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">{t("tracker.losses")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedLosses}</p>
         </div>
         <div
-          className={`rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)] px-2 py-3 sm:px-3 ${
-            isWinRatePulsing ? "ring-2 ring-[var(--fp-accent)]/30" : ""
+          className={`rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-[var(--fp-accent-muted)] px-2 py-3 sm:px-3 ${
+            isWinRatePulsing ? "ring-2 ring-fp-accent/30" : ""
           }`}
         >
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">
             {animatedWinRate.toFixed(1)}%
           </p>
@@ -159,7 +159,7 @@ export default function SuccessRateTracker({
       )}
 
       {pendingHistoryCount > 0 && (
-        <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 px-3 py-2 text-center text-xs font-medium text-[var(--fp-text)]">
+        <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-fp-warning/30 bg-fp-warning/10 px-3 py-2 text-center text-xs font-medium text-[var(--fp-text)]">
           {pendingHistoryCount} matches without FT result
           {displayedPredsCount > 0 && (
             <span className="mt-0.5 block text-[var(--fp-text-muted)]">
@@ -181,7 +181,7 @@ export default function SuccessRateTracker({
   );
 
   const shellClass =
-    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-[var(--fp-shadow-sm)] sm:px-4 sm:py-4";
+    "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-fp-sm sm:px-4 sm:py-4";
 
   if (onBreakdownClick) {
     return (
@@ -189,7 +189,7 @@ export default function SuccessRateTracker({
         type="button"
         title={t("tracker.openConsole")}
         onClick={onBreakdownClick}
-        className={`${shellClass} cursor-pointer text-left transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]`}
+        className={`${shellClass} cursor-pointer text-left transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-fp focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]`}
       >
         {inner}
       </button>

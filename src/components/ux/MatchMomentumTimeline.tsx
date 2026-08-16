@@ -271,7 +271,7 @@ function StatRow({
           style={{ transform: `scaleX(${homeShare})`, width: "100%" }}
         />
       </div>
-      <span className="shrink-0 px-1 text-center text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+      <span className="shrink-0 px-1 text-center text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
         {label}
       </span>
       <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
@@ -482,9 +482,9 @@ export default function MatchMomentumTimeline({
 
   const dominantBadgeClass =
     momentum.dominantTeam === "home"
-      ? "border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
+      ? "border-fp-accent/30 bg-fp-accent/10 text-[var(--fp-accent)]"
       : momentum.dominantTeam === "away"
-        ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+        ? "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]"
         : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]";
 
   // Real AI narration (when the server generated one) leads; the deterministic rule engine is the
@@ -523,7 +523,7 @@ export default function MatchMomentumTimeline({
           </p>
         </div>
 
-        <div className="mb-2.5 flex items-center justify-center gap-4 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+        <div className="mb-2.5 flex items-center justify-center gap-4 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
           <span className="flex min-w-0 items-center gap-1.5">
             <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-accent)]" />
             <span className="truncate">{homeTeam}</span>
@@ -576,7 +576,7 @@ export default function MatchMomentumTimeline({
           {ticks.map((m) => (
             <span
               key={m}
-              className="absolute -translate-x-1/2 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]"
+              className="absolute -translate-x-1/2 font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]"
               style={{ left: xPct(m) }}
             >
               {m}'
@@ -586,13 +586,13 @@ export default function MatchMomentumTimeline({
 
         <p
           key={anchorText}
-          className="mt-3 flex animate-card-in items-start gap-1.5 text-[12px] font-bold leading-snug text-[var(--fp-text)] motion-reduce:animate-none sm:text-sm"
+          className="mt-3 flex animate-card-in items-start gap-1.5 text-xs font-bold leading-snug text-[var(--fp-text)] motion-reduce:animate-none sm:text-sm"
         >
           <span>{anchorText}</span>
           {isAiAnchor && (
             <span
               title={t("match.momentumInsightBadge")}
-              className="mt-0.5 shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-accent)]"
+              className="mt-0.5 shrink-0 rounded-full border border-fp-accent/30 bg-fp-accent/10 px-1.5 py-0 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)]"
             >
               {t("match.momentumInsightBadge")}
             </span>
@@ -605,7 +605,7 @@ export default function MatchMomentumTimeline({
               <Tooltip key={chip.label} label={chip.detail}>
                 <button
                   type="button"
-                  className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                  className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-fp-accent/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
                 >
                   {chip.label} {chip.value}
                 </button>
@@ -635,7 +635,7 @@ export default function MatchMomentumTimeline({
                     <span aria-hidden className="text-sm leading-none">
                       {eventIcon(ev.kind)}
                     </span>
-                    <span className="font-mono text-[8px] font-semibold text-[var(--fp-text-muted)]">{minuteLabel}</span>
+                    <span className="font-mono text-[10px] font-semibold text-[var(--fp-text-muted)]">{minuteLabel}</span>
                   </button>
                 </Tooltip>
               );
@@ -645,14 +645,14 @@ export default function MatchMomentumTimeline({
 
         <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-[var(--fp-border)] pt-3">
           <div className="min-w-0">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
               {t("match.momentumNext")}
             </p>
-            <p className="truncate text-[12px] font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
+            <p className="truncate text-xs font-bold text-[var(--fp-text)] sm:text-sm">{recommendedPick}</p>
           </div>
           <span
             key={confidenceNumeric != null ? "numeric" : confidenceLabel}
-            className={`shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-[var(--fp-accent)] ${
+            className={`shrink-0 rounded-full border border-fp-accent/30 bg-fp-accent/10 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-[var(--fp-accent)] ${
               confidenceNumeric == null ? "animate-card-in motion-reduce:animate-none" : ""
             }`}
           >
@@ -665,7 +665,7 @@ export default function MatchMomentumTimeline({
         <CollapsiblePanel title={t("match.momentumDetails")} compact>
           <div className="mb-2 flex items-center justify-between gap-2">
             <span
-              className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${dominantBadgeClass}`}
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide sm:text-[10px] ${dominantBadgeClass}`}
             >
               {dominantLabel}
             </span>
@@ -712,13 +712,13 @@ export default function MatchMomentumTimeline({
             {ticks.map((m) => (
               <span
                 key={m}
-                className="absolute -translate-x-1/2 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]"
+                className="absolute -translate-x-1/2 font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]"
                 style={{ left: xPct(m) }}
               >
                 {m}'
               </span>
             ))}
-            <span className="absolute right-0 font-mono text-[8px] text-[var(--fp-text-muted)] sm:text-[9px]">
+            <span className="absolute right-0 font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]">
               {status === "HT" ? "HT" : status === "FT" ? "FT" : ""}
             </span>
           </div>
@@ -742,7 +742,7 @@ export default function MatchMomentumTimeline({
                     {raw.home.yellowCards != null && raw.home.yellowCards > 0 ? `🟨${raw.home.yellowCards} ` : ""}
                     {raw.home.redCards != null && raw.home.redCards > 0 ? `🟥${raw.home.redCards}` : ""}
                   </span>
-                  <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
                     {t("match.momentumCards")}
                   </span>
                   <span className="font-mono font-semibold tabular-nums text-[var(--fp-text)]">
@@ -798,7 +798,7 @@ export default function MatchMomentumTimeline({
                 {filteredEvents.map((ev, i) => (
                   <li
                     key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                    className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)]/15 sm:text-xs"
+                    className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)] sm:text-xs"
                   >
                     <span className="w-9 shrink-0 font-mono tabular-nums text-[var(--fp-text-muted)]">
                       {formatMinute(ev.minute, ev.extra)}

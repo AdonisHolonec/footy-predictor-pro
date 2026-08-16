@@ -17,7 +17,7 @@ export default function ErrorState({
   return (
     <div
       role="alert"
-      className="rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-4"
+      className="rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 px-4 py-4"
     >
       <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{title}</p>
       <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{message}</p>

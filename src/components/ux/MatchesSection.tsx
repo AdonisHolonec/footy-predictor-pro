@@ -1,6 +1,7 @@
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
+import SegmentedControl from "../../design-system/SegmentedControl";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
 import PredictionFocusCard from "./PredictionFocusCard";
@@ -60,47 +61,46 @@ export default function MatchesSection({
         </p>
       </header>
 
+      {/* The all/favorites pair is the FILTER (toggle semantics). "Live" is a
+          navigation shortcut and the Value checkbox is a separate control —
+          both stay in the same track via `trailing`, in today's exact order. */}
       {mode === "all" && (
-        <div className="inline-flex flex-wrap items-center gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5">
-          {(
+        <SegmentedControl
+          mode="toggle"
+          options={(
             [
               ["all", "dash.filterAll"],
               ["favorites", "dash.filterFavorites"]
             ] as const
-          ).map(([id, key]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onSetFilter?.(id)}
-              title={t("dash.filterTitle", { label: t(key) })}
-              aria-pressed={matchesFilter === id}
-              className={`h-9 rounded-md px-2.5 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                matchesFilter === id
-                  ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                  : "text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-              }`}
-            >
-              {t(key)}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={onGoLive}
-            title={t("dash.filterTitle", { label: t("dash.filterLive") })}
-            className="hidden h-9 rounded-md px-2.5 text-xs font-bold text-[var(--fp-text-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] lg:inline-flex"
-          >
-            {t("dash.filterLive")}
-          </button>
-          <label className="flex h-9 items-center gap-1.5 border-l border-[var(--fp-border)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]">
-            {t("dash.filterValue")}
-            <input
-              type="checkbox"
-              checked={valueOnly}
-              onChange={(e) => onToggleValueOnly?.(e.target.checked)}
-              className="accent-[var(--fp-accent)]"
-            />
-          </label>
-        </div>
+          ).map(([id, key]) => ({
+            value: id,
+            label: t(key),
+            title: t("dash.filterTitle", { label: t(key) })
+          }))}
+          value={matchesFilter ?? "all"}
+          onChange={(id) => onSetFilter?.(id)}
+          trailing={
+            <>
+              <button
+                type="button"
+                onClick={onGoLive}
+                title={t("dash.filterTitle", { label: t("dash.filterLive") })}
+                className="hidden h-9 rounded-md px-2.5 text-xs font-bold text-[var(--fp-text-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] lg:inline-flex"
+              >
+                {t("dash.filterLive")}
+              </button>
+              <label className="flex h-9 items-center gap-1.5 border-l border-[var(--fp-border)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]">
+                {t("dash.filterValue")}
+                <input
+                  type="checkbox"
+                  checked={valueOnly}
+                  onChange={(e) => onToggleValueOnly?.(e.target.checked)}
+                  className="h-4 w-4 accent-[var(--fp-accent)]"
+                />
+              </label>
+            </>
+          }
+        />
       )}
 
       {!matches.length && loading ? (

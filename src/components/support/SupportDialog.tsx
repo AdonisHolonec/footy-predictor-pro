@@ -86,6 +86,7 @@ export default function SupportDialog({ open, onClose, onSubmitted }: Props) {
       size="md"
       // A half-written ticket must not be lost to a stray click on the backdrop.
       closeOnBackdrop={done}
+      busy={busy}
       footer={
         done ? (
           <Button variant="primary" onClick={close}>
@@ -158,7 +159,7 @@ export default function SupportDialog({ open, onClose, onSubmitted }: Props) {
           {errorKey ? (
             <p
               role="alert"
-              className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
+              className="rounded-[var(--fp-radius-sm)] border border-fp-danger/40 bg-fp-danger/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
             >
               {t(errorKey)}
             </p>

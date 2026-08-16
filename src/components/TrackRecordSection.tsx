@@ -80,7 +80,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
     <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">{t("track.verified")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("track.verified")}</p>
           <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
             {t("track.settledPerf", { days: selectedDays })}
           </h2>
@@ -119,7 +119,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
         <p className="mt-6 text-sm font-medium text-[var(--fp-text-muted)]">{t("track.loading")}</p>
       )}
       {error && !loading && (
-        <p className="mt-8 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]">
+        <p className="mt-8 rounded-[var(--fp-radius)] border border-fp-danger/30 bg-fp-danger/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]">
           {error}
         </p>
       )}
@@ -146,7 +146,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
           </div>
 
           {(data?.trend?.length || 0) > 1 && (
-            <div className="mt-6 flex flex-wrap items-center gap-6 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-3 shadow-[var(--fp-shadow-sm)]">
+            <div className="mt-6 flex flex-wrap items-center gap-6 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-3 shadow-fp-sm">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">Equity spark</p>
                 <EquitySpark points={data!.trend} />

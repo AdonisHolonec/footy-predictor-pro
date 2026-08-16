@@ -76,13 +76,13 @@ describe("Dialog", () => {
   });
 
   it("closes on backdrop click by default and not when opted out", () => {
-    const { onClose, container, unmount } = renderDialog();
-    fireEvent.click(container.firstChild as HTMLElement);
+    const { onClose, unmount } = renderDialog();
+    fireEvent.click(screen.getByRole("dialog").parentElement as HTMLElement);
     expect(onClose).toHaveBeenCalledTimes(1);
     unmount();
 
     const second = renderDialog({ closeOnBackdrop: false });
-    fireEvent.click(second.container.firstChild as HTMLElement);
+    fireEvent.click(screen.getByRole("dialog").parentElement as HTMLElement);
     expect(second.onClose).not.toHaveBeenCalled();
   });
 

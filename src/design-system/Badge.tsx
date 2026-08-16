@@ -4,10 +4,10 @@ type Tone = "neutral" | "accent" | "success" | "danger" | "warning";
 
 const toneClass: Record<Tone, string> = {
   neutral: "border-[var(--fp-border)] text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]",
-  accent: "border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)] hover:border-[var(--fp-accent)]/50 hover:bg-[var(--fp-accent)]/20",
-  success: "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)] hover:border-[var(--fp-success)]/50 hover:bg-[var(--fp-success)]/20",
-  danger: "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)] hover:border-[var(--fp-danger)]/50 hover:bg-[var(--fp-danger)]/20",
-  warning: "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)] hover:border-[var(--fp-warning)]/50 hover:bg-[var(--fp-warning)]/20"
+  accent: "border-fp-accent/30 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)] hover:border-fp-accent/50 hover:bg-fp-accent/20",
+  success: "border-fp-success/30 bg-fp-success/10 text-[var(--fp-success)] hover:border-fp-success/50 hover:bg-fp-success/20",
+  danger: "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)] hover:border-fp-danger/50 hover:bg-fp-danger/20",
+  warning: "border-fp-warning/30 bg-fp-warning/10 text-[var(--fp-warning)] hover:border-fp-warning/50 hover:bg-fp-warning/20"
 };
 
 export default function Badge({

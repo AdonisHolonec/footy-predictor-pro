@@ -190,7 +190,7 @@ export function LeagueMarketHeatmap({ data }: { data: DashboardBundle["heatmap"]
         className="inline-grid min-w-full gap-1"
         style={{ gridTemplateColumns: `minmax(96px,1.4fr) repeat(${markets.length}, minmax(56px,1fr))` }}
       >
-        <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">League \\ Mkt</div>
+        <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">League \\ Mkt</div>
         {markets.map((m) => (
           <div key={m} className="text-center font-mono text-[10px] font-semibold text-[var(--fp-text)]">
             {m}
@@ -212,7 +212,7 @@ export function LeagueMarketHeatmap({ data }: { data: DashboardBundle["heatmap"]
                   title={cell ? `${league} · ${market}: ${hr ?? "—"}% (${cell.settled})` : "n/a"}
                 >
                   <span className="font-semibold">{hr != null ? `${hr}%` : "—"}</span>
-                  <span className="text-[8px] opacity-70">{cell?.settled ? `n=${cell.settled}` : ""}</span>
+                  <span className="text-[10px] opacity-70">{cell?.settled ? `n=${cell.settled}` : ""}</span>
                 </div>
               );
             })}
