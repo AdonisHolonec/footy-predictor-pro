@@ -15,3 +15,8 @@ export { default as CollapsiblePanel } from "./CollapsiblePanel";
 export { default as Tooltip } from "./Tooltip";
 export { default as UpgradePrompt } from "./UpgradePrompt";
 export type { UpgradeTier } from "./UpgradePrompt";
+export { default as IconButton } from "./IconButton";
+export { default as SegmentedControl } from "./SegmentedControl";
+export { default as FilterChip } from "./FilterChip";
+export { default as SectionHeader } from "./SectionHeader";
+export { default as Banner } from "./Banner";

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Button from "../../design-system/Button";
+import IconButton from "../../design-system/IconButton";
 import Badge from "../../design-system/Badge";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
@@ -124,30 +125,30 @@ export default function ConsumerShell({
       })}
       <span aria-hidden className="mx-1 h-5 w-px bg-[var(--fp-border)]" />
       <Tooltip label={favoritesActive ? t("shell.favoritesOn") : t("shell.favoritesOff")} align="end">
-        <button
-          type="button"
+        <IconButton
+          size="sm"
           onClick={onToggleFavorites}
-          className={`${iconBtn} ${favoritesActive ? "border-[var(--fp-warning)] bg-fp-warning/10 text-[var(--fp-warning)]" : ""}`}
+          className={favoritesActive ? "!border-[var(--fp-warning)] !bg-fp-warning/10 !text-[var(--fp-warning)]" : ""}
           aria-label={favoritesActive ? t("shell.favoritesOn") : t("shell.favoritesOff")}
-          aria-pressed={favoritesActive}
+          pressed={favoritesActive}
         >
           ★
-        </button>
+        </IconButton>
       </Tooltip>
       <Tooltip label={t("shell.notifications")} align="end">
-        <button type="button" onClick={onOpenNotifications} className={iconBtn} aria-label={t("shell.notifications")}>
+        <IconButton size="sm" onClick={onOpenNotifications} aria-label={t("shell.notifications")}>
           🔔
-        </button>
+        </IconButton>
       </Tooltip>
       <Tooltip label={t("shell.profileUpgrade")} align="end">
-        <button type="button" onClick={onOpenProfile} className={iconBtn} aria-label={t("shell.profileUpgrade")}>
+        <IconButton size="sm" onClick={onOpenProfile} aria-label={t("shell.profileUpgrade")}>
           👤
-        </button>
+        </IconButton>
       </Tooltip>
       <Tooltip label={t("shell.settings")} align="end">
-        <button type="button" onClick={onOpenSettings} className={iconBtn} aria-label={t("shell.settings")}>
+        <IconButton size="sm" onClick={onOpenSettings} aria-label={t("shell.settings")}>
           ⚙
-        </button>
+        </IconButton>
       </Tooltip>
     </div>
   );

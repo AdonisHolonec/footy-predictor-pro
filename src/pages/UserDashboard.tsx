@@ -21,6 +21,7 @@ import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
+import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import { useLocale } from "../context/LocaleContext";
@@ -530,27 +531,28 @@ export default function UserDashboard() {
         </span>
       )}
       {status && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-3 rounded-[var(--fp-radius)] border border-fp-accent/25 bg-[var(--fp-accent-muted)] px-3 py-2.5 text-sm font-semibold text-[var(--fp-text)]"
-        >
+        <Banner tone="info" live="status" className="mb-3 font-semibold">
           {status}
-        </div>
+        </Banner>
       )}
       {rehydratedNotice && (
-        <div className="mb-3 rounded-[var(--fp-radius)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-3 py-2 text-xs">
+        <Banner tone="info" className="mb-3 !text-xs">
           <span className="font-semibold text-[var(--fp-accent)]">Date vechi actualizate.</span>{" "}
           <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
-        </div>
+        </Banner>
       )}
       {userTier !== "free" && preds.length > 0 && hasLegacyPredictionShape(preds, userTier) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[var(--fp-radius)] border border-fp-warning/40 bg-fp-warning/10 px-3 py-2.5 text-sm">
-          <p className="min-w-0 flex-1 font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</p>
-          <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
-            {t("shell.predict")}
-          </Button>
-        </div>
+        <Banner
+          tone="warning"
+          className="mb-3"
+          action={
+            <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
+              {t("shell.predict")}
+            </Button>
+          }
+        >
+          <span className="font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</span>
+        </Banner>
       )}
 
       {navView === "home" && (
@@ -773,7 +775,7 @@ export default function UserDashboard() {
         onNavigate={handleNav}
         onPredict={() => void warmAndPredict()}
       />
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+      <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}

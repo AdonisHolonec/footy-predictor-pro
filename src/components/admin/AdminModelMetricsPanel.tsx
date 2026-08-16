@@ -1,4 +1,5 @@
 import { StatTile } from "../../design-system";
+import Button from "../../design-system/Button";
 import { HistorySyncMonitor } from "./HistorySyncMonitor";
 import { useModelMetrics } from "./useModelMetrics";
 
@@ -77,15 +78,16 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
           >
             {training ? "Training…" : "Train now"}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={refreshing}
             onClick={invalidate}
-            disabled={refreshing}
-            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="!min-h-0 !px-3 !py-1.5 !text-[10px] uppercase tracking-wide !text-[var(--fp-accent)]"
             title="Invalidează cache-ul de calibrare/stacker/elo (le reîncarcă la următorul predict)"
           >
-            {refreshing ? "…" : "Refresh cache"}
-          </button>
+            Refresh cache
+          </Button>
           <button
             type="button"
             onClick={runHistorySyncNow}
@@ -95,14 +97,15 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
           >
             {syncingHistoryNow ? "Syncing…" : "Run history sync"}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={loading}
             onClick={() => void load()}
-            disabled={loading}
-            className="touch-manipulation rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-border)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="!min-h-0 !px-3 !py-1.5 !text-[10px] uppercase tracking-wide"
           >
-            {loading ? "…" : "Reload"}
-          </button>
+            Reload
+          </Button>
         </div>
       </div>
 

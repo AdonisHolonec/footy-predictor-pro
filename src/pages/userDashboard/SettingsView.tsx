@@ -6,6 +6,7 @@
 import { Link } from "react-router-dom";
 import { useLocale } from "../../context/LocaleContext";
 import Button from "../../design-system/Button";
+import SectionHeader from "../../design-system/SectionHeader";
 import Card from "../../design-system/Card";
 import SupportEntry from "../../components/support/SupportEntry";
 import type { useAuth } from "../../hooks/useAuth";
@@ -38,11 +39,13 @@ export default function SettingsView(props: SettingsViewProps) {
   return (
         <section className="space-y-6">
           <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-              {t("dash.settingsTitle")}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("dash.settingsTitle")}</h1>
-            <p className="mt-2 text-sm text-[var(--fp-text-muted)]">{t("dash.settingsSub")}</p>
+            <SectionHeader
+              as="h1"
+              size="page"
+              eyebrow={t("dash.settingsTitle")}
+              title={t("dash.settingsTitle")}
+              description={t("dash.settingsSub")}
+            />
           </header>
 
           <Card>

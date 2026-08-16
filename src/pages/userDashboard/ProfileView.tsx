@@ -8,6 +8,7 @@ import type { AppNavView } from "../../components/ux/appNav";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../../components/ux/PricingCampaignBanner";
 import { useLocale } from "../../context/LocaleContext";
 import Badge from "../../design-system/Badge";
+import SectionHeader from "../../design-system/SectionHeader";
 import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import type { useAuth } from "../../hooks/useAuth";
@@ -62,10 +63,7 @@ export default function ProfileView(props: ProfileViewProps) {
   return (
         <section className="space-y-6">
           <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-              {t("nav.profile")}
-            </p>
-            <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
+            <SectionHeader as="h1" size="page" eyebrow={t("nav.profile")} title={t("nav.profile")} />
           </header>
 
           <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">

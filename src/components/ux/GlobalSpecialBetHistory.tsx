@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
+import SegmentedControl from "../../design-system/SegmentedControl";
+import SectionHeader from "../../design-system/SectionHeader";
 import GlobalSpecialBetTicketList from "./GlobalSpecialBetTicketList";
 import { GLOBAL_SPECIAL_BET_KINDS, type GlobalSpecialBetKind } from "../../types/globalSpecialBet";
 import type { FixtureLabel } from "../../utils/globalSpecialBetView";
@@ -51,35 +53,22 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
   return (
     <section className="space-y-3">
       <header>
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-          {t("gsb.eyebrow")}
-        </p>
-        <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
-          {t("gsb.ticketsTitle")}
-        </h2>
-        <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.ticketsSub")}</p>
+        <SectionHeader eyebrow={t("gsb.eyebrow")} title={t("gsb.ticketsTitle")} description={t("gsb.ticketsSub")} />
       </header>
 
-      {/* The same segmented pattern the match analysis uses: a real tablist, and
-          it scrolls rather than wraps so the labels never stack on a phone. */}
-      <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={t("gsb.ticketsTablist")}>
-        {GLOBAL_SPECIAL_BET_KINDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={kind === id}
-            onClick={() => setKind(id)}
-            className={`h-9 shrink-0 rounded-md px-3 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-              kind === id
-                ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
-            }`}
-          >
-            {t(TAB_LABEL_KEY[id])}
-          </button>
-        ))}
-      </div>
+      {/* The same segmented pattern the match analysis uses — a real tablist via
+          the shared primitive; it scrolls rather than wraps so the labels never
+          stack on a phone. */}
+      <SegmentedControl
+        mode="tabs"
+        frame="bare"
+        aria-label={t("gsb.ticketsTablist")}
+        className="overflow-x-auto pb-0.5"
+        optionClassName="px-3 py-1 text-[10px] uppercase tracking-wide"
+        options={GLOBAL_SPECIAL_BET_KINDS.map((id) => ({ value: id, label: t(TAB_LABEL_KEY[id]) }))}
+        value={kind}
+        onChange={(next) => setKind(next as GlobalSpecialBetKind)}
+      />
 
       <div role="tabpanel" className="space-y-3">
         {/* Keyed by kind: a tab switch is a new list, not a re-filtered one. */}

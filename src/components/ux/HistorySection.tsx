@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import Card from "../../design-system/Card";
+import SectionHeader from "../../design-system/SectionHeader";
 import Badge from "../../design-system/Badge";
 import { StatTile } from "../../design-system";
 import { useLocale } from "../../context/LocaleContext";
@@ -76,11 +77,7 @@ export default function HistorySection({
   return (
     <section className="space-y-6">
       <header>
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-          {t("history.eyebrow")}
-        </p>
-        <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("history.title")}</h1>
-        <p className="mt-2 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("history.sub")}</p>
+        <SectionHeader as="h1" size="page" eyebrow={t("history.eyebrow")} title={t("history.title")} description={t("history.sub")} />
       </header>
 
       {trackerSlot}

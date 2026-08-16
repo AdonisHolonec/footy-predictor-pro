@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { NotificationItem } from "../../utils/deriveNotifications";
 import { useLocale } from "../../context/LocaleContext";
 import Button from "../../design-system/Button";
+import SectionHeader from "../../design-system/SectionHeader";
 import EmptyState from "../../design-system/EmptyState";
 
 type Props = {
@@ -65,14 +66,7 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
   return (
     <section className="space-y-6">
       <header className="flex items-center justify-between gap-3">
-        <div>
-          <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-            {t("nav.notifications")}
-          </p>
-          <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold text-[var(--fp-text)]">
-            {t("nav.notifications")}
-          </h1>
-        </div>
+        <SectionHeader as="h1" size="page" eyebrow={t("nav.notifications")} title={t("nav.notifications")} />
         {hasUnseen && (
           <Button variant="ghost" size="sm" onClick={onMarkAllSeen}>
             {t("dash.notifMarkAllRead")}

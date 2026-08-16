@@ -1,3 +1,4 @@
+import IconButton from "./IconButton";
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
@@ -156,14 +157,9 @@ export default function Dialog({
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover:border-fp-accent/40 hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
-          >
+          <IconButton shape="round" onClick={onClose} aria-label="Close" className="shrink-0 !text-sm">
             ✕
-          </button>
+          </IconButton>
         </div>
 
         <div className="mt-5 text-sm text-[var(--fp-text)]">{children}</div>

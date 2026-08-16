@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { HealthDashboardBundle, OpsAlert } from "../../types";
 import { loadHealthDashboard } from "../../services/healthService";
 import HealthInsightGrid from "./HealthInsightGrid";
-import { StatTile, Button } from "../../design-system";
+import { StatTile, Button, FilterChip } from "../../design-system";
 import {
   Bar,
   BarChart,
@@ -152,18 +152,13 @@ export default function HealthDashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {[3, 7, 14].map((d) => (
-            <button
+            <FilterChip
               key={d}
-              type="button"
+              selected={days === d}
               onClick={() => setDays(d)}
-              className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${
-                days === d
-                  ? "border-fp-accent/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-              }`}
-            >
-              {d}D
-            </button>
+              >
+                {d}D
+              </FilterChip>
           ))}
           <Button variant="primary" size="sm" loading={loading} onClick={() => void refresh()}>
             Refresh

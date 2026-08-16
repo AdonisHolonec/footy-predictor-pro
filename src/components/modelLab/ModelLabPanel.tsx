@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ModelLabBundle, ModelLabResult, ModelSelectionBundle } from "../../types";
 import { loadModelLab, loadModelSelection } from "../../services/backtestService";
-import { Button } from "../../design-system";
+import { Button, FilterChip } from "../../design-system";
 
 function metricTone(value: number, kind: "roi" | "ev"): string {
   if (kind === "roi" || kind === "ev") {
@@ -58,18 +58,13 @@ export default function ModelLabPanel() {
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {[30, 90, 180].map((d) => (
-            <button
+            <FilterChip
               key={d}
-              type="button"
+              selected={days === d}
               onClick={() => setDays(d)}
-              className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${
-                days === d
-                  ? "border-fp-accent/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-              }`}
-            >
-              {d}D
-            </button>
+              >
+                {d}D
+              </FilterChip>
           ))}
           <Button variant="primary" size="sm" loading={loading} onClick={() => void refresh()}>
             Run

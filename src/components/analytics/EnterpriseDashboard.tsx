@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { BacktestAnalyticsResponse, DashboardBundle } from "../../types";
 import type { UsageSnapshot } from "../../types/index";
 import { loadAnalytics } from "../../services/backtestService";
-import { StatTile, Button } from "../../design-system";
+import { StatTile, Button, FilterChip } from "../../design-system";
 import {
   ApiUsageBarChart,
   ConfidenceAreaChart,
@@ -191,18 +191,13 @@ export default function EnterpriseDashboard({
               { key: "season" as const, label: "Season" }
             ] as const
           ).map((p) => (
-            <button
+            <FilterChip
               key={p.key}
-              type="button"
+              selected={period === p.key}
               onClick={() => setPeriod(p.key)}
-              className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide ${
-                period === p.key
-                  ? "border-fp-accent/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                  : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
-              }`}
-            >
-              {p.label}
-            </button>
+              >
+                {p.label}
+              </FilterChip>
           ))}
           <Button variant="primary" size="sm" loading={loading} onClick={() => void refresh()}>
             Refresh

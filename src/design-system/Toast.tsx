@@ -1,18 +1,62 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 
 type Props = {
   message: string | null;
   onDismiss: () => void;
-  durationMs?: number;
+  /**
+   * Auto-dismiss delay. `null` disables auto-dismiss entirely (the toast stays
+   * until closed). The old fixed 2.2s gave slower readers no chance and no
+   * recourse — the default is longer and, more importantly, escapable.
+   */
+  durationMs?: number | null;
+  /** Accessible name for the close button — pass t("common.close"). */
+  dismissLabel: string;
+  /** Optional inline action (e.g. an "Undo" Button). */
+  action?: ReactNode;
 };
 
-/** Subtle toast for copy/share feedback. */
-export default function Toast({ message, onDismiss, durationMs = 2200 }: Props) {
+/**
+ * Toast (PR 4) — same single-message contract the app already had (one
+ * caller owns the message string), consolidated to be escapable and honest:
+ *
+ *  - an explicit, keyboard-focusable close button (the old toast could ONLY
+ *    time out — nothing to click, nothing to Tab to);
+ *  - the countdown PAUSES while the pointer or focus is inside, so the toast
+ *    never disappears mid-read or mid-interaction;
+ *  - aria-live=polite, announced as before.
+ *
+ * Global stacking/portal infrastructure is deliberately NOT introduced here —
+ * overlay architecture is the next phase.
+ */
+export default function Toast({ message, onDismiss, durationMs = 5000, dismissLabel, action }: Props) {
+  const timer = useRef<number | null>(null);
+  const remaining = useRef<number | null>(null);
+  const startedAt = useRef<number>(0);
+
   useEffect(() => {
-    if (!message) return;
-    const t = window.setTimeout(onDismiss, durationMs);
-    return () => window.clearTimeout(t);
+    if (!message || durationMs == null) return;
+    remaining.current = durationMs;
+    startedAt.current = Date.now();
+    timer.current = window.setTimeout(onDismiss, durationMs);
+    return () => {
+      if (timer.current != null) window.clearTimeout(timer.current);
+      timer.current = null;
+    };
   }, [message, durationMs, onDismiss]);
+
+  const pause = () => {
+    if (timer.current == null || remaining.current == null) return;
+    window.clearTimeout(timer.current);
+    timer.current = null;
+    remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt.current));
+  };
+
+  const resume = () => {
+    if (!message || durationMs == null || timer.current != null || remaining.current == null) return;
+    startedAt.current = Date.now();
+    timer.current = window.setTimeout(onDismiss, remaining.current);
+  };
 
   if (!message) return null;
 
@@ -20,9 +64,22 @@ export default function Toast({ message, onDismiss, durationMs = 2200 }: Props) 
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-24 left-1/2 z-[var(--fp-z-toast)] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8"
+      onMouseEnter={pause}
+      onMouseLeave={resume}
+      onFocus={pause}
+      onBlur={resume}
+      className="fixed bottom-24 left-1/2 z-[var(--fp-z-toast)] flex max-w-[min(92vw,24rem)] -translate-x-1/2 items-center gap-2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8"
     >
-      {message}
+      <span className="min-w-0 flex-1">{message}</span>
+      {action}
+      <button
+        type="button"
+        aria-label={dismissLabel}
+        onClick={onDismiss}
+        className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] text-[var(--fp-text-muted)] transition hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
     </div>
   );
 }

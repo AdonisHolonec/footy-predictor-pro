@@ -1,6 +1,8 @@
 
 
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
+import IconButton from "../design-system/IconButton";
+import SegmentedControl from "../design-system/SegmentedControl";
 import MatchMomentumStickyStrip from "./ux/MatchMomentumStickyStrip";
 
 import { PredictionRow } from "../types";
@@ -129,15 +131,9 @@ export default function MatchModal({
               <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
               <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
             </div>
-            <button
-              ref={closeBtnRef}
-              type="button"
-              onClick={onClose}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover:border-fp-accent/40 hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
-              aria-label={tr("match.close")}
-            >
+            <IconButton ref={closeBtnRef} shape="round" onClick={onClose} aria-label={tr("match.close")} className="shrink-0 !text-sm">
               ✕
-            </button>
+            </IconButton>
           </div>
           <p className="mt-4 text-center font-display text-base font-semibold text-[var(--fp-text)]">
             {match.teams.home} <span className="text-[var(--fp-text-muted)]">vs</span> {match.teams.away}
@@ -192,16 +188,16 @@ export default function MatchModal({
         aria-labelledby="match-modal-title"
         aria-describedby="match-modal-desc"
       >
-        <button
+        <IconButton
           ref={closeBtnRef}
+          shape="round"
           onClick={onClose}
           title={tr("match.close")}
-          className="sticky top-2 z-10 ml-auto mr-2 mt-2 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)] transition hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
-          type="button"
           aria-label={tr("match.close")}
+          className="sticky top-2 z-10 ml-auto mr-2 mt-2"
         >
           ✕
-        </button>
+        </IconButton>
 
         {hasLiveScore && match.momentum && (
           <MatchMomentumStickyStrip
@@ -298,24 +294,16 @@ export default function MatchModal({
         {/* Navigation sits immediately after the Decision Block so the user learns
             the modal has sections before scrolling through any of them. */}
         <div className="sticky top-0 z-20 border-b border-[var(--fp-border)] bg-fp-bg-card/95 px-2 py-1.5 backdrop-blur-md sm:px-4">
-          <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={tr("match.analysis")}>
-            {DETAIL_TABS.map((tabItem) => (
-              <button
-                key={tabItem.id}
-                type="button"
-                role="tab"
-                aria-selected={detailTab === tabItem.id}
-                onClick={() => setDetailTab(tabItem.id)}
-                className={`h-9 shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-                  detailTab === tabItem.id
-                    ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
-                    : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
-                }`}
-              >
-                {tr(tabItem.labelKey)}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            mode="tabs"
+            frame="bare"
+            aria-label={tr("match.analysis")}
+            className="overflow-x-auto pb-0.5"
+            optionClassName="px-2 py-1 text-[10px] uppercase tracking-wide"
+            options={DETAIL_TABS.map((tabItem) => ({ value: tabItem.id, label: tr(tabItem.labelKey) }))}
+            value={detailTab}
+            onChange={(next) => setDetailTab(next as (typeof DETAIL_TABS)[number]["id"])}
+          />
         </div>
 
         <div className="space-y-3 p-3 sm:space-y-4 sm:p-5">

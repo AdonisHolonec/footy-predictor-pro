@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Banner from "../design-system/Banner";
 
 type AuthProps = {
   isOpen: boolean;
@@ -232,14 +233,14 @@ export default function Auth({
             )}
 
             {(localError || authError) && (
-              <div role="alert" aria-live="assertive" className="rounded-xl border border-fp-danger/35 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
+              <Banner tone="danger" live="alert" className="!px-3 !py-2 !text-xs font-semibold !text-[var(--fp-danger)]">
                 {localError || authError}
-              </div>
+              </Banner>
             )}
             {localSuccess && (
-              <div role="status" aria-live="polite" className="rounded-xl border border-fp-success/35 bg-fp-success/10 px-3 py-2 text-xs font-semibold text-[var(--fp-success)]">
+              <Banner tone="success" live="status" className="!px-3 !py-2 !text-xs font-semibold !text-[var(--fp-success)]">
                 {localSuccess}
-              </div>
+              </Banner>
             )}
 
             <button

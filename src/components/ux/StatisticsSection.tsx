@@ -3,6 +3,7 @@ import type { HistoryEntry, PerformanceLeagueBreakdown } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { StatTile } from "../../design-system";
 import Skeleton from "../../design-system/Skeleton";
+import SectionHeader from "../../design-system/SectionHeader";
 import CalibrationChart from "./CalibrationChart";
 import HistoryTrustSection from "./HistoryTrustSection";
 
@@ -31,9 +32,7 @@ export default function StatisticsSection({
   return (
     <section className="space-y-4">
       <header>
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("stats.eyebrow")}</p>
-        <h1 className="mt-1 font-display text-2xl font-semibold text-[var(--fp-text)]">{t("stats.title")}</h1>
-        <p className="mt-1.5 text-sm font-medium text-[var(--fp-text-muted)]">{t("stats.sub")}</p>
+        <SectionHeader as="h1" size="page" eyebrow={t("stats.eyebrow")} title={t("stats.title")} description={t("stats.sub")} />
       </header>
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
