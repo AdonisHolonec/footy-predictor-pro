@@ -2,6 +2,7 @@
 
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import IconButton from "../design-system/IconButton";
+import Overlay from "../design-system/Overlay";
 import SegmentedControl from "../design-system/SegmentedControl";
 import MatchMomentumStickyStrip from "./ux/MatchMomentumStickyStrip";
 
@@ -67,7 +68,7 @@ export default function MatchModal({
   presentation = "focus",
   onUpgradeRequired
 }: MatchModalProps) {
-  const model = useMatchModalModel({ match, accessTier, presentation, onClose, hashColor, logoColors });
+  const model = useMatchModalModel({ match, accessTier, presentation, hashColor, logoColors });
   const {
     awayColor, clamp100, closeBtnRef, confPct, confidenceCategory, correctScoreCandidates,
     decisionBenchmark, decisionEvPct, decisionRationale, detailTab, dq, edgeScore,
@@ -90,42 +91,44 @@ export default function MatchModal({
 
     if (!hasRich) {
       return (
-        <div
-          className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/85 p-3 backdrop-blur-md sm:p-4"
-          onClick={onClose}
+        <Overlay
+          open
+          onClose={onClose}
+          presentation="center"
+          closeOnBackdrop
+          zClassName="z-[var(--fp-z-overlay)]"
+          aria-label={tr("match.insufficientTitle")}
+          initialFocusRef={closeBtnRef}
+          backdropClassName="bg-fp-navy/85 backdrop-blur-md"
+          panelClassName="w-full max-w-md rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/90 p-8 text-center shadow-fp-lg backdrop-blur-xl"
         >
-          <div
-            className="w-full max-w-md rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/90 p-8 text-center shadow-fp-lg backdrop-blur-xl"
-            onClick={(e) => e.stopPropagation()}
+          <p className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
+          <button
+            ref={closeBtnRef}
+            type="button"
+            onClick={onClose}
+            className="mt-6 min-h-[var(--fp-touch)] rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-border)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
           >
-            <p className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
-            <button
-              ref={closeBtnRef}
-              type="button"
-              onClick={onClose}
-              className="mt-6 min-h-[var(--fp-touch)] rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-border)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
-            >
-              {tr("match.close")}
-            </button>
-          </div>
-        </div>
+            {tr("match.close")}
+          </button>
+        </Overlay>
       );
     }
 
     return (
-      <div
-        className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/88 p-3 backdrop-blur-md sm:p-4"
-        onClick={onClose}
+      <Overlay
+        open
+        onClose={onClose}
+        presentation="center"
+        closeOnBackdrop
+        zClassName="z-[var(--fp-z-overlay)]"
+        aria-labelledby="match-modal-insufficient-title"
+        aria-describedby="match-modal-insufficient-desc"
+        initialFocusRef={closeBtnRef}
+        backdropClassName="bg-fp-navy/88 backdrop-blur-md"
+        panelClassName="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl sm:max-w-2xl sm:p-8"
       >
-        <div
-          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl sm:max-w-2xl sm:p-8"
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="match-modal-insufficient-title"
-          aria-describedby="match-modal-insufficient-desc"
-        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
@@ -161,33 +164,28 @@ export default function MatchModal({
           >
             {tr("match.close")}
           </button>
-        </div>
-      </div>
+      </Overlay>
     );
   }
 
   return (
-    <div
-      className={
+    <Overlay
+      open
+      onClose={onClose}
+      presentation={isFocus ? "drawer" : "center"}
+      closeOnBackdrop
+      zClassName="z-[var(--fp-z-overlay)]"
+      aria-labelledby="match-modal-title"
+      aria-describedby="match-modal-desc"
+      initialFocusRef={closeBtnRef}
+      panelRef={modalRef}
+      backdropClassName={isFocus ? "bg-fp-navy/40 backdrop-blur-[2px]" : "bg-fp-navy/50 backdrop-blur-sm"}
+      panelClassName={
         isFocus
-          ? "fixed inset-0 z-[var(--fp-z-overlay)] flex items-end justify-end bg-fp-navy/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-[2px] sm:items-stretch sm:pb-0"
-          : "fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/50 p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-4"
+          ? "fp-readable relative flex h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
+          : "fp-readable relative max-h-[min(92dvh,100%)] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg lg:max-w-5xl"
       }
-      onClick={onClose}
     >
-      <div
-        ref={modalRef}
-        className={
-          isFocus
-            ? "fp-readable relative flex h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
-            : "fp-readable relative max-h-[min(92dvh,100%)] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg lg:max-w-5xl"
-        }
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="match-modal-title"
-        aria-describedby="match-modal-desc"
-      >
         <IconButton
           ref={closeBtnRef}
           shape="round"
@@ -675,7 +673,6 @@ export default function MatchModal({
               </details>
             )}
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }

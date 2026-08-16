@@ -86,6 +86,7 @@ export default function SupportDialog({ open, onClose, onSubmitted }: Props) {
       size="md"
       // A half-written ticket must not be lost to a stray click on the backdrop.
       closeOnBackdrop={done}
+      busy={busy}
       footer={
         done ? (
           <Button variant="primary" onClick={close}>

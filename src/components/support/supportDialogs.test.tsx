@@ -284,8 +284,8 @@ describe("dialog behaviour", () => {
 
   it("[17] Escape closes, and a backdrop click does not discard a half-written form", () => {
     const onClose = vi.fn();
-    const { container, unmount } = render(<SupportDialog open onClose={onClose} />);
-    fireEvent.click(container.firstChild as HTMLElement);
+    const { unmount } = render(<SupportDialog open onClose={onClose} />);
+    fireEvent.click(screen.getByRole("dialog").parentElement as HTMLElement);
     expect(onClose).not.toHaveBeenCalled();
 
     fireEvent.keyDown(document, { key: "Escape" });

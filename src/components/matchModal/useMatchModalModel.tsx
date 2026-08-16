@@ -21,64 +21,29 @@ type UseMatchModalModelArgs = {
   match: PredictionRow;
   accessTier: MatchModalProps["accessTier"];
   presentation: MatchModalProps["presentation"];
-  onClose: MatchModalProps["onClose"];
   hashColor: MatchModalProps["hashColor"];
   logoColors: MatchModalProps["logoColors"];
 };
 
 export function useMatchModalModel(args: UseMatchModalModelArgs) {
-  const { match, accessTier, presentation, onClose, hashColor, logoColors } = args;
+  const { match, accessTier, presentation, hashColor, logoColors } = args;
   const { t: tr } = useLocale();
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
   const [detailTab, setDetailTab] = useState<DetailTabId>("overview");
   const tab = (ids: DetailTabId[]) => (ids.includes(detailTab) ? "" : "hidden");
+  /*
+   * closeBtnRef survives as the Overlay's initialFocusRef target; modalRef is
+   * still the scroll container (momentum-strip scroll-to-top), wired through
+   * Overlay's panelRef. Focus trap, focus restore and Escape all moved to the
+   * shared Overlay engine (PR 5) — this hook used to carry its own copy-pasted
+   * trap/ESC listeners.
+   */
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
-  const prevFocusRef = useRef<HTMLElement | null>(null);
   const [xgData, setXgData] = useState<XGData | null>(() => {
     if (!match.luckStats) return null;
     return { homeXG: match.luckStats.hXG, awayXG: match.luckStats.aXG };
   });
-
-  useEffect(() => {
-    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
-    return () => {
-      clearTimeout(tm);
-      prevFocusRef.current?.focus?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const root = modalRef.current;
-      if (!root) return;
-      const focusable = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && (active === first || !root.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
 
   useEffect(() => {
     let cancelled = false;

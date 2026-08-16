@@ -79,6 +79,7 @@ export default function FeedbackDialog({ open, onClose, onSubmitted }: Props) {
       description={done ? undefined : t("feedback.subtitle")}
       size="sm"
       closeOnBackdrop={done}
+      busy={busy}
       footer={
         done ? (
           <Button variant="primary" onClick={close}>

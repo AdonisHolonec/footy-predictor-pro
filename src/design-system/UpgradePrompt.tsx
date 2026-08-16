@@ -2,6 +2,7 @@ import PricingCampaignBanner from "../components/ux/PricingCampaignBanner";
 import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
 import { useLocale } from "../context/LocaleContext";
 import Button from "./Button";
+import Overlay from "./Overlay";
 
 export type UpgradeTier = "premium" | "ultra";
 
@@ -21,17 +22,17 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
   const planLabel = requiredTier === "ultra" ? "Ultra" : "Premium";
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--fp-z-prompt)] flex items-end justify-center bg-fp-navy/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:px-4"
-      role="dialog"
-      aria-modal
+    <Overlay
+      open={open}
+      onClose={onClose}
+      presentation="sheet"
+      closeOnBackdrop
       aria-labelledby="upgrade-prompt-title"
-      onClick={onClose}
+      zClassName="z-[var(--fp-z-prompt)]"
+      backdropClassName="bg-fp-navy/45 backdrop-blur-[2px]"
+      panelClassName="max-h-[min(90dvh,40rem)] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-fp-lg sm:rounded-[var(--fp-radius-lg)] sm:p-6"
     >
-      <div
-        className="max-h-[min(90dvh,40rem)] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-fp-lg sm:rounded-[var(--fp-radius-lg)] sm:p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div>
         <p className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("upgrade.required")}</p>
         <h2 id="upgrade-prompt-title" className="mt-2 font-display text-xl font-semibold text-[var(--fp-text)]">
           {t("upgrade.unlock", { feature })}
@@ -53,6 +54,6 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
           </Button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

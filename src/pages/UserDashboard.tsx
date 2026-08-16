@@ -24,6 +24,7 @@ import Button from "../design-system/Button";
 import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
+import Overlay from "../design-system/Overlay";
 import { useLocale } from "../context/LocaleContext";
 
 
@@ -782,37 +783,36 @@ export default function UserDashboard() {
         onClose={() => setReportRow(null)}
         onSubmitted={() => setToast(t("predictionReport.successMessage"))}
       />
-      {isLeaguesOpen && (
-        <div className="fixed inset-0 z-[var(--fp-z-drawer)] flex items-end justify-end bg-fp-navy/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
-          <div
-            className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-fp-lg sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal
-            aria-label="League filter"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">{t("dash.leaguesTitle")}</h2>
-              <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
-                {t("dash.close")}
-              </Button>
-            </div>
-            <LeaguePanel
-              leaguesSorted={leaguesSorted}
-              selectedSet={new Set(selectedLeagueIds)}
-              selectedLeagueIds={selectedLeagueIds}
-              isLeaguesOpen
-              searchLeague={searchLeague}
-              eliteLeagues={ELITE_LEAGUES}
-              setIsLeaguesOpen={setIsLeaguesOpen}
-              setSearchLeague={setSearchLeague}
-              setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-              selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
-              clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
-            />
-          </div>
+      <Overlay
+        open={isLeaguesOpen}
+        onClose={() => setIsLeaguesOpen(false)}
+        presentation="drawer"
+        closeOnBackdrop
+        zClassName="z-[var(--fp-z-drawer)]"
+        aria-label="League filter"
+        backdropClassName="bg-fp-navy/30 backdrop-blur-[1px]"
+        panelClassName="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-fp-lg sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold">{t("dash.leaguesTitle")}</h2>
+          <Button variant="ghost" size="sm" onClick={() => setIsLeaguesOpen(false)}>
+            {t("dash.close")}
+          </Button>
         </div>
-      )}
+        <LeaguePanel
+          leaguesSorted={leaguesSorted}
+          selectedSet={new Set(selectedLeagueIds)}
+          selectedLeagueIds={selectedLeagueIds}
+          isLeaguesOpen
+          searchLeague={searchLeague}
+          eliteLeagues={ELITE_LEAGUES}
+          setIsLeaguesOpen={setIsLeaguesOpen}
+          setSearchLeague={setSearchLeague}
+          setSelectedLeagueIds={setSelectedLeagueIdsLimited}
+          selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
+          clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
+        />
+      </Overlay>
       {user && !user.onboardingCompleted && (
         <OnboardingCarousel
           leagueOptions={ELITE_LEAGUE_META}

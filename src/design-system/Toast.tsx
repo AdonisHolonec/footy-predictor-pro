@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
+import { getOverlayRoot } from "./overlayInfra";
 
 type Props = {
   message: string | null;
@@ -26,8 +28,10 @@ type Props = {
  *    never disappears mid-read or mid-interaction;
  *  - aria-live=polite, announced as before.
  *
- * Global stacking/portal infrastructure is deliberately NOT introduced here —
- * overlay architecture is the next phase.
+ * PR 5: renders through the shared #overlay-root portal so it escapes any
+ * transformed/isolated ancestor and never lands inside an inert #root. It
+ * shares the CONTAINER only — a toast is not modal, so it never joins the
+ * overlay stack, never locks scroll and never consumes Escape.
  */
 export default function Toast({ message, onDismiss, durationMs = 5000, dismissLabel, action }: Props) {
   const timer = useRef<number | null>(null);
@@ -60,7 +64,7 @@ export default function Toast({ message, onDismiss, durationMs = 5000, dismissLa
 
   if (!message) return null;
 
-  return (
+  return createPortal(
     <div
       role="status"
       aria-live="polite"
@@ -80,6 +84,7 @@ export default function Toast({ message, onDismiss, durationMs = 5000, dismissLa
       >
         <span aria-hidden="true">✕</span>
       </button>
-    </div>
+    </div>,
+    getOverlayRoot()
   );
 }

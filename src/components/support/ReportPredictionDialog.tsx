@@ -104,6 +104,7 @@ export default function ReportPredictionDialog({ open, onClose, row, onSubmitted
       description={done ? undefined : t("predictionReport.subtitle")}
       size="sm"
       closeOnBackdrop={done}
+      busy={busy}
       footer={
         done ? (
           <Button variant="primary" onClick={close}>

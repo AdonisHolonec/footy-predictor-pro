@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Banner from "../design-system/Banner";
+import Overlay from "../design-system/Overlay";
 
 type AuthProps = {
   isOpen: boolean;
@@ -29,9 +30,13 @@ export default function Auth({
   const [localError, setLocalError] = useState<string>("");
   const [localSuccess, setLocalSuccess] = useState<string>("");
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const modalRef = useRef<HTMLDivElement | null>(null);
-  const prevFocusRef = useRef<HTMLElement | null>(null);
 
+  /*
+   * Only Auth-specific state survives here: form reset on close, recovery-mode
+   * detection on open. Focus trap, focus restore and Escape all moved to the
+   * shared Overlay engine (PR 5) — this file used to carry its own copy-pasted
+   * trap/ESC listeners.
+   */
   useEffect(() => {
     if (!isOpen) {
       setPassword("");
@@ -40,54 +45,12 @@ export default function Auth({
       setLocalSuccess("");
       return;
     }
-    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery") {
       setMode("reset");
       setLocalSuccess("Seteaza o parola noua pentru contul tau.");
     }
-    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
-    return () => clearTimeout(tm);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const root = modalRef.current;
-      if (!root) return;
-      const focusable = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && (active === first || !root.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
-    if (isOpen) return;
-    prevFocusRef.current?.focus?.();
-  }, [isOpen]);
-
-  if (!isOpen) return null;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -140,19 +103,17 @@ export default function Auth({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-end justify-center bg-fp-navy/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
-      role="presentation"
+    <Overlay
+      open={isOpen}
+      onClose={onClose}
+      presentation="sheet"
+      zClassName="z-[var(--fp-z-overlay)]"
+      aria-labelledby="auth-modal-title"
+      aria-describedby="auth-modal-desc"
+      initialFocusRef={closeBtnRef}
+      backdropClassName="bg-fp-navy/80 backdrop-blur-md"
+      panelClassName="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-[var(--fp-radius)] border border-white/[0.09] bg-gradient-to-b from-fp-bg-card/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
     >
-      <div
-        ref={modalRef}
-        className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-[var(--fp-radius)] border border-white/[0.09] bg-gradient-to-b from-fp-bg-card/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auth-modal-title"
-        aria-describedby="auth-modal-desc"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div
           className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1"
           aria-hidden
@@ -296,7 +257,6 @@ export default function Auth({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }

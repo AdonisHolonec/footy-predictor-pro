@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PerformanceLeagueBreakdown, PerformanceUserBreakdown, PerformanceUserLeagueBreakdown } from "../types";
+import Overlay from "../design-system/Overlay";
 
 type PerformanceApiResponse = {
   ok: boolean;
@@ -39,8 +40,6 @@ export default function PerformanceCounterModal({
   const [byUserLeague, setByUserLeague] = useState<PerformanceUserLeagueBreakdown[]>([]);
   const [serverIsAdmin, setServerIsAdmin] = useState(false);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
-  const modalRef = useRef<HTMLDivElement | null>(null);
-  const prevFocusRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     if (!accessToken) {
@@ -76,52 +75,15 @@ export default function PerformanceCounterModal({
     }
   }, [accessToken, days]);
 
+  /*
+   * Only the data fetch stays modal-owned. Focus trap, restore and Escape all
+   * moved to the shared Overlay engine (PR 5) — this file used to carry its
+   * own copy-pasted trap/ESC listeners, byte-identical with Auth's.
+   */
   useEffect(() => {
     if (!open) return;
-    prevFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     void load();
-    const tm = setTimeout(() => closeBtnRef.current?.focus(), 0);
-    return () => clearTimeout(tm);
   }, [open, load]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const root = modalRef.current;
-      if (!root) return;
-      const focusable = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1 && el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && (active === first || !root.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (open) return;
-    prevFocusRef.current?.focus?.();
-  }, [open]);
-
-  if (!open) return null;
 
   const showGlobal = globalByLeague.length > 0;
   const showServer = Boolean(accessToken);
@@ -132,20 +94,17 @@ export default function PerformanceCounterModal({
   const td = "border-t border-[var(--fp-border)] px-2 py-1.5 font-mono text-[11px] text-[var(--fp-accent)]";
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--fp-z-modal)] flex items-end justify-center bg-black/75 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
-      onClick={onClose}
-      role="presentation"
+    <Overlay
+      open={open}
+      onClose={onClose}
+      presentation="sheet"
+      closeOnBackdrop
+      aria-labelledby="perf-counter-title"
+      aria-describedby="perf-counter-desc"
+      initialFocusRef={closeBtnRef}
+      backdropClassName="bg-black/75 backdrop-blur-md"
+      panelClassName="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-[var(--fp-radius)] border border-white/10 bg-gradient-to-b from-fp-bg-card/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
     >
-      <div
-        ref={modalRef}
-        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-[var(--fp-radius)] border border-white/10 bg-gradient-to-b from-fp-bg-card/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="perf-counter-title"
-        aria-describedby="perf-counter-desc"
-      >
         <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-fp-bg/40 px-4 py-3">
           <div>
             <h2 id="perf-counter-title" className="font-display text-sm font-semibold text-[var(--fp-text)]">
@@ -299,7 +258,6 @@ export default function PerformanceCounterModal({
 
           {!showGlobal && !showServer && <p className="text-center text-xs text-[var(--fp-text-muted)]">Nu există date de afișat.</p>}
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }
