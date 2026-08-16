@@ -138,14 +138,14 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
       <div className={`flex items-center justify-between gap-2 ${compact ? "mb-1.5" : "mb-2.5"}`}>
         <p
           className={`font-bold uppercase tracking-wide text-[var(--fp-text-muted)] ${
-            compact ? "text-[8px]" : "text-[10px] sm:text-[11px]"
+            compact ? "text-[10px]" : "text-[10px] sm:text-[11px]"
           }`}
         >
           {t("match.liveWinTitle")}
         </p>
         <p
           className={`truncate font-semibold text-[var(--fp-text-muted)] ${
-            compact ? "text-[9px]" : "text-[10px] sm:text-[11px]"
+            compact ? "text-[10px]" : "text-[10px] sm:text-[11px]"
           }`}
         >
           {shiftLine}
@@ -166,7 +166,7 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
         ))}
       </div>
 
-      <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 text-[9px]" : "mt-2 text-[10px] sm:text-[11px]"}`}>
+      <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 text-[10px]" : "mt-2 text-[10px] sm:text-[11px]"}`}>
         {cells.map((c, idx) => (
           <div
             key={c.key}
@@ -243,7 +243,7 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
           </svg>
           {hoverPoint && (
             <div
-              className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 font-mono text-[9px] tabular-nums text-[var(--fp-text)] shadow-fp-sm"
+              className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 font-mono text-[10px] tabular-nums text-[var(--fp-text)] shadow-fp-sm"
               style={{ left: `${Math.min(88, Math.max(12, (hoverPoint.minute / maxMinute) * 100))}%` }}
             >
               {hoverPoint.minute}&apos;

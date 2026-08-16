@@ -53,7 +53,7 @@ export type { TrackerProps };
 
 function LabFallback({ label }: { label: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-8 text-center font-mono text-[11px] text-[var(--fp-text-muted)]">
+    <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-4 py-8 text-center font-mono text-[11px] text-[var(--fp-text-muted)]">
       Loading {label}…
     </div>
   );
@@ -184,7 +184,7 @@ export default function PerformancePanel({
           />
         )}
         {section === "workspace" && (
-          <div className="rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 text-sm text-[var(--fp-text-muted)]">
+          <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 text-sm text-[var(--fp-text-muted)]">
             Scroll down to the match workspace, or use the prediction list below.
           </div>
         )}

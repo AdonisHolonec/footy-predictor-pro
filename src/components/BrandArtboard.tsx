@@ -11,7 +11,7 @@ export default function BrandArtboard({ src, alt, className = "", frameClassName
   return (
     <figure className={`group relative ${className}`}>
       <div
-        className={`relative overflow-hidden rounded-2xl border border-white/[0.1] bg-fp-bg/50 shadow-atelier backdrop-blur-sm sm:rounded-3xl ${frameClassName}`}
+        className={`relative overflow-hidden rounded-[var(--fp-radius)] border border-white/[0.1] bg-fp-bg/50 shadow-atelier backdrop-blur-sm sm:rounded-3xl ${frameClassName}`}
       >
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-fp-bg/80 via-transparent to-fp-bg/20" />
         <img

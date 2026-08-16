@@ -42,7 +42,7 @@ export default function LeaguePanel({
         >
           <div className="min-w-0">
             <h2 className="font-display text-base font-semibold text-[var(--fp-text)]">{t("leagues.title")}</h2>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-accent)]">{t("leagues.eyebrow")}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("leagues.eyebrow")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {selectedSet.size > 0 && (

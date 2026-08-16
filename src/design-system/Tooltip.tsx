@@ -22,7 +22,7 @@ export default function Tooltip({ label, children, className = "", align = "cent
       {children}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute top-full z-[100] mt-2 max-w-[min(16rem,calc(100vw-1.5rem))] whitespace-nowrap rounded-md bg-[var(--fp-navy)] px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-[var(--fp-ease)] group-focus-within/tip:opacity-100 group-active/tip:opacity-100 [@media(hover:hover)]:group-hover/tip:opacity-100 ${pos}`}
+        className={`pointer-events-none absolute top-full z-[var(--fp-z-tooltip)] mt-2 max-w-[min(16rem,calc(100vw-1.5rem))] whitespace-nowrap rounded-md bg-[var(--fp-navy)] px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-[var(--fp-ease)] group-focus-within/tip:opacity-100 group-active/tip:opacity-100 [@media(hover:hover)]:group-hover/tip:opacity-100 ${pos}`}
       >
         {label}
       </span>

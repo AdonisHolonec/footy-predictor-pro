@@ -20,7 +20,7 @@ export default function Toast({ message, onDismiss, durationMs = 2200 }: Props) 
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-24 left-1/2 z-[90] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8"
+      className="fixed bottom-24 left-1/2 z-[var(--fp-z-toast)] max-w-[min(92vw,24rem)] -translate-x-1/2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8"
     >
       {message}
     </div>

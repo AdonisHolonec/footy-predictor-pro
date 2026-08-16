@@ -62,14 +62,14 @@ export default function ProfileView(props: ProfileViewProps) {
   return (
         <section className="space-y-6">
           <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
               {t("nav.profile")}
             </p>
             <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
           </header>
 
           <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--fp-accent)] font-display text-xl font-bold text-white">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-[var(--fp-radius)] bg-[var(--fp-accent)] font-display text-xl font-bold text-white">
               {(user?.email?.[0] || "?").toUpperCase()}
             </div>
             <div className="min-w-0">

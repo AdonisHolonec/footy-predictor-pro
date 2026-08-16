@@ -54,7 +54,7 @@ function Metric({
 }) {
   return (
     <div className="min-w-0" title={title}>
-      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">{label}</div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">{label}</div>
       <div className={`mt-0.5 truncate font-mono text-[11px] font-bold tabular-nums sm:text-sm ${tone}`}>{value}</div>
     </div>
   );
@@ -109,7 +109,7 @@ export default function MatchDecisionBlock({
       className="mx-auto mt-3 w-full max-w-2xl rounded-[var(--fp-radius)] border border-fp-accent/25 bg-[var(--fp-bg-muted)] p-3 shadow-fp-sm sm:p-4"
       aria-label={tr("match.decisionTitle")}
     >
-      <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--fp-accent)]">
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
         {tr("match.decisionTitle")}
       </div>
 
@@ -120,7 +120,7 @@ export default function MatchDecisionBlock({
             <ConfidenceAura value={confidencePct} size="compact" />
           ) : (
             <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1.5 text-center">
-              <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
                 {tr("match.confidence")}
               </div>
               <div className="mt-0.5 text-[11px] font-bold text-[var(--fp-accent)]">{confidenceValue}</div>
@@ -129,7 +129,7 @@ export default function MatchDecisionBlock({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[8px] font-bold uppercase tracking-[0.18em] text-fp-accent/70">
+          <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-fp-accent/70">
             {tr("match.pick")}
           </div>
           <div className="flex items-center gap-1.5 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] sm:text-2xl">
@@ -139,7 +139,7 @@ export default function MatchDecisionBlock({
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             {tr("match.odd")}
           </div>
           <div className="font-mono text-base font-bold tabular-nums text-[var(--fp-success)] sm:text-xl">
@@ -156,7 +156,7 @@ export default function MatchDecisionBlock({
           value={
             <span className="inline-flex items-baseline gap-1">
               {evValue}
-              <span className="text-[8px] font-semibold uppercase tracking-wide opacity-80">{evVerdict}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{evVerdict}</span>
             </span>
           }
           tone={evTone}
@@ -167,7 +167,7 @@ export default function MatchDecisionBlock({
           value={
             <span className="inline-flex items-baseline gap-1">
               {dqPct}%
-              <span className="text-[8px] font-semibold uppercase tracking-wide opacity-80">{dqVerdict}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{dqVerdict}</span>
             </span>
           }
           tone={dqTone}
@@ -178,7 +178,7 @@ export default function MatchDecisionBlock({
       {/* Row 3 — consensus. Rendered only when benchmark data exists. */}
       {benchmark ? (
         <div className="mt-2.5 border-t border-[var(--fp-border)] pt-2.5">
-          <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             {tr("match.decisionConsensus")}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] tabular-nums sm:text-[11px]">
@@ -192,7 +192,7 @@ export default function MatchDecisionBlock({
             </span>
             {benchmark.agree != null ? (
               <span
-                className={`rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   benchmark.agree
                     ? "border-fp-success/40 bg-fp-success/10 text-[var(--fp-success)]"
                     : "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]"

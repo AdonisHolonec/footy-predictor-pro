@@ -92,7 +92,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
               single-pick decision for attention. */}
           {!canShowSpecialBet && (
             <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
-              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-warning/35 bg-fp-warning/10 px-3.5 py-3 text-center shadow-fp-sm max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-warning/35 bg-fp-warning/10 px-3.5 py-3 text-center shadow-fp-sm max-xs:max-w-[21rem] max-xs:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
                     {tr("match.specialBet")}
@@ -114,7 +114,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
           )}
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
             <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
-              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-success/45 bg-fp-success/10 px-3.5 py-3 text-center shadow-fp-sm max-[380px]:max-w-[21rem] max-[380px]:px-4 sm:max-w-[28rem]">
+              <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-success/45 bg-fp-success/10 px-3.5 py-3 text-center shadow-fp-sm max-xs:max-w-[21rem] max-xs:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
                     {tr("match.specialBet")}
@@ -146,7 +146,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-2.5 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-2 max-[380px]:px-3">
+                <div className="mt-2.5 space-y-1.5 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-2 max-xs:px-3">
                   {specialBetLegs.map((leg) => {
                     const tone = outcomeTextClass(leg.outcome);
                     const liveBadge =
@@ -189,7 +189,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
                   </span>
                   {specialCombinedOutcome === "win" || specialCombinedOutcome === "loss" ? (
                     <span
-                      className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+                      className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
                         specialCombinedOutcome === "win"
                           ? "bg-[var(--fp-success)] text-white"
                           : "bg-[var(--fp-danger)] text-white"
@@ -270,7 +270,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
                 </div>
                 {standingsRows && standingsRows.length > 0 ? (
                   <div className="mt-4">
-                    <h4 className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                    <h4 className="mb-2 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                       {tr("match.fullStandings", { league: match.league })}
                     </h4>
                     <LeagueStandingsTable

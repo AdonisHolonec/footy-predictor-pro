@@ -128,7 +128,7 @@ export default function GlobalSpecialBetSection({
       className="rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] p-4 shadow-fp-sm sm:p-5"
     >
       <header className="min-w-0">
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           {t("gsb.eyebrow")}
         </p>
         <h2

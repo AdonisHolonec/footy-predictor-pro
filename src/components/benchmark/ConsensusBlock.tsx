@@ -52,7 +52,7 @@ export default function ConsensusBlock({ ourRecommendation, benchmark, interpret
   return (
     <Card padding="sm" className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           <MarketFamilyIcon familyKey={ourRecommendation.familyKey} size={12} />
           External Consensus
         </div>

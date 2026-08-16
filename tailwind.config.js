@@ -1,8 +1,18 @@
+import defaultTheme from "tailwindcss/defaultTheme";
+
 /** @type {import('tailwindcss').Config} */
 export default {
   /** Include CSS that uses @apply so JIT emits theme utilities. */
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,css}"],
   theme: {
+    /* xs was already a real breakpoint — max-[380px]: appeared 29 times across
+       MatchCard/MatchModal before PR 3 declared it. Making it official turns
+       the magic number into `max-xs:` and keeps the set closed: no other new
+       breakpoints. Spread first so xs sorts before sm in the cascade. */
+    screens: {
+      xs: "380px",
+      ...defaultTheme.screens
+    },
     extend: {
       /**
        * Semantic colours as first-class Tailwind colours.

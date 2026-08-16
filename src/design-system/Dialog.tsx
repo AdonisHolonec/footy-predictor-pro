@@ -143,7 +143,7 @@ export default function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
-        className={`max-h-[90vh] w-full ${sizeClass[size]} overflow-y-auto rounded-2xl border border-[var(--fp-border)] bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl focus-visible:outline-none sm:p-8 ${className}`}
+        className={`max-h-[90vh] w-full ${sizeClass[size]} overflow-y-auto rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl focus-visible:outline-none sm:p-8 ${className}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

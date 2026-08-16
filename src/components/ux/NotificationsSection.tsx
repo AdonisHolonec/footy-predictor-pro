@@ -66,7 +66,7 @@ export default function NotificationsSection({ items, seenIds, onMarkAllSeen, on
     <section className="space-y-6">
       <header className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+          <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
             {t("nav.notifications")}
           </p>
           <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold text-[var(--fp-text)]">

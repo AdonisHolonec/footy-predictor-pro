@@ -89,11 +89,11 @@ export default function MatchModal({
     if (!hasRich) {
       return (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-fp-navy/85 p-3 backdrop-blur-md sm:p-4"
+          className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/85 p-3 backdrop-blur-md sm:p-4"
           onClick={onClose}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-fp-warning/25 bg-fp-bg-card/90 p-8 text-center shadow-fp-lg backdrop-blur-xl"
+            className="w-full max-w-md rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/90 p-8 text-center shadow-fp-lg backdrop-blur-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
@@ -113,11 +113,11 @@ export default function MatchModal({
 
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-fp-navy/88 p-3 backdrop-blur-md sm:p-4"
+        className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/88 p-3 backdrop-blur-md sm:p-4"
         onClick={onClose}
       >
         <div
-          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-fp-warning/25 bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl sm:max-w-2xl sm:p-8"
+          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl sm:max-w-2xl sm:p-8"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -153,7 +153,7 @@ export default function MatchModal({
 
           {table && table.length > 0 ? (
             <div className="mt-6">
-              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fp-accent/80">{tr("match.standings")}</h3>
+              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.standings")}</h3>
               <LeagueStandingsTable rows={table} highlightHomeId={hid} highlightAwayId={aid} />
             </div>
           ) : null}
@@ -174,8 +174,8 @@ export default function MatchModal({
     <div
       className={
         isFocus
-          ? "fixed inset-0 z-50 flex items-end justify-end bg-fp-navy/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-[2px] sm:items-stretch sm:pb-0"
-          : "fixed inset-0 z-50 flex items-center justify-center bg-fp-navy/50 p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-4"
+          ? "fixed inset-0 z-[var(--fp-z-overlay)] flex items-end justify-end bg-fp-navy/40 pb-[env(safe-area-inset-bottom)] backdrop-blur-[2px] sm:items-stretch sm:pb-0"
+          : "fixed inset-0 z-[var(--fp-z-overlay)] flex items-center justify-center bg-fp-navy/50 p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-4"
       }
       onClick={onClose}
     >
@@ -223,44 +223,44 @@ export default function MatchModal({
         )}
 
         <div className="border-b border-[var(--fp-border)] px-4 pb-4 pt-1 sm:px-6">
-          <p id="match-modal-title" className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+          <p id="match-modal-title" className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
             {tr("match.analysis")}
           </p>
-          <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-[380px]:gap-1.5 sm:mb-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3">
-            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
+          <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-xs:gap-1.5 sm:mb-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3">
+            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-xs:w-[4rem] sm:w-full sm:gap-1.5">
               <img
                 src={match.logos?.home}
-                className="h-14 w-14 shrink-0 object-contain opacity-95 max-[380px]:h-12 max-[380px]:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                className="h-14 w-14 shrink-0 object-contain opacity-95 max-xs:h-12 max-xs:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-base">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-xs:text-[10px] sm:text-sm lg:text-base">
                 {match.teams.home}
               </div>
             </div>
-            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-[380px]:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-[23rem] sm:px-2">
-              <div className="mb-0.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wider text-[var(--fp-text-muted)] max-[380px]:text-[8px] sm:text-[10px]">
+            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-xs:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-[23rem] sm:px-2">
+              <div className="mb-0.5 text-center text-[10px] font-bold uppercase leading-tight tracking-wider text-[var(--fp-text-muted)] max-xs:text-[10px]">
                 {match.league}
               </div>
-              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-[var(--fp-text)] max-[380px]:text-2xl sm:text-5xl">
+              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-[var(--fp-text)] max-xs:text-2xl sm:text-5xl">
                 {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
               </div>
               {/* Pick / odds / confidence intentionally NOT repeated here — they are
                   the Decision Block's job, directly below. */}
               {hasFinalScore && (
                 <div
-                    className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide max-[380px]:text-[8px] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
+                    className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide max-xs:text-[10px] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
                 >
                   {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
                 </div>
               )}
               {hasLiveScore && (
-                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-fp-danger/35 bg-fp-danger/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
+                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-fp-danger/35 bg-fp-danger/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
                   <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-live)] motion-reduce:animate-none" /> Live ·{" "}
                   {match.score?.home}-{match.score?.away}
                   {Number.isFinite(Number(match.score?.minute)) ? ` · ${match.score?.minute}'` : ""}
                 </div>
               )}
-              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[9px] text-[var(--fp-text-muted)] sm:mt-3 sm:gap-x-3 sm:text-[10px]">
+              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[10px] text-[var(--fp-text-muted)] sm:mt-3 sm:gap-x-3 sm:text-[10px]">
                 <span className="font-mono tabular-nums">{kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}</span>
                 <span>·</span>
                 <span className="font-mono tabular-nums">{new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -268,13 +268,13 @@ export default function MatchModal({
                 <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
               </div>
             </div>
-            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-[380px]:w-[4rem] sm:w-full sm:gap-1.5">
+            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-xs:w-[4rem] sm:w-full sm:gap-1.5">
               <img
                 src={match.logos?.away}
-                className="h-14 w-14 shrink-0 object-contain opacity-95 max-[380px]:h-12 max-[380px]:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                className="h-14 w-14 shrink-0 object-contain opacity-95 max-xs:h-12 max-xs:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
                 alt=""
               />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px] sm:text-sm lg:text-base">
+              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-xs:text-[10px] sm:text-sm lg:text-base">
                 {match.teams.away}
               </div>
             </div>
@@ -426,8 +426,8 @@ export default function MatchModal({
               match.modelMeta.reasonCodes?.length ||
               match.modelMeta.stakeBucket ||
               match.evaluation) && (
-              <details className={`group rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5 ${tab(["advanced"])}`}>
-                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.2em] text-fp-accent/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
+              <details className={`group rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5 ${tab(["advanced"])}`}>
+                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
                     {tr("match.modelAudit")}
                     <span className="text-[var(--fp-text-muted)] transition group-open:rotate-90">›</span>
@@ -436,18 +436,18 @@ export default function MatchModal({
                 <div className="mt-4 space-y-4 border-t border-[var(--fp-border)] pt-4 text-[11px] text-[var(--fp-text-muted)]">
                   {/* === Pipeline summary: indicator clar pentru ce strat e activ === */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.pipeline")}</span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-0.5 font-mono text-[9px] text-[var(--fp-text-muted)]">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.pipeline")}</span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-0.5 font-mono text-[10px] text-[var(--fp-text-muted)]">
                       Poisson+DC
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[9px] ${match.modelMeta.calibrationApplied ? "border-fp-accent/45 bg-fp-accent/10 text-[var(--fp-accent)]" : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-fp-text-muted/60"}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px] ${match.modelMeta.calibrationApplied ? "border-fp-accent/45 bg-fp-accent/10 text-[var(--fp-accent)]" : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-fp-text-muted/60"}`}>
                       Isotonic {match.modelMeta.calibrationApplied ? "✓" : "—"}
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[9px] ${match.modelMeta.stackerApplied ? "border-fp-success/45 bg-fp-success/10 text-[var(--fp-success)]" : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-fp-text-muted/60"}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px] ${match.modelMeta.stackerApplied ? "border-fp-success/45 bg-fp-success/10 text-[var(--fp-success)]" : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-fp-text-muted/60"}`}>
                       ML stacker {match.modelMeta.stackerApplied ? "✓" : "—"}
                     </span>
                     {match.modelMeta.elo ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-fp-warning/35 bg-fp-warning/8 px-2 py-0.5 font-mono text-[9px] text-[var(--fp-warning)]">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-fp-warning/35 bg-fp-warning/8 px-2 py-0.5 font-mono text-[10px] text-[var(--fp-warning)]">
                         Elo Δ {match.modelMeta.elo.spread > 0 ? "+" : ""}{Math.round(match.modelMeta.elo.spread)}
                       </span>
                     ) : null}
@@ -456,10 +456,10 @@ export default function MatchModal({
                   {/* === Probabilităţile la fiecare strat (doar dacă avem raw) === */}
                   {match.evaluation?.rawPoissonProbs1x2Pct && (
                     <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3">
-                      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-fp-accent/80">{tr("match.probsPipeline")}</div>
+                      <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-fp-accent/80">{tr("match.probsPipeline")}</div>
                       <table className="w-full text-[10px]">
                         <thead>
-                          <tr className="text-left font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                          <tr className="text-left font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                             <th className="py-1">Stage</th>
                             <th className="py-1 text-right">1</th>
                             <th className="py-1 text-right">X</th>
@@ -506,7 +506,7 @@ export default function MatchModal({
                   {(match.modelMeta.topPickLift != null ||
                     (match.modelMeta.topPickAlternates && match.modelMeta.topPickAlternates.length > 0)) && (
                     <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                      <div className="mb-1 flex items-center justify-between text-[9px] uppercase tracking-wider">
+                      <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider">
                         <span className="text-fp-accent/80">{tr("match.whyThisPick")}</span>
                         {match.modelMeta.topPickLift != null && (
                           <span
@@ -530,7 +530,7 @@ export default function MatchModal({
                       </p>
                       {match.modelMeta.topPickAlternates && match.modelMeta.topPickAlternates.length > 0 && (
                         <div className="mt-2 border-t border-[var(--fp-border)] pt-2">
-                          <div className="mb-1 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                          <div className="mb-1 text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                             Alternative considerate
                           </div>
                           <ul className="space-y-0.5 tabular-nums">
@@ -552,7 +552,7 @@ export default function MatchModal({
                   {/* === League profile + derived params === */}
                   {(match.leagueProfile || match.modelMeta.leagueParams) && (
                     <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-fp-accent/80">
+                      <div className="mb-1 text-[10px] uppercase tracking-wider text-fp-accent/80">
                         League profile
                         {match.leagueProfile?.name ? ` · ${match.leagueProfile.name}` : ""}
                         {match.leagueProfile?.fromCatalog === false ? " · default" : ""}
@@ -607,7 +607,7 @@ export default function MatchModal({
                   {/* === Shin info (market) === */}
                   {match.odds?.marginMethod && (
                     <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-fp-accent/80">{tr("match.marketDebiasing")}</div>
+                      <div className="mb-1 text-[10px] uppercase tracking-wider text-fp-accent/80">{tr("match.marketDebiasing")}</div>
                       <div className="flex flex-wrap gap-x-3 tabular-nums">
                         <span>method · {match.odds.marginMethod}</span>
                         {match.odds.shinZ != null && <span>z · {match.odds.shinZ.toFixed(4)}</span>}
@@ -619,7 +619,7 @@ export default function MatchModal({
                   {/* === Strength ratings (atk/def shrinkage) === */}
                   {match.modelMeta.strengthMeta && (
                     <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-fp-accent/80">{tr("match.strengthRatings")}</div>
+                      <div className="mb-1 text-[10px] uppercase tracking-wider text-fp-accent/80">{tr("match.strengthRatings")}</div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums sm:grid-cols-4">
                         {match.modelMeta.strengthMeta.atkH != null && <span>atk H {match.modelMeta.strengthMeta.atkH.toFixed(2)}</span>}
                         {match.modelMeta.strengthMeta.defH != null && <span>def H {match.modelMeta.strengthMeta.defH.toFixed(2)}</span>}
@@ -635,7 +635,7 @@ export default function MatchModal({
                   {/* === Elo details === */}
                   {match.modelMeta.elo && (
                     <div className={`rounded-lg border p-3 font-mono text-[10px] tabular-nums ${match.modelMeta.elo.thin ? "border-fp-warning/25 bg-fp-warning/8 text-[var(--fp-warning)]" : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"}`}>
-                      <div className="mb-1 text-[9px] uppercase tracking-wider text-fp-accent/80">
+                      <div className="mb-1 text-[10px] uppercase tracking-wider text-fp-accent/80">
                         Elo {match.modelMeta.elo.thin ? "· thin sample" : ""}
                       </div>
                       <div className="flex flex-wrap gap-x-3">
@@ -648,12 +648,12 @@ export default function MatchModal({
 
                   {match.modelMeta.method && (
                     <p>
-                      <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Method</span> · {match.modelMeta.method}
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Method</span> · {match.modelMeta.method}
                     </p>
                   )}
                   {match.modelMeta.probsModel && (
                     <p>
-                      <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Probs</span> · {match.modelMeta.probsModel}
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Probs</span> · {match.modelMeta.probsModel}
                     </p>
                   )}
                   {match.modelMeta.stakeBucket != null && (
@@ -664,7 +664,7 @@ export default function MatchModal({
                   )}
                   {Array.isArray(match.modelMeta.reasonCodes) && match.modelMeta.reasonCodes.length > 0 && (
                     <div>
-                      <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.reasonCodes")}</div>
+                      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.reasonCodes")}</div>
                       <ul className="list-inside list-disc space-y-0.5 font-mono text-[10px] text-[var(--fp-text-muted)]">
                         {match.modelMeta.reasonCodes.map((code) => (
                           <li key={code}>{code}</li>
@@ -678,7 +678,7 @@ export default function MatchModal({
                       {match.evaluation.marketBlendWeight != null && (
                         <div>Market blend · {(match.evaluation.marketBlendWeight * 100).toFixed(0)}%</div>
                       )}
-                      <div className="mt-1 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                      <div className="mt-1 text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                         v {match.evaluation.modelVersion || match.modelVersion || "?"}
                       </div>
                     </div>

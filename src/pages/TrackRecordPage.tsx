@@ -21,7 +21,7 @@ export default function TrackRecordPage() {
 
       <div className="relative z-10">
         <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-fp-bg-elevated/70 px-4 py-3 backdrop-blur-xl sm:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <div className="mx-auto flex max-w-[var(--fp-container)] items-center justify-between gap-4">
             <Link to="/" className="flex items-center gap-2.5 text-[var(--fp-text)] transition hover:text-[var(--fp-accent)]">
               <img
                 src={BRAND_IMAGES.logoPrimary}
@@ -47,10 +47,10 @@ export default function TrackRecordPage() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-14">
+        <main className="mx-auto max-w-[var(--fp-container)] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
           <TrackRecordSection days={45} showLinkToFull={false} />
 
-          <div className="mt-10 rounded-2xl border border-fp-accent/40 bg-fp-accent/15 p-5">
+          <div className="mt-10 rounded-[var(--fp-radius)] border border-fp-accent/40 bg-fp-accent/15 p-5">
             <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent)]">Next step</p>
             <p className="mt-2 text-sm text-[var(--fp-text-muted)]">
               Vrei aceleași semnale în timp real? Pornește free sau upgrade la Premium/Ultra.

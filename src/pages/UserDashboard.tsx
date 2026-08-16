@@ -781,7 +781,7 @@ export default function UserDashboard() {
         onSubmitted={() => setToast(t("predictionReport.successMessage"))}
       />
       {isLeaguesOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-end bg-fp-navy/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
+        <div className="fixed inset-0 z-[var(--fp-z-drawer)] flex items-end justify-end bg-fp-navy/30 backdrop-blur-[1px] sm:items-stretch" onClick={() => setIsLeaguesOpen(false)}>
           <div
             className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-fp-lg sm:h-full sm:max-h-none sm:rounded-none sm:border-l sm:pb-4"
             onClick={(e) => e.stopPropagation()}

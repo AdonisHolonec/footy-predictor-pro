@@ -50,7 +50,7 @@ export default function CollapsiblePanel({
             <h2
               className={
                 compact
-                  ? "text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--fp-accent)]"
+                  ? "text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]"
                   : "font-display text-base font-semibold text-[var(--fp-text)] sm:text-[length:var(--fp-section)]"
               }
             >

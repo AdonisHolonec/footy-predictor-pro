@@ -163,7 +163,7 @@ export default function ConsumerShell({
   return (
     <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
       <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-fp-bg-card/95 shadow-fp-sm backdrop-blur-md">
-        <div className="mx-auto flex max-w-[1280px] flex-col gap-2 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:px-6 sm:py-2.5 lg:px-8">
+        <div className="mx-auto flex max-w-[var(--fp-container)] flex-col gap-2 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:px-6 sm:py-2.5 lg:px-8">
           <div className="flex items-center gap-1.5 sm:contents">
             <button
               type="button"
@@ -189,14 +189,14 @@ export default function ConsumerShell({
                 title={t("shell.selectDate")}
                 value={date}
                 onChange={(e) => onDateChange(e.target.value)}
-                className="h-8 w-[6.4rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[11px] font-medium text-[var(--fp-text)] sm:h-9 sm:w-[7.5rem] sm:px-1.5 sm:text-sm"
+                className="h-9 w-[6.4rem] shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[11px] font-medium text-[var(--fp-text)] sm:w-[7.5rem] sm:px-1.5 sm:text-sm"
               />
               {extraDates}
               <Tooltip label={t("shell.filterLeagues")}>
                 <button
                   type="button"
                   onClick={onOpenLeagues}
-                  className="h-8 min-w-0 flex-1 truncate rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 text-[10px] font-bold leading-tight text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:h-9 sm:flex-none sm:px-2.5 sm:text-xs"
+                  className="h-9 min-w-0 flex-1 truncate rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 text-[10px] font-bold leading-tight text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:flex-none sm:px-2.5 sm:text-xs"
                   aria-label={t("shell.filterLeagues")}
                 >
                   {t("shell.leagues")}
@@ -217,7 +217,7 @@ export default function ConsumerShell({
                 onChange={(e) => onSearchChange(e.target.value)}
                 onFocus={() => onOpenSearch?.()}
                 placeholder={t("shell.searchTeams")}
-                className="h-8 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:h-9 sm:max-w-[14rem] sm:px-2.5"
+                className="h-9 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-[14rem] sm:px-2.5"
               />
 
               {onPredict ? (
@@ -228,7 +228,7 @@ export default function ConsumerShell({
                       variant="primary"
                       loading={predictBusy}
                       onClick={onPredict}
-                      className="h-8 shrink-0 font-bold sm:h-9"
+                      className="shrink-0 font-bold"
                       aria-label={t("shell.predictTip")}
                       aria-busy={predictBusy}
                     >
@@ -245,7 +245,7 @@ export default function ConsumerShell({
                     variant="secondary"
                     loading={refreshBusy && !predictBusy}
                     onClick={onRefresh}
-                    className="h-8 shrink-0 sm:h-9"
+                    className="shrink-0"
                     aria-label={t("shell.refreshPredictions")}
                     aria-busy={refreshBusy && !predictBusy}
                   >
@@ -265,7 +265,7 @@ export default function ConsumerShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1280px] px-3 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8 lg:pb-5">
+      <main className="mx-auto max-w-[var(--fp-container)] px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8 lg:pb-5">
         {children}
       </main>
 

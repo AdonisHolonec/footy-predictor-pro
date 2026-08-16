@@ -73,10 +73,10 @@ export default function LandingAccess() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-3 py-6 sm:px-4 sm:py-8">
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         {/* Hero */}
         <section className="text-center sm:text-left">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>
           <h1 className="mt-2 font-display text-[length:var(--fp-hero)] font-semibold leading-tight tracking-tight">
             {t("landing.headline")}
           </h1>
@@ -221,7 +221,7 @@ export default function LandingAccess() {
         {/* Pricing */}
         <section id="pricing" className="scroll-mt-20 space-y-3">
           <header>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent-text)]">{t("landing.pricingKicker")}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent-text)]">{t("landing.pricingKicker")}</p>
             <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold">{t("landing.pricingTitle")}</h2>
             <p className="mt-1 max-w-2xl text-sm text-[var(--fp-text-muted)]">{t("landing.pricingSub")}</p>
           </header>

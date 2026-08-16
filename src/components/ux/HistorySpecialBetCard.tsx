@@ -265,7 +265,7 @@ export default function HistorySpecialBetCard({ row, onOpenDetails, canShowSpeci
             </span>
             {combinedOutcome === "win" || combinedOutcome === "loss" ? (
               <span
-                className={`rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+                className={`rounded-md px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
                   combinedOutcome === "win"
                     ? "bg-[var(--fp-success)] text-white"
                     : "bg-[var(--fp-danger)] text-white"

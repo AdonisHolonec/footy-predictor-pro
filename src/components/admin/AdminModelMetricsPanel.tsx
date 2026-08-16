@@ -57,14 +57,14 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
     <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm md:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
-          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Model metrics</h2>
-          <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+          <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">Model metrics</h2>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             window {days}d · {metrics?.nProb ?? 0} settled cu probabilităţi
           </p>
         </div>
         <div className="flex items-center gap-2">
           {mlStatus && (
-            <div className="hidden font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text)] sm:block">
+            <div className="hidden font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text)] sm:block">
               cal · {mlStatus.calibrationMaps ?? 0} · stk · {mlStatus.activeStackerWeights ?? 0} · elo · {mlStatus.eloTeams ?? 0}
             </div>
           )}
@@ -116,7 +116,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             <div>Calibration: <span className="text-[var(--fp-text)]">{trainReport.calibrationRows || 0} rows · {trainReport.calibrationSummary || 0} maps</span></div>
             <div>Stacker: <span className="text-[var(--fp-text)]">{trainReport.stackerRows || 0} rows · {trainReport.stackerSamples || 0} samples · {trainReport.stackerTrained || 0} weights</span></div>
           </div>
-          <div className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+          <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
             finished {trainReport.finishedAt ? new Date(trainReport.finishedAt).toLocaleString() : "—"}
           </div>
         </div>
@@ -158,8 +158,8 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
       {metrics?.calibration1x2 && metrics.calibration1x2.length > 0 && (
         <div className="mt-5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">Calibration buckets</span>
-            <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">confidence vs accuracy</span>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent-hover)]">Calibration buckets</span>
+            <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">confidence vs accuracy</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[380px] font-mono text-[10px] tabular-nums">
@@ -224,7 +224,7 @@ function BreakdownTable({
 }) {
   return (
     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
-      <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">{title}</div>
+      <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent-hover)]">{title}</div>
       <table className="w-full font-mono text-[10px] tabular-nums">
         <thead className="text-left text-[var(--fp-text-muted)]">
           <tr>

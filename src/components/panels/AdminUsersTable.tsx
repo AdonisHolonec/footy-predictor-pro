@@ -128,7 +128,7 @@ export default function AdminUsersTable({
                 ) : (
                   <span className="inline-flex items-center gap-2">
                     <span>—</span>
-                    <span className="rounded-full border border-fp-warning/40 bg-fp-warning/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
+                    <span className="rounded-full border border-fp-warning/40 bg-fp-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
                       email lipsă
                     </span>
                   </span>
@@ -139,7 +139,7 @@ export default function AdminUsersTable({
               <td className="px-3 py-2">
                 <div className="mb-1">
                   <span
-                    className={`inline-flex rounded-md border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${tierToneClass(
+                    className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tierToneClass(
                       (adminTierDraftByUser[profile.userId] || profile.tier || "free") as UserTier
                     )}`}
                   >
@@ -185,13 +185,13 @@ export default function AdminUsersTable({
                       [profile.userId]: ""
                     }))
                   }
-                  className="ml-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-1 text-[9px] text-[var(--fp-text-muted)]"
+                  className="ml-1 rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-1 text-[10px] text-[var(--fp-text-muted)]"
                   title="Șterge data expirării"
                 >
                   Șterge
                 </button>
                 {isExpiredSubscription(profile.subscriptionExpiresAt) && (
-                  <div className="mt-1 inline-flex rounded-md border border-fp-danger/30 bg-fp-danger/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
+                  <div className="mt-1 inline-flex rounded-md border border-fp-danger/30 bg-fp-danger/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
                     Expirat — Salvează planul pentru acces nelimitat pe nivelurile plătite
                   </div>
                 )}
@@ -270,7 +270,7 @@ export default function AdminUsersTable({
                   {rowFeedback[profile.userId] && (
                     <span
                       role="status"
-                      className={`inline-flex max-w-[240px] items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                      className={`inline-flex max-w-[240px] items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                         rowFeedback[profile.userId]!.ok
                           ? "border-fp-success/30 bg-fp-success/10 text-[var(--fp-success)]"
                           : "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]"

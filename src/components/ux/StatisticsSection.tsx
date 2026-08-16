@@ -31,7 +31,7 @@ export default function StatisticsSection({
   return (
     <section className="space-y-4">
       <header>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("stats.eyebrow")}</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("stats.eyebrow")}</p>
         <h1 className="mt-1 font-display text-2xl font-semibold text-[var(--fp-text)]">{t("stats.title")}</h1>
         <p className="mt-1.5 text-sm font-medium text-[var(--fp-text-muted)]">{t("stats.sub")}</p>
       </header>

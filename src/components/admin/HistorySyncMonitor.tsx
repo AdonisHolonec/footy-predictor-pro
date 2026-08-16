@@ -63,14 +63,14 @@ export function HistorySyncMonitor({
   return (
     <div className="mt-4 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-accent-hover)]">History sync monitor</span>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent-hover)]">History sync monitor</span>
         <span className={`font-mono text-[10px] uppercase tracking-wider ${syncHealthTone(historySync.health)}`}>
           {historySync.health || "warn"}
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Reliability</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Reliability</div>
           <div className="mt-1">
             <span className={`inline-flex rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider ${reliabilityTone(historySync.summary?.reliability)}`}>
               {historySync.summary?.reliability || "DEGRADED"}
@@ -78,27 +78,27 @@ export function HistorySyncMonitor({
           </div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last run</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last run</div>
           <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
             {historySync.last?.ranAt ? new Date(historySync.last.ranAt).toLocaleString() : "—"}
           </div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last updated</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last updated</div>
           <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">{historySync.last?.updated ?? 0}</div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last est. calls</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last est. calls</div>
           <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">{historySync.last?.estimatedCalls ?? 0}</div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Recent failures</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Recent failures</div>
           <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
             {historySync.summary?.failures ?? 0} / {historySync.summary?.runs ?? 0}
           </div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Sync age (hours)</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Sync age (hours)</div>
           <div
             className={`mt-1 font-mono text-[10px] ${
               (historySync.summary?.hoursSinceLastRun ?? 999) > 8 ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"
@@ -108,14 +108,14 @@ export function HistorySyncMonitor({
           </div>
         </div>
         <div className="rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2 sm:col-span-3">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last successful run</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Last successful run</div>
           <div className="mt-1 font-mono text-[10px] text-[var(--fp-text)]">
             {historySync.lastSuccessfulRun?.ranAt
               ? new Date(historySync.lastSuccessfulRun.ranAt).toLocaleString()
               : "No successful run in recent window"}
           </div>
           <div
-            className={`mt-1 font-mono text-[9px] ${
+            className={`mt-1 font-mono text-[10px] ${
               (historySync.summary?.hoursSinceLastSuccess ?? 999) > 8 ? "text-[var(--fp-danger)]" : "text-[var(--fp-text-muted)]"
             }`}
           >
@@ -144,7 +144,7 @@ export function HistorySyncMonitor({
               <button
                 type="button"
                 onClick={() => setSnoozedAlerts({})}
-                className="rounded border border-[var(--fp-border)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
+                className="rounded border border-[var(--fp-border)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                 title="Reafișează toate alertele ascunse local."
               >
                 Reset snoozed alerts
@@ -165,7 +165,7 @@ export function HistorySyncMonitor({
                 <button
                   type="button"
                   onClick={() => snoozeAlert(String(alert.code || ""), 60)}
-                  className="rounded border border-[var(--fp-border)] px-2 py-0.5 text-[9px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
+                  className="rounded border border-[var(--fp-border)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
                   title="Ascunde alerta 60 minute (local)."
                 >
                   Snooze 60m
@@ -218,7 +218,7 @@ export function HistorySyncMonitor({
             <button
               type="button"
               onClick={() => setShowOnlySyncFailures((prev) => !prev)}
-              className={`rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
+              className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
                 showOnlySyncFailures
                   ? "border-fp-danger/35 bg-fp-danger/10 text-[var(--fp-danger)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
@@ -254,7 +254,7 @@ export function HistorySyncMonitor({
       )}
       {historySync.persist && (
         <div className="mt-3 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2">
-          <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Predict persist telemetry</div>
+          <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Predict persist telemetry</div>
           <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-[var(--fp-text)] sm:grid-cols-3">
             <div>runs: {historySync.persist.runs ?? 0}</div>
             <div>inserted: {historySync.persist.inserted ?? 0}</div>

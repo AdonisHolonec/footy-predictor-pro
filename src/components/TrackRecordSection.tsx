@@ -80,7 +80,7 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
     <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--fp-accent)]">{t("track.verified")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("track.verified")}</p>
           <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
             {t("track.settledPerf", { days: selectedDays })}
           </h2>

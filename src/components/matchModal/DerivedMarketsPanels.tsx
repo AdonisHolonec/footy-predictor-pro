@@ -47,7 +47,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                     λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
                     {match.modelMeta.firstHalf.lambdaAway.toFixed(2)}
                   </div>
-                  <div className="text-[9px] text-[var(--fp-text-muted)]">
+                  <div className="text-[10px] text-[var(--fp-text-muted)]">
                     scale · {(match.modelMeta.firstHalf.scaleHome * 100).toFixed(0)}% /{" "}
                     {(match.modelMeta.firstHalf.scaleAway * 100).toFixed(0)}%
                     {match.modelMeta.firstHalf.baselineUsed ? " · baseline" : ""}
@@ -56,7 +56,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               )}
               <div className="grid gap-5 lg:grid-cols-2">
                 <div>
-                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                  <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {tr("match.htResult")}
                   </div>
                   <ProbBar label={tr("match.htHomeLead")} val={match.probs.firstHalf.p1} color={homeColor} />
@@ -64,7 +64,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                   <ProbBar label={tr("match.htAwayLead")} val={match.probs.firstHalf.p2} color={awayColor} />
                 </div>
                 <div>
-                  <div className="mb-3 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+                  <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                     {tr("match.htGoals")}
                   </div>
                   <ProbBar label={tr("match.htOver05")} val={match.probs.firstHalf.pO05} color="#0e7490" />
@@ -75,7 +75,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               </div>
               {match.probs.firstHalf.bestScore && match.probs.firstHalf.bestScoreProb > 0 ? (
                 <div className="mt-4 rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
-                  <span className="text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.htBestScore")}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.htBestScore")}</span>
                   <span className="ml-2 text-[var(--fp-warning)] tabular-nums">
                     {match.probs.firstHalf.bestScore} · {match.probs.firstHalf.bestScoreProb.toFixed(0)}%
                   </span>
@@ -97,7 +97,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                     tr("card.noBookOdd")
                   )}
                   {htGoalsActual != null && (
-                    <span className="ml-2 font-mono text-[9px] text-[var(--fp-text-muted)]">
+                    <span className="ml-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
                       {tr("match.htGoalsLabel", { n: htGoalsActual })}
                     </span>
                   )}

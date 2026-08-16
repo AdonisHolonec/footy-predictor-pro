@@ -85,22 +85,22 @@ export default function ModelLabPanel() {
 
       {selection ? (
         <div className="mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-3 py-2.5 sm:mx-5">
-          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             Auto-promoted model
           </span>
           <span className="font-mono text-sm font-bold text-[var(--fp-accent)]">
             {selection.active?.id || selection.selected?.id || "E"} · {selection.active?.name || selection.selected?.name || "Everything enabled"}
           </span>
           {selection.active?.promotedAt ? (
-            <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">
+            <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">
               promoted {new Date(selection.active.promotedAt).toLocaleDateString()}
             </span>
           ) : (
-            <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">default (awaiting first cron)</span>
+            <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">default (awaiting first cron)</span>
           )}
           <span className="ml-auto flex flex-wrap gap-2">
             {(selection.windows || []).map((w) => (
-              <span key={w.key} className="font-mono text-[9px] text-[var(--fp-text-muted)]">
+              <span key={w.key} className="font-mono text-[10px] text-[var(--fp-text-muted)]">
                 {w.key}: <span className="text-[var(--fp-text)]">{w.winner?.id || "—"}</span>
               </span>
             ))}
@@ -124,7 +124,7 @@ export default function ModelLabPanel() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse">
             <thead>
-              <tr className="border-b border-[var(--fp-border)] text-left font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
+              <tr className="border-b border-[var(--fp-border)] text-left font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
                 <th className="px-2.5 py-2">Model</th>
                 <th className="px-2.5 py-2 text-right">n</th>
                 <th className="px-2.5 py-2 text-right">Accuracy</th>

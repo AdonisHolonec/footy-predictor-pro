@@ -140,12 +140,12 @@ export default function Auth({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-fp-navy/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
+      className="fixed inset-0 z-[var(--fp-z-overlay)] flex items-end justify-center bg-fp-navy/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
       role="presentation"
     >
       <div
         ref={modalRef}
-        className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-2xl border border-white/[0.09] bg-gradient-to-b from-fp-bg-card/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
+        className="animate-fadeIn w-full max-w-md overflow-hidden rounded-t-[var(--fp-radius)] border border-white/[0.09] bg-gradient-to-b from-fp-bg-card/95 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
@@ -157,7 +157,7 @@ export default function Auth({
           aria-hidden
         >
           <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-accent/60 to-transparent" />
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             Model pulse
           </span>
           <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-success/35 to-transparent" />

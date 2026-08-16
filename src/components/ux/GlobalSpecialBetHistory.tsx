@@ -51,7 +51,7 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
   return (
     <section className="space-y-3">
       <header>
-        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+        <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           {t("gsb.eyebrow")}
         </p>
         <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">

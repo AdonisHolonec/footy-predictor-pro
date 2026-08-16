@@ -75,7 +75,7 @@ function AlertingBlock(props: StatisticsPanelProps) {
 
   return (
     <div
-      className={`${props.alertsCollapsible ? "mt-3" : "mt-2 max-w-[760px]"} rounded-card border px-3 py-2.5 ${
+      className={`${props.alertsCollapsible ? "mt-3" : "mt-2 max-w-[760px]"} rounded-[var(--fp-radius)] border px-3 py-2.5 ${
         alertsSeverity === "high"
           ? "border-fp-danger/35 bg-fp-danger/10"
           : alertsSeverity === "medium"
@@ -147,7 +147,7 @@ function AlertingBlock(props: StatisticsPanelProps) {
           </span>
         )}
       </div>
-      <div className="mt-2 font-mono text-[9px] font-medium uppercase tracking-wide text-[var(--fp-text-muted)]">
+      <div className="mt-2 font-mono text-[10px] font-medium uppercase tracking-wide text-[var(--fp-text-muted)]">
         Active thresholds: DD {alertDrawdownThreshold.toFixed(2)} | Drift {alertDriftThreshold.toFixed(0)} | LowData{" "}
         {(alertLowDataThreshold * 100).toFixed(0)}%
       </div>
@@ -181,7 +181,7 @@ export default function StatisticsPanel(props: StatisticsPanelProps) {
           <StatTile label="KPI Settled" value={`${props.kpi?.settled || 0}`} loading={props.kpiLoading} />
         </div>
         <details className="mt-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
-          <summary className="cursor-pointer font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+          <summary className="cursor-pointer font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             Auto alerting & thresholds
           </summary>
           <AlertingBlock {...props} />

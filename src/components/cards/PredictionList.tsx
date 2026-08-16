@@ -98,7 +98,7 @@ export default function PredictionList({
             </button>
           </div>
           <div className="custom-scrollbar flex snap-x snap-mandatory items-center gap-2 overflow-x-auto xl:overflow-visible">
-            <span className="shrink-0 px-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Sortare</span>
+            <span className="shrink-0 px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Sortare</span>
             <button
               type="button"
               onClick={() => setSortBy("TIME")}
@@ -151,7 +151,7 @@ export default function PredictionList({
           {groupedDisplayedMatches.map((group) => (
             <section key={group.dateKey} className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent-hover)]">
+                <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">
                   {group.dateKey === "Fără dată"
                     ? group.dateKey
                     : new Date(group.dateKey).toLocaleDateString([], {

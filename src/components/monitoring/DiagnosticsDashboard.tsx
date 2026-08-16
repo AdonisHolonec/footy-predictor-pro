@@ -59,7 +59,7 @@ function HealthCard({ title, tone, hint }: { title: string; tone: HealthTone; hi
     <div className={`rounded-[var(--fp-radius)] border ${s.border} ${s.bg} p-3 shadow-fp-sm`}>
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
-        <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+        <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           {title}
         </span>
       </div>
@@ -188,7 +188,7 @@ export default function DiagnosticsDashboard() {
       {bundle ? (
         <div className="space-y-5 p-4 sm:p-5">
           <section>
-            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">
+            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">
               Lambda Sources
             </h4>
             <div className="space-y-2.5 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3">
@@ -199,7 +199,7 @@ export default function DiagnosticsDashboard() {
           </section>
 
           <section>
-            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">
+            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">
               Prediction Coverage
             </h4>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -211,7 +211,7 @@ export default function DiagnosticsDashboard() {
           </section>
 
           <section>
-            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">
+            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">
               Health
             </h4>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -223,7 +223,7 @@ export default function DiagnosticsDashboard() {
           </section>
 
           <section>
-            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">
+            <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">
               Last Update
             </h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

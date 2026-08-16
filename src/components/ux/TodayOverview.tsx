@@ -41,7 +41,7 @@ export default function TodayOverview({
   return (
     <section className="space-y-5">
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--accent)]">Today</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">Today</p>
         <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-[var(--text)] sm:text-3xl">
           Overview
         </h1>
@@ -56,9 +56,9 @@ export default function TodayOverview({
         ].map((k) => (
           <div
             key={k.label}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3"
+            className="rounded-[var(--fp-radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3"
           >
-            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)]">{k.label}</div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{k.label}</div>
             <div className="mt-1 font-display text-xl font-semibold tabular-nums text-[var(--text)]">{k.value}</div>
           </div>
         ))}
@@ -68,10 +68,10 @@ export default function TodayOverview({
         <button
           type="button"
           onClick={() => onOpenMatch(continueMatch)}
-          className="flex w-full items-center justify-between rounded-2xl border border-fp-accent/25 bg-fp-accent/5 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between rounded-[var(--fp-radius)] border border-fp-accent/25 bg-fp-accent/5 px-4 py-3 text-left"
         >
           <div>
-            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--accent)]">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-[var(--accent)]">
               Continue where you left off
             </div>
             <div className="mt-0.5 font-semibold text-[var(--text)]">
@@ -113,9 +113,9 @@ function Rail({
             key={m.id}
             type="button"
             onClick={() => onOpen(m)}
-            className="snap-start w-[220px] shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-left hover:border-fp-accent/40"
+            className="snap-start w-[220px] shrink-0 rounded-[var(--fp-radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-left hover:border-fp-accent/40"
           >
-            <div className="truncate font-mono text-[9px] uppercase text-[var(--text-muted)]">{m.league}</div>
+            <div className="truncate font-mono text-[10px] uppercase text-[var(--text-muted)]">{m.league}</div>
             <div className="mt-1 truncate text-sm font-semibold text-[var(--text)]">
               {m.teams.home} vs {m.teams.away}
             </div>

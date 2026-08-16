@@ -80,7 +80,7 @@ export function AdminBrandLockup({ editorialDate }: { editorialDate: string }) {
           <div className="font-display text-lg font-bold uppercase tracking-[0.14em] text-[var(--fp-text)] md:text-xl">
             Footy <span className="text-[var(--fp-accent)]">Predictor</span>
           </div>
-          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--fp-text-muted)]">{editorialDate}</p>
+          <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">{editorialDate}</p>
         </div>
       </div>
     </div>
@@ -106,7 +106,7 @@ export function AdminObservatoryHeader({
 }: AdminObservatoryHeaderProps) {
   const roleLabel = user ? "ADMIN" : "GUEST";
   return (
-    <header className="mb-6 rounded-card border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
+    <header className="mb-6 rounded-[var(--fp-radius)] border border-white/[0.07] bg-[var(--fp-bg-card)] shadow-card p-6">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,1.4fr)_minmax(0,1fr)] lg:items-center">
         <AdminBrandLockup editorialDate={editorialDate} />
         <div className="min-w-0 space-y-2">
@@ -127,7 +127,7 @@ export function AdminObservatoryHeader({
                   <div className="max-w-[220px] truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-text)]">
                     {user.email}
                   </div>
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-accent-hover)]">{roleLabel}</div>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">{roleLabel}</div>
                 </div>
                 <div className="h-10 w-10 shrink-0 rounded-full border border-fp-accent/35 bg-gradient-to-br from-fp-accent/25 to-[var(--fp-bg-card)] shadow-fp-sm" />
               </div>
@@ -264,7 +264,7 @@ export function AdminToolbarStrip({
         ))}
       </div>
       <div className="flex w-full max-w-[200px] flex-col sm:ml-auto">
-        <div className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
+        <div className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
           API{" "}
           <span className={usagePct > 80 ? "text-[var(--fp-danger)]" : "text-[var(--fp-success)]"}>
             {usageCount} / {usageLimit}
@@ -304,10 +304,10 @@ export function AdminFilterDeck({
   const guarded = filterMode === "LOW";
 
   return (
-    <div className="mt-4 space-y-4 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">Filtre</p>
+    <div className="mt-4 space-y-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Filtre</p>
       <div>
-        <p className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Kickoff</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Kickoff</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`${deckBtn} ${toggleClass(kickoffScope === "ALL")}`} onClick={() => setKickoffScope("ALL")}>
             All
@@ -321,7 +321,7 @@ export function AdminFilterDeck({
         </div>
       </div>
       <div>
-        <p className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Confidence</p>
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">Confidence</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`${deckBtn} ${toggleClass(high)}`} onClick={() => setFilterMode("SAFE")}>
             High
@@ -336,7 +336,7 @@ export function AdminFilterDeck({
       </div>
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">xG differential</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">xG differential</p>
           <span className="font-mono text-[10px] tabular-nums text-[var(--fp-accent)]">≥ {minXgSpread.toFixed(2)}</span>
         </div>
         <input
@@ -363,8 +363,8 @@ export function AdminInsightColumn({ sample }: AdminInsightColumnProps) {
   const conf = sample?.recommended.confidence ?? 42;
 
   return (
-    <aside className="space-y-4 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">Insight observatory</p>
+    <aside className="space-y-4 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Insight observatory</p>
       {sample ? (
         <>
           <EdgeCompass dataQuality={dq} valueDetected={!!sample.valueBet?.detected} className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg)] p-3" />
@@ -405,8 +405,8 @@ export function AdminPerformanceObservatory({ children, className = "mt-10" }: A
       className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 shadow-fp-sm sm:p-5 md:p-6 ${className}`}
     >
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Performance observatory</h2>
-        <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">settled stream</span>
+        <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent-hover)]">Performance observatory</h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">settled stream</span>
       </div>
       {children}
     </section>

@@ -68,8 +68,8 @@ function ChartCard({
   return (
     <div className={`rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4 ${className}`}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
-        {subtitle ? <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">{title}</h4>
+        {subtitle ? <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
       </div>
       {children}
     </div>
@@ -87,7 +87,7 @@ function RankList({
 }) {
   return (
     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4">
-      <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
+      <h4 className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">{title}</h4>
       <ul className="space-y-1.5">
         {(rows || []).length === 0 ? (
           <li className="font-mono text-[11px] text-[var(--fp-text-muted)]">Insufficient sample</li>

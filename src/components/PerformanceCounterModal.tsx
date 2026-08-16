@@ -133,13 +133,13 @@ export default function PerformanceCounterModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
+      className="fixed inset-0 z-[var(--fp-z-modal)] flex items-end justify-center bg-black/75 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:items-center sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
         ref={modalRef}
-        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/10 bg-gradient-to-b from-fp-bg-card/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
+        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-[var(--fp-radius)] border border-white/10 bg-gradient-to-b from-fp-bg-card/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-[var(--fp-radius)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -276,7 +276,7 @@ export default function PerformanceCounterModal({
                         byUserLeague.map((row) => (
                           <tr key={`${row.userId}-${row.leagueId}-${row.leagueName}`}>
                             {adminEffective && (
-                              <td className={`${td} max-w-[140px] truncate font-sans text-[9px]`} title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                              <td className={`${td} max-w-[140px] truncate font-sans text-[10px]`} title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
                                 {row.email ? (row.email.length > 22 ? `${row.email.slice(0, 22)}…` : row.email) : "—"}
                               </td>
                             )}
@@ -297,7 +297,7 @@ export default function PerformanceCounterModal({
             </>
           )}
 
-          {!showGlobal && !showServer && <p className="text-center text-[12px] text-[var(--fp-text-muted)]">Nu există date de afișat.</p>}
+          {!showGlobal && !showServer && <p className="text-center text-xs text-[var(--fp-text-muted)]">Nu există date de afișat.</p>}
         </div>
       </div>
     </div>

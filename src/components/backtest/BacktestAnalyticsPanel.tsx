@@ -290,8 +290,8 @@ export default function BacktestAnalyticsPanel() {
       {/* Metrics grid — Settled kept as first-class tile (do not remove) */}
       <div className="px-4 py-4 sm:px-5">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">Performance metrics</div>
-          <div className="font-mono text-[9px] text-[var(--fp-text-muted)]">
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Performance metrics</div>
+          <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">
             {loading ? "…" : `${report?.totalsUnfiltered?.filtered ?? 0} / ${report?.totalsUnfiltered?.settled ?? 0} bets`}
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function BacktestAnalyticsPanel() {
         </div>
 
         {/* Professional quant metrics */}
-        <div className="mb-2 mt-4 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+        <div className="mb-2 mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           Quantitative metrics
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -395,7 +395,7 @@ export default function BacktestAnalyticsPanel() {
 
       {/* Recent bets table */}
       <div className="border-t border-[var(--fp-border)] px-4 py-4 sm:px-5">
-        <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           Settled bets (filtered)
         </div>
         <div className="max-h-64 overflow-auto rounded-xl border border-[var(--fp-border)]">
@@ -448,7 +448,7 @@ type LoadableFilters = Partial<BacktestFilters>;
 function FilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block font-mono text-[8px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+      <span className="mb-1 block font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
         {label}
       </span>
       {children}
@@ -461,7 +461,7 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
     <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-text)]">{title}</div>
-        {subtitle ? <div className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</div> : null}
+        {subtitle ? <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">{subtitle}</div> : null}
       </div>
       {children}
     </div>

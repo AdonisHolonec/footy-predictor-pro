@@ -136,7 +136,7 @@ export default function AppShell({
       </header>
 
       <main className="min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:ml-60 lg:pb-8">
-        <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</div>
+        <div className="mx-auto max-w-[var(--fp-container)] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">{children}</div>
       </main>
 
       <nav

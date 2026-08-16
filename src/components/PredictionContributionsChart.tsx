@@ -30,7 +30,7 @@ export default function PredictionContributionsChart({
       {framed ? (
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.whyPrediction")}</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.whyPrediction")}</h3>
             <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">
               {t("panels.whyPredictionSub", {
                 pick: data.pick ? `· ${data.pick}` : "",
@@ -40,7 +40,7 @@ export default function PredictionContributionsChart({
           </div>
           {data.confidence != null ? (
             <div className="flex flex-col items-end">
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{t("panels.confidence")}</span>
               <span className="text-lg font-bold tabular-nums text-[var(--fp-success)]">{Math.round(data.confidence)}%</span>
             </div>
           ) : null}

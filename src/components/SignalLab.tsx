@@ -24,7 +24,7 @@ export function SignalLens({ confidence, edge, className = "" }: SignalLensProps
   const e = Math.max(0, Math.min(100, edge));
   return (
     <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
         <span className="font-semibold text-fp-accent/90">{t("panels.signalLens")}</span>
         <span className="font-mono text-[var(--fp-text)] tabular-nums">
           C {Math.round(c)}% · E {Math.round(e)}%
@@ -68,7 +68,7 @@ export function FormRibbon({ p1, pX, p2, homeTint, awayTint, className = "" }: F
   const w2 = (p2 / sum) * 100;
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
         <span className="font-semibold text-fp-accent/80">{t("panels.formRibbon")}</span>
         <span className="font-mono tabular-nums text-[var(--fp-text)]">1 · X · 2</span>
       </div>
@@ -141,7 +141,7 @@ export function EdgeCompass({ dataQuality, valueDetected, className = "" }: Edge
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">{t("panels.edgeCompass")}</div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">{t("panels.edgeCompass")}</div>
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[10px]">
           <span className="font-mono tabular-nums text-[var(--fp-accent)]">DQ {(dq * 100).toFixed(0)}%</span>
           <span
@@ -178,7 +178,7 @@ export function ModelPulseStrip({ status, tone = "healthy", className = "" }: Mo
       title={status}
     >
       <span className={`h-2 w-2 shrink-0 rounded-full ${dot} motion-reduce:animate-none animate-pulse-soft`} />
-      <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-fp-accent/90">Model pulse</span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/90">Model pulse</span>
       <span className="truncate text-[var(--fp-text)]">{status}</span>
     </div>
   );
@@ -201,16 +201,16 @@ export function ModelPulseWave({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-[var(--fp-border)] bg-gradient-to-r from-fp-bg-muted/90 via-fp-bg-card/80 to-fp-bg-muted/90 px-4 py-3 shadow-inner backdrop-blur-md ${className}`}
+      className={`relative overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-gradient-to-r from-fp-bg-muted/90 via-fp-bg-card/80 to-fp-bg-muted/90 px-4 py-3 shadow-inner backdrop-blur-md ${className}`}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(37,99,235,0.1),transparent)]" />
       <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-fp-accent/95">Model pulse</span>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-fp-accent/95">Model pulse</span>
           <span className="hidden h-3 w-px bg-[var(--fp-border)] sm:block" aria-hidden />
-          <span className="font-mono text-[9px] uppercase tracking-wider text-fp-success/95">{status}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-fp-success/95">{status}</span>
         </div>
-        <div className="font-mono text-[9px] tabular-nums text-[var(--fp-text-muted)] sm:text-right">
+        <div className="font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)] sm:text-right">
           <span className="text-[var(--fp-success)]">●</span> stream active
         </div>
       </div>
@@ -301,7 +301,7 @@ export function ConfidenceAura({ value, className = "", size = "default" }: Conf
         >
           {Math.round(v)}
         </span>
-        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[8px]" : "text-[9px]"}`}>
+        <span className={`font-mono uppercase tracking-widest text-[var(--fp-text-muted)] ${size === "compact" ? "text-[10px]" : "text-[10px]"}`}>
           conf
         </span>
       </div>
@@ -331,8 +331,8 @@ export function SignalScanStrip({
     >
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Edge</span>
-          <span className="font-mono text-[9px] tabular-nums text-fp-accent/90">{Math.round(e)}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Edge</span>
+          <span className="font-mono text-[10px] tabular-nums text-fp-accent/90">{Math.round(e)}</span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
@@ -343,8 +343,8 @@ export function SignalScanStrip({
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Lens</span>
-          <span className="font-mono text-[9px] tabular-nums text-[var(--fp-text)]">{Math.round(dq)}</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Lens</span>
+          <span className="font-mono text-[10px] tabular-nums text-[var(--fp-text)]">{Math.round(dq)}</span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)] ring-1 ring-[var(--fp-border)]">
           <div
@@ -355,8 +355,8 @@ export function SignalScanStrip({
       </div>
       <div>
         <div className="mb-1 flex items-center justify-between gap-1">
-          <span className="font-mono text-[8px] uppercase tracking-wider text-[var(--fp-text-muted)]">Value</span>
-          <span className={`font-mono text-[9px] tabular-nums ${valueDetected ? "text-[var(--fp-warning)]" : "text-[var(--fp-text-muted)]"}`}>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Value</span>
+          <span className={`font-mono text-[10px] tabular-nums ${valueDetected ? "text-[var(--fp-warning)]" : "text-[var(--fp-text-muted)]"}`}>
             {valueDetected ? "ON" : "—"}
           </span>
         </div>
@@ -380,13 +380,13 @@ type PredictionDossierShellProps = {
 /** Editorial frame: corners + ref line — “prediction dossier”. */
 export function PredictionDossierShell({ children, dossierId, className = "" }: PredictionDossierShellProps) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl ${className}`}>
+    <div className={`relative overflow-hidden rounded-[var(--fp-radius)] ${className}`}>
       <div className="pointer-events-none absolute left-3 top-3 h-4 w-4 border-l border-t border-fp-accent/35" />
       <div className="pointer-events-none absolute right-3 top-3 h-4 w-4 border-r border-t border-fp-accent/35" />
       <div className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 border-b border-l border-fp-accent/20" />
       <div className="pointer-events-none absolute bottom-3 right-3 h-4 w-4 border-b border-r border-fp-accent/20" />
       {dossierId && (
-        <div className="absolute right-4 top-4 font-mono text-[9px] uppercase tracking-[0.2em] text-fp-text-muted/80">
+        <div className="absolute right-4 top-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-text-muted/80">
           {dossierId}
         </div>
       )}

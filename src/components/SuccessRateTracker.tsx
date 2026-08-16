@@ -110,11 +110,11 @@ export default function SuccessRateTracker({
 
       <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
         <div className="rounded-[var(--fp-radius-sm)] border border-fp-success/35 bg-fp-success/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedWins}</p>
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-fp-danger/35 bg-fp-danger/10 px-2 py-3 sm:px-3">
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">{t("tracker.losses")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-danger)] sm:text-[10px]">{t("tracker.losses")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedLosses}</p>
         </div>
         <div
@@ -122,7 +122,7 @@ export default function SuccessRateTracker({
             isWinRatePulsing ? "ring-2 ring-fp-accent/30" : ""
           }`}
         >
-          <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">
             {animatedWinRate.toFixed(1)}%
           </p>

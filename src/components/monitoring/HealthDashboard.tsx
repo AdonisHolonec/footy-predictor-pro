@@ -49,8 +49,8 @@ function ChartCard({
   return (
     <div className={`rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 sm:p-4 ${className}`}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text)]">{title}</h4>
-        {subtitle ? <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text)]">{title}</h4>
+        {subtitle ? <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">{subtitle}</span> : null}
       </div>
       {children}
     </div>
@@ -180,7 +180,7 @@ export default function HealthDashboard() {
       {bundle ? (
         <>
           <div className="flex flex-wrap items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3 sm:px-5">
-            <div className={`font-mono text-xs font-semibold uppercase tracking-[0.18em] ${statusTone(bundle.status)}`}>
+            <div className={`font-mono text-xs font-semibold uppercase tracking-[0.14em] ${statusTone(bundle.status)}`}>
               {bundle.status}
             </div>
             <div className="font-mono text-[10px] text-[var(--fp-text-muted)]">

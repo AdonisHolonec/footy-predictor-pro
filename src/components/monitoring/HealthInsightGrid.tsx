@@ -35,11 +35,11 @@ function InsightCard({ insight }: { insight: HealthInsight }) {
   return (
     <Card padding="md" className="flex flex-col gap-3 border-l-2" style={{ borderLeftColor: accent }}>
       <div className="flex items-baseline justify-between gap-3">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-text-muted)]">
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
           {insight.title}
         </h4>
         <span
-          className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
+          className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em]"
           style={{ color: accent }}
         >
           {insight.statusLabel ?? TONE_LABEL[insight.tone]}
@@ -78,10 +78,10 @@ export default function HealthInsightGrid({ bundle }: { bundle: HealthDashboardB
   return (
     <section className="border-b border-[var(--fp-border)] px-4 py-4 sm:px-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fp-accent)]">
+        <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           Reading
         </h4>
-        <span className="font-mono text-[9px] text-[var(--fp-text-muted)]">
+        <span className="font-mono text-[10px] text-[var(--fp-text-muted)]">
           Ordered by what needs attention first
         </span>
       </div>

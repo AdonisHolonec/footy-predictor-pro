@@ -123,12 +123,12 @@ export default function MatchCard({
         style={{ animationDelay: `${animationDelayMs}ms` }}
         className="relative flex h-full animate-stagger-in cursor-pointer flex-col rounded-[var(--fp-radius)] border border-fp-warning/30 bg-fp-warning/5 shadow-fp-sm p-3.5 sm:p-4 touch-manipulation select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/50 motion-reduce:animate-none"
       >
-        <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--fp-warning)]">Insufficient signal</div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-warning)]">Insufficient signal</div>
         <div className="font-display mt-1 text-base font-semibold text-[var(--fp-text)]">
           {row.teams?.home} vs {row.teams?.away}
         </div>
         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[var(--fp-text-muted)]">{row.insufficientReason || "Modelul nu a putut estima λ-uri."}</p>
-        <p className="mt-3 font-mono text-[9px] text-fp-accent/80">Detalii în fișă analitică →</p>
+        <p className="mt-3 font-mono text-[10px] text-fp-accent/80">Detalii în fișă analitică →</p>
       </div>
     );
   }
@@ -158,7 +158,7 @@ export default function MatchCard({
                 e.stopPropagation();
                 onToggleWatch();
               }}
-              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 watched
                   ? "border-fp-warning/40 bg-fp-warning/15 text-[var(--fp-warning)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
@@ -177,7 +177,7 @@ export default function MatchCard({
                 e.stopPropagation();
                 onToggleBookmark();
               }}
-              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+              className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 bookmarked
                   ? "border-fp-accent/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
@@ -229,14 +229,14 @@ export default function MatchCard({
             {row.league}
           </span>
           <span
-            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${chip.className}`}
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${chip.className}`}
           >
             {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-live)] motion-reduce:animate-none" />}
             {chip.label}
           </span>
           {tier ? (
             <span
-              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide ${tier.className}`}
+              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide ${tier.className}`}
               title={tier.title}
             >
               {tier.label}
@@ -244,7 +244,7 @@ export default function MatchCard({
           ) : null}
           {row.confidenceEngine ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-fp-accent/30 bg-fp-accent/8 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
+              className="inline-flex items-center gap-1 rounded-md border border-fp-accent/30 bg-fp-accent/8 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
               title={t("card.confidenceCtxTip")}
             >
               {row.confidenceEngine.category
@@ -261,25 +261,25 @@ export default function MatchCard({
       </div>
 
       <div className="relative mt-4 sm:hidden">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2 max-[380px]:gap-1.5 max-[380px]:px-2 max-[380px]:py-1.5">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2 max-xs:gap-1.5 max-xs:px-2 max-xs:py-1.5">
           <div className="min-w-0 text-center">
             <div
-              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-[380px]:h-8 max-[380px]:w-8"
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-xs:h-8 max-xs:w-8"
               style={{ borderColor: homeColor }}
             >
               <img src={row.logos?.home} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
-            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px]">{row.teams.home}</div>
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-xs:text-[10px]">{row.teams.home}</div>
           </div>
-          <div className="font-mono text-[10px] text-[var(--fp-text-faint)] max-[380px]:text-[9px]">vs</div>
+          <div className="font-mono text-[10px] text-[var(--fp-text-faint)] max-xs:text-[10px]">vs</div>
           <div className="min-w-0 text-center">
             <div
-              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-[380px]:h-8 max-[380px]:w-8"
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[var(--fp-bg-card)] p-1 max-xs:h-8 max-xs:w-8"
               style={{ borderColor: awayColor }}
             >
               <img src={row.logos?.away} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
-            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-[380px]:text-[10px]">{row.teams.away}</div>
+            <div className="mt-1 line-clamp-2 text-[11px] font-semibold leading-tight text-[var(--fp-text)] max-xs:text-[10px]">{row.teams.away}</div>
           </div>
         </div>
       </div>
@@ -294,7 +294,7 @@ export default function MatchCard({
               <img src={row.logos?.home} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
             <div className="min-w-0">
-              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)]">{row.teams.home}</div>
+              <div className="line-clamp-2 text-xs font-semibold leading-tight text-[var(--fp-text)]">{row.teams.home}</div>
               <div
                 className="mt-2 h-0.5 max-w-[8rem] rounded-full opacity-80"
                 style={{ background: `linear-gradient(90deg, ${homeColor}, transparent)` }}
@@ -310,7 +310,7 @@ export default function MatchCard({
               <img src={row.logos?.away} className="h-full w-full object-contain opacity-90" alt="" />
             </div>
             <div className="min-w-0">
-              <div className="line-clamp-2 text-[12px] font-semibold leading-tight text-[var(--fp-text)]">{row.teams.away}</div>
+              <div className="line-clamp-2 text-xs font-semibold leading-tight text-[var(--fp-text)]">{row.teams.away}</div>
               <div
                 className="mt-2 h-0.5 max-w-[8rem] rounded-full opacity-80"
                 style={{ background: `linear-gradient(90deg, ${awayColor}, transparent)` }}
@@ -323,7 +323,7 @@ export default function MatchCard({
             <ConfidenceAura value={confPct} size="compact" className="self-start" />
           ) : (
             <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 text-center">
-              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">Încredere</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Încredere</div>
               <div className="mt-1 font-mono text-[11px] font-semibold text-[var(--fp-accent)]">
                 {confidenceCategory ? confidenceCategory : "Blocat"}
               </div>
@@ -337,8 +337,8 @@ export default function MatchCard({
         row.teamContext?.away?.rank != null ||
         row.teamContext?.away?.form) && (
         <div className="mt-3 hidden items-stretch justify-between gap-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2 sm:flex">
-          <div className="min-w-0 flex-1 font-mono text-[9px] leading-snug text-[var(--fp-text-muted)]">
-            <span className="block text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Gazde</span>
+          <div className="min-w-0 flex-1 font-mono text-[10px] leading-snug text-[var(--fp-text-muted)]">
+            <span className="block text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Gazde</span>
             <span className="text-[var(--fp-accent)]">#{row.teamContext?.home?.rank ?? "—"}</span>
             {row.teamContext?.home?.points != null ? <span className="text-[var(--fp-text-muted)]"> · {row.teamContext.home.points}pt</span> : null}
             {row.teamContext?.home?.form ? (
@@ -347,8 +347,8 @@ export default function MatchCard({
               </span>
             ) : null}
           </div>
-          <div className="min-w-0 flex-1 text-right font-mono text-[9px] leading-snug text-[var(--fp-text-muted)]">
-            <span className="block text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Oaspeți</span>
+          <div className="min-w-0 flex-1 text-right font-mono text-[10px] leading-snug text-[var(--fp-text-muted)]">
+            <span className="block text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Oaspeți</span>
             <span className="text-[var(--fp-accent)]">#{row.teamContext?.away?.rank ?? "—"}</span>
             {row.teamContext?.away?.points != null ? <span className="text-[var(--fp-text-muted)]"> · {row.teamContext.away.points}pt</span> : null}
             {row.teamContext?.away?.form ? (
@@ -363,11 +363,11 @@ export default function MatchCard({
       <div className="relative mt-4 flex flex-col gap-2 border-t border-[var(--fp-border)] pt-3 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
         <div className="flex items-start justify-between gap-2 sm:block min-w-0 flex-1">
           <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-fp-accent/75">
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/75">
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
-                className="rounded-sm bg-fp-warning/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-warning)]"
+                className="rounded-sm bg-fp-warning/15 px-1 py-[1px] text-[10px] font-bold tracking-wider text-[var(--fp-warning)]"
                 title={t("card.lowConfTip")}
               >
                 Nesigur
@@ -375,14 +375,14 @@ export default function MatchCard({
             ) : null}
             {isPickHot ? (
               <span
-                className="rounded-sm bg-fp-success/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-success)]"
+                className="rounded-sm bg-fp-success/15 px-1 py-[1px] text-[10px] font-bold tracking-wider text-[var(--fp-success)]"
                 title={t("card.strongSignalTip")}
               >
                 HOT
               </span>
             ) : null}
           </div>
-          <div className={`flex items-center gap-1.5 line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
+          <div className={`flex items-center gap-1.5 line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-xs:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
             <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0 text-fp-accent/70" />
             {recommendedLabel.label}
           </div>
@@ -397,7 +397,7 @@ export default function MatchCard({
             <ConfidenceAura value={confPct} size="compact" className="self-end" />
           ) : (
             <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2 text-center">
-              <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-[var(--fp-text-muted)]">Încredere</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">Încredere</div>
               <div className="mt-1 font-mono text-[11px] font-semibold text-[var(--fp-accent)]">
                 {confidenceCategory ? confidenceCategory : "Blocat"}
               </div>
@@ -409,7 +409,7 @@ export default function MatchCard({
           <div className="self-end text-right font-mono text-xs tabular-nums">
             {showRunningScore ? (
               <span className={isLive ? "text-[var(--fp-live)]" : "text-fp-warning/90"}>
-                <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
+                <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
                 <span className="font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">
                   {row.score?.home}-{row.score?.away}
                 </span>
@@ -437,26 +437,26 @@ export default function MatchCard({
             { label: "2", val: row.probs.p2, color: awayColor }
           ].map((b) => (
             <div key={b.label} className="flex items-center gap-2">
-              <span className="w-3 font-mono text-[9px] text-[var(--fp-text-muted)]">{b.label}</span>
+              <span className="w-3 font-mono text-[10px] text-[var(--fp-text-muted)]">{b.label}</span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${Math.max(0, Math.min(100, b.val || 0))}%`, backgroundColor: b.color }}
                 />
               </div>
-              <span className="w-8 text-right font-mono text-[9px] tabular-nums text-[var(--fp-text-muted)]">
+              <span className="w-8 text-right font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)]">
                 {Math.round(b.val || 0)}%
               </span>
             </div>
           ))}
           <div className="flex flex-wrap gap-1.5 pt-1">
             {row.valueBet?.detected && (
-              <span className="rounded-md border border-fp-warning/35 bg-fp-warning/10 px-1.5 py-0.5 font-mono text-[8px] uppercase text-[var(--fp-warning)]">
+              <span className="rounded-md border border-fp-warning/35 bg-fp-warning/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-[var(--fp-warning)]">
                 +EV
               </span>
             )}
             {hasExactConfidence && confPct > 0 && (
-              <span className="rounded-md border border-[var(--fp-border)] px-1.5 py-0.5 font-mono text-[8px] text-[var(--fp-text-muted)]">
+              <span className="rounded-md border border-[var(--fp-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--fp-text-muted)]">
                 {t("card.riskLabel", {
                   level:
                     confPct >= 70 ? t("card.riskLow") : confPct >= 55 ? t("card.riskMed") : t("card.riskHigh")
@@ -499,7 +499,7 @@ export default function MatchCard({
           ).map((label) => (
             <span
               key={label}
-              className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wide text-[var(--fp-text-muted)]"
+              className="inline-flex items-center rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]"
               title={t("card.unlockHigher")}
             >
               🔒 {label}
@@ -520,7 +520,7 @@ export default function MatchCard({
         />
       )}
 
-      <p className="relative mt-3 font-mono text-[9px] text-fp-text-muted/90">
+      <p className="relative mt-3 font-mono text-[10px] text-fp-text-muted/90">
         {compact ? t("card.detailsArrow") : t("card.openDetails")}
       </p>
     </div>

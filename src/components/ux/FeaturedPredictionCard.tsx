@@ -37,7 +37,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
     <div className="rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp overflow-hidden">
       <div className="flex items-center gap-2 border-b border-[var(--fp-border)] px-4 py-2.5">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fp-accent)]" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">
+        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
           {t("dash.featuredKicker")}
         </span>
         <span className="ml-auto min-w-0 truncate text-[11px] font-semibold text-[var(--fp-text-muted)]">
@@ -55,7 +55,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
       >
         <ConfidenceAura value={confPct} className="shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-bold leading-tight text-[var(--fp-text)]">
+          <div className="text-[length:var(--fp-body)] font-bold leading-tight text-[var(--fp-text)]">
             {match.teams.home}
             <br />
             {match.teams.away}
@@ -110,7 +110,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
           <button
             type="button"
             onClick={onOpenAnalysis}
-            className="mt-4 min-h-[var(--fp-touch)] w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-[12px] font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
+            className="mt-4 min-h-[var(--fp-touch)] w-full rounded-xl border border-[var(--fp-accent)] bg-transparent py-2.5 text-xs font-extrabold text-[var(--fp-accent)] hover:bg-[var(--fp-accent-muted)]"
           >
             {t("dash.featuredOpenAnalysis")}
           </button>

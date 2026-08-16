@@ -61,7 +61,7 @@ export default function PoissonMarketSection({
 
   return (
     <section
-      className={`relative ${framed ? "rounded-2xl border p-4 shadow-inner sm:p-5" : "rounded-xl border p-3 sm:p-4"} ${settled != null ? settledShell : framed ? "" : "border-transparent"}`}
+      className={`relative ${framed ? "rounded-[var(--fp-radius)] border p-4 shadow-inner sm:p-5" : "rounded-xl border p-3 sm:p-4"} ${settled != null ? settledShell : framed ? "" : "border-transparent"}`}
       style={
         framed && settled == null
           ? { borderColor: `${accent}40`, background: `linear-gradient(180deg, ${accent}0d, transparent)` }
@@ -70,7 +70,7 @@ export default function PoissonMarketSection({
     >
       {settled != null ? (
         <span
-          className={`absolute -right-1 -top-2 z-10 rounded-md px-2 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
+          className={`absolute -right-1 -top-2 z-10 rounded-md px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wider shadow-sm sm:text-[10px] ${
             settled
               ? "bg-[var(--fp-success)] text-white"
               : "bg-[var(--fp-danger)] text-white"
@@ -82,16 +82,16 @@ export default function PoissonMarketSection({
       {framed ? (
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
           <div>
-            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: accent }}>
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: accent }}>
               {icon} {title}
             </h3>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{subtitle}</p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{subtitle}</p>
           </div>
           <div className="text-right font-mono text-[10px] tabular-nums">
             <div className="text-[var(--fp-text-muted)]">
               λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
             </div>
-            <div className="text-[9px] text-[var(--fp-text-muted)]">
+            <div className="text-[10px] text-[var(--fp-text-muted)]">
               total aşteptat ≈ {data.expectedTotal.toFixed(1)}
               {data.usedFallback ? " · fallback" : ""}
             </div>
@@ -107,7 +107,7 @@ export default function PoissonMarketSection({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* TOTAL */}
         <div>
-          <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.poissonTotal")}</div>
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.poissonTotal")}</div>
           <table className="w-full font-mono text-[10px] tabular-nums">
             <tbody>
               {totalKeys.map((k) => {
@@ -120,7 +120,7 @@ export default function PoissonMarketSection({
                 );
               })}
               <tr className="border-t border-[var(--fp-border)]">
-                <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.mostLikely")}</td>
+                <td className="py-1 pr-2 text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.mostLikely")}</td>
                 <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableTotal}</td>
               </tr>
             </tbody>
@@ -130,9 +130,9 @@ export default function PoissonMarketSection({
         {/* TEAM LINES */}
         {hasTeamLines ? (
           <div>
-            <div className="mb-2 font-mono text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.perTeamOver")}</div>
+            <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{tr("match.perTeamOver")}</div>
             <table className="w-full font-mono text-[10px] tabular-nums">
-              <thead className="text-left text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">
+              <thead className="text-left text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="py-1"></th>
                   <th className="py-1 text-right" title={homeLabel}>
@@ -156,7 +156,7 @@ export default function PoissonMarketSection({
                   );
                 })}
                 <tr className="border-t border-[var(--fp-border)]">
-                  <td className="py-1 pr-2 text-[9px] uppercase tracking-wider text-[var(--fp-text-muted)]">Modal</td>
+                  <td className="py-1 pr-2 text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">Modal</td>
                   <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableHome}</td>
                   <td className="py-1 pl-2 text-right text-[var(--fp-warning)]">{data.mostProbableAway}</td>
                 </tr>
@@ -167,7 +167,7 @@ export default function PoissonMarketSection({
       </div>
 
       {(data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--fp-border)] pt-2 font-mono text-[9px] text-[var(--fp-text-muted)]">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--fp-border)] pt-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
           {data.sampleHome != null && <span>n gazde · {data.sampleHome}</span>}
           {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
           {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
@@ -195,7 +195,7 @@ export default function PoissonMarketSection({
           )}
           {actualTotal != null && (
             <span
-              className={`ml-2 font-mono text-[9px] font-semibold tabular-nums ${
+              className={`ml-2 font-mono text-[10px] font-semibold tabular-nums ${
                 settled === true
                   ? "text-[var(--fp-success)]"
                   : settled === false

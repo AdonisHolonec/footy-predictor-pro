@@ -100,7 +100,7 @@ function ComparisonTable({ lab }: { lab: PredictionLaboratory }) {
     <div className="overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]">
       <table className="w-full min-w-[320px] border-collapse text-left text-[11px]">
         <thead>
-          <tr className="border-b border-[var(--fp-border)] text-[9px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
+          <tr className="border-b border-[var(--fp-border)] text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">
             <th className="px-3 py-2.5">{t("panels.metric")}</th>
             <th className="px-3 py-2.5 text-right">{cmp.homeName}</th>
             <th className="px-3 py-2.5 text-right">{cmp.awayName}</th>
@@ -147,7 +147,7 @@ function MetricsStrip({ lab }: { lab: PredictionLaboratory }) {
           className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2"
           title={m.label}
         >
-          <div className="truncate text-[8px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{m.label}</div>
+          <div className="truncate text-[10px] font-bold uppercase tracking-wider text-[var(--fp-text-muted)]">{m.label}</div>
           <div className={`mt-0.5 text-sm font-bold tabular-nums ${scoreTone(m.value)}`}>
             {m.display ?? (m.value != null ? m.value.toFixed(0) : "—")}
           </div>
@@ -168,7 +168,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
     const empty = (
       <>
         {framed && (
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
         )}
         <p className={`${framed ? "mt-1.5" : ""} text-sm font-medium text-[var(--fp-text-muted)]`}>{t("match.insufficientTitle")}</p>
       </>
@@ -186,9 +186,9 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
     return (
       <div className="mt-1.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</span>
           {lab.bookmaker?.differencePp != null && (
-            <span className={`text-[9px] font-bold tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
+            <span className={`text-[10px] font-bold tabular-nums ${edgeTone(lab.bookmaker.differencePp)}`}>
               Δ {lab.bookmaker.differencePp >= 0 ? "+" : ""}
               {lab.bookmaker.differencePp.toFixed(1)}pp
             </span>
@@ -201,7 +201,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
                 className="w-full rounded-sm bg-fp-accent/70"
                 style={{ height: `${Math.max(8, (p.value / 100) * 40)}px` }}
               />
-              <span className="truncate text-[8px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
+              <span className="truncate text-[10px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
             </div>
           ))}
         </div>
@@ -214,7 +214,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
       {framed ? (
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.predictionAnalysis")}</h3>
             <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.labSubtitle")}</p>
           </div>
           <div className="text-[10px] font-semibold tabular-nums text-[var(--fp-text-muted)]">
@@ -233,18 +233,18 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
 
       <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
-          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.radar")}</div>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.radar")}</div>
           <LabRadar data={lab.radar} />
         </div>
         <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
-          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.comparison")}</div>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("panels.comparison")}</div>
           <ComparisonTable lab={lab} />
         </div>
       </div>
 
       {lab.evolution.length > 0 && (
         <div className="mt-3 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-2.5">
-          <div className="mb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">
             {t("panels.evolution")}
           </div>
           <EvolutionChart data={lab.evolution} />

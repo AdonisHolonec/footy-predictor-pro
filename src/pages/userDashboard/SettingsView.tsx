@@ -38,7 +38,7 @@ export default function SettingsView(props: SettingsViewProps) {
   return (
         <section className="space-y-6">
           <header>
-            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
+            <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.14em] text-[var(--fp-accent)]">
               {t("dash.settingsTitle")}
             </p>
             <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("dash.settingsTitle")}</h1>

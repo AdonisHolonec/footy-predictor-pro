@@ -62,7 +62,7 @@ function HistChart({
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2.5 py-2">
-      <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
       <p className="mt-0.5 font-display text-base font-bold tabular-nums text-[var(--fp-text)]">{value}</p>
     </div>
   );

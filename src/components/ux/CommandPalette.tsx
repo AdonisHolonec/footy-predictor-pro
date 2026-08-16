@@ -93,7 +93,7 @@ export default function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh]"
+      className="fixed inset-0 z-[var(--fp-z-palette)] flex items-start justify-center bg-black/60 px-4 pt-[12vh]"
       role="dialog"
       aria-modal
       aria-label="Global search"

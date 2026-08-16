@@ -27,7 +27,7 @@ export default function StatTile({
     <div
       className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-fp-sm ${className}`}
     >
-      <div className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
+      <div className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
         {label}
       </div>
       <div className={`mt-1 font-display text-xl font-semibold tabular-nums tracking-tight sm:text-2xl ${toneClass[tone]}`}>

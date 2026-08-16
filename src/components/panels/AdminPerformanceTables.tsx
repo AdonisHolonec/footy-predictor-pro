@@ -29,7 +29,7 @@ export default function AdminPerformanceTables({
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Pe utilizator</p>
           <div className="max-h-48 overflow-auto rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             <table className="min-w-full text-left font-mono text-[10px] text-[var(--fp-accent)]">
-              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
+              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="px-2 py-1.5">Email</th>
                   <th className="px-2 py-1.5 text-right">W</th>
@@ -41,7 +41,7 @@ export default function AdminPerformanceTables({
               <tbody>
                 {(perfAdminSnapshot?.byUser || []).map((row) => (
                   <tr key={row.userId} className="border-t border-[var(--fp-border)]">
-                    <td className="max-w-[160px] truncate px-2 py-1 text-[9px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                    <td className="max-w-[160px] truncate px-2 py-1 text-[10px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
                       {row.email || "—"}
                     </td>
                     <td className="px-2 py-1 text-right text-[var(--fp-accent)]">{row.wins}</td>
@@ -65,7 +65,7 @@ export default function AdminPerformanceTables({
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Utilizator + ligă</p>
           <div className="max-h-48 overflow-auto rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             <table className="min-w-full text-left font-mono text-[10px] text-[var(--fp-accent)]">
-              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
+              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="px-2 py-1.5">Email</th>
                   <th className="px-2 py-1.5">Ligă</th>
@@ -77,7 +77,7 @@ export default function AdminPerformanceTables({
               <tbody>
                 {(perfAdminSnapshot?.byUserLeague || []).map((row) => (
                   <tr key={`${row.userId}-${row.leagueId}-${row.leagueName}`} className="border-t border-[var(--fp-border)]">
-                    <td className="max-w-[100px] truncate px-2 py-1 text-[8px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
+                    <td className="max-w-[100px] truncate px-2 py-1 text-[10px]" title={row.email ? `${row.email} · ${row.userId}` : row.userId}>
                       {row.email ? (row.email.length > 18 ? `${row.email.slice(0, 18)}…` : row.email) : "—"}
                     </td>
                     <td className="max-w-[100px] truncate px-2 py-1" title={row.leagueName}>
