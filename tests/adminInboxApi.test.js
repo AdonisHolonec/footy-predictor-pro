@@ -8,6 +8,7 @@ import {
   handleAdminInbox,
   isValidInboxKind,
   isValidTicketStatus,
+  MAX_REPLY_LENGTH,
   normalizeInboxContext,
   parseInboxPaging,
   TICKET_STATUSES
@@ -198,10 +199,13 @@ test("[validation] an invalid kind is a 400 for an admin, not an empty list", as
   assert.deepEqual(supabase.calls.touched, [], "a rejected kind reads nothing");
 });
 
-test("[validation] a non-GET method is refused before anything else", async () => {
+test("[validation] an unsupported method is refused before anything else", async () => {
+  // POST left this test when 7F-3a made it the reply verb. The claim — that a method the
+  // endpoint does not serve is refused before any data is reached — is unchanged; only the
+  // example had to move to a verb the inbox still refuses.
   const supabase = mockSupabase();
   const res = mockRes();
-  await handleAdminInbox(req({ kind: "support" }, "POST"), res, deps(ADMIN, supabase));
+  await handleAdminInbox(req({ kind: "support" }, "DELETE"), res, deps(ADMIN, supabase));
   assert.equal(res.statusCode, 405);
   assert.deepEqual(supabase.calls.touched, []);
 });
@@ -341,12 +345,12 @@ test("[guard] the inbox creates and destroys nothing, and is admin-gated at its 
   const handler = fs.readFileSync("server-utils/adminInboxApi.js", "utf8");
   const route = fs.readFileSync("api/admin.js", "utf8");
 
-  // `.update(` left this list when 7F-2 added status management: the inbox may now change a
-  // ticket's status and nothing else. That single write is pinned by [patch/guard] below,
-  // which asserts there is exactly one update and that it carries exactly one column —
-  // a narrower claim than this one used to make, not a weaker one. Creating a ticket or
-  // destroying a user's message remains impossible.
-  for (const verb of [".insert(", ".upsert(", ".delete("]) {
+  // `.update(` left this list when 7F-2 added status management, and `.insert(` when 7F-3a
+  // added the reply. Both writes are pinned precisely below — [patch/guard] asserts one
+  // update of one column, [reply/guard] asserts one insert into the thread — which are
+  // narrower claims than this one used to make, not weaker ones. Destroying a user's
+  // message, or conjuring a ticket nobody opened, remains impossible.
+  for (const verb of [".upsert(", ".delete("]) {
     assert.ok(!handler.includes(verb), `the inbox must not ${verb} anything`);
   }
   assert.ok(handler.includes("assertAdmin"), "the handler gates on assertAdmin");
@@ -461,7 +465,7 @@ test("[patch/auth] authorisation runs before the body is validated", async () =>
 
 // ── B. method ─────────────────────────────────────────────────────────────
 
-test("[patch/method] PATCH is accepted, POST / PUT / DELETE are not", async () => {
+test("[patch/method] PATCH is accepted, PUT / DELETE are not", async () => {
   const ok = mockRes();
   await handleAdminInbox(
     patchReq({ kind: "support" }, { id: "t-1", status: "closed" }),
@@ -470,7 +474,10 @@ test("[patch/method] PATCH is accepted, POST / PUT / DELETE are not", async () =
   );
   assert.equal(ok.statusCode, 200);
 
-  for (const method of ["POST", "PUT", "DELETE"]) {
+  // POST left this list when 7F-3a made it the reply verb. What still matters here is that
+  // no method other than PATCH can move a status — which [reply/security] also asserts, by
+  // proving a reply writes nothing to support_tickets.
+  for (const method of ["PUT", "DELETE"]) {
     const supabase = mockUpdatable({ rows: [storedTicket()] });
     const res = mockRes();
     await handleAdminInbox(
@@ -699,15 +706,360 @@ test("[patch/mutation] the response is the stored row, not the requested value",
 
 // ── F. structural ─────────────────────────────────────────────────────────
 
-test("[patch/guard] the only write is a status update, and no policy work happens here", () => {
+test("[patch/guard] the only ticket write is a status update, and no policy work happens here", () => {
   const handler = fs.readFileSync("server-utils/adminInboxApi.js", "utf8");
-  for (const verb of [".insert(", ".upsert(", ".delete("]) {
+  // `.insert(` is 7F-3a's reply and is pinned by [reply/guard]; what this still asserts is
+  // that nothing is upserted or destroyed.
+  for (const verb of [".upsert(", ".delete("]) {
     assert.ok(!handler.includes(verb), `the inbox must not ${verb} anything`);
   }
   // Exactly one update, of exactly one column.
   const updates = handler.match(/\.update\(\{[^}]*\}\)/g) || [];
   assert.deepEqual(updates, [".update({ status })"]);
 
+  // RLS belongs to migration 051, never to an API module.
+  for (const forbidden of ["create policy", "alter table", "drop policy", "grant "]) {
+    assert.ok(!handler.toLowerCase().includes(forbidden), `no "${forbidden}" in an API module`);
+  }
+});
+
+// ── 7F-3a: admin reply ────────────────────────────────────────────────────
+//
+// One message, appended to a ticket that is not closed. The tests that matter most are the
+// ones proving what it cannot do: reach another kind's ticket, write a second column, speak
+// on a closed thread, or run for a caller the gate refused.
+
+/** Records the insert so the exact payload can be asserted, and the lookup separately. */
+function mockRepliable({ tickets = [], message = null } = {}) {
+  const calls = { touched: [], inserts: [], updates: [], filters: [] };
+
+  const builder = (table) => {
+    const q = {
+      select: () => q,
+      insert: (payload) => {
+        calls.inserts.push({ table, payload });
+        return q;
+      },
+      update: (payload) => {
+        calls.updates.push({ table, payload });
+        return q;
+      },
+      eq: (col, val) => {
+        calls.filters.push({ op: "eq", col, val });
+        return q;
+      },
+      in: (col, val) => {
+        calls.filters.push({ op: "in", col, val });
+        return q;
+      },
+      not: (col, op, val) => {
+        calls.filters.push({ op: `not.${op}`, col, val });
+        return q;
+      },
+      order: () => q,
+      range: () => q,
+      single: () => ({ then: (resolve) => resolve({ data: message, error: null }) }),
+      then: (resolve) => resolve({ data: table === "support_tickets" ? tickets : [], error: null })
+    };
+    return q;
+  };
+
+  return {
+    calls,
+    from(table) {
+      calls.touched.push(table);
+      return builder(table);
+    }
+  };
+}
+
+const postReq = (query, body) => ({ method: "POST", query, body });
+
+const openTicket = (overrides = {}) => ({ id: "t-1", status: "open", ...overrides });
+const createdMessage = (overrides = {}) => ({
+  id: "m-new",
+  ticket_id: "t-1",
+  author_role: "admin",
+  body: "we are on it",
+  is_internal_note: false,
+  created_at: "2026-08-15T20:00:00.000Z",
+  ...overrides
+});
+
+const reply = (body = "we are on it") => ({ id: "t-1", body });
+
+// ── auth ──────────────────────────────────────────────────────────────────
+
+test("[reply/auth] unauthenticated cannot reply, and nothing is touched", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+  const res = mockRes();
+  await handleAdminInbox(postReq({ kind: "support" }, reply()), res, deps(UNAUTHENTICATED, supabase));
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(supabase.calls.touched, []);
+  assert.deepEqual(supabase.calls.inserts, []);
+});
+
+test("[reply/auth] an authenticated non-admin cannot reply", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+  const res = mockRes();
+  await handleAdminInbox(postReq({ kind: "support" }, reply()), res, deps(NON_ADMIN, supabase));
+  assert.equal(res.statusCode, 403);
+  assert.deepEqual(supabase.calls.inserts, []);
+});
+
+test("[reply/auth] authorisation runs before the body is validated", async () => {
+  const supabase = mockRepliable();
+  const res = mockRes();
+  await handleAdminInbox(postReq({ kind: "support" }, { body: "" }), res, deps(NON_ADMIN, supabase));
+  assert.equal(res.statusCode, 403, "the gate answers first, not the validator");
+  assert.deepEqual(supabase.calls.touched, []);
+});
+
+// ── method ────────────────────────────────────────────────────────────────
+
+test("[reply/method] POST replies; PUT and DELETE are still refused", async () => {
+  const ok = mockRes();
+  await handleAdminInbox(
+    postReq({ kind: "support" }, reply()),
+    ok,
+    deps(ADMIN, mockRepliable({ tickets: [openTicket()], message: createdMessage() }))
+  );
+  assert.equal(ok.statusCode, 201);
+
+  for (const method of ["PUT", "DELETE"]) {
+    const supabase = mockRepliable({ tickets: [openTicket()] });
+    const res = mockRes();
+    await handleAdminInbox({ method, query: { kind: "support" }, body: reply() }, res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 405, method);
+    assert.deepEqual(supabase.calls.inserts, []);
+  }
+});
+
+test("[reply/method] GET and PATCH are unchanged by the arrival of POST", async () => {
+  const get = mockRes();
+  await handleAdminInbox(req({ kind: "report" }), get, deps(ADMIN, mockSupabase()));
+  assert.equal(get.statusCode, 200);
+
+  const patch = mockRes();
+  const supabase = mockUpdatable({ rows: [storedTicket({ status: "closed" })] });
+  await handleAdminInbox(patchReq({ kind: "support" }, { id: "t-1", status: "closed" }), patch, deps(ADMIN, supabase));
+  assert.equal(patch.statusCode, 200);
+  assert.deepEqual(supabase.calls.updates, [{ status: "closed" }]);
+});
+
+// ── validation ────────────────────────────────────────────────────────────
+
+test("[reply/validation] a body must be a non-empty string, uncoerced", async () => {
+  const rejected = [undefined, null, "", "   ", "\n\t ", 42, 0, true, {}, [], ["hi"]];
+  for (const body of rejected) {
+    const supabase = mockRepliable({ tickets: [openTicket()] });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind: "support" }, { id: "t-1", body }), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 400, `body=${JSON.stringify(body)}`);
+    assert.deepEqual(supabase.calls.inserts, [], "a refused body never reaches the database");
+  }
+});
+
+test("[reply/validation] the length boundary is 1 and 5000, and 5001 is refused", async () => {
+  assert.equal(MAX_REPLY_LENGTH, 5000);
+
+  for (const length of [1, MAX_REPLY_LENGTH]) {
+    const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+    const res = mockRes();
+    await handleAdminInbox(
+      postReq({ kind: "support" }, { id: "t-1", body: "x".repeat(length) }),
+      res,
+      deps(ADMIN, supabase)
+    );
+    assert.equal(res.statusCode, 201, `${length} characters must be accepted`);
+    assert.equal(supabase.calls.inserts[0].payload.body.length, length);
+  }
+
+  const supabase = mockRepliable({ tickets: [openTicket()] });
+  const res = mockRes();
+  await handleAdminInbox(
+    postReq({ kind: "support" }, { id: "t-1", body: "x".repeat(MAX_REPLY_LENGTH + 1) }),
+    res,
+    deps(ADMIN, supabase)
+  );
+  assert.equal(res.statusCode, 400);
+  // Refused, never shortened: silently truncating someone's answer is worse than saying no.
+  assert.deepEqual(supabase.calls.inserts, []);
+});
+
+test("[reply/validation] the body is trimmed before it is stored", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+  await handleAdminInbox(
+    postReq({ kind: "support" }, { id: "t-1", body: "  spaced out  " }),
+    mockRes(),
+    deps(ADMIN, supabase)
+  );
+  assert.equal(supabase.calls.inserts[0].payload.body, "spaced out");
+});
+
+test("[reply/validation] a missing or malformed id is refused before the database", async () => {
+  for (const id of [undefined, null, "", "  ", 5, {}, []]) {
+    const supabase = mockRepliable({ tickets: [openTicket()] });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind: "support" }, { id, body: "hello" }), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 400, `id=${JSON.stringify(id)}`);
+    assert.deepEqual(supabase.calls.touched, []);
+  }
+});
+
+test("[reply/validation] an invalid kind is refused, and feedback cannot be replied to", async () => {
+  for (const kind of ["nonsense", "", "feedback"]) {
+    const supabase = mockRepliable({ tickets: [openTicket()] });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind }, reply()), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 400, kind);
+    assert.deepEqual(supabase.calls.inserts, []);
+    assert.deepEqual(supabase.calls.touched, [], "feedback_entries is never opened");
+  }
+});
+
+// ── scope ─────────────────────────────────────────────────────────────────
+
+test("[reply/scope] a support ticket is replied to through the support kind", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+  const res = mockRes();
+  await handleAdminInbox(postReq({ kind: "support" }, reply()), res, deps(ADMIN, supabase));
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.kind, "support");
+  // The lookup carried identity AND category.
+  assert.ok(supabase.calls.filters.some((f) => f.op === "eq" && f.col === "id" && f.val === "t-1"));
+  assert.ok(supabase.calls.filters.some((f) => f.op === "not.in" && f.col === "category"));
+});
+
+test("[reply/scope] prediction and gsb reports are replied to through the report kind", async () => {
+  for (const category of ["prediction", "gsb"]) {
+    const supabase = mockRepliable({ tickets: [openTicket({ category })], message: createdMessage() });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind: "report" }, reply()), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 201, category);
+    const categoryFilter = supabase.calls.filters.find((f) => f.col === "category");
+    assert.equal(categoryFilter.op, "in");
+    assert.deepEqual(categoryFilter.val, ["prediction", "gsb"]);
+  }
+});
+
+test("[reply/scope] a cross-kind or nonexistent id is the same safe 404", async () => {
+  for (const kind of ["support", "report"]) {
+    const supabase = mockRepliable({ tickets: [] });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind }, { id: "t-elsewhere", body: "hi" }), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 404, kind);
+    assert.deepEqual(supabase.calls.inserts, []);
+    const body = JSON.stringify(res.body);
+    assert.ok(!body.includes("support_tickets"), "no table name");
+    assert.ok(!body.includes("category"), "no column name");
+  }
+});
+
+// ── closed ────────────────────────────────────────────────────────────────
+
+test("[reply/closed] a closed ticket is refused with the same words the user path uses", async () => {
+  for (const kind of ["support", "report"]) {
+    const supabase = mockRepliable({ tickets: [openTicket({ status: "closed" })] });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind }, reply()), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 409, kind);
+    assert.equal(res.body.error, "Tichetul este închis.");
+  }
+});
+
+test("[reply/closed] a closed ticket produces no message and no status change", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket({ status: "closed" })] });
+  await handleAdminInbox(postReq({ kind: "support" }, reply()), mockRes(), deps(ADMIN, supabase));
+  assert.deepEqual(supabase.calls.inserts, [], "no message is written");
+  assert.deepEqual(supabase.calls.updates, [], "support_tickets is never touched");
+  assert.ok(!supabase.calls.touched.includes("support_messages"));
+});
+
+test("[reply/closed] a CLOSED ticket under the WRONG kind is 404, not 409", async () => {
+  // Order is the point: scope first, then status. A 409 here would confirm that a ticket
+  // exists under a kind the caller was not asking about.
+  const supabase = mockRepliable({ tickets: [] });
+  const res = mockRes();
+  await handleAdminInbox(
+    postReq({ kind: "report" }, { id: "t-closed-support", body: "hi" }),
+    res,
+    deps(ADMIN, supabase)
+  );
+  assert.equal(res.statusCode, 404);
+  assert.notEqual(res.body.error, "Tichetul este închis.");
+});
+
+test("[reply/closed] every other status can still receive a reply", async () => {
+  for (const status of ["open", "in_progress", "waiting_user", "resolved"]) {
+    const supabase = mockRepliable({ tickets: [openTicket({ status })], message: createdMessage() });
+    const res = mockRes();
+    await handleAdminInbox(postReq({ kind: "support" }, reply()), res, deps(ADMIN, supabase));
+    assert.equal(res.statusCode, 201, status);
+  }
+});
+
+// ── security and persistence ──────────────────────────────────────────────
+
+test("[reply/security] the insert is exactly the four permitted fields", async () => {
+  const supabase = mockRepliable({ tickets: [openTicket()], message: createdMessage() });
+  await handleAdminInbox(
+    postReq(
+      { kind: "support" },
+      {
+        id: "t-1",
+        body: "we are on it",
+        // None of the below may reach the database.
+        author_role: "user",
+        is_internal_note: true,
+        status: "closed",
+        priority: "high",
+        category: "billing",
+        user_id: "someone-else",
+        ticket_id: "another-ticket",
+        created_at: "2000-01-01T00:00:00.000Z"
+      }
+    ),
+    mockRes(),
+    deps(ADMIN, supabase)
+  );
+
+  assert.equal(supabase.calls.inserts.length, 1, "exactly one message is written");
+  const { table, payload } = supabase.calls.inserts[0];
+  assert.equal(table, "support_messages");
+  assert.deepEqual(Object.keys(payload).sort(), ["author_role", "body", "is_internal_note", "ticket_id"]);
+  assert.equal(payload.author_role, "admin", "the role is a server literal");
+  assert.equal(payload.is_internal_note, false, "a client cannot create an internal note");
+  assert.equal(payload.ticket_id, "t-1", "the id comes from the scoped ticket, not the body");
+  assert.ok(!("created_at" in payload), "the database owns the clock");
+  // And nothing was written to the ticket itself.
+  assert.deepEqual(supabase.calls.updates, []);
+});
+
+test("[reply/persistence] the response is the row the database created", async () => {
+  const stored = createdMessage({ id: "m-server", body: "stored form" });
+  const supabase = mockRepliable({ tickets: [openTicket()], message: stored });
+  const res = mockRes();
+  await handleAdminInbox(
+    postReq({ kind: "support" }, { id: "t-1", body: "requested form" }),
+    res,
+    deps(ADMIN, supabase)
+  );
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(res.body.item, stored, "the caller sees what was stored, not what was asked for");
+});
+
+test("[reply/guard] the inbox appends messages but still creates and destroys nothing else", () => {
+  const handler = fs.readFileSync("server-utils/adminInboxApi.js", "utf8");
+  for (const verb of [".upsert(", ".delete("]) {
+    assert.ok(!handler.includes(verb), `the inbox must not ${verb} anything`);
+  }
+  // Exactly one insert, into the thread, and exactly one update, of one column.
+  const inserts = handler.match(/\.insert\(\{/g) || [];
+  assert.equal(inserts.length, 1, "one insert only");
+  assert.ok(handler.includes('.from("support_messages")'), "and it targets the thread");
+  const updates = handler.match(/\.update\(\{[^}]*\}\)/g) || [];
+  assert.deepEqual(updates, [".update({ status })"]);
   // RLS belongs to migration 051, never to an API module.
   for (const forbidden of ["create policy", "alter table", "drop policy", "grant "]) {
     assert.ok(!handler.toLowerCase().includes(forbidden), `no "${forbidden}" in an API module`);
