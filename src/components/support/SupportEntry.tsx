@@ -4,6 +4,7 @@ import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import SupportDialog from "./SupportDialog";
 import FeedbackDialog from "./FeedbackDialog";
+import MyTicketsPanel from "./MyTicketsPanel";
 
 /**
  * The one way into Support and Feedback, for every authenticated surface.
@@ -80,6 +81,10 @@ export default function SupportEntry({ variant = "card", onSubmitted, className 
           {t("support.openFeedback")}
         </Button>
       </div>
+      {/* Only in the card shape: the inline variant is a two-button toolbar strip with
+          no room for a list, and the tree that mounts it is the admin one, which reads
+          every ticket through the Admin Inbox already. */}
+      <MyTicketsPanel className="mt-5 border-t border-[var(--fp-border)] pt-4" />
       {dialogs}
     </Card>
   );

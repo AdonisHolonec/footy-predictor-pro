@@ -935,6 +935,26 @@ export const ro: Dict = {
   },
   // Trei suprafețe separate, intenționat: rezolvarea unei probleme, îmbunătățirea
   // produsului și semnalarea unei predicții sunt cereri diferite și se citesc altfel.
+  myTickets: {
+    title: "Mesajele tale",
+    empty: "Nu ne-ai trimis încă nimic.",
+    error: "Nu am putut încărca mesajele tale.",
+    retry: "Încearcă din nou",
+    noMessages: "Niciun mesaj pe acest tichet.",
+    kindSupport: "Suport",
+    kindReport: "Raport",
+    fromYou: "Tu",
+    fromTeam: "Footy Predictor",
+    // Cele cinci valori permise de migrația 051 — nici mai multe, nici sinonime.
+    status: {
+      open: "Deschis",
+      in_progress: "În lucru",
+      waiting_user: "Așteaptă răspunsul tău",
+      resolved: "Rezolvat",
+      closed: "Închis"
+    },
+    priority: { low: "Scăzută", normal: "Normală", high: "Ridicată" }
+  },
   support: {
     sectionTitle: "Ajutor și support",
     sectionHint: "Ceva nu merge sau ai o idee pentru noi — citim tot.",
