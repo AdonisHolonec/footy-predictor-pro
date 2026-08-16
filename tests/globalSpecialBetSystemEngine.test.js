@@ -204,7 +204,7 @@ test("[24] a huge valueScore does not buy a place — EV alone ranks", () => {
 test("[9] System reads the same candidate pool as Combo", () => {
   const options = { rows: evenPool(6), leagueIds: [39, 40, 41], now: NOW };
   const direct = collectGlobalCandidates(options);
-  const system = buildGlobalSystemBets(options);
+  const system = buildGlobalSystemBets({ ...options, systemK: 3 });
   const combo = buildGlobalSpecialBets(options);
 
   assert.deepEqual(system.candidates, direct.candidates);
@@ -214,7 +214,7 @@ test("[9] System reads the same candidate pool as Combo", () => {
 });
 
 test("[10] all twelve gate counters survive into the System result", () => {
-  const system = buildGlobalSystemBets({ rows: evenPool(6), leagueIds: [39, 40, 41], now: NOW });
+  const system = buildGlobalSystemBets({ rows: evenPool(6), leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
   assert.deepEqual(Object.keys(system.rejected).sort(), [
     "alreadyStarted",
     "identityUnknown",
@@ -261,15 +261,16 @@ test("[23] a leg breaching the edge ceiling is gone before ranking", () => {
 // ── 11–13. Five, or nothing ────────────────────────────────────────────────
 
 test("[11] five safe candidates are enough", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(5), leagueIds: [39, 40, 41], now: NOW });
+  const built = buildGlobalSystemBets({ rows: evenPool(5), leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
   assert.deepEqual(built.unavailable, []);
   assert.equal(built.selections.length, SYSTEM_SELECTION_COUNT);
 });
 
 test("[12] four safe candidates build nothing, and say why", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(4), leagueIds: [39, 40, 41], now: NOW });
+  const built = buildGlobalSystemBets({ rows: evenPool(4), leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
 
-  assert.deepEqual(built.bets, {}, "no ticket is built from a thin pool");
+  // Was `built.bets` deepEqual {} — one invocation now yields one ticket or none.
+  assert.equal(built.bet, null, "no ticket is built from a thin pool");
   assert.deepEqual(built.selections, []);
   assert.equal(built.unavailable.length, 1);
   assert.equal(built.unavailable[0].reason, "insufficient_system_candidates");
@@ -280,7 +281,7 @@ test("[12] four safe candidates build nothing, and say why", () => {
 test("[12b] a thin pool is never padded with a leg that failed a gate", () => {
   // Four safe candidates plus one below the floor: still unavailable, not five.
   const rows = [...evenPool(4), fixture(99, 39, [goodMarket({ probability: 0.5, odds: 1.9 })])];
-  const built = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW });
+  const built = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
 
   assert.equal(built.rejected.probabilityBelowFloor, 1);
   assert.equal(built.unavailable[0].reason, "insufficient_system_candidates");
@@ -288,9 +289,9 @@ test("[12b] a thin pool is never padded with a leg that failed a gate", () => {
 });
 
 test("[13] a built System carries exactly five selections", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
   for (const k of SYSTEM_K_VALUES) {
-    assert.equal(built.bets[k].selections.length, SYSTEM_SELECTION_COUNT, `system ${k}/5`);
+    const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: k });
+    assert.equal(built.bet.selections.length, SYSTEM_SELECTION_COUNT, `system ${k}/5`);
   }
 });
 
@@ -304,7 +305,7 @@ test("[14] two markets on one fixture cannot both enter the ticket", () => {
     ]),
     ...evenPool(5).map((row) => ({ ...row, id: row.id + 10 }))
   ];
-  const built = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW });
+  const built = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
 
   const fixtures = ids(built.selections);
   assert.equal(new Set(fixtures).size, fixtures.length, "one selection per fixture");
@@ -322,7 +323,7 @@ test("[15] the league band still applies, measured in probability points", () =>
     fixture(3, 39, [goodMarket({ probability: 0.78, odds: 1.5 })]),
     fixture(4, 40, [goodMarket({ probability: 0.79, odds: 1.5 })])
   ];
-  const pool = buildGlobalSystemBets({ rows, leagueIds: [39, 40], now: NOW }).pool;
+  const pool = buildGlobalSystemBets({ rows, leagueIds: [39, 40], now: NOW, systemK: 3 }).pool;
 
   assert.ok(LEAGUE_SPREAD_MAX_PP >= 1);
   assert.equal(pool[0].fixtureId, 1);
@@ -336,73 +337,78 @@ test("[15b] the band cannot drag a materially weaker leg into the ticket", () =>
     fixture(2, 39, [goodMarket({ probability: 0.84, odds: 1.5 })]),
     fixture(3, 40, [goodMarket({ probability: 0.65, odds: 1.5 })])
   ];
-  const pool = buildGlobalSystemBets({ rows, leagueIds: [39, 40], now: NOW }).pool;
+  const pool = buildGlobalSystemBets({ rows, leagueIds: [39, 40], now: NOW, systemK: 3 }).pool;
   assert.deepEqual(ids(pool), [1, 2, 3]);
 });
 
 // ── 16–19. The three products ──────────────────────────────────────────────
 
 test("[16] 3/5, 4/5 and 5/5 are the same five selections", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
+  // Three DELIBERATE builds. One build no longer produces three tickets, so the
+  // shared pool is demonstrated by asking three times and comparing the answers.
+  const of = (k) => buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: k });
+  const three = of(3);
+  const four = of(4);
+  const five = of(5);
 
-  assert.deepEqual(built.bets[3].selections, built.bets[4].selections);
-  assert.deepEqual(built.bets[4].selections, built.bets[5].selections);
-  assert.deepEqual(built.bets[3].selections, built.selections);
+  assert.deepEqual(three.bet.selections, four.bet.selections);
+  assert.deepEqual(four.bet.selections, five.bet.selections);
+  assert.deepEqual(three.bet.selections, three.selections);
   assert.notEqual(
-    built.bets[3].selections,
-    built.bets[4].selections,
+    three.bet.selections,
+    four.bet.selections,
     "same content, separate arrays — one ticket cannot mutate another"
   );
 });
 
-test("[17][18][19] each ticket is variant 5, kind system, k 3/4/5", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
-
+test("[17][18][19] a ticket is variant 5, kind system, at the k that was asked for", () => {
   for (const k of SYSTEM_K_VALUES) {
-    const bet = built.bets[k];
+    const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: k });
+    const bet = built.bet;
     assert.equal(bet.variant, 5, "variant keeps meaning the number of selections");
     assert.equal(bet.betKind, "system");
-    assert.equal(bet.systemK, k);
+    assert.equal(bet.systemK, k, "the k built is the k requested");
+    assert.equal(built.systemK, k);
   }
-  assert.deepEqual(Object.keys(built.bets).map(Number), [3, 4, 5]);
 });
 
 test("[19b] the combination count is C(5,k) — 10, 5 and 1", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
-  assert.equal(built.bets[3].combinationCount, 10);
-  assert.equal(built.bets[4].combinationCount, 5);
-  assert.equal(built.bets[5].combinationCount, 1);
+  const of = (k) => buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: k });
+  assert.equal(of(3).bet.combinationCount, 10);
+  assert.equal(of(4).bet.combinationCount, 5);
+  assert.equal(of(5).bet.combinationCount, 1);
 });
 
 test("[19c] a System ticket carries no combo payout field", () => {
   // Π odds is the payout of ONE combination, so it is not published under the
   // combo's field name. See the comment on toSystemBet.
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
-  const bet = built.bets[3];
+  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
+  const bet = built.bet;
 
   assert.equal(bet.totalOdds, undefined, "a 3/5 does not pay Π odds");
   assert.ok(Number.isFinite(bet.productOdds), "the product is kept, under a name that says what it is");
 });
 
 test("[19d] the ticket probability is P(X >= k), not the product", () => {
-  const built = buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW });
-  const probabilities = built.selections.map((s) => s.probability);
+  const of = (k) => buildGlobalSystemBets({ rows: evenPool(9), leagueIds: [39, 40, 41], now: NOW, systemK: k });
+  const byK = Object.fromEntries(SYSTEM_K_VALUES.map((k) => [k, of(k)]));
+  const probabilities = byK[3].selections.map((s) => s.probability);
   const product = probabilities.reduce((acc, p) => acc * p, 1);
 
   for (const k of SYSTEM_K_VALUES) {
     const expected = systemTicketProbability(probabilities, k);
-    assert.equal(built.bets[k].estimatedTicketProbability, Number(expected.toFixed(4)), `k=${k}`);
+    assert.equal(byK[k].bet.estimatedTicketProbability, Number(expected.toFixed(4)), `k=${k}`);
   }
   // 5/5 IS the product; 3/5 and 4/5 are strictly likelier, which is the whole
   // reason a system exists.
-  assert.equal(built.bets[5].estimatedTicketProbability, Number(product.toFixed(4)));
-  assert.ok(built.bets[3].estimatedTicketProbability > built.bets[4].estimatedTicketProbability);
-  assert.ok(built.bets[4].estimatedTicketProbability > built.bets[5].estimatedTicketProbability);
+  assert.equal(byK[5].bet.estimatedTicketProbability, Number(product.toFixed(4)));
+  assert.ok(byK[3].bet.estimatedTicketProbability > byK[4].bet.estimatedTicketProbability);
+  assert.ok(byK[4].bet.estimatedTicketProbability > byK[5].bet.estimatedTicketProbability);
 });
 
 // ── 20. System cannot reach production ─────────────────────────────────────
 
-test("[20] System is built and validated in code, and still refused by the database", () => {
+test("[20] the server builds and validates a System, and the k never comes from the request", () => {
   // The database now accepts one (migration 053 lifted the gate; S16 in
   // tests/integration/gsbSystemFoundation.db.test.js proves the creation). This
   // is the other half: the server never even asks. A unit test on the engine
@@ -438,8 +444,17 @@ test("[20] System is built and validated in code, and still refused by the datab
   assert.ok(persistence.includes("validateSystemShape"), "creation validates the shape before the RPC");
   assert.ok(persistence.includes("p_system_k"), "creation sends the k through 052's own parameter");
 
-  // The HTTP layer is still untouched: no route accepts a k, so no user can ask
-  // for a System even though the server now knows how to build one.
-  assert.ok(!api.includes("system_k"), "the HTTP layer stays unaware of System");
-  assert.ok(!api.includes("createGlobalSystemBets"), "no route creates a System");
+  // NARROWED, not dropped. This used to assert the HTTP layer knew nothing of
+  // System — true until the public product shipped, and the whole point of this
+  // increment is that it now does. What replaces it is the invariant that
+  // actually protects the product: the route may CREATE a System, but the k is
+  // never taken from the request. A source guard rather than a behavioural one
+  // for the same reason as above — a body-read reintroduced here would pass
+  // every unit test while quietly handing the product back to the client.
+  assert.ok(api.includes("createGlobalSystemBets"), "the public route can create a System");
+  assert.ok(api.includes("SYSTEM_PRODUCT_K = 3"), "the k is a server-side constant");
+  assert.ok(
+    !/body\.system_k|body\.systemK|\bsystemK\s*=\s*(?!SYSTEM_PRODUCT_K)/.test(api),
+    "the k is never read from the request body"
+  );
 });

@@ -728,7 +728,7 @@ export function validateSystemShape({ selections, systemK } = {}) {
 }
 
 /**
- * Build System 3/5, 4/5 and 5/5 from one safe pool.
+ * Build ONE System ticket, at the k the caller asked for.
  *
  * ORDER OF OPERATIONS — the same shape buildGlobalSpecialBets uses, with only
  * the ranking swapped:
@@ -745,17 +745,56 @@ export function validateSystemShape({ selections, systemK } = {}) {
  * variety from dragging a materially weaker leg into the ticket whatever the
  * ranking rewards.
  *
- * ALL THREE TICKETS SHARE ONE LIST. The top five are computed once; k selects
- * how many of them must win. Recomputing a separate top five per k would let
- * 3/5 and 4/5 disagree about which matches the product is even betting on.
+ * ONE INVOCATION IS ONE TICKET. This function used to loop over SYSTEM_K_VALUES
+ * and hand back {3: …, 4: …, 5: …}, so a single pool of five legs became three
+ * stored tickets. That is not the product: 3/5, 4/5 and 5/5 are three shapes a
+ * System ticket CAN take, not three tickets a punter placed. A 3/5 already pays
+ * when four or five legs land — it covers those outcomes through its own C(5,3)
+ * combinations — so writing a 4/5 and a 5/5 from the same five legs charges
+ * three stakes for one opinion.
+ *
+ * `systemK` is therefore required, and validated before anything is built. It
+ * is a product choice and this function refuses to make it: there is no default
+ * k, and no rule that reads probability, confidence or odds to pick one.
  *
  * Fewer than five safe candidates means NO system ticket — no padding, no
  * relaxed gate, no duplicated fixture. The refusal carries the pool size and
- * the rejection counters, so the caller can say why the pool was thin.
+ * the rejection counters, so the caller can say why the pool was thin. An
+ * unsupported k refuses the same way rather than throwing: "3.5 is not a shape
+ * we sell" is an ordinary answer to an ordinary question.
  *
- * @param {{ rows: object[], leagueIds: number[], now: number }} options
+ * @param {{ rows: object[], leagueIds: number[], now: number, systemK: number }} options
  */
 export function buildGlobalSystemBets(options) {
+  const systemK = options?.systemK;
+  // The k is judged BEFORE the pool is collected: an unsupported shape is not
+  // worth twelve gates of work, and a caller that omitted the argument should
+  // hear about the argument rather than about a thin pool. The placeholder
+  // array carries only the count — the real legs are validated again at
+  // persistence, against the rows that will actually be written.
+  const shape = validateSystemShape({
+    selections: new Array(SYSTEM_SELECTION_COUNT).fill(null),
+    systemK
+  });
+  if (!shape.valid) {
+    const collected = collectGlobalCandidates(options);
+    return {
+      ...collected,
+      pool: [],
+      selections: [],
+      systemK: null,
+      bet: null,
+      unavailable: [
+        {
+          betKind: "system",
+          reason: shape.reason,
+          requestedK: systemK === undefined ? null : systemK,
+          supportedK: shape.supportedK
+        }
+      ]
+    };
+  }
+
   const collected = collectGlobalCandidates(options);
   const pool = diversifyGlobalCandidates(rankSystemCandidates(collected.candidates));
 
@@ -764,7 +803,8 @@ export function buildGlobalSystemBets(options) {
       ...collected,
       pool,
       selections: [],
-      bets: {},
+      systemK,
+      bet: null,
       unavailable: [
         {
           betKind: "system",
@@ -777,10 +817,7 @@ export function buildGlobalSystemBets(options) {
   }
 
   const selections = pool.slice(0, SYSTEM_SELECTION_COUNT);
-  const bets = {};
-  for (const systemK of SYSTEM_K_VALUES) bets[systemK] = toSystemBet(systemK, selections);
-
-  return { ...collected, pool, selections, bets, unavailable: [] };
+  return { ...collected, pool, selections, systemK, bet: toSystemBet(systemK, selections), unavailable: [] };
 }
 
 export default {

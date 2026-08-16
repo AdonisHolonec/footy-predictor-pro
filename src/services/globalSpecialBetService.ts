@@ -74,6 +74,13 @@ export async function generateGlobalSpecialBet(params: {
   betDate: string;
   variant: number;
   leagueIds: number[];
+  /**
+   * Omitted for a Combo, which keeps the exact request this app has always
+   * sent. "system" asks for the Bilet Sistem — five selections, at least three
+   * of which must win. There is deliberately no `system_k`: the server owns the
+   * k, and a request carrying one is refused with 400.
+   */
+  betKind?: "system";
 }): Promise<GlobalSpecialBetGenerateResult> {
   const res = await fetchWithAuth("/api/special-bets", {
     method: "POST",
@@ -81,7 +88,8 @@ export async function generateGlobalSpecialBet(params: {
     body: JSON.stringify({
       bet_date: params.betDate,
       variant: params.variant,
-      leagueIds: params.leagueIds
+      leagueIds: params.leagueIds,
+      ...(params.betKind ? { bet_kind: params.betKind } : {})
     })
   });
   const json = await readEnvelope(res);

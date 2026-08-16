@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createGlobalSpecialBet, createGlobalSystemBets } from "../server-utils/globalSpecialBets.js";
-import { systemTicketProbability } from "../server-utils/globalSpecialBetEngine.js";
+import { SYSTEM_K_VALUES, systemTicketProbability } from "../server-utils/globalSpecialBetEngine.js";
 
 /**
  * System creation and persistence — the arguments that reach the RPC.
@@ -92,27 +92,54 @@ const created = (params) => ({
   selections: []
 });
 
-const systemOf = (supabase) =>
-  createGlobalSystemBets({ userId: USER, betDate: BET_DATE, leagueIds: [39], now: NOW, supabase });
+/**
+ * One invocation, one k, one ticket.
+ *
+ * `systemK` has NO default here on purpose. An earlier draft defaulted it to 3,
+ * which silently turned `systemOf(supabase, undefined)` into a valid request and
+ * hid the very case [I4] exists to check. There is no product default k, so the
+ * helper must not invent one either: every call names its k.
+ */
+const systemOf = (supabase, systemK) =>
+  createGlobalSystemBets({ userId: USER, betDate: BET_DATE, leagueIds: [39], systemK, now: NOW, supabase });
 
-const build = (count, rpcResult = created) =>
-  systemOf(fakeSupabase({ historyRows: history(count), rpcResult }));
+const build = (count, rpcResult = created, systemK = 3) =>
+  systemOf(fakeSupabase({ historyRows: history(count), rpcResult }), systemK);
+
+/**
+ * The same pool built once per k — three DELIBERATE, SEPARATE invocations.
+ *
+ * This replaced the single call that used to return three tickets. A test that
+ * wants to compare the three shapes now has to ask for each one, which is the
+ * point: nothing produces more than one ticket by itself.
+ */
+async function eachK(count = 6, rpcResult = created) {
+  const out = {};
+  for (const k of SYSTEM_K_VALUES) {
+    const supabase = fakeSupabase({ historyRows: history(count), rpcResult });
+    const result = await systemOf(supabase, k);
+    out[k] = { supabase, result, params: supabase.calls.rpc[0]?.params ?? null };
+  }
+  return out;
+}
 
 // ── A. Generation from the shared pool ────────────────────────────────────
 
 test("[A1] System reads the same candidate pool as Combo and takes exactly five", async () => {
   const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  const out = await systemOf(supabase);
+  const out = await systemOf(supabase, 3);
 
   assert.equal(out.available, true);
-  assert.equal(out.selections.length, 5, "six candidates, five selected");
-  assert.equal(supabase.calls.rpc.length, 3, "one row per k, from one build");
-  for (const { params } of supabase.calls.rpc) assert.equal(params.p_selections.length, 5);
+  assert.equal(out.engineSelections.length, 5, "six candidates, five selected");
+  // Was 3, "one row per k, from one build". That WAS the defect: one five-leg
+  // opinion became three stored tickets and three stakes.
+  assert.equal(supabase.calls.rpc.length, 1, "one invocation writes exactly one ticket");
+  assert.equal(supabase.calls.rpc[0].params.p_selections.length, 5);
 });
 
 test("[A2] fewer than five safe candidates writes nothing and says why", async () => {
   const supabase = fakeSupabase({ historyRows: history(4), rpcResult: created });
-  const out = await systemOf(supabase);
+  const out = await systemOf(supabase, 3);
 
   assert.equal(out.available, false);
   assert.equal(out.created, false);
@@ -128,7 +155,7 @@ test("[A3] a candidate failing a gate is not padded back in", async () => {
   const rows = history(5);
   rows[4].raw_payload.valueEngine.markets[0].odds = 1.1;
   const supabase = fakeSupabase({ historyRows: rows, rpcResult: created });
-  const out = await systemOf(supabase);
+  const out = await systemOf(supabase, 3);
 
   assert.equal(out.available, false);
   assert.equal(out.rejected.oddBelowMinimum, 1, "the existing gate name is untouched");
@@ -150,24 +177,23 @@ test("[A4] one selection per fixture: two markets on one match cannot both be ta
     period: "full_match",
     scope: "match"
   });
-  const out = await systemOf(fakeSupabase({ historyRows: rows, rpcResult: created }));
+  const out = await systemOf(fakeSupabase({ historyRows: rows, rpcResult: created }), 3);
 
-  const ids = out.selections.map((s) => s.fixtureId);
+  const ids = out.engineSelections.map((s) => s.fixtureId);
   assert.equal(new Set(ids).size, 5, "no fixture appears twice");
 });
 
 // ── B/D. What the RPC is asked to store ───────────────────────────────────
 
-test("[B1][D1] all three tickets are persisted as variant 5, kind system, k 3/4/5", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+test("[B1][D1] the requested k is persisted as variant 5, kind system", async () => {
+  // Each k is asked for on its own. Previously one call produced all three.
+  const all = await eachK();
 
-  assert.deepEqual(
-    supabase.calls.rpc.map(({ params }) => params.p_system_k),
-    [3, 4, 5]
-  );
-  for (const { name, params } of supabase.calls.rpc) {
-    assert.equal(name, "create_global_special_bet");
+  for (const k of SYSTEM_K_VALUES) {
+    const { supabase, params } = all[k];
+    assert.equal(supabase.calls.rpc.length, 1, `k=${k} wrote one row`);
+    assert.equal(supabase.calls.rpc[0].name, "create_global_special_bet");
+    assert.equal(params.p_system_k, k, "the k stored is the k requested");
     assert.equal(params.p_bet_kind, "system");
     assert.equal(params.p_variant, 5);
     assert.equal(params.p_selections.length, 5);
@@ -177,71 +203,62 @@ test("[B1][D1] all three tickets are persisted as variant 5, kind system, k 3/4/
   }
 });
 
-test("[D2] the five legs are identical across the three tickets", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+test("[D2] the five legs are the same whichever k is asked for", async () => {
+  // The pool does not depend on k — only how many of it must win does. Three
+  // separate invocations, not one call returning three tickets.
+  const all = await eachK();
 
-  const [three, four, five] = supabase.calls.rpc.map(({ params }) => params.p_selections);
-  assert.deepEqual(three, four);
-  assert.deepEqual(four, five);
-  assert.notEqual(three, four, "same content, separate arrays");
+  assert.deepEqual(all[3].params.p_selections, all[4].params.p_selections);
+  assert.deepEqual(all[4].params.p_selections, all[5].params.p_selections);
+  assert.notEqual(all[3].params.p_selections, all[4].params.p_selections, "separate arrays");
 });
 
 test("[D3] total_odds is the product of the five odds", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+  const all = await eachK();
 
-  // 1.8^5 = 18.89568, rounded to the column's three decimals.
-  for (const { params } of supabase.calls.rpc) {
-    assert.equal(params.p_total_odds, 18.896);
-    assert.ok(params.p_total_odds > 1, "the schema requires it");
+  // 1.8^5 = 18.89568, rounded to the column's three decimals. Same for every k:
+  // it describes the legs, not the payout.
+  for (const k of SYSTEM_K_VALUES) {
+    assert.equal(all[k].params.p_total_odds, 18.896);
+    assert.ok(all[k].params.p_total_odds > 1, "the schema requires it");
   }
 });
 
 // ── C. The probability is the Poisson-binomial tail ───────────────────────
 
 test("[C1] ticket_probability is P(X >= k): the mandated values for five legs at 0.70", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+  const all = await eachK();
 
-  const byK = Object.fromEntries(
-    supabase.calls.rpc.map(({ params }) => [params.p_system_k, params.p_ticket_probability])
-  );
-  assert.equal(byK[3], 0.8369);
-  assert.equal(byK[4], 0.5282);
-  assert.equal(byK[5], 0.1681);
+  assert.equal(all[3].params.p_ticket_probability, 0.8369);
+  assert.equal(all[4].params.p_ticket_probability, 0.5282);
+  assert.equal(all[5].params.p_ticket_probability, 0.1681);
 });
 
 test("[C2] it is never the product, except where the product is the right answer", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
-
-  const byK = Object.fromEntries(
-    supabase.calls.rpc.map(({ params }) => [params.p_system_k, params.p_ticket_probability])
-  );
+  const all = await eachK();
   const product = Number((0.7 ** 5).toFixed(4));
 
-  assert.equal(byK[5], product, "k = n IS the product");
-  assert.notEqual(byK[3], product, "a 3/5 is far likelier than all five landing");
-  assert.notEqual(byK[4], product);
+  assert.equal(all[5].params.p_ticket_probability, product, "k = n IS the product");
+  assert.notEqual(all[3].params.p_ticket_probability, product, "a 3/5 is far likelier than all five landing");
+  assert.notEqual(all[4].params.p_ticket_probability, product);
 });
 
 test("[C3] the tail is monotone: P(X>=3) >= P(X>=4) >= P(X>=5)", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+  const all = await eachK();
 
-  const [p3, p4, p5] = supabase.calls.rpc.map(({ params }) => params.p_ticket_probability);
+  const p3 = all[3].params.p_ticket_probability;
+  const p4 = all[4].params.p_ticket_probability;
+  const p5 = all[5].params.p_ticket_probability;
   assert.ok(p3 > p4 && p4 > p5, `${p3} > ${p4} > ${p5}`);
 });
 
 test("[C4] the persisted value comes from the single implementation, not a second one", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  const out = await systemOf(supabase);
+  const all = await eachK();
 
-  const probabilities = out.selections.map((s) => s.probability);
-  for (const { params } of supabase.calls.rpc) {
-    const expected = Number(systemTicketProbability(probabilities, params.p_system_k).toFixed(4));
-    assert.equal(params.p_ticket_probability, expected, `k=${params.p_system_k}`);
+  for (const k of SYSTEM_K_VALUES) {
+    const probabilities = all[k].result.engineSelections.map((s) => s.probability);
+    const expected = Number(systemTicketProbability(probabilities, k).toFixed(4));
+    assert.equal(all[k].params.p_ticket_probability, expected, `k=${k}`);
   }
 });
 
@@ -261,16 +278,15 @@ test("[E1] a repeat returns the existing row and the probability stored with it"
     selections: []
   }));
 
-  for (const k of [3, 4, 5]) {
-    assert.equal(out.bets[k].created, false, `k=${k} was not created again`);
-    assert.equal(out.bets[k].ticketProbability, 0.5, "the stored figure wins over a fresh computation");
-  }
+  assert.equal(out.created, false, "the row already existed");
+  assert.equal(out.ticketProbability, 0.5, "the stored figure wins over a fresh computation");
 });
 
 test("[E2] a fresh creation reports the engine's own figure", async () => {
-  const out = await build(6);
-  assert.equal(out.bets[3].created, true);
-  assert.equal(out.bets[3].ticketProbability, 0.8369);
+  const out = await build(6, created, 3);
+  assert.equal(out.created, true);
+  assert.equal(out.systemK, 3);
+  assert.equal(out.ticketProbability, 0.8369);
 });
 
 // ── F. Coexistence with Combo ─────────────────────────────────────────────
@@ -289,11 +305,10 @@ test("[F1] Combo and System send different identities for the same user, date an
     supabase: comboSupabase
   });
 
-  const systemSupabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(systemSupabase);
+  const all = await eachK();
 
   const combo = comboSupabase.calls.rpc[0].params;
-  const system = systemSupabase.calls.rpc.map(({ params }) => params);
+  const system = SYSTEM_K_VALUES.map((k) => all[k].params);
 
   // Same user, date, scope and variant — four rows kept apart by kind and k,
   // which is exactly what migration 052 widened the identity index to hold.
@@ -347,11 +362,10 @@ test("[G1] the Combo payload is untouched — nine arguments, no kind, Πp", asy
 // ── H. The RPC contract ───────────────────────────────────────────────────
 
 test("[H1] System sends the nine Combo arguments plus exactly the two from 052", async () => {
-  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
-  await systemOf(supabase);
+  const all = await eachK();
 
-  for (const { params } of supabase.calls.rpc) {
-    assert.deepEqual(Object.keys(params).sort(), [
+  for (const k of SYSTEM_K_VALUES) {
+    assert.deepEqual(Object.keys(all[k].params).sort(), [
       "p_average_confidence",
       "p_bet_date",
       "p_bet_kind",
@@ -369,22 +383,23 @@ test("[H1] System sends the nine Combo arguments plus exactly the two from 052",
 
 test("[H2] the response envelope is consumed without assuming Combo-only fields", async () => {
   // A bet object carrying nothing but an id: the caller must still cope.
-  const out = await build(6, (params) => ({
+  const thin = (params) => ({
     ok: true,
     created: true,
     bet: { id: `bet-${params.p_system_k}` },
     selections: []
-  }));
+  });
 
-  for (const k of [3, 4, 5]) {
-    assert.equal(out.bets[k].bet.id, `bet-${k}`);
-    assert.equal(out.bets[k].systemK, k);
-    assert.deepEqual(out.bets[k].selections, []);
+  const combinationsByK = {};
+  for (const k of SYSTEM_K_VALUES) {
+    const out = await build(6, thin, k);
+    assert.equal(out.bet.id, `bet-${k}`);
+    assert.equal(out.systemK, k);
+    assert.deepEqual(out.selections, [], "an empty echo is not an empty ticket");
+    assert.equal(out.engineSelections.length, 5, "the engine's legs survive a thin echo");
+    combinationsByK[k] = out.combinationCount;
   }
-  assert.deepEqual(
-    [out.bets[3].combinationCount, out.bets[4].combinationCount, out.bets[5].combinationCount],
-    [10, 5, 1]
-  );
+  assert.deepEqual(combinationsByK, { 3: 10, 4: 5, 5: 1 });
 });
 
 test("[H3] an RPC refusal is surfaced, never swallowed", async () => {
@@ -393,4 +408,83 @@ test("[H3] an RPC refusal is surfaced, never swallowed", async () => {
     /system_not_enabled/,
     "the database guard must reach the caller intact"
   );
+});
+
+// ── I. Cardinality — the permanent contract ───────────────────────────────
+//
+// A System is ONE ticket of five selections with ONE k. 3/5, 4/5 and 5/5 are
+// three shapes the ticket can take, not three tickets a punter placed. The
+// generator used to build all three from a single pool, so one opinion became
+// three stored rows and three stakes. These tests exist so it cannot come back.
+
+test("[I1] one selected system k produces exactly one ticket", async () => {
+  for (const k of SYSTEM_K_VALUES) {
+    const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
+    const out = await systemOf(supabase, k);
+
+    assert.equal(supabase.calls.rpc.length, 1, `k=${k}: exactly one RPC`);
+    assert.equal(supabase.calls.rpc[0].params.p_system_k, k, "the k stored is the k requested");
+    assert.equal(supabase.calls.rpc[0].params.p_selections.length, 5);
+    assert.equal(out.systemK, k);
+    assert.equal(out.created, true);
+  }
+});
+
+test("[I2] the generator does not create 3/5, 4/5 and 5/5 together", async () => {
+  const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
+  await systemOf(supabase, 3);
+
+  const ks = supabase.calls.rpc.map(({ params }) => params.p_system_k);
+  assert.deepEqual(ks, [3], "asking for a 3/5 must not also write a 4/5 or a 5/5");
+  assert.ok(!ks.includes(4), "no 4/5 appeared on its own");
+  assert.ok(!ks.includes(5), "no 5/5 appeared on its own");
+});
+
+test("[I3] a second shape exists only when it is asked for separately", async () => {
+  // Same five legs, two deliberate invocations: two tickets, because a caller
+  // asked twice — not because one call decided to write both.
+  const first = fakeSupabase({ historyRows: history(6), rpcResult: created });
+  const second = fakeSupabase({ historyRows: history(6), rpcResult: created });
+
+  const a = await systemOf(first, 3);
+  const b = await systemOf(second, 4);
+
+  assert.equal(first.calls.rpc.length, 1);
+  assert.equal(second.calls.rpc.length, 1);
+  assert.equal(a.systemK, 3);
+  assert.equal(b.systemK, 4);
+  assert.deepEqual(
+    first.calls.rpc[0].params.p_selections,
+    second.calls.rpc[0].params.p_selections,
+    "the same pool, so the same five legs"
+  );
+});
+
+test("[I4] a k outside the product is refused before anything is written", async () => {
+  // Number(null) is 0 and Number("3") is 3: both would slip past a coercing
+  // check, and both must be refused. 2 and 6 are integers the product does not
+  // sell; 3.5 is not a shape at all.
+  for (const badK of [null, undefined, 0, 2, 6, 3.5, "3", NaN, -1]) {
+    const supabase = fakeSupabase({ historyRows: history(6), rpcResult: created });
+    const out = await systemOf(supabase, badK);
+
+    assert.equal(supabase.calls.rpc.length, 0, `k=${String(badK)} reached the database`);
+    assert.equal(out.available, false);
+    assert.equal(out.created, false);
+    assert.equal(out.unavailable[0].betKind, "system");
+    assert.ok(
+      ["invalid_k", "unsupported_k"].includes(out.unavailable[0].reason),
+      `k=${String(badK)} gave reason ${out.unavailable[0].reason}`
+    );
+    assert.deepEqual(out.unavailable[0].supportedK, [...SYSTEM_K_VALUES]);
+  }
+});
+
+test("[I5] a valid k with too thin a pool still writes nothing", async () => {
+  // The two refusals stay distinguishable: a bad k is not a thin pool.
+  const supabase = fakeSupabase({ historyRows: history(4), rpcResult: created });
+  const out = await systemOf(supabase, 4);
+
+  assert.equal(supabase.calls.rpc.length, 0);
+  assert.equal(out.unavailable[0].reason, "insufficient_system_candidates");
 });

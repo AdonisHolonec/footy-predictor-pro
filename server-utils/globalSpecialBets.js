@@ -16,7 +16,8 @@ import {
   buildGlobalSpecialBets,
   buildGlobalSystemBets,
   GLOBAL_SPECIAL_BET_VARIANTS,
-  SYSTEM_K_VALUES,
+  // SYSTEM_K_VALUES is deliberately not imported: nothing here iterates the k
+  // values any more. The engine validates the single requested k.
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
@@ -291,6 +292,7 @@ export async function createGlobalSystemBets({
   userId,
   betDate,
   leagueIds,
+  systemK,
   now = Date.now(),
   supabase = getSupabaseAdmin()
 }) {
@@ -298,11 +300,12 @@ export async function createGlobalSystemBets({
 
   const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
   const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
-  const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now });
+  const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now, systemK });
 
-  // Fewer than five safe candidates: nothing is written, and the counters say
-  // why the pool was thin. No padding, no relaxed gate, no duplicated fixture.
-  if (built.selections.length === 0) {
+  // Nothing to write: either the requested k is not a shape the product sells,
+  // or fewer than five safe candidates survived the gates. Both answers carry
+  // their reason, and neither pads, relaxes a gate or duplicates a fixture.
+  if (!built.bet) {
     return {
       ok: true,
       created: false,
@@ -314,63 +317,64 @@ export async function createGlobalSystemBets({
   }
 
   const modelVersion = resolveModelVersion(payloadsByFixtureId, built.selections);
-  const bets = {};
+  const bet = built.bet;
 
-  for (const systemK of SYSTEM_K_VALUES) {
-    const bet = built.bets[systemK];
-
-    // The application refuses a malformed ticket BEFORE the RPC. The CHECK
-    // constraints in 052 are the second lock, not the first: a database error is
-    // a worse diagnosis than a named reason, and relying on it would mean the
-    // only description of the product contract lived in SQL.
-    const shape = validateSystemShape({ selections: bet.selections, systemK });
-    if (!shape.valid) {
-      throw new Error(
-        `refusing to persist a system ticket: ${shape.reason} ` +
-          `(selections=${shape.selectionCount}, system_k=${systemK})`
-      );
-    }
-
-    const { data, error } = await supabase.rpc("create_global_special_bet", {
-      p_user_id: userId,
-      p_bet_date: betDate,
-      p_variant: bet.variant,
-      p_league_ids: canonicalLeagues,
-      // The product of the five odds — the schema's field, not the system payout.
-      p_total_odds: bet.productOdds,
-      p_average_confidence: bet.averageConfidence,
-      p_model_version: modelVersion,
-      // Its own row set per ticket, so no two bets share a mutable array.
-      p_selections: toSelectionRows(bet.selections),
-      // P(X >= k) from the Poisson-binomial tail, never the product.
-      p_ticket_probability: bet.estimatedTicketProbability,
-      p_bet_kind: "system",
-      p_system_k: systemK
-    });
-    if (error) throw error;
-    if (!data?.ok) throw new Error(`create_global_special_bet: ${data?.error || "unknown_error"}`);
-
-    bets[systemK] = {
-      created: Boolean(data.created),
-      bet: data.bet,
-      selections: data.selections || [],
-      systemK,
-      combinationCount: shape.combinationCount,
-      // As stored for a repeat request, as computed for a fresh one — never a
-      // number attributed to selections it was not computed from.
-      ticketProbability: data.created
-        ? bet.estimatedTicketProbability
-        : data.bet?.ticket_probability != null
-          ? Number(data.bet.ticket_probability)
-          : null
-    };
+  // The application refuses a malformed ticket BEFORE the RPC — now against the
+  // selections that will actually be written, not a placeholder count. The CHECK
+  // constraints in 052 are the second lock, not the first: a database error is a
+  // worse diagnosis than a named reason, and relying on it would mean the only
+  // description of the product contract lived in SQL.
+  const shape = validateSystemShape({ selections: bet.selections, systemK: bet.systemK });
+  if (!shape.valid) {
+    throw new Error(
+      `refusing to persist a system ticket: ${shape.reason} ` +
+        `(selections=${shape.selectionCount}, system_k=${bet.systemK})`
+    );
   }
+
+  // EXACTLY ONE ROW. This used to loop over SYSTEM_K_VALUES and issue three
+  // RPCs, turning one five-leg opinion into three stored tickets and three
+  // stakes. One invocation, one k, one ticket.
+  const { data, error } = await supabase.rpc("create_global_special_bet", {
+    p_user_id: userId,
+    p_bet_date: betDate,
+    p_variant: bet.variant,
+    p_league_ids: canonicalLeagues,
+    // The product of the five odds — the schema's field, not the system payout.
+    p_total_odds: bet.productOdds,
+    p_average_confidence: bet.averageConfidence,
+    p_model_version: modelVersion,
+    p_selections: toSelectionRows(bet.selections),
+    // P(X >= k) from the Poisson-binomial tail, never the product.
+    p_ticket_probability: bet.estimatedTicketProbability,
+    p_bet_kind: "system",
+    p_system_k: bet.systemK
+  });
+  if (error) throw error;
+  if (!data?.ok) throw new Error(`create_global_special_bet: ${data?.error || "unknown_error"}`);
 
   return {
     ok: true,
     available: true,
-    bets,
-    selections: built.selections,
+    created: Boolean(data.created),
+    bet: data.bet,
+    // Same shape createGlobalSpecialBet returns, so the HTTP layer can answer
+    // for both products without knowing which one it just built: `selections`
+    // is what the database stored. The engine's own five legs are kept beside
+    // it under a name that says so — they answer a different question (what was
+    // chosen, with probabilities) and collapsing the two would make an empty
+    // echo look like an empty ticket.
+    selections: data.selections || [],
+    engineSelections: built.selections,
+    systemK: bet.systemK,
+    combinationCount: shape.combinationCount,
+    // As stored for a repeat request, as computed for a fresh one — never a
+    // number attributed to selections it was not computed from.
+    ticketProbability: data.created
+      ? bet.estimatedTicketProbability
+      : data.bet?.ticket_probability != null
+        ? Number(data.bet.ticket_probability)
+        : null,
     examined: built.examined,
     rejected: built.rejected
   };
