@@ -187,13 +187,16 @@
     filter: brightness(0.98);
   }
 
+  /* Focus ring rides the theme's accent (--fp-focus-ring, tokens.css) instead
+     of the old hardcoded teal, which belonged to no theme and washed out on
+     the light canvas. Same 2px geometry and offsets — colour only. */
   button:focus-visible {
-    outline: 2px solid rgba(62, 207, 191, 0.55);
+    outline: 2px solid var(--fp-focus-ring);
     outline-offset: 2px;
   }
 
   a[href]:focus-visible {
-    outline: 2px solid rgba(62, 207, 191, 0.55);
+    outline: 2px solid var(--fp-focus-ring);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -204,7 +207,7 @@
 
   input:focus-visible,
   select:focus-visible {
-    outline: 2px solid rgba(62, 207, 191, 0.4);
+    outline: 2px solid var(--fp-focus-ring-soft);
     outline-offset: 0;
   }
 }

@@ -106,7 +106,7 @@ export default function MatchDecisionBlock({
 
   return (
     <section
-      className="mx-auto mt-3 w-full max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-accent)]/25 bg-[var(--fp-bg-muted)] p-3 shadow-[var(--fp-shadow-sm)] sm:p-4"
+      className="mx-auto mt-3 w-full max-w-2xl rounded-[var(--fp-radius)] border border-fp-accent/25 bg-[var(--fp-bg-muted)] p-3 shadow-fp-sm sm:p-4"
       aria-label={tr("match.decisionTitle")}
     >
       <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--fp-accent)]">
@@ -129,7 +129,7 @@ export default function MatchDecisionBlock({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[8px] font-bold uppercase tracking-[0.18em] text-[var(--fp-accent)]/70">
+          <div className="text-[8px] font-bold uppercase tracking-[0.18em] text-fp-accent/70">
             {tr("match.pick")}
           </div>
           <div className="flex items-center gap-1.5 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] sm:text-2xl">
@@ -194,8 +194,8 @@ export default function MatchDecisionBlock({
               <span
                 className={`rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
                   benchmark.agree
-                    ? "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
-                    : "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
+                    ? "border-fp-success/40 bg-fp-success/10 text-[var(--fp-success)]"
+                    : "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]"
                 }`}
               >
                 {benchmark.agree ? tr("match.consensusAgree") : tr("match.consensusDiffer")}
@@ -208,7 +208,7 @@ export default function MatchDecisionBlock({
       {/* Row 4 — one-sentence rationale, plain language, no formulas. */}
       {rationale ? (
         <p className="mt-2.5 border-t border-[var(--fp-border)] pt-2.5 text-[11px] leading-relaxed text-[var(--fp-text-muted)]">
-          <span className="font-bold uppercase tracking-wide text-[var(--fp-accent)]/80">
+          <span className="font-bold uppercase tracking-wide text-fp-accent/80">
             {tr("match.decisionWhy")} ·{" "}
           </span>
           {rationale}

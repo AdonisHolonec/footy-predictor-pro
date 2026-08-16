@@ -127,7 +127,7 @@ export default function ConsumerShell({
         <button
           type="button"
           onClick={onToggleFavorites}
-          className={`${iconBtn} ${favoritesActive ? "border-[var(--fp-warning)] bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]" : ""}`}
+          className={`${iconBtn} ${favoritesActive ? "border-[var(--fp-warning)] bg-fp-warning/10 text-[var(--fp-warning)]" : ""}`}
           aria-label={favoritesActive ? t("shell.favoritesOn") : t("shell.favoritesOff")}
           aria-pressed={favoritesActive}
         >
@@ -162,7 +162,7 @@ export default function ConsumerShell({
 
   return (
     <div className="min-h-screen bg-[var(--fp-bg)] text-[var(--fp-text)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 shadow-[var(--fp-shadow-sm)] backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-fp-bg-card/95 shadow-fp-sm backdrop-blur-md">
         <div className="mx-auto flex max-w-[1280px] flex-col gap-2 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:px-6 sm:py-2.5 lg:px-8">
           <div className="flex items-center gap-1.5 sm:contents">
             <button
@@ -270,7 +270,7 @@ export default function ConsumerShell({
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-fp-bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
         aria-label={t("nav.home")}
       >
         {MOBILE_TAB_ITEMS.map((item) => {

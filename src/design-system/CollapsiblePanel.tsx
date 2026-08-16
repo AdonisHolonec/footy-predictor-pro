@@ -31,7 +31,7 @@ export default function CollapsiblePanel({
 
   return (
     <section
-      className={`overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] ${className}`}
+      className={`overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm ${className}`}
     >
       <button
         type="button"

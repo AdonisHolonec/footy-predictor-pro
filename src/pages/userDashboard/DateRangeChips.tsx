@@ -27,7 +27,7 @@ export default function DateRangeChips({
   const plus1On = activePredictDates.includes(tomorrow);
   const plus2On = activePredictDates.includes(dayAfter);
   const chipOn =
-    "h-8 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)] bg-[var(--fp-accent)] px-1.5 text-[10px] font-bold text-white shadow-[var(--fp-shadow-sm)] ring-1 ring-[var(--fp-accent)]/35 sm:h-9 sm:px-2 sm:text-xs sm:ring-2";
+    "h-8 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-accent)] bg-[var(--fp-accent)] px-1.5 text-[10px] font-bold text-white shadow-fp-sm ring-1 ring-fp-accent/35 sm:h-9 sm:px-2 sm:text-xs sm:ring-2";
   const chipOff =
     "h-8 shrink-0 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-1.5 text-[10px] font-bold text-[var(--fp-text-muted)] sm:h-9 sm:px-2 sm:text-xs";
   return (

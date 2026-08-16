@@ -68,7 +68,7 @@ export default function TodayOverview({
         <button
           type="button"
           onClick={() => onOpenMatch(continueMatch)}
-          className="flex w-full items-center justify-between rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent)]/5 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between rounded-2xl border border-fp-accent/25 bg-fp-accent/5 px-4 py-3 text-left"
         >
           <div>
             <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--accent)]">
@@ -113,7 +113,7 @@ function Rail({
             key={m.id}
             type="button"
             onClick={() => onOpen(m)}
-            className="snap-start w-[220px] shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-left hover:border-[var(--accent)]/40"
+            className="snap-start w-[220px] shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-left hover:border-fp-accent/40"
           >
             <div className="truncate font-mono text-[9px] uppercase text-[var(--text-muted)]">{m.league}</div>
             <div className="mt-1 truncate text-sm font-semibold text-[var(--text)]">

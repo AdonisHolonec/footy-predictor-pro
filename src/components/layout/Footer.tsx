@@ -6,7 +6,7 @@ type FooterProps = {
 
 export default function Footer({ onPredict, disabled, selectedLeagueCount }: FooterProps) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-[var(--fp-bg-elevated)] via-[var(--fp-bg-elevated)]/95 to-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-[var(--fp-bg-elevated)] via-fp-bg-elevated/95 to-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden">
       <div className="pointer-events-auto mx-auto max-w-7xl">
         <button
           type="button"

@@ -68,7 +68,7 @@ export default function ProfileView(props: ProfileViewProps) {
             <h1 className="mt-1 font-display text-[length:var(--fp-hero)] font-semibold">{t("nav.profile")}</h1>
           </header>
 
-          <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)]">
+          <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
             <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[var(--fp-accent)] font-display text-xl font-bold text-white">
               {(user?.email?.[0] || "?").toUpperCase()}
             </div>
@@ -81,7 +81,7 @@ export default function ProfileView(props: ProfileViewProps) {
           </div>
 
           {!tierQuotaExempt && predictLimitToday != null && (
-            <div className="rounded-[var(--fp-radius-lg)] bg-[var(--fp-accent)] p-4 text-white shadow-[var(--fp-shadow-sm)]">
+            <div className="rounded-[var(--fp-radius-lg)] bg-[var(--fp-accent)] p-4 text-white shadow-fp-sm">
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-85">{t("dash.dailyQuota")}</p>
               <p className="mt-1.5 font-display text-3xl font-bold tracking-tight">
                 {predictCountToday}
@@ -101,7 +101,7 @@ export default function ProfileView(props: ProfileViewProps) {
               <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.subscription")}</h2>
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.subscriptionSub")}</p>
               {isSubscriptionExpired && (
-                <div className="mt-3 flex items-center gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-2.5">
+                <div className="mt-3 flex items-center gap-2 rounded-[var(--fp-radius-sm)] border border-fp-danger/35 bg-fp-danger/10 px-3 py-2.5">
                   <span className="text-base" aria-hidden>
                     ⚠️
                   </span>

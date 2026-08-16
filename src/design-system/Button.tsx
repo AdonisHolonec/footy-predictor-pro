@@ -16,7 +16,7 @@ const variantClass: Record<Variant, string> = {
   secondary:
     "border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] text-[var(--fp-text)] hover:border-[var(--fp-border-strong)] hover:bg-[var(--fp-bg-muted)] active:border-[var(--fp-border-strong)] active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed",
   ghost: "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)] active:opacity-70 disabled:opacity-50 disabled:cursor-not-allowed",
-  danger: "bg-[var(--fp-danger)]/15 text-[var(--fp-danger)] hover:bg-[var(--fp-danger)]/25 active:bg-[var(--fp-danger)]/35 disabled:opacity-50 disabled:cursor-not-allowed"
+  danger: "bg-fp-danger/15 text-[var(--fp-danger)] hover:bg-fp-danger/25 active:bg-fp-danger/35 disabled:opacity-50 disabled:cursor-not-allowed"
 };
 
 const sizeClass: Record<Size, string> = {

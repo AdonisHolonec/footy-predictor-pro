@@ -71,18 +71,18 @@ function deriveRiskLevel(
   if (confPct >= 70) {
     return {
       label: t("card.riskLabel", { level: t("card.riskLow") }),
-      className: "border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
+      className: "border-fp-success/35 bg-fp-success/10 text-[var(--fp-success)]"
     };
   }
   if (confPct >= 55) {
     return {
       label: t("card.riskLabel", { level: t("card.riskMed") }),
-      className: "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
+      className: "border-fp-warning/35 bg-fp-warning/10 text-[var(--fp-warning)]"
     };
   }
   return {
     label: t("card.riskLabel", { level: t("card.riskHigh") }),
-    className: "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+    className: "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]"
   };
 }
 
@@ -319,7 +319,7 @@ export default function PredictionFocusCard({
             onOpen();
           }
         }}
-        className="cursor-pointer rounded-[var(--fp-radius)] border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)]"
+        className="cursor-pointer rounded-[var(--fp-radius)] border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-fp-sm"
       >
         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-warning)]">{t("card.limitedData")}</p>
         <p className="mt-1 font-display text-sm font-semibold text-[var(--fp-text)]">
@@ -341,7 +341,7 @@ export default function PredictionFocusCard({
           onOpen();
         }
       }}
-      className="group cursor-pointer rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-[var(--fp-shadow-sm)] transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-[var(--fp-shadow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+      className="group cursor-pointer rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-2.5 shadow-fp-sm transition-[box-shadow,transform] duration-[var(--fp-ease)] hover:-translate-y-0.5 hover:shadow-fp focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
     >
       <div className="flex items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -352,8 +352,8 @@ export default function PredictionFocusCard({
             {row.league}
           </p>
           {live && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--fp-danger)]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-danger)]">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-fp-danger/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--fp-danger)]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-live)] motion-reduce:animate-none" />
               {t("card.live")}
             </span>
           )}
@@ -368,7 +368,7 @@ export default function PredictionFocusCard({
             }}
             className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
               watched
-                ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
+                ? "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]"
                 : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
             }`}
             title={watched ? t("card.removeFavorite") : t("card.addFavorite")}
@@ -387,7 +387,7 @@ export default function PredictionFocusCard({
               e.stopPropagation();
               onReport();
             }}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover-fine:border-[var(--fp-danger)]/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover-fine:border-fp-danger/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
             title={t("predictionReport.cardAction")}
             aria-label={t("predictionReport.cardAction")}
           >
@@ -424,7 +424,7 @@ export default function PredictionFocusCard({
           <span
             className={`font-mono tabular-nums ${
               hasScore
-                ? `text-sm font-bold ${live ? "text-[var(--fp-danger)]" : "text-[var(--fp-text)]"}`
+                ? `text-sm font-bold ${live ? "text-[var(--fp-live)]" : "text-[var(--fp-text)]"}`
                 : "text-[9px] font-bold uppercase tracking-wide text-[var(--fp-text-faint)]"
             }`}
           >
@@ -458,7 +458,7 @@ export default function PredictionFocusCard({
       {live && <LiveWinProbabilityStrip match={row} compact className="mt-2" />}
 
       {live && row.momentum && (
-        <div className="mt-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 px-2.5 py-2">
+        <div className="mt-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-fp-bg-muted/50 px-2.5 py-2">
           <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">
             {t("card.momentum")}
           </p>
@@ -495,7 +495,7 @@ export default function PredictionFocusCard({
         </div>
       )}
 
-      <div className="mt-2.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/40 p-2.5">
+      <div className="mt-2.5 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-fp-bg-muted/40 p-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-[8px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("card.mainPick")}</p>
@@ -526,7 +526,7 @@ export default function PredictionFocusCard({
               </span>
             )}
             {evPct != null && evPct > 0 && (
-              <span className="rounded border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 px-1.5 py-0.5 text-[8px] font-bold text-[var(--fp-warning)]">
+              <span className="rounded border border-fp-warning/40 bg-fp-warning/15 px-1.5 py-0.5 text-[8px] font-bold text-[var(--fp-warning)]">
                 ⚡ +{Math.round(evPct)}% {t("card.valueEdge")}
               </span>
             )}
@@ -569,7 +569,7 @@ export default function PredictionFocusCard({
           <span className="text-right">{t("card.colConfidence")}</span>
           <span className="text-right">{t("card.colOdds")}</span>
         </div>
-        <div className="divide-y divide-[var(--fp-border)]/70">
+        <div className="divide-y divide-[var(--fp-border)]">
           {marketRows.map((r) => {
             const tone = r.locked ? "text-[var(--fp-text-muted)]" : outcomeTextClass(r.outcome);
             return (
@@ -581,7 +581,7 @@ export default function PredictionFocusCard({
                 {r.locked ? (
                   <button
                     type="button"
-                    className="inline-flex max-w-full items-center gap-0.5 truncate rounded border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-1 py-0.5 text-[9px] font-bold text-[var(--fp-text)] hover:bg-[var(--fp-warning)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                    className="inline-flex max-w-full items-center gap-0.5 truncate rounded border border-fp-warning/35 bg-fp-warning/10 px-1 py-0.5 text-[9px] font-bold text-[var(--fp-text)] hover:bg-fp-warning/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
                     title={t("match.upgradeTo", { label: r.lockFeature, tier: r.lockTier })}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -601,7 +601,7 @@ export default function PredictionFocusCard({
                     </span>
                     {r.id === "recommended" && hasValue && (
                       <span
-                        className="shrink-0 rounded bg-[var(--fp-warning)]/15 px-1 py-0.5 text-[8px] font-bold tabular-nums text-[var(--fp-warning)]"
+                        className="shrink-0 rounded bg-fp-warning/15 px-1 py-0.5 text-[8px] font-bold tabular-nums text-[var(--fp-warning)]"
                         title={t("match.valueDetected")}
                       >
                         +{ev.toFixed(1)}% EV

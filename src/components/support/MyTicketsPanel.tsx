@@ -102,7 +102,7 @@ export default function MyTicketsPanel({ className = "" }: { className?: string 
         {heading}
         <div
           role="alert"
-          className="mt-3 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
+          className="mt-3 rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 px-4 py-3"
         >
           <p className="text-sm text-[var(--fp-text-muted)]">{t("myTickets.error")}</p>
           <Button className="mt-2" variant="secondary" size="sm" onClick={() => void load()}>

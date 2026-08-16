@@ -106,6 +106,42 @@
   --fp-z-dropdown: 50;
   --fp-z-modal: 60;
   --fp-z-toast: 70;
+
+  /* RGB triplets — same colours as above, exposed as raw channels so Tailwind
+     can compose opacity (`bg-fp-danger/10`). Tailwind 3.4 drops any
+     `<util>-[var(--fp-x)]/NN` class silently, which is how 600 semantic tints
+     shipped as no-ops; `rgb(var(--fp-x-rgb) / <alpha-value>)` in
+     tailwind.config.js is the root fix. A guard test asserts each triplet
+     matches its hex twin per theme, so the two spellings cannot drift. */
+  --fp-bg-rgb: 243 242 242;
+  --fp-bg-elevated-rgb: 234 233 233;
+  --fp-bg-card-rgb: 255 255 255;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 236 48 19;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 210 43 17;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 32 30 29;
+  --fp-text-muted-rgb: 96 93 93;
+  --fp-text-faint-rgb: 125 121 121;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+
+  /* Semantic split (foundation only): "live" is not "loss" and "value" is not
+     "warning", even though today they share hues. These tokens carry the
+     CURRENT colours so adopting them is visually a no-op; separating the hues
+     themselves is a later, deliberate design decision — not this PR. */
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+
+  /* Focus ring — themed, replaces the hardcoded teal rgba(62,207,191,…) that
+     ignored all three themes. Two intensities mirror the old 0.55/0.4 pair. */
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 /* Light — mirrors :root explicitly so the theme block is self-contained
@@ -136,6 +172,28 @@ html.theme-light {
   --fp-glass-border: rgba(32, 30, 29, 0.08);
   --fp-gradient-primary: linear-gradient(135deg, rgba(236, 48, 19, 0.1), rgba(180, 83, 9, 0.06));
   --fp-gradient-surface: linear-gradient(180deg, rgba(32, 30, 29, 0.02), rgba(32, 30, 29, 0));
+
+  --fp-bg-rgb: 243 242 242;
+  --fp-bg-elevated-rgb: 234 233 233;
+  --fp-bg-card-rgb: 255 255 255;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 236 48 19;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 210 43 17;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 32 30 29;
+  --fp-text-muted-rgb: 96 93 93;
+  --fp-text-faint-rgb: 125 121 121;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 /* Dark — now the opt-in alternative (was default pre-Sprint-2), reachable via Settings */
@@ -165,6 +223,28 @@ html.theme-dark {
   --fp-glass-border: rgba(255, 255, 255, 0.1);
   --fp-gradient-primary: linear-gradient(135deg, rgba(31, 174, 107, 0.16), rgba(240, 178, 61, 0.08));
   --fp-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+
+  --fp-bg-rgb: 10 13 11;
+  --fp-bg-elevated-rgb: 16 20 15;
+  --fp-bg-card-rgb: 22 27 23;
+  --fp-bg-muted-rgb: 29 35 30;
+  --fp-navy-rgb: 13 21 18;
+  --fp-accent-rgb: 31 174 107;
+  --fp-accent-hover-rgb: 41 201 122;
+  --fp-accent-text-rgb: 31 174 107;
+  --fp-purple-rgb: 167 139 250;
+  --fp-text-rgb: 243 245 243;
+  --fp-text-muted-rgb: 159 175 166;
+  --fp-text-faint-rgb: 168 181 172;
+  --fp-success-rgb: 34 208 110;
+  --fp-danger-rgb: 240 69 58;
+  --fp-warning-rgb: 240 178 61;
+  --fp-live: #f0453a;
+  --fp-live-rgb: 240 69 58;
+  --fp-value: #f0b23d;
+  --fp-value-rgb: 240 178 61;
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 40%, transparent);
 }
 
 html.theme-contrast {
@@ -178,6 +258,33 @@ html.theme-contrast {
   --fp-accent: #3ddc84;
   --fp-accent-muted: rgba(61, 220, 132, 0.25);
   --fp-accent-text: var(--fp-accent);
+
+  /* Triplets mirror the values this theme actually RESOLVES to today: tokens
+     the block never overrode (bg-muted, navy, success, danger, warning, purple,
+     accent-hover…) inherit :root's light values, and the triplets say so
+     explicitly rather than silently. Documented inheritance, zero visual change. */
+  --fp-bg-rgb: 0 0 0;
+  --fp-bg-elevated-rgb: 10 10 10;
+  --fp-bg-card-rgb: 17 17 17;
+  --fp-bg-muted-rgb: 234 231 231;
+  --fp-navy-rgb: 32 30 29;
+  --fp-accent-rgb: 61 220 132;
+  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-text-rgb: 61 220 132;
+  --fp-purple-rgb: 124 58 237;
+  --fp-text-rgb: 255 255 255;
+  --fp-text-muted-rgb: 226 232 240;
+  --fp-text-faint-rgb: 212 212 212;
+  --fp-success-rgb: 21 122 74;
+  --fp-danger-rgb: 157 23 77;
+  --fp-warning-rgb: 180 83 9;
+  --fp-live: #9d174d;
+  --fp-live-rgb: 157 23 77;
+  --fp-value: #b45309;
+  --fp-value-rgb: 180 83 9;
+  /* Contrast theme: ring stays near-opaque so it never washes out on black. */
+  --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 85%, transparent);
+  --fp-focus-ring-soft: color-mix(in srgb, var(--fp-accent) 70%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

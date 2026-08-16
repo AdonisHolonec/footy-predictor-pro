@@ -149,7 +149,7 @@ export default function Login() {
       />
       <div className="login-ultra-noise pointer-events-none absolute inset-0 z-[1]" aria-hidden />
       <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_16%_14%,rgba(56,189,248,0.34),transparent_42%),radial-gradient(circle_at_87%_10%,rgba(251,191,36,0.28),transparent_40%),radial-gradient(circle_at_52%_100%,rgba(244,63,94,0.24),transparent_36%)]" aria-hidden />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-[var(--fp-bg-elevated)]/30 via-[var(--fp-bg)]/20 to-[var(--fp-bg)]/88" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-fp-bg-elevated/30 via-fp-bg/20 to-fp-bg/88" aria-hidden />
       <div className="pointer-events-none absolute inset-0 z-[1] opacity-30 [background-size:24px_24px] [background-image:linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)]" aria-hidden />
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-10 sm:py-14">
         <header className="mb-10 border-b border-white/[0.1] pb-8 animate-fadeIn">
@@ -165,7 +165,7 @@ export default function Login() {
             alt="Footy Predictor"
             className="mt-4 h-28 w-28 rounded-2xl border-2 border-cyan-300/65 object-contain p-1 brightness-110 saturate-150 shadow-[0_0_44px_rgba(34,211,238,0.5)] animate-[pulse_4s_ease-in-out_infinite] motion-reduce:animate-none sm:h-36 sm:w-36"
           />
-          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.18] bg-[var(--fp-bg-card)]/68 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-[24px] sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
+          <div className="mt-2 max-w-4xl rounded-2xl border border-white/[0.18] bg-fp-bg-card/68 p-4 shadow-[0_0_28px_rgba(56,189,248,0.16)] backdrop-blur-[24px] sm:p-5 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-0">
             <h1 className="font-display text-4xl font-bold leading-[1.03] tracking-tight drop-shadow-[0_0_34px_rgba(56,189,248,0.28)] sm:text-6xl lg:text-7xl">
               <span className="relative inline-block">
                 <span
@@ -188,8 +188,8 @@ export default function Login() {
           <div className="animate-fadeIn space-y-6 [animation-delay:40ms]">
             <ModelPulseWave status="OPTIMAL CALIBRATION" className="w-full" />
 
-            <div className="rounded-2xl border border-[var(--fp-success)]/45 bg-[var(--fp-bg-card)]/80 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-[24px]">
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--fp-accent-text)]/80">{t("auth.statsTitle")}</p>
+            <div className="rounded-2xl border border-fp-success/45 bg-fp-bg-card/80 px-4 py-4 shadow-[0_0_24px_rgba(16,185,129,0.18)] backdrop-blur-[24px]">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-fp-accent-text/80">{t("auth.statsTitle")}</p>
               <div className="mt-2 grid grid-cols-3 gap-3 text-center">
                 <div>
                   <div className="font-mono text-2xl font-semibold tabular-nums text-[var(--fp-success)] sm:text-3xl">
@@ -210,11 +210,11 @@ export default function Login() {
               </div>
             </div>
 
-            <section className="rounded-2xl border border-white/[0.2] bg-[var(--fp-bg-card)]/80 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-[24px]">
+            <section className="rounded-2xl border border-white/[0.2] bg-fp-bg-card/80 p-4 shadow-[0_0_20px_rgba(56,189,248,0.14)] backdrop-blur-[24px]">
               <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.servicesTitle")}</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 {[t("auth.service1"), t("auth.service2"), t("auth.service3"), t("auth.service4")].map((service) => (
-                  <div key={service} className="rounded-xl border border-[var(--fp-success)]/25 bg-[var(--fp-bg)]/45 px-3 py-2 font-mono text-[11px] text-[var(--fp-text)]">
+                  <div key={service} className="rounded-xl border border-fp-success/25 bg-fp-bg/45 px-3 py-2 font-mono text-[11px] text-[var(--fp-text)]">
                     {service}
                   </div>
                 ))}
@@ -236,11 +236,11 @@ export default function Login() {
           </div>
 
           <section className="lg:sticky lg:top-8">
-            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-[var(--fp-bg-card)]/100 via-[var(--fp-bg-elevated)]/100 to-[var(--fp-bg-card)]/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
+            <div className="login-auth-shell animate-fadeIn overflow-hidden rounded-2xl border border-white/[0.2] bg-gradient-to-b from-fp-bg-card/100 via-fp-bg-elevated/100 to-fp-bg-card/95 shadow-[0_0_38px_rgba(56,189,248,0.26)] backdrop-blur-[30px] [animation-delay:90ms]">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-1 pt-1" aria-hidden>
-                <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-accent)]/55 to-transparent" />
+                <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-accent/55 to-transparent" />
                 <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-text-muted)]">{t("auth.title")}</span>
-                <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-[var(--fp-success)]/30 to-transparent" />
+                <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-success/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
                 <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.secure")}</p>
@@ -260,7 +260,7 @@ export default function Login() {
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       disabled={mode === "reset"}
-                      className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                      className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                     />
                   </label>
                   {mode !== "forgot" && (
@@ -270,7 +270,7 @@ export default function Login() {
                         type="password"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
-                        className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                        className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                       />
                     </label>
                   )}
@@ -281,7 +281,7 @@ export default function Login() {
                         type="password"
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
-                        className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-[var(--fp-accent)]/35"
+                        className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-fp-accent/35"
                       />
                     </label>
                   )}
@@ -292,13 +292,13 @@ export default function Login() {
                         type="checkbox"
                         checked={privacyAccepted}
                         onChange={(event) => setPrivacyAccepted(event.target.checked)}
-                        className="mt-1 h-3.5 w-3.5 rounded border-white/20 bg-[var(--fp-bg-card)] accent-[var(--fp-accent)] focus:ring-[var(--fp-accent)]/40"
+                        className="mt-1 h-3.5 w-3.5 rounded border-white/20 bg-[var(--fp-bg-card)] accent-[var(--fp-accent)] focus:ring-fp-accent/40"
                       />
                       <span>
                         {t("auth.privacyPrefix")}
                         <Link
                           to="/privacy"
-                          className="font-semibold text-[var(--fp-accent-text)] underline decoration-[var(--fp-border)]/60 underline-offset-2 hover:text-[var(--fp-accent-hover)]"
+                          className="font-semibold text-[var(--fp-accent-text)] underline decoration-[var(--fp-border)] underline-offset-2 hover:text-[var(--fp-accent-hover)]"
                         >
                           {t("auth.privacyPolicyLink")}
                         </Link>
@@ -308,12 +308,12 @@ export default function Login() {
                   )}
 
                   {(localError || error) && (
-                    <div className="rounded-xl border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
+                    <div className="rounded-xl border border-fp-danger/35 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
                       {localError || error}
                     </div>
                   )}
                   {message && (
-                    <div className="rounded-xl border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-success)]">
+                    <div className="rounded-xl border border-fp-success/35 bg-fp-success/10 px-3 py-2 text-xs font-semibold text-[var(--fp-success)]">
                       {message}
                     </div>
                   )}
@@ -321,7 +321,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full rounded-xl border border-[var(--fp-accent)]/70 bg-gradient-to-r from-[var(--fp-accent)]/80 via-[var(--fp-accent)] to-[var(--fp-success)]/70 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(56,189,248,0.5)] transition hover:-translate-y-0.5 hover:from-[var(--fp-accent)] hover:to-[var(--fp-success)] hover:shadow-[0_0_34px_rgba(56,189,248,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-xl border border-fp-accent/70 bg-gradient-to-r from-fp-accent/80 via-[var(--fp-accent)] to-fp-success/70 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(56,189,248,0.5)] transition hover:-translate-y-0.5 hover:from-[var(--fp-accent)] hover:to-[var(--fp-success)] hover:shadow-[0_0_34px_rgba(56,189,248,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting
                       ? t("auth.processing")
@@ -352,7 +352,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => setMode("forgot")}
-                      className="text-[var(--fp-warning)]/90 transition hover:text-[var(--fp-warning)]"
+                      className="text-fp-warning/90 transition hover:text-[var(--fp-warning)]"
                     >
                       {t("auth.forgotLink")}
                     </button>

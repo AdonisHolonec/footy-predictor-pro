@@ -22,14 +22,14 @@ export default function UpgradePrompt({ open, feature, requiredTier, onClose, on
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-end justify-center bg-[var(--fp-navy)]/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:px-4"
+      className="fixed inset-0 z-[95] flex items-end justify-center bg-fp-navy/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:px-4"
       role="dialog"
       aria-modal
       aria-labelledby="upgrade-prompt-title"
       onClick={onClose}
     >
       <div
-        className="max-h-[min(90dvh,40rem)] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-[var(--fp-shadow-lg)] sm:rounded-[var(--fp-radius-lg)] sm:p-6"
+        className="max-h-[min(90dvh,40rem)] w-full max-w-md overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-5 shadow-fp-lg sm:rounded-[var(--fp-radius-lg)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("upgrade.required")}</p>

@@ -98,7 +98,7 @@ export default function AppShell({
         </div>
       </aside>
 
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[var(--fp-border)] bg-[var(--fp-bg)]/95 px-3 backdrop-blur-md lg:hidden">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[var(--fp-border)] bg-fp-bg/95 px-3 backdrop-blur-md lg:hidden">
         <button
           type="button"
           onClick={() => onNavigate("home")}
@@ -140,7 +140,7 @@ export default function AppShell({
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-[var(--fp-bg-elevated)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--fp-border)] bg-fp-bg-elevated/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
         aria-label={t("nav.home")}
       >
         {MOBILE_TAB_ITEMS.map((item) => {

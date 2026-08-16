@@ -133,7 +133,7 @@ export default function ReportPredictionDialog({ open, onClose, row, onSubmitted
                 {row.teams?.home} <span className="text-[var(--fp-text-muted)]">{t("common.vs")}</span>{" "}
                 {row.teams?.away}
               </p>
-              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]/70">
+              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-fp-accent/70">
                 {row.league}
               </p>
               {context.recommendation ? (
@@ -170,7 +170,7 @@ export default function ReportPredictionDialog({ open, onClose, row, onSubmitted
           {errorKey ? (
             <p
               role="alert"
-              className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
+              className="rounded-[var(--fp-radius-sm)] border border-fp-danger/40 bg-fp-danger/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
             >
               {t(errorKey)}
             </p>

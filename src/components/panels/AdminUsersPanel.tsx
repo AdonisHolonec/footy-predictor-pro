@@ -65,7 +65,7 @@ export default function AdminUsersPanel({
   onMonetizationSave
 }: AdminUsersPanelProps) {
   return (
-    <section className="mb-6 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] backdrop-blur-xl">
+    <section className="mb-6 rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Admin · utilizatori</h2>

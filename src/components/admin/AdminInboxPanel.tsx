@@ -223,7 +223,7 @@ export default function AdminInboxPanel() {
             aria-pressed={kind === tab.id}
             className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
               kind === tab.id
-                ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]"
+                ? "bg-fp-accent/15 text-[var(--fp-accent)]"
                 : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]"
             }`}
           >

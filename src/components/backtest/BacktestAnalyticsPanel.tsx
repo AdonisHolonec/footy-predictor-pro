@@ -118,7 +118,7 @@ export default function BacktestAnalyticsPanel() {
   }
 
   return (
-    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] sm:mt-5">
+    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm sm:mt-5">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--fp-border)] px-3.5 py-3 sm:px-5">
         <div>
           <h3 className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
@@ -165,7 +165,7 @@ export default function BacktestAnalyticsPanel() {
               onClick={() => setPeriod(p.key)}
               className={`rounded-full border px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition ${
                 period === p.key
-                  ? "border-[var(--fp-accent)]/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                  ? "border-fp-accent/50 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                   : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)] hover:text-[var(--fp-text)]"
               }`}
             >
@@ -282,7 +282,7 @@ export default function BacktestAnalyticsPanel() {
       </div>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
+        <div className="mx-4 mt-3 rounded-lg border border-fp-danger/30 bg-fp-danger/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
           {error}
         </div>
       ) : null}
@@ -400,7 +400,7 @@ export default function BacktestAnalyticsPanel() {
         </div>
         <div className="max-h-64 overflow-auto rounded-xl border border-[var(--fp-border)]">
           <table className="min-w-full text-left font-mono text-[10px]">
-            <thead className="sticky top-0 bg-[var(--fp-bg-card)]/95 text-[var(--fp-text-muted)]">
+            <thead className="sticky top-0 bg-fp-bg-card/95 text-[var(--fp-text-muted)]">
               <tr>
                 <th className="px-2 py-1.5 font-semibold">Date</th>
                 <th className="px-2 py-1.5 font-semibold">Match</th>

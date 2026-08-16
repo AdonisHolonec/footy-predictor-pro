@@ -38,8 +38,8 @@ export default function OnboardingCarousel({ leagueOptions, initialLeagueIds, on
   const skip = () => onComplete({ leagueIds: initialLeagueIds, markets: [] });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--fp-navy)]/60 p-4 backdrop-blur-sm">
-      <div className="flex w-full max-w-md flex-col rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-[var(--fp-shadow)] sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-fp-navy/60 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-md flex-col rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-6 shadow-fp sm:p-8">
         <button
           type="button"
           onClick={skip}

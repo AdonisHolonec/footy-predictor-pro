@@ -175,7 +175,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
     );
     if (!framed) return <div>{empty}</div>;
     return (
-      <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+      <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
         {empty}
       </section>
     );
@@ -198,7 +198,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
           {top.map((p) => (
             <div key={p.key} className="flex min-w-0 flex-1 flex-col items-center gap-0.5" title={`${p.metric}: ${p.value}`}>
               <div
-                className="w-full rounded-sm bg-[var(--fp-accent)]/70"
+                className="w-full rounded-sm bg-fp-accent/70"
                 style={{ height: `${Math.max(8, (p.value / 100) * 40)}px` }}
               />
               <span className="truncate text-[8px] font-semibold text-[var(--fp-text-muted)]">{p.metric.slice(0, 3)}</span>
@@ -256,7 +256,7 @@ export default function PredictionLaboratoryPanel({ match, compact = false, fram
   if (!framed) return <div>{body}</div>;
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
       {body}
     </section>
   );

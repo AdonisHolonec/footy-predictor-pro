@@ -19,9 +19,9 @@ export default function MarketPickCard({
   const { t: tr } = useLocale();
   const settledTone =
     outcome === true
-      ? "border-[var(--fp-success)]/50 bg-[var(--fp-success)]/10"
+      ? "border-fp-success/50 bg-fp-success/10"
       : outcome === false
-        ? "border-[var(--fp-danger)]/50 bg-[var(--fp-danger)]/10"
+        ? "border-fp-danger/50 bg-fp-danger/10"
         : null;
   const valueTone =
     outcome === true
@@ -50,7 +50,7 @@ export default function MarketPickCard({
         {badge ? (
           <span
             className={`rounded-sm px-1 py-[1px] text-[9px] font-bold tracking-wider ${
-              isToss ? "bg-[var(--fp-warning)]/20 text-[var(--fp-warning)]" : ""
+              isToss ? "bg-fp-warning/20 text-[var(--fp-warning)]" : ""
             }`}
             title={
               info?.tier === "toss"

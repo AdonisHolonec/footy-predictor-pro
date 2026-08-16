@@ -23,15 +23,15 @@ const DIMENSION_KEYS: Array<keyof NonNullable<ConfidenceEngineData["scores"]>> =
 function categoryTone(category?: string): string {
   switch (category) {
     case "Very High":
-      return "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]";
+      return "border-fp-success/40 bg-fp-success/15 text-[var(--fp-success)]";
     case "High":
-      return "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]";
+      return "border-fp-accent/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]";
     case "Medium":
       return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
     case "Low":
-      return "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
+      return "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]";
     case "Very Low":
-      return "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]";
+      return "border-fp-danger/40 bg-fp-danger/10 text-[var(--fp-danger)]";
     default:
       return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
   }

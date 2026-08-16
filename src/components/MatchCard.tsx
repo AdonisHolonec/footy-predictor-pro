@@ -121,14 +121,14 @@ export default function MatchCard({
           }
         }}
         style={{ animationDelay: `${animationDelayMs}ms` }}
-        className="relative flex h-full animate-stagger-in cursor-pointer flex-col rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/5 shadow-[var(--fp-shadow-sm)] p-3.5 sm:p-4 touch-manipulation select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/50 motion-reduce:animate-none"
+        className="relative flex h-full animate-stagger-in cursor-pointer flex-col rounded-[var(--fp-radius)] border border-fp-warning/30 bg-fp-warning/5 shadow-fp-sm p-3.5 sm:p-4 touch-manipulation select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/50 motion-reduce:animate-none"
       >
         <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--fp-warning)]">Insufficient signal</div>
         <div className="font-display mt-1 text-base font-semibold text-[var(--fp-text)]">
           {row.teams?.home} vs {row.teams?.away}
         </div>
         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[var(--fp-text-muted)]">{row.insufficientReason || "Modelul nu a putut estima λ-uri."}</p>
-        <p className="mt-3 font-mono text-[9px] text-[var(--fp-accent)]/80">Detalii în fișă analitică →</p>
+        <p className="mt-3 font-mono text-[9px] text-fp-accent/80">Detalii în fișă analitică →</p>
       </div>
     );
   }
@@ -145,9 +145,9 @@ export default function MatchCard({
         }
       }}
       style={{ animationDelay: `${animationDelayMs}ms` }}
-      className="group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] p-3.5 sm:p-4 touch-manipulation select-none transition-[transform,box-shadow,border-color] duration-200 ease-out hover-fine:-translate-y-0.5 hover-fine:border-[var(--fp-accent)]/25 hover-fine:shadow-[var(--fp-shadow)] active:translate-y-0 motion-reduce:animate-none motion-reduce:hover-fine:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/50"
+      className="group relative flex h-full animate-stagger-in cursor-pointer flex-col overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm p-3.5 sm:p-4 touch-manipulation select-none transition-[transform,box-shadow,border-color] duration-200 ease-out hover-fine:-translate-y-0.5 hover-fine:border-fp-accent/25 hover-fine:shadow-fp active:translate-y-0 motion-reduce:animate-none motion-reduce:hover-fine:translate-y-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/50"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--fp-accent)]/25 to-transparent opacity-80" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fp-accent/25 to-transparent opacity-80" />
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -160,7 +160,7 @@ export default function MatchCard({
               }}
               className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 watched
-                  ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
+                  ? "border-fp-warning/40 bg-fp-warning/15 text-[var(--fp-warning)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
               aria-label={watched ? t("card.removeFavorite") : t("card.addFavorite")}
@@ -179,7 +179,7 @@ export default function MatchCard({
               }}
               className={`flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border text-[12px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
                 bookmarked
-                  ? "border-[var(--fp-accent)]/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                  ? "border-fp-accent/40 bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
               }`}
               aria-label={bookmarked ? t("card.removeBookmark") : t("card.addBookmark")}
@@ -217,7 +217,7 @@ export default function MatchCard({
                 e.stopPropagation();
                 onReport();
               }}
-              className="flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[11px] text-[var(--fp-text-muted)] hover-fine:border-[var(--fp-danger)]/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+              className="flex h-11 min-w-11 items-center justify-center rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] text-[11px] text-[var(--fp-text-muted)] hover-fine:border-fp-danger/40 hover-fine:text-[var(--fp-danger)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
               aria-label={t("predictionReport.cardAction")}
               title={t("predictionReport.cardAction")}
             >
@@ -231,7 +231,7 @@ export default function MatchCard({
           <span
             className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${chip.className}`}
           >
-            {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-danger)] motion-reduce:animate-none" />}
+            {isLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--fp-live)] motion-reduce:animate-none" />}
             {chip.label}
           </span>
           {tier ? (
@@ -244,7 +244,7 @@ export default function MatchCard({
           ) : null}
           {row.confidenceEngine ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/8 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
+              className="inline-flex items-center gap-1 rounded-md border border-fp-accent/30 bg-fp-accent/8 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]"
               title={t("card.confidenceCtxTip")}
             >
               {row.confidenceEngine.category
@@ -363,11 +363,11 @@ export default function MatchCard({
       <div className="relative mt-4 flex flex-col gap-2 border-t border-[var(--fp-border)] pt-3 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
         <div className="flex items-start justify-between gap-2 sm:block min-w-0 flex-1">
           <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-[var(--fp-accent)]/75">
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.15em] text-fp-accent/75">
             <span>Selecție</span>
             {hasExactConfidence && confPct > 0 && confPct < 55 ? (
               <span
-                className="rounded-sm bg-[var(--fp-warning)]/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-warning)]"
+                className="rounded-sm bg-fp-warning/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-warning)]"
                 title={t("card.lowConfTip")}
               >
                 Nesigur
@@ -375,7 +375,7 @@ export default function MatchCard({
             ) : null}
             {isPickHot ? (
               <span
-                className="rounded-sm bg-[var(--fp-success)]/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-success)]"
+                className="rounded-sm bg-fp-success/15 px-1 py-[1px] text-[8px] font-bold tracking-wider text-[var(--fp-success)]"
                 title={t("card.strongSignalTip")}
               >
                 HOT
@@ -383,7 +383,7 @@ export default function MatchCard({
             ) : null}
           </div>
           <div className={`flex items-center gap-1.5 line-clamp-2 break-words font-display text-xl font-bold tracking-tight text-[var(--fp-text)] max-[380px]:text-lg sm:text-2xl ${isPickHot ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" : ""}`}>
-            <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0 text-[var(--fp-accent)]/70" />
+            <MarketFamilyIcon familyKey={recommendedLabel.familyKey} className="shrink-0 text-fp-accent/70" />
             {recommendedLabel.label}
           </div>
           <div className={`mt-0.5 font-mono text-[10px] font-semibold tabular-nums ${isPickHot ? "text-[var(--fp-success)]" : "text-[var(--fp-accent)]"}`}>
@@ -408,13 +408,13 @@ export default function MatchCard({
         {(hasFinalScore || showRunningScore) && (
           <div className="self-end text-right font-mono text-xs tabular-nums">
             {showRunningScore ? (
-              <span className={isLive ? "text-[var(--fp-danger)]" : "text-[var(--fp-warning)]/90"}>
+              <span className={isLive ? "text-[var(--fp-live)]" : "text-fp-warning/90"}>
                 <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">{isLive ? "Live" : "Scor"}</span>
                 <span className="font-display text-lg font-bold tabular-nums text-[var(--fp-text)]">
                   {row.score?.home}-{row.score?.away}
                 </span>
                 {liveMinuteLabel && (
-                  <span className="block text-[10px] font-semibold tabular-nums text-[var(--fp-danger)]/80">
+                  <span className="block text-[10px] font-semibold tabular-nums text-fp-danger/80">
                     {liveMinuteLabel}
                   </span>
                 )}
@@ -451,7 +451,7 @@ export default function MatchCard({
           ))}
           <div className="flex flex-wrap gap-1.5 pt-1">
             {row.valueBet?.detected && (
-              <span className="rounded-md border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-1.5 py-0.5 font-mono text-[8px] uppercase text-[var(--fp-warning)]">
+              <span className="rounded-md border border-fp-warning/35 bg-fp-warning/10 px-1.5 py-0.5 font-mono text-[8px] uppercase text-[var(--fp-warning)]">
                 +EV
               </span>
             )}
@@ -520,7 +520,7 @@ export default function MatchCard({
         />
       )}
 
-      <p className="relative mt-3 font-mono text-[9px] text-[var(--fp-text-muted)]/90">
+      <p className="relative mt-3 font-mono text-[9px] text-fp-text-muted/90">
         {compact ? t("card.detailsArrow") : t("card.openDetails")}
       </p>
     </div>

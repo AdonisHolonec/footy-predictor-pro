@@ -82,7 +82,7 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
       label: t("match.liveWinDraw"),
       livePct: live.pX,
       deltaPp: Number.isFinite(kickoff?.pX) ? live.pX - kickoff.pX : null,
-      barClass: "bg-[var(--fp-text-muted)]/50",
+      barClass: "bg-fp-text-muted/50",
       textClass: "text-[var(--fp-text-muted)]"
     },
     {
@@ -131,8 +131,8 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
     <div
       className={
         compact
-          ? `rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 px-2.5 py-2 ${className}`
-          : `rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)]/50 p-3.5 shadow-[var(--fp-shadow-sm)] sm:p-4 ${className}`
+          ? `rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-fp-bg-muted/50 px-2.5 py-2 ${className}`
+          : `rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-fp-bg-muted/50 p-3.5 shadow-fp-sm sm:p-4 ${className}`
       }
     >
       <div className={`flex items-center justify-between gap-2 ${compact ? "mb-1.5" : "mb-2.5"}`}>
@@ -243,13 +243,13 @@ export default function LiveWinProbabilityStrip({ match, className = "", compact
           </svg>
           {hoverPoint && (
             <div
-              className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 font-mono text-[9px] tabular-nums text-[var(--fp-text)] shadow-[var(--fp-shadow-sm)]"
+              className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-1 font-mono text-[9px] tabular-nums text-[var(--fp-text)] shadow-fp-sm"
               style={{ left: `${Math.min(88, Math.max(12, (hoverPoint.minute / maxMinute) * 100))}%` }}
             >
               {hoverPoint.minute}&apos;
               <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-accent)] align-middle" aria-hidden />
               {Math.round(hoverPoint.p1)}%
-              <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-text-muted)]/50 align-middle" aria-hidden />
+              <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-fp-text-muted/50 align-middle" aria-hidden />
               {Math.round(hoverPoint.pX)}%
               <span className="mx-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--fp-danger)] align-middle" aria-hidden />
               {Math.round(hoverPoint.p2)}%

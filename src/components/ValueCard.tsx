@@ -17,25 +17,25 @@ const SIGNAL_STYLES: Record<
   { border: string; bg: string; text: string; labelKey: string; badge: string }
 > = {
   positive: {
-    border: "border-[var(--fp-success)]/40",
-    bg: "bg-[var(--fp-success)]/10",
+    border: "border-fp-success/40",
+    bg: "bg-fp-success/10",
     text: "text-[var(--fp-success)]",
     labelKey: "panels.positiveEv",
-    badge: "border-[var(--fp-success)]/40 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
+    badge: "border-fp-success/40 bg-fp-success/15 text-[var(--fp-success)]"
   },
   neutral: {
-    border: "border-[var(--fp-warning)]/40",
-    bg: "bg-[var(--fp-warning)]/10",
+    border: "border-fp-warning/40",
+    bg: "bg-fp-warning/10",
     text: "text-[var(--fp-warning)]",
     labelKey: "panels.neutral",
-    badge: "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
+    badge: "border-fp-warning/40 bg-fp-warning/15 text-[var(--fp-warning)]"
   },
   negative: {
-    border: "border-[var(--fp-danger)]/40",
-    bg: "bg-[var(--fp-danger)]/10",
+    border: "border-fp-danger/40",
+    bg: "bg-fp-danger/10",
     text: "text-[var(--fp-danger)]",
     labelKey: "panels.negativeEv",
-    badge: "border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/15 text-[var(--fp-danger)]"
+    badge: "border-fp-danger/40 bg-fp-danger/15 text-[var(--fp-danger)]"
   }
 };
 
@@ -104,7 +104,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
 
   return (
     <section
-      className={`rounded-[var(--fp-radius)] border bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)] ${tone.border} ${className}`}
+      className={`rounded-[var(--fp-radius)] border bg-[var(--fp-bg-card)] p-3 shadow-fp-sm ${tone.border} ${className}`}
     >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-[var(--fp-border)] pb-2">
         <div>
@@ -121,7 +121,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
             {toneLabel}
           </div>
           {recommendable ? (
-            <div className="rounded-md border border-[var(--fp-success)]/45 bg-[var(--fp-success)]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-success)]">
+            <div className="rounded-md border border-fp-success/45 bg-fp-success/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--fp-success)]">
               {t("panels.bestMarket")} · {family ? `${family} · ` : ""}
               {selection}
             </div>
@@ -140,28 +140,28 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
         <Flag
           active={Boolean(engine.positiveEV)}
           label={t("panels.positiveEv")}
-          activeClass="border-[var(--fp-success)]/35 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
+          activeClass="border-fp-success/35 bg-fp-success/15 text-[var(--fp-success)]"
         />
         <Flag
           active={signal === "neutral"}
           label={t("panels.neutral")}
-          activeClass="border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
+          activeClass="border-fp-warning/35 bg-fp-warning/15 text-[var(--fp-warning)]"
         />
         <Flag
           active={Boolean(engine.negativeEV)}
           label={t("panels.negativeEv")}
-          activeClass="border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/15 text-[var(--fp-danger)]"
+          activeClass="border-fp-danger/35 bg-fp-danger/15 text-[var(--fp-danger)]"
         />
         <Flag
           active={recommendable}
           label={recommendable ? t("panels.recommendable") : t("panels.notRecommended")}
-          activeClass="border-[var(--fp-success)]/35 bg-[var(--fp-success)]/15 text-[var(--fp-success)]"
+          activeClass="border-fp-success/35 bg-fp-success/15 text-[var(--fp-success)]"
           inactiveClass="border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]"
         />
       </div>
 
       {engine.negativeEV || ev < 0 ? (
-        <p className="mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
+        <p className="mt-3 rounded-lg border border-fp-danger/30 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
           {t("panels.negativeEvWarn")}
         </p>
       ) : null}
@@ -195,7 +195,7 @@ export default function ValueCard({ engine, bookmaker, compact = false, classNam
                   <tr
                     key={`${m.family}-${m.type}-${idx}`}
                     className={`border-b border-[var(--fp-border)] last:border-0 ${
-                      isBest ? "bg-[var(--fp-success)]/10" : "bg-[var(--fp-bg-card)]"
+                      isBest ? "bg-fp-success/10" : "bg-[var(--fp-bg-card)]"
                     }`}
                   >
                     <td className="px-2.5 py-1.5 font-semibold text-[var(--fp-text)]">

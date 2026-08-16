@@ -19,11 +19,11 @@ export default function Privacy() {
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)] lg:items-start lg:gap-12">
           <div className="mx-auto max-w-2xl space-y-6 text-sm leading-relaxed text-[var(--fp-text-muted)] lg:mx-0">
             <header className="space-y-3 border-b border-white/[0.08] pb-8">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--fp-accent)]/85">Footy predictor</p>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-fp-accent/85">Footy predictor</p>
               <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-3xl">
                 Politica de confidențialitate și informare GDPR
               </h1>
-              <p className="text-xs text-[var(--fp-text-muted)]/90">
+              <p className="text-xs text-fp-text-muted/90">
                 Ultima actualizare: document informativ pentru utilizatori. Nu înlocuiește sfat juridic personalizat.
               </p>
             </header>

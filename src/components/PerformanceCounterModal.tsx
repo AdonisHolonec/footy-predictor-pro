@@ -127,9 +127,9 @@ export default function PerformanceCounterModal({
   const showServer = Boolean(accessToken);
   const adminEffective = isAdmin || serverIsAdmin;
 
-  const tableWrap = "overflow-x-auto rounded-xl border border-white/5 bg-[var(--fp-bg)]/50 shadow-inner";
+  const tableWrap = "overflow-x-auto rounded-xl border border-white/5 bg-fp-bg/50 shadow-inner";
   const th = "px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]";
-  const td = "border-t border-[var(--fp-border)]/35 px-2 py-1.5 font-mono text-[11px] text-[var(--fp-accent)]";
+  const td = "border-t border-[var(--fp-border)] px-2 py-1.5 font-mono text-[11px] text-[var(--fp-accent)]";
 
   return (
     <div
@@ -139,14 +139,14 @@ export default function PerformanceCounterModal({
     >
       <div
         ref={modalRef}
-        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/10 bg-gradient-to-b from-[var(--fp-bg-card)]/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
+        className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-t-2xl border border-white/10 bg-gradient-to-b from-fp-bg-card/98 to-[var(--fp-bg-elevated)] shadow-atelierLg backdrop-blur-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="perf-counter-title"
         aria-describedby="perf-counter-desc"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-[var(--fp-bg)]/40 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-fp-bg/40 px-4 py-3">
           <div>
             <h2 id="perf-counter-title" className="font-display text-sm font-semibold text-[var(--fp-text)]">
               Consolă laborator · performanță
@@ -157,7 +157,7 @@ export default function PerformanceCounterModal({
             ref={closeBtnRef}
             type="button"
             onClick={onClose}
-            className="touch-manipulation rounded-full border border-white/10 bg-[var(--fp-bg-card)] px-3 py-1.5 text-xs font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-bg-card)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/40"
+            className="touch-manipulation rounded-full border border-white/10 bg-[var(--fp-bg-card)] px-3 py-1.5 text-xs font-semibold text-[var(--fp-accent)] hover:bg-[var(--fp-bg-card)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/40"
           >
             Închide
           </button>
@@ -167,7 +167,7 @@ export default function PerformanceCounterModal({
             Scoruri din istoric sincronizat; rândurile per utilizator apar după Predict autentificat.
           </p>
           {err && (
-            <div role="alert" aria-live="assertive" className="mb-3 rounded-lg border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-3 py-2 text-[11px] text-[var(--fp-warning)]">{err}</div>
+            <div role="alert" aria-live="assertive" className="mb-3 rounded-lg border border-fp-warning/40 bg-fp-warning/10 px-3 py-2 text-[11px] text-[var(--fp-warning)]">{err}</div>
           )}
           {loading && showServer && (
             <div role="status" aria-live="polite" className="mb-3 text-center font-mono text-[11px] font-semibold uppercase tracking-widest text-[var(--fp-success)]">Se încarcă…</div>
@@ -178,7 +178,7 @@ export default function PerformanceCounterModal({
               <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-hover)]">{leagueTableHeading}</h3>
               <div className={tableWrap}>
                 <table className="min-w-full text-left">
-                  <thead className="bg-[var(--fp-bg-card)]/90">
+                  <thead className="bg-fp-bg-card/90">
                     <tr>
                       <th className={th}>Ligă</th>
                       <th className={`${th} text-right`}>W</th>
@@ -213,7 +213,7 @@ export default function PerformanceCounterModal({
                 </h3>
                 <div className={tableWrap}>
                   <table className="min-w-full text-left">
-                    <thead className="bg-[var(--fp-bg-card)]/90">
+                    <thead className="bg-fp-bg-card/90">
                       <tr>
                         {adminEffective && <th className={th}>Email</th>}
                         <th className={`${th} text-right`}>W</th>
@@ -255,7 +255,7 @@ export default function PerformanceCounterModal({
                 </h3>
                 <div className={tableWrap}>
                   <table className="min-w-full text-left">
-                    <thead className="bg-[var(--fp-bg-card)]/90">
+                    <thead className="bg-fp-bg-card/90">
                       <tr>
                         {adminEffective && <th className={th}>Email</th>}
                         <th className={th}>Ligă</th>

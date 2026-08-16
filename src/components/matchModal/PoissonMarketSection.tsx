@@ -48,9 +48,9 @@ export default function PoissonMarketSection({
 
   const settledShell =
     settled === true
-      ? "ring-1 ring-[var(--fp-success)]/50 border-[var(--fp-success)]/40 bg-[var(--fp-success)]/10"
+      ? "ring-1 ring-fp-success/50 border-fp-success/40 bg-fp-success/10"
       : settled === false
-        ? "ring-1 ring-[var(--fp-danger)]/50 border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10"
+        ? "ring-1 ring-fp-danger/50 border-fp-danger/40 bg-fp-danger/10"
         : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)]";
 
   const toneClass = (pct: number) => {
@@ -178,9 +178,9 @@ export default function PoissonMarketSection({
         <div
           className={`mt-3 border-t pt-2 ${
             settled === true
-              ? "border-[var(--fp-success)]/35"
+              ? "border-fp-success/35"
               : settled === false
-                ? "border-[var(--fp-danger)]/35"
+                ? "border-fp-danger/35"
                 : "border-[var(--fp-border)]"
           }`}
         >

@@ -25,7 +25,7 @@ export default function StatTile({
 }) {
   return (
     <div
-      className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-[var(--fp-shadow-sm)] ${className}`}
+      className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-fp-sm ${className}`}
     >
       <div className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
         {label}
@@ -33,7 +33,7 @@ export default function StatTile({
       <div className={`mt-1 font-display text-xl font-semibold tabular-nums tracking-tight sm:text-2xl ${toneClass[tone]}`}>
         {loading ? "…" : value}
       </div>
-      {hint ? <div className="mt-1 text-[10px] text-[var(--fp-text-muted)]/85">{hint}</div> : null}
+      {hint ? <div className="mt-1 text-[10px] text-fp-text-muted/85">{hint}</div> : null}
     </div>
   );
 }

@@ -77,10 +77,10 @@ function AlertingBlock(props: StatisticsPanelProps) {
     <div
       className={`${props.alertsCollapsible ? "mt-3" : "mt-2 max-w-[760px]"} rounded-card border px-3 py-2.5 ${
         alertsSeverity === "high"
-          ? "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10"
+          ? "border-fp-danger/35 bg-fp-danger/10"
           : alertsSeverity === "medium"
-            ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10"
-            : "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10"
+            ? "border-fp-warning/40 bg-fp-warning/10"
+            : "border-fp-success/30 bg-fp-success/10"
       }`}
     >
       <div className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
@@ -142,7 +142,7 @@ function AlertingBlock(props: StatisticsPanelProps) {
           Reset defaults
         </button>
         {thresholdsSaved !== "idle" && (
-          <span className="rounded-lg border border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)]">
+          <span className="rounded-lg border border-fp-success/30 bg-fp-success/10 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)]">
             {thresholdsSaved === "saved" ? "Saved" : "Defaults restored"}
           </span>
         )}
@@ -180,7 +180,7 @@ export default function StatisticsPanel(props: StatisticsPanelProps) {
           />
           <StatTile label="KPI Settled" value={`${props.kpi?.settled || 0}`} loading={props.kpiLoading} />
         </div>
-        <details className="mt-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-[var(--fp-shadow-sm)]">
+        <details className="mt-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm">
           <summary className="cursor-pointer font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
             Auto alerting & thresholds
           </summary>

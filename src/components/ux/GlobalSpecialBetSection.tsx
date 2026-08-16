@@ -125,7 +125,7 @@ export default function GlobalSpecialBetSection({
   const shell = (children: ReactNode) => (
     <section
       aria-labelledby="gsb-heading"
-      className="rounded-[var(--fp-radius-lg)] border border-[var(--fp-accent)]/30 bg-[var(--fp-accent-muted)] p-4 shadow-[var(--fp-shadow-sm)] sm:p-5"
+      className="rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] p-4 shadow-fp-sm sm:p-5"
     >
       <header className="min-w-0">
         <p className="font-mono text-[length:var(--fp-badge)] uppercase tracking-[0.2em] text-[var(--fp-accent)]">
@@ -242,7 +242,7 @@ export default function GlobalSpecialBetSection({
       )}
 
       {state.phase === "unavailable" && (
-        <div className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 px-4 py-3">
+        <div className="mt-4 rounded-[var(--fp-radius)] border border-fp-warning/35 bg-fp-warning/10 px-4 py-3">
           <p className="font-display text-sm font-semibold text-[var(--fp-text)]">{t("gsb.unavailableTitle")}</p>
           <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.unavailableDesc")}</p>
           {/* Shown only because the API supplies both numbers; never inferred. */}
@@ -258,7 +258,7 @@ export default function GlobalSpecialBetSection({
       {state.phase === "error" && (
         <div
           role="alert"
-          className="mt-4 rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
+          className="mt-4 rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 px-4 py-3"
         >
           <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{t(state.error.titleKey)}</p>
           {/* The server's own reason wins whenever it sent one. */}

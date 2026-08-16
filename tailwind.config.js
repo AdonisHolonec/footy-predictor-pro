@@ -4,6 +4,41 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx,css}"],
   theme: {
     extend: {
+      /**
+       * Semantic colours as first-class Tailwind colours.
+       *
+       * Tailwind 3.4 silently DROPS any `<util>-[var(--fp-x)]/NN` class — an
+       * opacity modifier cannot be composed onto an arbitrary var() colour, so
+       * ~600 semantic tints across the app produced no CSS at all (borders fell
+       * back to preflight grey, tinted panels had no background). Registering
+       * each token as `rgb(var(--fp-x-rgb) / <alpha-value>)` is the root fix:
+       * `bg-fp-danger/10` now emits exactly the 10% tint the code intended, and
+       * every future opacity works without new tokens. The `--fp-*-rgb`
+       * triplets live in design-system/tokens.css next to their hex twins, per
+       * theme; a guard test (tokens.guard.test.ts) keeps the two in sync.
+       *
+       * Plain `text-[var(--fp-x)]` classes (no modifier) still work and are
+       * untouched — only the broken `/NN` spellings were migrated.
+       */
+      colors: {
+        "fp-bg": "rgb(var(--fp-bg-rgb) / <alpha-value>)",
+        "fp-bg-elevated": "rgb(var(--fp-bg-elevated-rgb) / <alpha-value>)",
+        "fp-bg-card": "rgb(var(--fp-bg-card-rgb) / <alpha-value>)",
+        "fp-bg-muted": "rgb(var(--fp-bg-muted-rgb) / <alpha-value>)",
+        "fp-navy": "rgb(var(--fp-navy-rgb) / <alpha-value>)",
+        "fp-accent": "rgb(var(--fp-accent-rgb) / <alpha-value>)",
+        "fp-accent-hover": "rgb(var(--fp-accent-hover-rgb) / <alpha-value>)",
+        "fp-accent-text": "rgb(var(--fp-accent-text-rgb) / <alpha-value>)",
+        "fp-purple": "rgb(var(--fp-purple-rgb) / <alpha-value>)",
+        "fp-text": "rgb(var(--fp-text-rgb) / <alpha-value>)",
+        "fp-text-muted": "rgb(var(--fp-text-muted-rgb) / <alpha-value>)",
+        "fp-text-faint": "rgb(var(--fp-text-faint-rgb) / <alpha-value>)",
+        "fp-success": "rgb(var(--fp-success-rgb) / <alpha-value>)",
+        "fp-danger": "rgb(var(--fp-danger-rgb) / <alpha-value>)",
+        "fp-warning": "rgb(var(--fp-warning-rgb) / <alpha-value>)",
+        "fp-live": "rgb(var(--fp-live-rgb) / <alpha-value>)",
+        "fp-value": "rgb(var(--fp-value-rgb) / <alpha-value>)"
+      },
       fontFamily: {
         display: ["Archivo", "system-ui", "sans-serif"],
         sans: ["Archivo", "system-ui", "sans-serif"],
@@ -14,6 +49,17 @@ export default {
         "card-lg": "1.125rem"
       },
       boxShadow: {
+        /**
+         * Token-backed elevation. `shadow-[var(--fp-shadow-sm)]` never worked:
+         * Tailwind parses a bare var() arbitrary value as a shadow COLOUR
+         * (`--tw-shadow-color`), leaving `--tw-shadow` at `0 0 #0000` — so all
+         * 68 call sites rendered no shadow. Named shadows pass the token
+         * through as the full box-shadow definition, exactly as authored in
+         * tokens.css, per theme.
+         */
+        "fp-sm": "var(--fp-shadow-sm)",
+        fp: "var(--fp-shadow)",
+        "fp-lg": "var(--fp-shadow-lg)",
         atelier: "0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 28px rgba(0, 0, 0, 0.28)",
         atelierLg: "0 1px 0 rgba(255,255,255,0.05) inset, 0 16px 40px rgba(0, 0, 0, 0.35)",
         innerSoft: "inset 0 1px 0 rgba(255,255,255,0.05)",

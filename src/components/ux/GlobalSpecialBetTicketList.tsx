@@ -73,7 +73,7 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props
     return (
       <div
         role="alert"
-        className="rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
+        className="rounded-[var(--fp-radius)] border border-fp-danger/35 bg-fp-danger/10 px-4 py-3"
       >
         <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{t("gsb.historyErrorTitle")}</p>
         <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">

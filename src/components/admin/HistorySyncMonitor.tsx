@@ -10,15 +10,15 @@ function syncHealthTone(health?: "ok" | "warn" | "fail") {
 }
 
 function syncHintTone(level?: "ok" | "warn" | "fail") {
-  if (level === "ok") return "border-[var(--fp-success)]/25 bg-[var(--fp-success)]/5 text-[var(--fp-success)]";
-  if (level === "fail") return "border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 text-[var(--fp-danger)]";
-  return "border-[var(--fp-warning)]/25 bg-[var(--fp-warning)]/5 text-[var(--fp-warning)]";
+  if (level === "ok") return "border-fp-success/25 bg-fp-success/5 text-[var(--fp-success)]";
+  if (level === "fail") return "border-fp-danger/25 bg-fp-danger/5 text-[var(--fp-danger)]";
+  return "border-fp-warning/25 bg-fp-warning/5 text-[var(--fp-warning)]";
 }
 
 function reliabilityTone(reliability?: string) {
-  if (reliability === "HEALTHY") return "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)]";
-  if (reliability === "CRITICAL") return "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/12 text-[var(--fp-danger)]";
-  return "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
+  if (reliability === "HEALTHY") return "border-fp-success/30 bg-fp-success/10 text-[var(--fp-success)]";
+  if (reliability === "CRITICAL") return "border-fp-danger/35 bg-fp-danger/12 text-[var(--fp-danger)]";
+  return "border-fp-warning/30 bg-fp-warning/10 text-[var(--fp-warning)]";
 }
 
 function callsBudgetTone(level?: string) {
@@ -127,7 +127,7 @@ export function HistorySyncMonitor({
         </div>
       </div>
       {historySync.last?.error && (
-        <div className="mt-2 rounded-lg border border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 px-3 py-2 font-mono text-[10px] text-[var(--fp-danger)]">
+        <div className="mt-2 rounded-lg border border-fp-danger/25 bg-fp-danger/5 px-3 py-2 font-mono text-[10px] text-[var(--fp-danger)]">
           {historySync.last.error}
         </div>
       )}
@@ -156,8 +156,8 @@ export function HistorySyncMonitor({
               key={`${alert.code || "alert"}-${idx}`}
               className={`rounded-lg border px-3 py-2 font-mono text-[10px] ${
                 alert.level === "fail"
-                  ? "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
-                  : "border-[var(--fp-warning)]/30 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
+                  ? "border-fp-danger/35 bg-fp-danger/10 text-[var(--fp-danger)]"
+                  : "border-fp-warning/30 bg-fp-warning/10 text-[var(--fp-warning)]"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
@@ -220,7 +220,7 @@ export function HistorySyncMonitor({
               onClick={() => setShowOnlySyncFailures((prev) => !prev)}
               className={`rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
                 showOnlySyncFailures
-                  ? "border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+                  ? "border-fp-danger/35 bg-fp-danger/10 text-[var(--fp-danger)]"
                   : "border-[var(--fp-border)] text-[var(--fp-text)] hover:bg-[var(--fp-bg-muted)]"
               }`}
               title="Afișează doar rulările eșuate."

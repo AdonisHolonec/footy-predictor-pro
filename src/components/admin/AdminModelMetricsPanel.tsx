@@ -54,7 +54,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
   const ece = metrics?.ece1x2 ?? null;
 
   return (
-    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-[var(--fp-shadow-sm)] md:p-6">
+    <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm md:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
         <div>
           <h2 className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--fp-accent-hover)]">Model metrics</h2>
@@ -72,7 +72,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={trainNow}
             disabled={training}
-            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-fp-success/25 bg-fp-success/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-fp-success/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează acum agentul de antrenare ML (calibration + stacker) pe baza istoricului."
           >
             {training ? "Training…" : "Train now"}
@@ -90,7 +90,7 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
             type="button"
             onClick={runHistorySyncNow}
             disabled={syncingHistoryNow}
-            className="touch-manipulation rounded-lg border border-[var(--fp-success)]/25 bg-[var(--fp-success)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-[var(--fp-success)]/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="touch-manipulation rounded-lg border border-fp-success/25 bg-fp-success/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] hover:bg-fp-success/15 disabled:cursor-not-allowed disabled:opacity-50"
             title="Rulează manual /api/history?sync=1 și reîncarcă monitorizarea."
           >
             {syncingHistoryNow ? "Syncing…" : "Run history sync"}
@@ -106,9 +106,9 @@ export function AdminModelMetricsPanel({ accessToken, days = 45 }: AdminModelMet
         </div>
       </div>
 
-      {err && <div className="mb-3 rounded-lg border border-[var(--fp-danger)]/25 bg-[var(--fp-danger)]/5 px-3 py-2 text-[11px] text-[var(--fp-danger)]">{err}</div>}
+      {err && <div className="mb-3 rounded-lg border border-fp-danger/25 bg-fp-danger/5 px-3 py-2 text-[11px] text-[var(--fp-danger)]">{err}</div>}
       {trainReport && (
-        <div className="mb-3 rounded-lg border border-[var(--fp-success)]/35 bg-[var(--fp-success)]/10 px-3 py-2">
+        <div className="mb-3 rounded-lg border border-fp-success/35 bg-fp-success/10 px-3 py-2">
           <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--fp-success)]">Last training run</div>
           <div className="mt-1 grid grid-cols-1 gap-1 font-mono text-[10px] text-[var(--fp-accent)] sm:grid-cols-2">
             <div>Mode: <span className="text-[var(--fp-text)]">{trainReport.mode || "all"}</span></div>

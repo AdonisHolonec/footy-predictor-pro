@@ -39,8 +39,8 @@ function isoToLocalDatetimeInput(value?: string | null) {
 }
 
 function tierToneClass(tier: UserTier) {
-  if (tier === "ultra") return "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]";
-  if (tier === "premium") return "border-[var(--fp-accent)]/35 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]";
+  if (tier === "ultra") return "border-fp-warning/35 bg-fp-warning/10 text-[var(--fp-warning)]";
+  if (tier === "premium") return "border-fp-accent/35 bg-fp-accent/10 text-[var(--fp-accent)]";
   return "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text-muted)]";
 }
 
@@ -106,7 +106,7 @@ export default function AdminUsersTable({
   return (
     <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
       <table className="min-w-full text-left text-[11px] text-[var(--fp-accent)]">
-        <thead className="sticky top-0 bg-[var(--fp-bg-muted)]/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
+        <thead className="sticky top-0 bg-fp-bg-muted/95 text-[10px] uppercase text-[var(--fp-text-muted)]">
           <tr>
             <th className="px-3 py-2">Email</th>
             <th className="px-3 py-2">ID utilizator</th>
@@ -128,7 +128,7 @@ export default function AdminUsersTable({
                 ) : (
                   <span className="inline-flex items-center gap-2">
                     <span>—</span>
-                    <span className="rounded-full border border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
+                    <span className="rounded-full border border-fp-warning/40 bg-fp-warning/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-warning)]">
                       email lipsă
                     </span>
                   </span>
@@ -191,7 +191,7 @@ export default function AdminUsersTable({
                   Șterge
                 </button>
                 {isExpiredSubscription(profile.subscriptionExpiresAt) && (
-                  <div className="mt-1 inline-flex rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
+                  <div className="mt-1 inline-flex rounded-md border border-fp-danger/30 bg-fp-danger/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--fp-danger)]">
                     Expirat — Salvează planul pentru acces nelimitat pe nivelurile plătite
                   </div>
                 )}
@@ -216,7 +216,7 @@ export default function AdminUsersTable({
                       );
                     }}
                     disabled={busyUserIds.has(profile.userId)}
-                    className="rounded-md border border-[var(--fp-accent)]/20 bg-[var(--fp-accent)]/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
+                    className="rounded-md border border-fp-accent/20 bg-fp-accent/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
                   >
                     Fă {profile.role === "admin" ? "user" : "admin"}
                   </button>
@@ -235,7 +235,7 @@ export default function AdminUsersTable({
                       );
                     }}
                     disabled={busyUserIds.has(profile.userId)}
-                    className="rounded-md border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] disabled:opacity-50"
+                    className="rounded-md border border-fp-danger/30 bg-fp-danger/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] disabled:opacity-50"
                   >
                     {profile.isBlocked ? "Deblochează" : "Blochează"}
                   </button>
@@ -263,7 +263,7 @@ export default function AdminUsersTable({
                       );
                     }}
                     disabled={busyUserIds.has(profile.userId)}
-                    className="rounded-md border border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] disabled:opacity-50"
+                    className="rounded-md border border-fp-success/30 bg-fp-success/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-success)] disabled:opacity-50"
                   >
                     Salvează planul
                   </button>
@@ -272,8 +272,8 @@ export default function AdminUsersTable({
                       role="status"
                       className={`inline-flex max-w-[240px] items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
                         rowFeedback[profile.userId]!.ok
-                          ? "border-[var(--fp-success)]/30 bg-[var(--fp-success)]/10 text-[var(--fp-success)]"
-                          : "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+                          ? "border-fp-success/30 bg-fp-success/10 text-[var(--fp-success)]"
+                          : "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]"
                       }`}
                     >
                       {rowFeedback[profile.userId]!.ok ? "✓" : "✗"} {rowFeedback[profile.userId]!.label}

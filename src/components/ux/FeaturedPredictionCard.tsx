@@ -34,7 +34,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
   const kickoffTime = new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow)] overflow-hidden">
+    <div className="rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp overflow-hidden">
       <div className="flex items-center gap-2 border-b border-[var(--fp-border)] px-4 py-2.5">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fp-accent)]" />
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--fp-accent)]">
@@ -51,7 +51,7 @@ export default function FeaturedPredictionCard({ match, onOpenAnalysis }: Props)
       <button
         type="button"
         onClick={onOpenAnalysis}
-        className="flex w-full items-center gap-4 px-4 pb-1 pt-4 text-left transition-colors hover:bg-[var(--fp-bg-muted)]/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+        className="flex w-full items-center gap-4 px-4 pb-1 pt-4 text-left transition-colors hover:bg-fp-bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
       >
         <ConfidenceAura value={confPct} className="shrink-0" />
         <div className="min-w-0 flex-1">

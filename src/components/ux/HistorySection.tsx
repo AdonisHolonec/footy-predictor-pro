@@ -124,7 +124,7 @@ export default function HistorySection({
                   onClick={() => setSelectedId(active ? null : id)}
                   aria-pressed={active}
                   className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
-                    active ? "bg-[var(--fp-success)]/5" : "hover:bg-[var(--fp-bg-muted)]"
+                    active ? "bg-fp-success/5" : "hover:bg-[var(--fp-bg-muted)]"
                   }`}
                 >
                   <div className="flex min-w-0 items-center gap-2.5">

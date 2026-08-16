@@ -482,9 +482,9 @@ export default function MatchMomentumTimeline({
 
   const dominantBadgeClass =
     momentum.dominantTeam === "home"
-      ? "border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]"
+      ? "border-fp-accent/30 bg-fp-accent/10 text-[var(--fp-accent)]"
       : momentum.dominantTeam === "away"
-        ? "border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 text-[var(--fp-danger)]"
+        ? "border-fp-danger/30 bg-fp-danger/10 text-[var(--fp-danger)]"
         : "border-[var(--fp-border)] bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]";
 
   // Real AI narration (when the server generated one) leads; the deterministic rule engine is the
@@ -592,7 +592,7 @@ export default function MatchMomentumTimeline({
           {isAiAnchor && (
             <span
               title={t("match.momentumInsightBadge")}
-              className="mt-0.5 shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-accent)]"
+              className="mt-0.5 shrink-0 rounded-full border border-fp-accent/30 bg-fp-accent/10 px-1.5 py-0 text-[8px] font-bold uppercase tracking-wide text-[var(--fp-accent)]"
             >
               {t("match.momentumInsightBadge")}
             </span>
@@ -605,7 +605,7 @@ export default function MatchMomentumTimeline({
               <Tooltip key={chip.label} label={chip.detail}>
                 <button
                   type="button"
-                  className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+                  className="rounded-full border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1 font-mono text-[10px] font-semibold text-[var(--fp-text-muted)] transition-colors duration-150 hover:border-fp-accent/40 hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
                 >
                   {chip.label} {chip.value}
                 </button>
@@ -652,7 +652,7 @@ export default function MatchMomentumTimeline({
           </div>
           <span
             key={confidenceNumeric != null ? "numeric" : confidenceLabel}
-            className={`shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-[var(--fp-accent)] ${
+            className={`shrink-0 rounded-full border border-fp-accent/30 bg-fp-accent/10 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-[var(--fp-accent)] ${
               confidenceNumeric == null ? "animate-card-in motion-reduce:animate-none" : ""
             }`}
           >
@@ -798,7 +798,7 @@ export default function MatchMomentumTimeline({
                 {filteredEvents.map((ev, i) => (
                   <li
                     key={`${ev.minute}-${ev.extra ?? 0}-${ev.kind}-${ev.team}-${ev.player ?? i}`}
-                    className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)]/15 sm:text-xs"
+                    className="animate-card-in flex items-center gap-2 rounded-[var(--fp-radius-sm)] px-1.5 py-1.5 text-[11px] even:bg-[var(--fp-border)] sm:text-xs"
                   >
                     <span className="w-9 shrink-0 font-mono tabular-nums text-[var(--fp-text-muted)]">
                       {formatMinute(ev.minute, ev.extra)}

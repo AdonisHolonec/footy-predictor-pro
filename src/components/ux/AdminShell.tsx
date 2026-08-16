@@ -44,7 +44,7 @@ export default function AdminShell({ section, onSection, children }: Props) {
               onClick={() => onSection(s.id)}
               className={`shrink-0 rounded-lg px-3 py-2 text-left text-xs font-semibold ${
                 section === s.id
-                  ? "bg-[var(--fp-accent)]/15 text-[var(--fp-accent)]"
+                  ? "bg-fp-accent/15 text-[var(--fp-accent)]"
                   : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)]"
               }`}
             >

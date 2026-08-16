@@ -17,10 +17,10 @@ export default function TrackRecordPage() {
         style={{ backgroundImage: `url(${BRAND_IMAGES.heroPlatform})` }}
         aria-hidden
       />
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-[var(--fp-bg-elevated)]/15 via-[var(--fp-bg)]/50 to-[var(--fp-bg)]/98" aria-hidden />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-fp-bg-elevated/15 via-fp-bg/50 to-fp-bg/98" aria-hidden />
 
       <div className="relative z-10">
-        <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[var(--fp-bg-elevated)]/70 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-fp-bg-elevated/70 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
             <Link to="/" className="flex items-center gap-2.5 text-[var(--fp-text)] transition hover:text-[var(--fp-accent)]">
               <img
@@ -39,7 +39,7 @@ export default function TrackRecordPage() {
               </Link>
               <Link
                 to={user ? workspace : login}
-                className="rounded-xl border border-[var(--fp-accent)]/50 bg-[var(--fp-accent)]/20 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent)]"
+                className="rounded-xl border border-fp-accent/50 bg-fp-accent/20 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent)]"
               >
                 {user ? "Workspace" : "Login"}
               </Link>
@@ -50,7 +50,7 @@ export default function TrackRecordPage() {
         <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:py-14">
           <TrackRecordSection days={45} showLinkToFull={false} />
 
-          <div className="mt-10 rounded-2xl border border-[var(--fp-accent)]/40 bg-[var(--fp-accent)]/15 p-5">
+          <div className="mt-10 rounded-2xl border border-fp-accent/40 bg-fp-accent/15 p-5">
             <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-accent)]">Next step</p>
             <p className="mt-2 text-sm text-[var(--fp-text-muted)]">
               Vrei aceleași semnale în timp real? Pornește free sau upgrade la Premium/Ultra.
@@ -58,7 +58,7 @@ export default function TrackRecordPage() {
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
                 to={user ? workspace : signup}
-                className="rounded-xl border border-[var(--fp-accent)]/70 bg-[var(--fp-accent)]/40 px-4 py-2 text-sm font-semibold text-white"
+                className="rounded-xl border border-fp-accent/70 bg-fp-accent/40 px-4 py-2 text-sm font-semibold text-white"
               >
                 {user ? "Open Workspace" : "Start Gratuit"}
               </Link>

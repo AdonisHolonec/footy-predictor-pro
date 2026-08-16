@@ -75,9 +75,9 @@ export default function GlobalSpecialBetSelectionRow({
      for the failure, so the two states stay ranked, and DESIGN.md's One Accent
      Rule keeps the accent off informational fills. */
   const emphasis = deciding
-    ? "border-[var(--fp-danger)]/45 ring-1 ring-inset ring-[var(--fp-danger)]/20"
+    ? "border-fp-danger/45 ring-1 ring-inset ring-fp-danger/20"
     : underway
-      ? "border-[var(--fp-accent)]/45"
+      ? "border-fp-accent/45"
       : "border-[var(--fp-border)]";
 
   return (

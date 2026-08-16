@@ -14,8 +14,8 @@ export default function LuckBadge({ goals, xg }: LuckBadgeProps) {
     <div
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1 text-[9px] font-semibold shadow-sm sm:text-[10px] ${
         isLucky
-          ? "border-[var(--fp-warning)]/35 bg-[var(--fp-warning)]/10 text-[var(--fp-warning)]"
-          : "border-[var(--fp-accent)]/25 bg-[var(--fp-accent)]/10 text-[var(--fp-accent)]/90"
+          ? "border-fp-warning/35 bg-fp-warning/10 text-[var(--fp-warning)]"
+          : "border-fp-accent/25 bg-fp-accent/10 text-fp-accent/90"
       }`}
       title={`${isLucky ? "Lucky form" : "Value trend"} (${diff >= 0 ? "+" : ""}${diff.toFixed(2)})`}
     >

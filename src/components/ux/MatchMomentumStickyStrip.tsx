@@ -42,7 +42,7 @@ export default function MatchMomentumStickyStrip({
       type="button"
       onClick={onJumpToTop}
       aria-label={summaryLabel}
-      className="sticky top-14 z-10 mx-4 flex items-center gap-2.5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-left shadow-[var(--fp-shadow)] transition-colors duration-150 hover:border-[var(--fp-accent)]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:mx-6"
+      className="sticky top-14 z-10 mx-4 flex items-center gap-2.5 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-2 text-left shadow-fp transition-colors duration-150 hover:border-fp-accent/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:mx-6"
     >
       <span className="shrink-0 font-mono text-[10px] font-bold tabular-nums text-[var(--fp-text-muted)]">{minuteLabel}</span>
       <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-bold tabular-nums text-[var(--fp-text)]">
@@ -52,7 +52,7 @@ export default function MatchMomentumStickyStrip({
         <span className="absolute inset-y-0 left-0 bg-[var(--fp-accent)]" style={{ width: `${homeMomentum}%` }} />
         <span className="absolute inset-y-0 right-0 bg-[var(--fp-danger)]" style={{ width: `${awayMomentum}%` }} />
       </span>
-      <span className="shrink-0 rounded-full border border-[var(--fp-accent)]/30 bg-[var(--fp-accent)]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--fp-accent)]">
+      <span className="shrink-0 rounded-full border border-fp-accent/30 bg-fp-accent/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--fp-accent)]">
         {confidenceLabel}
       </span>
     </button>

@@ -132,7 +132,7 @@ export default function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-[var(--fp-z-modal)] flex items-center justify-center bg-[var(--fp-navy)]/88 p-3 backdrop-blur-md sm:p-4"
+      className="fixed inset-0 z-[var(--fp-z-modal)] flex items-center justify-center bg-fp-navy/88 p-3 backdrop-blur-md sm:p-4"
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
@@ -143,7 +143,7 @@ export default function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
-        className={`max-h-[90vh] w-full ${sizeClass[size]} overflow-y-auto rounded-2xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)]/95 p-5 shadow-[var(--fp-shadow-lg)] backdrop-blur-xl focus-visible:outline-none sm:p-8 ${className}`}
+        className={`max-h-[90vh] w-full ${sizeClass[size]} overflow-y-auto rounded-2xl border border-[var(--fp-border)] bg-fp-bg-card/95 p-5 shadow-fp-lg backdrop-blur-xl focus-visible:outline-none sm:p-8 ${className}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -160,7 +160,7 @@ export default function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover:border-[var(--fp-accent)]/40 hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]/45"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--fp-border)] text-sm text-[var(--fp-text-muted)] hover:border-fp-accent/40 hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fp-accent/45"
           >
             ✕
           </button>

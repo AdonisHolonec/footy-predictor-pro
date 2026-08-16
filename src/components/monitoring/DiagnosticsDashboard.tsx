@@ -26,22 +26,22 @@ const TONE_STYLES: Record<HealthTone, { dot: string; text: string; bg: string; b
   ok: {
     dot: "bg-[var(--fp-success)]",
     text: "text-[var(--fp-success)]",
-    bg: "bg-[var(--fp-success)]/8",
-    border: "border-[var(--fp-success)]/30",
+    bg: "bg-fp-success/8",
+    border: "border-fp-success/30",
     label: "OK"
   },
   warn: {
     dot: "bg-[var(--fp-warning)]",
     text: "text-[var(--fp-warning)]",
-    bg: "bg-[var(--fp-warning)]/8",
-    border: "border-[var(--fp-warning)]/30",
+    bg: "bg-fp-warning/8",
+    border: "border-fp-warning/30",
     label: "Warning"
   },
   error: {
     dot: "bg-[var(--fp-danger)]",
     text: "text-[var(--fp-danger)]",
-    bg: "bg-[var(--fp-danger)]/8",
-    border: "border-[var(--fp-danger)]/30",
+    bg: "bg-fp-danger/8",
+    border: "border-fp-danger/30",
     label: "Error"
   },
   unknown: {
@@ -56,7 +56,7 @@ const TONE_STYLES: Record<HealthTone, { dot: string; text: string; bg: string; b
 function HealthCard({ title, tone, hint }: { title: string; tone: HealthTone; hint: string }) {
   const s = TONE_STYLES[tone];
   return (
-    <div className={`rounded-[var(--fp-radius)] border ${s.border} ${s.bg} p-3 shadow-[var(--fp-shadow-sm)]`}>
+    <div className={`rounded-[var(--fp-radius)] border ${s.border} ${s.bg} p-3 shadow-fp-sm`}>
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
         <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fp-text-muted)]">
@@ -64,7 +64,7 @@ function HealthCard({ title, tone, hint }: { title: string; tone: HealthTone; hi
         </span>
       </div>
       <div className={`mt-1.5 font-display text-lg font-semibold ${s.text}`}>{s.label}</div>
-      <div className="mt-1 text-[10px] text-[var(--fp-text-muted)]/85">{hint}</div>
+      <div className="mt-1 text-[10px] text-fp-text-muted/85">{hint}</div>
     </div>
   );
 }
@@ -164,7 +164,7 @@ export default function DiagnosticsDashboard() {
         : "error";
 
   return (
-    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-[var(--fp-shadow-sm)] sm:mt-5">
+    <div className="mt-4 overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-sm sm:mt-5">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--fp-border)] px-3.5 py-3 sm:px-5">
         <div>
           <h3 className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
@@ -180,7 +180,7 @@ export default function DiagnosticsDashboard() {
       </div>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-lg border border-[var(--fp-danger)]/30 bg-[var(--fp-danger)]/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
+        <div className="mx-4 mt-3 rounded-lg border border-fp-danger/30 bg-fp-danger/10 px-3 py-2 font-mono text-[11px] text-[var(--fp-danger)] sm:mx-5">
           {error}
         </div>
       ) : null}

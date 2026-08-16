@@ -12,14 +12,14 @@ export default function AdminPerformanceTables({
   onReload
 }: AdminPerformanceTablesProps) {
   return (
-    <div className="mt-4 rounded-xl border border-[var(--fp-success)]/20 bg-[var(--fp-bg-card)] p-3 shadow-inner">
+    <div className="mt-4 rounded-xl border border-fp-success/20 bg-[var(--fp-bg-card)] p-3 shadow-inner">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-accent)]">Performance counter · 30 zile (server)</p>
         <button
           type="button"
           onClick={() => void onReload()}
           disabled={perfAdminLoading}
-          className="touch-manipulation rounded-md border border-[var(--fp-accent)]/20 bg-[var(--fp-accent)]/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
+          className="touch-manipulation rounded-md border border-fp-accent/20 bg-fp-accent/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-accent)] disabled:opacity-50"
         >
           {perfAdminLoading ? "Se încarcă…" : "Reîncarcă"}
         </button>
@@ -29,7 +29,7 @@ export default function AdminPerformanceTables({
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Pe utilizator</p>
           <div className="max-h-48 overflow-auto rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             <table className="min-w-full text-left font-mono text-[10px] text-[var(--fp-accent)]">
-              <thead className="sticky top-0 bg-[var(--fp-bg-muted)]/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
+              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="px-2 py-1.5">Email</th>
                   <th className="px-2 py-1.5 text-right">W</th>
@@ -65,7 +65,7 @@ export default function AdminPerformanceTables({
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">Utilizator + ligă</p>
           <div className="max-h-48 overflow-auto rounded-lg border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             <table className="min-w-full text-left font-mono text-[10px] text-[var(--fp-accent)]">
-              <thead className="sticky top-0 bg-[var(--fp-bg-muted)]/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
+              <thead className="sticky top-0 bg-fp-bg-muted/95 text-[9px] uppercase text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="px-2 py-1.5">Email</th>
                   <th className="px-2 py-1.5">Ligă</th>

@@ -58,7 +58,7 @@ export function MarketPicksGrid({ row, accessTier }: MarketPicksGridProps) {
           locked: cornersLocked,
           odd: row.marketOdds?.corners?.odd,
           source: row.marketOdds?.corners?.bookmaker,
-          accentClass: "border-[var(--fp-accent)]/35 bg-[var(--fp-accent-muted)]"
+          accentClass: "border-fp-accent/35 bg-[var(--fp-accent-muted)]"
         },
         {
           label: t("match.shotsSub"),
@@ -98,14 +98,14 @@ export function MarketPicksGrid({ row, accessTier }: MarketPicksGridProps) {
           locked: firstHalfLocked,
           odd: row.marketOdds?.firstHalfGoals?.odd,
           source: row.marketOdds?.firstHalfGoals?.bookmaker,
-          accentClass: "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/10"
+          accentClass: "border-fp-warning/40 bg-fp-warning/10"
         }
       ].map((item) => {
         const isHot = item.label === marketPulseWinnerLabel;
         return (
         <div
           key={item.label}
-          className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-[var(--fp-accent)]/40" : ""}`}
+          className={`rounded-md border px-1.5 py-1 text-center ${item.accentClass} ${isHot ? "ring-1 ring-fp-accent/40" : ""}`}
         >
           <div className="font-mono text-[8px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{item.label}</div>
           {item.locked ? (

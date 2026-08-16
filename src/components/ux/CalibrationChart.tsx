@@ -55,7 +55,7 @@ export default function CalibrationChart({ history }: Props) {
             </div>
             <div className="relative mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
               <div
-                className="absolute inset-y-0 left-0 rounded-full bg-[var(--fp-accent)]/30"
+                className="absolute inset-y-0 left-0 rounded-full bg-fp-accent/30"
                 style={{ width: `${Math.min(100, b.avgConf)}%` }}
               />
               <div

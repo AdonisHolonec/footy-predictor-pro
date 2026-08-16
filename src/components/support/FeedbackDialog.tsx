@@ -142,7 +142,7 @@ export default function FeedbackDialog({ open, onClose, onSubmitted }: Props) {
                   onClick={() => setRating(rating === value ? null : value)}
                   className={`h-11 min-w-11 rounded-[var(--fp-radius-sm)] border text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] ${
                     rating !== null && value <= rating
-                      ? "border-[var(--fp-warning)]/40 bg-[var(--fp-warning)]/15 text-[var(--fp-warning)]"
+                      ? "border-fp-warning/40 bg-fp-warning/15 text-[var(--fp-warning)]"
                       : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
                   }`}
                 >
@@ -156,7 +156,7 @@ export default function FeedbackDialog({ open, onClose, onSubmitted }: Props) {
           {errorKey ? (
             <p
               role="alert"
-              className="rounded-[var(--fp-radius-sm)] border border-[var(--fp-danger)]/40 bg-[var(--fp-danger)]/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
+              className="rounded-[var(--fp-radius-sm)] border border-fp-danger/40 bg-fp-danger/10 px-3 py-2 text-xs font-medium text-[var(--fp-danger)]"
             >
               {t(errorKey)}
             </p>
