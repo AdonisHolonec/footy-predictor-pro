@@ -11,6 +11,26 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Archivo:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      /* Theme bootstrap (PR 2) — applies the last APPLIED theme before first
+         paint so a direct load of any route never flashes the classless :root
+         fallback. Kept inline and dependency-free by necessity; the literals
+         mirror src/design-system/theme.ts (THEME_MIRROR_KEY + the three theme
+         classes) and a guard test keeps the two in sync. No business logic:
+         read one key, validate against the three known themes, add one class.
+         The signed-in user's own preference is re-resolved after the session
+         loads, by <ThemeBoot/> at the router root. */
+      (function () {
+        var theme = "light";
+        try {
+          var stored = localStorage.getItem("footy:theme");
+          if (stored === "dark" || stored === "contrast") theme = stored;
+        } catch (e) {
+          /* storage blocked — light is the app's default */
+        }
+        document.documentElement.classList.add("theme-" + theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
