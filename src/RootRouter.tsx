@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import ThemeBoot from "./design-system/ThemeBoot";
 import { useAuth } from "./hooks/useAuth";
 
 // Route-level code splitting: every page is its own chunk, so a visitor on the
@@ -58,6 +59,9 @@ function AuthGate() {
 export default function RootRouter() {
   return (
     <BrowserRouter>
+      {/* Theme is an application responsibility: applied for every route,
+          before any page decides anything — never owned by a dashboard. */}
+      <ThemeBoot />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingAccess />} />

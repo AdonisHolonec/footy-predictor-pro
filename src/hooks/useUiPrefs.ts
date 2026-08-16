@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readStoredLocale, writeStoredLocale, type Locale } from "../i18n";
+import { applyTheme, uiPrefsStorageKey, type UiTheme } from "../design-system/theme";
 
-export type UiTheme = "light" | "dark" | "contrast";
+export type { UiTheme };
 export type { Locale };
 
 export type MatchesSubFilterPref = "all" | "live" | "favorites";
@@ -53,9 +54,9 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   notifyLiveSwing: true
 };
 
-function storageKey(userId?: string | null) {
-  return `footy:ui:v6:${userId || "anon"}`;
-}
+/* Key shape owned by design-system/theme.ts so the pre-paint bootstrap and
+   this hook can never disagree about where the preference lives. */
+const storageKey = uiPrefsStorageKey;
 
 function legacyKeys(userId?: string | null) {
   const id = userId || "anon";
@@ -84,15 +85,11 @@ function readPrefs(userId?: string | null): UiPrefsV3 {
   }
 }
 
-function applyTheme(theme: UiTheme) {
-  const root = document.documentElement;
-  root.classList.remove("theme-light", "theme-dark", "theme-contrast");
-  /* Always set an explicit theme class so legacy .lab-card / signal surfaces get light overrides. */
-  if (theme === "dark") root.classList.add("theme-dark");
-  else if (theme === "contrast") root.classList.add("theme-contrast");
-  else root.classList.add("theme-light");
-  root.dataset.theme = theme;
-}
+/* Theme application moved to design-system/theme.ts (PR 2): this hook still
+   owns CHANGING the preference — setTheme/cycleTheme below — but every DOM
+   write goes through the app-level single writer, the same one the root
+   ThemeBoot and the index.html bootstrap feed. First application no longer
+   waits for this hook (i.e. for UserDashboard) to mount. */
 
 export function useUiPrefs(userId?: string | null) {
   const [prefs, setPrefs] = useState<UiPrefsV3>(() => readPrefs(userId));
