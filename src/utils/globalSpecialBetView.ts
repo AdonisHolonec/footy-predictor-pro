@@ -131,10 +131,17 @@ export function describeTicketOutcome(
 /**
  * What KIND of ticket this is, as a translatable label.
  *
- * `variant` alone cannot say: a Combo 5 and Systems 3/5, 4/5 and 5/5 all carry
- * variant 5, so a history that reads the variant shows four different products
- * under one heading — same day, same five legs, four identical rows. The kind is
- * the discriminator, and `system_k` is what separates the three Systems.
+ * `variant` alone cannot say: a Combo 5 and any System both carry variant 5, so
+ * a history that reads the variant shows them under one heading — same day, same
+ * five legs, identical rows for different tickets. `bet_kind` is the
+ * discriminator, and `system_k` is the stored threshold that names the shape.
+ *
+ * THE PUBLIC PRODUCT IS ONE TICKET: Bilet Sistem 3/5 — five selections of which
+ * at least three must win, with the k fixed by the server. 4/5 and 5/5 are not
+ * products; they are what that ticket DOES when four or five of its legs land,
+ * told through its own winning combinations. This function still renders any
+ * stored k because the schema permits 3, 4 and 5, and a row written by a direct
+ * backend call has to be described honestly rather than mislabelled.
  *
  * `combinationCount` is C(n, k), derived rather than stored: it is a property of
  * the shape, so recomputing it cannot drift from a persisted copy. Null for a
@@ -144,9 +151,9 @@ export function describeTicketShape(
   bet: Pick<GlobalSpecialBet, "bet_kind" | "system_k" | "variant">
 ): { key: string; vars: Record<string, string | number>; combinationCount: number | null } {
   const n = Number(bet?.variant);
-  // Anything that is not a System the product actually sells reads as a combo: the
-  // column defaults to 'combo', so an unrecognised shape is one we do not offer,
-  // and the safe reading of an unknown shape is the one that promises least.
+  // Anything that is not a System shape the schema can store reads as a combo:
+  // the column defaults to 'combo', so an unrecognised shape is one nothing
+  // writes, and the safe reading of an unknown shape is the one promising least.
   if (bet?.bet_kind !== "system" || !isSystemK(bet?.system_k) || !Number.isFinite(n)) {
     return { key: "gsb.shapeCombo", vars: { n: Number.isFinite(n) ? n : 0 }, combinationCount: null };
   }
@@ -155,7 +162,12 @@ export function describeTicketShape(
 }
 
 /**
- * Is this a k the product actually sells?
+ * Is this a k the SCHEMA can hold?
+ *
+ * Deliberately wider than the public product, which sells one System: 3/5. This
+ * guards rendering, not selling — a row stored at another k through a direct
+ * backend call must still be described, and refusing it here would print a
+ * shape that does not exist instead of the one that does.
  *
  * Order matters, and each step exists for a value that would otherwise slip past:
  *
@@ -166,10 +178,11 @@ export function describeTicketShape(
  *      number, so a string here means something upstream changed and guessing its
  *      intent would hide that.
  *   2. INTEGER, which removes NaN and 3.5 in one check.
- *   3. MEMBERSHIP in SYSTEM_K_VALUES — the product contract, not a range. 0, 2, 6
- *      and -1 are all integers and all not tickets we sell. This mirrors the same
- *      list the engine validates against and migration 054 enforces in SQL, so the
- *      three layers cannot drift apart.
+ *   3. MEMBERSHIP in SYSTEM_K_VALUES — the stored contract, not a range. 0, 2, 6
+ *      and -1 are all integers and none of them is a shape the database will
+ *      hold. This mirrors the list the engine validates against and migration 054
+ *      enforces in SQL, so the three layers cannot drift apart. Narrower still is
+ *      the public product, which fixes k at 3 in the API layer.
  */
 function isSystemK(value: unknown): value is SystemK {
   if (typeof value !== "number" || !Number.isInteger(value)) return false;
