@@ -907,9 +907,15 @@ export const ro: Dict = {
     lockedTitle: "Global Special Bet",
     lockedDesc: "Global Special Bet este disponibil pe planul Ultra.",
     unlock: "Deblochează",
-    historyTitle: "Istoric Global Special Bet",
-    historySub: "Selecțiile multi-meci generate anterior, exact cum au fost salvate.",
-    historyEmpty: "Nu ai încă niciun Global Special Bet salvat.",
+    // Secțiunea „Bilete”: două produse, două tab-uri, două stări goale distincte —
+    // „nu ai combo” și „nu ai sistem” sunt fapte diferite.
+    ticketsTitle: "Bilete",
+    ticketsSub: "Biletele tale Global Special Bet, separat pe Combo și Sistem.",
+    ticketsTablist: "Tipul biletului",
+    ticketsTabCombo: "Combo",
+    ticketsTabSystem: "Sistem",
+    ticketsEmptyCombo: "Nu ai încă niciun bilet Combo salvat.",
+    ticketsEmptySystem: "Nu ai încă niciun bilet Sistem salvat.",
     historyLoading: "Se încarcă istoricul…",
     historyErrorTitle: "Nu am putut încărca istoricul",
     historyLoadMore: "Încarcă mai multe",

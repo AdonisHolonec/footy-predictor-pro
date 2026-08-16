@@ -906,9 +906,15 @@ export const en: Dict = {
     lockedTitle: "Global Special Bet",
     lockedDesc: "Global Special Bet is available on the Ultra plan.",
     unlock: "Unlock",
-    historyTitle: "Global Special Bet history",
-    historySub: "Your previously generated multi-match selections, exactly as they were saved.",
-    historyEmpty: "You have no saved Global Special Bet yet.",
+    // The Tickets section: two products, two tabs, two distinct empty states —
+    // "no combos" and "no systems" are different facts.
+    ticketsTitle: "Tickets",
+    ticketsSub: "Your Global Special Bet tickets, split into Combo and System.",
+    ticketsTablist: "Ticket type",
+    ticketsTabCombo: "Combo",
+    ticketsTabSystem: "System",
+    ticketsEmptyCombo: "You have no saved Combo ticket yet.",
+    ticketsEmptySystem: "You have no saved System ticket yet.",
     historyLoading: "Loading history…",
     historyErrorTitle: "Could not load the history",
     historyLoadMore: "Load more",
