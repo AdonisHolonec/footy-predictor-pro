@@ -7,6 +7,7 @@ import StatTile from "../../design-system/StatTile";
 import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
 import { useGlobalSpecialBet } from "../../hooks/useGlobalSpecialBet";
 import {
+  describeTicketShape,
   formatDateTime,
   isUnderwaySelection,
   orderSelectionsByKickoff,
@@ -76,6 +77,15 @@ export default function GlobalSpecialBetSection({
     () => (state.phase === "ready" ? summarizeGlobalSpecialBet(state.bet) : null),
     [state]
   );
+
+  // Read from the STORED bet, never from the button the user pressed: what the
+  // server actually created is the only thing worth naming, and describeTicketShape
+  // is the same helper the history uses so one ticket cannot read two ways.
+  const shape = useMemo(
+    () => (state.phase === "ready" ? describeTicketShape(state.bet) : null),
+    [state]
+  );
+  const isSystem = state.phase === "ready" && state.bet.bet_kind === "system";
 
   const createdLabel = useMemo(
     () => (summary ? formatDateTime(summary.createdAt, locale) : null),
@@ -208,6 +218,14 @@ export default function GlobalSpecialBetSection({
         </Button>
       </div>
 
+      {/* What the selected product IS, before anything is generated. The System
+          needs saying: "Bilet Sistem" alone does not mention five legs, and it
+          certainly does not mention that three of them are enough. A Combo's
+          option label already carries its own count. */}
+      {product.kind === "system" && (
+        <p className="mt-2 text-xs font-semibold text-[var(--fp-accent)]">{t("gsb.productSystemHint")}</p>
+      )}
+
       {state.phase === "idle" && (
         <p className="mt-4 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.intro")}</p>
       )}
@@ -255,12 +273,23 @@ export default function GlobalSpecialBetSection({
         </div>
       )}
 
-      {state.phase === "ready" && summary && live && (
+      {state.phase === "ready" && summary && live && shape && (
         <div className="mt-4">
+          {/* WHAT WAS JUST CREATED, named before it is measured. A Combo 5 and a
+              Bilet Sistem both hold five legs, so without this line the two
+              confirmations are the same card with the same numbers. The same
+              helper the history uses answers it, so one ticket reads identically
+              wherever it appears — and for a System the combination count comes
+              with it, because "Sistem 3/5" without "Combinații 10" states a
+              threshold and hides what it costs to cover. */}
+          <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+            {t(shape.key, shape.vars)}
+            {shape.combinationCount ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}` : ""}
+          </p>
           {/* The sentence comes before the tiles: "3 din 5 au intrat · 2 încă în
               joc" is the answer, the tiles are the evidence. Same reading the
               history shows, so one bet reads identically in both places. */}
-          <p className="text-[length:var(--fp-body)] font-semibold text-[var(--fp-text)]">
+          <p className="mt-1 text-[length:var(--fp-body)] font-semibold text-[var(--fp-text)]">
             {t(live.reading.key, live.reading.vars)}
           </p>
           {live.next && live.next.time ? (
@@ -302,8 +331,16 @@ export default function GlobalSpecialBetSection({
                 }
               />
             </div>
+            {/* For a System this number is the product of ALL FIVE odds — the
+                price of the one all-legs combination, not what the ticket pays.
+                Calling it "Cotă totală" here told the user their 3/5 returns
+                24.42×, when ten combinations share the stake and five winners
+                return 6.83×. The history has always labelled it correctly; this
+                is the same branch, on the same helper. */}
             <StatTile
-              label={t("gsb.summaryTotalOdds")}
+              label={
+                isSystem ? t("gsb.summaryAllLegsOdds", { n: summary.variant }) : t("gsb.summaryTotalOdds")
+              }
               value={summary.totalOdds ?? "—"}
               hint={
                 summary.settledTotalOdds ? `${t("gsb.summarySettledOdds")}: ${summary.settledTotalOdds}` : undefined

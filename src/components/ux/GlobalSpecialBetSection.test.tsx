@@ -66,6 +66,35 @@ const fixtureIndex = buildFixtureLabelIndex([
   ]
 ]);
 
+/**
+ * What the server returns for a Bilet Sistem: ONE ticket, five legs, k = 3.
+ *
+ * `total_odds` is 1.8^5 = 18.896 — the product of all five odds, which is the
+ * price of the single all-legs combination and NOT what the ticket pays. At
+ * k = 3 the stake is split across C(5,3) = 10 combinations, so five winners
+ * return 6.83×.
+ */
+const SYSTEM_BODY = {
+  ok: true,
+  created: true,
+  bet: {
+    ...READY_BODY.bet,
+    id: "bet-sys",
+    variant: 5,
+    bet_kind: "system",
+    system_k: 3,
+    total_odds: 18.896,
+    ticket_probability: 0.8369
+  },
+  selections: [
+    selection({ id: "s1", fixture_id: 999001 }),
+    selection({ id: "s2", fixture_id: 999002 }),
+    selection({ id: "s3", fixture_id: 999003 }),
+    selection({ id: "s4", fixture_id: 999004 }),
+    selection({ id: "s5", fixture_id: 999005 })
+  ]
+};
+
 function renderSection(props: Record<string, unknown> = {}) {
   return render(
     <GlobalSpecialBetSection
@@ -454,6 +483,16 @@ describe("GlobalSpecialBetSection", () => {
   });
 
   describe("Bilet Sistem", () => {
+    /** Pick the System, then build it. The user's whole interaction. */
+    async function pickSystemAndGenerate() {
+      await act(async () => {
+        screen.getByRole("button", { name: "Bilet Sistem" }).click();
+      });
+      await act(async () => {
+        screen.getByRole("button", { name: /Generează|Regenerează/ }).click();
+      });
+    }
+
     it("asks the server for a System, and sends no k", async () => {
       fetchWithAuth.mockResolvedValue(jsonResponse(201, READY_BODY));
       renderSection();
@@ -474,6 +513,68 @@ describe("GlobalSpecialBetSection", () => {
       // and no control that could produce one.
       expect(Object.keys(body)).not.toContain("system_k");
       expect(Object.keys(body)).not.toContain("systemK");
+    });
+
+    it("names the product it just created, with its combination count", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SYSTEM_BODY));
+      renderSection();
+      await pickSystemAndGenerate();
+
+      expect(await screen.findByText(/Sistem 3\/5/)).toBeTruthy();
+      expect(screen.getByText(/Combinații 10/)).toBeTruthy();
+    });
+
+    it("calls the product of the five odds what it is, never the ticket price", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SYSTEM_BODY));
+      renderSection();
+      await pickSystemAndGenerate();
+
+      // 18.90 is one all-legs combination, not the payout: ten combinations
+      // share the stake, so five winners return 6.83×. Labelling it "Cotă
+      // totală" promised nearly four times what the ticket can pay.
+      expect(await screen.findByText("Cota celor 5")).toBeTruthy();
+      expect(screen.queryByText("Cotă totală")).toBeNull();
+    });
+
+    it("keeps calling a Combo's odds the total odds", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, READY_BODY));
+      renderSection();
+      await act(async () => {
+        screen.getByRole("button", { name: /Generează/ }).click();
+      });
+
+      expect(await screen.findByText("Cotă totală")).toBeTruthy();
+      expect(screen.queryByText(/Cota celor/)).toBeNull();
+      // A combo names no combination count: it has exactly one.
+      expect(screen.queryByText(/Combinații/)).toBeNull();
+    });
+
+    it("explains the product as soon as it is selected, before anything is built", async () => {
+      renderSection();
+      expect(screen.queryByText("5 selecții · câștigi cu minimum 3 corecte")).toBeNull();
+
+      await act(async () => {
+        screen.getByRole("button", { name: "Bilet Sistem" }).click();
+      });
+      expect(screen.getByText("5 selecții · câștigi cu minimum 3 corecte")).toBeTruthy();
+
+      // And it belongs to the System alone.
+      await act(async () => {
+        screen.getByRole("button", { name: "5 selecții" }).click();
+      });
+      expect(screen.queryByText("5 selecții · câștigi cu minimum 3 corecte")).toBeNull();
+    });
+
+    it("shows ONE ticket with five selections, never three", async () => {
+      fetchWithAuth.mockResolvedValue(jsonResponse(201, SYSTEM_BODY));
+      const { container } = renderSection();
+      await pickSystemAndGenerate();
+
+      await screen.findByText(/Sistem 3\/5/);
+      expect(screen.getAllByText(/Sistem \d\/5/)).toHaveLength(1);
+      expect(screen.queryByText(/Sistem 4\/5/)).toBeNull();
+      expect(screen.queryByText(/Sistem 5\/5/)).toBeNull();
+      expect(container.querySelectorAll("ul > li")).toHaveLength(5);
     });
 
     it("selecting the System does not disturb the Combo the user already built", async () => {

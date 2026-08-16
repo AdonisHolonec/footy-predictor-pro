@@ -846,8 +846,11 @@ export const en: Dict = {
     generate: "Generate",
     regenerate: "Regenerate",
     generating: "Generating your Global Special Bet…",
+    // The group now offers two products, not just a selection count: a Combo of
+    // 3, 5 or 8 fixtures, and the System ticket. The old wording ("pick how many
+    // selections you want") described only half the choice.
     intro:
-      "Pick how many selections you want and the server builds that variant from all your upcoming predicted fixtures in your favorite leagues.",
+      "Pick the ticket type and the server builds it from all your upcoming predicted fixtures in your favorite leagues.",
     summarySelections: "Selections",
     summaryTotalOdds: "Total odds",
     summarySettledOdds: "Settled odds",

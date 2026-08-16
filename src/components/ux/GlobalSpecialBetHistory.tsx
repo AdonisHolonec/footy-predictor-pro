@@ -22,14 +22,19 @@ const TAB_LABEL_KEY: Record<GlobalSpecialBetKind, string> = {
  * A separate section from the per-match history it sits above: that one is a
  * list of matches, this one is a list of tickets.
  *
- * WHY TWO TABS AND NOT FOUR. Systems 3/5, 4/5 and 5/5 are three different
- * tickets, but the API filters on `bet_kind` only — there is no `system_k`
- * parameter, and pagination is a server-side range over the filtered set. Four
- * tabs would therefore have to filter a received page in the browser, which
- * quietly breaks "load more": `hasMore` means *this page came back full*, and a
- * page that is full of systems can be empty of 4/5s. So the split stops where
- * the server's filter stops, and each row names its own shape and combination
- * count instead — "Sistem 3/5 · Combinații 10" is on the card either way.
+ * WHY TWO TABS AND NOT FOUR. Because there are two products. The public System
+ * is Sistem 3/5 and only that: five selections of which at least three must win,
+ * with the k fixed by the server. 4/5 and 5/5 are not tickets anyone can buy —
+ * they are what a 3/5 ticket DOES when four or five of its legs land, and that
+ * is already told through the one ticket's winning combinations.
+ *
+ * A tab per k would therefore invent products the product does not sell. Rows
+ * stored at another k — reachable only through a direct backend call — still
+ * render honestly here, each naming its own shape and combination count, because
+ * this list describes stored tickets rather than offering choices. It also could
+ * not be paginated: the API filters on `bet_kind` alone, and `hasMore` means
+ * *this page came back full*, which a page full of systems can be while holding
+ * no 4/5 at all.
  *
  * Each tab owns its own request. The list is keyed by kind, so switching tabs
  * mounts a fresh hook with its own loading, error, empty, page and hasMore —

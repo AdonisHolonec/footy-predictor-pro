@@ -846,8 +846,11 @@ export const ro: Dict = {
     generate: "Generează",
     regenerate: "Regenerează",
     generating: "Îți construim Global Special Bet…",
+    // Grupul oferă acum două produse, nu doar un număr de selecții: Combo la 3,
+    // 5 sau 8 meciuri şi Biletul Sistem. Formularea veche („alege câte selecții
+    // vrei") descria doar jumătate din alegere.
     intro:
-      "Alege câte selecții vrei, iar serverul construiește varianta din toate meciurile tale viitoare cu predicții, în ligile favorite.",
+      "Alege tipul biletului, iar serverul îl construiește din toate meciurile tale viitoare cu predicții, în ligile favorite.",
     summarySelections: "Selecții",
     summaryTotalOdds: "Cotă totală",
     summarySettledOdds: "Cotă la decontare",
