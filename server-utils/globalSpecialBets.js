@@ -37,7 +37,7 @@ export function isValidVariant(variant) {
  * The two products stored in `special_bets`, spelled as the `bet_kind` column spells them.
  *
  * Kept as its own list rather than derived from the variant, because the variant cannot
- * tell them apart: a Combo 5 and all three Systems are variant 5.
+ * tell them apart: a Combo 5 and any stored System are both variant 5.
  */
 export const GLOBAL_SPECIAL_BET_KINDS = ["combo", "system"];
 
@@ -264,13 +264,16 @@ export async function createGlobalSpecialBet({
 }
 
 /**
- * Generate (or return) all three System tickets for one user/date/league scope.
+ * Generate (or return) THE System ticket for one user/date/league scope.
  *
- * ONE POOL, ONE BUILD, THREE ROWS. The five legs are chosen once and the same
- * five are written for 3/5, 4/5 and 5/5 — only k differs. Three separate calls
- * would each re-read the pool at a slightly later `now`, and a fixture kicking
- * off between them would silently give the three tickets different legs, which
- * is exactly the inconsistency the product must not have.
+ * ONE POOL, ONE BUILD, ONE ROW. The five legs are chosen once and written at the
+ * k the caller supplied. The public product fixes that at 3 — in the API layer,
+ * not here — so what ships is Bilet Sistem 3/5 and nothing else.
+ *
+ * This once wrote three rows from one pool, one per k, which turned a single
+ * five-leg opinion into three stored tickets and three stakes. 4/5 and 5/5 are
+ * not other tickets: they are what a 3/5 DOES when four or five of its legs
+ * land, and settlement already says so through the combinations that won.
  *
  * Everything below the build is the Combo path, reused rather than rebuilt:
  * canonicalizeLeagueScope, loadCandidatePayloads, resolveModelVersion,
@@ -278,15 +281,16 @@ export async function createGlobalSpecialBet({
  * migration 052 already provides.
  *
  * `total_odds` carries the PRODUCT of the five odds, the schema's existing
- * required field. It is not the payout of a 3/5 or a 4/5 — that is derived at
- * settlement, from the combinations that actually won — and no surface may
- * present it as one.
+ * required field. It is not the ticket's payout — that is derived at settlement,
+ * from the combinations that actually won — and no surface may present it as
+ * one.
  *
  * `ticket_probability` is P(X >= k), never Πp. The engine computed it in
  * toSystemBet through the single Poisson-binomial implementation; nothing is
  * recalculated here.
  *
- * @param {{ userId: string, betDate: string, leagueIds: number[], now?: number, supabase?: object }} params
+ * @param {{ userId: string, betDate: string, leagueIds: number[], systemK: number,
+ *           now?: number, supabase?: object }} params
  */
 export async function createGlobalSystemBets({
   userId,
@@ -411,10 +415,15 @@ export async function listGlobalSpecialBets({
     .range(safeOffset, safeOffset + safeLimit - 1);
 
   if (variant !== undefined && variant !== null && variant !== "") query = query.eq("variant", Number(variant));
-  // Variant does NOT imply kind: a Combo 5 and Systems 3/5, 4/5 and 5/5 all carry
-  // variant 5, so filtering on variant alone returns four different products under
-  // one heading. Kind is the only thing that separates them, and it is optional so
-  // that a caller asking for everything still gets everything.
+  // Variant does NOT imply kind: a Combo 5 and any stored System both carry
+  // variant 5, so filtering on variant alone returns Combos and Systems under one
+  // heading. `bet_kind` is the only thing that separates them, and it is optional
+  // so a caller asking for everything still gets everything.
+  //
+  // Stored shapes are wider than the public product on purpose: the column holds
+  // system_k 3, 4 or 5 (migration 054), while the only System on sale is 3/5.
+  // There is no system_k filter here — narrowing the list by a threshold nobody
+  // can choose would be answering a question the product does not ask.
   if (betKind !== undefined && betKind !== null && betKind !== "") query = query.eq("bet_kind", String(betKind));
   if (betDate) query = query.eq("bet_date", betDate);
 

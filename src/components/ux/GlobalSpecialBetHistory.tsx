@@ -1,21 +1,8 @@
 import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
-import Badge from "../../design-system/Badge";
-import Button from "../../design-system/Button";
-import Card from "../../design-system/Card";
-import Skeleton from "../../design-system/Skeleton";
-import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
-import { useGlobalSpecialBetHistory } from "../../hooks/useGlobalSpecialBetHistory";
-import {
-  describeTicketOutcome,
-  describeTicketShape,
-  formatConfidencePercent,
-  formatOdds,
-  formatProbabilityPercent,
-  isDecidingSelection,
-  readGlobalSpecialBet,
-  type FixtureLabel
-} from "../../utils/globalSpecialBetView";
+import GlobalSpecialBetTicketList from "./GlobalSpecialBetTicketList";
+import { GLOBAL_SPECIAL_BET_KINDS, type GlobalSpecialBetKind } from "../../types/globalSpecialBet";
+import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 
 type Props = {
   fixtureIndex?: Map<number, FixtureLabel>;
@@ -23,30 +10,43 @@ type Props = {
   canUseGlobalSpecialBet?: boolean;
 };
 
+/** The two products the API can filter on. Sourced from the type, never re-listed. */
+const TAB_LABEL_KEY: Record<GlobalSpecialBetKind, string> = {
+  combo: "gsb.ticketsTabCombo",
+  system: "gsb.ticketsTabSystem"
+};
+
 /**
- * Stored Global Special Bets, newest first.
+ * Bilete — the user's stored Global Special Bets, one tab per product.
  *
- * A separate history from the per-match Special Bet list it sits above: this one
- * is a list of accumulators, that one is a list of matches. Every value shown is
- * the stored snapshot — nothing is re-graded or re-priced on the client, and a
- * NULL settled odd renders as a dash rather than a zero.
+ * A separate section from the per-match history it sits above: that one is a
+ * list of matches, this one is a list of tickets.
+ *
+ * WHY TWO TABS AND NOT FOUR. Because there are two products. The public System
+ * is Sistem 3/5 and only that: five selections of which at least three must win,
+ * with the k fixed by the server. 4/5 and 5/5 are not tickets anyone can buy —
+ * they are what a 3/5 ticket DOES when four or five of its legs land, and that
+ * is already told through the one ticket's winning combinations.
+ *
+ * A tab per k would therefore invent products the product does not sell. Rows
+ * stored at another k — reachable only through a direct backend call — still
+ * render honestly here, each naming its own shape and combination count, because
+ * this list describes stored tickets rather than offering choices. It also could
+ * not be paginated: the API filters on `bet_kind` alone, and `hasMore` means
+ * *this page came back full*, which a page full of systems can be while holding
+ * no 4/5 at all.
+ *
+ * Each tab owns its own request. The list is keyed by kind, so switching tabs
+ * mounts a fresh hook with its own loading, error, empty, page and hasMore —
+ * never one list re-filtered, and never one product's rows under the other's
+ * heading. The cost is a refetch on switch; a cache here would be a second
+ * source of truth for data the server already paginates, so there isn't one.
  */
 export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpecialBet = false }: Props) {
-  const { t, locale } = useLocale();
-  const { state, loadMore, retry } = useGlobalSpecialBetHistory({ enabled: canUseGlobalSpecialBet });
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { t } = useLocale();
+  const [kind, setKind] = useState<GlobalSpecialBetKind>("combo");
 
   if (!canUseGlobalSpecialBet) return null;
-
-  const formatDay = (value: string) => {
-    const ms = Date.parse(value);
-    if (!Number.isFinite(ms)) return value;
-    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }).format(new Date(ms));
-  };
 
   return (
     <section className="space-y-3">
@@ -55,150 +55,36 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
           {t("gsb.eyebrow")}
         </p>
         <h2 className="mt-1 font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
-          {t("gsb.historyTitle")}
+          {t("gsb.ticketsTitle")}
         </h2>
-        <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.historySub")}</p>
+        <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.ticketsSub")}</p>
       </header>
 
-      {state.phase === "loading" && (
-        <div role="status" aria-live="polite" className="space-y-2">
-          <p className="sr-only">{t("gsb.historyLoading")}</p>
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      )}
+      {/* The same segmented pattern the match analysis uses: a real tablist, and
+          it scrolls rather than wraps so the labels never stack on a phone. */}
+      <div className="flex gap-0.5 overflow-x-auto pb-0.5" role="tablist" aria-label={t("gsb.ticketsTablist")}>
+        {GLOBAL_SPECIAL_BET_KINDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={kind === id}
+            onClick={() => setKind(id)}
+            className={`h-9 shrink-0 rounded-md px-3 py-1 text-[10px] font-bold uppercase tracking-wide focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
+              kind === id
+                ? "bg-[var(--fp-accent-muted)] text-[var(--fp-accent)]"
+                : "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)]"
+            }`}
+          >
+            {t(TAB_LABEL_KEY[id])}
+          </button>
+        ))}
+      </div>
 
-      {state.phase === "error" && (
-        <div
-          role="alert"
-          className="rounded-[var(--fp-radius)] border border-[var(--fp-danger)]/35 bg-[var(--fp-danger)]/10 px-4 py-3"
-        >
-          <p className="font-display text-sm font-semibold text-[var(--fp-danger)]">{t("gsb.historyErrorTitle")}</p>
-          <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">
-            {state.error.message || t(state.error.messageKey)}
-          </p>
-          {state.error.retryable && (
-            <Button className="mt-3" variant="secondary" size="sm" onClick={retry}>
-              {t("gsb.retry")}
-            </Button>
-          )}
-        </div>
-      )}
-
-      {state.phase === "ready" && state.bets.length === 0 && (
-        <Card>
-          <p className="text-sm text-[var(--fp-text-muted)]">{t("gsb.historyEmpty")}</p>
-        </Card>
-      )}
-
-      {state.phase === "ready" && state.bets.length > 0 && (
-        <>
-          <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
-            {state.bets.map((bet, idx) => {
-              const expanded = expandedId === bet.id;
-              const isLast = idx === state.bets.length - 1;
-              const shape = describeTicketShape(bet);
-              const isSystem = bet.bet_kind === "system";
-              const totalOdds = formatOdds(bet.total_odds);
-              // What actually came back, and whether it beat the stake. One helper
-              // answers it for both products, so a System that won under its stake
-              // cannot be reported the way a Combo win is.
-              const outcome = describeTicketOutcome(bet);
-              const confidence = formatConfidencePercent(bet.average_confidence);
-              // The STORED ticket chance (migration 050) — never recomputed
-              // from the legs. Null on legacy rows, which keep the old
-              // confidence line instead of a dash that explains nothing.
-              const ticketChance = formatProbabilityPercent(bet.ticket_probability);
-              const reading = readGlobalSpecialBet(bet);
-              return (
-                <div key={bet.id} className={!isLast || expanded ? "border-b border-[var(--fp-border)]" : ""}>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(expanded ? null : bet.id)}
-                    aria-expanded={expanded}
-                    aria-label={expanded ? t("gsb.collapse") : t("gsb.expand")}
-                    className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
-                      expanded ? "bg-[var(--fp-accent-muted)]" : "hover:bg-[var(--fp-bg-muted)]"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-                        {formatDay(bet.bet_date)} · {t(shape.key, shape.vars)}
-                      </p>
-                      {/* The numbers stay on the collapsed row: shape and price are
-                          what the user scans a history for. For a system the product
-                          of the odds is the ALL-legs combination, not the ticket's
-                          price, so it is labelled as such and sits next to how many
-                          combinations the ticket actually covers. */}
-                      <p className="mt-0.5 font-mono text-sm tabular-nums text-[var(--fp-text)]">
-                        {t("gsb.summarySelections")} {bet.selections.length} ·{" "}
-                        {isSystem
-                          ? t("gsb.summaryAllLegsOdds", { n: bet.variant })
-                          : t("gsb.summaryTotalOdds")}{" "}
-                        <span className="font-bold">{totalOdds ?? "—"}</span>
-                        {isSystem && shape.combinationCount
-                          ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}`
-                          : ""}
-                      </p>
-                      {/* The settled figure is a sentence, not a bare odd: "returned
-                          0.80× · net −20%" is the answer to the question a history is
-                          opened to ask, and a bare 0.80 next to "settled odds" is not. */}
-                      <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
-                        {t(outcome.detailKey, outcome.vars)}
-                      </p>
-                      {outcome.warningKey ? (
-                        <p className="mt-0.5 text-[11px] font-semibold text-[var(--fp-warning)]">
-                          {t(outcome.warningKey)}
-                        </p>
-                      ) : null}
-                      {/* The reading sits above the confidence digit on purpose:
-                          "a picat pe o singură selecție" is what the user came to
-                          find out, and it reads as a sentence, not as more data. */}
-                      <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text)]">
-                        {t(reading.key, reading.vars)}
-                      </p>
-                      {ticketChance ? (
-                        <p
-                          className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]"
-                          aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}
-                        >
-                          {t("gsb.ticketChance")}: {ticketChance}
-                        </p>
-                      ) : (
-                        <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
-                          {t("gsb.summaryAvgConfidence")} {confidence ?? "—"}
-                        </p>
-                      )}
-                    </div>
-                    <Badge tone={outcome.tone}>{t(outcome.labelKey)}</Badge>
-                  </button>
-
-                  {expanded && (
-                    <div className="border-t border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-3">
-                      <ul className="space-y-2">
-                        {bet.selections.map((selection) => (
-                          <GlobalSpecialBetSelectionRow
-                            key={selection.id}
-                            selection={selection}
-                            fixtureIndex={fixtureIndex}
-                            deciding={isDecidingSelection(bet.status, selection)}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {state.hasMore && (
-            <Button variant="secondary" size="sm" onClick={loadMore}>
-              {t("gsb.historyLoadMore")}
-            </Button>
-          )}
-        </>
-      )}
+      <div role="tabpanel" className="space-y-3">
+        {/* Keyed by kind: a tab switch is a new list, not a re-filtered one. */}
+        <GlobalSpecialBetTicketList key={kind} kind={kind} fixtureIndex={fixtureIndex} />
+      </div>
     </section>
   );
 }

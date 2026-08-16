@@ -77,7 +77,10 @@ describe("GlobalSpecialBetHistory", () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
 
-    await waitFor(() => expect(screen.getByText("Nu ai încă niciun Global Special Bet salvat.")).toBeTruthy());
+    // The section now opens on the Combo tab, and each product owns its own empty
+    // copy: a single "nothing saved" line would be a claim neither tab can make,
+    // since neither tab has seen the other's rows.
+    await waitFor(() => expect(screen.getByText("Nu ai încă niciun bilet Combo salvat.")).toBeTruthy());
   });
 
   it("keeps status and price readable without opening the item", async () => {

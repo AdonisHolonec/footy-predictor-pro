@@ -846,8 +846,11 @@ export const en: Dict = {
     generate: "Generate",
     regenerate: "Regenerate",
     generating: "Generating your Global Special Bet…",
+    // The group now offers two products, not just a selection count: a Combo of
+    // 3, 5 or 8 fixtures, and the System ticket. The old wording ("pick how many
+    // selections you want") described only half the choice.
     intro:
-      "Pick how many selections you want and the server builds that variant from all your upcoming predicted fixtures in your favorite leagues.",
+      "Pick the ticket type and the server builds it from all your upcoming predicted fixtures in your favorite leagues.",
     summarySelections: "Selections",
     summaryTotalOdds: "Total odds",
     summarySettledOdds: "Settled odds",
@@ -906,9 +909,15 @@ export const en: Dict = {
     lockedTitle: "Global Special Bet",
     lockedDesc: "Global Special Bet is available on the Ultra plan.",
     unlock: "Unlock",
-    historyTitle: "Global Special Bet history",
-    historySub: "Your previously generated multi-match selections, exactly as they were saved.",
-    historyEmpty: "You have no saved Global Special Bet yet.",
+    // The Tickets section: two products, two tabs, two distinct empty states —
+    // "no combos" and "no systems" are different facts.
+    ticketsTitle: "Tickets",
+    ticketsSub: "Your Global Special Bet tickets, split into Combo and System.",
+    ticketsTablist: "Ticket type",
+    ticketsTabCombo: "Combo",
+    ticketsTabSystem: "System",
+    ticketsEmptyCombo: "You have no saved Combo ticket yet.",
+    ticketsEmptySystem: "You have no saved System ticket yet.",
     historyLoading: "Loading history…",
     historyErrorTitle: "Could not load the history",
     historyLoadMore: "Load more",
