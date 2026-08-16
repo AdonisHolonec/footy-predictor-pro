@@ -932,6 +932,26 @@ export const en: Dict = {
   },
   // Three separate surfaces on purpose: solving a problem, improving the product,
   // and flagging one prediction are different asks and read differently.
+  myTickets: {
+    title: "Your messages",
+    empty: "You have not sent us anything yet.",
+    error: "We could not load your messages.",
+    retry: "Try again",
+    noMessages: "No messages on this ticket.",
+    kindSupport: "Support",
+    kindReport: "Report",
+    fromYou: "You",
+    fromTeam: "Footy Predictor",
+    // The five values migration 051 allows — no more, and no synonyms.
+    status: {
+      open: "Open",
+      in_progress: "In progress",
+      waiting_user: "Waiting for you",
+      resolved: "Resolved",
+      closed: "Closed"
+    },
+    priority: { low: "Low", normal: "Normal", high: "High" }
+  },
   support: {
     sectionTitle: "Help & support",
     sectionHint: "Something broken, or an idea for us — either way we read all of it.",
