@@ -388,6 +388,71 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
 }
 
 /**
+ * The ONLY raw_payload keys the win/loss aggregate reads, traced through
+ * aggregateCardMarketStats -> resolveCardMarketValidations -> deriveCardMarketPicks:
+ *
+ *   status, score, validation, cardMarkets, cardMarketValidations,
+ *   marketResults                  - read by resolveCardMarketValidations
+ *   recommended, probs, marketOdds - read by deriveCardMarketPicks(payload)
+ *
+ * Selecting the raw_payload COLUMN instead pulled the whole document, and those
+ * rows are ~134KB at the median (see the upsert-chunking note above). At the
+ * public default (days=30, limit=500) that is tens of MB serialized by PostgREST
+ * to produce a ~130 byte response - enough to cross Postgres' statement_timeout,
+ * which is why GET /api/history?days=30 failed intermittently in production.
+ */
+export const AGGREGATE_PAYLOAD_KEYS = Object.freeze([
+  "cardMarketValidations",
+  "cardMarkets",
+  "marketOdds",
+  "marketResults",
+  "probs",
+  "recommended",
+  "score",
+  "status",
+  "validation"
+]);
+
+const AGGREGATE_PAYLOAD_PREFIX = "pl_";
+
+/** Scalar columns the aggregate reads straight off the row. */
+const AGGREGATE_ROW_COLUMNS = Object.freeze([
+  "validation",
+  "match_status",
+  "score_home",
+  "score_away",
+  "recommended_pick"
+]);
+
+/** `pl_status:raw_payload->status, ...` - PostgREST projects the keys, not the blob. */
+export const AGGREGATE_STATS_SELECT = [
+  ...AGGREGATE_ROW_COLUMNS,
+  ...AGGREGATE_PAYLOAD_KEYS.map((key) => `${AGGREGATE_PAYLOAD_PREFIX}${key}:raw_payload->${key}`)
+].join(", ");
+
+/**
+ * Rebuild the row shape the settlement helpers expect. They take a DB row and
+ * reach into `row.raw_payload`, so the projected keys are folded back into
+ * exactly that shape - the helpers are untouched and cannot tell the difference.
+ */
+export function rehydrateAggregateRow(row) {
+  const source = row && typeof row === "object" ? row : {};
+  const rawPayload = {};
+  for (const key of AGGREGATE_PAYLOAD_KEYS) {
+    const value = source[`${AGGREGATE_PAYLOAD_PREFIX}${key}`];
+    if (value !== undefined && value !== null) rawPayload[key] = value;
+  }
+  return {
+    validation: source.validation ?? null,
+    match_status: source.match_status ?? null,
+    score_home: source.score_home ?? null,
+    score_away: source.score_away ?? null,
+    recommended_pick: source.recommended_pick ?? null,
+    raw_payload: rawPayload
+  };
+}
+
+/**
  * Win/loss aggregates for marketing / login stats.
  * Uses raw_payload card markets when present so goals/corners/shots count too.
  */
@@ -399,12 +464,12 @@ export async function readPredictionsHistoryAggregateStats(days = 30, limit = 50
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
-    .select("validation, match_status, score_home, score_away, recommended_pick, raw_payload")
+    .select(AGGREGATE_STATS_SELECT)
     .gte("kickoff_at", cutoff)
     .order("kickoff_at", { ascending: false })
     .limit(safeLimit);
   if (error) throw error;
-  const rows = data || [];
+  const rows = (data || []).map(rehydrateAggregateRow);
   return { stats: aggregateCardMarketStats(rows) };
 }
 
