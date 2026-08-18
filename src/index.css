@@ -310,6 +310,42 @@
   .glass-input::placeholder {
     color: color-mix(in srgb, var(--fp-text-muted) 60%, transparent);
   }
+
+  /**
+   * Grows a control's POINTER TARGET to --fp-touch (44px) without changing a
+   * single pixel of its box, so the shell's dense toolbar keeps the 36px visual
+   * rhythm it deliberately uses ("sm = 36px, allowed in dense toolbars only" —
+   * IconButton) while the thing a thumb has to hit is a comfortable 44px.
+   *
+   * Raising min-height instead measured +16px on the mobile header (139 -> 155),
+   * which works against how much of an 844px phone the chrome already occupies.
+   *
+   * The overlay never shrinks a target that is already larger, and it needs no
+   * z-index: it sits inside the control, so a press anywhere on it is a press
+   * on the control.
+   *
+   * CAVEAT — the overlay is a pseudo-element, so `overflow: hidden` anywhere
+   * between it and the viewport CLIPS IT AWAY and the class silently does
+   * nothing. Two controls in this shell are exactly that case and deliberately
+   * do NOT carry it: the brand button clips itself with `truncate`, and the
+   * RO/EN pair sits inside a rounded `overflow-hidden` group. Both already
+   * clear the 24px WCAG 2.2 AA minimum; widening them needs markup changes, not
+   * this class. Verify with elementFromPoint at the edge of the intended area
+   * before assuming a control gained one.
+   */
+  .touch-target {
+    position: relative;
+  }
+
+  .touch-target::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    width: max(100%, var(--fp-touch));
+    height: max(100%, var(--fp-touch));
+  }
 }
 
 @keyframes fadeIn {
