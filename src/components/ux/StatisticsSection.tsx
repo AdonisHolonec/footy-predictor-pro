@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import type { HistoryEntry, PerformanceLeagueBreakdown } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
-import { StatTile } from "../../design-system";
 import Skeleton from "../../design-system/Skeleton";
 import SectionHeader from "../../design-system/SectionHeader";
 import CalibrationChart from "./CalibrationChart";
@@ -11,20 +10,12 @@ const TrackRecordSection = lazy(() => import("../TrackRecordSection"));
 
 type Props = {
   trackerSlot?: ReactNode;
-  winRate: number;
-  settled: number;
-  wins: number;
-  losses: number;
   history?: HistoryEntry[];
   leagueBreakdown?: PerformanceLeagueBreakdown[];
 };
 
 export default function StatisticsSection({
   trackerSlot,
-  winRate,
-  settled,
-  wins,
-  losses,
   history = [],
   leagueBreakdown = []
 }: Props) {
@@ -35,17 +26,9 @@ export default function StatisticsSection({
         <SectionHeader as="h1" size="page" eyebrow={t("stats.eyebrow")} title={t("stats.title")} description={t("stats.sub")} />
       </header>
 
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-        <StatTile
-          label={t("stats.successRate")}
-          value={settled ? `${winRate.toFixed(1)}%` : "—"}
-          tone={!settled ? "neutral" : winRate >= 50 ? "success" : "warning"}
-        />
-        <StatTile label={t("stats.wins")} value={String(wins)} tone="success" />
-        <StatTile label={t("stats.losses")} value={String(losses)} tone="danger" />
-        <StatTile label={t("stats.settled")} value={String(settled)} tone="neutral" />
-      </div>
-
+      {/* The single canonical performance block. A StatTile row used to sit
+          above it repeating hit rate, wins, losses and settled — every one of
+          which the tracker already shows. */}
       {trackerSlot}
 
       <CalibrationChart history={history} />

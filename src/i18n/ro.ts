@@ -579,8 +579,8 @@ export const ro: Dict = {
     wins: "Victorii",
     losses: "Înfrângeri",
     hitRate: "Rată lovitură",
-    openConsole: "Deschide consola detaliată · click",
-    sync: "Sincronizare…"
+    openConsole: "Deschide consola detaliată",
+    sync: "Se actualizează…"
   },
   history: {
     eyebrow: "Istoric",
@@ -597,7 +597,8 @@ export const ro: Dict = {
     outcomeHalfLoss: "Pierdere 1/2",
     topPick: "Top pick:",
     score: "Scor {home}-{away}",
-    empty: "Încă nu există predicții în istoric. Rulează Predict, apoi revino după sync.",
+    emptyTitle: "Niciun rezultat încă",
+    empty: "Predicțiile tale apar aici după ce meciurile se termină și rezultatele sunt validate.",
     selectedMatch: "Pariu special · meci selectat",
     clearSelection: "Închide",
     confidence: "Încredere {value}",
