@@ -12,12 +12,15 @@ type Props = {
   trackerSlot?: ReactNode;
   history?: HistoryEntry[];
   leagueBreakdown?: PerformanceLeagueBreakdown[];
+  /** Next step for an account with no settled results yet. */
+  onStartPredicting?: () => void;
 };
 
 export default function StatisticsSection({
   trackerSlot,
   history = [],
-  leagueBreakdown = []
+  leagueBreakdown = [],
+  onStartPredicting
 }: Props) {
   const { t } = useLocale();
   return (
@@ -36,7 +39,11 @@ export default function StatisticsSection({
       {/* The per-day / per-league / per-market tables used to sit on Home, where
           they answered a question Home does not ask. They belong beside the rest
           of the track record. */}
-      <HistoryTrustSection history={history} leagueBreakdown={leagueBreakdown} />
+      <HistoryTrustSection
+        history={history}
+        leagueBreakdown={leagueBreakdown}
+        onStartPredicting={onStartPredicting}
+      />
 
       <Suspense fallback={<Skeleton className="h-48 w-full" />}>
         <TrackRecordSection days={45} showLinkToFull compact={false} />
