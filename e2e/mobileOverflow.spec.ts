@@ -57,6 +57,53 @@ async function expectNoHorizontalOverflow(page: Page, view: string) {
 
   // The offender list is asserted first: when this regresses it names the
   // element, which a bare width comparison never would.
+  // TEMPORARY CI DIAGNOSTIC — not for merge. The offender list comes back empty
+  // while the document measures 433/390 on the runner, so the cause is something
+  // querySelectorAll cannot return: a pseudo-element, or inline/text content
+  // overflowing a box whose own rect stays inside the viewport.
+  const forensics = await page.evaluate(() => {
+    const doc = globalThis.document;
+    const vw = globalThis.innerWidth;
+    const rows: string[] = [];
+    const desc = (el: Element) => `${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 44)}`;
+
+    const widest: { r: number; s: string }[] = [];
+    const contentOverflow: string[] = [];
+    const pseudo: string[] = [];
+
+    for (const el of Array.from(doc.querySelectorAll("body *"))) {
+      const r = el.getBoundingClientRect();
+      const cs = globalThis.getComputedStyle(el);
+      if (r.width || r.height) {
+        widest.push({ r: r.right, s: `${desc(el)} [${Math.round(r.left)}->${Math.round(r.right)}] pos=${cs.position}` });
+      }
+      // Content wider than the box: text or inline children spilling out.
+      if (el.scrollWidth > el.clientWidth + 1 && cs.overflowX === "visible") {
+        contentOverflow.push(
+          `${desc(el)} scrollW=${el.scrollWidth} clientW=${el.clientWidth} rect=${Math.round(r.left)}->${Math.round(r.right)} ws=${cs.whiteSpace}`
+        );
+      }
+      for (const which of ["::before", "::after"]) {
+        const p = globalThis.getComputedStyle(el, which);
+        if (!p || p.content === "none" || p.content === "") continue;
+        const w = parseFloat(p.width) || 0;
+        if (!w) continue;
+        const right = r.left + w;
+        if (w > vw || right > vw + 1) {
+          pseudo.push(`${desc(el)}${which} w=${Math.round(w)} pos=${p.position} left=${p.left} host=[${Math.round(r.left)}->${Math.round(r.right)}]`);
+        }
+      }
+    }
+    widest.sort((a, b) => b.r - a.r);
+    rows.push("FONT: " + globalThis.getComputedStyle(doc.body).fontFamily.slice(0, 90));
+    rows.push("WIDEST-RIGHT: " + widest.slice(0, 6).map((x) => x.s).join(" | "));
+    rows.push("CONTENT-OVERFLOW: " + (contentOverflow.slice(0, 6).join(" | ") || "none"));
+    rows.push("PSEUDO-WIDE: " + (pseudo.slice(0, 6).join(" | ") || "none"));
+    return rows;
+  });
+  // eslint-disable-next-line no-console
+  console.log(`\n===== OVERFLOW FORENSICS (${view}) =====\n` + forensics.join("\n") + "\n=====\n");
+
   expect(result.offenders, `${view}: element(s) overhang the 390px viewport`).toEqual([]);
   expect(
     result.scrollWidth,
