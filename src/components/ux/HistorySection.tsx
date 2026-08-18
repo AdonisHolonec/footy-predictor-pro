@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
-import Card from "../../design-system/Card";
+import EmptyState from "../../design-system/EmptyState";
 import SectionHeader from "../../design-system/SectionHeader";
 import Badge from "../../design-system/Badge";
-import { StatTile } from "../../design-system";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
 import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
@@ -14,11 +13,6 @@ import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 type Props = {
   history: HistoryEntry[];
   trackerSlot?: ReactNode;
-  pendingCount: number;
-  wins: number;
-  losses: number;
-  settled: number;
-  winRate: number;
   /** Open full match analysis (MatchModal). */
   onOpenMatch?: (row: HistoryEntry) => void;
   /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
@@ -45,11 +39,6 @@ function rowKey(row: HistoryEntry): string {
 export default function HistorySection({
   history,
   trackerSlot,
-  pendingCount,
-  wins,
-  losses,
-  settled,
-  winRate,
   onOpenMatch,
   canShowSpecialBet = false,
   onUpgradeRequired,
@@ -80,22 +69,10 @@ export default function HistorySection({
         <SectionHeader as="h1" size="page" eyebrow={t("history.eyebrow")} title={t("history.title")} description={t("history.sub")} />
       </header>
 
+      {/* The single canonical performance block. A StatTile row used to sit
+          below it repeating hit rate, W/L, pending and settled — every one of
+          which the tracker already shows. */}
       {trackerSlot}
-
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-        <StatTile
-          label={t("history.successRate")}
-          value={settled ? `${winRate.toFixed(1)}%` : "—"}
-          tone={!settled ? "neutral" : winRate >= 50 ? "success" : "warning"}
-        />
-        <StatTile label="W / L" value={`${wins} / ${losses}`} tone="neutral" />
-        <StatTile
-          label={t("history.pending")}
-          value={String(pendingCount)}
-          tone={pendingCount > 0 ? "warning" : "neutral"}
-        />
-        <StatTile label={t("history.settled")} value={String(settled)} tone="neutral" />
-      </div>
 
       {/* A list of accumulators, kept above and apart from the per-match list
           below it — the two are different products and must never read as one. */}
@@ -105,9 +82,7 @@ export default function HistorySection({
       />
 
       {!rows.length ? (
-        <Card>
-          <p className="text-sm text-[var(--fp-text-muted)]">{t("history.empty")}</p>
-        </Card>
+        <EmptyState title={t("history.emptyTitle")} description={t("history.empty")} />
       ) : (
         <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
           {rows.slice(0, 80).map((row, idx, visibleRows) => {

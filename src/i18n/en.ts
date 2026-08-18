@@ -579,8 +579,8 @@ export const en: Dict = {
     wins: "Wins",
     losses: "Losses",
     hitRate: "Hit rate",
-    openConsole: "Open detailed console · click",
-    sync: "Sync…"
+    openConsole: "Open detailed console",
+    sync: "Updating…"
   },
   history: {
     eyebrow: "History",
@@ -597,7 +597,8 @@ export const en: Dict = {
     outcomeHalfLoss: "Half Loss",
     topPick: "Top pick:",
     score: "Score {home}-{away}",
-    empty: "No predictions in history yet. Run Predict, then come back after sync.",
+    emptyTitle: "No results yet",
+    empty: "Your predictions appear here once their matches finish and the results are validated.",
     selectedMatch: "Special bet · selected match",
     clearSelection: "Close",
     confidence: "Confidence {value}",

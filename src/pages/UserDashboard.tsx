@@ -639,7 +639,6 @@ export default function UserDashboard() {
           analysisMatch={analysisMatch}
           history={history}
           trackerSlot={trackerSlot}
-          pendingHistoryCount={pendingHistoryCount}
           canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
           continueMatch={continueMatch}
         />
@@ -649,11 +648,6 @@ export default function UserDashboard() {
         <HistorySection
           history={history}
           trackerSlot={trackerSlot}
-          pendingCount={pendingHistoryCount}
-          wins={trackerStats.wins}
-          losses={trackerStats.losses}
-          settled={trackerStats.settled}
-          winRate={trackerStats.winRate}
           onOpenMatch={openMatch}
           canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
@@ -665,10 +659,6 @@ export default function UserDashboard() {
       {navView === "statistics" && (
         <StatisticsSection
           trackerSlot={trackerSlot}
-          winRate={trackerStats.winRate}
-          settled={trackerStats.settled}
-          wins={trackerStats.wins}
-          losses={trackerStats.losses}
           history={history}
           leagueBreakdown={userPerformanceByLeague}
         />

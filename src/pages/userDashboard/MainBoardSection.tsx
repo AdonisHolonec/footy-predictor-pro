@@ -49,7 +49,6 @@ export default function MainBoardSection({
   analysisMatch,
   history,
   trackerSlot,
-  pendingHistoryCount,
   canShowSpecialBet,
   continueMatch
 }: {
@@ -71,7 +70,6 @@ export default function MainBoardSection({
   analysisMatch: PredictionRow | null;
   history: HistoryEntry[];
   trackerSlot: ReactNode;
-  pendingHistoryCount: number;
   canShowSpecialBet: boolean;
   continueMatch: PredictionRow | null;
 }) {
@@ -224,11 +222,6 @@ export default function MainBoardSection({
         <HistorySection
           history={history}
           trackerSlot={trackerSlot}
-          pendingCount={pendingHistoryCount}
-          wins={trackerStats.wins}
-          losses={trackerStats.losses}
-          settled={trackerStats.settled}
-          winRate={trackerStats.winRate}
           onOpenMatch={openMatch}
           canShowSpecialBet={canShowSpecialBet}
           onUpgradeRequired={onUpgradeRequired}
@@ -249,10 +242,6 @@ export default function MainBoardSection({
         <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">{t("dash.insightsLoading")}</p>}>
           <StatisticsSection
             trackerSlot={trackerSlot}
-            winRate={trackerStats.winRate}
-            settled={trackerStats.settled}
-            wins={trackerStats.wins}
-            losses={trackerStats.losses}
           />
           <div className="mt-6">
             <TrackRecordSection />
