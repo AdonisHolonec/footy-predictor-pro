@@ -60,6 +60,27 @@ export function loggedInMarker(page: Page) {
   return predictButton(page).or(page.getByRole("navigation", { name: "Admin" })).first();
 }
 
+/** The league-filter drawer, matched on the aria-label the workspace gives it. */
+function leagueDialog(page: Page) {
+  return page.getByRole("dialog", { name: "League filter" });
+}
+
+/**
+ * Proof we reached the workspace, whether or not an overlay is covering it.
+ *
+ * Every overlay now renders in a portal outside #root and marks #root `inert`
+ * + `aria-hidden` while it is open (PR #88). The league drawer auto-opens at
+ * desktop widths, so on this suite's 1366px viewport the workspace — Predict
+ * button included — is absent from the accessibility tree that getByRole
+ * queries the instant we arrive. Waiting on loggedInMarker alone therefore
+ * timed out against a session that had authenticated perfectly (CI, run
+ * 31973348576). The open drawer is itself evidence we landed, so accept either,
+ * settle the overlays, and only then assert the workspace proper.
+ */
+function workspaceEntered(page: Page) {
+  return loggedInMarker(page).or(leagueDialog(page)).first();
+}
+
 /** Shell icon buttons (aria-labels from i18n shell.*). */
 export function openProfile(page: Page) {
   return page.getByRole("button", { name: "Profil și upgrade" }).first().click();
@@ -85,18 +106,24 @@ async function dismissOnboardingIfPresent(page: Page) {
 }
 
 /**
- * An account with no favorite leagues gets the league-filter dialog
- * (z-[70] full-screen overlay) auto-opened on login, which intercepts every
- * click. Give the account a real selection — "Elite · toate" persists to the
- * profile's favorites, so both the dialog stops re-opening AND Predict has
- * leagues to work with — then close it.
+ * The league-filter drawer opens by VIEWPORT, not by account state: the
+ * workspace seeds its open flag from `isDesktopViewport()` (>= 1024px) on every
+ * mount, so at this suite's 1366px it is open on every arrival, favorites or
+ * not — and it comes back on the next mount however we dismiss it. It is a
+ * drawer (--fp-z-drawer), and while it is up the workspace behind it is inert
+ * and hidden from the accessibility tree, so nothing else is clickable or even
+ * findable until it is closed.
+ *
+ * "Elite · toate" is still the right way to close it: the selection persists to
+ * the profile's favorites, so Predict has leagues to work with. Closing is what
+ * this buys us; not re-opening is not something it can promise.
  */
 async function settleLeagueDialogIfPresent(page: Page) {
-  const dialog = page.getByRole("dialog", { name: "League filter" });
+  const dialog = leagueDialog(page);
   try {
     await dialog.waitFor({ state: "visible", timeout: 3_000 });
   } catch {
-    return; // dialog not shown — selection already exists
+    return; // no drawer here — narrow viewport, or a shell that has none (admin)
   }
   await dialog.getByRole("button", { name: "Elite · toate" }).first().click();
   await dialog.getByRole("button", { name: "Închide", exact: true }).first().click();
@@ -121,8 +148,10 @@ export async function loginViaUi(page: Page, creds = CREDS) {
   await page.getByRole("textbox", { name: "Email" }).fill(creds.email);
   await page.getByRole("textbox", { name: "Parolă" }).fill(creds.password);
   await page.getByRole("button", { name: "Autentificare", exact: true }).click();
-  await expect(loggedInMarker(page)).toBeVisible({ timeout: 30_000 });
+  // Either the workspace or the overlay hiding it — see workspaceEntered.
+  await expect(workspaceEntered(page)).toBeVisible({ timeout: 30_000 });
   await settleWorkspaceOverlays(page);
+  await expect(loggedInMarker(page)).toBeVisible({ timeout: 15_000 });
 }
 
 /** How long the landing gets to hydrate a stored session before we treat it as gone. */
@@ -165,8 +194,11 @@ export async function gotoWorkspace(page: Page) {
       const link = page.getByRole("link", { name: /deschide (aplicația|workspace)/i }).first();
       await link.waitFor({ state: "visible", timeout: HYDRATION_GRACE_MS });
       await link.click({ timeout: 5_000 });
-      await expect(loggedInMarker(page)).toBeVisible({ timeout: 15_000 });
+      // Same ordering as loginViaUi: the drawer auto-opens on every workspace
+      // mount at this viewport, so it hides the marker here too.
+      await expect(workspaceEntered(page)).toBeVisible({ timeout: 15_000 });
       await settleWorkspaceOverlays(page);
+      await expect(loggedInMarker(page)).toBeVisible({ timeout: 15_000 });
       return;
     } catch {
       // logged-out landing, or the entry bounced — try once more, then recover
