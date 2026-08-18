@@ -6,7 +6,7 @@ import { useBacktest } from "./useBacktest";
 import { useCallsCounter } from "./useCallsCounter";
 import { useDateRollover } from "./useDateRollover";
 import { useHistorySync } from "./useHistorySync";
-import { useLeaguePanelState } from "./useLeaguePanelState";
+import { isDesktopViewport, useLeaguePanelState } from "./useLeaguePanelState";
 import { useLeagues } from "./useLeagues";
 import { usePerformanceTracker } from "./usePerformanceTracker";
 import { usePredictions } from "./usePredictions";
@@ -31,7 +31,11 @@ export function useAppController() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [, setHistoryStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
   const [status, setStatus] = useState<string>("");
-  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
+  // Admin docks LeaguePanel in the sidebar column, where this flag is
+  // DISCLOSURE state, not a modal: expanded where there is room. Passed
+  // explicitly so the consumer workspace can start closed without
+  // changing what admin has always done.
+  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState({ initialOpen: isDesktopViewport() });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [perfCounterModalOpen, setPerfCounterModalOpen] = useState(false);
   const [perfAdminSnapshot, setPerfAdminSnapshot] = useState<PerfAdminSnapshot | null>(null);

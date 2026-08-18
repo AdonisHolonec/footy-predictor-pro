@@ -80,7 +80,11 @@ export default function UserDashboard() {
   } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
-  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState();
+  // The consumer surface renders LeaguePanel through the modal Overlay, so
+  // "open" means an inert, scroll-locked, focus-trapped workspace behind a
+  // dialog. It opens from the shell's "Selectează ligi" trigger — never on
+  // arrival, and never again because the window was resized.
+  const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState({ initialOpen: false });
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
   const {
