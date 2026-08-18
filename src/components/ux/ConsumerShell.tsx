@@ -239,7 +239,12 @@ export default function ConsumerShell({
                 </Tooltip>
               ) : null}
 
-              <Tooltip label={t("shell.refreshPredictions")}>
+              {/* Trailing control on the row: a centred tooltip is 256px wide and
+                  overhangs the right edge at 390px, which made the whole
+                  authenticated shell scroll sideways (442px document on a 390px
+                  viewport). `end` is the same edge-safe placement the icon rail
+                  above already uses. */}
+              <Tooltip label={t("shell.refreshPredictions")} align="end">
                 <span className="inline-flex">
                   <Button
                     size="sm"
