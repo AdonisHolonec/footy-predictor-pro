@@ -68,3 +68,24 @@ describe("ConsumerShell navigation", () => {
     expect(MOBILE_TAB_ITEMS.map((i) => i.id)).toEqual(["home", "matches", "live", "history", "profile"]);
   });
 });
+
+describe("ConsumerShell touch targets", () => {
+  afterEach(cleanup);
+
+  /**
+   * Predict is the shell's critical action, and IconButton records the rule it
+   * has to meet: "md = 44px (--fp-touch, the default for critical actions);
+   * sm = 36px, allowed in dense toolbars only". It stays visually `sm` so the
+   * toolbar keeps its 36px rhythm — the mobile header measured 139px and
+   * growing the box pushed it to 155px — and `touch-target` supplies the 44px
+   * pointer area instead.
+   */
+  it("gives the Predict action a 44px pointer target without growing its box", () => {
+    renderShell({ onPredict: () => {} });
+    const predict = screen.getAllByRole("button", { name: /Generează predicții pentru/ })[0];
+    expect(predict.className).toContain("touch-target");
+    // Still the dense-toolbar size: this is a hit-area fix, not a layout change.
+    expect(predict.className).toContain("min-h-9");
+    expect(predict.className).not.toContain("min-h-[var(--fp-touch)]");
+  });
+});

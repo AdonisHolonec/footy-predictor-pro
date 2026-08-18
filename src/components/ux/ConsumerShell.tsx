@@ -229,7 +229,7 @@ export default function ConsumerShell({
                       variant="primary"
                       loading={predictBusy}
                       onClick={onPredict}
-                      className="shrink-0 font-bold"
+                      className="touch-target shrink-0 font-bold"
                       aria-label={t("shell.predictTip")}
                       aria-busy={predictBusy}
                     >
