@@ -38,6 +38,7 @@ import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/
 import { getLeagueProfile } from "../../server-utils/leagueProfiles/LeagueProfile.js";
 import { computeLeagueProfileRecalibration } from "../../server-utils/leagueProfiles/computeLeagueProfileRecalibration.js";
 import { saveLeagueProfileOverlay } from "../../server-utils/leagueProfiles/leagueProfileOverlayStore.js";
+import { withObservationScope } from "../../server-utils/observability/metricsStore.js";
 import {
   refreshLeagueProfileOverlays,
   clearRuntimeLeagueOverlays
@@ -386,7 +387,7 @@ async function runLeagueProfileRecalibration(supabase, modelVersion) {
   return { rows: rows.length, summary };
 }
 
-export default async function handler(req, res) {
+async function handlerImpl(req, res) {
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
@@ -561,4 +562,15 @@ export default async function handler(req, res) {
       error: error?.message || "Cron-ul zilnic ML a eșuat."
     });
   }
+}
+
+/**
+ * One buffered metrics document per invocation: every recordObservation /
+ * bumpCounter inside this handler is applied to a single read and written back
+ * once, instead of a GET+SET each. Wrapping is required HERE because this is
+ * the invocation boundary — requestMonitor only covers predict and fixtures,
+ * and the warm/cron paths that issue the most cache telemetry never reach it.
+ */
+export default async function handler(req, res) {
+  return withObservationScope(() => handlerImpl(req, res));
 }

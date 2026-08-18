@@ -45,6 +45,7 @@ import {
   resolveFixtureFirstHalfGoals
 } from "../server-utils/fixtureHalftimeGoals.js";
 import { buildMomentumEngine } from "../server-utils/momentum/MomentumEngine.js";
+import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 
 async function requireUserOrCron(req, res) {
   if (isAuthorizedCronOrInternalRequest(req)) return { ok: true, cron: true };
@@ -777,10 +778,21 @@ async function handleXg(req, res) {
 
 // -------------------- Dispatcher --------------------
 
-export default async function handler(req, res) {
+async function handlerImpl(req, res) {
   attachRequestMonitor(req, res, { route: "fixtures" });
   const view = String(req.query.view || "").toLowerCase();
   if (view === "live") return handleLive(req, res);
   if (view === "xg") return handleXg(req, res);
   return handleDay(req, res);
+}
+
+/**
+ * One buffered metrics document per invocation: every recordObservation /
+ * bumpCounter inside this handler is applied to a single read and written back
+ * once, instead of a GET+SET each. Wrapping is required HERE because this is
+ * the invocation boundary — requestMonitor only covers predict and fixtures,
+ * and the warm/cron paths that issue the most cache telemetry never reach it.
+ */
+export default async function handler(req, res) {
+  return withObservationScope(() => handlerImpl(req, res));
 }
