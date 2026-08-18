@@ -1,5 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { gotoWorkspace, hasCreds } from "./helpers";
+import { expectNoHorizontalOverflow } from "./overflowScan";
 
 /**
  * The authenticated shell used to scroll sideways on a phone: at 390px the
@@ -11,39 +12,12 @@ import { gotoWorkspace, hasCreds } from "./helpers";
  * A phone-width viewport must never scroll horizontally. This asserts the
  * measurement directly rather than the fix, so any future element that
  * overhangs the right edge fails here too — whatever causes it.
+ *
+ * The scan itself lives in ./overflowScan, which also names the OTHER way a
+ * document scrolls sideways: content painting outside a box that fits. Its own
+ * regression tests are in overflowScan.spec.ts.
  */
 test.use({ viewport: { width: 390, height: 844 } });
-
-/** Nothing inside #root may extend past the viewport on a 390px screen. */
-async function expectNoHorizontalOverflow(page: Page, view: string) {
-  // Browser globals are reached through globalThis on purpose: e2e/ is linted
-  // with node globals and `no-undef` deliberately left ON (eslint.config.js),
-  // and this body runs in the page, not in Node.
-  const result = await page.evaluate(() => {
-    const doc = globalThis.document;
-    const de = doc.documentElement;
-    const vw = globalThis.innerWidth;
-    const offenders: string[] = [];
-    for (const el of Array.from(doc.querySelectorAll("#root *"))) {
-      const r = el.getBoundingClientRect();
-      if (!r.width || !r.height) continue;
-      // Fixed chrome is positioned against the viewport and cannot scroll it.
-      if (globalThis.getComputedStyle(el).position === "fixed") continue;
-      if (r.right > vw + 1 || r.left < -1) {
-        offenders.push(
-          `${el.tagName.toLowerCase()} [${Math.round(r.left)}→${Math.round(r.right)}] ` +
-            `"${(el.textContent || "").trim().slice(0, 40)}" .${(el.className || "").toString().slice(0, 60)}`
-        );
-      }
-    }
-    return { scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, offenders };
-  });
-
-  // The offender list is asserted first: when this regresses it names the
-  // element, which a bare width comparison never would.
-  expect(result.offenders, `${view}: element(s) overhang the 390px viewport`).toEqual([]);
-  expect(result.scrollWidth, `${view}: document scrolls horizontally`).toBe(result.clientWidth);
-}
 
 test.describe("mobile shell fits a 390px viewport", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");

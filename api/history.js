@@ -17,6 +17,7 @@ import {
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
+import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
@@ -950,7 +951,7 @@ async function handleClosingOdds(req, res) {
  * GET or POST /api/history?view=special-bets — Global Special Bet, reached as
  *   /api/special-bets through the rewrite in vercel.json (Hobby function cap).
  */
-export default async function handler(req, res) {
+async function handlerImpl(req, res) {
   // Checked first: Global Special Bet is its own resource, not a projection of
   // predictions_history, and it must not inherit this handler's read defaults.
   if (String(req.query.view || "") === "special-bets") {
@@ -972,4 +973,15 @@ export default async function handler(req, res) {
     return handlePerformanceRead(req, res);
   }
   return handleHistoryRead(req, res);
+}
+
+/**
+ * One buffered metrics document per invocation: every recordObservation /
+ * bumpCounter inside this handler is applied to a single read and written back
+ * once, instead of a GET+SET each. Wrapping is required HERE because this is
+ * the invocation boundary — requestMonitor only covers predict and fixtures,
+ * and the warm/cron paths that issue the most cache telemetry never reach it.
+ */
+export default async function handler(req, res) {
+  return withObservationScope(() => handlerImpl(req, res));
 }

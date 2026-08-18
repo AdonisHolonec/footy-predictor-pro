@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient } from "@vercel/kv";
 
 const kv = createClient({
@@ -110,13 +111,111 @@ async function writeDay(day) {
   return payload;
 }
 
+/**
+ * Invocation-scoped observation buffer.
+ *
+ * Every writer below mutates ONE document (`footy_ops_metrics:<date>`) through a
+ * read-modify-write. Done per call that is GET+SET each time, and a single cache
+ * miss fires four of them — the dominant Redis amplifier this buffer removes.
+ *
+ * Inside a scope the mutations are collected and applied to one document read,
+ * written back once. Outside a scope nothing changes: callers that are not
+ * wrapped (a script, a test, a stage invoked directly) keep the original
+ * write-through behaviour, so this is additive rather than a migration.
+ *
+ * AsyncLocalStorage — not a module-level array — because Vercel reuses one
+ * instance across CONCURRENT invocations; a shared array would let two requests
+ * flush each other's buffers.
+ */
+const observationScope = new AsyncLocalStorage();
+
+/** Mutations are described, not applied, while buffered. */
+function applyObservation(day, { channel, durationMs, ok, failureKind }) {
+  const ch = String(channel || "api");
+  if (!day.routes[ch]) day.routes[ch] = emptyChannel();
+  const bucket = day.routes[ch];
+  bucket.count += 1;
+  if (!ok) bucket.errors += 1;
+  bucket.sumMs += durationMs;
+  bucket.maxMs = Math.max(bucket.maxMs, durationMs);
+  bucket.samples = pushSample(bucket.samples, durationMs);
+  if (!ok && failureKind && day.failures[failureKind] != null) {
+    day.failures[failureKind] += 1;
+  }
+  return day;
+}
+
+function applyFailure(day, failureKind) {
+  day.failures[failureKind] = Number(day.failures[failureKind] || 0) + 1;
+  return day;
+}
+
+function applyCounter(day, key, delta) {
+  if (!day.counters || typeof day.counters !== "object") day.counters = {};
+  day.counters[key] = Number(day.counters[key] || 0) + delta;
+  return day;
+}
+
+/**
+ * Apply everything buffered during one invocation: ONE read, ONE write.
+ *
+ * Never throws. Observability must not turn a successful product response into a
+ * 5xx — the same contract every writer here already honours with its own catch.
+ */
+async function flushScope(store) {
+  if (!store || !store.pending.length) return null;
+  const pending = store.pending.splice(0, store.pending.length);
+  try {
+    const day = await readDay();
+    for (const m of pending) {
+      if (m.kind === "observation") applyObservation(day, m);
+      else if (m.kind === "failure") applyFailure(day, m.failureKind);
+      else if (m.kind === "counter") applyCounter(day, m.key, m.delta);
+    }
+    await writeDay(day);
+    return day;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run `fn` with one buffered metrics document, flushed once when it settles.
+ *
+ * The flush is in `finally`, so it runs on the success path AND when the handler
+ * throws — deterministic at the invocation boundary, no timer involved.
+ *
+ * TRADEOFF: if the runtime kills the invocation before `finally` (an OOM, a hard
+ * timeout), that invocation's observations are lost. Bounded to abnormal
+ * termination, and nothing in the product path reads these metrics back, so the
+ * loss is confined to reporting.
+ */
+export async function withObservationScope(fn) {
+  const store = { pending: [] };
+  try {
+    return await observationScope.run(store, fn);
+  } finally {
+    await flushScope(store);
+  }
+}
+
+/** Exposed for tests: is a buffer currently active? */
+export function hasActiveObservationScope() {
+  return Boolean(observationScope.getStore());
+}
+
 /** Increment a failure counter without counting a full route observation. */
 export async function bumpFailure(kind) {
   const failureKind = String(kind || "");
   if (!["prediction", "api", "cache"].includes(failureKind)) return null;
+  const store = observationScope.getStore();
+  if (store) {
+    store.pending.push({ kind: "failure", failureKind });
+    return null;
+  }
   try {
     const day = await readDay();
-    day.failures[failureKind] = Number(day.failures[failureKind] || 0) + 1;
+    applyFailure(day, failureKind);
     await writeDay(day);
     return day;
   } catch {
@@ -140,10 +239,14 @@ export async function bumpCounter(name, by = 1) {
   if (!key) return null;
   const delta = Number(by);
   if (!Number.isFinite(delta) || delta === 0) return null;
+  const store = observationScope.getStore();
+  if (store) {
+    store.pending.push({ kind: "counter", key, delta });
+    return null;
+  }
   try {
     const day = await readDay();
-    if (!day.counters || typeof day.counters !== "object") day.counters = {};
-    day.counters[key] = Number(day.counters[key] || 0) + delta;
+    applyCounter(day, key, delta);
     await writeDay(day);
     return day;
   } catch {
@@ -161,18 +264,14 @@ export async function recordObservation(channel, opts = {}) {
   const durationMs = Math.max(0, Number(opts.durationMs) || 0);
   const ok = opts.ok !== false;
   const failureKind = opts.failureKind || null;
+  const store = observationScope.getStore();
+  if (store) {
+    store.pending.push({ kind: "observation", channel: ch, durationMs, ok, failureKind });
+    return null;
+  }
   try {
     const day = await readDay();
-    if (!day.routes[ch]) day.routes[ch] = emptyChannel();
-    const bucket = day.routes[ch];
-    bucket.count += 1;
-    if (!ok) bucket.errors += 1;
-    bucket.sumMs += durationMs;
-    bucket.maxMs = Math.max(bucket.maxMs, durationMs);
-    bucket.samples = pushSample(bucket.samples, durationMs);
-    if (!ok && failureKind && day.failures[failureKind] != null) {
-      day.failures[failureKind] += 1;
-    }
+    applyObservation(day, { channel: ch, durationMs, ok, failureKind });
     await writeDay(day);
     return day;
   } catch {

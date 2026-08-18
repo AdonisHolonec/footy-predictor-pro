@@ -13,6 +13,7 @@ import {
 } from "../server-utils/userDailyWarmPredictUsage.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
   inferSeason,
   resolveLeagueSeasonFromFixtures,
@@ -20,7 +21,7 @@ import {
   loadStandingsMap
 } from "../server-utils/pipeline/predictHelpers.js";
 
-export default async function handler(req, res) {
+async function handlerImpl(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const leagueIdsStr = req.query.leagueIds || "";
   const leagueIds = leagueIdsStr.split(",").filter(Boolean).map(Number);
@@ -229,4 +230,15 @@ export default async function handler(req, res) {
     errors,
     note: "Datele au fost salvate în Vercel KV (Redis) pentru reutilizare de către /api/predict."
   });
+}
+
+/**
+ * One buffered metrics document per invocation: every recordObservation /
+ * bumpCounter inside this handler is applied to a single read and written back
+ * once, instead of a GET+SET each. Wrapping is required HERE because this is
+ * the invocation boundary — requestMonitor only covers predict and fixtures,
+ * and the warm/cron paths that issue the most cache telemetry never reach it.
+ */
+export default async function handler(req, res) {
+  return withObservationScope(() => handlerImpl(req, res));
 }
