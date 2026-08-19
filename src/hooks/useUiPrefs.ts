@@ -22,7 +22,6 @@ export type UiPrefsV3 = {
   bookmarkFixtureIds: number[];
   favoriteTeamIds: number[];
   pinnedLeagueIds: number[];
-  recentFixtureIds: number[];
   savedFilterName: string | null;
   minConfidence: number;
   minEv: number;
@@ -45,7 +44,6 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   bookmarkFixtureIds: [],
   favoriteTeamIds: [],
   pinnedLeagueIds: [],
-  recentFixtureIds: [],
   savedFilterName: null,
   minConfidence: 0,
   minEv: 0,
@@ -154,13 +152,6 @@ export function useUiPrefs(userId?: string | null) {
     });
   }, []);
 
-  const pushRecent = useCallback((fixtureId: number) => {
-    setPrefs((p) => ({
-      ...p,
-      recentFixtureIds: [fixtureId, ...p.recentFixtureIds.filter((id) => id !== fixtureId)].slice(0, 20)
-    }));
-  }, []);
-
   const updateFilters = useCallback(
     (
       patch: Partial<
@@ -208,7 +199,6 @@ export function useUiPrefs(userId?: string | null) {
       cycleTheme,
       toggleWatchlist,
       toggleBookmark,
-      pushRecent,
       updateFilters,
       isWatched,
       isBookmarked,
@@ -221,7 +211,6 @@ export function useUiPrefs(userId?: string | null) {
       cycleTheme,
       toggleWatchlist,
       toggleBookmark,
-      pushRecent,
       updateFilters,
       isWatched,
       isBookmarked,

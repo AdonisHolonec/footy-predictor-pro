@@ -93,7 +93,7 @@
   --fp-touch: 44px;
 
   /* Z-index scale — documents the layering already in use across the app
-     (grep-verified: z-0/10/20/40/50/[60]/[70] in AppShell, MatchModal, overlays).
+     (grep-verified: z-0/10/20/40/50/[60]/[70] in ConsumerShell, MatchModal, overlays).
      Additive only: existing hardcoded Tailwind z-* classes are NOT retrofitted
      here (would touch many unrelated files with no demonstrated bug) — this
      scale exists so new layout/overlay work has a documented reference instead
