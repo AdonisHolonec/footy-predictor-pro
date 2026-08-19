@@ -129,7 +129,6 @@ export default function UserDashboard() {
     setLocale: setPrefsLocale,
     cycleTheme,
     toggleWatchlist,
-    pushRecent,
     updateFilters,
     isWatched,
     markNotificationsSeen
@@ -449,13 +448,7 @@ export default function UserDashboard() {
     await warmAndPredict();
   }
 
-  const openMatch = useCallback(
-    (match: PredictionRow) => {
-      pushRecent(Number(match.id));
-      setSelectedMatch(match);
-    },
-    [pushRecent]
-  );
+  const openMatch = useCallback((match: PredictionRow) => setSelectedMatch(match), []);
 
   const handleNav = useCallback(
     (view: AppNavView) => {
