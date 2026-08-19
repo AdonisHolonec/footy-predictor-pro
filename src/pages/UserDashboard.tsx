@@ -47,12 +47,11 @@ import { buildFixtureLabelIndex } from "../utils/globalSpecialBetView";
 import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
-import { MAIN_VIEWS, clampTierDates, hasLegacyPredictionShape } from "./userDashboard/helpers";
+import { clampTierDates, hasLegacyPredictionShape } from "./userDashboard/helpers";
 import ProfileView from "./userDashboard/ProfileView";
 import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
-import MainBoardSection from "./userDashboard/MainBoardSection";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
@@ -155,8 +154,7 @@ export default function UserDashboard() {
     pendingHistoryCount,
     marketValidationsByFixtureId,
     userPerformanceByLeague,
-    historySearchLabels,
-    simpleRoi
+    historySearchLabels
   } = useDashboardHistory({ userId: user?.id, accessToken: session?.access_token });
   const trackerStats = historyStats;
   const {
@@ -198,7 +196,6 @@ export default function UserDashboard() {
     homeCounts,
     homeLiveCount,
     notificationItems,
-    continueMatch,
     analysisMatch
   } = useDerivedPredictions({
     preds,
@@ -469,9 +466,6 @@ export default function UserDashboard() {
     [updateFilters]
   );
 
-  const isMainBoard =
-    MAIN_VIEWS.includes(navView) && navView !== "home" && navView !== "matches" && navView !== "live";
-
   const trackerSlot = (
     <SuccessRateTracker
       stats={trackerStats}
@@ -616,31 +610,6 @@ export default function UserDashboard() {
           valueOnly={prefs.valueOnly}
           onToggleValueOnly={(checked) => updateFilters({ valueOnly: checked })}
           loading={warmPredictBusy && !visiblePreds.length}
-        />
-      )}
-
-      {isMainBoard && (
-        <MainBoardSection
-          visiblePreds={visiblePreds}
-          matchesFilter={matchesFilter}
-          valueOnly={prefs.valueOnly}
-          updateFilters={updateFilters}
-          handleNav={handleNav}
-          setNavView={setNavView}
-          trackerStats={trackerStats}
-          simpleRoi={simpleRoi}
-          userTier={userTier}
-          marketValidationsByFixtureId={marketValidationsByFixtureId}
-          isWatched={isWatched}
-          toggleWatchlist={toggleWatchlist}
-          openMatch={openMatch}
-          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-          warmAndPredict={warmAndPredict}
-          analysisMatch={analysisMatch}
-          history={history}
-          trackerSlot={trackerSlot}
-          canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
-          continueMatch={continueMatch}
         />
       )}
 

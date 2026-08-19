@@ -5,7 +5,12 @@ import { applyTheme, uiPrefsStorageKey, type UiTheme } from "../design-system/th
 export type { UiTheme };
 export type { Locale };
 
-export type MatchesSubFilterPref = "all" | "live" | "favorites";
+/**
+ * "picks" is the confidence-ranked view of the slate: only rows carrying a
+ * recommendation, best first. It used to be a nav destination of its own
+ * (`navView === "predictions"`), which no tab bar or rail ever linked to.
+ */
+export type MatchesSubFilterPref = "all" | "live" | "favorites" | "picks";
 
 /** Mirrors the 1X2 / Over-Under / BTTS market family used by marketTiers and the accuracy tracker. */
 export type MarketPref = "oneXTwo" | "overUnder" | "btts";

@@ -7,7 +7,8 @@ import Skeleton from "../../design-system/Skeleton";
 import PredictionFocusCard from "./PredictionFocusCard";
 
 type AccessTier = UpgradeTier | "free" | string;
-type MatchesSubFilter = "all" | "favorites";
+/** "picks" ranks the slate by confidence; see useDerivedPredictions. */
+type MatchesSubFilter = "all" | "favorites" | "picks";
 
 type Props = {
   mode: "all" | "live";
@@ -70,6 +71,7 @@ export default function MatchesSection({
           options={(
             [
               ["all", "dash.filterAll"],
+              ["picks", "dash.filterPicks"],
               ["favorites", "dash.filterFavorites"]
             ] as const
           ).map(([id, key]) => ({
@@ -121,28 +123,42 @@ export default function MatchesSection({
           ))}
         </div>
       ) : !matches.length ? (
+        /*
+          "picks" empties for a different reason than the rest: the slate is
+          not missing, it just holds nothing the model will stand behind. So it
+          reads like favorites — a filter you can step out of — rather than
+          offering Predict, which would regenerate the same unbacked rows.
+        */
         <EmptyState
           title={
             mode === "live"
               ? t("dash.emptyLiveTitle")
               : matchesFilter === "favorites"
                 ? t("dash.emptyFavoritesTitle")
-                : t("dash.emptyPredsTitle")
+                : matchesFilter === "picks"
+                  ? t("dash.emptyPicksTitle")
+                  : t("dash.emptyPredsTitle")
           }
           description={
             mode === "live"
               ? t("dash.emptyLiveDesc")
               : matchesFilter === "favorites"
                 ? t("dash.emptyFavoritesDesc")
-                : t("dash.emptyPredsDesc")
+                : matchesFilter === "picks"
+                  ? t("dash.emptyPicksDesc")
+                  : t("dash.emptyPredsDesc")
           }
           actionLabel={
-            mode === "live" ? undefined : matchesFilter === "favorites" ? t("dash.showAll") : t("shell.predict")
+            mode === "live"
+              ? undefined
+              : matchesFilter === "favorites" || matchesFilter === "picks"
+                ? t("dash.showAll")
+                : t("shell.predict")
           }
           onAction={
             mode === "live"
               ? undefined
-              : matchesFilter === "favorites"
+              : matchesFilter === "favorites" || matchesFilter === "picks"
                 ? () => onSetFilter?.("all")
                 : onPredict
           }
