@@ -4,7 +4,6 @@ import FeatureImportanceChart from "../../components/FeatureImportanceChart";
 import PredictionContributionsChart from "../../components/PredictionContributionsChart";
 import PredictionFocusCard from "../../components/ux/PredictionFocusCard";
 import HistorySection from "../../components/ux/HistorySection";
-import StatisticsSection from "../../components/ux/StatisticsSection";
 import Button from "../../design-system/Button";
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 import EmptyState from "../../design-system/EmptyState";
@@ -238,14 +237,31 @@ export default function MainBoardSection({
         )}
       </CollapsiblePanel>
 
+      {/*
+        The panel promises "public track record and deeper statistics", and the
+        public track record is the half that is actually its own. The other half
+        was a whole second copy of the Statistics page: this panel rendered
+        `StatisticsSection`, which since PR #44 carries the per-day / per-league
+        / per-market tables plus its own `TrackRecordSection`.
+
+        Nothing here ever passed it `history` or `leagueBreakdown`, and the
+        component defaults both to `[]`, so those tables printed 32 empty cells
+        for EVERY account — not only new ones. Threading the data in is the
+        obvious-looking fix and the wrong one: PR #44 moved those tables off this
+        board deliberately ("statistics for statistics' sake"), and Statistics
+        already renders them from the same values.
+
+        So the duplicate goes rather than the data arriving. That also settles
+        three things the copy dragged along: a second `TrackRecordSection`
+        (duplicate `id="track-record"`, and a second identical /api/backtest
+        request on every expand), a second performance block on a view whose
+        History panel already renders `trackerSlot` — the duplication PR #94
+        removed everywhere else — and a page-level `<h1>Statistici</h1>` nested
+        inside a panel titled "Perspective".
+      */}
       <CollapsiblePanel title={t("dash.insightsTitle")} subtitle={t("dash.insightsSub")}>
         <Suspense fallback={<p className="text-sm text-[var(--fp-text-muted)]">{t("dash.insightsLoading")}</p>}>
-          <StatisticsSection
-            trackerSlot={trackerSlot}
-          />
-          <div className="mt-6">
-            <TrackRecordSection />
-          </div>
+          <TrackRecordSection />
         </Suspense>
       </CollapsiblePanel>
 
