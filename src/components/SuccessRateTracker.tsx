@@ -123,15 +123,30 @@ export default function SuccessRateTracker({
           }`}
         >
           <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-accent)] sm:text-[10px]">{t("tracker.hitRate")}</p>
+          {/*
+            A rate needs a denominator. `historyStatsFromRows` falls back to
+            `winRate: 0` when nothing has settled, which is a placeholder, not a
+            measurement — printed as "0.0%" it claims the user lost everything
+            they ever ran. The counts either side stay: with no settled results
+            you really do have zero wins and zero losses, and a count of nothing
+            IS zero. Only the ratio is undefined.
+
+            `stats.settled > 0` is the same test the history tables use, so a
+            genuine 0 wins / 3 losses still reads 0.0% here as it does there.
+          */}
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">
-            {animatedWinRate.toFixed(1)}%
+            {stats.settled > 0 ? `${animatedWinRate.toFixed(1)}%` : "—"}
           </p>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
-            <div
-              className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-700"
-              style={{ transform: `scaleX(${Math.max(0, Math.min(100, stats.winRate)) / 100})` }}
-            />
-          </div>
+          {stats.settled > 0 && (
+            /* An empty track is a filled bar's way of saying "0%", so it goes
+               with the number rather than sitting there at scaleX(0). */
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--fp-bg-card)]">
+              <div
+                className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-700"
+                style={{ transform: `scaleX(${Math.max(0, Math.min(100, stats.winRate)) / 100})` }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
