@@ -7,6 +7,7 @@ import {
   resolveRecommendedValidation
 } from "./cardMarketSettlement.js";
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
+import { deriveHistoryListColumns } from "./historyListColumns.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
@@ -62,7 +63,8 @@ export function validationFromMatch(status, pick, score) {
   return result ? "win" : "loss";
 }
 
-function mapPredictionToDbRow(prediction) {
+/** Exported so the dual-write contract can be tested on the exact row INSERT/UPSERT receive. */
+export function mapPredictionToDbRow(prediction) {
   const kickoffAt = prediction.kickoff || null;
   const status = prediction.status || null;
   const scoreHome = asNum(prediction.score?.home);
@@ -134,7 +136,10 @@ function mapPredictionToDbRow(prediction) {
         : null,
     saved_at: generatedAt,
     updated_at: generatedAt,
-    raw_payload: payloadWithMeta
+    raw_payload: payloadWithMeta,
+    // Derived from the SAME object persisted above, so the columns can never
+    // describe a payload that was not written.
+    ...deriveHistoryListColumns(payloadWithMeta)
   };
 }
 
