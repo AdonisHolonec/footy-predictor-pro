@@ -60,3 +60,49 @@ describe("HistorySection", () => {
     expect(screen.getAllByTestId("tracker")).toHaveLength(1);
   });
 });
+
+/**
+ * Exactly what `?view=list` returns: the eight fields the list reads, and none
+ * of the analytical payload. Any component in this subtree that quietly assumed
+ * a full row would throw here rather than in production.
+ */
+const LIGHT_ROW = {
+  id: 1234567,
+  leagueId: 283,
+  league: "Liga I - Superliga",
+  teams: { home: "FCSB Bucuresti", away: "CFR 1907 Cluj" },
+  kickoff: "2026-08-01T18:00:00.000Z",
+  status: "FT",
+  score: { home: 2, away: 1 },
+  recommended: { pick: "Peste 2.5", confidence: 0.71, odd: 1.85 },
+  savedAt: "2026-08-01T21:05:00.000Z",
+  validation: "win",
+  cardMarkets: null,
+  cardMarketValidations: { corners: "win" },
+  modelVersion: "v3.2.1",
+  logos: { home: "https://media.api-sports.io/football/teams/2246.png", away: "https://media.api-sports.io/football/teams/2249.png" },
+  probs: { corners: { over85: 0.51 } }
+} as unknown as Parameters<typeof HistorySection>[0]["history"][number];
+
+describe("HistorySection on the light list projection", () => {
+  it("renders a row that carries no analytical payload", () => {
+    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+
+    // Teams, score and recommendation all come from the light contract now.
+    expect(screen.getByText(/FCSB Bucuresti/)).toBeTruthy();
+    expect(screen.getByText(/CFR 1907 Cluj/)).toBeTruthy();
+    expect(screen.getByText(/2\s*-\s*1|2\s*–\s*1|2:1/)).toBeTruthy();
+  });
+
+  it("still renders the logos the light projection carries", () => {
+    const { container } = render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    const logos = Array.from(container.querySelectorAll("img")).map((i) => i.getAttribute("src") || "");
+    expect(logos.some((s) => s.includes("2246.png")), "home logo missing from the light row").toBe(true);
+    expect(logos.some((s) => s.includes("2249.png")), "away logo missing from the light row").toBe(true);
+  });
+
+  it("does not fall back to the empty state for a light row", () => {
+    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    expect(screen.queryByText(eitherLocale("emptyTitle"))).toBeNull();
+  });
+});
