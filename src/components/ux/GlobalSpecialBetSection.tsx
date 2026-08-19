@@ -194,6 +194,10 @@ export default function GlobalSpecialBetSection({
 
         <Button
           size="sm"
+          /* Stays visually `sm` so the card keeps its density; `touch-target`
+             supplies the 44px pointer area, the same way the shell's Predict
+             action does. */
+          className="touch-target"
           loading={isGenerating}
           /* Disabled while in flight: the visual half of the double-submit guard.
              The server owns idempotency, so a slipped second click is still safe. */

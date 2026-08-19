@@ -88,4 +88,28 @@ describe("ConsumerShell touch targets", () => {
     expect(predict.className).toContain("min-h-9");
     expect(predict.className).not.toContain("min-h-[var(--fp-touch)]");
   });
+  /**
+   * Predict's neighbours in the same toolbar row were left at the dense size
+   * without the pointer pad, so the row mixed a 44px target with two 36px ones.
+   * Same rule, same fix, no visual change.
+   */
+  it("gives the league filter and refresh the same 44px pointer target", () => {
+    renderShell({ onPredict: () => {} });
+    for (const name of [/Filtreaza|ligi/i, /Reincarca picks|picks salvate/i]) {
+      const el = screen.getAllByRole("button", { name })[0];
+      expect(el, `no control matched ${name}`).toBeTruthy();
+      expect(el.className, `${el.getAttribute("aria-label")} lacks the pad`).toContain("touch-target");
+    }
+  });
+
+  it("keeps every padded control visually dense", () => {
+    renderShell({ onPredict: () => {} });
+    // The pad is invisible: nothing in the row may adopt the 44px BOX, or the
+    // mobile header grows (it measured 139px, and a box change pushed it 155px).
+    const padded = Array.from(document.querySelectorAll("button.touch-target"));
+    expect(padded.length).toBeGreaterThanOrEqual(3);
+    for (const el of padded) {
+      expect(el.className, "a padded control grew its box").not.toContain("min-h-[var(--fp-touch)]");
+    }
+  });
 });

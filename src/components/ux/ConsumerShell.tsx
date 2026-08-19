@@ -197,10 +197,15 @@ export default function ConsumerShell({
                 <button
                   type="button"
                   onClick={onOpenLeagues}
-                  className="h-9 min-w-0 flex-1 truncate rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 text-[10px] font-bold leading-tight text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:flex-none sm:px-2.5 sm:text-xs"
+                  className="touch-target h-9 min-w-0 flex-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 text-[10px] font-bold leading-tight text-[var(--fp-text)] hover:border-[var(--fp-accent)] hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:flex-none sm:px-2.5 sm:text-xs"
                   aria-label={t("shell.filterLeagues")}
                 >
-                  {t("shell.leagues")}
+                  {/* `truncate` moved off the button and onto the label. It
+                      carries `overflow: hidden`, which clipped `touch-target`'s
+                      ::after pad to the 36px box — the pad rendered and bought
+                      nothing (measured: 36px with the class, 44px the moment
+                      overflow went visible). The label still ellipsises. */}
+                  <span className="block truncate">{t("shell.leagues")}</span>
                 </button>
               </Tooltip>
             </div>
@@ -251,7 +256,7 @@ export default function ConsumerShell({
                     variant="secondary"
                     loading={refreshBusy && !predictBusy}
                     onClick={onRefresh}
-                    className="shrink-0"
+                    className="touch-target shrink-0"
                     aria-label={t("shell.refreshPredictions")}
                     aria-busy={refreshBusy && !predictBusy}
                   >
