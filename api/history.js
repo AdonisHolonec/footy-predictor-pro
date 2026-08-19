@@ -21,6 +21,8 @@ import { withObservationScope } from "../server-utils/observability/metricsStore
 import {
   mapDbRowToHistoryEntry,
   readPredictionsHistory,
+  readPredictionsHistoryList,
+  readPredictionsHistoryListForUser,
   readPredictionsHistoryAggregateStats,
   readPredictionsHistoryForUser,
   resolveValueBetPick,
@@ -362,6 +364,17 @@ export async function handleHistoryDetail(req, res, rawFixtureId, deps = {}) {
  * that answers true here must never reach the windowed list query, and an
  * absent or blank fixtureId must leave the list path exactly as it was.
  */
+/**
+ * Whether this request opted into the light list projection.
+ *
+ * Exported so the routing rule is testable rather than asserted as a string.
+ * Only the exact token `list` opts in — anything else, including the existing
+ * `view=special-bets`, must leave the full default alone.
+ */
+export function shouldServeLightList(query) {
+  return String(query?.view || "") === "list";
+}
+
 export function shouldServeFixtureDetail(query) {
   const raw = query?.fixtureId;
   return raw !== undefined && raw !== null && String(raw).trim() !== "";
@@ -387,6 +400,18 @@ async function handleHistoryRead(req, res) {
   const mine =
     String(req.query.mine || "") === "1" ||
     String(req.query.mine || "").toLowerCase() === "true";
+  /*
+    Opt-in light projection. The default stays FULL because this endpoint is
+    also a prediction source: usePredictionsCache.rehydratePredictionsFromHistory()
+    pipes the response into setPreds, and a light row there would both degrade
+    the prediction cards and keep looking "legacy" to hasLegacyPredictionShape,
+    re-triggering the very fetch that produced it.
+
+    `view` is an existing parameter (view=special-bets, dispatched above), and
+    sync/closing/performance are all resolved before this handler runs, so
+    sync=1 keeps winning regardless of view.
+  */
+  const listView = shouldServeLightList(req.query);
 
   if (mine) {
     const requester = await getRequester(req);
@@ -394,7 +419,9 @@ async function handleHistoryRead(req, res) {
       return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
     try {
-      const { items, stats } = await readPredictionsHistoryForUser(requester.user.id, days, limit);
+      const { items, stats } = listView
+        ? await readPredictionsHistoryListForUser(requester.user.id, days, limit)
+        : await readPredictionsHistoryForUser(requester.user.id, days, limit);
       return res.status(200).json({
         ok: true,
         mine: true,
@@ -414,7 +441,9 @@ async function handleHistoryRead(req, res) {
     const adminCheck = await assertAdmin(req);
     if (adminCheck.ok) {
       try {
-        const { items, stats } = await readPredictionsHistory(days, limit);
+        const { items, stats } = listView
+          ? await readPredictionsHistoryList(days, limit)
+          : await readPredictionsHistory(days, limit);
         return res.status(200).json({
           ok: true,
           days: safeDays,

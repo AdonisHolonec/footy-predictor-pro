@@ -473,6 +473,155 @@ export async function readPredictionsHistoryAggregateStats(days = 30, limit = 50
   return { stats: aggregateCardMarketStats(rows) };
 }
 
+/**
+ * The light History LIST projection — opt-in via `?view=list`.
+ *
+ * The dashboard asks for days=30&limit=2000&mine=1 and the rows are ~261KB each
+ * at the median, so PostgREST serializes hundreds of megabytes to render a list
+ * that shows a scoreline and a badge. That is what crosses statement_timeout.
+ *
+ * This is NOT a global slimming. `/api/history` is also a prediction source:
+ * usePredictionsCache.rehydratePredictionsFromHistory() feeds its response
+ * straight into `setPreds`, which drives the prediction cards and
+ * hasLegacyPredictionShape(). A light row there would degrade those cards and
+ * — because a light row still looks "legacy" — could re-trigger the rehydrate
+ * that fetched it. So lightness is opt-in per caller and the default is
+ * untouched.
+ *
+ * The key set is the UNION of two contracts, not just what the list renders:
+ *   - what aggregateCardMarketStats() reads (AGGREGATE_PAYLOAD_KEYS), because
+ *     the list response still carries `stats`
+ *   - what the list itself needs: teams/kickoff/logos/league/leagueId, plus
+ *     `recommended` for filterByMinDisplayOdds, which gates on recommended.odd
+ *
+ * Everything genuinely large stays behind `?fixtureId=N`: monteCarlo,
+ * featureImportance, predictionContributions, explanation, evaluation,
+ * leagueProfile, teamContext, modelMeta, valueEngine, momentum.
+ */
+export const HISTORY_LIST_PAYLOAD_KEYS = Object.freeze([
+  ...AGGREGATE_PAYLOAD_KEYS,
+  "kickoff",
+  "league",
+  "leagueId",
+  "logos",
+  "modelVersion",
+  "teams"
+]);
+
+/** Scalar columns the light mapper falls back to when a payload key is absent. */
+const HISTORY_LIST_ROW_COLUMNS = Object.freeze([
+  "fixture_id",
+  "league_id",
+  "league_name",
+  "kickoff_at",
+  "home_team",
+  "away_team",
+  "score_home",
+  "score_away",
+  "validation",
+  "match_status",
+  "recommended_pick",
+  "recommended_confidence",
+  "saved_at",
+  "model_version"
+]);
+
+/**
+ * Same `pl_<key>:raw_payload-><key>` form as AGGREGATE_STATS_SELECT. The prefix
+ * is load-bearing: `validation`, `score` and `status` exist BOTH as columns and
+ * as payload keys, so an unprefixed alias would collide.
+ */
+export const HISTORY_LIST_SELECT = [
+  ...HISTORY_LIST_ROW_COLUMNS,
+  ...HISTORY_LIST_PAYLOAD_KEYS.map((key) => `${AGGREGATE_PAYLOAD_PREFIX}${key}:raw_payload->${key}`)
+].join(", ");
+
+/** Fold the projected `pl_*` aliases back into a row carrying a partial raw_payload. */
+export function rehydrateListRow(row) {
+  const source = row && typeof row === "object" ? row : {};
+  const rawPayload = {};
+  for (const key of HISTORY_LIST_PAYLOAD_KEYS) {
+    const value = source[`${AGGREGATE_PAYLOAD_PREFIX}${key}`];
+    if (value !== undefined && value !== null) rawPayload[key] = value;
+  }
+  const out = { raw_payload: rawPayload };
+  for (const column of HISTORY_LIST_ROW_COLUMNS) out[column] = source[column] ?? null;
+  return out;
+}
+
+/**
+ * Light counterpart to mapDbRowToHistoryEntry.
+ *
+ * Deliberately enumerates its output instead of spreading the payload. The full
+ * mapper does `...payload` — correct there, and relied upon by
+ * Stage01DataCollection — but here a spread would silently re-widen the
+ * contract the moment a new key joined the projection. Field-for-field, the
+ * fallback order matches the full mapper so the public row shape is identical.
+ */
+export function mapDbRowToHistoryListEntry(row) {
+  const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+  return {
+    id: row.fixture_id,
+    leagueId: row.league_id ?? payload.leagueId,
+    league: row.league_name ?? payload.league ?? "Necunoscut",
+    teams: payload.teams || { home: row.home_team || "Gazde", away: row.away_team || "Oaspeți" },
+    kickoff: payload.kickoff || row.kickoff_at,
+    status: row.match_status || payload.status || "",
+    score: { home: row.score_home, away: row.score_away },
+    recommended: payload.recommended || { pick: row.recommended_pick || "", confidence: row.recommended_confidence || 0 },
+    savedAt: row.saved_at,
+    validation: row.validation,
+    cardMarkets: payload.cardMarkets || null,
+    cardMarketValidations: resolveCardMarketValidations(row),
+    modelVersion: row.model_version ?? payload.modelVersion,
+    // Rendered by the list itself; the only genuinely visual payload key here.
+    logos: payload.logos || null,
+    // Read by useDashboardHistory's pending count, not displayed.
+    probs: payload.probs || null
+  };
+}
+
+/** Global history, light projection. Same rows, same order, same stats. */
+export async function readPredictionsHistoryList(days = 30, limit = 500) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
+  const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from(HISTORY_TABLE)
+    .select(HISTORY_LIST_SELECT)
+    .gte("kickoff_at", cutoff)
+    .order("kickoff_at", { ascending: false })
+    .limit(safeLimit);
+  if (error) throw error;
+  const rows = (data || []).map(rehydrateListRow);
+  const items = filterByMinDisplayOdds(rows.map(mapDbRowToHistoryListEntry));
+  return { items, stats: aggregateCardMarketStats(rows) };
+}
+
+/**
+ * User-scoped history, light projection.
+ *
+ * The RPC is `returns setof predictions_history` and is left exactly as it is —
+ * narrowing it would be a schema migration. PostgREST applies `?select=` to a
+ * set-returning function just as it does to a table, so the projection happens
+ * without touching the function.
+ */
+export async function readPredictionsHistoryListForUser(userId, days = 30, limit = 500) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
+  const { data, error } = await supabase
+    .rpc("predictions_history_for_user", { p_user_id: userId, p_days: safeDays, p_limit: safeLimit })
+    .select(HISTORY_LIST_SELECT);
+  if (error) throw error;
+  const rows = (data || []).map(rehydrateListRow);
+  const items = filterByMinDisplayOdds(rows.map(mapDbRowToHistoryListEntry));
+  return { items, stats: aggregateCardMarketStats(rows) };
+}
+
 /** Rows from predictions_history joined via user_prediction_fixtures (service role RPC). */
 export async function readPredictionsHistoryForUser(userId, days = 30, limit = 500) {
   const supabase = getSupabaseAdmin();

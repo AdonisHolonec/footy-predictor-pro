@@ -28,7 +28,7 @@ export function useDashboardHistory({
         return;
       }
       if (!accessToken) return;
-      const response = await fetch("/api/history?days=30&limit=2000&mine=1", {
+      const response = await fetch("/api/history?days=30&limit=2000&mine=1&view=list", {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       const json = await response.json();
