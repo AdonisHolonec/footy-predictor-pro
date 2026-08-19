@@ -57,20 +57,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The browser download is what stalled on 2026-08-19. Cached, a hit skips
-      # it entirely and only the system-deps install remains; the key is the
-      # lockfile, so a Playwright version bump invalidates it on its own.
+      # Cached, a hit skips the download entirely; the key is the lockfile, so
+      # a Playwright version bump invalidates it on its own.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
+      # Split from the browser install because they fail for unrelated reasons.
+      # `--with-deps` ran apt first, and on 2026-08-19 apt stalled twice in a
+      # row against archive.ubuntu.com — the 6-minute cap fired before the
+      # browser step it was protecting ever started, so the suite never ran and
+      # the gate reported nothing about main.
+      #
+      # Non-blocking on purpose: ubuntu-latest already ships almost everything
+      # Chromium links against, and the cached browser is the part that matters.
+      # If a library really is missing the next step launches Chromium and the
+      # suite fails there — a clear error, not a silent pass.
+      - name: Install system dependencies
+        continue-on-error: true
+        timeout-minutes: 4
+        run: npx playwright install-deps chromium
+
+      # The browser itself: ~2s on a cache hit, and it must succeed.
       - name: Install Chromium
-        # Normally well under a minute. Failing here is recoverable — a stall
-        # that eats the job budget is not.
-        timeout-minutes: 6
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: npx playwright install chromium
 
       - name: Run smoke suite
         env:
