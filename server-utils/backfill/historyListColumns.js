@@ -1,3 +1,9 @@
+import {
+  deriveHistoryListColumnsWithDiagnostics,
+  IMMUTABLE_COLUMNS,
+  MUTABLE_COLUMNS
+} from "../historyListColumns.js";
+
 /**
  * One-off backfill for the seven derived list columns added by migration 055.
  *
@@ -45,52 +51,13 @@ export const BACKFILL_SELECT = [
   "src_market_results:raw_payload->marketResults"
 ].join(", ");
 
-/** Migration 042's guard, applied to the same source it was written for. */
-const NUMERIC_GUARD = /^[0-9]+(\.[0-9]+)?$/;
-/** Strict: a total is a whole number of corners or shots, never 9.5. */
-const INTEGER_GUARD = /^-?[0-9]+$/;
-
-/** Fields that cannot change after the prediction was written. */
-export const IMMUTABLE_COLUMNS = Object.freeze(["recommended_odd", "logo_home", "logo_away"]);
-/** Fields settlement rewrites as results arrive. */
-export const MUTABLE_COLUMNS = Object.freeze([
-  "card_market_validations",
-  "card_markets",
-  "corners_total",
-  "shots_on_target_total"
-]);
-
 /**
- * A value that is present but does not satisfy its guard is REPORTED, never
- * coerced. Returning `{ ok: false }` keeps a bad row from failing its batch
- * while still surfacing it in the diagnostics.
+ * The parsing rules live in ../historyListColumns.js so the live writers and this
+ * backfill cannot drift apart. What stays HERE is the reconciliation that is
+ * backfill-only: deciding whether a derived value should replace what is already
+ * in the column.
  */
-export function parseGuardedNumber(value, guard) {
-  if (value === null || value === undefined) return { ok: true, value: null, present: false };
-  if (typeof value === "object") return { ok: false, value: null, present: true };
-  const text = String(value).trim();
-  if (text === "") return { ok: true, value: null, present: false };
-  if (!guard.test(text)) return { ok: false, value: null, present: true };
-  const parsed = Number(text);
-  if (!Number.isFinite(parsed)) return { ok: false, value: null, present: true };
-  return { ok: true, value: parsed, present: true };
-}
-
-/** Empty string is absence, not a value. */
-function parseText(value) {
-  if (value === null || value === undefined) return { value: null, present: false };
-  if (typeof value !== "string") return { value: null, present: false };
-  const trimmed = value.trim();
-  if (trimmed === "") return { value: null, present: false };
-  return { value: trimmed, present: true };
-}
-
-/** JSON null is absence; only a real object is a value. */
-function parseJson(value) {
-  if (value === null || value === undefined) return { value: null, present: false };
-  if (typeof value !== "object") return { value: null, present: false };
-  return { value, present: true };
-}
+export { IMMUTABLE_COLUMNS, MUTABLE_COLUMNS };
 
 function sameJson(a, b) {
   if (a === b) return true;
@@ -107,53 +74,23 @@ function sameJson(a, b) {
  * Both directions are safe to re-run.
  */
 export function planRowUpdate(row) {
-  const diagnostics = {
-    missingSource: 0,
-    numericRejected: 0,
-    integerRejected: 0,
-    rejectedColumns: []
-  };
+  // The projected `src_*` aliases ARE the payload sub-objects, so they are folded
+  // back into payload shape and run through the one shared derivation.
+  const { columns: derived, diagnostics } = deriveHistoryListColumnsWithDiagnostics({
+    recommended: row.src_recommended,
+    logos: row.src_logos,
+    cardMarketValidations: row.src_card_market_validations,
+    cardMarkets: row.src_card_markets,
+    marketResults: row.src_market_results
+  });
+
+  // Backfill-only reconciliation. Immutable columns keep whatever is already
+  // stored; mutable columns follow the authoritative payload but are never
+  // nulled by a source that simply is not there. This is NOT how live writes
+  // behave — see ../historyListColumns.js.
   const desired = {};
-
-  const odd = parseGuardedNumber(row.src_recommended?.odd, NUMERIC_GUARD);
-  if (!odd.ok) {
-    diagnostics.numericRejected += 1;
-    diagnostics.rejectedColumns.push("recommended_odd");
-  }
-  if (!odd.present) diagnostics.missingSource += 1;
-  desired.recommended_odd = row.recommended_odd ?? odd.value;
-
-  const logoHome = parseText(row.src_logos?.home);
-  if (!logoHome.present) diagnostics.missingSource += 1;
-  desired.logo_home = row.logo_home ?? logoHome.value;
-
-  const logoAway = parseText(row.src_logos?.away);
-  if (!logoAway.present) diagnostics.missingSource += 1;
-  desired.logo_away = row.logo_away ?? logoAway.value;
-
-  const cmv = parseJson(row.src_card_market_validations);
-  if (!cmv.present) diagnostics.missingSource += 1;
-  desired.card_market_validations = cmv.value ?? row.card_market_validations ?? null;
-
-  const cm = parseJson(row.src_card_markets);
-  if (!cm.present) diagnostics.missingSource += 1;
-  desired.card_markets = cm.value ?? row.card_markets ?? null;
-
-  const corners = parseGuardedNumber(row.src_market_results?.cornersTotal, INTEGER_GUARD);
-  if (!corners.ok) {
-    diagnostics.integerRejected += 1;
-    diagnostics.rejectedColumns.push("corners_total");
-  }
-  if (!corners.present) diagnostics.missingSource += 1;
-  desired.corners_total = corners.value ?? row.corners_total ?? null;
-
-  const shots = parseGuardedNumber(row.src_market_results?.shotsOnTargetTotal, INTEGER_GUARD);
-  if (!shots.ok) {
-    diagnostics.integerRejected += 1;
-    diagnostics.rejectedColumns.push("shots_on_target_total");
-  }
-  if (!shots.present) diagnostics.missingSource += 1;
-  desired.shots_on_target_total = shots.value ?? row.shots_on_target_total ?? null;
+  for (const key of IMMUTABLE_COLUMNS) desired[key] = row[key] ?? derived[key];
+  for (const key of MUTABLE_COLUMNS) desired[key] = derived[key] ?? row[key] ?? null;
 
   // Only columns whose value actually moves are written, so a second run is a
   // no-op rather than a table-wide rewrite that would churn updated_at.

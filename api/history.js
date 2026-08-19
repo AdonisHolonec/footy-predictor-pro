@@ -28,6 +28,7 @@ import {
   resolveValueBetPick,
   validationFromMatch
 } from "../server-utils/predictionsHistory.js";
+import { deriveMutableHistoryListColumns } from "../server-utils/historyListColumns.js";
 
 function parseNumericStat(statistics, candidates) {
   if (!Array.isArray(statistics)) return null;
@@ -653,6 +654,11 @@ async function handleHistorySync(req, res) {
         validation,
         value_bet_validation: valueBetValidation,
         raw_payload: enrichedPayload,
+        // Only the four columns settlement can move, derived from the payload
+        // written on the line above. recommended/logos are untouched by
+        // attachCardMarketsToPayload, so writing them here would be a no-op that
+        // could hide a future regression.
+        ...deriveMutableHistoryListColumns(enrichedPayload),
         updated_at: new Date().toISOString()
       });
     }
@@ -909,6 +915,10 @@ async function handleHistorySync(req, res) {
           fixture_id: Number(row.fixture_id),
           validation,
           raw_payload: enriched,
+          // Same rule as the recommended-settlement pass: derived from `enriched`,
+          // the exact object being persisted. This path CAN introduce totals the
+          // provider has just supplied.
+          ...deriveMutableHistoryListColumns(enriched),
           updated_at: new Date().toISOString()
         });
       }
