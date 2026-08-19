@@ -15,9 +15,20 @@ name: E2E Smoke
 #
 # The smoke stays read-mostly by design: predict hits the warm cache, billing
 # stops at the checkout-session response and never completes a payment.
+
+# One smoke at a time: each run performs ~3 password logins and Supabase
+# rate-limits them project-wide, so two concurrent runs fail each other.
+#
+# `cancel-in-progress: true` because this smoke targets PRODUCTION, not the
+# commit's own build. A queued run for an older SHA would test whatever
+# production has since become, so only the newest run carries information and
+# superseding an older one loses nothing. Under `false`, GitHub keeps a single
+# pending slot and each new push cancelled the previously queued run — so one
+# stalled run meant the newest commit was never smoked at all. That is how
+# 2026-08-19 lost the smoke for five consecutive merges (#100 through #104).
 concurrency:
   group: e2e-smoke
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 on:
   workflow_dispatch:
@@ -28,6 +39,11 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    # A green smoke takes ~4m30s. Without this the job inherits GitHub's 6-hour
+    # default, and on 2026-08-19 one that hung on the browser install held the
+    # concurrency group for 6h 0m 55s before the platform killed it — blocking
+    # every merge behind it. The cap is what makes a stall self-healing.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +57,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The browser download is what stalled on 2026-08-19. Cached, a hit skips
+      # it entirely and only the system-deps install remains; the key is the
+      # lockfile, so a Playwright version bump invalidates it on its own.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Chromium
+        # Normally well under a minute. Failing here is recoverable — a stall
+        # that eats the job budget is not.
+        timeout-minutes: 6
         run: npx playwright install --with-deps chromium
 
       - name: Run smoke suite
