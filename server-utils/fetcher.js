@@ -1,6 +1,6 @@
 import { createClient } from "@vercel/kv";
 import { logError, logWarn } from "./observability/logger.js";
-import { bumpCounter, recordObservation } from "./observability/metricsStore.js";
+import { bumpCacheStat, bumpCounter, cacheStatsKey, recordObservation } from "./observability/metricsStore.js";
 export { recordObservation };
 
 const kv = createClient({
@@ -150,12 +150,10 @@ async function recordUsageFromHeaders(res, provider) {
 async function bumpDailyCacheStats({ hit, miss, inflightJoin }) {
   const field = hit ? "hits" : miss ? "misses" : inflightJoin ? "inflightJoins" : null;
   if (!field) return;
-  try {
-    // Atomic counter — avoids the read-modify-write GET+SET round trip.
-    await kv.hincrby(`footy_cache_stats:${getTodayISO()}`, field, 1);
-  } catch {
-    // non-fatal
-  }
+  // Buffered per invocation and summed at the boundary (see bumpCacheStat).
+  // It was already a single atomic HINCRBY, but one per cache lookup: the cost
+  // was the call COUNT, not the command shape.
+  await bumpCacheStat(field);
 }
 
 export function getLocalCacheStats() {
@@ -168,7 +166,7 @@ export function getLocalCacheStats() {
 
 export async function getDailyCacheStats(dateISO = getTodayISO()) {
   try {
-    const row = (await kv.hgetall(`footy_cache_stats:${dateISO}`)) || {};
+    const row = (await kv.hgetall(cacheStatsKey(dateISO))) || {};
     const hits = Number(row.hits || 0);
     const misses = Number(row.misses || 0);
     const total = hits + misses;

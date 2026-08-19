@@ -165,9 +165,34 @@ function applyCounter(day, key, delta) {
 async function flushScope(store) {
   if (!store || !store.pending.length) return null;
   const pending = store.pending.splice(0, store.pending.length);
+
+  /*
+    Cache counters live in their own hash, so they flush independently of the
+    ops document — and crucially they collapse by FIELD, not by observation.
+    HINCRBY takes a single field, so a warm invocation that hits the cache 40
+    times and misses 35 issues two commands instead of seventy-five.
+  */
+  const cacheDeltas = new Map();
+  for (const m of pending) {
+    if (m.kind !== "cacheStat") continue;
+    cacheDeltas.set(m.field, (cacheDeltas.get(m.field) || 0) + 1);
+  }
+  for (const [field, delta] of cacheDeltas) {
+    try {
+      await kv.hincrby(cacheStatsKey(), field, delta);
+    } catch {
+      // Non-fatal, same contract as every other writer here.
+    }
+  }
+
+  // Only the ops document needs the read-modify-write; skip it when an
+  // invocation produced nothing but cache counters.
+  const dayMutations = pending.filter((m) => m.kind !== "cacheStat");
+  if (!dayMutations.length) return null;
+
   try {
     const day = await readDay();
-    for (const m of pending) {
+    for (const m of dayMutations) {
       if (m.kind === "observation") applyObservation(day, m);
       else if (m.kind === "failure") applyFailure(day, m.failureKind);
       else if (m.kind === "counter") applyCounter(day, m.key, m.delta);
@@ -202,6 +227,40 @@ export async function withObservationScope(fn) {
 /** Exposed for tests: is a buffer currently active? */
 export function hasActiveObservationScope() {
   return Boolean(observationScope.getStore());
+}
+
+/**
+ * The daily cache hit/miss hash. Exported so the reader in fetcher.js and the
+ * writer here cannot drift onto different keys.
+ */
+export function cacheStatsKey(dateISO = todayISO()) {
+  return `footy_cache_stats:${dateISO}`;
+}
+
+/**
+ * One cache hit / miss / in-flight join.
+ *
+ * `getWithCache` calls this on EVERY lookup, and a single warm invocation
+ * makes ~75 of them, so writing straight through cost one HINCRBY per cache
+ * read — 3,867 commands on the day this was measured, 38.6% of all Redis
+ * traffic, for a counter no product path reads.
+ *
+ * Buffered inside an invocation scope and summed at the boundary. Outside a
+ * scope it still writes immediately, so callers that are not wrapped keep
+ * their existing behaviour rather than silently losing counts.
+ */
+export async function bumpCacheStat(field) {
+  if (!field) return;
+  const store = observationScope.getStore();
+  if (store) {
+    store.pending.push({ kind: "cacheStat", field });
+    return;
+  }
+  try {
+    await kv.hincrby(cacheStatsKey(), field, 1);
+  } catch {
+    // non-fatal
+  }
 }
 
 /** Increment a failure counter without counting a full route observation. */
