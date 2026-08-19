@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ThemeBoot from "./design-system/ThemeBoot";
-import { useAuth } from "./hooks/useAuth";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 
 // Route-level code splitting: every page is its own chunk, so a visitor on the
 // marketing landing no longer downloads the authenticated workspace (the main
@@ -59,19 +59,27 @@ function AuthGate() {
 export default function RootRouter() {
   return (
     <BrowserRouter>
-      {/* Theme is an application responsibility: applied for every route,
-          before any page decides anything — never owned by a dashboard. */}
-      <ThemeBoot />
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<LandingAccess />} />
-          <Route path="/track-record" element={<TrackRecordPage />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/workspace" element={<AuthGate />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      {/* One auth lifecycle for the whole app. This is the narrowest boundary
+          that still covers every consumer: ThemeBoot sits outside the routes,
+          and AuthGate below decides which dashboard renders — so anything
+          higher (main.tsx) would be wider for no gain, and anything lower
+          would leave ThemeBoot with a second instance, which is the
+          duplication this exists to remove. */}
+      <AuthProvider>
+        {/* Theme is an application responsibility: applied for every route,
+            before any page decides anything — never owned by a dashboard. */}
+        <ThemeBoot />
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<LandingAccess />} />
+            <Route path="/track-record" element={<TrackRecordPage />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/workspace" element={<AuthGate />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
