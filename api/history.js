@@ -19,6 +19,7 @@ import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
+  mapDbRowToHistoryEntry,
   readPredictionsHistory,
   readPredictionsHistoryAggregateStats,
   readPredictionsHistoryForUser,
@@ -298,6 +299,74 @@ async function handlePerformanceRead(req, res) {
   }
 }
 
+/**
+ * One history row, by primary key.
+ *
+ * The list response carries `raw_payload` for EVERY row purely so the match
+ * modal can render without a fetch — at a measured ~261 KB per row that is
+ * where /api/history spends its statement timeout. This is the detail source
+ * the modal will eventually read instead; the list is deliberately unchanged
+ * until it exists and is proven.
+ *
+ * Authorization deliberately matches the WEAKEST row-level access the list
+ * already grants: `mine=1` requires a valid JWT, and anonymous callers get
+ * `items: []`. So this requires a session and never becomes public. It does not
+ * filter by user, because `predictions_history` has no user column — rows are
+ * model output for public fixtures, and per-user scoping lives in the
+ * `predictions_history_for_user` RPC rather than the table.
+ */
+export async function handleHistoryDetail(req, res, rawFixtureId, deps = {}) {
+  // Dependencies are injectable so the tests run against fakes — no Postgres,
+  // no network — the same shape supportApi.js uses.
+  const requestUser = deps.getRequester || getRequester;
+  const supabaseFor = deps.getSupabaseAdmin || getSupabaseAdmin;
+  const mapRow = deps.mapDbRowToHistoryEntry || mapDbRowToHistoryEntry;
+
+  const fixtureId = Number(rawFixtureId);
+  if (!Number.isInteger(fixtureId) || fixtureId <= 0) {
+    return res.status(400).json({ ok: false, error: "fixtureId invalid." });
+  }
+
+  const requester = await requestUser(req);
+  if (!requester.ok) {
+    return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
+  }
+
+  const supabase = supabaseFor();
+  if (!supabase) {
+    return res.status(500).json({ ok: false, error: "Clientul Supabase nu este disponibil." });
+  }
+
+  try {
+    // Primary-key lookup: no date window, no limit, no scan.
+    const { data, error } = await supabase
+      .from(HISTORY_TABLE)
+      .select("*")
+      .eq("fixture_id", fixtureId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ ok: false, error: "Fixture inexistent în istoric." });
+    }
+    // Same mapper the list uses, so the modal sees a byte-identical shape.
+    return res.status(200).json({ ok: true, scope: "fixture_detail", item: mapRow(data) });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
+  }
+}
+
+/**
+ * Whether this request asks for one fixture rather than the list.
+ *
+ * Exported because it is the routing rule the whole split depends on: anything
+ * that answers true here must never reach the windowed list query, and an
+ * absent or blank fixtureId must leave the list path exactly as it was.
+ */
+export function shouldServeFixtureDetail(query) {
+  const raw = query?.fixtureId;
+  return raw !== undefined && raw !== null && String(raw).trim() !== "";
+}
+
 async function handleHistoryRead(req, res) {
   if (req.method && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -306,6 +375,11 @@ async function handleHistoryRead(req, res) {
   const supabaseConfig = assertSupabaseConfigured();
   if (!supabaseConfig.ok) {
     return res.status(500).json({ ok: false, error: supabaseConfig.error });
+  }
+
+  // Single fixture: answered by primary key, never by the windowed list query.
+  if (shouldServeFixtureDetail(req.query)) {
+    return handleHistoryDetail(req, res, req.query.fixtureId);
   }
 
   const days = Number(req.query.days || 30);
