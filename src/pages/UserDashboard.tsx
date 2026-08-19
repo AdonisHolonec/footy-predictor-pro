@@ -18,7 +18,7 @@ import { useLeaguePanelState } from "../hooks/useLeaguePanelState";
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
-import { useHistoryDetail } from "../hooks/useHistoryDetail";
+import { useHistoryDetailSource } from "../hooks/useHistoryDetailSource";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
@@ -90,14 +90,6 @@ export default function UserDashboard() {
   const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState({ initialOpen: false });
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
-  /*
-    Prefetch only — the modal still renders from `selectedMatch`, exactly as
-    before. Opening a match warms the by-fixture detail cache so the later phase
-    that stops shipping `raw_payload` in the LIST has a proven source to read
-    from. The return value is deliberately unused: nothing about what the user
-    sees changes in this phase.
-  */
-  useHistoryDetail(selectedMatch ? Number(selectedMatch.id) : null);
   const {
     selectedLeagueIds,
     setSelectedLeagueIdsLimited,
@@ -167,6 +159,14 @@ export default function UserDashboard() {
     userPerformanceByLeague,
     historySearchLabels
   } = useDashboardHistory({ userId: user?.id, accessToken: session?.access_token });
+  /*
+    The modal's data source. For a fixture that exists in history this resolves
+    to the by-fixture detail row; for anything else — and for any failure — it
+    stays on `selectedMatch`, so the modal is never worse off than before.
+    See useHistoryDetailSource for why membership, not the opening section,
+    decides whether a request happens.
+  */
+  const { match: modalMatch } = useHistoryDetailSource(selectedMatch, history);
   const trackerStats = historyStats;
   const {
     preds,
@@ -725,12 +725,12 @@ export default function UserDashboard() {
         isAdmin={false}
         leagueTableHeading="Predicțiile tale · pe ligă (ultimele 30 zile)"
       />
-      {selectedMatch && (
+      {modalMatch && (
         // Null fallback: the first open pays one cached network roundtrip; a
         // spinner for that beat would flash more than it informs.
         <Suspense fallback={null}>
           <MatchModal
-            match={selectedMatch}
+            match={modalMatch}
             logoColors={{}}
             hashColor={hashColor}
             canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
