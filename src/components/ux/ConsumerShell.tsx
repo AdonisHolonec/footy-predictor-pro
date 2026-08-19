@@ -67,7 +67,15 @@ export default function ConsumerShell({
 
   const langSwitch = (
     <div
-      className="inline-flex h-9 overflow-hidden rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]"
+      /*
+       * 44px (h-11) rather than the toolbar's 36px rhythm: RO and EN sit flush
+       * against each other, so a mis-tap does not miss the control - it picks
+       * the OTHER language. `touch-target` cannot help here, twice over: the
+       * group clips ::after, and unclipped the two pads fight over the shared
+       * edge (measured: EN's pad took 6px of RO's own box). Real width is the
+       * only thing that separates them, so the boxes carry it.
+       */
+      className="inline-flex h-11 overflow-hidden rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]"
       role="group"
       aria-label={t("shell.switchLang")}
     >
@@ -75,7 +83,7 @@ export default function ConsumerShell({
         type="button"
         title={t("shell.switchLang")}
         onClick={() => setLocale("ro")}
-        className={`min-w-9 px-2 text-[11px] font-bold ${
+        className={`min-w-11 px-2 text-[11px] font-bold ${
           locale === "ro" ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
         }`}
       >
@@ -85,7 +93,7 @@ export default function ConsumerShell({
         type="button"
         title={t("shell.switchLang")}
         onClick={() => setLocale("en")}
-        className={`min-w-9 px-2 text-[11px] font-bold ${
+        className={`min-w-11 px-2 text-[11px] font-bold ${
           locale === "en" ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
         }`}
       >
