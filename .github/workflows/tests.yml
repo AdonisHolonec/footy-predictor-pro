@@ -9,6 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Green runs take ~1m30s, so this is ~13x headroom — generous enough for a
+    # cold npm cache and the audit step's retry loop. The number that matters is
+    # the one it replaces: without it a job inherits GitHub's 6-hour default,
+    # and on 2026-08-19 a hung `playwright install` in the E2E workflow ran the
+    # full six hours before the platform killed it (#106). Nothing here
+    # serializes on a concurrency group, so a stall would strand one PR check
+    # rather than block a queue — visible, but still six hours of a runner.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4

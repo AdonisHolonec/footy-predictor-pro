@@ -14,6 +14,11 @@ jobs:
   analyze:
     name: Analyze (javascript-typescript)
     runs-on: ubuntu-latest
+    # Green runs take ~1-2.5 minutes, so this is ~8x headroom, with room for
+    # database creation to grow with the codebase. Interpreted languages do not
+    # need the 360 minutes the compiled-language CodeQL templates budget for;
+    # what they must not do is silently inherit it (#106).
+    timeout-minutes: 20
     permissions:
       security-events: write
       contents: read
