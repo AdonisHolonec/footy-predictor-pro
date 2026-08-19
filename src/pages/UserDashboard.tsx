@@ -604,7 +604,11 @@ export default function UserDashboard() {
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
           onReportMatch={setReportRow}
           onPredict={() => void warmAndPredict()}
-          matchesFilter={matchesFilter === "favorites" ? "favorites" : "all"}
+          /* Collapse only "live" — it is a VIEW, not one of this control's
+             options. Listing the options instead silently dropped any new one:
+             "picks" arrived, the old `=== "favorites" ? … : "all"` flattened it
+             away, and the chip never showed as selected. */
+          matchesFilter={matchesFilter === "live" ? "all" : matchesFilter}
           onSetFilter={(f) => updateFilters({ matchesFilter: f })}
           onGoLive={() => handleNav("live")}
           valueOnly={prefs.valueOnly}
