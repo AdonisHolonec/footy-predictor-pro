@@ -175,12 +175,19 @@ export default function SuccessRateTracker({
 
       {pendingHistoryCount > 0 && (
         <div className="mt-4 rounded-[var(--fp-radius-sm)] border border-fp-warning/30 bg-fp-warning/10 px-3 py-2 text-center text-xs font-medium text-[var(--fp-text)]">
-          {pendingHistoryCount} matches without FT result
+          {/*
+            Worded as "label: count" in both locales on purpose. `translate`
+            interpolates `{n}` and has no plural machinery, and the catalogues
+            use one invariant form ("{n} meciuri analizate azi"), so a sentence
+            shape would read "1 meciuri" in Romanian for a single match. A label
+            is correct for every count without inventing a plural mechanism.
+          */}
+          {t("tracker.pendingAwaiting", { n: pendingHistoryCount })}
           {displayedPredsCount > 0 && (
             <span className="mt-0.5 block text-[var(--fp-text-muted)]">
-              In current list: {pendingAmongDisplayedPreds}
+              {t("tracker.pendingInList", { n: pendingAmongDisplayedPreds })}
               {pendingHistoryCount > pendingAmongDisplayedPreds
-                ? ` · +${pendingHistoryCount - pendingAmongDisplayedPreds} other days`
+                ? ` · ${t("tracker.pendingOtherDays", { n: pendingHistoryCount - pendingAmongDisplayedPreds })}`
                 : ""}
             </span>
           )}
