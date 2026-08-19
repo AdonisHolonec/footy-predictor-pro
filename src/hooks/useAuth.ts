@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
 import { localCalendarDateKey } from "../utils/appUtils";
@@ -70,7 +71,20 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
   };
 }
 
-export function useAuth() {
+/**
+ * The whole auth lifecycle: session, profile, tier, and the Supabase
+ * subscription. Runs EXACTLY ONCE, inside AuthProvider — never call it
+ * directly. Consumers use `useAuth()` below, which reads the shared value.
+ *
+ * It used to be the exported hook, so each of its seven consumers built its
+ * own state, its own `getSession()` on mount and its own
+ * `onAuthStateChange` subscription. Three of them mount together on
+ * /workspace (ThemeBoot, RootRouter's AuthGate, UserDashboard), which is why
+ * one activation journey issued 9-11 POSTs to
+ * /api/fixtures?syncBootstrapAdmin=1 — every one a 403 — plus a duplicated
+ * tierStatus call and three copies of the session/profile round-trips.
+ */
+function useAuthState() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -80,6 +94,8 @@ export function useAuth() {
   const [predictCountToday, setPredictCountToday] = useState(0);
   const [predictLimitToday, setPredictLimitToday] = useState<number | null>(null);
   const [tierQuotaExempt, setTierQuotaExempt] = useState(false);
+  /** Access tokens already offered to the bootstrap-admin check. */
+  const bootstrapAsked = useRef<Set<string>>(new Set());
 
   const loadProfile = useCallback(async (userId: string) => {
     if (!supabase) return null;
@@ -116,6 +132,22 @@ export function useAuth() {
     async (authUser: SupabaseAuthUser, profile: ProfileRow | null, accessToken: string): Promise<ProfileRow | null> => {
       if (!profile || profile.role === "admin") return profile;
       if (profile.role !== "user") return profile;
+      /*
+        The provider removes the duplicate INSTANCES, but not the duplicate
+        PATHS: getSession() runs on mount, on every predict (usePredictFlow's
+        resolveAccessToken) and when favourite leagues are saved, and
+        onAuthStateChange fires again on SIGNED_IN and TOKEN_REFRESHED. Each
+        would re-ask a question whose answer cannot change while the token
+        does not: the allowlist is server-side and keyed on the token's email.
+
+        Keyed by TOKEN, never by user id — a fresh sign-in mints a new token,
+        so signing out cannot suppress the next session's promotion, and a
+        real bootstrap admin is still promoted on its first ask.
+      */
+      if (bootstrapAsked.current.has(accessToken)) return profile;
+      // Tokens rotate roughly hourly; keep the set from growing all session.
+      if (bootstrapAsked.current.size > 50) bootstrapAsked.current.clear();
+      bootstrapAsked.current.add(accessToken);
       try {
         const response = await fetch("/api/fixtures?syncBootstrapAdmin=1", {
           method: "POST",
@@ -131,7 +163,10 @@ export function useAuth() {
           return await loadProfile(authUser.id);
         }
       } catch {
-        // silent — non-admin users get 403; admin UI waits for DB role
+        // Silent by design — non-admin users get 403 and the admin UI waits
+        // for the DB role. A THROW is different from a 403 though: nothing was
+        // decided, so release the token and let a later path ask again.
+        bootstrapAsked.current.delete(accessToken);
       }
       return profile;
     },
@@ -672,4 +707,40 @@ export function useAuth() {
     updateNotificationPreferences,
     markOnboardingComplete
   };
+}
+
+/** Everything `useAuth()` hands a consumer. */
+export type AuthState = ReturnType<typeof useAuthState>;
+
+/*
+  Deliberately `null` rather than a default object: a consumer rendered
+  outside the provider must fail loudly at the boundary, not silently read a
+  logged-out shape and redirect the user to /login.
+*/
+const AuthContext = createContext<AuthState | null>(null);
+
+/**
+ * Owns the single auth lifecycle. Mount it once, above every consumer —
+ * RootRouter does, inside BrowserRouter, which is the narrowest boundary that
+ * still covers ThemeBoot and every route.
+ *
+ * The file is `.ts`, so the element is built with `createElement` rather than
+ * JSX; renaming it to `.tsx` would move the hook and churn eleven import
+ * paths for no behavioural gain.
+ */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const value = useAuthState();
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+/**
+ * The shared auth state. Same shape and same values as before the provider
+ * existed — consumers did not change; only the number of lifecycles did.
+ */
+export function useAuth(): AuthState {
+  const value = useContext(AuthContext);
+  if (!value) {
+    throw new Error("useAuth must be used inside <AuthProvider>. RootRouter mounts it for the whole app.");
+  }
+  return value;
 }
