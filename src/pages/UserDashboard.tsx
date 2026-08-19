@@ -661,6 +661,7 @@ export default function UserDashboard() {
           trackerSlot={trackerSlot}
           history={history}
           leagueBreakdown={userPerformanceByLeague}
+          onStartPredicting={() => handleNav("home")}
         />
       )}
 
