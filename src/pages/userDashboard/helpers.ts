@@ -1,4 +1,3 @@
-import type { AppNavView } from "../../components/ux/appNav";
 import type { MarketPref } from "../../hooks/useUiPrefs";
 import type { PredictionRow } from "../../types";
 import { normalizeSelectedDates } from "../../utils/appUtils";
@@ -69,8 +68,6 @@ export function clampTierDates(baseDate: string, tier: string | undefined, dates
   const filtered = normalizeSelectedDates((dates || []).filter((d) => allowed.has(d)));
   return filtered.length ? filtered : [baseDate];
 }
-
-export const MAIN_VIEWS: AppNavView[] = ["home", "matches", "predictions", "live"];
 
 /** True when `row` has an actionable (non-toss) tier for at least one of the onboarding-picked markets. */
 export function matchesPreferredMarkets(row: PredictionRow, preferredMarkets: MarketPref[]) {

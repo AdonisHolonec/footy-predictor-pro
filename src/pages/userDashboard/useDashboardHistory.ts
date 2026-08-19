@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useHistorySync } from "../../hooks/useHistorySync";
 import type { HistoryEntry, HistoryStats, PerformanceLeagueBreakdown } from "../../types";
 import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
-import { computeSimpleRoi, historyStatsFromRows, tallyEntryCardMarkets } from "../../utils/historyStats";
+import { historyStatsFromRows, tallyEntryCardMarkets } from "../../utils/historyStats";
 
 /**
  * Istoricul predicțiilor + statisticile derivate, mutate verbatim din
@@ -94,7 +94,6 @@ export function useDashboardHistory({
         .map((h) => `${h.teams?.home || "?"} vs ${h.teams?.away || "?"} · ${h.league || ""}`.trim()),
     [history]
   );
-  const simpleRoi = useMemo(() => computeSimpleRoi(history), [history]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -132,7 +131,6 @@ export function useDashboardHistory({
     pendingHistoryCount,
     marketValidationsByFixtureId,
     userPerformanceByLeague,
-    historySearchLabels,
-    simpleRoi
+    historySearchLabels
   };
 }

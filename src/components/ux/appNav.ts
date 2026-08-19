@@ -1,7 +1,12 @@
+/*
+ * "predictions" was a destination here until UX-07n. Neither the tab bar nor
+ * the desktop rail ever listed it — both build from MOBILE_TAB_ITEMS — so the
+ * only way in was ⌘K, and mobile has no keyboard. Its one unique asset, the
+ * confidence-ranked list, is now the Matches "picks" filter.
+ */
 export type AppNavView =
   | "home"
   | "matches"
-  | "predictions"
   | "live"
   | "history"
   | "statistics"
@@ -16,7 +21,6 @@ export const APP_NAV_ITEMS: { id: AppNavView; labelKey: string; shortKey: string
   { id: "home", labelKey: "nav.home", shortKey: "nav.home" },
   /** Bottom tab reads "Predictions" (mobile) while the desktop sidebar keeps "Matches" — same view, id="matches". */
   { id: "matches", labelKey: "nav.matches", shortKey: "nav.matches", mobileShortKey: "nav.predictions" },
-  { id: "predictions", labelKey: "nav.predictions", shortKey: "nav.picks" },
   { id: "live", labelKey: "nav.live", shortKey: "nav.live" },
   { id: "history", labelKey: "nav.history", shortKey: "nav.history", mobileShortKey: "nav.resultsShort" },
   { id: "statistics", labelKey: "nav.statistics", shortKey: "nav.stats" },

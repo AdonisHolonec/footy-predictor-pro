@@ -37,20 +37,27 @@ export function useDerivedPredictions({
   );
   const visiblePreds = useMemo(() => {
     let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
-    const listFilter: MatchesSubFilter | "predictions" =
+    /*
+      "picks" reached this list through `navView === "predictions"`, a
+      destination neither the tab bar nor the desktop rail ever linked to —
+      only ⌘K did, so no mobile user could open it at all. It is a way of
+      looking at the slate rather than a place, so it is a Matches filter now,
+      beside all/favorites.
+    */
+    const listFilter: MatchesSubFilter =
       navView === "live"
         ? "live"
-        : navView === "predictions"
-          ? "predictions"
-          : matchesFilter === "favorites" || matchesFilter === "live"
-            ? matchesFilter
-            : "all";
+        : matchesFilter === "favorites" || matchesFilter === "live" || matchesFilter === "picks"
+          ? matchesFilter
+          : "all";
     if (listFilter === "live") {
       rows = rows.filter((row) => isFixtureInPlay(row.status));
     } else if (listFilter === "favorites") {
       const ids = new Set(prefs.watchlistFixtureIds);
       rows = rows.filter((row) => ids.has(Number(row.id)));
-    } else if (listFilter === "predictions") {
+    } else if (listFilter === "picks") {
+      // A pick you cannot act on is not a pick: rows with no recommendation, or
+      // without the data to make one, are not ranked low — they are dropped.
       rows = rows
         .filter((row) => !row.insufficientData && Boolean(row.recommended?.pick))
         .slice()
@@ -151,11 +158,6 @@ export function useDerivedPredictions({
       }),
     [preds, history, prefs.watchlistFixtureIds, prefs.notifyLiveSwing]
   );
-  const continueMatch = useMemo(() => {
-    const recent = prefs.recentFixtureIds[0];
-    if (!recent) return null;
-    return preds.find((p) => Number(p.id) === recent) || null;
-  }, [prefs.recentFixtureIds, preds]);
   const analysisMatch = useMemo(() => {
     const playable = preds.filter((p) => !p.insufficientData);
     // The featured "verdict of the day" is a pre-kickoff call — in-play rows
@@ -178,7 +180,6 @@ export function useDerivedPredictions({
     homeCounts,
     homeLiveCount,
     notificationItems,
-    continueMatch,
     analysisMatch
   };
 }
