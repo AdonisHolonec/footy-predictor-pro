@@ -18,6 +18,7 @@ import { useLeaguePanelState } from "../hooks/useLeaguePanelState";
 import { usePredictFlow } from "../hooks/usePredictFlow";
 import { useLiveFixtureScorePoll } from "../hooks/useLiveFixtureScorePoll";
 import { useMarketTotalsHydrate } from "../hooks/useMarketTotalsHydrate";
+import { useHistoryDetail } from "../hooks/useHistoryDetail";
 import { useUiPrefs } from "../hooks/useUiPrefs";
 import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
@@ -89,6 +90,14 @@ export default function UserDashboard() {
   const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState({ initialOpen: false });
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
+  /*
+    Prefetch only — the modal still renders from `selectedMatch`, exactly as
+    before. Opening a match warms the by-fixture detail cache so the later phase
+    that stops shipping `raw_payload` in the LIST has a proven source to read
+    from. The return value is deliberately unused: nothing about what the user
+    sees changes in this phase.
+  */
+  useHistoryDetail(selectedMatch ? Number(selectedMatch.id) : null);
   const {
     selectedLeagueIds,
     setSelectedLeagueIdsLimited,
