@@ -59,6 +59,9 @@ import { useLeagueSelection } from "./userDashboard/useLeagueSelection";
 import { useDerivedPredictions } from "./userDashboard/useDerivedPredictions";
 import { useTrackerAnimations } from "./userDashboard/useTrackerAnimations";
 
+/** How often the workspace re-reads server tier/quota state. See the effect below. */
+const TIER_STATUS_POLL_MS = 5 * 60_000;
+
 export default function UserDashboard() {
   const {
     user,
@@ -314,11 +317,26 @@ export default function UserDashboard() {
     return () => clearTimeout(tm);
   }, [dateSyncBadgeUntil]);
 
+  /*
+    Every tick is a real request: /api/fixtures?tierStatus=1 INCRs the shared
+    `anonrl:fixtures-day:{ip}:{hour}` rate-limit counter and reads the daily
+    predict counter — 2 KV commands, whether it answers 200 or 402.
+
+    At 30s that was 121 requests/hour per open tab, against a default cap of
+    120/hour for that namespace: one workspace left open consumed an IP's
+    entire fixture-listing budget, and everyone behind the same NAT shared it.
+
+    Nothing on Home, Matches or the prediction flow reads this. It feeds
+    predictCountToday / predictLimitToday / tierQuotaExempt, and those reach
+    ProfileView alone — a screen you have to navigate to, which re-runs the
+    session refresh on the way in. Five minutes is fresh enough for a quota
+    line there, and drops the tab to ~10% of the budget.
+  */
   useEffect(() => {
     if (!session?.access_token) return;
     const tm = setInterval(() => {
       void refreshTierStatus();
-    }, 30000);
+    }, TIER_STATUS_POLL_MS);
     return () => clearInterval(tm);
   }, [session?.access_token, refreshTierStatus]);
 
