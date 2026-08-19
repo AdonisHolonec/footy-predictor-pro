@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsumerShell from "./ConsumerShell";
 import { MOBILE_TAB_ITEMS } from "./appNav";
@@ -111,5 +111,50 @@ describe("ConsumerShell touch targets", () => {
     for (const el of padded) {
       expect(el.className, "a padded control grew its box").not.toContain("min-h-[var(--fp-touch)]");
     }
+  });
+});
+
+describe("ConsumerShell locale switch", () => {
+  afterEach(cleanup);
+
+  /**
+   * RO and EN are flush against each other, so an imprecise tap does not miss
+   * the control - it selects the OTHER language. The pad utility cannot fix
+   * that (the group clips ::after, and unclipped the pads fight over the shared
+   * edge), so the boxes themselves carry the 44px.
+   */
+  it("gives each language its own 44px box", () => {
+    renderShell({});
+    const group = screen.getByRole("group", { name: /limb|lang/i });
+    expect(group.className).toContain("h-11");
+    const langs = Array.from(group.querySelectorAll("button"));
+    expect(langs).toHaveLength(2);
+    for (const b of langs) {
+      expect(b.className, "a language button is narrower than the guideline").toContain("min-w-11");
+      // The pad would be clipped by the group and would steal from its
+      // neighbour; real width is what separates two flush controls.
+      expect(b.className).not.toContain("touch-target");
+    }
+  });
+
+  it("keeps both languages independently selectable", () => {
+    renderShell({});
+    const group = screen.getByRole("group", { name: /limb|lang/i });
+    const [ro, en] = Array.from(group.querySelectorAll("button"));
+    expect(ro.textContent).toBe("RO");
+    expect(en.textContent).toBe("EN");
+    // Each keeps its own accessible name and handler - one control, not a toggle.
+    expect(ro.getAttribute("title")).toBeTruthy();
+    expect(en.getAttribute("title")).toBeTruthy();
+    fireEvent.click(en);
+    fireEvent.click(ro);
+  });
+
+  it("leaves the neighbouring header controls at their own rhythm", () => {
+    renderShell({ onPredict: () => {} });
+    // The 44px decision is scoped to the flush pair. The desktop rail and the
+    // dense toolbar keep 36px (UX-07m tracks the rail separately).
+    const predict = screen.getAllByRole("button", { name: /Gener/ })[0];
+    expect(predict.className).toContain("min-h-9");
   });
 });
