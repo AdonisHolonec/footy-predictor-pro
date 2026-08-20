@@ -53,7 +53,7 @@ function deferred(): Deferred {
 
 /** Only the prediction-hydration calls, ignoring any other history traffic. */
 function hydrationCalls(): string[] {
-  return fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("mine=1") && !u.includes("view="));
+  return fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("view=prediction-list"));
 }
 
 function settleLatest(items: unknown[], extra: Record<string, unknown> = {}) {
@@ -208,12 +208,17 @@ describe("hydration in-flight guard", () => {
     const url = hydrationCalls()[0];
 
     expect(url).toContain("/api/history");
-    expect(url).toContain("days=14");
-    expect(url).toContain("limit=1000");
     expect(url).toContain("mine=1");
-    // The full projection is what feeds the prediction cards; a light row here
-    // would strip them and keep every row looking legacy.
-    expect(url).not.toContain("view=");
+    // P3-B: the board projection, which keeps probs and modelVersion. The
+    // History LIST projection must never appear here — it strips exactly the
+    // fields hasLegacyPredictionShape reads, which would leave every row looking
+    // legacy and re-arm the rehydrate that fetched it.
+    expect(url).toContain("view=prediction-list");
+    expect(url).not.toContain("view=list&");
+    expect(url.endsWith("view=list")).toBe(false);
+    // The window only has to cover selectedDates, which is clamped to today..+2.
+    expect(url).toContain("days=3");
+    expect(url).toContain("limit=300");
   });
 
   it("still applies the date filter to hydrated rows", async () => {
