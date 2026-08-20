@@ -185,14 +185,25 @@ export function mergePredsWithHistory(preds: PredictionRow[], history: HistoryEn
     if (!h) return p;
     const st = String(h.status ?? "").trim();
     const nextStatus = st || p.status;
-    const nh = h.score?.home;
-    const na = h.score?.away;
+    const rawHome = h.score?.home;
+    const rawAway = h.score?.away;
     const oh = p.score?.home;
     const oa = p.score?.away;
-    const nhN = Number(nh);
-    const naN = Number(na);
-    const hasServerScore = Number.isFinite(nhN) && Number.isFinite(naN);
-    const nextScore = hasServerScore ? { home: nhN, away: naN } : p.score;
+    // 0-0 is a real score, so presence is decided by an explicit null check, never
+    // by truthiness — and never by Number() alone either, since Number(null) is 0
+    // and would turn "no score recorded" into a goalless draw.
+    const hasServerScore =
+      rawHome != null &&
+      rawAway != null &&
+      Number.isFinite(Number(rawHome)) &&
+      Number.isFinite(Number(rawAway));
+    // History knows the goals; it does NOT know the minute, stoppage time or the
+    // halftime split for a match still in play — those are live-poll state. Taking
+    // only home/away and keeping the rest is what stops a live row from silently
+    // losing `score.minute`, which the momentum timeline needs to advance.
+    const nextScore = hasServerScore
+      ? { ...(p.score || {}), home: Number(rawHome), away: Number(rawAway) }
+      : p.score;
     const nextValidations = h.cardMarketValidations ?? p.cardMarketValidations ?? null;
     const nextReferee = String(h.referee || "").trim() || p.referee;
     const nextMarketResults = h.marketResults
