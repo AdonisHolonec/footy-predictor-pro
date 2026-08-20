@@ -11,6 +11,7 @@ import {
   useLocalStorageState
 } from "../../utils/appUtils";
 import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
+import { projectPredictionsByUserForStorage } from "../../utils/predictionListProjection";
 import { hasLegacyPredictionShape } from "./helpers";
 
 type AuthUser = ReturnType<typeof useAuth>["user"];
@@ -43,7 +44,18 @@ export function usePredictionsCache({
   setStatus: (message: string) => void;
 }) {
   const { t } = useLocale();
-  const [predictionsByUser, setPredictionsByUser] = useLocalStorageState<Record<string, PredictionRow[]>>("footy.user.predictionsByUser", {});
+  /*
+    State stays FULL; only the serialized copy is narrowed. Every reader in this
+    hook — the date/league filter, the live-poll carry-forward, the history merge
+    — keeps seeing whole rows, and so does `preds` and everything downstream of
+    it. What changes is the ~245 KB/row that used to be written for every
+    prediction, which is what silently overflowed the key and froze it.
+  */
+  const [predictionsByUser, setPredictionsByUser] = useLocalStorageState<Record<string, PredictionRow[]>>(
+    "footy.user.predictionsByUser",
+    {},
+    projectPredictionsByUserForStorage
+  );
   const [, setUserPredictionMap] = useLocalStorageState<Record<string, number[]>>("footy.user.predictionMap", {});
   const [preds, setPreds] = useState<PredictionRow[]>([]);
   const [rehydratedNotice, setRehydratedNotice] = useState<string | null>(null);
