@@ -1,6 +1,7 @@
 /**
- * One-off backfill: populate the seven derived list columns added by migration
- * 055 from the `raw_payload` they already contain.
+ * One-off backfill: populate the derived list columns from the `raw_payload`
+ * they already contain — the seven added by migration 055 and the four
+ * recommendation-metadata scalars added by 056.
  *
  * DRY-RUN BY DEFAULT. Pass --apply to write.
  *
@@ -10,8 +11,8 @@
  *   npm run backfill:history-columns -- --max-batches=1     # one batch only
  *   npm run backfill:history-columns -- --apply
  *
- * Migration 055 must already be deployed — the script fails loudly if the
- * columns are absent rather than silently doing nothing.
+ * Migrations 055 AND 056 must already be deployed — the script fails loudly if
+ * the columns are absent rather than silently doing nothing.
  *
  * `raw_payload` is never written. Nothing reads these columns yet: this seeds
  * them, and the dual-write and read cutover are separate changes. Re-running is
@@ -81,7 +82,7 @@ async function main() {
     // rather than reporting a successful run that touched nothing.
     const message = error?.message || String(error);
     if (/does not exist/i.test(message)) {
-      console.error(`\nMigration 055 does not appear to be deployed: ${message}`);
+      console.error(`\nMigration 055 or 056 does not appear to be deployed: ${message}`);
     } else {
       console.error(`\nBackfill failed: ${message}`);
     }

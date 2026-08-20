@@ -1,6 +1,6 @@
 /**
- * The single definition of how the seven promoted list columns are derived from
- * `raw_payload`.
+ * The single definition of how the promoted list columns are derived from
+ * `raw_payload` — the seven from migration 055 plus the four from 056.
  *
  * `raw_payload` is authoritative; these columns are a cache that lets the
  * History list be answered without touching the JSONB document. Measured on 452
@@ -33,8 +33,24 @@ export const NUMERIC_GUARD = /^[0-9]+(\.[0-9]+)?$/;
 /** Strict: a total is a whole number of corners or shots, never 9.5. */
 export const INTEGER_GUARD = /^-?[0-9]+$/;
 
-/** Written once at creation; no settlement path can change them. */
-export const IMMUTABLE_COLUMNS = Object.freeze(["recommended_odd", "logo_home", "logo_away"]);
+/**
+ * Written once at creation; no settlement path can change them.
+ *
+ * The four `recommended_*` entries added by migration 056 belong here for the
+ * same reason `recommended_odd` does: attachCardMarketsToPayload never touches
+ * `recommended`, and every settlement writer persists `{...raw}`, so the value
+ * is carried forward rather than recomputed. Listing them here is what keeps
+ * them out of deriveMutableHistoryListColumns — the exclusion is structural.
+ */
+export const IMMUTABLE_COLUMNS = Object.freeze([
+  "recommended_odd",
+  "recommended_family",
+  "recommended_period",
+  "recommended_scope",
+  "recommended_book_line",
+  "logo_home",
+  "logo_away"
+]);
 /** Rewritten by settlement as results arrive. */
 export const MUTABLE_COLUMNS = Object.freeze([
   "card_market_validations",
@@ -96,6 +112,30 @@ export function deriveHistoryListColumnsWithDiagnostics(payload) {
   };
 
   const odd = noteGuard(parseGuardedNumber(p.recommended?.odd, NUMERIC_GUARD), "recommended_odd", "numericRejected");
+  /*
+    Market Identity Contract metadata, read verbatim.
+
+    parseText, not a normalizer: `family` is matched against a fixed set by
+    normalizeServerFamily on the client and `period`/`scope` are contract
+    descriptors, so the only safe transformation is trimming. Nothing here may
+    infer family from the pick text or period from the market type — that
+    inference already exists client-side as the LEGACY fallback for rows that
+    predate the contract, and writing a guess into a column would make a legacy
+    row indistinguishable from one the server actually classified.
+
+    bookLine goes through NUMERIC_GUARD, the same guard as the odd, because a
+    line is a positive number and 6.75 / 8.25 are real production values. It is
+    deliberately NOT INTEGER_GUARD: a quarter line is not a whole number, and
+    rounding one would name a line the bookmaker never offered.
+  */
+  const family = note(parseText(p.recommended?.family));
+  const period = note(parseText(p.recommended?.period));
+  const scope = note(parseText(p.recommended?.scope));
+  const bookLine = noteGuard(
+    parseGuardedNumber(p.recommended?.bookLine, NUMERIC_GUARD),
+    "recommended_book_line",
+    "numericRejected"
+  );
   const logoHome = note(parseText(p.logos?.home));
   const logoAway = note(parseText(p.logos?.away));
   const cmv = note(parseJson(p.cardMarketValidations));
@@ -114,6 +154,10 @@ export function deriveHistoryListColumnsWithDiagnostics(payload) {
   return {
     columns: {
       recommended_odd: odd.value,
+      recommended_family: family.value,
+      recommended_period: period.value,
+      recommended_scope: scope.value,
+      recommended_book_line: bookLine.value,
       logo_home: logoHome.value,
       logo_away: logoAway.value,
       card_market_validations: cmv.value,

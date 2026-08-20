@@ -63,7 +63,7 @@ function assertNoDrift(writtenRow, label) {
   }
 }
 
-test("the helper always returns all seven keys, absent sources as null", () => {
+test("the helper always returns every promoted key, absent sources as null", () => {
   const columns = deriveHistoryListColumns({});
   assert.deepEqual(Object.keys(columns).sort(), [...ALL_COLUMNS].sort());
   for (const key of ALL_COLUMNS) assert.equal(columns[key], null, `${key} should be null`);
@@ -255,4 +255,134 @@ test("W6 writes no promoted column and could not change one if it tried", () => 
   for (const key of ALL_COLUMNS) assert.equal(key in w6Update, false, `W6 must not write "${key}"`);
   // Every promoted source survives its spread untouched.
   assert.deepEqual(deriveHistoryListColumns(nextPayload), deriveHistoryListColumns(prev));
+});
+
+/* ---------------------------------------------------------------------------
+ * 056 — recommendation metadata: family / period / scope / bookLine.
+ *
+ * Immutable, so the boundary that matters is that a settlement writer cannot
+ * reach them at all, and that nothing infers a value the server never wrote.
+ * ------------------------------------------------------------------------- */
+
+const RECOMMENDED_COLUMNS = [
+  "recommended_family",
+  "recommended_period",
+  "recommended_scope",
+  "recommended_book_line"
+];
+
+test("056: each scalar maps from its own recommended sub-key", () => {
+  const columns = deriveHistoryListColumns({
+    recommended: {
+      pick: "SOT Over 9.5",
+      odd: 1.9,
+      family: "Shots on Target",
+      period: "full_match",
+      scope: "match",
+      bookLine: 9.5
+    }
+  });
+  assert.equal(columns.recommended_family, "Shots on Target");
+  assert.equal(columns.recommended_period, "full_match");
+  assert.equal(columns.recommended_scope, "match");
+  assert.equal(columns.recommended_book_line, 9.5);
+});
+
+test("056: one absent sub-key never disturbs the others", () => {
+  for (const key of ["family", "period", "scope", "bookLine"]) {
+    const recommended = {
+      pick: "Over 2.5",
+      family: "Over/Under",
+      period: "full_match",
+      scope: "match",
+      bookLine: 2.5
+    };
+    delete recommended[key];
+    const columns = deriveHistoryListColumns({ recommended });
+    const missing = key === "bookLine" ? "recommended_book_line" : `recommended_${key}`;
+    assert.equal(columns[missing], null, `${missing} should be null when its source is absent`);
+    for (const other of RECOMMENDED_COLUMNS) {
+      if (other === missing) continue;
+      assert.notEqual(columns[other], null, `${other} was lost when ${key} was absent`);
+    }
+  }
+});
+
+test("056: absence is NULL — never an empty string, never zero", () => {
+  const columns = deriveHistoryListColumns({ recommended: { pick: "1" } });
+  for (const column of RECOMMENDED_COLUMNS) {
+    assert.equal(columns[column], null, `${column} should be null`);
+    assert.notEqual(columns[column], "", `${column} was coerced to an empty string`);
+    assert.notEqual(columns[column], 0, `${column} was coerced to zero`);
+  }
+});
+
+test("056: family is never inferred from the pick text", () => {
+  // The client has a legacy pick-text fallback for rows that predate the
+  // contract. Writing that guess into a column would erase the distinction
+  // between "the server classified this" and "we guessed".
+  for (const pick of ["Over 9.5 Corners", "Cards Under 3.5", "SOT Over 8.5", "GG", "1X"]) {
+    const columns = deriveHistoryListColumns({ recommended: { pick } });
+    assert.equal(columns.recommended_family, null, `family was inferred from "${pick}"`);
+    assert.equal(columns.recommended_period, null, `period was inferred from "${pick}"`);
+  }
+});
+
+test("056: the book line keeps its exact value, including quarter lines", () => {
+  for (const line of [6.75, 8.25, 10.25, 9.5, 7, 30.5]) {
+    const columns = deriveHistoryListColumns({ recommended: { bookLine: line } });
+    assert.equal(columns.recommended_book_line, line, `bookLine ${line} was altered`);
+  }
+});
+
+test("056: an unusable book line is rejected and reported, not coerced", () => {
+  for (const bad of ["abc", -1, {}, [], Number.NaN, Infinity]) {
+    const columns = deriveHistoryListColumns({ recommended: { bookLine: bad } });
+    assert.equal(columns.recommended_book_line, null, `bookLine ${JSON.stringify(bad)} was coerced`);
+  }
+});
+
+test("056: a non-string family is absence rather than a stringified object", () => {
+  for (const bad of [{ name: "Corners" }, ["Corners"], 7, true]) {
+    const columns = deriveHistoryListColumns({ recommended: { family: bad } });
+    assert.equal(columns.recommended_family, null, `family ${JSON.stringify(bad)} was coerced`);
+  }
+});
+
+test("056: W1/W2 writes all four from the payload it persists", () => {
+  const row = mapPredictionToDbRow(
+    prediction({
+      recommended: {
+        pick: "Over 9.5",
+        odd: 1.9,
+        confidence: 0.7,
+        family: "Corners",
+        period: "full_match",
+        scope: "match",
+        bookLine: 9.5
+      }
+    })
+  );
+  assert.equal(row.recommended_family, "Corners");
+  assert.equal(row.recommended_period, "full_match");
+  assert.equal(row.recommended_scope, "match");
+  assert.equal(row.recommended_book_line, 9.5);
+  // The whole point: the column describes the document actually stored.
+  assertNoDrift(row, "W1/W2 recommendation metadata");
+});
+
+test("056: settlement cannot write recommendation metadata", () => {
+  // Structural, not conventional: the mutable helper simply does not return
+  // these keys, so a settlement writer spreading it cannot touch them.
+  const mutable = deriveMutableHistoryListColumns({
+    recommended: { family: "Corners", period: "full_match", scope: "match", bookLine: 9.5 },
+    cardMarkets: { corners: { pick: "Over 9.5" } }
+  });
+  for (const column of RECOMMENDED_COLUMNS) {
+    assert.ok(!(column in mutable), `${column} leaked into the settlement write shape`);
+  }
+  for (const column of RECOMMENDED_COLUMNS) {
+    assert.ok(IMMUTABLE_COLUMNS.includes(column), `${column} is not declared immutable`);
+    assert.ok(!MUTABLE_COLUMNS.includes(column), `${column} is declared mutable`);
+  }
 });
