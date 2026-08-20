@@ -420,6 +420,15 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const readList = deps.readPredictionsHistoryListForUser || readPredictionsHistoryListForUser;
   const readPredictions = deps.readPredictionsForHydration || readPredictionsForHydration;
   const readFull = deps.readPredictionsHistoryForUser || readPredictionsHistoryForUser;
+  // The anonymous and admin branches were previously unreachable from a test,
+  // which is why their timing and error paths went unverified until production
+  // showed them failing. Same injectable-deps convention as the readers above.
+  const bearerOf = deps.readBearer || readBearer;
+  const adminOf = deps.assertAdmin || assertAdmin;
+  const rateLimit = deps.checkAnonymousRateLimit || checkAnonymousRateLimit;
+  const readGlobalList = deps.readPredictionsHistoryList || readPredictionsHistoryList;
+  const readGlobal = deps.readPredictionsHistory || readPredictionsHistory;
+  const readAggregate = deps.readPredictionsHistoryAggregateStats || readPredictionsHistoryAggregateStats;
 
   if (req.method && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -492,13 +501,13 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const safeDays = Math.max(1, Math.min(days || 30, 120));
   const safeLimit = Math.max(1, Math.min(limit || 500, 2000));
 
-  if (readBearer(req)) {
-    const adminCheck = await assertAdmin(req);
+  if (bearerOf(req)) {
+    const adminCheck = await timeStage(deps.timing, "authMs", () => adminOf(req));
     if (adminCheck.ok) {
       try {
-        const { items, stats } = listView
-          ? await readPredictionsHistoryList(days, limit)
-          : await readPredictionsHistory(days, limit);
+        const { items, stats } = await timeStage(deps.timing, "dbReadMs", () =>
+          listView ? readGlobalList(days, limit) : readGlobal(days, limit)
+        );
         return res.status(200).json({
           ok: true,
           days: safeDays,
@@ -507,30 +516,46 @@ export async function handleHistoryRead(req, res, deps = {}) {
           scope: "global_admin"
         });
       } catch (error) {
+        recordError(deps.timing, error, "dbReadMs");
         return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
       }
     }
   }
 
-  const rl = await checkAnonymousRateLimit(req, {
-    namespace: "history-public",
-    maxPerHour: Math.max(30, Math.min(Number(process.env.ANON_RATE_HISTORY_PUBLIC || 90), 300))
-  });
+  /*
+    Timed separately: this is the anonymous branch's FIRST await and it talks to
+    Redis, not Postgres. Production showed 12-29s anonymous 500s with 100% of
+    the duration unattributed, and a limiter stall would look exactly like a
+    slow query without this boundary.
+  */
+  const rl = await timeStage(deps.timing, "rateLimitMs", () =>
+    rateLimit(req, {
+      namespace: "history-public",
+      maxPerHour: Math.max(30, Math.min(Number(process.env.ANON_RATE_HISTORY_PUBLIC || 90), 300))
+    })
+  );
   if (!rl.ok) {
     if (rl.retryAfterSec) res.setHeader("Retry-After", String(rl.retryAfterSec));
     return res.status(429).json({ ok: false, error: "Prea multe cereri." });
   }
 
   try {
-    const { stats } = await readPredictionsHistoryAggregateStats(safeDays, safeLimit);
+    const { stats } = await timeStage(deps.timing, "dbReadMs", () =>
+      readAggregate(safeDays, safeLimit)
+    );
     return res.status(200).json({
       ok: true,
       days: safeDays,
       stats,
+      // Always empty by design: the public scope serves aggregate stats only,
+      // which is why a healthy anonymous response is ~136 bytes with rows 0.
       items: [],
       scope: "aggregate_public"
     });
   } catch (error) {
+    // Previously absent here, which is why every production anonymous 500
+    // emitted a record with no errorKind at all.
+    recordError(deps.timing, error, "dbReadMs");
     return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
   }
 }
