@@ -14,6 +14,11 @@ import {
 } from "../predictHelpers.js";
 import { beginFixture, resetFixture } from "../PipelineContext.js";
 import {
+  beginFixture as beginFixtureTelemetry,
+  endFixture,
+  recordStage
+} from "../../observability/pipelineTelemetry.js";
+import {
   initFixtureWorkingState,
   buildFixtureErrorRow,
   extractVenueFromFixture
@@ -117,9 +122,25 @@ export async function runFixtureStageLoop(context) {
       });
       initFixtureWorkingState(f);
 
+      /*
+        Per-fixture attribution. The loop is serial, so each fixture's wall time
+        is a real slice of the request, and the gap between it and the summed
+        stage time is work happening between stages rather than inside one.
+        Measurement only — the guard inside the telemetry helpers makes every
+        call a no-op when no accumulator is present, so a caller that builds a
+        context by hand is unaffected.
+      */
+      const fixtureStarted = Date.now();
+      beginFixtureTelemetry(context.telemetry, fixtureId);
+
       try {
         for (const stage of FIXTURE_STAGES) {
-          await stage.run(context);
+          const stageStarted = Date.now();
+          try {
+            await stage.run(context);
+          } finally {
+            recordStage(context.telemetry, stage.STAGE_ID || "unknown", Date.now() - stageStarted);
+          }
           if (context.fixture?.aborted) break;
         }
         if (context.fixture?.silentSkip) {
@@ -138,6 +159,7 @@ export async function runFixtureStageLoop(context) {
         });
         out.push(buildFixtureErrorRow(f, context.league));
       } finally {
+        endFixture(context.telemetry, Date.now() - fixtureStarted);
         resetFixture(context);
       }
     }

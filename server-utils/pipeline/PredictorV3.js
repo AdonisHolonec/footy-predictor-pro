@@ -6,7 +6,10 @@
  */
 
 import { createPipelineContext } from "./PipelineContext.js";
-import { logError } from "../observability/logger.js";
+import { logError, logWarn } from "../observability/logger.js";
+import { createPipelineTelemetry, recordStage, summarize } from "../observability/pipelineTelemetry.js";
+import { SLOW_REQUEST_MS } from "../observability/requestMonitor.js";
+import { getLocalCacheStats, upstreamCursor, upstreamSamplesSince } from "../fetcher.js";
 import { decrementPredictCountBy } from "../accessTier.js";
 import { filterByMinDisplayOdds } from "../predictionDisplayGate.js";
 import * as Stage00Ingress from "./stages/Stage00Ingress.js";
@@ -46,6 +49,72 @@ export const STAGE_ORDER = [
 export const REQUEST_STAGES_BEFORE_FIXTURES = [Stage00Ingress, Stage01DataCollection];
 export const REQUEST_STAGES_AFTER_FIXTURES = [Stage10Persistence, Stage11Masking, Stage12Response];
 
+function percentile(sorted, p) {
+  if (!sorted.length) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))];
+}
+
+/**
+ * Upstream and cache attribution for one request.
+ *
+ * Cache counters come from the diff of the process-local counters the fetcher
+ * already keeps and Stage12 already reports; upstream durations come from the
+ * fetcher's sample ring since a cursor taken at request start. Both are module
+ * scope, so concurrent requests in one warm instance interleave — stated here
+ * rather than implied, because it bounds how far these numbers can be trusted.
+ */
+function collectUpstream(cacheBefore, upstreamFrom) {
+  const after = getLocalCacheStats();
+  const samples = upstreamSamplesSince(upstreamFrom);
+  const durations = samples.map((s) => s.ms).sort((a, b) => a - b);
+  const slowest = samples.reduce((best, s) => (!best || s.ms > best.ms ? s : best), null);
+
+  const byEndpoint = Object.create(null);
+  for (const s of samples) {
+    const e = byEndpoint[s.endpoint] || (byEndpoint[s.endpoint] = { calls: 0, totalMs: 0 });
+    e.calls += 1;
+    e.totalMs += s.ms;
+  }
+  const slowestFamilies = Object.entries(byEndpoint)
+    .sort((a, b) => b[1].totalMs - a[1].totalMs)
+    .slice(0, 5)
+    .map(([endpoint, v]) => ({ endpoint, calls: v.calls, totalMs: v.totalMs }));
+
+  return {
+    calls: samples.length,
+    errors: samples.filter((s) => !s.ok).length,
+    totalMs: durations.reduce((a, b) => a + b, 0),
+    maxMs: durations.length ? durations[durations.length - 1] : 0,
+    p50Ms: percentile(durations, 50),
+    p95Ms: percentile(durations, 95),
+    slowestEndpoint: slowest ? { endpoint: slowest.endpoint, ms: slowest.ms, ok: slowest.ok } : null,
+    slowestFamilies,
+    cacheHits: Math.max(0, (after.hits || 0) - (cacheBefore.hits || 0)),
+    cacheMisses: Math.max(0, (after.misses || 0) - (cacheBefore.misses || 0)),
+    inflightJoins: Math.max(0, (after.inflightJoins || 0) - (cacheBefore.inflightJoins || 0))
+  };
+}
+
+/**
+ * One structured line per SLOW request, and nothing at all otherwise.
+ *
+ * A 35-fixture Predict must not become 35 log lines, and a fast Predict must not
+ * become any. The threshold is the same one requestMonitor uses to classify a
+ * request slow, so the two always agree about which requests are interesting.
+ */
+function emitPredictTelemetry({ telemetry, startedAt, cacheBefore, upstreamFrom, context }) {
+  const totalMs = Date.now() - startedAt;
+  if (totalMs < SLOW_REQUEST_MS) return null;
+  const summary = summarize(telemetry, {
+    totalMs,
+    upstream: collectUpstream(cacheBefore, upstreamFrom)
+  });
+  summary.halted = Boolean(context?.halted);
+  summary.dataSource = context?.responseHeaders?.["X-Data-Source"] || (context?.halted ? "halted" : "live");
+  logWarn("predict.timing", summary);
+  return summary;
+}
+
 /**
  * @param {import('http').IncomingMessage} req
  * @param {import('http').ServerResponse} res
@@ -54,18 +123,53 @@ export async function handle(req, res) {
   const context = createPipelineContext(req, res);
   context.predictorVersion = PREDICTOR_V3_VERSION;
 
+  /*
+    Timing attribution. One production Predict took 48,744 ms for 35 fixtures and
+    nothing could say where it went: stageMarks is written by every stage and read
+    by nobody, and stages 02-09 overwrite theirs per fixture.
+
+    Timed HERE, in the orchestrator, rather than inside thirteen stage files —
+    the stages stay untouched, and `finally` means a halting or throwing stage is
+    still measured. Measurement only: no stage order, no behaviour, no output.
+  */
+  const startedAt = Date.now();
+  const telemetry = createPipelineTelemetry();
+  context.telemetry = telemetry;
+  const cacheBefore = getLocalCacheStats();
+  const upstreamFrom = upstreamCursor();
+
+  const runStage = async (stage) => {
+    const stageStarted = Date.now();
+    try {
+      await stage.run(context);
+    } finally {
+      recordStage(telemetry, stage.STAGE_ID || "unknown", Date.now() - stageStarted);
+    }
+  };
+
+  const emit = () => {
+    // Best-effort: telemetry must never affect the response.
+    try {
+      emitPredictTelemetry({ telemetry, startedAt, cacheBefore, upstreamFrom, context });
+    } catch {
+      /* observability must not break a prediction */
+    }
+  };
+
   try {
     for (const stage of REQUEST_STAGES_BEFORE_FIXTURES) {
-      await stage.run(context);
+      await runStage(stage);
       if (context.halted) {
-        await Stage12Response.run(context);
+        await runStage(Stage12Response);
+        emit();
         return;
       }
     }
 
     await runFixtureStageLoop(context);
     if (context.halted) {
-      await Stage12Response.run(context);
+      await runStage(Stage12Response);
+      emit();
       return;
     }
 
@@ -75,8 +179,9 @@ export async function handle(req, res) {
     context.out = filterByMinDisplayOdds(context.out);
 
     for (const stage of REQUEST_STAGES_AFTER_FIXTURES) {
-      await stage.run(context);
+      await runStage(stage);
     }
+    emit();
   } catch (error) {
     logError("predict.handler_failed", { error: error?.message || String(error) });
     const reserved = context.reservedTierUsage || 0;
