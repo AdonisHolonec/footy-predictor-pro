@@ -67,6 +67,32 @@ function createSlimClient(url: string, anonKey: string) {
   };
 }
 
+/**
+ * The persisted session, read straight from storage.
+ *
+ * The distinction L2 needs: a restore that TIMED OUT tells us nothing about
+ * whether the user is signed in, while auth-js removing the session from
+ * storage means it has actually decided the credential is dead. Storage is
+ * therefore the tie-breaker, and reading it never touches the network.
+ *
+ * Same key auth-js uses, so this observes its state rather than inventing one.
+ */
+export function readPersistedSession(): { access_token?: string; user?: { id?: string } } | null {
+  if (!supabaseUrl) return null;
+  try {
+    const storageKey = `sb-${new URL(supabaseUrl).hostname.split(".")[0]}-auth-token`;
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { access_token?: string; user?: { id?: string } } | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    // A record without a user is not a session anyone can be restored into.
+    return parsed.access_token && parsed.user?.id ? parsed : null;
+  } catch {
+    // Unparseable or unavailable storage is simply "no evidence of a session".
+    return null;
+  }
+}
+
 export type SlimSupabaseClient = ReturnType<typeof createSlimClient>;
 
 export const supabase = isSupabaseConfigured

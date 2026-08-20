@@ -4,8 +4,12 @@ import {
   AUTH_REQUEST_TIMEOUT_MS,
   AUTH_TIMEOUT_MESSAGE_KEY,
   AuthTimeoutError,
+  SESSION_RESTORE_TIMEOUT_MS,
+  SessionRestoreTimeoutError,
   createTimeoutFetch,
-  isAuthTimeoutError
+  isAuthTimeoutError,
+  isSessionRestoreTimeoutError,
+  withDeadline
 } from "./authTimeout";
 
 /**
@@ -135,5 +139,73 @@ describe("timeout identification", () => {
   test("the user-facing message is an i18n key, never a raw dump", () => {
     expect(AUTH_TIMEOUT_MESSAGE_KEY.startsWith("auth.")).toBe(true);
     expect(AUTH_TIMEOUT_MESSAGE_KEY).not.toMatch(/supabase|fetch|abort/i);
+  });
+});
+
+/* -- the orchestration deadline -------------------------------------------- */
+
+describe("withDeadline", () => {
+  test("a promise that never settles is forced to settle", async () => {
+    const never = new Promise<string>(() => {});
+    const bounded = withDeadline(never, 15_000, () => new SessionRestoreTimeoutError(15_000));
+    const assertion = expect(bounded).rejects.toBeInstanceOf(SessionRestoreTimeoutError);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+
+  test("a fast result passes through untouched", async () => {
+    const bounded = withDeadline(Promise.resolve("session"), 15_000, () => new Error("unused"));
+    await expect(bounded).resolves.toBe("session");
+  });
+
+  test("the work's own rejection is preserved, not replaced by the deadline", async () => {
+    const boom = new Error("refresh rejected");
+    const bounded = withDeadline(Promise.reject(boom), 15_000, () => new Error("deadline"));
+    await expect(bounded).rejects.toBe(boom);
+  });
+
+  test("no timer is left pending after success", async () => {
+    await withDeadline(Promise.resolve(1), 15_000, () => new Error("x"));
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("no timer is left pending after a timeout", async () => {
+    const bounded = withDeadline(new Promise<never>(() => {}), 5_000, () => new Error("x")).catch(() => "done");
+    await vi.advanceTimersByTimeAsync(5_000);
+    await bounded;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("repeated initialisation does not accumulate competing timers", async () => {
+    const runs = [1, 2, 3, 4, 5].map((n) => withDeadline(Promise.resolve(n), 15_000, () => new Error("x")));
+    await Promise.all(runs);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("the deadline abandons the losing promise rather than retrying it", async () => {
+    const work = vi.fn(() => new Promise<never>(() => {}));
+    const bounded = withDeadline(work(), 5_000, () => new Error("x")).catch(() => "done");
+    await vi.advanceTimersByTimeAsync(20_000);
+    await bounded;
+    // One attempt, ever. A deadline must not multiply auth traffic.
+    expect(work).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("session-restore deadline sizing", () => {
+  test("it outlives a single transport deadline but not auth-js's retry budget", () => {
+    // A slow-but-successful request must not be cut short; the ~30s retry
+    // sequence that produced the observed hang must be.
+    expect(SESSION_RESTORE_TIMEOUT_MS).toBeGreaterThan(AUTH_REQUEST_TIMEOUT_MS);
+    expect(SESSION_RESTORE_TIMEOUT_MS).toBeLessThan(30_000);
+  });
+
+  test("the two timeout kinds are distinguishable", () => {
+    const restore = new SessionRestoreTimeoutError(15_000);
+    const transport = new AuthTimeoutError(10_000);
+    expect(isSessionRestoreTimeoutError(restore)).toBe(true);
+    expect(isSessionRestoreTimeoutError(transport)).toBe(false);
+    expect(isAuthTimeoutError(restore)).toBe(false);
+    expect(isSessionRestoreTimeoutError(new Error("nope"))).toBe(false);
   });
 });
