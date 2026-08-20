@@ -56,13 +56,32 @@ export function useDashboardHistory({
     return map;
   }, [history]);
   const pendingHistoryCount = useMemo(() => {
+    /*
+      Which markets exist on a row.
+
+      The light `?view=list` shape is column-based and no longer ships `probs`
+      — shipping a large analytical object to answer a yes/no is what the read
+      cutover exists to stop. It sets hasCornersMarket / hasShotsMarket from
+      card_markets instead, which answers exactly the same question: measured
+      across all 810 production rows, `probs.corners` present equals
+      `cardMarkets.corners` present on 748/748, and `probs.shotsOnTarget`
+      equals `cardMarkets.shots` on 748/748, with zero rows differing.
+
+      The `probs` branch stays for the FULL shape (hydration, by-fixture
+      detail), which still carries it.
+    */
+    const hasMarket = (item: HistoryEntry, market: "corners" | "shots") => {
+      const flag = market === "corners" ? item.hasCornersMarket : item.hasShotsMarket;
+      if (flag !== undefined) return flag;
+      return Boolean(item.probs?.[market === "shots" ? "shotsOnTarget" : "corners"]);
+    };
     return history.filter((item) => {
       if (item.validation === "pending") return true;
       if (!isFinalMatchStatus(item.status)) return false;
       const v = item.cardMarketValidations;
-      if (!v) return Boolean(item.probs?.corners || item.probs?.shotsOnTarget);
+      if (!v) return hasMarket(item, "corners") || hasMarket(item, "shots");
       return (["corners", "shots"] as const).some((k) => {
-        if (!item.probs?.[k === "shots" ? "shotsOnTarget" : k]) return false;
+        if (!hasMarket(item, k)) return false;
         return v[k] !== "win" && v[k] !== "loss";
       });
     }).length;

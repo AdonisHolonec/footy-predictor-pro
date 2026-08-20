@@ -776,6 +776,15 @@ export type PredictionRow = {
 export type HistoryEntry = PredictionRow & {
   savedAt: string;
   validation: SettlementOutcome;
+  /**
+   * Set only by the light `?view=list` mapper, which is column-based and does
+   * not ship `probs`. They answer the one question the pending counter asked
+   * that object: does this fixture have a corners / shots market at all.
+   * Undefined on the full (`fixtureId=N`, hydration) shape, where `probs` is
+   * present and should be used instead.
+   */
+  hasCornersMarket?: boolean;
+  hasShotsMarket?: boolean;
 };
 
 export type HistoryStats = {
