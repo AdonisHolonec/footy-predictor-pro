@@ -834,7 +834,23 @@ export const ro: Dict = {
     no: "Nu",
     na: "N/A",
     on: "pornit",
-    off: "oprit"
+    off: "oprit",
+    /**
+     * Accessible names for the outcome badge. On mobile the badge shows only an
+     * icon, so these carry the meaning the visible text no longer does; they are
+     * full words on purpose, unlike the terse visible labels ("WIN" / "LOSE").
+     * Shared by the per-match history badge and the Global Special Bet badge,
+     * whose `won`/`lost` map onto `win`/`loss`.
+     */
+    status: {
+      pending: "În așteptare",
+      win: "Câștigător",
+      loss: "Pierdut",
+      push: "Egal",
+      halfWin: "Jumătate câștigătoare",
+      halfLoss: "Jumătate pierdută",
+      void: "Anulat"
+    }
   },
   /**
    * Global Special Bet — produs distinct de „Special Bet · Semnale de top”

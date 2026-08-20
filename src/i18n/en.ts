@@ -834,7 +834,23 @@ export const en: Dict = {
     no: "No",
     na: "N/A",
     on: "on",
-    off: "off"
+    off: "off",
+    /**
+     * Accessible names for the outcome badge. On mobile the badge shows only an
+     * icon, so these carry the meaning the visible text no longer does; they are
+     * full words on purpose, unlike the terse visible labels ("WIN" / "LOSE").
+     * Shared by the per-match history badge and the Global Special Bet badge,
+     * whose `won`/`lost` map onto `win`/`loss`.
+     */
+    status: {
+      pending: "Pending",
+      win: "Winner",
+      loss: "Lost",
+      push: "Push",
+      halfWin: "Half win",
+      halfLoss: "Half loss",
+      void: "Void"
+    }
   },
   /**
    * Global Special Bet — a distinct product from the per-match

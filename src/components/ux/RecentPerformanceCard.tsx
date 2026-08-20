@@ -3,6 +3,7 @@ import type { HistoryEntry, HistoryStats } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import Card from "../../design-system/Card";
 import Badge from "../../design-system/Badge";
+import StatusBadge from "../../design-system/StatusBadge";
 import Button from "../../design-system/Button";
 import { computeYesterdayAccuracy } from "../../utils/historyStats";
 
@@ -109,7 +110,8 @@ export default function RecentPerformanceCard({
                 <span className="min-w-0 truncate font-semibold">
                   {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
                 </span>
-                <Badge
+                <StatusBadge
+                  status={row.validation}
                   tone={
                     row.validation === "win" || row.validation === "half_win"
                       ? "success"
@@ -119,19 +121,20 @@ export default function RecentPerformanceCard({
                           ? "neutral"
                           : "warning"
                   }
-                >
-                  {row.validation === "win"
-                    ? t("history.win")
-                    : row.validation === "loss"
-                      ? t("history.loss")
-                      : row.validation === "push"
-                        ? t("history.outcomePush")
-                        : row.validation === "half_win"
-                          ? t("history.outcomeHalfWin")
-                          : row.validation === "half_loss"
-                            ? t("history.outcomeHalfLoss")
-                            : t("history.pendingBadge")}
-                </Badge>
+                  label={
+                    row.validation === "win"
+                      ? t("history.win")
+                      : row.validation === "loss"
+                        ? t("history.loss")
+                        : row.validation === "push"
+                          ? t("history.outcomePush")
+                          : row.validation === "half_win"
+                            ? t("history.outcomeHalfWin")
+                            : row.validation === "half_loss"
+                              ? t("history.outcomeHalfLoss")
+                              : t("history.pendingBadge")
+                  }
+                />
               </button>
             </li>
           ))}
