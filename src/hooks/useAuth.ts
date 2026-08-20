@@ -4,6 +4,15 @@ import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supaba
 import type { User } from "../types";
 import { localCalendarDateKey } from "../utils/appUtils";
 import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
+import {
+  AUTH_REQUEST_TIMEOUT_MS,
+  AUTH_TIMEOUT_MESSAGE_KEY,
+  createTimeoutFetch,
+  isAuthTimeoutError
+} from "../utils/authTimeout";
+
+/** One deadline for the app-level auth traffic that does not go through auth-js. */
+const boundedFetch = createTimeoutFetch(AUTH_REQUEST_TIMEOUT_MS);
 
 type ProfileRow = {
   user_id: string;
@@ -84,12 +93,30 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
  * /api/fixtures?syncBootstrapAdmin=1 — every one a 403 — plus a duplicated
  * tierStatus call and three copies of the session/profile round-trips.
  */
+/**
+ * Five distinguishable states, because "no user object" used to mean all of
+ * them at once — and AuthGate read it as "signed out", bouncing a user with a
+ * perfectly valid session to /login the moment a profile read wobbled.
+ */
+export type AuthStatus =
+  /** Still resolving; nothing decided yet. */
+  | "unresolved"
+  /** Confirmed absent: there is genuinely no session. */
+  | "no-session"
+  /** Confirmed present, profile loaded. */
+  | "authenticated"
+  /** Session present, profile still loading. */
+  | "profile-pending"
+  /** Session present, but an auth or profile request failed or timed out. */
+  | "auth-error";
+
 function useAuthState() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastAuthEvent, setLastAuthEvent] = useState<AuthChangeEvent | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("unresolved");
   const [managedProfiles, setManagedProfiles] = useState<ManagedProfile[]>([]);
   const [predictCountToday, setPredictCountToday] = useState(0);
   const [predictLimitToday, setPredictLimitToday] = useState<number | null>(null);
@@ -149,7 +176,9 @@ function useAuthState() {
       if (bootstrapAsked.current.size > 50) bootstrapAsked.current.clear();
       bootstrapAsked.current.add(accessToken);
       try {
-        const response = await fetch("/api/fixtures?syncBootstrapAdmin=1", {
+        // Bounded: a best-effort secondary promotion. Unbounded, this single
+        // request could hold the sign-in button open on its own.
+        const response = await boundedFetch("/api/fixtures?syncBootstrapAdmin=1", {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -188,8 +217,30 @@ function useAuthState() {
       if (userErr) {
         const { error: refreshErr } = await supabase.auth.refreshSession();
         if (refreshErr) {
+          /*
+            This branch used to run `setSession(null); setUser(null); throw` —
+            which is how a 503 on getUser() bounced a user holding a valid,
+            unexpired session straight to /login. "The server did not answer" is
+            not "you are signed out": the stored session is still the only
+            evidence either way, and discarding it turns a transient upstream
+            wobble into a forced logout.
+
+            So a still-usable session is kept and reported as degraded. Only a
+            genuinely rejected credential clears state — auth-js already made
+            that call by removing the session from storage, so re-reading it
+            below is what distinguishes the two cases.
+          */
+          const { data: after } = await supabase.auth.getSession();
+          if (after.session) {
+            setSession(after.session);
+            setUser(mapSupabaseUser(after.session.user, null));
+            setAuthStatus("auth-error");
+            setError(isAuthTimeoutError(userErr) ? AUTH_TIMEOUT_MESSAGE_KEY : userErr.message);
+            return after.session;
+          }
           setSession(null);
           setUser(null);
+          setAuthStatus("no-session");
           throw userErr;
         }
       }
@@ -197,16 +248,37 @@ function useAuthState() {
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
     const sess = data.session;
-    let nextProfile: ProfileRow | null = null;
-    if (sess?.user) {
+    if (!sess?.user) {
+      setSession(null);
+      setUser(null);
+      setAuthStatus("no-session");
+      return sess;
+    }
+    // The session is established from here on. Profile enrichment is secondary:
+    // it may fail without unauthenticating anyone.
+    setSession(sess);
+    setUser(mapSupabaseUser(sess.user, null));
+    setAuthStatus("profile-pending");
+    let nextProfile: ProfileRow | null;
+    try {
       nextProfile = await loadProfile(sess.user.id);
       const token = sess.access_token;
       if (token) {
         nextProfile = await promoteBootstrapAdminInDb(sess.user, nextProfile, token);
       }
+      setUser(mapSupabaseUser(sess.user, nextProfile));
+      setAuthStatus("authenticated");
+    } catch (profileError: unknown) {
+      setUser(mapSupabaseUser(sess.user, null));
+      setAuthStatus("auth-error");
+      setError(
+        isAuthTimeoutError(profileError)
+          ? AUTH_TIMEOUT_MESSAGE_KEY
+          : profileError instanceof Error
+            ? profileError.message
+            : "Unable to load profile"
+      );
     }
-    setSession(sess);
-    setUser(mapSupabaseUser(sess?.user ?? null, nextProfile));
     return sess;
   }, [loadProfile, promoteBootstrapAdminInDb]);
 
@@ -278,18 +350,54 @@ function useAuthState() {
       throw missingConfigError;
     }
     setError(null);
-    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-    if (loginError) {
-      setError(loginError.message);
-      throw loginError;
+    let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"];
+    try {
+      const result = await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) {
+        setError(result.error.message);
+        throw result.error;
+      }
+      data = result.data;
+    } catch (signInError: unknown) {
+      // auth-js rewraps a transport throw, so the deadline arrives here rather
+      // than as `result.error`.
+      if (isAuthTimeoutError(signInError)) {
+        setAuthStatus("auth-error");
+        setError(AUTH_TIMEOUT_MESSAGE_KEY);
+      }
+      throw signInError;
     }
-    let nextProfile = data.user ? await loadProfile(data.user.id) : null;
-    const token = data.session?.access_token;
-    if (data.user && token) {
-      nextProfile = await promoteBootstrapAdminInDb(data.user, nextProfile, token);
-    }
+    /*
+      signInWithPassword has succeeded: the user IS authenticated. Everything
+      below is enrichment, and none of it may un-authenticate them or hold the
+      button open. Previously a hung profile read here left "Se procesează…" on
+      screen forever, because a promise that never settles reaches neither catch
+      nor finally.
+    */
     setSession(data.session);
-    setUser(mapSupabaseUser(data.user, nextProfile));
+    setUser(mapSupabaseUser(data.user, null));
+    setAuthStatus(data.session ? "profile-pending" : "no-session");
+    let nextProfile: ProfileRow | null;
+    try {
+      nextProfile = data.user ? await loadProfile(data.user.id) : null;
+      const token = data.session?.access_token;
+      if (data.user && token) {
+        nextProfile = await promoteBootstrapAdminInDb(data.user, nextProfile, token);
+      }
+      setUser(mapSupabaseUser(data.user, nextProfile));
+      if (data.session) setAuthStatus("authenticated");
+    } catch (profileError: unknown) {
+      // Surfaced, never swallowed — but as a degraded state, not a failed login.
+      setUser(mapSupabaseUser(data.user, null));
+      if (data.session) setAuthStatus("auth-error");
+      setError(
+        isAuthTimeoutError(profileError)
+          ? AUTH_TIMEOUT_MESSAGE_KEY
+          : profileError instanceof Error
+            ? profileError.message
+            : "Unable to load profile"
+      );
+    }
     return data;
   }, [loadProfile, promoteBootstrapAdminInDb]);
 
@@ -690,6 +798,7 @@ function useAuthState() {
     loading,
     error,
     lastAuthEvent,
+    authStatus,
     managedProfiles,
     login,
     signup,

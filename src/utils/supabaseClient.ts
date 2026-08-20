@@ -1,5 +1,6 @@
 import { AuthClient } from "@supabase/auth-js";
 import { PostgrestClient } from "@supabase/postgrest-js";
+import { AUTH_REQUEST_TIMEOUT_MS, createTimeoutFetch } from "./authTimeout";
 
 // Client slim: aplicația folosește doar auth + PostgREST, dar `createClient`
 // din @supabase/supabase-js importă static și realtime, storage, functions și
@@ -22,10 +23,19 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 function createSlimClient(url: string, anonKey: string) {
   const storageKey = `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
 
+  /*
+    auth-js 2.110.7 ships no AbortController and no setTimeout in its fetch
+    layer, so a stalled GoTrue request is a promise that never settles. Injecting
+    the deadline here bounds every auth call — sign-in, getUser, refresh — at the
+    transport, without touching URL, headers, JWT handling or storage.
+  */
+  const boundedFetch = createTimeoutFetch(AUTH_REQUEST_TIMEOUT_MS);
+
   const auth = new AuthClient({
     url: `${url}/auth/v1`,
     headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
     storageKey,
+    fetch: boundedFetch,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
@@ -38,7 +48,12 @@ function createSlimClient(url: string, anonKey: string) {
     const headers = new Headers(init?.headers);
     if (!headers.has("apikey")) headers.set("apikey", anonKey);
     if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
-    return fetch(input, { ...init, headers });
+    /*
+      Bounded too: this wrapper awaits getSession() before every PostgREST
+      request, so an auth stall already propagates here. A profile read that
+      never settles is what kept login() past signInWithPassword.
+    */
+    return boundedFetch(input, { ...init, headers });
   };
 
   const rest = new PostgrestClient(`${url}/rest/v1`, {

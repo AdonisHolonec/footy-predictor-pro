@@ -5,6 +5,7 @@ import { ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useLocale } from "../context/LocaleContext";
 import { useAuth } from "../hooks/useAuth";
+import { isAuthTimeoutError } from "../utils/authTimeout";
 import { HistoryStats } from "../types";
 
 export default function Login() {
@@ -120,7 +121,15 @@ export default function Login() {
         setMode("login");
       }
     } catch (submitError: unknown) {
-      setLocalError(submitError instanceof Error ? submitError.message : t("auth.operationFailedMsg"));
+      // A stalled auth request is a connection problem, not a credentials
+      // problem, and must never surface as a raw Supabase dump.
+      setLocalError(
+        isAuthTimeoutError(submitError)
+          ? t("auth.timeoutMsg")
+          : submitError instanceof Error
+            ? submitError.message
+            : t("auth.operationFailedMsg")
+      );
     } finally {
       setSubmitting(false);
     }
@@ -309,7 +318,7 @@ export default function Login() {
 
                   {(localError || error) && (
                     <div className="rounded-xl border border-fp-danger/35 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
-                      {localError || error}
+                      {t(localError || error || "")}
                     </div>
                   )}
                   {message && (
