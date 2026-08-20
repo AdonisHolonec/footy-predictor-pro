@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { HistoryEntry, PredictionRow } from "../types";
 
 export function normalizeSelectedDates(dates: string[]): string[] {
@@ -85,7 +85,16 @@ export function inferSeason(dateISO: string): number {
   return m >= 7 ? y : y - 1;
 }
 
-export function useLocalStorageState<T>(key: string, initial: T) {
+/**
+ * @param toStored Narrows the value on its way to disk WITHOUT narrowing state.
+ *   The prediction caches store rows that are ~245 KB each and blow the origin
+ *   budget long before the user has a full slate; everything else stores a date
+ *   or a handful of ids and passes nothing here. Applying it at serialization
+ *   rather than in `setV` is the whole point: the live object keeps every field,
+ *   so the modal and the card readers are untouched within a session, and only
+ *   what survives a reload is narrowed.
+ */
+export function useLocalStorageState<T>(key: string, initial: T, toStored?: (value: T) => T) {
   const [v, setV] = useState<T>(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -95,9 +104,14 @@ export function useLocalStorageState<T>(key: string, initial: T) {
     }
   });
 
+  // A ref, so a caller passing an inline lambda does not re-write storage every render.
+  const toStoredRef = useRef(toStored);
+  toStoredRef.current = toStored;
+
   useEffect(() => {
     try {
-      localStorage.setItem(key, JSON.stringify(v));
+      const project = toStoredRef.current;
+      localStorage.setItem(key, JSON.stringify(project ? project(v) : v));
     } catch {
       // ignore storage errors
     }

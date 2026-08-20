@@ -9,6 +9,7 @@ import {
   mergePredsWithHistory,
   useLocalStorageState
 } from "../utils/appUtils";
+import { projectPredictionRowsForStorage } from "../utils/predictionListProjection";
 import { useLiveFixtureScorePoll } from "./useLiveFixtureScorePoll";
 
 function hasTierMaskedPredictionShape(rows: PredictionRow[]): boolean {
@@ -32,7 +33,14 @@ export function usePredictions({
   userEnabledLivePoll,
   setStatus
 }: UsePredictionsOptions) {
-  const [preds, setPreds] = useLocalStorageState<PredictionRow[]>("footy.lastPreds", []);
+  // Same defect as the signed-in cache, same fix: state full, disk narrowed.
+  // Measured at 882,308 B — the second-largest key on the origin, competing for
+  // the same budget as footy.user.predictionsByUser.
+  const [preds, setPreds] = useLocalStorageState<PredictionRow[]>(
+    "footy.lastPreds",
+    [],
+    projectPredictionRowsForStorage
+  );
   const [logoColors, setLogoColors] = useLocalStorageState<Record<string, string>>("footy.logoColors", {});
   const [filterMode, setFilterMode] = useState<FilterMode>("ALL");
   const [kickoffScope, setKickoffScope] = useState<KickoffScope>("ALL");
