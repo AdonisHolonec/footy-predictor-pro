@@ -91,12 +91,14 @@ describe("history list view opt-in", () => {
 
     getByText("go").click();
 
-    await waitFor(() => expect(listRequests().some((u) => u.includes("limit=1000"))).toBe(true));
-    const rehydrateCall = listRequests().find((u) => u.includes("limit=1000"));
+    await waitFor(() => expect(listRequests().some((u) => u.includes("view=prediction-list"))).toBe(true));
+    const rehydrateCall = listRequests().find((u) => u.includes("view=prediction-list"));
     expect(
       rehydrateCall,
-      "prediction hydration opted into the light projection — this degrades the cards and can loop"
-    ).not.toContain("view=list");
-    expect(rehydrateCall).toContain("days=14");
+      "prediction hydration opted into the History LIST projection — this degrades the cards and can loop"
+    ).not.toContain("view=list&");
+    expect(rehydrateCall?.endsWith("view=list")).toBe(false);
+    // P3-B gave hydration its own projection, which keeps probs and modelVersion.
+    expect(rehydrateCall).toContain("mine=1");
   });
 });

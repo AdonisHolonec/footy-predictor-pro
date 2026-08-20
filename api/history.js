@@ -25,6 +25,7 @@ import {
   readPredictionsHistoryListForUser,
   readPredictionsHistoryAggregateStats,
   readPredictionsHistoryForUser,
+  readPredictionsForHydration,
   resolveValueBetPick,
   validationFromMatch
 } from "../server-utils/predictionsHistory.js";
@@ -376,17 +377,46 @@ export function shouldServeLightList(query) {
   return String(query?.view || "") === "list";
 }
 
+/**
+ * Whether this request wants the prediction-board projection.
+ *
+ * Exported for the same reason as shouldServeLightList: the routing rule is
+ * testable rather than asserted as a string. Only the exact token
+ * `prediction-list` opts in — `list`, `special-bets` and anything else must
+ * leave their own behaviour alone, and no `view` at all must stay FULL, because
+ * historyService.loadHistory reads the full `mine=1` shape for the guest and
+ * admin observatory surfaces.
+ */
+export function shouldServePredictionList(query) {
+  return String(query?.view || "") === "prediction-list";
+}
+
 export function shouldServeFixtureDetail(query) {
   const raw = query?.fixtureId;
   return raw !== undefined && raw !== null && String(raw).trim() !== "";
 }
 
-async function handleHistoryRead(req, res) {
+/**
+ * The windowed list read, and the routing between its three projections.
+ *
+ * `deps` is injectable for the same reason handleHistoryDetail's is: which
+ * reader a query reaches is a rule worth asserting against fakes rather than
+ * inferring. Three shapes share this one branch and must not be confused —
+ * `view=list` (History list, columns only), `view=prediction-list` (the
+ * prediction board) and no view at all (FULL, which historyService.loadHistory
+ * still depends on for the guest and admin observatory).
+ */
+export async function handleHistoryRead(req, res, deps = {}) {
+  const requestUser = deps.getRequester || getRequester;
+  const readList = deps.readPredictionsHistoryListForUser || readPredictionsHistoryListForUser;
+  const readPredictions = deps.readPredictionsForHydration || readPredictionsForHydration;
+  const readFull = deps.readPredictionsHistoryForUser || readPredictionsHistoryForUser;
+
   if (req.method && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
   }
 
-  const supabaseConfig = assertSupabaseConfigured();
+  const supabaseConfig = (deps.assertSupabaseConfigured || assertSupabaseConfigured)();
   if (!supabaseConfig.ok) {
     return res.status(500).json({ ok: false, error: supabaseConfig.error });
   }
@@ -413,16 +443,19 @@ async function handleHistoryRead(req, res) {
     sync=1 keeps winning regardless of view.
   */
   const listView = shouldServeLightList(req.query);
+  const predictionListView = shouldServePredictionList(req.query);
 
   if (mine) {
-    const requester = await getRequester(req);
+    const requester = await requestUser(req);
     if (!requester.ok) {
       return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
     try {
       const { items, stats } = listView
-        ? await readPredictionsHistoryListForUser(requester.user.id, days, limit)
-        : await readPredictionsHistoryForUser(requester.user.id, days, limit);
+        ? await readList(requester.user.id, days, limit)
+        : predictionListView
+          ? await readPredictions(requester.user.id, days, limit)
+          : await readFull(requester.user.id, days, limit);
       return res.status(200).json({
         ok: true,
         mine: true,

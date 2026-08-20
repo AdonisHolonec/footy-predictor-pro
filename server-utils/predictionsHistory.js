@@ -8,6 +8,7 @@ import {
 } from "./cardMarketSettlement.js";
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 import { stripDeadValueEngineArraysFromRows } from "./valueEngineTransport.js";
+import { projectPredictionListRows } from "./predictionListProjection.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
@@ -741,4 +742,25 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
   */
   const items = stripDeadValueEngineArraysFromRows(filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry)));
   return { items, stats: aggregateCardMarketStats(rows) };
+}
+
+/**
+ * The same user-scoped read, narrowed to what the prediction board renders.
+ *
+ * Opt-in via `view=prediction-list`, because the full `mine=1` shape has a second
+ * consumer: historyService.loadHistory serves the guest/admin observatory from
+ * it with no `view` at all. Only the hydration caller asks for this.
+ *
+ * The odds gate and the stats aggregate run on the same rows as the full path,
+ * so what a caller gets back is the full result with fields removed — never a
+ * different set of predictions.
+ *
+ * The trim is transport only. `raw_payload` is not read for writing, not
+ * rewritten, and not mutated: the projection copies before it drops anything,
+ * which matters because mapDbRowToHistoryEntry spreads the payload and the
+ * nested objects are shared references.
+ */
+export async function readPredictionsForHydration(userId, days = 3, limit = 300) {
+  const { items, stats } = await readPredictionsHistoryForUser(userId, days, limit);
+  return { items: projectPredictionListRows(items), stats };
 }

@@ -136,7 +136,19 @@ export function usePredictionsCache({
   async function runHydration(): Promise<PredictionRow[]> {
     try {
       if (!user?.id || !accessToken) return [];
-      const response = await fetch("/api/history?days=14&limit=1000&mine=1", {
+      /*
+        days=3, not 14: every row outside `selectedDates` is discarded a few
+        lines below, and selectedDates is clamped to today..today+2. The RPC
+        window has no upper bound, so 3 days of history already covers every
+        future kickoff. Measured on one real user: 184 rows returned, of which
+        35 were usable. The window is what reduces how many documents Postgres
+        detoasts; the projection below reduces what crosses the wire.
+
+        view=prediction-list is opt-in for a reason — historyService.loadHistory
+        reads the FULL `mine=1` shape for the guest and admin surfaces, so the
+        default must stay full and only this caller may ask for the narrow one.
+      */
+      const response = await fetch("/api/history?days=3&limit=300&mine=1&view=prediction-list", {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       const json = await response.json();
