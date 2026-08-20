@@ -757,6 +757,8 @@ export const ro: Dict = {
     password: "Parolă",
     continue: "Continuă către workspace-ul tău Footy Predictor.",
     processing: "Se procesează…",
+    timeoutMsg: "Autentificarea a durat prea mult. Verifică conexiunea și încearcă din nou.",
+    degradedProfile: "Sesiunea ta este activă, dar profilul nu s-a putut încărca. Unele detalii pot lipsi.",
     sendReset: "Trimite email reset",
     updatePassword: "Actualizează parola",
     backLink: "← Pagina de acces",

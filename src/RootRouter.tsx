@@ -25,10 +25,19 @@ function RouteFallback() {
   );
 }
 
-function AuthGate() {
-  const { user, loading } = useAuth();
+export function AuthGate() {
+  const { user, loading, session, authStatus } = useAuth();
 
-  if (loading) {
+  /*
+    `!user` used to mean five different things at once, and this gate read all of
+    them as "signed out". A 503 on getUser() therefore bounced a user holding a
+    valid, unexpired session to /login, which then bounced back the moment the
+    profile arrived — the /workspace -> /login -> /workspace loop.
+
+    A session is the authority on whether someone is signed in. A missing profile
+    is a degraded session, not an anonymous one.
+  */
+  if (loading || authStatus === "unresolved") {
     return (
       <div className="lab-page grid min-h-screen place-items-center">
         <div className="lab-bg" aria-hidden />
@@ -39,7 +48,10 @@ function AuthGate() {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // Only a confirmed-absent session sends anyone to /login.
+  if (!session && !user) return <Navigate to="/login" replace />;
+  // Session present but the profile has not resolved yet: hold, never redirect.
+  if (!user) return <RouteFallback />;
   if (user.isBlocked) {
     return (
       <div className="lab-page grid min-h-screen place-items-center p-6">

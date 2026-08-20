@@ -757,6 +757,8 @@ export const en: Dict = {
     password: "Password",
     continue: "Continue to your Footy Predictor workspace.",
     processing: "Processing…",
+    timeoutMsg: "Authentication took too long. Check your connection and try again.",
+    degradedProfile: "Your session is active, but your profile could not be loaded. Some details may be missing.",
     sendReset: "Send reset email",
     updatePassword: "Update password",
     backLink: "← Access page",
