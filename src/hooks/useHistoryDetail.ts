@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PredictionRow } from "../types";
+import { fetchWithAuth } from "../utils/apiAuth";
 
 /**
  * One history row, fetched by fixture id.
@@ -65,7 +66,22 @@ export function useHistoryDetail(fixtureId: number | null | undefined): HistoryD
 
     void (async () => {
       try {
-        const response = await fetch(`/api/history?fixtureId=${id}`, { signal: controller.signal });
+        /*
+          fetchWithAuth, not fetch: `/api/history?fixtureId=N` is authenticated.
+          handleHistoryDetail() calls getRequester(), which reads ONLY the
+          Authorization header — there is no cookie fallback — so a bare fetch
+          answered 401 for every caller and the modal fell back to the fat list
+          row without ever surfacing an error the user could see. That silence
+          is why it survived: the fallback IS the pre-detail behaviour, so the
+          feature looked like it worked. The endpoint is deliberately
+          authenticated (it matches the weakest row-level access `mine=1`
+          already grants) and stays that way — the client was the broken half.
+
+          `init` is forwarded verbatim, so `signal` still reaches fetch and the
+          AbortController below keeps working. The return value is a plain
+          Response: status handling and JSON parsing stay exactly as they were.
+        */
+        const response = await fetchWithAuth(`/api/history?fixtureId=${id}`, { signal: controller.signal });
         const json = (await response.json()) as { ok?: boolean; item?: PredictionRow; error?: string };
         if (!alive || wantedRef.current !== id) return;
         if (!response.ok || !json?.ok || !json.item) {

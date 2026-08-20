@@ -3,6 +3,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __clearHistoryDetailCache, useHistoryDetail } from "./useHistoryDetail";
 
 /**
+ * A real Supabase session, so the REAL fetchWithAuth runs.
+ *
+ * Deliberately NOT mocking ../utils/apiAuth: mocking it would only prove the
+ * hook calls a helper, which is the assertion that would have passed while the
+ * bug was live. Mocking one layer lower — the session — lets the genuine
+ * fetchWithAuth build the headers and hands the assertion the object that
+ * actually reaches the network.
+ */
+const ACCESS_TOKEN = "test-access-token";
+let currentSession: { access_token: string } | null = { access_token: ACCESS_TOKEN };
+
+vi.mock("../utils/supabaseClient", () => ({
+  isSupabaseConfigured: true,
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: currentSession }, error: null })
+    }
+  }
+}));
+
+/**
  * The history LIST ships ~261 KB of `raw_payload` per row purely so the match
  * modal can render without a fetch — the measured cause of /api/history's
  * statement timeouts. This hook is the detail source that lets the list stop.
@@ -32,6 +53,7 @@ function itemResponse(id: number) {
 
 beforeEach(() => {
   __clearHistoryDetailCache();
+  currentSession = { access_token: ACCESS_TOKEN };
   fetchMock = vi.fn(async (url: string) => itemResponse(Number(String(url).split("fixtureId=")[1])));
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -44,6 +66,18 @@ afterEach(() => {
 /** Detail requests only, ignoring anything else the tree might fetch. */
 function detailCalls(): string[] {
   return fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("fixtureId="));
+}
+
+/** The RequestInit each detail request was actually issued with. */
+function detailInits(): RequestInit[] {
+  return fetchMock.mock.calls
+    .filter((c) => String(c[0]).includes("fixtureId="))
+    .map((c) => (c[1] ?? {}) as RequestInit);
+}
+
+/** Header value as the network layer would see it, whatever form init.headers took. */
+function headerOf(init: RequestInit, name: string): string | null {
+  return new Headers(init.headers ?? {}).get(name);
 }
 
 describe("useHistoryDetail", () => {
@@ -123,5 +157,83 @@ describe("useHistoryDetail", () => {
     await new Promise((r) => setTimeout(r, 90));
     expect(errors, "unmount produced a React state-update warning").toEqual([]);
     spy.mockRestore();
+  });
+  /**
+   * The regression that shipped: the hook issued a bare fetch, api/history.js
+   * reads only the Authorization header, so every request 401'd and the modal
+   * fell back to the list row. Nothing surfaced, because the fallback is also
+   * the correct behaviour when detail is unavailable.
+   *
+   * Asserted on the object handed to fetch, not on the hook's source and not on
+   * "was fetchWithAuth called" — the header has to survive all the way to the
+   * network layer for the endpoint to accept it.
+   */
+  it("sends the session bearer token on the detail request", async () => {
+    render(<Probe id={101} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("101"));
+
+    const inits = detailInits();
+    expect(inits).toHaveLength(1);
+    expect(
+      headerOf(inits[0], "Authorization"),
+      "the detail request went out unauthenticated - api/history.js answers 401"
+    ).toBe(`Bearer ${ACCESS_TOKEN}`);
+  });
+
+  it("still carries the abort signal alongside the auth header", async () => {
+    render(<Probe id={101} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("101"));
+
+    const [init] = detailInits();
+    expect(headerOf(init, "Authorization")).toBe(`Bearer ${ACCESS_TOKEN}`);
+    // Losing `signal` would silently undo the unmount/stale-navigation guards.
+    expect(init.signal, "fetchWithAuth dropped the AbortController signal").toBeInstanceOf(AbortSignal);
+  });
+
+  it("asks anonymously rather than throwing when there is no session", async () => {
+    // Signed-out users have no history to open, but the hook must degrade to an
+    // ordinary 401 rather than crash the modal on a missing session.
+    currentSession = null;
+    fetchMock.mockImplementation(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ ok: false, error: "Lipsește token-ul de autorizare." })
+    }));
+
+    render(<Probe id={101} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toContain("error:"));
+    expect(headerOf(detailInits()[0], "Authorization")).toBeNull();
+  });
+
+  it("does not cache a failure", async () => {
+    // A 401 during a token refresh must not permanently blank the fixture: the
+    // cache is keyed by fixture and holds ANSWERS, never attempts.
+    fetchMock.mockImplementationOnce(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ ok: false, error: "Token invalid sau expirat." })
+    }));
+
+    const { unmount } = render(<Probe id={404} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toContain("error:"));
+    unmount();
+
+    render(<Probe id={404} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("404"));
+    expect(detailCalls().length, "a failed attempt poisoned the cache").toBe(2);
+  });
+
+  it("does not cache a network failure", async () => {
+    fetchMock.mockImplementationOnce(async () => {
+      throw new Error("network down");
+    });
+
+    const { unmount } = render(<Probe id={505} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toContain("error:"));
+    unmount();
+
+    render(<Probe id={505} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("505"));
+    expect(detailCalls().length, "a network failure poisoned the cache").toBe(2);
   });
 });
