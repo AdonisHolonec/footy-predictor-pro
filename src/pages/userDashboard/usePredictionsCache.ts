@@ -121,7 +121,7 @@ export function usePredictionsCache({
     });
   }, [history, user?.id, setPredictionsByUser]);
 
-  async function rehydratePredictionsFromHistory(): Promise<PredictionRow[]> {
+  async function runHydration(): Promise<PredictionRow[]> {
     try {
       if (!user?.id || !accessToken) return [];
       const response = await fetch("/api/history?days=14&limit=1000&mine=1", {
@@ -164,6 +164,44 @@ export function usePredictionsCache({
     } catch {
       return [];
     }
+  }
+
+  /**
+   * The hydration request in flight, or null.
+   *
+   * Both de-dup guards in the effect below are conditioned on `preds.length > 0`,
+   * so the empty-cache case — the one that actually needs hydrating — reached
+   * `runHydration()` with nothing stopping a second call. Measured in production:
+   * two identical 45,074,431-byte requests starting 11 ms apart on one cold start,
+   * 90 MB for a response the second copy then overwrote with the same rows.
+   *
+   * A ref, not state: this must be readable and writable synchronously inside the
+   * same commit that already started a request, which a state update cannot do.
+   */
+  const inFlightHydrationRef = useRef<Promise<PredictionRow[]> | null>(null);
+
+  /**
+   * Callers share one request while it is in flight; the next call after it
+   * settles starts a fresh one. Cleared on BOTH outcomes, so a failure never
+   * latches hydration off — `runHydration` resolves to [] rather than rejecting,
+   * and an empty result is deliberately not remembered as a successful hydration.
+   */
+  function rehydratePredictionsFromHistory(): Promise<PredictionRow[]> {
+    const pending = inFlightHydrationRef.current;
+    if (pending) return pending;
+
+    const started = runHydration();
+    inFlightHydrationRef.current = started;
+    // Attached directly to `started`, not through a .catch().finally() chain:
+    // handlers run in attachment order, so registering here — before the caller
+    // awaits the promise we hand back — guarantees the ref is already clear by
+    // the time that caller resumes and may legitimately hydrate again.
+    // Identity check: never clear a newer request started after this one settled.
+    const release = () => {
+      if (inFlightHydrationRef.current === started) inFlightHydrationRef.current = null;
+    };
+    void started.then(release, release);
+    return started;
   }
 
   const tierShapeRehydrateKeyRef = useRef("");
