@@ -6,9 +6,10 @@ import {
   planRowUpdate,
   runBackfill
 } from "../server-utils/backfill/historyListColumns.js";
+import { IMMUTABLE_COLUMNS, MUTABLE_COLUMNS } from "../server-utils/historyListColumns.js";
 
 /**
- * The 055 column backfill.
+ * The promoted-column backfill (055 + 056).
  *
  * `raw_payload` stays authoritative; these columns are a cache. What must not
  * regress is the write direction: an immutable column may never be replaced
@@ -25,6 +26,10 @@ function row(fixtureId, overrides = {}) {
   return {
     fixture_id: fixtureId,
     recommended_odd: null,
+    recommended_family: null,
+    recommended_period: null,
+    recommended_scope: null,
+    recommended_book_line: null,
     logo_home: null,
     logo_away: null,
     card_market_validations: null,
@@ -145,7 +150,9 @@ test("a missing source leaves the target NULL and is counted", () => {
   });
   const { update, diagnostics } = planRowUpdate(bare);
   assert.equal(update, null, "a row with no source values produced a write");
-  assert.equal(diagnostics.missingSource, 7);
+  // One per promoted column, derived rather than hard-coded: adding a column
+  // without teaching the backfill about it should fail here, not silently pass.
+  assert.equal(diagnostics.missingSource, IMMUTABLE_COLUMNS.length + MUTABLE_COLUMNS.length);
 });
 
 test("JSON null is treated as absence, not as a value", () => {
@@ -307,4 +314,85 @@ test("per-column counts reflect what was actually written", async () => {
   assert.equal(stats.populated.logo_home, 2);
   assert.equal(stats.populated.corners_total, 2);
   assert.equal(stats.numericRejected, 1);
+});
+
+/* ---------------------------------------------------------------------------
+ * 056 — recommendation metadata.
+ *
+ * These four are IMMUTABLE, so the reconciliation that matters is `target ??
+ * source`: a populated column survives a re-run even if the payload disagrees.
+ * ------------------------------------------------------------------------- */
+
+test("056: the four recommendation scalars are populated from raw_payload", () => {
+  const { update } = planRowUpdate(
+    row(1, {
+      src_recommended: {
+        pick: "Over 9.5",
+        odd: 1.85,
+        family: "Shots on Target",
+        period: "full_match",
+        scope: "match",
+        bookLine: 9.5
+      }
+    })
+  );
+  assert.equal(update.recommended_family, "Shots on Target");
+  assert.equal(update.recommended_period, "full_match");
+  assert.equal(update.recommended_scope, "match");
+  assert.equal(update.recommended_book_line, 9.5);
+});
+
+test("056: a quarter book line survives the backfill unrounded", () => {
+  // 6.75 and 8.25 are live production values. An integer column, or an integer
+  // guard, would name a line the bookmaker never offered.
+  for (const line of [6.75, 8.25, 7, 10.5]) {
+    const { update } = planRowUpdate(row(1, { src_recommended: { pick: "Over", bookLine: line } }));
+    assert.equal(update.recommended_book_line, line, `bookLine ${line} was not preserved`);
+  }
+});
+
+test("056: absent metadata stays NULL and is never inferred from the pick", () => {
+  // The pick alone would let a reader guess Corners from the 9.5 line. Guessing
+  // here would make a legacy row indistinguishable from a classified one.
+  const { update } = planRowUpdate(row(1, { src_recommended: { pick: "Over 9.5", odd: 1.85 } }));
+  assert.equal(update.recommended_family, undefined);
+  assert.equal(update.recommended_period, undefined);
+  assert.equal(update.recommended_scope, undefined);
+  assert.equal(update.recommended_book_line, undefined);
+});
+
+test("056: an unusable book line is reported, not coerced", () => {
+  const { update, diagnostics } = planRowUpdate(
+    row(1, { src_recommended: { pick: "Over", odd: 1.85, bookLine: "not-a-line" } })
+  );
+  assert.equal(update?.recommended_book_line, undefined);
+  assert.ok(diagnostics.numericRejected >= 1, "a bad book line was not counted");
+  assert.ok(diagnostics.rejectedColumns.includes("recommended_book_line"));
+  // The rest of the row still backfills.
+  assert.equal(update.recommended_odd, 1.85);
+});
+
+test("056: an empty-string family is absence, not a value", () => {
+  const { update } = planRowUpdate(row(1, { src_recommended: { pick: "Over", family: "   " } }));
+  assert.equal(update?.recommended_family, undefined);
+});
+
+test("056: a populated metadata target is never replaced by a different source", () => {
+  const { update } = planRowUpdate(
+    row(1, {
+      recommended_family: "Corners",
+      recommended_book_line: 8.5,
+      src_recommended: { pick: "Over", family: "Shots", bookLine: 9.5 }
+    })
+  );
+  assert.equal(update?.recommended_family, undefined, "an immutable family was overwritten");
+  assert.equal(update?.recommended_book_line, undefined, "an immutable book line was overwritten");
+});
+
+test("056: the projection selects the new columns and still never the document", () => {
+  for (const column of ["recommended_family", "recommended_period", "recommended_scope", "recommended_book_line"]) {
+    assert.ok(BACKFILL_SELECT.includes(column), `${column} is missing from the projection`);
+  }
+  // No new payload path is needed - src_recommended already carries all four.
+  assert.ok(!/(^|[\s,])raw_payload([\s,]|$)/.test(BACKFILL_SELECT), "the projection selects the whole document");
 });

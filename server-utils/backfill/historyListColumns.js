@@ -5,7 +5,8 @@ import {
 } from "../historyListColumns.js";
 
 /**
- * One-off backfill for the seven derived list columns added by migration 055.
+ * One-off backfill for the derived list columns: the seven from migration 055
+ * and the four recommendation-metadata scalars from 056.
  *
  * `raw_payload` REMAINS AUTHORITATIVE. These columns are a cache that exists so
  * the History list can be answered without touching the JSONB document — the
@@ -38,6 +39,14 @@ import {
 export const BACKFILL_SELECT = [
   "fixture_id",
   "recommended_odd",
+  // 056. No new payload projection is needed: `src_recommended` already carries
+  // the whole `recommended` object, so family/period/scope/bookLine come out of
+  // the projection this backfill has always taken. The COLUMNS are selected
+  // because the immutable reconciliation below reads the stored value first.
+  "recommended_family",
+  "recommended_period",
+  "recommended_scope",
+  "recommended_book_line",
   "logo_home",
   "logo_away",
   "card_market_validations",
@@ -121,6 +130,10 @@ function emptyStats() {
     failed: 0,
     populated: {
       recommended_odd: 0,
+      recommended_family: 0,
+      recommended_period: 0,
+      recommended_scope: 0,
+      recommended_book_line: 0,
       logo_home: 0,
       logo_away: 0,
       card_market_validations: 0,
