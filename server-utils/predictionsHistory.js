@@ -408,46 +408,76 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
  * to produce a ~130 byte response - enough to cross Postgres' statement_timeout,
  * which is why GET /api/history?days=30 failed intermittently in production.
  */
-export const AGGREGATE_PAYLOAD_KEYS = Object.freeze([
-  "cardMarketValidations",
-  "cardMarkets",
-  "marketOdds",
-  "marketResults",
-  "probs",
-  "recommended",
-  "score",
-  "status",
-  "validation"
-]);
-
-const AGGREGATE_PAYLOAD_PREFIX = "pl_";
-
-/** Scalar columns the aggregate reads straight off the row. */
+/**
+ * D2: promoted columns only - the aggregate no longer touches raw_payload.
+ *
+ * Projecting `raw_payload->key` narrowed the WIRE but not the read: to evaluate
+ * a key Postgres must de-TOAST the whole document. Measured in production on
+ * identical rows, same filter/order/limit: columns-only 0.278s / 82KB versus
+ * nine key extractions 3.381s / 2.28MB - 12.2x slower for a 136 byte response,
+ * because one raw_payload row is ~339KB and the 30-day window holds ~452 of
+ * them. That is what reached statement_timeout and produced the 500s.
+ *
+ * Every value below already exists as a column (055/056 promoted them), so this
+ * is a projection change, not a schema change. Verified against production
+ * before the switch: 0/811 rows have a null match_status, validation or
+ * recommended_pick; corners_total and card_markets agree with their payload
+ * counterparts on every sampled row; and of the 41 rows with a null score_home,
+ * none carry a payload score - so the dropped `payload.score` fallback never
+ * fired.
+ */
 const AGGREGATE_ROW_COLUMNS = Object.freeze([
   "validation",
   "match_status",
   "score_home",
   "score_away",
-  "recommended_pick"
+  "recommended_pick",
+  "recommended_family",
+  "card_markets",
+  "card_market_validations",
+  "corners_total",
+  "shots_on_target_total"
 ]);
 
-/** `pl_status:raw_payload->status, ...` - PostgREST projects the keys, not the blob. */
-export const AGGREGATE_STATS_SELECT = [
-  ...AGGREGATE_ROW_COLUMNS,
-  ...AGGREGATE_PAYLOAD_KEYS.map((key) => `${AGGREGATE_PAYLOAD_PREFIX}${key}:raw_payload->${key}`)
-].join(", ");
+export const AGGREGATE_STATS_SELECT = AGGREGATE_ROW_COLUMNS.join(", ");
 
 /**
- * Rebuild the row shape the settlement helpers expect. They take a DB row and
- * reach into `row.raw_payload`, so the projected keys are folded back into
- * exactly that shape - the helpers are untouched and cannot tell the difference.
+ * Rebuild the row shape the settlement helpers expect, from columns.
+ *
+ * The helpers reach into `row.raw_payload`, so the promoted columns are folded
+ * back into exactly that shape and the helpers cannot tell the difference.
+ *
+ * `probs` and `marketOdds` are deliberately absent. They feed only
+ * deriveCardMarketPicks, which runs when `cardMarkets` is missing or no market
+ * is decided - measured at 0 of 811 production rows, since card_markets is
+ * always populated and every row has at least one decided market. A row that
+ * did reach it would now yield no derived goals/corners/shots picks rather than
+ * deriving them from a document this path no longer reads: it contributes
+ * nothing instead of contributing something wrong.
  */
 export function rehydrateAggregateRow(row) {
   const source = row && typeof row === "object" ? row : {};
   const rawPayload = {};
-  for (const key of AGGREGATE_PAYLOAD_KEYS) {
-    const value = source[`${AGGREGATE_PAYLOAD_PREFIX}${key}`];
-    if (value !== undefined && value !== null) rawPayload[key] = value;
+  if (source.card_markets != null) rawPayload.cardMarkets = source.card_markets;
+  if (source.card_market_validations != null) {
+    rawPayload.cardMarketValidations = source.card_market_validations;
+  }
+  /*
+    Only when a total exists. `payload.marketResults?.x ?? null` yielded null for
+    an absent marketResults, and yields null for an explicit null here - the same
+    value, and null must never become 0 or a pending market would settle as a loss.
+  */
+  if (source.corners_total != null || source.shots_on_target_total != null) {
+    rawPayload.marketResults = {
+      cornersTotal: source.corners_total ?? null,
+      shotsOnTargetTotal: source.shots_on_target_total ?? null
+    };
+  }
+  if (source.recommended_pick != null) {
+    rawPayload.recommended = {
+      pick: source.recommended_pick,
+      family: source.recommended_family ?? null
+    };
   }
   return {
     validation: source.validation ?? null,

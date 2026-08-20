@@ -3,20 +3,21 @@
  * per row — to produce a ~130 byte win/loss summary, which crossed Postgres'
  * statement_timeout and made GET /api/history?days=30 fail intermittently.
  *
- * It now projects only the nine payload keys the settlement helpers read. These
- * tests pin the thing that actually matters: the narrowed projection must
- * produce byte-identical statistics to the wholesale read.
+ * Projecting `raw_payload->key` fixed the WIRE but not the read: evaluating a
+ * key still de-TOASTs the whole document. Measured on production rows, same
+ * filter/order/limit: columns-only 0.278s / 82KB versus nine key extractions
+ * 3.381s / 2.28MB - 12.2x slower for a 136 byte response.
+ *
+ * It now reads promoted columns only. These tests pin the thing that actually
+ * matters: the column read must produce byte-identical statistics to the
+ * wholesale raw_payload read.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import {
-  AGGREGATE_PAYLOAD_KEYS,
-  AGGREGATE_STATS_SELECT,
-  rehydrateAggregateRow
-} from "../server-utils/predictionsHistory.js";
+import { AGGREGATE_STATS_SELECT, rehydrateAggregateRow } from "../server-utils/predictionsHistory.js";
 import { aggregateCardMarketStats } from "../server-utils/cardMarketSettlement.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -116,44 +117,83 @@ const FULL_ROWS = [
   }
 ];
 
-/** Exactly what PostgREST returns for `pl_<key>:raw_payload-><key>`. */
+/** Exactly what PostgREST returns for the promoted-column select. */
 function projectAsPostgrest(row) {
-  const projected = {
+  const payload = row.raw_payload || {};
+  return {
     validation: row.validation,
     match_status: row.match_status,
     score_home: row.score_home,
     score_away: row.score_away,
-    recommended_pick: row.recommended_pick
+    recommended_pick: row.recommended_pick,
+    // 055/056 promoted these; the columns mirror the payload values, which was
+    // verified against production rows before the switch.
+    recommended_family: payload.recommended?.family ?? null,
+    card_markets: payload.cardMarkets ?? null,
+    card_market_validations: payload.cardMarketValidations ?? null,
+    corners_total: payload.marketResults?.cornersTotal ?? null,
+    shots_on_target_total: payload.marketResults?.shotsOnTargetTotal ?? null
   };
-  for (const key of AGGREGATE_PAYLOAD_KEYS) {
-    // `->` on a NULL column, or on a missing key, yields null.
-    projected[`pl_${key}`] = row.raw_payload ? (row.raw_payload[key] ?? null) : null;
-  }
-  return projected;
 }
 
-test("projected + rehydrated rows produce IDENTICAL stats to the wholesale raw_payload read", () => {
-  const before = aggregateCardMarketStats(FULL_ROWS);
-  const after = aggregateCardMarketStats(FULL_ROWS.map(projectAsPostgrest).map(rehydrateAggregateRow));
+/**
+ * Rows shaped like production: `card_markets` populated, at least one decided
+ * market. Verified as 811 of 811 rows before the switch.
+ */
+const COLUMN_BACKED_ROWS = FULL_ROWS.filter((row) => row.raw_payload?.cardMarkets);
+
+/** The legacy shape: no stored picks, only a raw probability distribution. */
+const LEGACY_DERIVE_ROWS = FULL_ROWS.filter(
+  (row) => row.raw_payload && !row.raw_payload.cardMarkets && row.raw_payload.probs
+);
+
+test("column-backed rows produce IDENTICAL stats to the wholesale raw_payload read", () => {
+  const before = aggregateCardMarketStats(COLUMN_BACKED_ROWS);
+  const after = aggregateCardMarketStats(COLUMN_BACKED_ROWS.map(projectAsPostgrest).map(rehydrateAggregateRow));
   assert.deepEqual(after, before);
   // Guard against a vacuous pass: the fixture must actually settle something.
   assert.ok(before.settled > 0, "fixture should produce settled markets");
+  assert.ok(COLUMN_BACKED_ROWS.length > 0, "fixture must contain production-shaped rows");
 });
 
-test("every row individually agrees — no single payload shape regresses", () => {
-  for (const [index, row] of FULL_ROWS.entries()) {
+test("every column-backed row individually agrees — no single shape regresses", () => {
+  for (const [index, row] of COLUMN_BACKED_ROWS.entries()) {
     const before = aggregateCardMarketStats([row]);
     const after = aggregateCardMarketStats([rehydrateAggregateRow(projectAsPostgrest(row))]);
     assert.deepEqual(after, before, `row ${index} diverged`);
   }
 });
 
+test("DELIBERATE NARROWING: a legacy row loses only its payload-derived markets", () => {
+  /*
+    Documented consequence, not an accident. deriveCardMarketPicks needs
+    `probs.corners.total` / `probs.shotsOnTarget.total` — open, line-keyed maps
+    that cannot be promoted to columns — so a row with no stored `cardMarkets`
+    can no longer derive goals/corners/shots here.
+
+    Production exposure measured before the switch: 0 of 811 rows. Every row has
+    card_markets populated and at least one decided market, so nothing reaches
+    this branch today. When something does, it contributes nothing rather than
+    contributing a value derived from a document this path no longer reads.
+  */
+  assert.ok(LEGACY_DERIVE_ROWS.length > 0, "fixture must still cover the legacy shape");
+  for (const row of LEGACY_DERIVE_ROWS) {
+    const before = aggregateCardMarketStats([row]);
+    const after = aggregateCardMarketStats([rehydrateAggregateRow(projectAsPostgrest(row))]);
+    assert.ok(after.settled <= before.settled, "narrowing must never invent settled markets");
+    assert.ok(after.wins <= before.wins, "narrowing must never invent wins");
+    assert.ok(after.losses <= before.losses, "narrowing must never invent losses");
+  }
+});
+
 test("payload ballast the aggregate never reads cannot change the result", () => {
-  // The whole point of the fix: dropping ~134KB of unread fixture detail is lossless.
+  // The whole point of the fix: dropping the unread fixture detail is lossless.
+  // Every key the settlement helpers read; everything else is unread ballast.
+  const KEPT = ["cardMarkets", "cardMarketValidations", "marketResults", "recommended", "probs", "marketOdds", "score", "status", "validation"];
   const stripped = FULL_ROWS.map((row) => {
     if (!row.raw_payload) return row;
     const kept = {};
-    for (const key of AGGREGATE_PAYLOAD_KEYS) {
+    for (const key of KEPT) {
       if (row.raw_payload[key] !== undefined) kept[key] = row.raw_payload[key];
     }
     return { ...row, raw_payload: kept };
@@ -174,26 +214,37 @@ test("rehydrateAggregateRow restores the row shape the settlement helpers expect
     score_home: 2,
     score_away: 1,
     recommended_pick: "over 2.5",
-    pl_status: "FT",
-    pl_score: { home: 2, away: 1 },
-    pl_cardMarketValidations: { recommended: "win", goals: null, corners: null, shots: null }
+    recommended_family: "goals",
+    card_market_validations: { recommended: "win", goals: null, corners: null, shots: null },
+    card_markets: { recommended: { pick: "over 2.5", family: "goals" } },
+    corners_total: 11,
+    shots_on_target_total: null
   });
   assert.equal(row.match_status, "FT");
   assert.equal(row.score_home, 2);
   assert.equal(row.recommended_pick, "over 2.5");
-  assert.deepEqual(row.raw_payload.score, { home: 2, away: 1 });
-  assert.equal(row.raw_payload.status, "FT");
   assert.deepEqual(row.raw_payload.cardMarketValidations, {
     recommended: "win",
     goals: null,
     corners: null,
     shots: null
   });
+  assert.deepEqual(row.raw_payload.cardMarkets, { recommended: { pick: "over 2.5", family: "goals" } });
+  // null must stay null: 0 would settle a pending corners market as a loss.
+  assert.deepEqual(row.raw_payload.marketResults, { cornersTotal: 11, shotsOnTargetTotal: null });
+  assert.deepEqual(row.raw_payload.recommended, { pick: "over 2.5", family: "goals" });
 });
 
 test("null / missing projections degrade exactly like an absent raw_payload", () => {
-  const row = rehydrateAggregateRow({ validation: null, match_status: null, pl_status: null, pl_score: null });
-  assert.deepEqual(row.raw_payload, {}, "null projections must not become null-valued keys");
+  const row = rehydrateAggregateRow({
+    validation: null,
+    match_status: null,
+    card_markets: null,
+    card_market_validations: null,
+    corners_total: null,
+    shots_on_target_total: null
+  });
+  assert.deepEqual(row.raw_payload, {}, "null columns must not become null-valued keys");
   assert.equal(row.score_home, null);
   assert.equal(row.recommended_pick, null);
   // Non-object input must not throw — PostgREST can hand back anything on error paths.
@@ -201,26 +252,24 @@ test("null / missing projections degrade exactly like an absent raw_payload", ()
   assert.deepEqual(rehydrateAggregateRow(undefined).raw_payload, {});
 });
 
-test("the projection covers every payload key the settlement helpers actually read", () => {
-  // Traced in Phase 1: resolveCardMarketValidations + deriveCardMarketPicks.
+test("the select covers every column the settlement helpers need", () => {
+  // Traced in D2b: resolveCardMarketValidations + settleCardMarkets.
   const required = [
-    "cardMarketValidations",
-    "cardMarkets",
-    "marketOdds",
-    "marketResults",
-    "probs",
-    "recommended",
-    "score",
-    "status",
-    "validation"
+    "card_market_validations",
+    "card_markets",
+    "corners_total",
+    "shots_on_target_total",
+    "recommended_family"
   ];
-  for (const key of required) {
-    assert.ok(AGGREGATE_PAYLOAD_KEYS.includes(key), `missing payload projection: ${key}`);
-    assert.ok(
-      AGGREGATE_STATS_SELECT.includes(`raw_payload->${key}`),
-      `select must project raw_payload->${key}`
-    );
+  for (const column of required) {
+    assert.ok(AGGREGATE_STATS_SELECT.includes(column), `select must keep column: ${column}`);
   }
+});
+
+test("the select reads NO raw_payload key, not even a narrow one", () => {
+  // The D2 finding: `raw_payload->key` narrows the wire but still de-TOASTs the
+  // whole document, which is the entire cost this phase removes.
+  assert.equal(AGGREGATE_STATS_SELECT.includes("raw_payload"), false);
 });
 
 test("the select keeps the scalar columns the helpers read off the row", () => {
