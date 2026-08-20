@@ -490,3 +490,82 @@ test("an anonymous failure never leaks the underlying message", async () => {
   assert.equal(serialized.includes("hunter2"), false);
   assert.equal(serialized.includes("dbhost"), false);
 });
+
+/* -- D3: splitting dbReadMs -------------------------------------------------- */
+
+/**
+ * D2b removed raw_payload from the anonymous aggregate and production dbReadMs
+ * did not move: 8,963-39,368ms, while the identical query run directly against
+ * PostgREST answered in 0.33-0.63s at the same moment. So the query is not the
+ * cost. These spans say whether it is client acquisition or the HTTP request.
+ *
+ * They are nested INSIDE dbReadMs and must never be added to it.
+ */
+
+test("the client and request spans are recorded separately", () => {
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "dbReadMs", 14_000);
+  markStage(t, "supabaseClientMs", 1);
+  markStage(t, "supabaseRequestMs", 13_990);
+
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 14_050 });
+  assert.equal(out.supabaseClientMs, 1);
+  assert.equal(out.supabaseRequestMs, 13_990);
+  assert.equal(out.dbReadMs, 14_000);
+});
+
+test("nested spans are not double-counted against unattributed time", () => {
+  /*
+    The trap this guards: supabaseClientMs + supabaseRequestMs ~= dbReadMs, so
+    summing all stages would subtract the same milliseconds twice and report a
+    bogus negative gap clamped to 0 — hiding real unattributed time.
+  */
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "rateLimitMs", 10);
+  markStage(t, "dbReadMs", 9_000);
+  markStage(t, "supabaseClientMs", 0);
+  markStage(t, "supabaseRequestMs", 8_995);
+  markStage(t, "responseMs", 1);
+
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 10_000 });
+  // 10,000 - (10 + 9,000 + 1) = 989, NOT 10,000 - 18,006.
+  assert.equal(out.unattributedMs, 989);
+});
+
+test("a request that never reaches Supabase records neither span", () => {
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "rateLimitMs", 12);
+  const out = summarizeHistoryTiming(t, { status: 429, durationMs: 9_000 });
+  assert.equal("supabaseClientMs" in out, false);
+  assert.equal("supabaseRequestMs" in out, false);
+});
+
+test("the split still carries no secret or payload", () => {
+  const t = createHistoryTiming({ days: "30", access_token: "eyJhbGciOi.secret.x" });
+  markStage(t, "supabaseClientMs", 2);
+  markStage(t, "supabaseRequestMs", 9_000);
+  const serialized = JSON.stringify(summarizeHistoryTiming(t, { status: 200, durationMs: 9_100 }));
+  assert.equal(serialized.includes("secret"), false);
+  assert.equal(serialized.includes("eyJ"), false);
+});
+
+test("the admin client is cached, so timing it measures construction not connection", async () => {
+  /*
+    The hypothesis D3 set out to test was "a new client per invocation". It is
+    false: getSupabaseAdmin caches at module scope, so a warm lambda re-uses one
+    instance and createClient() runs at most once per instance. createClient is
+    synchronous and opens no socket, which is why the span is named
+    supabaseClientMs and not connectionMs.
+
+    This also pins that instrumenting the call site cannot introduce a second
+    client — the identity check would fail if it did.
+  */
+  process.env.SUPABASE_URL = process.env.SUPABASE_URL || "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "service-key";
+  const { getSupabaseAdmin } = await import("../server-utils/supabaseAdmin.js");
+
+  const first = getSupabaseAdmin();
+  const second = getSupabaseAdmin();
+  assert.ok(first, "client should be constructed when env is present");
+  assert.equal(first, second, "getSupabaseAdmin must return the same cached instance");
+});

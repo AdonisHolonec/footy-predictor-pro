@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { markStage } from "./observability/historyTiming.js";
 import { MODEL_VERSION } from "./modelConstants.js";
 import {
   aggregateCardMarketStats,
@@ -493,18 +494,32 @@ export function rehydrateAggregateRow(row) {
  * Win/loss aggregates for marketing / login stats.
  * Uses raw_payload card markets when present so goals/corners/shots count too.
  */
-export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500) {
+export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500, timing) {
+  /*
+    D3 split, nested inside the caller's dbReadMs.
+
+    getSupabaseAdmin() caches its client at module scope, so on a warm instance
+    this is a property read and on a cold one a synchronous createClient() that
+    opens no socket - which is exactly what supabaseClientMs is here to confirm
+    or refute, rather than assume.
+  */
+  const clientStartedAt = Date.now();
   const supabase = getSupabaseAdmin();
+  markStage(timing, "supabaseClientMs", Date.now() - clientStartedAt);
   if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+  // The request itself: the client is untouched, no fetch option is overridden
+  // and no payload is intercepted - only the await is bracketed.
+  const requestStartedAt = Date.now();
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
     .select(AGGREGATE_STATS_SELECT)
     .gte("kickoff_at", cutoff)
     .order("kickoff_at", { ascending: false })
     .limit(safeLimit);
+  markStage(timing, "supabaseRequestMs", Date.now() - requestStartedAt);
   if (error) throw error;
   const rows = (data || []).map(rehydrateAggregateRow);
   return { stats: aggregateCardMarketStats(rows) };
