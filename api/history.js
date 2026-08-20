@@ -19,6 +19,15 @@ import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
+  createHistoryTiming,
+  emitHistoryTiming,
+  markStage,
+  recordError,
+  recordFinalBytes,
+  recordRows,
+  timeStage
+} from "../server-utils/observability/historyTiming.js";
+import {
   mapDbRowToHistoryEntry,
   readPredictionsHistory,
   readPredictionsHistoryList,
@@ -446,16 +455,27 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const predictionListView = shouldServePredictionList(req.query);
 
   if (mine) {
-    const requester = await requestUser(req);
+    const timing = deps.timing;
+    const requester = await timeStage(timing, "authMs", () => requestUser(req));
     if (!requester.ok) {
       return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
     try {
-      const { items, stats } = listView
-        ? await readList(requester.user.id, days, limit)
-        : predictionListView
-          ? await readPredictions(requester.user.id, days, limit)
-          : await readFull(requester.user.id, days, limit);
+      /*
+        One span around the whole read: the RPC, the row mapping and the card
+        aggregate all live inside these functions. Splitting further would mean
+        threading a timer through predictionsHistory's signatures, which is a
+        change to P3-B's code for a diagnostic — deliberately left to a later
+        phase. `dbReadMs` vs `responseMs` is already the split that separates
+        "the database was slow" from "the payload was large".
+      */
+      const { items, stats } = await timeStage(timing, "dbReadMs", () =>
+        listView
+          ? readList(requester.user.id, days, limit)
+          : predictionListView
+            ? readPredictions(requester.user.id, days, limit)
+            : readFull(requester.user.id, days, limit)
+      );
       return res.status(200).json({
         ok: true,
         mine: true,
@@ -464,6 +484,7 @@ export async function handleHistoryRead(req, res, deps = {}) {
         items
       });
     } catch (error) {
+      recordError(deps.timing, error, "dbReadMs");
       return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
     }
   }
@@ -1097,7 +1118,7 @@ async function handleClosingOdds(req, res) {
  * GET or POST /api/history?view=special-bets — Global Special Bet, reached as
  *   /api/special-bets through the rewrite in vercel.json (Hobby function cap).
  */
-async function handlerImpl(req, res) {
+async function handlerImpl(req, res, timing) {
   // Checked first: Global Special Bet is its own resource, not a projection of
   // predictions_history, and it must not inherit this handler's read defaults.
   if (String(req.query.view || "") === "special-bets") {
@@ -1118,7 +1139,7 @@ async function handlerImpl(req, res) {
   if (perfOn) {
     return handlePerformanceRead(req, res);
   }
-  return handleHistoryRead(req, res);
+  return handleHistoryRead(req, res, { timing });
 }
 
 /**
@@ -1128,6 +1149,58 @@ async function handlerImpl(req, res) {
  * the invocation boundary — requestMonitor only covers predict and fixtures,
  * and the warm/cron paths that issue the most cache telemetry never reach it.
  */
+/**
+ * Observes rows and final bytes without re-serialising anything.
+ *
+ * `res.json` already stringifies the body; measuring it again solely for
+ * telemetry would mean a second pass over a payload that reaches 7.7MB on the
+ * full `mine=1` path. So the row count comes from the array that is already in
+ * hand, and the size comes from the Content-Length the runtime has already
+ * computed — absent that header, bytes stay UNKNOWN rather than guessed.
+ */
+function observeResponse(res, timing) {
+  const original = typeof res?.json === "function" ? res.json.bind(res) : null;
+  if (!original) return;
+  res.json = (body) => {
+    recordRows(timing, Array.isArray(body?.items) ? body.items.length : null);
+    const startedAt = Date.now();
+    try {
+      return original(body);
+    } finally {
+      markStage(timing, "responseMs", Date.now() - startedAt);
+      recordFinalBytes(timing, readContentLength(res));
+    }
+  };
+}
+
+function readContentLength(res) {
+  try {
+    const raw = typeof res?.getHeader === "function" ? res.getHeader("content-length") : null;
+    const n = Number(Array.isArray(raw) ? raw[0] : raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One buffered metrics document per invocation, and one timing record.
+ *
+ * The wrapper is the only place that can cover every branch — special-bets,
+ * sync, closing, performance, detail and the read views all return from
+ * handlerImpl — so total duration, status, mode, rows and bytes are captured
+ * once here rather than duplicated into each path.
+ */
 export default async function handler(req, res) {
-  return withObservationScope(() => handlerImpl(req, res));
+  const timing = createHistoryTiming(req?.query || {}, req?.method);
+  const startedAt = Date.now();
+  observeResponse(res, timing);
+  try {
+    return await withObservationScope(() => handlerImpl(req, res, timing));
+  } catch (error) {
+    recordError(timing, error);
+    throw error;
+  } finally {
+    emitHistoryTiming(timing, { status: res?.statusCode, durationMs: Date.now() - startedAt });
+  }
 }
