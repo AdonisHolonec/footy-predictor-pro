@@ -48,7 +48,7 @@ import { buildFixtureLabelIndex } from "../utils/globalSpecialBetView";
 import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
-import { clampTierDates, hasLegacyPredictionShape } from "./userDashboard/helpers";
+import { clampTierDates, hasLegacyPredictionShape, shouldShowOnboarding } from "./userDashboard/helpers";
 import ProfileView from "./userDashboard/ProfileView";
 import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
@@ -801,7 +801,7 @@ export default function UserDashboard() {
           clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
         />
       </Overlay>
-      {user && !user.onboardingCompleted && (
+      {shouldShowOnboarding(user) && (
         <OnboardingCarousel
           leagueOptions={ELITE_LEAGUE_META}
           initialLeagueIds={selectedLeagueIds}

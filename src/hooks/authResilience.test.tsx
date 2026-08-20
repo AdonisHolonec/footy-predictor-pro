@@ -148,6 +148,44 @@ describe("login", () => {
     expect(screen.getByTestId("status").textContent).toBe("auth-error");
   });
 
+  test("a user without a loaded profile reports onboarding as unknown, not false", async () => {
+    /*
+      The distinction the onboarding gate depends on, asserted through the real
+      mapSupabaseUser: while the profile is absent the answer is `undefined`
+      ("we do not know"), never `false` ("this user never onboarded") — which is
+      what showed an existing user the onboarding carousel mid-restore.
+    */
+    ctl.profile = async () => {
+      throw new AuthTimeoutError(10_000);
+    };
+    await mount();
+    await act(async () => {
+      await api.login("user@example.com", "pw");
+    });
+    expect(api.user).not.toBeNull();
+    expect(api.user?.onboardingCompleted).toBeUndefined();
+  });
+
+  test("a loaded profile reports onboarding as a real boolean", async () => {
+    ctl.profile = async () => ({ data: { ...PROFILE, onboarding_completed: true }, error: null });
+    await mount();
+    await act(async () => {
+      await api.login("user@example.com", "pw");
+    });
+    expect(api.user?.onboardingCompleted).toBe(true);
+  });
+
+  test("a loaded profile that has not onboarded reports a real false", async () => {
+    // The case the whole feature turns on: a genuinely new user must still be
+    // distinguishable from one whose profile simply has not arrived.
+    ctl.profile = async () => ({ data: { ...PROFILE, onboarding_completed: false }, error: null });
+    await mount();
+    await act(async () => {
+      await api.login("user@example.com", "pw");
+    });
+    expect(api.user?.onboardingCompleted).toBe(false);
+  });
+
   test("a failing profile read is reported, never swallowed", async () => {
     ctl.profile = async () => {
       throw new AuthTimeoutError(10_000);

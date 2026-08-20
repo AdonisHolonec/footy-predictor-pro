@@ -1,5 +1,5 @@
 import type { MarketPref } from "../../hooks/useUiPrefs";
-import type { PredictionRow } from "../../types";
+import type { PredictionRow, User } from "../../types";
 import { normalizeSelectedDates } from "../../utils/appUtils";
 
 /**
@@ -7,6 +7,20 @@ import { normalizeSelectedDates } from "../../utils/appUtils";
  * remediation program). No React, no state — the component keeps the wiring,
  * this module keeps the arithmetic.
  */
+
+/**
+ * Whether to ask this user to onboard.
+ *
+ * Deliberately `=== false`, not `!completed`. Since L1 the session is
+ * established before the profile is fetched, so `user` legitimately exists with
+ * `onboardingCompleted === undefined` for the length of that request — and
+ * "we do not know yet" must not be answered with a modal. Only a loaded profile
+ * that actually says "not onboarded" opens the carousel; `undefined` (profile
+ * pending, or unavailable during degraded auth) keeps it shut.
+ */
+export function shouldShowOnboarding(user: User | null | undefined): boolean {
+  return user?.onboardingCompleted === false;
+}
 
 /** True when cached rows are older than the UI expects, or under-masked for the user's effective tier. */
 export function hasLegacyPredictionShape(rows: PredictionRow[], accessTier?: string): boolean {
