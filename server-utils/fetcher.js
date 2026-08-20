@@ -17,6 +17,51 @@ const inflight = new Map();
 const localCacheStats = { hits: 0, misses: 0, inflightJoins: 0, upstream: 0 };
 
 /**
+ * Per-upstream-call timings, so a slow Predict can say WHICH call was slow.
+ *
+ * A monotonic sequence rather than a diff of running totals: a caller records
+ * the cursor before its work and asks for the samples added since, which keeps
+ * max/p95 meaningful instead of unrecoverable from two snapshots.
+ *
+ * Bounded ring — a warm lambda serves many requests and this must never grow.
+ * MEASUREMENT ONLY: nothing here alters the fetch, its headers, its cache key,
+ * its TTL or its error handling.
+ *
+ * Known limitation, deliberately accepted rather than papered over: this is
+ * module scope, so if two requests run concurrently in the same instance their
+ * samples interleave. `localCacheStats` already has exactly this property and
+ * Stage12 already reports it. Predict runs are rare enough that the attribution
+ * is still worth having; anything finer needs AsyncLocalStorage plumbing that
+ * this phase is not authorised to add.
+ */
+const UPSTREAM_SAMPLE_CAP = 300;
+const upstreamSamples = [];
+let upstreamSeq = 0;
+
+/** @returns {number} Opaque cursor to pass to upstreamSamplesSince(). */
+export function upstreamCursor() {
+  return upstreamSeq;
+}
+
+/**
+ * @param {number} cursor
+ * @returns {Array<{seq:number, endpoint:string, ms:number, ok:boolean}>}
+ */
+export function upstreamSamplesSince(cursor) {
+  const from = Number(cursor);
+  if (!Number.isFinite(from)) return [];
+  return upstreamSamples.filter((s) => s.seq > from);
+}
+
+function recordUpstreamTiming(endpoint, ms, ok) {
+  const duration = Number(ms);
+  if (!Number.isFinite(duration) || duration < 0) return;
+  upstreamSeq += 1;
+  upstreamSamples.push({ seq: upstreamSeq, endpoint: String(endpoint || "?"), ms: duration, ok: ok !== false });
+  if (upstreamSamples.length > UPSTREAM_SAMPLE_CAP) upstreamSamples.shift();
+}
+
+/**
  * Dual-provider auto-detect:
  * - APISPORTS_KEY prezent → foloseşte api-sports.io direct (v3.football.api-sports.io)
  * - altfel → fallback RapidAPI (api-football-v1.p.rapidapi.com/v3)
@@ -284,6 +329,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
       const apiMs = Date.now() - apiStarted;
       if (!attempt.res.ok || hasErrors) {
         void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
+        recordUpstreamTiming(endpoint, apiMs, false);
         logError("api.upstream_failed", {
           endpoint,
           status: attempt.res.status,
@@ -314,6 +360,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
       }
 
       void recordObservation("api", { durationMs: apiMs, ok: true });
+      recordUpstreamTiming(endpoint, apiMs, true);
       return {
         ok: true,
         fromCache: false,
@@ -326,6 +373,7 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
     } catch (err) {
       const apiMs = Date.now() - apiStarted;
       void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
+      recordUpstreamTiming(endpoint, apiMs, false);
       logError("api.upstream_exception", { endpoint, error: err.message, durationMs: apiMs });
       return { ok: false, error: err.message, fromCache: false, apiMs };
     } finally {

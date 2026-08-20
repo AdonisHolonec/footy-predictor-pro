@@ -18,6 +18,15 @@ function readHeader(res, name) {
  * live pipeline leaves it unset. Reading it here is what keeps this counter out of
  * PredictorV3 — the pipeline is observed, not modified.
  */
+/**
+ * A request at or above this is logged as slow rather than routine.
+ *
+ * Exported so PredictorV3 emits its stage-timing summary on exactly the same
+ * requests this marks slow, instead of carrying a second copy of the number
+ * that could drift away from it.
+ */
+export const SLOW_REQUEST_MS = 8000;
+
 export function classifyPredictSource(res) {
   const source = readHeader(res, "X-Data-Source");
   if (!source) return { channel: "predictLive", counter: "predict_served_live", source: "live" };
@@ -126,7 +135,7 @@ export function attachRequestMonitor(req, res, opts = {}) {
     };
 
     if (!ok) logError("http.request.failed", meta);
-    else if (durationMs >= 8000) logWarn("http.request.slow", meta);
+    else if (durationMs >= SLOW_REQUEST_MS) logWarn("http.request.slow", meta);
     else logInfo("http.request", meta);
   };
 
