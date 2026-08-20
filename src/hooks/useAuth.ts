@@ -3,12 +3,16 @@ import type { ReactNode } from "react";
 import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
 import { localCalendarDateKey } from "../utils/appUtils";
-import { isSupabaseConfigured, supabase } from "../utils/supabaseClient";
+import { isSupabaseConfigured, readPersistedSession, supabase } from "../utils/supabaseClient";
 import {
   AUTH_REQUEST_TIMEOUT_MS,
   AUTH_TIMEOUT_MESSAGE_KEY,
+  SESSION_RESTORE_TIMEOUT_MS,
+  SessionRestoreTimeoutError,
   createTimeoutFetch,
-  isAuthTimeoutError
+  isAuthTimeoutError,
+  isSessionRestoreTimeoutError,
+  withDeadline
 } from "../utils/authTimeout";
 
 /** One deadline for the app-level auth traffic that does not go through auth-js. */
@@ -202,7 +206,11 @@ function useAuthState() {
     [loadProfile]
   );
 
-  const getSession = useCallback(async () => {
+  /**
+   * The unbounded restore sequence. Callers must not await this directly — it is
+   * the thing that could hang; `getSession` below is what puts a clock on it.
+   */
+  const restoreSession = useCallback(async () => {
     if (!supabase) {
       setSession(null);
       setUser(null);
@@ -281,6 +289,55 @@ function useAuthState() {
     }
     return sess;
   }, [loadProfile, promoteBootstrapAdminInDb]);
+
+  /**
+   * Session restore, with a clock on it.
+   *
+   * L1 gave every auth REQUEST a deadline and those deadlines fired in
+   * production — three times, ten seconds apart — yet the app still sat on
+   * "Se încarcă sesiunea…" forever. Bounding each attempt does not bound a
+   * sequence of them: `auth.getSession()` awaits auth-js's `initializePromise`,
+   * which spans however many refresh attempts auth-js decides to make. Since
+   * `setLoading(false)` lives in this promise's `finally`, an unbounded restore
+   * is an unbounded spinner.
+   *
+   * On timeout the question is not "is this user signed in" — a timeout answers
+   * nothing about that. Storage answers it: auth-js removes a session it has
+   * actually rejected, so a session still on disk is a session nobody has
+   * invalidated, and it is kept and marked degraded. Only its absence routes
+   * anyone to /login.
+   */
+  const getSession = useCallback(async () => {
+    try {
+      return await withDeadline(
+        restoreSession(),
+        SESSION_RESTORE_TIMEOUT_MS,
+        () => new SessionRestoreTimeoutError(SESSION_RESTORE_TIMEOUT_MS)
+      );
+    } catch (restoreError: unknown) {
+      if (!isSessionRestoreTimeoutError(restoreError)) throw restoreError;
+
+      const persisted = readPersistedSession();
+      if (!persisted) {
+        // No evidence of a session anywhere: ordinary unauthenticated routing.
+        setSession(null);
+        setUser(null);
+        setAuthStatus("no-session");
+        return null;
+      }
+      /*
+        A timeout is not a revocation. The stored session is untouched, the user
+        stays signed in, and the state says "degraded" so the UI can say so —
+        rather than a spinner that never ends or a logout nobody asked for.
+      */
+      const restored = persisted as unknown as Session;
+      setSession(restored);
+      setUser(mapSupabaseUser(restored.user, null));
+      setAuthStatus("auth-error");
+      setError(AUTH_TIMEOUT_MESSAGE_KEY);
+      return restored;
+    }
+  }, [restoreSession]);
 
   const refreshTierStatus = useCallback(async () => {
     if (!session?.access_token) return null;

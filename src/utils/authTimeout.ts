@@ -37,6 +37,57 @@ export const AUTH_TIMEOUT_MESSAGE_KEY = "auth.timeoutMsg";
 /** Stable discriminator, so callers never string-match an error message. */
 export const AUTH_TIMEOUT_CODE = "AUTH_TIMEOUT";
 
+/**
+ * Deadline for the whole session-restore orchestration, not one request.
+ *
+ * L1 bounded every auth request, and in production those deadlines demonstrably
+ * fired — three times, 10s apart. The app still hung on "Se încarcă sesiunea…"
+ * anyway, because `auth.getSession()` first awaits auth-js's `initializePromise`,
+ * and auth-js retries a failing refresh on its own schedule. Bounding each
+ * attempt does not bound a sequence of them.
+ *
+ * 15s sits deliberately between the two: above one transport deadline (10s), so
+ * a single slow-but-successful request is never cut short, and well below the
+ * ~30s retry budget that produced the observed hang. A healthy restore is a
+ * storage read and finishes in milliseconds, so this only ever fires when
+ * something is already wrong.
+ */
+export const SESSION_RESTORE_TIMEOUT_MS = 15_000;
+
+export const SESSION_RESTORE_TIMEOUT_CODE = "SESSION_RESTORE_TIMEOUT";
+
+export class SessionRestoreTimeoutError extends Error {
+  readonly code = SESSION_RESTORE_TIMEOUT_CODE;
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`Session restore exceeded ${timeoutMs}ms`);
+    this.name = "SessionRestoreTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export function isSessionRestoreTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; name?: unknown };
+  return candidate.code === SESSION_RESTORE_TIMEOUT_CODE || candidate.name === "SessionRestoreTimeoutError";
+}
+
+/**
+ * Settle `work` within `timeoutMs`, whatever `work` decides to do.
+ *
+ * Deliberately NOT a retry: the losing promise is abandoned, not re-issued, so
+ * a deadline can never multiply auth traffic. The timer is always cleared, so a
+ * repeated initialization cannot accumulate competing timers.
+ */
+export function withDeadline<T>(work: Promise<T>, timeoutMs: number, makeError: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(makeError()), timeoutMs);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
 export class AuthTimeoutError extends Error {
   readonly code = AUTH_TIMEOUT_CODE;
   readonly timeoutMs: number;
