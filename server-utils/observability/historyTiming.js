@@ -29,7 +29,14 @@ export const HISTORY_TIMING_EVENT = "history.timing";
 export const HISTORY_ROUTE = "/api/history";
 
 /** Stage names this module will accept. Anything else is ignored. */
-const STAGES = ["authMs", "dbReadMs", "aggregateMs", "mappingMs", "responseMs"];
+/*
+  `rateLimitMs` exists because production showed every /api/history 500 and the
+  slow anonymous 200 landing on the anonymous branch with 100% of the time
+  unattributed — and that branch's first await is a rate-limit check against
+  Redis, not the database. Without its own stage a stalled limiter is
+  indistinguishable from a stalled query.
+*/
+const STAGES = ["authMs", "rateLimitMs", "dbReadMs", "aggregateMs", "mappingMs", "responseMs"];
 const STAGE_SET = new Set(STAGES);
 
 function flagOf(query, name) {

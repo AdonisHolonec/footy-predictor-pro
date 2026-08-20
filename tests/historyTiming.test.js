@@ -241,6 +241,10 @@ function fakeRes() {
     return res;
   };
   res.getHeader = (name) => res.headers[String(name).toLowerCase()] ?? null;
+  res.setHeader = (name, value) => {
+    res.headers[String(name).toLowerCase()] = value;
+    return res;
+  };
   return res;
 }
 
@@ -332,4 +336,157 @@ test("timeStage returns the wrapped value and still times a throw", async () => 
   );
   const out = summarizeHistoryTiming(t, { status: 500, durationMs: 9_000 });
   assert.equal(typeof out.authMs, "number");
+});
+
+/* -- H2: the anonymous branch --------------------------------------------- */
+
+/**
+ * Production evidence that shaped these: every /api/history 500 observed was
+ * `mode: anonymous`, 12,434-28,819 ms, 67 bytes, with 100% of the duration
+ * unattributed and NO errorKind — while the `mine`/`list` path reconciled
+ * exactly (authMs 3,226 + dbReadMs 4,855 = 8,081, unattributed 0).
+ *
+ * So the wrapper was never bypassed; the anonymous branch simply had no stages
+ * and never recorded its errors.
+ */
+
+function anonDeps(timing, overrides = {}) {
+  return {
+    timing,
+    assertSupabaseConfigured: () => ({ ok: true }),
+    readBearer: () => null,
+    checkAnonymousRateLimit: async () => ({ ok: true }),
+    readPredictionsHistoryAggregateStats: async () => ({ stats: { total: 0 } }),
+    ...overrides
+  };
+}
+
+test("an anonymous request records its rate-limit and database spans", async () => {
+  const query = { days: "30" };
+  const timing = createHistoryTiming(query);
+  const res = fakeRes();
+  await handleHistoryRead({ method: "GET", query }, res, anonDeps(timing));
+
+  const out = summarizeHistoryTiming(timing, { status: 200, durationMs: 9_000 });
+  assert.equal(res.statusCode, 200);
+  assert.equal(typeof out.rateLimitMs, "number");
+  assert.equal(typeof out.dbReadMs, "number");
+  assert.equal(out.mode, "anonymous");
+});
+
+test("a slow anonymous request is attributed rather than left unexplained", () => {
+  // The production shape: 100% unattributed. With stages present the remainder
+  // must collapse.
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "rateLimitMs", 12_000);
+  markStage(t, "dbReadMs", 800);
+  markStage(t, "responseMs", 1);
+  const out = summarizeHistoryTiming(t, { status: 500, durationMs: 12_801 });
+  assert.equal(out.unattributedMs, 0);
+  assert.equal(out.rateLimitMs, 12_000);
+});
+
+test("a failing anonymous read now carries an error classification", async () => {
+  const query = { days: "30" };
+  const timing = createHistoryTiming(query);
+  const res = fakeRes();
+  await handleHistoryRead(
+    { method: "GET", query },
+    res,
+    anonDeps(timing, {
+      readPredictionsHistoryAggregateStats: async () => {
+        throw new Error("canceling statement due to statement timeout");
+      }
+    })
+  );
+
+  assert.equal(res.statusCode, 500);
+  // Production emitted these with no errorKind at all.
+  assert.equal(summarizeHistoryTiming(timing, { status: 500, durationMs: 12_434 }).errorKind, "db_timeout");
+});
+
+test("a handler-returned 500 is always reported, however fast", () => {
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "rateLimitMs", 5);
+  const emitted = emitHistoryTiming(t, { status: 500, durationMs: 60 });
+  assert.ok(emitted);
+  assert.equal(emitted.status, 500);
+  assert.equal(emitted.mode, "anonymous");
+});
+
+test("a rate-limited request still reports, and never reaches the database", async () => {
+  const query = { days: "30" };
+  const timing = createHistoryTiming(query);
+  const res = fakeRes();
+  let dbCalled = false;
+  await handleHistoryRead(
+    { method: "GET", query },
+    res,
+    anonDeps(timing, {
+      checkAnonymousRateLimit: async () => ({ ok: false, retryAfterSec: 60 }),
+      readPredictionsHistoryAggregateStats: async () => {
+        dbCalled = true;
+        return { stats: {} };
+      }
+    })
+  );
+
+  assert.equal(res.statusCode, 429);
+  assert.equal(dbCalled, false);
+  const out = summarizeHistoryTiming(timing, { status: 429, durationMs: 9_000 });
+  assert.equal(typeof out.rateLimitMs, "number");
+  assert.equal("dbReadMs" in out, false);
+});
+
+test("the anonymous response shape is unchanged by instrumentation", async () => {
+  const query = { days: "30" };
+  const withRes = fakeRes();
+  await handleHistoryRead({ method: "GET", query }, withRes, anonDeps(createHistoryTiming(query)));
+  const withoutRes = fakeRes();
+  await handleHistoryRead({ method: "GET", query }, withoutRes, anonDeps(undefined));
+
+  assert.equal(JSON.stringify(withRes.body), JSON.stringify(withoutRes.body));
+  // items is empty BY DESIGN on the public scope — rows 0 is not a failure.
+  assert.deepEqual(withRes.body.items, []);
+  assert.equal(withRes.body.scope, "aggregate_public");
+});
+
+test("the admin global scope records its auth and database spans", async () => {
+  // Reached only with a bearer that passes assertAdmin — a branch no test could
+  // enter before these deps became injectable.
+  const query = { days: "30" };
+  const timing = createHistoryTiming(query);
+  const res = fakeRes();
+  await handleHistoryRead(
+    { method: "GET", query },
+    res,
+    anonDeps(timing, {
+      readBearer: () => "token",
+      assertAdmin: async () => ({ ok: true }),
+      readPredictionsHistory: async () => ({ items: ITEMS, stats: { total: 3 } })
+    })
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.scope, "global_admin");
+  const out = summarizeHistoryTiming(timing, { status: 200, durationMs: 9_000 });
+  assert.equal(typeof out.authMs, "number");
+  assert.equal(typeof out.dbReadMs, "number");
+});
+
+test("an anonymous failure never leaks the underlying message", async () => {
+  const query = { days: "30" };
+  const timing = createHistoryTiming(query);
+  await handleHistoryRead(
+    { method: "GET", query },
+    fakeRes(),
+    anonDeps(timing, {
+      readPredictionsHistoryAggregateStats: async () => {
+        throw new Error("postgres://user:hunter2@dbhost:5432 refused");
+      }
+    })
+  );
+  const serialized = JSON.stringify(summarizeHistoryTiming(timing, { status: 500, durationMs: 12_434 }));
+  assert.equal(serialized.includes("hunter2"), false);
+  assert.equal(serialized.includes("dbhost"), false);
 });
