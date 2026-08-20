@@ -7,6 +7,7 @@ import {
   resolveRecommendedValidation
 } from "./cardMarketSettlement.js";
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
+import { stripDeadValueEngineArraysFromRows } from "./valueEngineTransport.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
@@ -730,6 +731,14 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
   });
   if (error) throw error;
   const rows = data || [];
-  const items = filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry));
+  /*
+    Transport trim, applied HERE and not in mapDbRowToHistoryEntry, because that
+    mapper is shared with the by-fixture detail route (api/history.js:326) and
+    detail must keep the whole document. This function has exactly one caller —
+    the `mine=1`, no-`view` hydration branch — so the trim reaches the prediction
+    hydration response and nothing else. `markets` is untouched; only the two
+    arrays no consumer reads are dropped, and only from the response body.
+  */
+  const items = stripDeadValueEngineArraysFromRows(filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry)));
   return { items, stats: aggregateCardMarketStats(rows) };
 }
