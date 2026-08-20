@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import EmptyState from "../../design-system/EmptyState";
 import SectionHeader from "../../design-system/SectionHeader";
-import Badge from "../../design-system/Badge";
+import StatusBadge from "../../design-system/StatusBadge";
 import { useLocale } from "../../context/LocaleContext";
 import type { ReactNode } from "react";
 import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
@@ -137,7 +137,11 @@ export default function HistorySection({
                       </p>
                     </div>
                   </div>
-                  <Badge tone={toneFor(row.validation)}>{labelFor(row.validation)}</Badge>
+                  <StatusBadge
+                    status={row.validation}
+                    tone={toneFor(row.validation)}
+                    label={labelFor(row.validation)}
+                  />
                 </button>
 
                 {active ? (

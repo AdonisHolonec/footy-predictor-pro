@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { useLocale } from "../../context/LocaleContext";
-import Badge from "../../design-system/Badge";
+import StatusBadge from "../../design-system/StatusBadge";
 import Button from "../../design-system/Button";
 import SectionHeader from "../../design-system/SectionHeader";
 import SegmentedControl from "../../design-system/SegmentedControl";
@@ -352,7 +352,11 @@ export default function GlobalSpecialBetSection({
 
           <div className="mt-4 flex items-center justify-between gap-2">
             <h3 className="font-display text-sm font-semibold text-[var(--fp-text)]">{t("gsb.selectionsTitle")}</h3>
-            <Badge tone={statusTone(summary.status)}>{t(statusLabelKey(summary.status))}</Badge>
+            <StatusBadge
+              status={summary.status}
+              tone={statusTone(summary.status)}
+              label={t(statusLabelKey(summary.status))}
+            />
           </div>
 
           {/* Chronological, not by rank: while the bet runs the list is a

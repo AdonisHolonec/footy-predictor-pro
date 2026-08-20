@@ -1,5 +1,5 @@
 import { useLocale } from "../../context/LocaleContext";
-import Badge from "../../design-system/Badge";
+import StatusBadge from "../../design-system/StatusBadge";
 import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 import {
   formatConfidencePercent,
@@ -108,7 +108,11 @@ export default function GlobalSpecialBetSelectionRow({
             {kickoff ? ` · ${kickoff}` : ""}
           </p>
         </div>
-        <Badge tone={statusTone(selection.status)}>{t(statusLabelKey(selection.status))}</Badge>
+        <StatusBadge
+          status={selection.status}
+          tone={statusTone(selection.status)}
+          label={t(statusLabelKey(selection.status))}
+        />
       </div>
 
       <div className="mt-2.5 flex items-center gap-1.5">
