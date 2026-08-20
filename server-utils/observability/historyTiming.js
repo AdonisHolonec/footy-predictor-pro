@@ -1,5 +1,6 @@
 import { SLOW_REQUEST_MS } from "./requestMonitor.js";
 import { logWarn } from "./logger.js";
+import { summarizeTransport } from "./transportTiming.js";
 
 /**
  * Per-request timing attribution for /api/history.
@@ -105,6 +106,9 @@ export function createHistoryTiming(query = {}, method = "GET") {
     limit: safeInt(query?.limit),
     hasFixtureId: Boolean(query?.fixtureId !== undefined && String(query?.fixtureId ?? "").trim() !== ""),
     stages: Object.create(null),
+    // D4: the transport collector for this invocation, attached by the route so
+    // the phase split travels with the timing it explains.
+    transport: null,
     rows: null,
     finalBytes: null,
     errorKind: null
@@ -135,6 +139,12 @@ export async function timeStage(timing, stage, fn) {
   } finally {
     markStage(timing, stage, Date.now() - startedAt);
   }
+}
+
+/** Attach the invocation's transport collector. Absent is fine — see D4. */
+export function attachTransport(timing, collector) {
+  if (!usable(timing)) return;
+  timing.transport = collector || null;
 }
 
 export function recordRows(timing, rows) {
@@ -203,6 +213,12 @@ export function summarizeHistoryTiming(timing, { status, durationMs } = {}) {
   for (const stage of STAGES) {
     if (timing.stages[stage] !== undefined) out[stage] = timing.stages[stage];
   }
+  // D4: the phases INSIDE supabaseRequestMs. Nested, so they are reported
+  // alongside the stages rather than folded into the unattributed arithmetic
+  // below — counting them as top-level would subtract the same milliseconds
+  // twice and invent time that was never lost.
+  const transport = summarizeTransport(timing.transport);
+  if (transport) Object.assign(out, transport);
   if (timing.rows !== null) out.rows = timing.rows;
   if (timing.finalBytes !== null) out.finalBytes = timing.finalBytes;
   if (timing.errorKind) out.errorKind = timing.errorKind;

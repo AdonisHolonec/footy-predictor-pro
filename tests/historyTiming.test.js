@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   HISTORY_TIMING_EVENT,
+  attachTransport,
   classifyHistoryError,
   classifyHistoryMode,
   createHistoryTiming,
@@ -15,6 +16,11 @@ import {
   timeStage
 } from "../server-utils/observability/historyTiming.js";
 import { SLOW_REQUEST_MS } from "../server-utils/observability/requestMonitor.js";
+import {
+  createTransportCollector,
+  instrumentFetch,
+  withTransportScope
+} from "../server-utils/observability/transportTiming.js";
 import { handleHistoryRead } from "../api/history.js";
 
 /**
@@ -568,4 +574,74 @@ test("the admin client is cached, so timing it measures construction not connect
   const second = getSupabaseAdmin();
   assert.ok(first, "client should be constructed when env is present");
   assert.equal(first, second, "getSupabaseAdmin must return the same cached instance");
+});
+
+/* -- D4: the transport phases inside supabaseRequestMs ---------------------- */
+
+/** Runs one stubbed Supabase call inside a scope and returns its collector. */
+async function collectOneRequest({ delayMs = 0 } = {}) {
+  const collector = createTransportCollector("/api/history");
+  const wrapped = instrumentFetch(async () => {
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    return new Response("[]");
+  }, { hostname: "db.example.co" });
+  await withTransportScope(collector, () => wrapped("https://db.example.co/rest/v1/x"));
+  return collector;
+}
+
+test("the transport phases ride along with the timing they explain", async () => {
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "dbReadMs", 12_435);
+  markStage(t, "supabaseRequestMs", 12_434);
+  attachTransport(t, await collectOneRequest());
+
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 12_447 });
+
+  assert.equal(typeof out.fetchTotalMs, "number", "the phase split must reach the emitted event");
+  assert.equal(out.connection, "unknown", "a stubbed fetch has no undici connection to report");
+});
+
+test("the nested phases do not double-count against unattributed time", async () => {
+  const t = createHistoryTiming({ days: "30" });
+  markStage(t, "dbReadMs", 1_000);
+  markStage(t, "supabaseRequestMs", 999);
+  attachTransport(t, await collectOneRequest({ delayMs: 30 }));
+
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 23_000 });
+
+  // dbReadMs is the only TOP-LEVEL stage; supabaseRequestMs and every transport
+  // phase sit inside it. Counting them again would invent lost time.
+  assert.equal(out.unattributedMs, 22_000);
+});
+
+test("an invocation that made no Supabase request adds no transport fields", () => {
+  const t = createHistoryTiming({ days: "30" });
+  attachTransport(t, createTransportCollector("/api/history"));
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 9_000 });
+  assert.equal("fetchTotalMs" in out, false);
+  assert.equal("connection" in out, false);
+});
+
+test("timing still summarizes when no collector was ever attached", () => {
+  const t = createHistoryTiming({ days: "30" });
+  const out = summarizeHistoryTiming(t, { status: 200, durationMs: 9_000 });
+  assert.equal("fetchTotalMs" in out, false);
+  assert.equal(out.unattributedMs, 9_000);
+});
+
+test("attaching a transport collector to a broken accumulator is a no-op", () => {
+  // Instrumentation must never be the thing that throws.
+  assert.doesNotThrow(() => attachTransport(null, createTransportCollector("/api/history")));
+  assert.doesNotThrow(() => attachTransport(createHistoryTiming({}), null));
+});
+
+test("the transport fields carry no host, no path and no credentials", async () => {
+  const t = createHistoryTiming({ days: "30", access_token: "eyJhbGciOi.secret" });
+  attachTransport(t, await collectOneRequest());
+
+  const serialized = JSON.stringify(summarizeHistoryTiming(t, { status: 200, durationMs: 12_000 }));
+
+  for (const forbidden of ["db.example.co", "rest/v1", "secret", "eyJ"]) {
+    assert.equal(serialized.includes(forbidden), false, forbidden + " must not be in the event");
+  }
 });
