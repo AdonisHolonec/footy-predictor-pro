@@ -10,7 +10,7 @@ import {
   normalizeSelectedDates,
   useLocalStorageState
 } from "../../utils/appUtils";
-import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
+import { applyLiveStateCarryForward } from "../../utils/liveState";
 import { projectPredictionsByUserForStorage } from "../../utils/predictionListProjection";
 import { hasLegacyPredictionShape } from "./helpers";
 
@@ -94,28 +94,13 @@ export function usePredictionsCache({
       if (!selectedLeagueSet.size) return true;
       return selectedLeagueSet.has(Number(row.leagueId));
     });
-    // predictionsByUser never receives live poll data (score/momentum/liveAdjustment)
-    // — it lives only in-memory on `preds`. Re-filtering from the cache on every
-    // predictionsByUser change (history sync, xg hydrate, tier promotion, etc.)
-    // would otherwise silently discard it mid-match. Carry it forward unless the
-    // cache shows the match freshly settled (then trust the settled snapshot).
-    setPreds((prevPreds) => {
-      const prevById = new Map(prevPreds.map((p) => [Number(p.id), p]));
-      return filtered.map((row) => {
-        const prev = prevById.get(Number(row.id));
-        if (!prev) return row;
-        if (isFinalMatchStatus(row.status) && !isFinalMatchStatus(prev.status)) return row;
-        return {
-          ...row,
-          status: prev.status || row.status,
-          score: prev.score ?? row.score,
-          momentum: prev.momentum ?? row.momentum,
-          confidenceEngine: row.confidenceEngine
-            ? { ...row.confidenceEngine, liveAdjustment: prev.confidenceEngine?.liveAdjustment ?? row.confidenceEngine?.liveAdjustment }
-            : row.confidenceEngine
-        };
-      });
-    });
+    // predictionsByUser never receives live poll data (score/momentum/liveEvents/
+    // liveAdjustment) — it lives only in-memory on `preds`. Re-filtering from the
+    // cache on every predictionsByUser change (history sync, xg hydrate, tier
+    // promotion, etc.) would otherwise silently discard it mid-match. The rule now
+    // lives in one place and is shared with the history rehydration below, which
+    // was missing it entirely.
+    setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, filtered));
     if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
@@ -170,7 +155,12 @@ export function usePredictionsCache({
 
       if (!hydrated.length) return [];
 
-      setPreds(hydrated);
+      // History describes the match as STORED — it carries no momentum, no live
+      // events and no minute for a match still in play. It also answers seconds
+      // after `/api/fixtures?view=live`, so a wholesale assignment here lands last
+      // and erases the live poll's work: momentum vanished and the widget fell back
+      // to "Momentum unavailable" a couple of seconds after opening a live match.
+      setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, hydrated));
       if (user?.id) {
         setPredictionsByUser((prev) => ({
           ...prev,
