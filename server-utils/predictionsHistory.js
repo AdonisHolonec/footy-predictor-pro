@@ -503,17 +503,16 @@ export async function readPredictionsHistoryAggregateStats(days = 30, limit = 50
  * featureImportance, predictionContributions, explanation, evaluation,
  * leagueProfile, teamContext, modelMeta, valueEngine, momentum.
  */
-export const HISTORY_LIST_PAYLOAD_KEYS = Object.freeze([
-  ...AGGREGATE_PAYLOAD_KEYS,
-  "kickoff",
-  "league",
-  "leagueId",
-  "logos",
-  "modelVersion",
-  "teams"
-]);
+export const HISTORY_LIST_PAYLOAD_KEYS = Object.freeze([]);
 
-/** Scalar columns the light mapper falls back to when a payload key is absent. */
+/**
+ * Everything the list reads. All real columns — no JSON extraction.
+ *
+ * Seven arrived with migration 055, four more with 056, and Phase 4H
+ * materialised card_markets / card_market_validations on the 324 rows that
+ * predated creation-time attachment, so `card_markets IS NULL` is now 0 across
+ * all 810 rows. That is what makes this projection possible.
+ */
 const HISTORY_LIST_ROW_COLUMNS = Object.freeze([
   "fixture_id",
   "league_id",
@@ -528,61 +527,152 @@ const HISTORY_LIST_ROW_COLUMNS = Object.freeze([
   "recommended_pick",
   "recommended_confidence",
   "saved_at",
-  "model_version"
+  "model_version",
+  // 055
+  "recommended_odd",
+  "logo_home",
+  "logo_away",
+  "card_markets",
+  "card_market_validations",
+  "corners_total",
+  "shots_on_target_total",
+  // 056
+  "recommended_family",
+  "recommended_period",
+  "recommended_scope",
+  "recommended_book_line"
 ]);
 
 /**
- * Same `pl_<key>:raw_payload-><key>` form as AGGREGATE_STATS_SELECT. The prefix
- * is load-bearing: `validation`, `score` and `status` exist BOTH as columns and
- * as payload keys, so an unprefixed alias would collide.
+ * THE READ CUTOVER.
+ *
+ * This projection no longer contains a single `raw_payload->key`. Measured on
+ * the production RPC for a 308-row user, same rows, same predicate:
+ *
+ *   15 payload keys   1,755,036 bytes   1585-1830 ms
+ *    0 payload keys     317,456 bytes    125-220 ms
+ *
+ * `raw_payload->key` narrows what crosses the wire, not what Postgres has to
+ * read: the ~261 KB document still comes out of TOAST and is decompressed to
+ * produce a scoreline and a badge. Only removing the document from the
+ * projection removes that cost, which is why 055/056 and the Phase 4H
+ * materialisation had to land first.
+ *
+ * The DEFAULT list is deliberately untouched. /api/history is also a prediction
+ * source — usePredictionsCache.rehydratePredictionsFromHistory() pipes the
+ * response straight into setPreds — so only `?view=list` opts in.
  */
-export const HISTORY_LIST_SELECT = [
-  ...HISTORY_LIST_ROW_COLUMNS,
-  ...HISTORY_LIST_PAYLOAD_KEYS.map((key) => `${AGGREGATE_PAYLOAD_PREFIX}${key}:raw_payload->${key}`)
-].join(", ");
+export const HISTORY_LIST_SELECT = HISTORY_LIST_ROW_COLUMNS.join(", ");
 
-/** Fold the projected `pl_*` aliases back into a row carrying a partial raw_payload. */
+/**
+ * Adapt a column row into the shape the settlement helpers read.
+ *
+ * NOT a payload rehydration: nothing here comes out of the document. But
+ * resolveCardMarketValidations and aggregateCardMarketStats look for
+ * `row.raw_payload.cardMarkets` / `.cardMarketValidations` / `.marketResults`,
+ * and those helpers are settlement code that this phase must not touch. So the
+ * three column values are presented under the key path they already expect.
+ *
+ * marketResults is synthesised ONLY from the two promoted totals, and stays
+ * absent when both are NULL — an absent total must never read as a real zero.
+ */
 export function rehydrateListRow(row) {
   const source = row && typeof row === "object" ? row : {};
-  const rawPayload = {};
-  for (const key of HISTORY_LIST_PAYLOAD_KEYS) {
-    const value = source[`${AGGREGATE_PAYLOAD_PREFIX}${key}`];
-    if (value !== undefined && value !== null) rawPayload[key] = value;
-  }
-  const out = { raw_payload: rawPayload };
+  const out = {};
   for (const column of HISTORY_LIST_ROW_COLUMNS) out[column] = source[column] ?? null;
+
+  const marketResults =
+    out.corners_total === null && out.shots_on_target_total === null
+      ? null
+      : { cornersTotal: out.corners_total, shotsOnTargetTotal: out.shots_on_target_total };
+
+  out.raw_payload = {
+    cardMarkets: out.card_markets,
+    cardMarketValidations: out.card_market_validations,
+    ...(marketResults ? { marketResults } : {})
+  };
   return out;
 }
 
 /**
- * Light counterpart to mapDbRowToHistoryEntry.
+ * Light counterpart to mapDbRowToHistoryEntry — now entirely column-based.
  *
- * Deliberately enumerates its output instead of spreading the payload. The full
- * mapper does `...payload` — correct there, and relied upon by
- * Stage01DataCollection — but here a spread would silently re-widen the
- * contract the moment a new key joined the projection. Field-for-field, the
- * fallback order matches the full mapper so the public row shape is identical.
+ * There is no `...payload` spread, no `raw_payload` read and no fallback to the
+ * document. Every field below comes from a real column, so a future key added
+ * to raw_payload cannot silently re-widen this contract.
+ *
+ * Two departures from the old shape, both deliberate:
+ *
+ *  - `logos` carries home/away only. The document also held `logos.league`, and
+ *    055 did not promote it, but no History consumer reads it — HistorySection
+ *    renders home and away; MatchCard/PredictionFocusCard do read it and are
+ *    fed `preds`, not history rows.
+ *
+ *  - `probs` is gone, replaced by two named booleans. The old row shipped the
+ *    whole probs object so useDashboardHistory could ask "does this fixture
+ *    have a corners/shots market at all". Shipping a large analytical object to
+ *    answer a yes/no is what this phase exists to stop, and a field named
+ *    `probs` holding anything other than probabilities would be a lie in the
+ *    type. card_markets answers the same question exactly: measured across all
+ *    810 production rows, `probs.corners` present == `cardMarkets.corners`
+ *    present on 748/748, and `probs.shotsOnTarget` == `cardMarkets.shots` on
+ *    748/748, with zero rows differing.
  */
 export function mapDbRowToHistoryListEntry(row) {
-  const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+  const source = row && typeof row === "object" ? row : {};
+  const cardMarkets = source.card_markets ?? null;
+  const logoHome = source.logo_home ?? null;
+  const logoAway = source.logo_away ?? null;
+
+  /*
+    `recommended` is assembled from its own columns rather than a stored object.
+    Each optional key is omitted when NULL instead of being set to null, so
+    formatRecommendedPick sees exactly what it saw when the value came out of
+    the document: absent, not "present and empty". That distinction is what
+    keeps a legacy row without a period from rendering an invented suffix.
+  */
+  const recommended = {
+    pick: source.recommended_pick || "",
+    confidence: source.recommended_confidence || 0
+  };
+  if (source.recommended_odd !== null && source.recommended_odd !== undefined) {
+    recommended.odd = source.recommended_odd;
+  }
+  if (source.recommended_family !== null && source.recommended_family !== undefined) {
+    recommended.family = source.recommended_family;
+  }
+  if (source.recommended_period !== null && source.recommended_period !== undefined) {
+    recommended.period = source.recommended_period;
+  }
+  if (source.recommended_scope !== null && source.recommended_scope !== undefined) {
+    recommended.scope = source.recommended_scope;
+  }
+  if (source.recommended_book_line !== null && source.recommended_book_line !== undefined) {
+    recommended.bookLine = source.recommended_book_line;
+  }
+
   return {
-    id: row.fixture_id,
-    leagueId: row.league_id ?? payload.leagueId,
-    league: row.league_name ?? payload.league ?? "Necunoscut",
-    teams: payload.teams || { home: row.home_team || "Gazde", away: row.away_team || "Oaspeți" },
-    kickoff: payload.kickoff || row.kickoff_at,
-    status: row.match_status || payload.status || "",
-    score: { home: row.score_home, away: row.score_away },
-    recommended: payload.recommended || { pick: row.recommended_pick || "", confidence: row.recommended_confidence || 0 },
-    savedAt: row.saved_at,
-    validation: row.validation,
-    cardMarkets: payload.cardMarkets || null,
-    cardMarketValidations: resolveCardMarketValidations(row),
-    modelVersion: row.model_version ?? payload.modelVersion,
-    // Rendered by the list itself; the only genuinely visual payload key here.
-    logos: payload.logos || null,
-    // Read by useDashboardHistory's pending count, not displayed.
-    probs: payload.probs || null
+    id: source.fixture_id,
+    leagueId: source.league_id,
+    league: source.league_name || "Necunoscut",
+    teams: { home: source.home_team || "Gazde", away: source.away_team || "Oaspeți" },
+    kickoff: source.kickoff_at,
+    status: source.match_status || "",
+    score: { home: source.score_home, away: source.score_away },
+    recommended,
+    savedAt: source.saved_at,
+    validation: source.validation,
+    cardMarkets,
+    // Still resolved rather than read straight from the column: a market that
+    // was pending when it was written settles once the match is final, and
+    // resolveCardMarketValidations is what applies that. It now reads the
+    // adapted column row, not the document.
+    cardMarketValidations: resolveCardMarketValidations(source),
+    modelVersion: source.model_version,
+    logos: logoHome || logoAway ? { home: logoHome, away: logoAway } : null,
+    // Replaces the `probs` object. Read by useDashboardHistory's pending count.
+    hasCornersMarket: Boolean(cardMarkets && cardMarkets.corners),
+    hasShotsMarket: Boolean(cardMarkets && cardMarkets.shots)
   };
 }
 
