@@ -540,13 +540,23 @@ function useAuthState() {
       throw missingConfigError;
     }
     setError(null);
-    const { error: logoutError } = await supabase.auth.signOut();
-    if (logoutError) {
-      setError(logoutError.message);
-      throw logoutError;
+    try {
+      const { error: logoutError } = await supabase.auth.signOut();
+      if (logoutError) {
+        setError(logoutError.message);
+        throw logoutError;
+      }
+    } finally {
+      /*
+        Always clear locally, even if the network call failed. Signing out is an
+        explicit instruction, not an inference — and the false-logout guard above
+        would otherwise read the leftover storage record as "still signed in" and
+        keep the user in the app they just asked to leave.
+      */
+      setSession(null);
+      setUser(null);
+      setAuthStatus("no-session");
     }
-    setSession(null);
-    setUser(null);
   }, []);
 
   const updateFavoriteLeagues = useCallback(async (favoriteLeagues: number[]) => {
@@ -751,12 +761,42 @@ function useAuthState() {
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setLastAuthEvent(event);
-      setSession(nextSession);
       if (!nextSession?.user) {
+        /*
+          A null session is not a logout.
+
+          In auth-js 2.110.7 exactly two events can arrive with a null session:
+          SIGNED_OUT, emitted only by `_removeSession()`, and INITIAL_SESSION,
+          which is emitted with `null` when initialisation *errors* — including
+          when our own request deadlines fire. Everything else (SIGNED_IN,
+          TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY, the MFA events)
+          always carries a session.
+
+          That second case is the false logout observed in production: the app
+          had a working session, auth-js failed to initialise against a degraded
+          server, and this listener read `session == null` as "signed out" and
+          bounced /workspace -> /login while the stored record sat untouched.
+
+          Storage is the discriminator, because `_removeSession()` deletes the
+          record before emitting SIGNED_OUT. A record that is still there means
+          nothing has been invalidated; its absence means auth-js decided the
+          credential is dead. This is a UI-preservation signal only — every
+          protected resource is still gated by the JWT, RLS and the APIs.
+        */
+        const persisted = readPersistedSession();
+        if (persisted?.user?.id) {
+          setAuthStatus("auth-error");
+          setLoading(false);
+          // Deliberately does not clear: nobody invalidated this session.
+          return;
+        }
+        setSession(null);
         setUser(null);
+        setAuthStatus("no-session");
         setLoading(false);
         return;
       }
+      setSession(nextSession);
       void (async () => {
         try {
           let profile = await loadProfile(nextSession.user.id);
@@ -765,10 +805,12 @@ function useAuthState() {
             profile = await promoteBootstrapAdminInDb(nextSession.user, profile, token);
           }
           setUser(mapSupabaseUser(nextSession.user, profile));
+          setAuthStatus("authenticated");
         } catch (profileError: unknown) {
           const message = profileError instanceof Error ? profileError.message : "Unable to load profile";
           setError(message);
           setUser(mapSupabaseUser(nextSession.user, null));
+          setAuthStatus("auth-error");
         } finally {
           setLoading(false);
         }
