@@ -19,6 +19,12 @@ import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
+  createTransportCollector,
+  withTransportScope
+} from "../server-utils/observability/transportTiming.js";
+import {
+  HISTORY_ROUTE,
+  attachTransport,
   createHistoryTiming,
   emitHistoryTiming,
   markStage,
@@ -1220,8 +1226,15 @@ export default async function handler(req, res) {
   const timing = createHistoryTiming(req?.query || {}, req?.method);
   const startedAt = Date.now();
   observeResponse(res, timing);
+  // D4: bind a transport collector to the async context so the module-cached
+  // Supabase client — which has no idea which request it is serving — can
+  // attribute its HTTP phases back to this invocation.
+  const transport = createTransportCollector(HISTORY_ROUTE);
+  attachTransport(timing, transport);
   try {
-    return await withObservationScope(() => handlerImpl(req, res, timing));
+    return await withTransportScope(transport, () =>
+      withObservationScope(() => handlerImpl(req, res, timing))
+    );
   } catch (error) {
     recordError(timing, error);
     throw error;
