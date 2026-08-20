@@ -541,7 +541,7 @@ export async function handleHistoryRead(req, res, deps = {}) {
 
   try {
     const { stats } = await timeStage(deps.timing, "dbReadMs", () =>
-      readAggregate(safeDays, safeLimit)
+      readAggregate(safeDays, safeLimit, deps.timing)
     );
     return res.status(200).json({
       ok: true,

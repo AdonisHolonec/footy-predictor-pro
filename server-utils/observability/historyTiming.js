@@ -36,7 +36,28 @@ export const HISTORY_ROUTE = "/api/history";
   Redis, not the database. Without its own stage a stalled limiter is
   indistinguishable from a stalled query.
 */
-const STAGES = ["authMs", "rateLimitMs", "dbReadMs", "aggregateMs", "mappingMs", "responseMs"];
+/*
+  `supabaseClientMs` and `supabaseRequestMs` split what `dbReadMs` already
+  measures. D2b removed raw_payload from the anonymous aggregate and production
+  dbReadMs did NOT move (8,963-39,368ms), while the identical query run directly
+  against PostgREST answered in 0.33-0.63s at the same moment. So the cost is not
+  the query. These two spans say whether it is the client acquisition or the HTTP
+  request - and they are strictly nested inside dbReadMs, never added to it.
+
+  Named `supabaseClientMs`, not `connectionMs`: getSupabaseAdmin() constructs a
+  cached client object and opens no socket, so this measures construction, not
+  connection establishment.
+*/
+const STAGES = [
+  "authMs",
+  "rateLimitMs",
+  "dbReadMs",
+  "supabaseClientMs",
+  "supabaseRequestMs",
+  "aggregateMs",
+  "mappingMs",
+  "responseMs"
+];
 const STAGE_SET = new Set(STAGES);
 
 function flagOf(query, name) {
@@ -188,7 +209,13 @@ export function summarizeHistoryTiming(timing, { status, durationMs } = {}) {
 
   // What the measured stages did not explain — work happening between them
   // rather than inside one. If this dominates, the split is in the wrong place.
-  const staged = STAGES.reduce((sum, s) => sum + (timing.stages[s] || 0), 0);
+  /*
+    Only the top-level spans. supabaseClientMs and supabaseRequestMs are nested
+    INSIDE dbReadMs, so counting them here would subtract the same milliseconds
+    twice and report a false negative gap.
+  */
+  const TOP_LEVEL = ["authMs", "rateLimitMs", "dbReadMs", "aggregateMs", "mappingMs", "responseMs"];
+  const staged = TOP_LEVEL.reduce((sum, s) => sum + (timing.stages[s] || 0), 0);
   out.unattributedMs = Math.max(0, out.durationMs - staged);
   return out;
 }
