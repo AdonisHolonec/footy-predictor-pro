@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import MatchModal from "../MatchModal";
 import { en } from "../../i18n/en";
@@ -26,7 +26,7 @@ import type { PredictionRow } from "../../types";
 afterEach(cleanup);
 
 /** Whichever locale the environment resolves to, the copy is one of these. */
-function eitherLocale(ns: "match", key: string): RegExp {
+function eitherLocale(ns: "match" | "detail", key: string): RegExp {
   const leaf = (d: typeof en) => (d[ns] as unknown as Record<string, string>)[key];
   const variants = [leaf(en), leaf(ro as unknown as typeof en)]
     .filter(Boolean)
@@ -74,6 +74,11 @@ function renderModal(overrides: Partial<PredictionRow> = {}) {
       hashColor={() => "rgb(120,120,120)"}
     />
   );
+  // UX-C: Momentum lives behind the Live layer's one disclosure. The gate under
+  // test is unchanged (OverviewHero still decides on isFixtureInPlay); the tests
+  // open the disclosure when the layer exists so the slot can be observed.
+  const liveDetails = screen.queryAllByRole("button", { name: eitherLocale("detail", "liveDetails") })[0];
+  if (liveDetails) fireEvent.click(liveDetails);
 }
 
 /** The Momentum slot = the timeline when data exists, the "unavailable" note when it does not. */
@@ -84,9 +89,10 @@ function momentumSlotShown(): boolean {
   );
 }
 
-/** Live score chip rendered by the MatchModal header — gated on hasLiveScore, untouched here. */
+/** Live score in the compact header — gated on hasLiveScore, untouched here. */
 function liveScoreChipShown(): boolean {
-  return screen.queryAllByText(/Live\s*·/).length > 0;
+  const centre = document.querySelector('[data-layer="header"] [data-slot="centre"]');
+  return Boolean(centre && /--fp-live/.test(centre.className) && /\d/.test(centre.textContent || ""));
 }
 
 /** LiveWinProbabilityStrip — the OverviewHero line directly above the Momentum gate. */

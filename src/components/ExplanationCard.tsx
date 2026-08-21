@@ -23,10 +23,13 @@ function isFormReason(code: string): boolean {
 export default function ExplanationCard({
   explanation,
   compact = false,
+  showInternals = false,
   framed = true
 }: {
   explanation: PredictionExplanation;
   compact?: boolean;
+  /** Account › Model internals. Off: the Σλ line is not rendered. */
+  showInternals?: boolean;
   framed?: boolean;
 }) {
   const { t } = useLocale();
@@ -133,7 +136,7 @@ export default function ExplanationCard({
         </div>
       )}
 
-      {explanation.expectedGoals != null && Number.isFinite(explanation.expectedGoals) && (
+      {showInternals && explanation.expectedGoals != null && Number.isFinite(explanation.expectedGoals) && (
         <div className="mt-3 font-mono text-[10px] text-[var(--fp-text-muted)]">
           Σ λ = <span className="text-[var(--fp-text)]">{explanation.expectedGoals.toFixed(2)}</span> {t("panels.expectedGoals")}
         </div>

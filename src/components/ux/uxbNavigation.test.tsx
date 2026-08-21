@@ -385,7 +385,8 @@ describe("UX-B · Today, Results, Performance composition", () => {
   });
 
   it("Model internals stay behind the Account setting: the Advanced tab is offered only when enabled", () => {
-    expect(src("components/MatchModal.tsx")).toMatch(/tabItem\.id !== "advanced" \|\| showModelInternals/);
+    // UX-C: the Advanced TAB became the Advanced LAYER; the gate is the same prop.
+    expect(src("components/MatchModal.tsx")).toMatch(/\{showModelInternals && \(\s*<div data-layer="advanced">/);
     expect(src("hooks/useUiPrefs.ts")).toMatch(/showModelInternals: false/);
     expect(src("pages/userDashboard/ProfileView.tsx")).toMatch(/model-internals-toggle/);
   });
