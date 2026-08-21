@@ -133,6 +133,15 @@
      themselves is a later, deliberate design decision — not this PR. */
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched. */
+  --fp-momentum-home: #d99a07;
+  --fp-momentum-home-rgb: 217 154 7;
+  --fp-momentum-away: #3f3b39;
+  --fp-momentum-away-rgb: 63 59 57;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
 
@@ -188,6 +197,15 @@ html.theme-light {
   --fp-warning-rgb: 180 83 9;
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched. */
+  --fp-momentum-home: #d99a07;
+  --fp-momentum-home-rgb: 217 154 7;
+  --fp-momentum-away: #3f3b39;
+  --fp-momentum-away-rgb: 63 59 57;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
   --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
@@ -239,6 +257,15 @@ html.theme-dark {
   --fp-warning-rgb: 240 178 61;
   --fp-live: #f0453a;
   --fp-live-rgb: 240 69 58;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched. */
+  --fp-momentum-home: #f5c542;
+  --fp-momentum-home-rgb: 245 197 66;
+  --fp-momentum-away: #e8ecea;
+  --fp-momentum-away-rgb: 232 236 234;
   --fp-value: #f0b23d;
   --fp-value-rgb: 240 178 61;
   --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
@@ -278,6 +305,15 @@ html.theme-contrast {
   --fp-warning-rgb: 180 83 9;
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched. */
+  --fp-momentum-home: #b8780a;
+  --fp-momentum-home-rgb: 184 120 10;
+  --fp-momentum-away: #201e1d;
+  --fp-momentum-away-rgb: 32 30 29;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
   /* Contrast theme: ring stays near-opaque so it never washes out on black. */

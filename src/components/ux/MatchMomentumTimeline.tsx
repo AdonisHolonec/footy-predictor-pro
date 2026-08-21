@@ -130,6 +130,71 @@ export function buildTimelineSegments(history: HistoryPoint[]): MomentumSegment[
   return segments;
 }
 
+/**
+ * Threat level for one interval — PRESENTATION ONLY.
+ *
+ * The bar's DIRECTION and its `magnitude` both come from buildTimelineSegments above,
+ * which classifies with MomentumEngine's own +/-10pp rule. Nothing here re-derives
+ * dominance or touches the momentum numbers; this maps an existing magnitude onto one
+ * of three heights so the chart is readable without reading digits.
+ *
+ * The low boundary is not a new number: DOMINANCE_THRESHOLD_PP (10pp) is already the
+ * point at which the engine stops calling an interval balanced, so anything at or below
+ * it is the shortest bar. The medium/high split at 30pp is the one purely visual choice
+ * in this file — three tiers need two cuts, and the engine only supplies one.
+ */
+export type ThreatLevel = "low" | "medium" | "high";
+
+/** 30pp of separation — the visual cut between "on top" and "camped in their half". */
+const HIGH_THREAT_PP = 30;
+
+export function threatLevel(segment: Pick<MomentumSegment, "side" | "magnitude">): ThreatLevel {
+  if (segment.side === "neutral") return "low";
+  const pp = segment.magnitude * 100;
+  if (pp <= DOMINANCE_THRESHOLD_PP) return "low";
+  if (pp <= HIGH_THREAT_PP) return "medium";
+  return "high";
+}
+
+/** Share of the half-height a bar fills, per tier. Neutral keeps a visible stub so a
+ *  balanced passage reads as "measured and quiet", never as "no data". */
+export const THREAT_HEIGHT_PCT: Record<ThreatLevel, number> = { low: 34, medium: 66, high: 100 };
+
+/** Half-height share of the symmetric stub a balanced interval draws on both sides of
+ *  the axis — present enough to say "we observed this minute", quiet enough not to be
+ *  mistaken for either team having the ball. */
+export const NEUTRAL_STUB_PCT = 12;
+
+export type DominantPeriod = { fromMinute: number; toMinute: number; side: "home" | "away" };
+
+/**
+ * The longest unbroken run of intervals already classified to the CURRENTLY dominant
+ * team. This is grouping, not new logic: every `side` was decided by
+ * buildTimelineSegments, and `dominantTeam` comes from the engine. Returns null when the
+ * match is balanced or no run exists, so the annotation simply does not render.
+ */
+export function findDominantPeriod(
+  segments: MomentumSegment[],
+  dominantTeam: Momentum["dominantTeam"]
+): DominantPeriod | null {
+  if (dominantTeam !== "home" && dominantTeam !== "away") return null;
+  let best: DominantPeriod | null = null;
+  let run: DominantPeriod | null = null;
+  for (const seg of segments) {
+    if (seg.side === dominantTeam) {
+      run = run
+        ? { ...run, toMinute: seg.toMinute }
+        : { fromMinute: seg.fromMinute, toMinute: seg.toMinute, side: dominantTeam };
+      const span = run.toMinute - run.fromMinute;
+      if (!best || span > best.toMinute - best.fromMinute) best = run;
+    } else {
+      run = null;
+    }
+  }
+  // A single zero-length point is a blip, not a period.
+  return best && best.toMinute > best.fromMinute ? best : null;
+}
+
 const EVENT_FILTERS: Array<{ id: EventFilter; labelKey: string }> = [
   { id: "all", labelKey: "match.filterAll" },
   { id: "goal", labelKey: "match.filterGoals" },
@@ -502,6 +567,30 @@ export default function MatchMomentumTimeline({
   const timelineSegments = buildTimelineSegments(history);
   const stripEndMinute = Math.max(maxMinute, 1);
 
+  const dominantPeriod = findDominantPeriod(timelineSegments, momentum.dominantTeam);
+  const latestSegment = timelineSegments[timelineSegments.length - 1];
+  /*
+    ACCESSIBILITY (a11y): the chart encodes meaning in colour AND vertical direction, so
+    neither is available to a screen reader or to a colour-blind reader. This sentence
+    states the same three facts in words — who is on top, how strong the current threat
+    is, and whose the dominant period was — and is the chart element's accessible name.
+    Every fragment is i18n; nothing here is hard-coded English.
+  */
+  const chartSummary = [
+    `${t("card.momentum")}: ${dominantLabel}`,
+    `${t("match.momentumCurrentThreat")}: ${t(
+      `match.momentumThreat${(() => {
+        const l = latestSegment ? threatLevel(latestSegment) : "low";
+        return `${l[0].toUpperCase()}${l.slice(1)}`;
+      })()}`
+    )}`,
+    dominantPeriod
+      ? `${t("match.momentumDominantPeriod")}: ${dominantPeriod.side === "home" ? homeTeam : awayTeam}`
+      : null
+  ]
+    .filter(Boolean)
+    .join(". ");
+
   const segmentTitle = (seg: MomentumSegment) => {
     const range =
       seg.fromMinute === seg.toMinute
@@ -521,67 +610,197 @@ export default function MatchMomentumTimeline({
           <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[11px]">
             {t("card.momentum")}
           </p>
+          {/* Explanatory copy is desktop-only: on a 390px card the chart plus two legends
+              is already the whole budget, and a sentence here pushes the graph below the
+              fold for the reader who most needs to see it. */}
+          <p className="hidden min-w-0 truncate text-[10px] text-[var(--fp-text-muted)] lg:block">
+            {t("match.momentumHowToRead")}
+          </p>
         </div>
 
-        <div className="mb-2.5 flex items-center justify-center gap-4 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)] sm:text-[10px]">
+        {/* LEGEND — team identity. Swatches are the same colours the bars use, so the
+            key teaches the chart rather than sitting beside it. */}
+        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-accent)]" />
+            <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--fp-momentum-home)]" />
             <span className="truncate">{homeTeam}</span>
           </span>
           <span className="flex min-w-0 items-center gap-1.5">
             <span className="truncate">{awayTeam}</span>
-            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[var(--fp-danger)]" />
+            <span
+              aria-hidden
+              className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-[var(--fp-border)] bg-[var(--fp-momentum-away)]"
+            />
           </span>
         </div>
 
+        {/* GRAPH — one bar per observed interval, mirrored about a central baseline.
+            Direction is the interval's own `side`; height is its own `magnitude`. Both
+            come from buildTimelineSegments, i.e. from MomentumEngine's numbers. */}
         <div
-          data-testid="momentum-strip"
+          data-testid="momentum-chart"
           role="img"
-          aria-label={`${homeTeam} ${Math.round(momentum.homeMomentum)} – ${Math.round(momentum.awayMomentum)} ${awayTeam}`}
-          className="flex h-3 w-full items-stretch bg-transparent"
+          aria-label={chartSummary}
+          className="relative w-full select-none bg-transparent"
         >
-          {timelineSegments.map((seg, i) => (
-            <div
-              key={`${seg.fromMinute}-${seg.toMinute}-${i}`}
-              data-side={seg.side}
-              title={segmentTitle(seg)}
-              aria-label={segmentTitle(seg)}
-              className={`h-full min-w-[2px] rounded-[1px] transition-opacity duration-300 motion-reduce:transition-none ${
-                seg.side === "home"
-                  ? "bg-[var(--fp-accent)]"
-                  : seg.side === "away"
-                    ? "bg-[var(--fp-danger)]"
-                    : "bg-[var(--fp-text-muted)]"
-              }`}
-              style={{
-                flexGrow: Math.max(1, seg.toMinute - seg.fromMinute),
-                flexBasis: 0,
-                // Opacity varies within the team colour by dominance strength — identity
-                // stays constant, intensity does the talking. Neutral stays discreet.
-                opacity: seg.side === "neutral" ? 0.22 : 0.45 + seg.magnitude * 0.55
-              }}
-            />
-          ))}
-          {/* Un-played remainder of the axis: transparent spacer so segment widths keep
-              their true minute proportions against the tick row below. */}
-          {stripEndMinute > (history[history.length - 1]?.minute ?? 0) && (
+          {dominantPeriod && (
             <div
               aria-hidden
-              style={{ flexGrow: stripEndMinute - (history[history.length - 1]?.minute ?? 0), flexBasis: 0 }}
+              data-testid="momentum-dominant-bracket"
+              /*
+                A tinted BAND, not a boxed-in rectangle. A full-height dashed border read
+                as an empty container in QA and pulled more attention than the bars it was
+                meant to annotate; a soft wash plus a single top rule marks the span while
+                staying behind the data.
+              */
+              className="pointer-events-none absolute inset-y-0 z-0 border-t border-[var(--fp-border)]"
+              style={{
+                /*
+                  The fill goes through the -rgb companion token rather than a Tailwind
+                  opacity modifier on a var() colour: that combination compiles to
+                  nothing in Tailwind 3.4 (the whole class is dropped), which
+                  tokens.guard.test.ts enforces across src/.
+                */
+                background: "rgb(var(--fp-bg-muted-rgb) / 0.55)",
+                left: xPct(dominantPeriod.fromMinute),
+                width: `${Math.max(0, posPct(dominantPeriod.toMinute) - posPct(dominantPeriod.fromMinute))}%`
+              }}
             />
           )}
+
+          <div className="relative z-[1] flex h-[68px] w-full items-stretch gap-px sm:h-[92px]">
+            {timelineSegments.map((seg, i) => {
+              const level = threatLevel(seg);
+              const height = THREAT_HEIGHT_PCT[level];
+              const isLatest = i === timelineSegments.length - 1;
+              const isNeutral = seg.side === "neutral";
+              const isHome = seg.side === "home";
+              const colour =
+                seg.side === "neutral"
+                  ? "var(--fp-text-muted)"
+                  : isHome
+                    ? "var(--fp-momentum-home)"
+                    : "var(--fp-momentum-away)";
+              return (
+                <div
+                  key={`${seg.fromMinute}-${seg.toMinute}-${i}`}
+                  data-side={seg.side}
+                  data-level={level}
+                  data-latest={isLatest || undefined}
+                  title={segmentTitle(seg)}
+                  className="flex min-w-[2px] flex-col justify-center"
+                  style={{ flexGrow: Math.max(1, seg.toMinute - seg.fromMinute), flexBasis: 0 }}
+                >
+                  {/*
+                    A BALANCED interval straddles the axis instead of sitting under it.
+                    Below-the-line is the away identity, so rendering a neutral stub there
+                    read as "Chelsea had that spell" in QA when the engine had actually
+                    called it level. Symmetry is what says "neither".
+                  */}
+                  {/* Upper half — home grows DOWN toward the baseline. */}
+                  <div className="flex h-1/2 flex-col justify-end">
+                    {(isHome || isNeutral) && (
+                      <span
+                        className="block w-full rounded-t-[2px]"
+                        style={{
+                          height: `${isNeutral ? NEUTRAL_STUB_PCT : height}%`,
+                          background: colour,
+                          // The current moment reads strongest; history recedes without
+                          // ever becoming unreadable.
+                          opacity: isNeutral ? 0.3 : isLatest ? 1 : 0.62
+                        }}
+                      />
+                    )}
+                  </div>
+                  {/* Lower half — away grows DOWN away from the baseline. */}
+                  <div className="flex h-1/2 flex-col justify-start">
+                    {(!isHome || isNeutral) && (
+                      <span
+                        className="block w-full rounded-b-[2px]"
+                        style={{
+                          height: `${isNeutral ? NEUTRAL_STUB_PCT : height}%`,
+                          background: colour,
+                          opacity: isNeutral ? 0.3 : isLatest ? 1 : 0.62
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Un-played remainder — keeps minute proportions honest against the ticks. */}
+            {stripEndMinute > (history[history.length - 1]?.minute ?? 0) && (
+              <div
+                aria-hidden
+                style={{ flexGrow: stripEndMinute - (history[history.length - 1]?.minute ?? 0), flexBasis: 0 }}
+              />
+            )}
+          </div>
+
+          {/* The baseline itself — drawn over the bars so the mirror axis is unambiguous. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-1/2 z-[2] h-px -translate-y-1/2 bg-[var(--fp-border)]"
+          />
         </div>
 
         <div className="relative mt-1 h-3 w-full" aria-hidden>
-          {ticks.map((m) => (
+          {ticks.map((m) => {
+            /*
+              Edge ticks are clamped INWARD instead of being centred on their minute.
+              A centred label at 0% or 100% hangs half its width outside the chart —
+              measured at 8.3px past the card edge for the 90' tick at a 390px viewport.
+              Only the two end labels move, and only by half their own width, so the
+              tick still reads against the position it marks.
+            */
+            const pct = posPct(m);
+            const align =
+              pct <= 0 ? "translate-x-0" : pct >= 100 ? "-translate-x-full" : "-translate-x-1/2";
+            return (
+              <span
+                key={m}
+                className={`absolute ${align} font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]`}
+                style={{ left: xPct(m) }}
+              >
+                {m}'
+              </span>
+            );
+          })}
+        </div>
+
+        {/* THREAT LEGEND — real bars, not words alone, so height becomes readable.
+            DOMINANT PERIOD annotation shares the row and collapses to the team name
+            alone on mobile. */}
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex items-end gap-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
+            {(["low", "medium", "high"] as const).map((lvl) => (
+              <span key={lvl} className="flex items-end gap-1">
+                <span
+                  aria-hidden
+                  className="w-1 rounded-[1px] bg-[var(--fp-text-muted)]"
+                  /*
+                    A SAMPLE of the bar, deliberately small: it must teach the height
+                    ladder without competing with the chart it explains. The ratios match
+                    THREAT_HEIGHT_PCT (34/66/100) scaled into a 4-10px band.
+                  */
+                  style={{
+                    height: `${Math.round((THREAT_HEIGHT_PCT[lvl] / 100) * 10)}px`,
+                    opacity: 0.4 + THREAT_HEIGHT_PCT[lvl] / 250
+                  }}
+                />
+                <span>{t(`match.momentumThreat${lvl[0].toUpperCase()}${lvl.slice(1)}`)}</span>
+              </span>
+            ))}
+          </div>
+          {dominantPeriod && (
             <span
-              key={m}
-              className="absolute -translate-x-1/2 font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]"
-              style={{ left: xPct(m) }}
+              data-testid="momentum-dominant-label"
+              className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
             >
-              {m}'
+              <span className="hidden sm:inline">{t("match.momentumDominantPeriod")} — </span>
+              {dominantPeriod.side === "home" ? homeTeam : awayTeam}
             </span>
-          ))}
+          )}
         </div>
 
         <p
