@@ -165,6 +165,25 @@ export const THREAT_HEIGHT_PCT: Record<ThreatLevel, number> = { low: 34, medium:
  *  mistaken for either team having the ball. */
 export const NEUTRAL_STUB_PCT = 12;
 
+/**
+ * Brightness ladder. COLOUR ONLY — it changes no height, position or classification.
+ *
+ * The reference reads dominance twice: once by direction, and once by brightness, with
+ * the dominant spell in full-strength colour and every other passage dimmed to a muted
+ * olive/grey. Highlighting only the newest bar left the dominant period carried by its
+ * background band alone, so the chart lost the second reading.
+ */
+export const BAR_OPACITY = Object.freeze({
+  /** The live moment still wins outright — it must never tie with older bars. */
+  current: 1,
+  /** Inside the engine-classified dominant run. */
+  dominant: 0.94,
+  /** Ordinary history: present, clearly subordinate. */
+  history: 0.42,
+  /** A balanced interval — quietest of all, and symmetric about the axis. */
+  neutral: 0.3
+});
+
 export type DominantPeriod = { fromMinute: number; toMinute: number; side: "home" | "away" };
 
 /**
@@ -675,6 +694,18 @@ export default function MatchMomentumTimeline({
               const isLatest = i === timelineSegments.length - 1;
               const isNeutral = seg.side === "neutral";
               const isHome = seg.side === "home";
+              const inDominant =
+                dominantPeriod != null &&
+                seg.side === dominantPeriod.side &&
+                seg.fromMinute >= dominantPeriod.fromMinute &&
+                seg.toMinute <= dominantPeriod.toMinute;
+              const barOpacity = isNeutral
+                ? BAR_OPACITY.neutral
+                : isLatest
+                  ? BAR_OPACITY.current
+                  : inDominant
+                    ? BAR_OPACITY.dominant
+                    : BAR_OPACITY.history;
               const colour =
                 seg.side === "neutral"
                   ? "var(--fp-text-muted)"
@@ -687,6 +718,7 @@ export default function MatchMomentumTimeline({
                   data-side={seg.side}
                   data-level={level}
                   data-latest={isLatest || undefined}
+                  data-dominant={inDominant || undefined}
                   title={segmentTitle(seg)}
                   className="flex min-w-[2px] flex-col justify-center"
                   style={{ flexGrow: Math.max(1, seg.toMinute - seg.fromMinute), flexBasis: 0 }}
@@ -705,9 +737,7 @@ export default function MatchMomentumTimeline({
                         style={{
                           height: `${isNeutral ? NEUTRAL_STUB_PCT : height}%`,
                           background: colour,
-                          // The current moment reads strongest; history recedes without
-                          // ever becoming unreadable.
-                          opacity: isNeutral ? 0.3 : isLatest ? 1 : 0.62
+                          opacity: barOpacity
                         }}
                       />
                     )}
@@ -720,7 +750,7 @@ export default function MatchMomentumTimeline({
                         style={{
                           height: `${isNeutral ? NEUTRAL_STUB_PCT : height}%`,
                           background: colour,
-                          opacity: isNeutral ? 0.3 : isLatest ? 1 : 0.62
+                          opacity: barOpacity
                         }}
                       />
                     )}

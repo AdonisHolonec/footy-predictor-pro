@@ -4,7 +4,8 @@ import MatchMomentumTimeline, {
   buildTimelineSegments,
   findDominantPeriod,
   threatLevel,
-  THREAT_HEIGHT_PCT
+  THREAT_HEIGHT_PCT,
+  BAR_OPACITY
 } from "./MatchMomentumTimeline";
 import type { PredictionRow } from "../../types";
 
@@ -169,6 +170,32 @@ describe("MatchMomentumTimeline — mirrored momentum chart", () => {
     expect(Number(latest.querySelector("span")!.style.opacity)).toBeGreaterThan(
       Number(older.querySelector("span")!.style.opacity)
     );
+  });
+
+  it("lifts the dominant period above ordinary history, the reference second reading", () => {
+    // The reference encodes dominance twice: by direction, and by brightness. A bar
+    // inside the engine-classified dominant run stays at full strength while the rest
+    // of the match dims, so the period is legible from the bars alone — not only from
+    // the band behind them.
+    const { rerender } = render(<MatchMomentumTimeline {...baseProps(10, 88)} />);
+    rerender(<MatchMomentumTimeline {...baseProps(20, 85)} />);
+    rerender(<MatchMomentumTimeline {...baseProps(30, 44)} />); // away spell breaks the run
+    rerender(<MatchMomentumTimeline {...baseProps(40, 90)} />);
+    const all = bars();
+    const dominant = all.filter((b) => b.dataset.dominant === "true" && b.dataset.latest !== "true");
+    const ordinary = all.filter((b) => !b.dataset.dominant && b.dataset.latest !== "true" && b.dataset.side !== "neutral");
+    expect(dominant.length, "no dominant-period bars to compare").toBeGreaterThan(0);
+    expect(ordinary.length, "no ordinary history to compare against").toBeGreaterThan(0);
+    const op = (el: HTMLElement) => Number(el.querySelector("span")!.style.opacity);
+    expect(Math.min(...dominant.map(op))).toBeGreaterThan(Math.max(...ordinary.map(op)));
+  });
+
+  it("keeps the brightness ladder ordered and colour-only", () => {
+    expect(BAR_OPACITY.current).toBeGreaterThan(BAR_OPACITY.dominant);
+    expect(BAR_OPACITY.dominant).toBeGreaterThan(BAR_OPACITY.history);
+    expect(BAR_OPACITY.history).toBeGreaterThan(BAR_OPACITY.neutral);
+    // Heights are untouched by emphasis — brightness must never stand in for threat.
+    expect(THREAT_HEIGHT_PCT.high).toBe(100);
   });
 
   it("bar widths still grow with the real minute interval they cover", () => {
