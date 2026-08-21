@@ -20,8 +20,10 @@ function listRow(id: number): PredictionRow {
 }
 
 /** What the detail endpoint returns for the same fixture. */
-function detailItem(id: number) {
-  return { id, src: "detail", teams: { home: "H", away: "A" } };
+// FT by default: the cache-reuse guarantees below are about SETTLED rows - a
+// pending / in-play detail is refetched on every open (live-detail fix).
+function detailItem(id: number, extra: Record<string, unknown> = {}) {
+  return { id, src: "detail", status: "FT", teams: { home: "H", away: "A" }, ...extra };
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -188,5 +190,97 @@ describe("resolveModalMatch", () => {
     // The list carries fixture ids from JSON; the detail row from Postgres.
     const selected = { id: "101", src: "list" } as unknown as PredictionRow;
     expect(resolveModalMatch(selected, detailItem(101) as unknown as PredictionRow)).toMatchObject({ src: "detail" });
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Live-detail ownership (production forensic, Aug 21): the detail row never
+ * replaces fresh live state; a FINAL detail still wins; another fixture is ignored.
+ * ------------------------------------------------------------------------- */
+
+const MOMENTUM = { homeMomentum: 64, awayMomentum: 36, dominantTeam: "home", trend: "up", confidence: 80 };
+const EVENTS = [{ minute: 12, team: "home", type: "goal", player: "Saka" }];
+function liveSelected(id = 101): PredictionRow {
+  return {
+    id,
+    src: "list",
+    status: "2H",
+    score: { home: 3, away: 0, minute: 57 },
+    momentum: MOMENTUM,
+    liveEvents: EVENTS,
+    confidenceEngine: { liveAdjustment: { delta: 2, reason: "aligned" } },
+    recommended: { pick: "Over 2.5", confidence: 70 },
+    teams: { home: "Arsenal", away: "Coventry" }
+  } as unknown as PredictionRow;
+}
+function persistedDetail(id = 101, extra: Record<string, unknown> = {}): PredictionRow {
+  // What /api/history?fixtureId= really returns for a pending row: DB status,
+  // DB score, no momentum / events / liveAdjustment, persisted settlement fields.
+  return {
+    id,
+    src: "detail",
+    status: "NS",
+    score: { home: null, away: null },
+    validation: "pending",
+    cardMarketValidations: { goals: "pending", recommended: "pending" },
+    recommended: { pick: "Over 2.5", confidence: 70, odd: 1.85 },
+    teams: { home: "Arsenal", away: "Coventry" },
+    ...extra
+  } as unknown as PredictionRow;
+}
+
+describe("resolveModalMatch - live/detail ownership", () => {
+  it("1 - live selected + NS detail keeps status, score, minute, momentum, events, liveAdjustment", () => {
+    const out = resolveModalMatch(liveSelected(), persistedDetail())!;
+    expect(out.status).toBe("2H");
+    expect(out.score).toEqual({ home: 3, away: 0, minute: 57 });
+    expect(out.momentum).toEqual(MOMENTUM);
+    expect(out.liveEvents).toEqual(EVENTS);
+    expect(out.confidenceEngine?.liveAdjustment).toEqual({ delta: 2, reason: "aligned" });
+  });
+
+  it("2 - live selected + 2H detail (stale sync snapshot, no minute) keeps the live snapshot", () => {
+    const out = resolveModalMatch(liveSelected(), persistedDetail(101, { status: "2H", score: { home: 2, away: 0 } }))!;
+    expect(out.score).toEqual({ home: 3, away: 0, minute: 57 });
+    expect(out.momentum).toEqual(MOMENTUM);
+  });
+
+  it("3 - detail missing momentum / events never erases them", () => {
+    const out = resolveModalMatch(liveSelected(), persistedDetail())!;
+    expect(out.momentum).not.toBeUndefined();
+    expect(out.liveEvents?.length).toBe(1);
+  });
+
+  it("4 - a FINAL detail wins outright: FT, final score, settlement", () => {
+    const out = resolveModalMatch(liveSelected(), persistedDetail(101, { status: "FT", score: { home: 3, away: 0 }, validation: "win", cardMarketValidations: { recommended: "win" } }))!;
+    expect(out.status).toBe("FT");
+    expect(out.score).toEqual({ home: 3, away: 0 });
+    expect((out as unknown as { validation: string }).validation).toBe("win");
+    expect(out.momentum).toBeUndefined();
+  });
+
+  it("5 - selected only, no detail: unchanged by identity", () => {
+    const sel = liveSelected();
+    expect(resolveModalMatch(sel, null)).toBe(sel);
+  });
+
+  it("6 - a detail for another fixture is ignored", () => {
+    const sel = liveSelected(101);
+    expect(resolveModalMatch(sel, persistedDetail(202))).toBe(sel);
+    expect(resolveModalMatch(sel, persistedDetail(202, { status: "FT" }))).toBe(sel);
+  });
+
+  it("7 - persisted validation comes from the detail; 8 - so do cardMarketValidations and the odd", () => {
+    const out = resolveModalMatch(liveSelected(), persistedDetail(101, { validation: "pending", cardMarketValidations: { goals: "win", recommended: "pending" } })) as unknown as Record<string, unknown>;
+    expect(out.validation).toBe("pending");
+    expect(out.cardMarketValidations).toEqual({ goals: "win", recommended: "pending" });
+    expect((out.recommended as { odd?: number }).odd).toBe(1.85);
+    expect(out.src).toBe("detail");
+  });
+
+  it("is not a blind spread: only the approved carried set comes from the live row", () => {
+    const sel = { ...liveSelected(), extraLiveOnly: "x" } as unknown as PredictionRow;
+    const out = resolveModalMatch(sel, persistedDetail()) as unknown as Record<string, unknown>;
+    expect(out.extraLiveOnly).toBeUndefined();
   });
 });
