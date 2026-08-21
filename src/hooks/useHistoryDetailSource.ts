@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PredictionRow } from "../types";
 import { useHistoryDetail } from "./useHistoryDetail";
+import { carryForwardLiveState } from "../utils/liveState";
 
 /**
  * Chooses which object the match modal renders from.
@@ -54,8 +55,26 @@ export function resolveModalMatch(
   detail: PredictionRow | null
 ): PredictionRow | null {
   if (!selected) return null;
-  if (detail && Number(detail.id) === Number(selected.id)) return detail;
-  return selected;
+  if (!detail || Number(detail.id) !== Number(selected.id)) return selected;
+  /*
+    Live-detail ownership (production forensic, Aug 21): the by-fixture detail
+    row is the PERSISTED record — recommendation, validation, market
+    validations, settlement — and it is authoritative for those. It is NOT a
+    live snapshot: its status/score are whatever the last sync wrote (NS before
+    the first cron after kickoff, 2H hours later) and it never carries
+    momentum, events or the live confidence nudge, because the poll never
+    persists them. Returning it verbatim made the modal disagree with the list
+    ("57' 3–0 LIVE" in the row, "10:00 PM" in the header) and dropped Momentum
+    the moment the request resolved.
+
+    So the merge is the one already approved for hydration (PR #138): the
+    fresh selected row is `previous`, the detail is `incoming`; the explicit
+    carried set (status, score, momentum, liveEvents, liveAdjustment) stays
+    live, everything else comes from the detail — and a FINAL detail wins
+    outright through the helper's own final-status escape, so a settled row
+    still replaces a stale in-memory 2H. No second final rule lives here.
+  */
+  return carryForwardLiveState(selected, detail);
 }
 
 export function useHistoryDetailSource(
