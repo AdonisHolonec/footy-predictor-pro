@@ -628,13 +628,7 @@ export default function UserDashboard() {
       )}
 
       {navView === "history" && (
-        <HistorySection
-          history={history}
-          onOpenMatch={openMatch}
-          canShowSpecialBet={canShowSpecialBet}
-          onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-          onGoTickets={() => handleNav("tickets")}
-        />
+        <HistorySection history={history} onOpenMatch={openMatch} onGoTickets={() => handleNav("tickets")} />
       )}
 
       {navView === "tickets" && (
@@ -654,6 +648,7 @@ export default function UserDashboard() {
           history={history}
           leagueBreakdown={userPerformanceByLeague}
           onStartPredicting={() => handleNav("home")}
+          onViewResults={() => handleNav("history")}
         />
       )}
 

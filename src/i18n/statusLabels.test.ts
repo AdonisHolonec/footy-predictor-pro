@@ -57,10 +57,16 @@ describe("outcome status accessible names", () => {
     expect(translate("ro", "common.status.nope")).toBe("common.status.nope");
   });
 
-  test("the accessible name is a full word, not the terse visible badge text", () => {
-    // The visible badge stays "WIN" / "LOSE"; the accessible name must not
-    // collapse back onto it, or the icon would announce as an abbreviation.
-    expect(translate("ro", "common.status.win")).not.toBe(translate("ro", "history.win"));
-    expect(translate("ro", "common.status.loss")).not.toBe(translate("ro", "history.loss"));
+  test("neither the accessible name nor the visible badge is an all-caps abbreviation", () => {
+    // UX-E: the visible badge is a full Title-case word ("Won" / "Lost"), the
+    // same token the ticket history uses — so neither surface can announce or
+    // read as "WIN" / "LOSE" shouting.
+    const fullWord = /^\p{Lu}\p{Ll}/u;
+    for (const locale of ["en", "ro"] as const) {
+      for (const key of ["win", "loss"]) {
+        expect(translate(locale, `common.status.${key}`)).toMatch(fullWord);
+        expect(translate(locale, `history.${key}`)).toMatch(fullWord);
+      }
+    }
   });
 });

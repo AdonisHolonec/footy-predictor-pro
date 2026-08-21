@@ -2,213 +2,178 @@ import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import EmptyState from "../../design-system/EmptyState";
 import SectionHeader from "../../design-system/SectionHeader";
-import StatusBadge from "../../design-system/StatusBadge";
 import SegmentedControl from "../../design-system/SegmentedControl";
 import Button from "../../design-system/Button";
+import IconButton from "../../design-system/IconButton";
 import { useLocale } from "../../context/LocaleContext";
-import HistorySpecialBetCard from "./HistorySpecialBetCard";
-import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import MatchList from "./MatchList";
+import MatchListRow from "./MatchListRow";
+import { historyStatsFromRows } from "../../utils/historyStats";
+import { kickoffLocalDateKey, localCalendarDateKey } from "../../utils/appUtils";
 
-type OutcomeFilter = "all" | "won" | "lost" | "pending";
-const OUTCOME_GROUPS: Record<Exclude<OutcomeFilter, "all">, string[]> = {
-  won: ["win", "half_win"],
-  lost: ["loss", "half_loss"],
-  pending: ["pending"]
-};
+/**
+ * Results (UX-E) — "what happened to my predictions?"
+ *
+ *   1. the selected day, with previous / next / today navigation
+ *   2. a one-line outcome summary for that day (the existing
+ *      `historyStatsFromRows` — the same denominator the tracker uses)
+ *   3. the day's rows, in the list grammar (MatchListRow), newest first
+ *   4. a compact entry to ticket results (Tickets owns ticket history)
+ *
+ * Not here, on purpose: the performance tracker (Performance), the ticket
+ * history (Tickets), the inline per-match ticket builder (Match Detail), and
+ * the old silent 80-row cap — a day is a day.
+ */
+
+type OutcomeFilter = "all" | "win" | "loss" | "pending" | "push" | "half_win" | "half_loss";
+/** The statuses the settlement model actually emits for a per-match pick (no "void" exists here). */
+const OUTCOME_FILTERS: { id: OutcomeFilter; key: string }[] = [
+  { id: "all", key: "dash.filterAll" },
+  { id: "win", key: "history.win" },
+  { id: "loss", key: "history.loss" },
+  { id: "pending", key: "history.pendingBadge" },
+  { id: "push", key: "history.outcomePush" },
+  { id: "half_win", key: "history.outcomeHalfWin" },
+  { id: "half_loss", key: "history.outcomeHalfLoss" }
+];
 
 type Props = {
   history: HistoryEntry[];
-  /** Open full match analysis (MatchModal). */
+  /** Open full match analysis (MatchModal) — where the per-match ticket builder lives. */
   onOpenMatch?: (row: HistoryEntry) => void;
-  /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
-  canShowSpecialBet?: boolean;
-  onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
-  /** Opens the Tickets destination, where accumulator results live now. */
+  /** Opens the Tickets destination, where accumulator results live. */
   onGoTickets?: () => void;
+  /** Injected for tests; defaults to the local calendar day. */
+  today?: string;
 };
 
-function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
-  if (v === "win" || v === "half_win") return "success";
-  if (v === "loss" || v === "half_loss") return "danger";
-  if (v === "pending") return "warning";
-  // push (stake returned) and anything unknown read as neutral.
-  return "neutral";
+function shiftDay(iso: string, delta: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return localCalendarDateKey(new Date(y, m - 1, d + delta));
 }
 
 function rowKey(row: HistoryEntry): string {
   return String(row.id ?? `${row.teams?.home}-${row.teams?.away}-${row.kickoff}`);
 }
 
-export default function HistorySection({
-  history,
-  onOpenMatch,
-  canShowSpecialBet = false,
-  onUpgradeRequired,
-  onGoTickets
-}: Props) {
+export default function HistorySection({ history, onOpenMatch, onGoTickets, today = localCalendarDateKey() }: Props) {
   const { t, locale } = useLocale();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Outcome filter — session-local, like the Matches segment. */
+  const [day, setDay] = useState(today);
   const [outcome, setOutcome] = useState<OutcomeFilter>("all");
 
-  const rows = useMemo(() => {
-    const sorted = [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || "")));
-    if (outcome === "all") return sorted;
-    return sorted.filter((row) => OUTCOME_GROUPS[outcome].includes(String(row.validation || "")));
-  }, [history, outcome]);
+  /** Every day that has at least one row — bounds the navigation to real data. */
+  const days = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of history) set.add(kickoffLocalDateKey(row.kickoff));
+    return [...set].sort();
+  }, [history]);
+  const earliest = days[0] ?? today;
+  const canGoBack = day > earliest;
+  const canGoForward = day < today;
 
-  // Day groups: a header per calendar day, in the viewer's zone, newest first.
-  const dayOf = (row: HistoryEntry) => {
-    const d = new Date(String(row.kickoff || ""));
-    return Number.isFinite(d.getTime())
-      ? new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", { weekday: "long", day: "numeric", month: "long" }).format(d)
-      : "—";
-  };
+  const dayRows = useMemo(
+    () =>
+      history
+        .filter((row) => kickoffLocalDateKey(row.kickoff) === day)
+        .sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
+    [history, day]
+  );
+  const summary = useMemo(() => historyStatsFromRows(dayRows), [dayRows]);
+  const pendingCount = useMemo(() => dayRows.filter((row) => row.validation === "pending").length, [dayRows]);
+  const rows = useMemo(
+    () => (outcome === "all" ? dayRows : dayRows.filter((row) => String(row.validation || "") === outcome)),
+    [dayRows, outcome]
+  );
 
-  const labelFor = (v?: string) => {
-    if (v === "win") return t("history.win");
-    if (v === "loss") return t("history.loss");
-    if (v === "pending") return t("history.pendingBadge");
-    if (v === "push") return t("history.outcomePush");
-    if (v === "half_win") return t("history.outcomeHalfWin");
-    if (v === "half_loss") return t("history.outcomeHalfLoss");
-    return String(v || "—").toUpperCase();
-  };
+  const dayLabel = useMemo(() => {
+    const [y, m, d] = day.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(new Date(y, m - 1, d));
+  }, [day, locale]);
+  const relative =
+    day === today ? t("history.dayToday") : day === shiftDay(today, -1) ? t("history.dayYesterday") : null;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <header>
         <SectionHeader as="h1" size="page" eyebrow={t("nav.results")} title={t("nav.results")} description={t("history.sub")} />
       </header>
 
-      {/* Results answers "what happened?" — the performance numbers live on
-          Performance, accumulator results on Tickets. Here: an outcome filter
-          and day-grouped rows. */}
+      {/* 1 · the day */}
+      <nav aria-label={t("history.dayNav")} className="flex items-center gap-2" data-testid="results-day-nav">
+        <IconButton size="sm" onClick={() => setDay(shiftDay(day, -1))} disabled={!canGoBack} aria-label={t("history.dayPrev")}>
+          ‹
+        </IconButton>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-[var(--fp-text)]" aria-current="date" data-testid="results-day-label">
+            {dayLabel}
+            {relative && <span className="ml-1.5 font-normal text-[var(--fp-text-muted)]">· {relative}</span>}
+          </p>
+        </div>
+        <IconButton size="sm" onClick={() => setDay(shiftDay(day, 1))} disabled={!canGoForward} aria-label={t("history.dayNext")}>
+          ›
+        </IconButton>
+        {day !== today && (
+          <Button size="sm" variant="ghost" onClick={() => setDay(today)}>
+            {t("history.dayToday")}
+          </Button>
+        )}
+      </nav>
+
+      {/* 2 · the summary — one line, the tracker's own denominator, never repeated below */}
+      {summary.settled + pendingCount > 0 && (
+        <p className="font-mono text-xs text-[var(--fp-text-muted)]" data-testid="results-summary">
+          {t("history.daySummary", {
+            settled: summary.settled,
+            won: summary.wins,
+            lost: summary.losses,
+            rate: summary.settled ? summary.winRate.toFixed(0) : "—"
+          })}
+          {pendingCount > 0 && <span> · {t("history.dayPending", { n: pendingCount })}</span>}
+        </p>
+      )}
+
+      {/* filters + the ticket entry */}
       <div className="flex flex-wrap items-center gap-2" data-testid="results-controls">
         <SegmentedControl
           mode="toggle"
-          options={(
-            [
-              ["all", "dash.filterAll"],
-              ["won", "history.win"],
-              ["lost", "history.loss"],
-              ["pending", "history.pendingBadge"]
-            ] as const
-          ).map(([id, key]) => ({ value: id, label: t(key), title: t("dash.filterTitle", { label: t(key) }) }))}
+          options={OUTCOME_FILTERS.map(({ id, key }) => ({
+            value: id,
+            label: t(key),
+            title: t("dash.filterTitle", { label: t(key) })
+          }))}
           value={outcome}
           onChange={(next) => setOutcome(next as OutcomeFilter)}
         />
         {onGoTickets && (
-          <Button size="sm" variant="ghost" onClick={onGoTickets} className="ml-auto">
-            {t("nav.tickets")} ›
+          <Button size="sm" variant="ghost" onClick={onGoTickets} className="ml-auto" data-testid="results-tickets-link">
+            {t("history.ticketResults")} ›
           </Button>
         )}
       </div>
 
+      {/* 3 · the rows */}
       {!rows.length ? (
         <EmptyState
-          title={t("history.emptyTitle")}
-          description={t("history.empty")}
-          actionLabel={outcome !== "all" ? t("dash.showAll") : undefined}
-          onAction={outcome !== "all" ? () => setOutcome("all") : undefined}
+          title={dayRows.length ? t("history.emptyFilteredTitle") : t("history.emptyDayTitle")}
+          description={dayRows.length ? t("history.emptyFilteredDesc") : t("history.emptyDayDesc")}
+          actionLabel={outcome !== "all" ? t("dash.showAll") : canGoBack ? t("history.dayPrev") : undefined}
+          onAction={outcome !== "all" ? () => setOutcome("all") : canGoBack ? () => setDay(shiftDay(day, -1)) : undefined}
         />
       ) : (
-        <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
-          {rows.slice(0, 80).map((row, idx, visibleRows) => {
-            const id = rowKey(row);
-            const active = selectedId === id;
-            const isLast = idx === visibleRows.length - 1;
-            const day = dayOf(row);
-            const newDay = idx === 0 || dayOf(visibleRows[idx - 1]) !== day;
-            return (
-              <div key={id} className={!isLast || active ? "border-b border-[var(--fp-border)]" : ""}>
-                {newDay && (
-                  <h2
-                    data-testid="results-day"
-                    className="border-b border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
-                  >
-                    {day}
-                  </h2>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(active ? null : id)}
-                  aria-pressed={active}
-                  className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
-                    active ? "bg-fp-success/5" : "hover:bg-[var(--fp-bg-muted)]"
-                  }`}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    {row.logos?.home || row.logos?.away ? (
-                      <div className="flex shrink-0 items-center -space-x-1.5">
-                        {row.logos?.home ? (
-                          <img
-                            src={row.logos.home}
-                            alt=""
-                            className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
-                          />
-                        ) : null}
-                        {row.logos?.away ? (
-                          <img
-                            src={row.logos.away}
-                            alt=""
-                            className="h-6 w-6 rounded-full bg-[var(--fp-bg-muted)] object-contain"
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <div className="min-w-0">
-                      <p className="font-mono text-[10px] text-[var(--fp-text-muted)]">
-                        {row.league || "—"} ·{" "}
-                        {row.kickoff ? String(row.kickoff).slice(0, 16).replace("T", " ") : "—"}
-                      </p>
-                      <p className="mt-0.5 truncate font-semibold">
-                        {row.teams?.home || "?"} {t("common.vs")} {row.teams?.away || "?"}
-                      </p>
-                      <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">
-                        {t("history.topPick")}{" "}
-                        <span className="text-[var(--fp-text)]">
-                          {formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended).label}
-                        </span>
-                        {row.score?.home != null && row.score?.away != null
-                          ? ` · ${t("history.score", { home: row.score.home, away: row.score.away })}`
-                          : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <StatusBadge
-                    status={row.validation}
-                    tone={toneFor(row.validation)}
-                    label={labelFor(row.validation)}
-                  />
-                </button>
-
-                {active ? (
-                  <div className="border-t border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-3">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-                        {t("history.selectedMatch")}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(null)}
-                        className="text-xs font-semibold text-[var(--fp-accent)] hover:underline"
-                      >
-                        {t("history.clearSelection")}
-                      </button>
-                    </div>
-                    <HistorySpecialBetCard
-                      row={row}
-                      onOpenDetails={onOpenMatch}
-                      canShowSpecialBet={canShowSpecialBet}
-                      onUpgradeRequired={onUpgradeRequired}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+        <MatchList label={`${t("nav.results")} · ${dayLabel}`}>
+          {rows.map((row) => (
+            <MatchListRow
+              key={rowKey(row)}
+              row={row}
+              marketValidations={row.cardMarketValidations ?? { recommended: row.validation }}
+              onOpen={() => onOpenMatch?.(row)}
+            />
+          ))}
+        </MatchList>
       )}
     </section>
   );
