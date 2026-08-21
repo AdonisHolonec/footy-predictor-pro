@@ -491,6 +491,115 @@ export function rehydrateAggregateRow(row) {
 }
 
 /**
+ * The columns settlement needs, and the shape it needs them in.
+ *
+ * Same idea as AGGREGATE_STATS_SELECT above, for the heavier caller: scan 3 of
+ * the settlement cron. It differs in what it must carry, so it is a separate
+ * list rather than a reuse — the aggregate needs no totals it cannot already
+ * grade, while settlement needs every total plus the first-half predicate.
+ *
+ * D7 measured why this exists. Scan 3 selected raw_payload for all 472 FINAL
+ * rows in the window in one statement; at ~353 KB/row that is ~151 MB, and
+ * production reproduces the failure at a quarter of it:
+ *
+ *   raw_payload      limit=250   10,441 ms   500  57014 statement timeout
+ *   promoted columns limit=250      269 ms   200
+ *
+ * Scan 3 is the only pass that can settle Corners / Shots / SOT / Cards, so
+ * when it aborts those families stay pending forever while score-derived
+ * families — settled by scan 1, which is small enough to commit — go through.
+ */
+export const SETTLEMENT_ROW_COLUMNS = Object.freeze([
+  "fixture_id",
+  "kickoff_at",
+  "match_status",
+  "score_home",
+  "score_away",
+  "validation",
+  "recommended_pick",
+  "recommended_family",
+  "card_markets",
+  "card_market_validations",
+  "corners_total",
+  "shots_on_target_total",
+  "shots_total",
+  "cards_total",
+  "cards_points",
+  "first_half_goals",
+  "has_first_half_probs"
+]);
+
+export const SETTLEMENT_SELECT = SETTLEMENT_ROW_COLUMNS.join(", ");
+
+/**
+ * Rebuild the row shape the settlement helpers expect, from columns only.
+ *
+ * The sibling of rehydrateAggregateRow, and it keeps that function's two rules:
+ *
+ *   · `probs.corners` / `probs.shotsOnTarget` / `marketOdds` are deliberately
+ *     absent. They feed only deriveCardMarketPicks, which runs when cardMarkets
+ *     is missing — measured at 0 of 821 production rows, since card_markets is
+ *     populated on every one. A row that did reach it yields no derived picks
+ *     rather than deriving them from a document this path no longer reads: it
+ *     contributes nothing instead of contributing something wrong.
+ *
+ *   · A total is copied only when it exists. `null` and "absent" must stay the
+ *     same value, because a null total that became 0 would settle a pending
+ *     Under line as a win against a match nobody has counted.
+ *
+ * `probs.firstHalf` is reconstructed as an EMPTY OBJECT when the predicate says
+ * one existed. Settlement reads it only through `Boolean(raw.probs?.firstHalf)`,
+ * so an empty object is the exact truth this path can state — and anything more
+ * would be inventing probabilities the columns do not carry.
+ */
+export function rehydrateSettlementRow(row) {
+  const source = row && typeof row === "object" ? row : {};
+  const rawPayload = {};
+
+  if (source.card_markets != null) rawPayload.cardMarkets = source.card_markets;
+  if (source.card_market_validations != null) {
+    rawPayload.cardMarketValidations = source.card_market_validations;
+  }
+
+  const totals = {
+    cornersTotal: source.corners_total,
+    shotsOnTargetTotal: source.shots_on_target_total,
+    shotsTotal: source.shots_total,
+    cardsTotal: source.cards_total,
+    cardsPoints: source.cards_points,
+    firstHalfGoals: source.first_half_goals
+  };
+  // Only build marketResults when at least one total is real, so a row with no
+  // statistics keeps `marketResults` absent exactly as the payload had it.
+  if (Object.values(totals).some((v) => v != null)) {
+    rawPayload.marketResults = {};
+    for (const [key, value] of Object.entries(totals)) {
+      if (value != null) rawPayload.marketResults[key] = value;
+    }
+  }
+
+  if (source.recommended_pick != null) {
+    rawPayload.recommended = {
+      pick: source.recommended_pick,
+      family: source.recommended_family ?? null
+    };
+  }
+
+  if (source.has_first_half_probs === true) rawPayload.probs = { firstHalf: {} };
+
+  return {
+    fixture_id: source.fixture_id ?? null,
+    kickoff_at: source.kickoff_at ?? null,
+    validation: source.validation ?? null,
+    match_status: source.match_status ?? null,
+    score_home: source.score_home ?? null,
+    score_away: source.score_away ?? null,
+    recommended_pick: source.recommended_pick ?? null,
+    raw_payload: rawPayload
+  };
+}
+
+/**
  * Win/loss aggregates for marketing / login stats.
  * Uses raw_payload card markets when present so goals/corners/shots count too.
  */

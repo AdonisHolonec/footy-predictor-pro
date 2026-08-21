@@ -52,8 +52,8 @@ function validationFromMatch(status, pick, score) {
 }
 
 // Goals Over/Under lines this codebase ever offers as a recommendation (buildValueCandidates
-// only ever builds 1.5/2.5/3.5 goals lines). Any other O/U-shaped line can only be Corners —
-// Cards has no settlement totals tracked yet.
+// only ever builds 1.5/2.5/3.5 goals lines). Any other O/U-shaped line can only be Corners,
+// since every other totals family carries an explicit `family` and is handled above.
 const GOALS_OU_LINES = new Set([1.5, 2.5, 3.5]);
 
 /**
@@ -68,14 +68,44 @@ const GOALS_OU_LINES = new Set([1.5, 2.5, 3.5]);
  *
  * @param {{ pick: string, family?: string|null, status: string,
  *   score: { home: number|null, away: number|null },
- *   marketTotals?: { cornersTotal?: number|null } }} params
+ *   marketTotals?: { cornersTotal?: number|null, shotsTotal?: number|null,
+ *     shotsOnTargetTotal?: number|null, cardsTotal?: number|null } }} params
  * @returns {"win"|"loss"|"pending"|"push"|"half_win"|"half_loss"} Asian
  *   outcomes appear only on totals families (Corners / Shots / SOT) at
  *   integer/quarter lines; 1X2-shaped picks keep the win/loss/pending set.
  */
 export function resolveRecommendedValidation({ pick, family, status, score, marketTotals }) {
   if (!isFinalStatus(status)) return "pending";
-  if (family === "Cards") return "pending"; // no cards totals tracked yet
+
+  /*
+    Cards grades against cardsTotal — the RAW count (yellow + red) — and never
+    against cardsPoints.
+
+    The unit is not a choice made here; it is the unit the line is already in.
+    deriveMarketLambdas("cards") reads team_market_rolling.cards_for_avg, and
+    teamMarketRolling.js pushes `teamCards.count` into that bag (`.points` goes
+    to the separate cards_points_* columns, which nothing downstream consumes).
+    So the Poisson lines in Stage05Simulation are expressed in raw cards, and the
+    league fallback baseline agrees: cardsAvgTotal defaults to 4.2, a per-match
+    card count, not a weighted-points total.
+
+    Migration 038's header says the opposite — "liniile Poisson ... sunt exprimate
+    în aceste puncte". That comment is STALE: it predates the split that moved the
+    weighted convention out into cards_points_*_avg, and the code above is what
+    actually runs. Grading a 3.5 line against points instead of count would settle
+    roughly every fixture as an Over.
+
+    Absent data stays pending, exactly as Corners/Shots/SOT do above. A missing
+    total is not zero — see the yellow-anchor rule in fixtureCardTotals.js, which
+    is what guarantees a null here means "not counted" rather than "no cards".
+  */
+  if (family === "Cards") {
+    const cardsOu = parseOuPickAnywhere(pick);
+    if (!cardsOu) return "pending";
+    const cardsTotal = marketTotals?.cardsTotal;
+    if (cardsTotal == null) return "pending";
+    return settleOuValidation(cardsOu.side, cardsOu.line, cardsTotal) ?? "pending";
+  }
 
   // Total shots grades against the match's combined shot count. Like SOT below, it must
   // never fall through to the goals path: "Shots Over 22.5" graded against goals scored
@@ -320,8 +350,9 @@ export function deriveCardMarketPicks(prediction) {
  * @param {ReturnType<typeof deriveCardMarketPicks>} opts.picks
  * @param {{ cornersTotal?: number|null, shotsOnTargetTotal?: number|null,
  *   shotsTotal?: number|null, cardsTotal?: number|null, cardsPoints?: number|null }}
- *   [opts.marketTotals] cardsTotal/cardsPoints are carried for persistence only — no
- *   market grades against them yet (Cards short-circuits to "pending" above).
+ *   [opts.marketTotals] cardsTotal grades a Cards recommendation (raw yellow+red
+ *   count). cardsPoints is carried for rolling/backtest only — no market grades
+ *   against the weighted convention.
  */
 export function settleCardMarkets({ status, score, picks, marketTotals = {} }) {
   const out = {
@@ -386,12 +417,10 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
     // Combined match shots — settles a Recommended from the Shots family. Distinct from
     // shotsOnTargetTotal: the two markets are graded against their own totals.
     shotsTotal: marketTotals?.shotsTotal ?? base.marketResults?.shotsTotal ?? null,
-    // Observed card totals. RECORDED, NOT GRADED AGAINST: resolveRecommendedValidation
-    // still returns "pending" for the Cards family and SETTLEABLE_VALUE_FAMILIES.Cards
-    // stays false, so no selection's outcome depends on these yet. They are captured now
-    // because the observed total is the prerequisite for the settlement, the rolling
-    // averages and the backtest that come later — and it is only readable from the
-    // statistics payload, which is cheapest to take while it is already in hand.
+    // Observed card totals. cardsTotal is now GRADED AGAINST by
+    // resolveRecommendedValidation (raw yellow+red, the unit the Poisson line is
+    // built in). cardsPoints stays recorded-only: it feeds the rolling averages and
+    // the backtest, and no market settles against the weighted convention.
     cardsTotal: marketTotals?.cardsTotal ?? base.marketResults?.cardsTotal ?? null,
     cardsPoints: marketTotals?.cardsPoints ?? base.marketResults?.cardsPoints ?? null,
     firstHalfGoals: marketTotals?.firstHalfGoals ?? base.marketResults?.firstHalfGoals ?? null

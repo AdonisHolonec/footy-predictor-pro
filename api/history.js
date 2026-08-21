@@ -34,6 +34,8 @@ import {
   timeStage
 } from "../server-utils/observability/historyTiming.js";
 import {
+  SETTLEMENT_SELECT,
+  rehydrateSettlementRow,
   mapDbRowToHistoryEntry,
   readPredictionsHistory,
   readPredictionsHistoryList,
@@ -588,7 +590,17 @@ async function handleHistorySync(req, res) {
   const supabase = getSupabaseAdmin();
   const days = Math.max(1, Math.min(Number(req.query.days || 30), 120));
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const scanChunkSize = Math.max(200, Math.min(Number(process.env.HISTORY_SYNC_SCAN_CHUNK || 1000), 2000));
+  /*
+    D8 mitigation, kept after the read-path fix as defence in depth.
+
+    Scans 1 and 2 still read raw_payload (they need valueBet/valueEngine, which are
+    not promoted), so their statement size still tracks document growth: ~353 KB/row
+    in August against ~10 KB in May. Measured, 100 rows of raw_payload is 31 MB and
+    2.2 s while 250 rows times out, so 100 is the largest page that demonstrably
+    commits. Scan 3 no longer reads the document at all and is unaffected by this
+    number — it is bounded by the projection, not by the chunk.
+  */
+  const scanChunkSize = Math.max(25, Math.min(Number(process.env.HISTORY_SYNC_SCAN_CHUNK || 100), 2000));
   const scanMaxRows = Math.max(scanChunkSize, Math.min(Number(process.env.HISTORY_SYNC_SCAN_MAX_ROWS || 10000), 50000));
 
   try {
@@ -850,11 +862,18 @@ async function handleHistorySync(req, res) {
     // processed ahead of everything else — priority is meaningless while paging inline.
     const finishedRows = [];
     for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+      /*
+        PROMOTED COLUMNS ONLY — never raw_payload. This scan covers every FINAL row
+        in the window (472 in production), and at ~353 KB/row the document read is
+        ~151 MB in one statement. Production reproduces the failure at a quarter of
+        that: limit=250 with raw_payload → 10,441 ms → 57014 statement timeout,
+        against 269 ms for this projection. The throw aborted the whole handler, so
+        the only pass that can settle Corners / Shots / SOT / Cards never ran and
+        those families stayed pending while score-derived ones went through scan 1.
+      */
       const { data: page, error: cardErr } = await supabase
         .from(HISTORY_TABLE)
-        .select(
-          "fixture_id, recommended_pick, match_status, score_home, score_away, validation, raw_payload"
-        )
+        .select(SETTLEMENT_SELECT)
         .gte("kickoff_at", cutoff)
         .in("match_status", ["FT", "AET", "PEN"])
         .order("kickoff_at", { ascending: false })
@@ -862,7 +881,9 @@ async function handleHistorySync(req, res) {
         .range(offset, offset + scanChunkSize - 1);
       if (cardErr) throw cardErr;
       if (!page?.length) break;
-      finishedRows.push(...page);
+      // Columns → the shape the settlement helpers already expect, so they cannot
+      // tell the difference. `probs`/`marketOdds` stay absent by design.
+      finishedRows.push(...page.map(rehydrateSettlementRow));
       if (page.length < scanChunkSize) break;
     }
 
@@ -999,10 +1020,29 @@ async function handleHistorySync(req, res) {
         cardUpdates.push({
           fixture_id: Number(row.fixture_id),
           validation,
-          raw_payload: enriched,
-          // Same rule as the recommended-settlement pass: derived from `enriched`,
-          // the exact object being persisted. This path CAN introduce totals the
-          // provider has just supplied.
+          /*
+            NO raw_payload. This pass no longer reads the document, so it must not
+            write it either: persisting `enriched` here would store a payload
+            rebuilt from columns, silently truncating every key the projection does
+            not carry (probs, marketOdds, valueEngine, momentum, ...).
+
+            The columns are what the read paths use — the History list, the detail
+            endpoint and the aggregate all read them, and none reads
+            raw_payload.cardMarkets / cardMarketValidations. So the settlement
+            result is fully published by the columns below.
+
+            The derivation rule at the top of historyListColumns.js still holds,
+            with `enriched` as the exact object being persisted-from: preservation
+            is inside it, because rehydrateSettlementRow put the previous column
+            values into marketResults and attachCardMarketsToPayload carries them
+            forward when no new totals arrived. The carrier changed from the
+            document to the columns; the rule did not.
+
+            Consequence, stated plainly: raw_payload.cardMarketValidations now goes
+            stale on newly settled rows. That is acceptable only because the columns
+            are authoritative for every reader — it is not a licence for a future
+            reader to prefer the payload copy.
+          */
           ...deriveMutableHistoryListColumns(enriched),
           updated_at: new Date().toISOString()
         });
