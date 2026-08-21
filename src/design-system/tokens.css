@@ -133,6 +133,21 @@
      themselves is a later, deliberate design decision — not this PR. */
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched.
+
+     Light-surface gold is #bf8506, not the brighter #d99a07 it started as: measured
+     against the white card that was 2.45:1, under the 3:1 WCAG 1.4.11 floor for a
+     graphic that carries meaning. #bf8506 reaches 3.19:1 against the card and 3.47:1
+     against the away colour — the value that maximises the WORSE of the two, since
+     darkening further to help the card actively hurts the away separation. */
+  --fp-momentum-home: #bf8506;
+  --fp-momentum-home-rgb: 191 133 6;
+  --fp-momentum-away: #3f3b39;
+  --fp-momentum-away-rgb: 63 59 57;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
 
@@ -188,6 +203,21 @@ html.theme-light {
   --fp-warning-rgb: 180 83 9;
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched.
+
+     Light-surface gold is #bf8506, not the brighter #d99a07 it started as: measured
+     against the white card that was 2.45:1, under the 3:1 WCAG 1.4.11 floor for a
+     graphic that carries meaning. #bf8506 reaches 3.19:1 against the card and 3.47:1
+     against the away colour — the value that maximises the WORSE of the two, since
+     darkening further to help the card actively hurts the away separation. */
+  --fp-momentum-home: #bf8506;
+  --fp-momentum-home-rgb: 191 133 6;
+  --fp-momentum-away: #3f3b39;
+  --fp-momentum-away-rgb: 63 59 57;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
   --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
@@ -239,6 +269,21 @@ html.theme-dark {
   --fp-warning-rgb: 240 178 61;
   --fp-live: #f0453a;
   --fp-live-rgb: 240 69 58;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched.
+
+     Light-surface gold is #bf8506, not the brighter #d99a07 it started as: measured
+     against the white card that was 2.45:1, under the 3:1 WCAG 1.4.11 floor for a
+     graphic that carries meaning. #bf8506 reaches 3.19:1 against the card and 3.47:1
+     against the away colour — the value that maximises the WORSE of the two, since
+     darkening further to help the card actively hurts the away separation. */
+  --fp-momentum-home: #f5c542;
+  --fp-momentum-home-rgb: 245 197 66;
+  --fp-momentum-away: #e8ecea;
+  --fp-momentum-away-rgb: 232 236 234;
   --fp-value: #f0b23d;
   --fp-value-rgb: 240 178 61;
   --fp-focus-ring: color-mix(in srgb, var(--fp-accent) 55%, transparent);
@@ -278,6 +323,23 @@ html.theme-contrast {
   --fp-warning-rgb: 180 83 9;
   --fp-live: #9d174d;
   --fp-live-rgb: 157 23 77;
+  /* Momentum chart identities (presentation only — no engine or data meaning).
+     Gold is the home/Team A identity in every theme; the away/Team B partner is the
+     "light neutral" of the reference, which MUST invert per theme — a white bar on
+     the light theme's white card would be invisible. Nothing else in the app uses
+     these; the global Home/Away language (accent/danger) is untouched.
+
+     Light-surface gold is #bf8506, not the brighter #d99a07 it started as: measured
+     against the white card that was 2.45:1, under the 3:1 WCAG 1.4.11 floor for a
+     graphic that carries meaning. #bf8506 reaches 3.19:1 against the card and 3.47:1
+     against the away colour — the value that maximises the WORSE of the two, since
+     darkening further to help the card actively hurts the away separation. */
+  /* theme-contrast is a DARK surface (--fp-bg #000, card #111), not a light one.
+     Max-contrast pair: bright gold 12.53:1 and pure white 18.88:1 against the card. */
+  --fp-momentum-home: #ffcc33;
+  --fp-momentum-home-rgb: 255 204 51;
+  --fp-momentum-away: #ffffff;
+  --fp-momentum-away-rgb: 255 255 255;
   --fp-value: #b45309;
   --fp-value-rgb: 180 83 9;
   /* Contrast theme: ring stays near-opaque so it never washes out on black. */
