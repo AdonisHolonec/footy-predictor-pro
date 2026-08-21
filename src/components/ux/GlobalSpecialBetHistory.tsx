@@ -10,6 +10,10 @@ type Props = {
   fixtureIndex?: Map<number, FixtureLabel>;
   /** Fails closed, like the per-match Special Bet card. */
   canUseGlobalSpecialBet?: boolean;
+  /** UX-E Tickets: the surface owns the heading. */
+  embedded?: boolean;
+  /** Empty-state CTA — opens the builder above. */
+  onBuild?: () => void;
 };
 
 /** The two products the API can filter on. Sourced from the type, never re-listed. */
@@ -44,17 +48,19 @@ const TAB_LABEL_KEY: Record<GlobalSpecialBetKind, string> = {
  * heading. The cost is a refetch on switch; a cache here would be a second
  * source of truth for data the server already paginates, so there isn't one.
  */
-export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpecialBet = false }: Props) {
+export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpecialBet = false, embedded = false, onBuild }: Props) {
   const { t } = useLocale();
   const [kind, setKind] = useState<GlobalSpecialBetKind>("combo");
 
   if (!canUseGlobalSpecialBet) return null;
 
   return (
-    <section className="space-y-3">
-      <header>
-        <SectionHeader eyebrow={t("gsb.eyebrow")} title={t("gsb.ticketsTitle")} description={t("gsb.ticketsSub")} />
-      </header>
+    <section className="space-y-3" data-testid="ticket-history">
+      {!embedded && (
+        <header>
+          <SectionHeader eyebrow={t("gsb.eyebrow")} title={t("gsb.ticketsTitle")} description={t("gsb.ticketsSub")} />
+        </header>
+      )}
 
       {/* The same segmented pattern the match analysis uses — a real tablist via
           the shared primitive; it scrolls rather than wraps so the labels never
@@ -72,7 +78,7 @@ export default function GlobalSpecialBetHistory({ fixtureIndex, canUseGlobalSpec
 
       <div role="tabpanel" className="space-y-3">
         {/* Keyed by kind: a tab switch is a new list, not a re-filtered one. */}
-        <GlobalSpecialBetTicketList key={kind} kind={kind} fixtureIndex={fixtureIndex} />
+        <GlobalSpecialBetTicketList key={kind} kind={kind} fixtureIndex={fixtureIndex} onBuild={onBuild} />
       </div>
     </section>
   );

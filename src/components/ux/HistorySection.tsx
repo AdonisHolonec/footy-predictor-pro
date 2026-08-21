@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import type { HistoryEntry } from "../../types";
 import EmptyState from "../../design-system/EmptyState";
-import SectionHeader from "../../design-system/SectionHeader";
 import SegmentedControl from "../../design-system/SegmentedControl";
 import Button from "../../design-system/Button";
 import IconButton from "../../design-system/IconButton";
@@ -14,15 +13,19 @@ import { kickoffLocalDateKey, localCalendarDateKey } from "../../utils/appUtils"
 /**
  * Results (UX-E) — "what happened to my predictions?"
  *
- *   1. the selected day, with previous / next / today navigation
- *   2. a one-line outcome summary for that day (the existing
- *      `historyStatsFromRows` — the same denominator the tracker uses)
- *   3. the day's rows, in the list grammar (MatchListRow), newest first
- *   4. a compact entry to ticket results (Tickets owns ticket history)
+ * A record, read top to bottom in one rhythm:
  *
- * Not here, on purpose: the performance tracker (Performance), the ticket
- * history (Tickets), the inline per-match ticket builder (Match Detail), and
- * the old silent 80-row cap — a day is a day.
+ *   1. DATE     — the primary interaction. Previous / next around a large day
+ *                 label, "Today" to jump back. Stronger than anything below.
+ *   2. SUMMARY  — one strip, ≤56px: settled · won · lost · rate, pending aside.
+ *                 The existing `historyStatsFromRows`; never repeated on the page.
+ *   3. FILTER   — one scrolling row, ≤48px, only the statuses settlement emits.
+ *   4. LIST     — the day's rows in the UX-A grammar (MatchListRow), dominant.
+ *   5. SECONDARY — ticket results live in Tickets; one quiet link down.
+ *
+ * Not here, on purpose: the performance tracker (Performance), KPI cards,
+ * charts, the ticket history (Tickets), the inline ticket builder (Match
+ * Detail), and the old silent 80-row cap — a day is a day.
  */
 
 type OutcomeFilter = "all" | "win" | "loss" | "pending" | "push" | "half_win" | "half_loss";
@@ -56,6 +59,22 @@ function rowKey(row: HistoryEntry): string {
   return String(row.id ?? `${row.teams?.home}-${row.teams?.away}-${row.kickoff}`);
 }
 
+/** One fact of the summary strip: a figure with its quiet label underneath. */
+function Figure({ value, label, tone = "text" }: { value: string; label: string; tone?: "text" | "success" | "danger" | "accent" }) {
+  const toneClass = {
+    text: "text-[var(--fp-text)]",
+    success: "text-[var(--fp-success)]",
+    danger: "text-[var(--fp-danger)]",
+    accent: "text-[var(--fp-accent)]"
+  }[tone];
+  return (
+    <div className="min-w-0">
+      <p className={`font-display text-lg font-bold leading-none tabular-nums ${toneClass}`}>{value}</p>
+      <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{label}</p>
+    </div>
+  );
+}
+
 export default function HistorySection({ history, onOpenMatch, onGoTickets, today = localCalendarDateKey() }: Props) {
   const { t, locale } = useLocale();
   const [day, setDay] = useState(today);
@@ -85,61 +104,84 @@ export default function HistorySection({ history, onOpenMatch, onGoTickets, toda
     [dayRows, outcome]
   );
 
-  const dayLabel = useMemo(() => {
+  const [weekday, dateLabel] = useMemo(() => {
     const [y, m, d] = day.split("-").map(Number);
-    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", {
-      weekday: "long",
-      day: "numeric",
-      month: "long"
-    }).format(new Date(y, m - 1, d));
+    const date = new Date(y, m - 1, d);
+    const tag = locale === "ro" ? "ro-RO" : "en-GB";
+    return [
+      new Intl.DateTimeFormat(tag, { weekday: "long" }).format(date),
+      new Intl.DateTimeFormat(tag, { day: "numeric", month: "short" }).format(date)
+    ];
   }, [day, locale]);
   const relative =
     day === today ? t("history.dayToday") : day === shiftDay(today, -1) ? t("history.dayYesterday") : null;
 
   return (
-    <section className="space-y-4">
-      <header>
-        <SectionHeader as="h1" size="page" eyebrow={t("nav.results")} title={t("nav.results")} description={t("history.sub")} />
-      </header>
+    <section className="space-y-3" data-surface="results">
+      <h1 className="sr-only">{t("nav.results")}</h1>
 
-      {/* 1 · the day */}
-      <nav aria-label={t("history.dayNav")} className="flex items-center gap-2" data-testid="results-day-nav">
-        <IconButton size="sm" onClick={() => setDay(shiftDay(day, -1))} disabled={!canGoBack} aria-label={t("history.dayPrev")}>
+      {/* 1 · DATE — the primary interaction; stronger than every control below. */}
+      <nav
+        aria-label={t("history.dayNav")}
+        className="flex items-center justify-between gap-2 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2 py-2 shadow-fp-sm"
+        data-testid="results-day-nav"
+      >
+        <IconButton onClick={() => setDay(shiftDay(day, -1))} disabled={!canGoBack} aria-label={t("history.dayPrev")}>
           ‹
         </IconButton>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[var(--fp-text)]" aria-current="date" data-testid="results-day-label">
-            {dayLabel}
-            {relative && <span className="ml-1.5 font-normal text-[var(--fp-text-muted)]">· {relative}</span>}
+        <div className="min-w-0 flex-1 text-center">
+          <p className="truncate font-display text-lg font-bold leading-tight text-[var(--fp-text)]" aria-current="date" data-testid="results-day-label">
+            <span className="capitalize">{weekday}</span>, {dateLabel}
+          </p>
+          <p className="mt-0.5 flex items-center justify-center gap-2 text-xs text-[var(--fp-text-muted)]">
+            {relative ? (
+              <span className="font-semibold uppercase tracking-wide text-[var(--fp-accent)]">{relative}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDay(today)}
+                className="font-semibold uppercase tracking-wide text-[var(--fp-accent)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                data-testid="results-day-today"
+              >
+                {t("history.dayToday")}
+              </button>
+            )}
           </p>
         </div>
-        <IconButton size="sm" onClick={() => setDay(shiftDay(day, 1))} disabled={!canGoForward} aria-label={t("history.dayNext")}>
+        <IconButton onClick={() => setDay(shiftDay(day, 1))} disabled={!canGoForward} aria-label={t("history.dayNext")}>
           ›
         </IconButton>
-        {day !== today && (
-          <Button size="sm" variant="ghost" onClick={() => setDay(today)}>
-            {t("history.dayToday")}
-          </Button>
-        )}
       </nav>
 
-      {/* 2 · the summary — one line, the tracker's own denominator, never repeated below */}
+      {/* 2 · SUMMARY — one strip, the tracker's own denominator, never repeated below. */}
       {summary.settled + pendingCount > 0 && (
-        <p className="font-mono text-xs text-[var(--fp-text-muted)]" data-testid="results-summary">
-          {t("history.daySummary", {
+        <div
+          className="flex items-center gap-4 px-1 sm:gap-6"
+          data-testid="results-summary"
+          aria-label={t("history.daySummary", {
             settled: summary.settled,
             won: summary.wins,
             lost: summary.losses,
             rate: summary.settled ? summary.winRate.toFixed(0) : "—"
           })}
-          {pendingCount > 0 && <span> · {t("history.dayPending", { n: pendingCount })}</span>}
-        </p>
+        >
+          <Figure value={String(summary.settled)} label={t("history.sumSettled")} />
+          <Figure value={String(summary.wins)} label={t("history.win")} tone="success" />
+          <Figure value={String(summary.losses)} label={t("history.loss")} tone="danger" />
+          <Figure value={summary.settled ? `${summary.winRate.toFixed(0)}%` : "—"} label={t("history.sumRate")} tone="accent" />
+          {pendingCount > 0 && (
+            <p className="ml-auto shrink-0 text-xs text-[var(--fp-text-muted)]" data-testid="results-pending">
+              {t("history.dayPending", { n: pendingCount })}
+            </p>
+          )}
+        </div>
       )}
 
-      {/* filters + the ticket entry */}
-      <div className="flex flex-wrap items-center gap-2" data-testid="results-controls">
+      {/* 3 · FILTER — one row that scrolls, never wraps into a second row on a phone. */}
+      <div className="-mx-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" data-testid="results-controls">
         <SegmentedControl
           mode="toggle"
+          className="w-max"
           options={OUTCOME_FILTERS.map(({ id, key }) => ({
             value: id,
             label: t(key),
@@ -148,14 +190,9 @@ export default function HistorySection({ history, onOpenMatch, onGoTickets, toda
           value={outcome}
           onChange={(next) => setOutcome(next as OutcomeFilter)}
         />
-        {onGoTickets && (
-          <Button size="sm" variant="ghost" onClick={onGoTickets} className="ml-auto" data-testid="results-tickets-link">
-            {t("history.ticketResults")} ›
-          </Button>
-        )}
       </div>
 
-      {/* 3 · the rows */}
+      {/* 4 · LIST — dominant. */}
       {!rows.length ? (
         <EmptyState
           title={dayRows.length ? t("history.emptyFilteredTitle") : t("history.emptyDayTitle")}
@@ -164,7 +201,7 @@ export default function HistorySection({ history, onOpenMatch, onGoTickets, toda
           onAction={outcome !== "all" ? () => setOutcome("all") : canGoBack ? () => setDay(shiftDay(day, -1)) : undefined}
         />
       ) : (
-        <MatchList label={`${t("nav.results")} · ${dayLabel}`}>
+        <MatchList label={`${t("nav.results")} · ${weekday} ${dateLabel}`}>
           {rows.map((row) => (
             <MatchListRow
               key={rowKey(row)}
@@ -174,6 +211,15 @@ export default function HistorySection({ history, onOpenMatch, onGoTickets, toda
             />
           ))}
         </MatchList>
+      )}
+
+      {/* 5 · SECONDARY — accumulators are a different product; one link, after the record. */}
+      {onGoTickets && (
+        <div className="flex justify-end">
+          <Button size="sm" variant="ghost" onClick={onGoTickets} data-testid="results-tickets-link">
+            {t("history.ticketResults")} ›
+          </Button>
+        </div>
       )}
     </section>
   );

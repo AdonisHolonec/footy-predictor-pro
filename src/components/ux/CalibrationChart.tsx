@@ -5,6 +5,8 @@ import Card from "../../design-system/Card";
 
 type Props = {
   history: HistoryEntry[];
+  /** The panel around it owns the title. */
+  embedded?: boolean;
 };
 
 const BANDS: { min: number; max: number; labelKey: string }[] = [
@@ -15,7 +17,7 @@ const BANDS: { min: number; max: number; labelKey: string }[] = [
   { min: 90, max: 101, labelKey: "stats.calibrationBand90plus" }
 ];
 
-export default function CalibrationChart({ history }: Props) {
+export default function CalibrationChart({ history, embedded = false }: Props) {
   const { t } = useLocale();
 
   const buckets = useMemo(() => {
@@ -35,13 +37,14 @@ export default function CalibrationChart({ history }: Props) {
 
   if (!buckets.length) return null;
 
+  const Shell = embedded ? "div" : Card;
   return (
-    <Card>
-      <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+    <Shell>
+      {!embedded && (<><h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
         {t("stats.calibrationTitle")}
       </h2>
-      <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("stats.calibrationSub")}</p>
-      <div className="mt-4 space-y-3">
+      <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("stats.calibrationSub")}</p></>)}
+      <div className={embedded ? "space-y-3" : "mt-4 space-y-3"}>
         {buckets.map((b) => (
           <div key={b.labelKey}>
             <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--fp-text-muted)]">
@@ -66,6 +69,6 @@ export default function CalibrationChart({ history }: Props) {
           </div>
         ))}
       </div>
-    </Card>
+    </Shell>
   );
 }

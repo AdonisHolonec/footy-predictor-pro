@@ -611,6 +611,10 @@ export const ro: Dict = {
     fullTimeShort: "FT"
   },
   tickets: {
+    buildCta: "Construiește bilet",
+    emptyCta: "Construiește un bilet",
+    emptyDesc: "Combină câteva dintre cele mai puternice predicții într-un bilet și urmărește aici cum se încheie.",
+    legs: "{n} selecții",
     buildTitle: "Construiește bilet",
     buildSub: "Un bilet cu mai multe selecții din ligile tale favorite.",
     historyTitle: "Istoric bilete",
@@ -623,15 +627,17 @@ export const ro: Dict = {
     modelInternalsSub: "Adaugă fila Avansat în analiza meciului: etapele pipeline-ului, λ, calibrare și versiunea modelului."
   },
   perf: {
+    trendTitle: "Ultimele {n} zile",
+    trendNone: "Nicio predicție validată",
     viewResults: "Vezi rezultatele",
     breakdownTitle: "Detaliere",
     breakdownSub: "Pe zi · ligă · piață",
     reliabilityTitle: "Fiabilitatea modelului",
     reliabilitySub: "Calibrarea predicțiilor tale validate",
-    yoursEyebrow: "A",
+    yoursEyebrow: "Contul tău",
     yoursTitle: "Rezultatele tale",
     yoursSub: "Doar predicțiile validate din acest cont.",
-    modelEyebrow: "B",
+    modelEyebrow: "Public · toate conturile",
     modelTitle: "Istoricul modelului",
     modelSub: "Record public, toate conturile, ultimele 45 de zile."
   },
@@ -658,6 +664,8 @@ export const ro: Dict = {
     advancedSub: "Laborator · Monte Carlo · xG · audit"
   },
   history: {
+    sumSettled: "Validate",
+    sumRate: "Rată reușită",
     dayNav: "Ziua",
     dayPrev: "Ziua anterioară",
     dayNext: "Ziua următoare",
@@ -990,7 +998,7 @@ export const ro: Dict = {
     kickoff: "Start",
     matchFallback: "Meci #{id}",
     leagueFallback: "Liga #{id}",
-    statusPending: "În desfășurare",
+    statusPending: "În așteptare",
     statusWon: "Câștigat",
     statusLost: "Pierdut",
     statusVoid: "Anulat",
