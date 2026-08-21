@@ -532,6 +532,37 @@ export const SETTLEMENT_ROW_COLUMNS = Object.freeze([
 export const SETTLEMENT_SELECT = SETTLEMENT_ROW_COLUMNS.join(", ");
 
 /**
+ * Scan 3 may skip a finished row only when there is nothing left to grade.
+ *
+ * D8b. Before this, "nothing left" was read from `card_market_validations` alone:
+ * when every market the row carries was already win/loss, the row was skipped.
+ * That test ignored the top-level `validation` column. Production carried Cards
+ * rows whose market validations had been graded by an earlier path while
+ * `validation` was never promoted from them — and because the markets read as
+ * settled, scan 3 skipped those rows on every run, so `validation` stayed
+ * `pending` forever (D8 verification: fixtures 1607172, 1552118).
+ *
+ * A row with a recommended pick whose `validation` is not win/loss still has a
+ * gap, whatever its markets say; it must reach the grading step below. Rows
+ * without a recommended pick keep the market-only test: there is no top-level
+ * outcome for them to miss.
+ */
+export function isSettlementRowComplete({ picks, storedValidations, validation, missingFirstHalf = false }) {
+  if (missingFirstHalf) return false;
+  const vals = storedValidations && typeof storedValidations === "object" ? storedValidations : null;
+  if (!vals) return false;
+  const settled = (v) => v === "win" || v === "loss";
+  const marketsSettled = ["recommended", "goals", "corners", "shots"].every((key) =>
+    picks?.[key] ? settled(vals[key]) : true
+  );
+  if (!marketsSettled) return false;
+  // The top-level outcome is the record users and the tracker read; a graded
+  // market does not stand in for it.
+  if (picks?.recommended && !settled(validation)) return false;
+  return true;
+}
+
+/**
  * Rebuild the row shape the settlement helpers expect, from columns only.
  *
  * The sibling of rehydrateAggregateRow, and it keeps that function's two rules:

@@ -35,6 +35,7 @@ import {
 } from "../server-utils/observability/historyTiming.js";
 import {
   SETTLEMENT_SELECT,
+  isSettlementRowComplete,
   rehydrateSettlementRow,
   mapDbRowToHistoryEntry,
   readPredictionsHistory,
@@ -919,14 +920,18 @@ async function handleHistorySync(req, res) {
         const missingHt = hasFirstHalfPick && !htKnown;
         if (!hasAnyPick && !missingHt) continue;
 
-        const allSettled =
-          storedVals &&
-          typeof storedVals === "object" &&
-          ["recommended", "goals", "corners", "shots"].every((key) => {
-            if (!picks[key]) return true;
-            return storedVals[key] === "win" || storedVals[key] === "loss";
-          });
-        if (allSettled && !missingHt) continue;
+        // D8b: "complete" also requires the top-level validation to be graded when
+        // a recommended pick exists — settled markets alone used to skip rows whose
+        // `validation` was never promoted, leaving them pending on every run.
+        if (
+          isSettlementRowComplete({
+            picks,
+            storedValidations: storedVals,
+            validation: row.validation,
+            missingFirstHalf: missingHt
+          })
+        )
+          continue;
 
         let marketTotals = {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
