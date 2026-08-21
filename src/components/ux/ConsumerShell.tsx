@@ -4,7 +4,7 @@ import IconButton from "../../design-system/IconButton";
 import Badge from "../../design-system/Badge";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
-import { MOBILE_TAB_ITEMS, type AppNavView } from "./appNav";
+import { DESKTOP_NAV_ITEMS, MOBILE_TAB_ITEMS, type AppNavView } from "./appNav";
 import { NavIcon } from "./navIcons";
 
 type Props = {
@@ -25,7 +25,6 @@ type Props = {
   onOpenNotifications: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onOpenSearch?: () => void;
   email?: string | null;
   tier?: string;
   extraDates?: ReactNode;
@@ -54,7 +53,6 @@ export default function ConsumerShell({
   onOpenNotifications,
   onOpenProfile,
   onOpenSettings,
-  onOpenSearch,
   email,
   tier = "free",
   extraDates,
@@ -114,7 +112,7 @@ export default function ConsumerShell({
    */
   const desktopNavIcons = (
     <div className="hidden items-center gap-1 lg:flex">
-      {MOBILE_TAB_ITEMS.map((item) => {
+      {DESKTOP_NAV_ITEMS.map((item) => {
         const label = t(item.labelKey);
         const isActive = activeNav === item.id;
         return (
@@ -229,7 +227,6 @@ export default function ConsumerShell({
                 title={t("shell.searchTeams")}
                 value={search}
                 onChange={(e) => onSearchChange(e.target.value)}
-                onFocus={() => onOpenSearch?.()}
                 placeholder={t("shell.searchTeams")}
                 className="h-9 min-w-[6.5rem] flex-[1_1_8rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-[14rem] sm:px-2.5"
               />

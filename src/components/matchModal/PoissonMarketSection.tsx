@@ -168,10 +168,12 @@ export default function PoissonMarketSection({
 
       {(data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--fp-border)] pt-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
-          {data.sampleHome != null && <span>n gazde · {data.sampleHome}</span>}
-          {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
-          {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
-          {data.usedFallback && <span className="text-[var(--fp-warning)]">⚠ fallback (rolling stats incomplete)</span>}
+          {data.sampleHome != null && <span>{tr("match.sampleHome", { n: data.sampleHome })}</span>}
+          {data.sampleAway != null && <span>{tr("match.sampleAway", { n: data.sampleAway })}</span>}
+          {data.leagueBaseline != null && (
+            <span>{tr("match.leagueAverage", { n: data.leagueBaseline.toFixed(1) })}</span>
+          )}
+          {data.usedFallback && <span className="text-[var(--fp-warning)]">{tr("match.sampleFallback")}</span>}
         </div>
       )}
       {bestPick && (

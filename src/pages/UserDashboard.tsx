@@ -48,7 +48,12 @@ import { buildFixtureLabelIndex } from "../utils/globalSpecialBetView";
 import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
-import { clampTierDates, hasLegacyPredictionShape, shouldShowOnboarding } from "./userDashboard/helpers";
+import {
+  canShowSpecialBet as canShowSpecialBetFor,
+  clampTierDates,
+  hasLegacyPredictionShape,
+  shouldShowOnboarding
+} from "./userDashboard/helpers";
 import ProfileView from "./userDashboard/ProfileView";
 import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
@@ -149,6 +154,8 @@ export default function UserDashboard() {
   const matchSearch = prefs.matchSearch;
   const showSettledMarketsOnly = prefs.settledOnly;
   const todayKey = localCalendarDateKey();
+  // One predicate for both Special Bet surfaces (list modal + history) — see helpers.
+  const canShowSpecialBet = canShowSpecialBetFor(userTier, tierQuotaExempt);
   const {
     history,
     historyStats,
@@ -267,15 +274,18 @@ export default function UserDashboard() {
     const billing = params.get("billing");
     if (!billing) return;
     if (billing === "success") {
-      setStatus("Plată reușită. Abonamentul se activează în câteva secunde — reîncarcă profilul dacă tier-ul nu apare.");
+      setStatus(t("dash.billingSuccess"));
       setNavView("settings");
     } else if (billing === "cancel") {
-      setStatus("Checkout anulat.");
+      setStatus(t("dash.billingCancelled"));
     }
     params.delete("billing");
     params.delete("tier");
     const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
     window.history.replaceState({}, "", next);
+    // Runs once on mount (the URL param is consumed and stripped); `t` is read at
+    // that moment only, so it is deliberately not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL consumption
   }, [setStatus]);
 
   const { warm: runWarm, predict: runPredict } = usePredictFlow<PredictionRow>({
@@ -525,7 +535,6 @@ export default function UserDashboard() {
       onOpenNotifications={() => setNavView("notifications")}
       onOpenProfile={() => setNavView("profile")}
       onOpenSettings={() => setNavView("settings")}
-      onOpenSearch={() => setCommandOpen(true)}
       email={user?.email}
       tier={userTier}
       extraDates={
@@ -556,7 +565,7 @@ export default function UserDashboard() {
       )}
       {rehydratedNotice && (
         <Banner tone="info" className="mb-3 !text-xs">
-          <span className="font-semibold text-[var(--fp-accent)]">Date vechi actualizate.</span>{" "}
+          <span className="font-semibold text-[var(--fp-accent)]">{t("dash.rehydratedLabel")}</span>{" "}
           <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
         </Banner>
       )}
@@ -602,6 +611,7 @@ export default function UserDashboard() {
           /* Generation date, not a pool filter: the GSB pool is every upcoming
              predicted fixture, so the card no longer follows the browsed date. */
           betDate={todayKey}
+          selectedDate={activePredictDates[0] ?? date}
           /* The profile's favourite leagues, not the local league filter: the
              server validates the scope against profiles.favorite_leagues and
              rejects anything outside it. */
@@ -642,7 +652,7 @@ export default function UserDashboard() {
           history={history}
           trackerSlot={trackerSlot}
           onOpenMatch={openMatch}
-          canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+          canShowSpecialBet={canShowSpecialBet}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
           gsbFixtureIndex={gsbFixtureIndex}
           canUseGlobalSpecialBet={Boolean(user)}
@@ -733,7 +743,7 @@ export default function UserDashboard() {
             match={modalMatch}
             logoColors={{}}
             hashColor={hashColor}
-            canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+            canShowSpecialBet={canShowSpecialBet}
             accessTier={userTier}
             presentation="focus"
             onClose={() => setSelectedMatch(null)}

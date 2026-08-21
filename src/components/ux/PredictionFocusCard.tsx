@@ -172,7 +172,7 @@ export default function PredictionFocusCard({
   onReport
 }: Props) {
   const { t } = useLocale();
-  const { weather, loading: weatherLoading } = useKickoffWeather(row.venue, row.kickoff);
+  const { weather } = useKickoffWeather(row.venue, row.kickoff);
   const [showDetails, setShowDetails] = useState(false);
 
   const tier = String(accessTier || "free").toLowerCase();
@@ -298,11 +298,12 @@ export default function PredictionFocusCard({
     }
   ];
 
-  const weatherText = weather
-    ? `${weather.tempC}°C · ${t(weatherCodeKey(weather.code))}`
-    : weatherLoading
-      ? t("card.weatherLoading")
-      : t("card.weatherUnavailable");
+  // Referee and weather are context, not verdicts: render each only when it
+  // exists. A missing value renders nothing — never "unavailable" / "n/a" — and
+  // a still-loading forecast is treated as absent rather than shown as a stub.
+  const refereeText = row.referee?.trim() || null;
+  const weatherText = weather ? `${weather.tempC}°C · ${t(weatherCodeKey(weather.code))}` : null;
+  const hasMetaLine = Boolean(refereeText || weatherText);
 
   const marketGrid =
     "grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_2.5rem_2.35rem] items-center gap-x-1";
@@ -366,16 +367,25 @@ export default function PredictionFocusCard({
               e.stopPropagation();
               onToggleWatch();
             }}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--fp-radius-sm)] border text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] ${
-              watched
-                ? "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]"
-                : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
-            }`}
+            /* 44×44 hit area (WCAG 2.5.8 / platform minimum) around a 32 px visual:
+               the negative vertical margin keeps the header row at its 32 px height,
+               so the card does not grow; the extra width is real and never overlaps
+               the neighbouring control because each owns its own box. */
+            className="group/star -my-1.5 flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-none"
             title={watched ? t("card.removeFavorite") : t("card.addFavorite")}
             aria-label={watched ? t("card.removeFavorite") : t("card.addFavorite")}
             aria-pressed={watched}
           >
-            ★
+            <span
+              aria-hidden
+              className={`flex h-8 w-8 items-center justify-center rounded-[var(--fp-radius-sm)] border text-sm group-focus-visible/star:outline group-focus-visible/star:outline-2 group-focus-visible/star:outline-[var(--fp-accent)] ${
+                watched
+                  ? "border-fp-warning/40 bg-fp-warning/10 text-[var(--fp-warning)]"
+                  : "border-[var(--fp-border)] text-[var(--fp-text-muted)]"
+              }`}
+            >
+              ★
+            </span>
           </button>
         )}
         {/* Reporting is rare and corrective: it sits last, unfilled, and only
@@ -396,11 +406,13 @@ export default function PredictionFocusCard({
         )}
       </div>
 
-      <p className="mt-1 truncate text-[10px] leading-tight text-[var(--fp-text-muted)]">
-        <span title={t("card.referee")}>{row.referee?.trim() || t("card.refereeUnavailable")}</span>
-        <span className="mx-1 text-[var(--fp-text-faint)]">·</span>
-        <span title={t("card.weather")}>{weatherText}</span>
-      </p>
+      {hasMetaLine && (
+        <p className="mt-1 truncate text-[10px] leading-tight text-[var(--fp-text-muted)]">
+          {refereeText && <span title={t("card.referee")}>{refereeText}</span>}
+          {refereeText && weatherText && <span className="mx-1 text-[var(--fp-text-faint)]">·</span>}
+          {weatherText && <span title={t("card.weather")}>{weatherText}</span>}
+        </p>
+      )}
 
       <div className="mt-2.5 grid grid-cols-[1fr_auto_1fr] items-start gap-1">
         <div className="flex min-w-0 flex-col items-center gap-1">

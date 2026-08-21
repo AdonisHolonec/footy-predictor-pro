@@ -54,6 +54,21 @@ export function hasDerivateMarkets(row: PredictionRow) {
   return Boolean(row.probs?.corners || row.probs?.shotsOnTarget || row.probs?.shotsTotal || row.probs?.firstHalf);
 }
 
+/**
+ * Per-match Special Bet is an Ultra feature.
+ *
+ * `quotaExempt` is the SERVER's verdict, not a role string: api/fixtures.js
+ * resolves quota-exempt accounts (DB-role admins and the bootstrap admin list —
+ * see isWarmPredictQuotaExempt) to the Ultra tier for prediction data, and the
+ * client mirrors that flag as `tierQuotaExempt`. Reading it here keeps the UI on
+ * the same source of truth as the data it shows, and retires the old
+ * `role === "admin"` fallback without changing who sees what:
+ *   free ✗ · premium ✗ · ultra ✓ · admin (quota-exempt) ✓
+ */
+export function canShowSpecialBet(tier: string | undefined, quotaExempt: boolean): boolean {
+  return tier === "ultra" || quotaExempt === true;
+}
+
 export function tierPredictWindowDays(tier?: string) {
   if (tier === "ultra") return 3; // today +2
   if (tier === "premium") return 2; // today +1
