@@ -26,7 +26,7 @@ import type { PredictionRow } from "../../types";
 afterEach(cleanup);
 
 /** Whichever locale the environment resolves to, the copy is one of these. */
-function eitherLocale(ns: "match" | "detail", key: string): RegExp {
+function eitherLocale(ns: "match", key: string): RegExp {
   const leaf = (d: typeof en) => (d[ns] as unknown as Record<string, string>)[key];
   const variants = [leaf(en), leaf(ro as unknown as typeof en)]
     .filter(Boolean)
@@ -77,7 +77,9 @@ function renderModal(overrides: Partial<PredictionRow> = {}) {
   // UX-C: Momentum lives behind the Live layer's one disclosure. The gate under
   // test is unchanged (OverviewHero still decides on isFixtureInPlay); the tests
   // open the disclosure when the layer exists so the slot can be observed.
-  const liveDetails = screen.queryAllByRole("button", { name: eitherLocale("detail", "liveDetails") })[0];
+  const card = (d: typeof en) => (d.card as unknown as Record<string, string>).momentum;
+  const momentumTitle = new RegExp(`^(${card(en)}|${card(ro as unknown as typeof en)})`);
+  const liveDetails = screen.queryAllByRole("button", { name: momentumTitle })[0];
   if (liveDetails) fireEvent.click(liveDetails);
 }
 
