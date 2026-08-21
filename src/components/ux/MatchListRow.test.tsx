@@ -68,6 +68,18 @@ describe("MatchListRow · pre-match", () => {
     expect(slot("score")?.textContent).not.toMatch(/\d/);
   });
 
+  it("in play with a null score prints 'vs' — never null–null (live-state audit, case B)", () => {
+    const { slot } = renderRow(row({ status: "1H", score: { home: null, away: null, minute: 12 } }));
+    expect(slot("score")?.textContent).toMatch(either("common", "vs"));
+    expect(slot("score")?.textContent).not.toMatch(/null|\d/);
+    expect(slot("time")?.textContent).toMatch(/12/);
+  });
+
+  it("in play with 0–0 prints the real score", () => {
+    const { slot } = renderRow(row({ status: "1H", score: { home: 0, away: 0, minute: 3 } }));
+    expect(slot("score")?.textContent).toMatch(/0–0/);
+  });
+
   it("[4][5] shows both team badges from the existing logo source, same size", () => {
     const { li } = renderRow(row());
     const badges = li.querySelectorAll("[data-team-badge='image']");

@@ -10,7 +10,7 @@ import type { MatchModalProps } from "../MatchModal";
 import type { DetailPart } from "./detailParts";
 import { deriveDataQuality, deriveSignalEdge } from "../SignalLab";
 import type { PredictionRow, XGData } from "../../types";
-import { isFixtureInPlay } from "../../utils/appUtils";
+import { hasRunningScore } from "../../utils/appUtils";
 import { listSpecialBetCandidates, pickSpecialBetLegs, outcomeTextClass, specialBetCombinedOdd as specialBetCombinedOddValue, specialBetCombinedOutcome } from "../../utils/specialBet";
 import { resolveCardMarketOutcome } from "../../utils/cardMarketOutcome";
 import { fetchWithAuth } from "../../utils/apiAuth";
@@ -75,13 +75,9 @@ export function useMatchModalModel(args: UseMatchModalModelArgs) {
     match.score?.home !== undefined &&
     match.score?.away !== undefined;
   const hasNumericScore = match.score != null && typeof match.score.home === "number" && typeof match.score.away === "number";
-  const koMs = new Date(match.kickoff).getTime();
-  const pastKickoffPollWindow = Number.isFinite(koMs) && Date.now() >= koMs - 15 * 60 * 1000;
-  /** Scor în desfășurare: status „live” sau încă NS dar după fereastra de start (poll actualizează). */
-  const hasLiveScore =
-    hasNumericScore &&
-    !hasFinalScore &&
-    (isFixtureInPlay(match.status) || (pastKickoffPollWindow && !isFinalStatus(match.status)));
+  /** Running (non-final) score snapshot — the SCORE question. The LIVE identity
+      (label, colour, dot) follows isFixtureInPlay in MatchModal, never this. */
+  const hasLiveScore = hasRunningScore(match);
   // Recommended settlement is server-resolved only — never regraded here (see
   // resolveCardMarketOutcome). Renders the persisted verdict, or neutral when still pending.
   const recommendedOutcome = resolveCardMarketOutcome("recommended", match);

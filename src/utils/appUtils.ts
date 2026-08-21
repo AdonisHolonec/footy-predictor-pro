@@ -133,10 +133,59 @@ export function hashColor(seed: string): string {
 const IN_PLAY_STATUSES = new Set(["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP", "VAR", "1ST", "2ND"]);
 
 export function isFixtureInPlay(status?: string): boolean {
-  const s = String(status ?? "")
+  return IN_PLAY_STATUSES.has(normalizeStatus(status));
+}
+
+/**
+ * Statuses after which a fixture will never be in play again — the finals plus
+ * the abandoned / postponed / awarded family. One set, shared by the live poller
+ * (never poll these) and the running-score predicate (never show these as live).
+ */
+export const TERMINAL_NON_FINAL_STATUSES = new Set(["CANC", "PST", "ABD", "AWD", "WO"]);
+const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
+
+function normalizeStatus(status?: string): string {
+  return String(status ?? "")
     .trim()
     .toUpperCase();
-  return IN_PLAY_STATUSES.has(s);
+}
+
+export function isTerminalOrAbandonedStatus(status?: string): boolean {
+  const s = normalizeStatus(status);
+  return FINAL_STATUSES.has(s) || TERMINAL_NON_FINAL_STATUSES.has(s);
+}
+
+/** Grace around kickoff during which an NS/TBD fixture may still carry a running score. */
+export const RUNNING_SCORE_WINDOW_BEFORE_MS = 15 * 60 * 1000;
+export const RUNNING_SCORE_WINDOW_AFTER_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * A running (non-final) score snapshot exists for this fixture.
+ *
+ * This is the SCORE question, not the LIVE question. It decides whether the
+ * score slot prints the score instead of the kickoff time; it never claims the
+ * match is being played — that is `isFixtureInPlay`, which gates Momentum,
+ * events, stats, the win-probability strip, the live counter and the poller.
+ *
+ * True when both scores are numbers (0 is a score; null is not), the status is
+ * neither final nor abandoned/postponed, and either the status is in play or
+ * the fixture is still reported NS/TBD inside the poll grace (kickoff − 15 min
+ * … kickoff + 4 h, the same window the poller uses, so the grace ends when the
+ * polling that could refresh it ends).
+ */
+export function hasRunningScore(
+  row: { status?: string; kickoff?: string; score?: { home?: number | null; away?: number | null } | null },
+  nowMs: number = Date.now()
+): boolean {
+  const home = row.score?.home;
+  const away = row.score?.away;
+  if (typeof home !== "number" || typeof away !== "number") return false;
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return false;
+  if (isTerminalOrAbandonedStatus(row.status)) return false;
+  if (isFixtureInPlay(row.status)) return true;
+  const koMs = new Date(row.kickoff ?? "").getTime();
+  if (!Number.isFinite(koMs)) return false;
+  return nowMs >= koMs - RUNNING_SCORE_WINDOW_BEFORE_MS && nowMs <= koMs + RUNNING_SCORE_WINDOW_AFTER_MS;
 }
 
 export async function dominantColorFromImage(url: string): Promise<string | null> {
