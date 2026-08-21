@@ -10,7 +10,7 @@ import {
   normalizeSelectedDates,
   useLocalStorageState
 } from "../../utils/appUtils";
-import { applyLiveStateCarryForward } from "../../utils/liveState";
+import { applyLiveStateCarryForward, demoteStaleLiveStatus } from "../../utils/liveState";
 import { projectPredictionsByUserForStorage } from "../../utils/predictionListProjection";
 import { hasLegacyPredictionShape } from "./helpers";
 
@@ -100,7 +100,9 @@ export function usePredictionsCache({
     // promotion, etc.) would otherwise silently discard it mid-match. The rule now
     // lives in one place and is shared with the history rehydration below, which
     // was missing it entirely.
-    setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, filtered));
+    // Same freshness boundary for the locally cached rows: a status cached as 1H in
+    // an earlier session is a historical observation by now.
+    setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, filtered.map((row) => demoteStaleLiveStatus(row))));
     if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
@@ -144,7 +146,10 @@ export function usePredictionsCache({
       const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const selectedDateSet = new Set(effectiveDates);
       const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
+      // Freshness normalization BEFORE carry-forward: a stale persisted 1H must not
+      // become current LIVE on first paint (no previous state to carry forward).
       const hydrated = (json.items as PredictionRow[])
+        .map((row) => demoteStaleLiveStatus(row))
         .filter((row) => {
           const kickoffDate = kickoffLocalDateKey(row.kickoff);
           if (!selectedDateSet.has(kickoffDate)) return false;

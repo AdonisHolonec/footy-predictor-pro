@@ -262,3 +262,28 @@ describe("hydration in-flight guard", () => {
     expect(hydrationCalls().length).toBe(2);
   });
 });
+
+describe("hydration freshness boundary (live-state freshness fix)", () => {
+  // KICKOFF_IN_RANGE (2026-08-18 18:00Z) is days in the past at test time, so a
+  // persisted 1H for it is exactly the stale row the cron left behind.
+  it("stale DB 1H with no previous state does not become current LIVE on first paint", async () => {
+    const h = mount();
+    await waitFor(() => expect(hydrationCalls().length).toBe(1));
+    settleLatest([row({ status: "1H", score: { home: 0, away: 0 } })]);
+    const restored = await h.call();
+    expect(restored).toHaveLength(1);
+    expect(restored[0].status).not.toMatch(/^(1H|2H|HT|ET|BT|P|LIVE|INT|SUSP|VAR|1ST|2ND)$/);
+    expect(restored[0].status).not.toMatch(/^(FT|AET|PEN)$/);
+    expect(restored[0].rawStatus).toBe("1H");
+    expect(restored[0].score).toEqual({ home: 0, away: 0 });
+  });
+
+  it("a persisted FT is hydrated untouched", async () => {
+    const h = mount();
+    await waitFor(() => expect(hydrationCalls().length).toBe(1));
+    settleLatest([row({ status: "FT", score: { home: 2, away: 1 } })]);
+    const restored = await h.call();
+    expect(restored[0].status).toBe("FT");
+    expect(restored[0].rawStatus).toBeUndefined();
+  });
+});

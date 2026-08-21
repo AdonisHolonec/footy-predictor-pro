@@ -472,6 +472,9 @@ export type PredictionRow = {
   logos?: { league?: string; home?: string; away?: string };
   kickoff: string;
   status: string;
+  /** Diagnostics only: the persisted provider status when `status` was demoted at the
+      read boundary for being stale (see demoteStaleLiveStatus). Absent otherwise. */
+  rawStatus?: string;
   score?: MatchScore;
   /** Live momentum snapshot (Sprint 1 foundation) — null/absent when unavailable; never a placeholder. */
   momentum?: {
