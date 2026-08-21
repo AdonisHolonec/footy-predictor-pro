@@ -598,6 +598,10 @@ export const en: Dict = {
     openConsole: "Open detailed console",
     sync: "Updating…"
   },
+  list: {
+    /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
+    fullTimeShort: "FT"
+  },
   history: {
     eyebrow: "History",
     title: "History",

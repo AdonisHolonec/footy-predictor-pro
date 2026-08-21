@@ -4,7 +4,8 @@ import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import SegmentedControl from "../../design-system/SegmentedControl";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
-import PredictionFocusCard from "./PredictionFocusCard";
+import MatchList from "./MatchList";
+import MatchListRow from "./MatchListRow";
 
 type AccessTier = UpgradeTier | "free" | string;
 /** "picks" ranks the slate by confidence; see useDerivedPredictions. */
@@ -19,8 +20,6 @@ type Props = {
   onToggleWatch: (fixtureId: number) => void;
   onOpenMatch: (row: PredictionRow) => void;
   onUpgradeRequired: (feature: string, requiredTier: UpgradeTier) => void;
-  /** Opens the prediction report dialog for a row. Absent = no report button. */
-  onReportMatch?: (row: PredictionRow) => void;
   onPredict: () => void;
   matchesFilter?: MatchesSubFilter;
   onSetFilter?: (filter: MatchesSubFilter) => void;
@@ -34,13 +33,10 @@ type Props = {
 export default function MatchesSection({
   mode,
   matches,
-  accessTier,
   marketValidationsByFixtureId,
   isWatched,
   onToggleWatch,
   onOpenMatch,
-  onUpgradeRequired,
-  onReportMatch,
   onPredict,
   matchesFilter = "all",
   onSetFilter,
@@ -106,19 +102,14 @@ export default function MatchesSection({
       )}
 
       {!matches.length && loading ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-hidden>
+        <div className="overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]" aria-hidden>
           {Array.from({ length: 6 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="flex h-[168px] flex-col gap-3 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3.5 sm:p-4"
-            >
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-14" />
-              </div>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-3 w-2/3" />
-              <Skeleton className="mt-auto h-8 w-full" />
+            <div key={idx} className="flex h-[72px] items-center gap-3 border-b border-[var(--fp-border)] px-3 last:border-b-0">
+              <Skeleton className="h-3 w-9" />
+              <Skeleton className="h-6 w-6 rounded-full" />
+              <Skeleton className="h-3 flex-1" />
+              <Skeleton className="h-6 w-6 rounded-full" />
+              <Skeleton className="hidden h-3 w-24 sm:block" />
             </div>
           ))}
         </div>
@@ -164,21 +155,18 @@ export default function MatchesSection({
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <MatchList label={mode === "live" ? t("nav.live") : t("nav.matches")}>
           {matches.map((row) => (
-            <PredictionFocusCard
+            <MatchListRow
               key={row.id}
               row={row}
-              accessTier={accessTier}
               marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
               watched={isWatched(Number(row.id))}
               onToggleWatch={() => onToggleWatch(Number(row.id))}
               onOpen={() => onOpenMatch(row)}
-              onUpgradeRequired={onUpgradeRequired}
-              onReport={onReportMatch ? () => onReportMatch(row) : undefined}
             />
           ))}
-        </div>
+        </MatchList>
       )}
     </section>
   );

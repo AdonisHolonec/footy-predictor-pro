@@ -598,6 +598,10 @@ export const ro: Dict = {
     openConsole: "Deschide consola detaliată",
     sync: "Se actualizează…"
   },
+  list: {
+    /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
+    fullTimeShort: "FT"
+  },
   history: {
     eyebrow: "Istoric",
     title: "Istoric",

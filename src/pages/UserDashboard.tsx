@@ -632,7 +632,6 @@ export default function UserDashboard() {
           onToggleWatch={toggleWatchlist}
           onOpenMatch={openMatch}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-          onReportMatch={setReportRow}
           onPredict={() => void warmAndPredict()}
           /* Collapse only "live" — it is a VIEW, not one of this control's
              options. Listing the options instead silently dropped any new one:
@@ -748,6 +747,7 @@ export default function UserDashboard() {
             presentation="focus"
             onClose={() => setSelectedMatch(null)}
             onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
+            onReport={() => setReportRow(modalMatch)}
           />
         </Suspense>
       )}
