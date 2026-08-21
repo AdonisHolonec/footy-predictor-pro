@@ -6,7 +6,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
-import type { DetailTabId, MatchModalProps } from "../MatchModal";
+import type { MatchModalProps } from "../MatchModal";
+import type { DetailPart } from "./detailParts";
 import { deriveDataQuality, deriveSignalEdge } from "../SignalLab";
 import type { PredictionRow, XGData } from "../../types";
 import { isFixtureInPlay } from "../../utils/appUtils";
@@ -29,8 +30,9 @@ export function useMatchModalModel(args: UseMatchModalModelArgs) {
   const { match, accessTier, presentation, hashColor, logoColors } = args;
   const { t: tr } = useLocale();
   const [specialLegCount, setSpecialLegCount] = useState<2 | 3>(2);
-  const [detailTab, setDetailTab] = useState<DetailTabId>("overview");
-  const tab = (ids: DetailTabId[]) => (ids.includes(detailTab) ? "" : "hidden");
+  // Legacy tab state; MatchModal composes layers with its own part gates (UX-C).
+  const [detailTab, setDetailTab] = useState<DetailPart>("live");
+  const tab = (ids: DetailPart[]) => (ids.includes(detailTab) ? "" : "hidden");
   /*
    * closeBtnRef survives as the Overlay's initialFocusRef target; modalRef is
    * still the scroll container (momentum-strip scroll-to-top), wired through

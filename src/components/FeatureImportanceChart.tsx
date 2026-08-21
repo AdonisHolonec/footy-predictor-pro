@@ -15,10 +15,13 @@ function barColor(index: number, total: number): string {
 export default function FeatureImportanceChart({
   importance,
   compact = false,
+  showInternals = false,
   framed = true
 }: {
   importance: FeatureImportance;
   compact?: boolean;
+  /** Account › Model internals. Off: the schema id / Σ line is not rendered. */
+  showInternals?: boolean;
   /** When false, omit outer card chrome (for CollapsiblePanel). */
   framed?: boolean;
 }) {
@@ -64,15 +67,17 @@ export default function FeatureImportanceChart({
             <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("panels.keyFactors")}</h3>
             <p className="mt-0.5 text-xs font-medium text-[var(--fp-text-muted)]">{t("panels.keyFactorsSub")}</p>
           </div>
-          <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
-            {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
-          </div>
+          {showInternals && (
+            <div className="text-xs font-semibold text-[var(--fp-text-muted)]">
+              {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
+            </div>
+          )}
         </div>
-      ) : (
+      ) : showInternals ? (
         <div className="mb-2 text-right text-[10px] font-semibold text-[var(--fp-text-muted)]">
           {importance.schemaVersion || "fi-v1"} · Σ {importance.total ?? 100}%
         </div>
-      )}
+      ) : null}
 
       <div className="space-y-2.5">
         {items.map((item, i) => (

@@ -142,16 +142,18 @@ export default function MatchDecisionBlock({
           <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             {tr("match.odd")}
           </div>
-          <div className="font-mono text-base font-bold tabular-nums text-[var(--fp-success)] sm:text-xl">
+          <div className="font-mono text-base font-bold tabular-nums text-[var(--fp-text)] sm:text-xl">
             {odd != null && Number.isFinite(odd) ? odd.toFixed(2) : tr("common.na")}
           </div>
         </div>
       </div>
 
-      {/* Row 2 — the trust signals that decide accept vs reject. */}
-      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--fp-border)] pt-2.5">
-        <Metric label={tr("match.confidence")} value={confidenceValue} />
-        <Metric
+      {/* Row 2 — the trust signals that decide accept vs reject. Confidence is
+          stated once, by the ring above (UX-C §7), so it is not repeated here. */}
+      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 border-t border-[var(--fp-border)] pt-2.5">
+        {/* +EV only when the server value is positive (UX-C §6): no "n/a", no negative
+            verdict competing with the pick. The full value analysis lives in Markets. */}
+        {hasEv && evPct > 0 && (<Metric
           label={tr("match.decisionEv")}
           value={
             <span className="inline-flex items-baseline gap-1">
@@ -161,7 +163,7 @@ export default function MatchDecisionBlock({
           }
           tone={evTone}
           title={tr("match.decisionEvHint")}
-        />
+        />)}
         <Metric
           label={tr("match.decisionDataQuality")}
           value={

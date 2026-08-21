@@ -3,15 +3,12 @@
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import IconButton from "../design-system/IconButton";
 import Overlay from "../design-system/Overlay";
-import SegmentedControl from "../design-system/SegmentedControl";
-import MatchMomentumStickyStrip from "./ux/MatchMomentumStickyStrip";
 
 import { PredictionRow } from "../types";
 
 import { outcomeTextClass, specialBetLiveAdjustmentBadge } from "../utils/specialBet";
 
 import MatchDecisionBlock from "./matchModal/MatchDecisionBlock";
-import { finalScoreBadgeClass, finalScoreLabel } from "./matchModal/helpers";
 import TeamSnapshotCard from "./matchModal/TeamSnapshotCard";
 import LeagueStandingsTable from "./matchModal/LeagueStandingsTable";
 import { ProbBar } from "./matchModal/ProbBar";
@@ -19,6 +16,11 @@ import { useMatchModalModel } from "./matchModal/useMatchModalModel";
 import OverviewHero from "./matchModal/OverviewHero";
 import AnalysisPanels from "./matchModal/AnalysisPanels";
 import DerivedMarketsPanels from "./matchModal/DerivedMarketsPanels";
+import WhyThisPickPanel from "./matchModal/WhyThisPickPanel";
+import LiveWinProbabilityStrip from "./ux/LiveWinProbabilityStrip";
+import { partsGate, type DetailPart } from "./matchModal/detailParts";
+import { formatLiveMinute } from "./matchCard/derivations";
+import { isFixtureInPlay } from "../utils/appUtils";
 
 export type MatchModalProps = {
   match: PredictionRow;
@@ -53,14 +55,7 @@ export type MatchModalProps = {
  *   markets  → 1X2 odds, value, per-market Poisson panels  (every price)
  *   advanced → model internals, previously buried in prediction/why
  */
-const DETAIL_TABS = [
-  { id: "overview", labelKey: "match.tabOverview" },
-  { id: "analysis", labelKey: "match.tabAnalysis" },
-  { id: "markets", labelKey: "match.tabMarkets" },
-  { id: "advanced", labelKey: "match.tabAdvanced" }
-] as const;
-
-export type DetailTabId = (typeof DETAIL_TABS)[number]["id"];
+export type { DetailPart };
 
 export default function MatchModal({
   match,
@@ -77,13 +72,13 @@ export default function MatchModal({
   const model = useMatchModalModel({ match, accessTier, presentation, hashColor, logoColors });
   const {
     awayColor, clamp100, closeBtnRef, confPct, confidenceCategory, correctScoreCandidates,
-    decisionBenchmark, decisionEvPct, decisionRationale, detailTab, dq, edgeScore,
+    decisionBenchmark, decisionEvPct, decisionRationale, dq, edgeScore,
     effectiveAccessTier, ext, finalPickResult, firstHalfPick, firstHalfVerdict,
     hasExactConfidence, hasFinalScore, hasLiveScore, hasNumericScore, homeColor, htGoalsActual,
     isFocus, isFreeLike, isPremiumLike, kickoffDate, modalRef, recommendedLabel,
-    recommendedOdd, setDetailTab, setSpecialLegCount, showStandingsBlock, showTierUpgradeLocks,
+    recommendedOdd, setSpecialLegCount, showStandingsBlock, showTierUpgradeLocks,
     specialBetCandidatesLen, specialBetCombinedOdd, specialBetLegs, specialCombinedOutcome,
-    specialCombinedTone, specialLegCount, standingsRows, tab, tr, xgData
+    specialCombinedTone, specialLegCount, standingsRows, tr, xgData
   } = model;
 
   if (match.insufficientData) {
@@ -174,6 +169,47 @@ export default function MatchModal({
     );
   }
 
+  const isInPlay = isFixtureInPlay(match.status);
+  const liveMinute = formatLiveMinute(match.score?.minute, match.score?.extra);
+  const kickoffTime = new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const centreLabel =
+    hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}–${match.score?.away}` : kickoffTime;
+  const statusLabel = hasLiveScore
+    ? (liveMinute ?? tr("card.live"))
+    : hasFinalScore
+      // Settlement token in the header slot: the one place the outcome is stated.
+      ? finalPickResult === true
+        ? `${tr("list.fullTimeShort")} · ${tr("history.win")}`
+        : finalPickResult === false
+          ? `${tr("list.fullTimeShort")} · ${tr("history.loss")}`
+          : tr("list.fullTimeShort")
+      : kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+  const whyFactors = (match.explanation?.reasons ?? [])
+    .map((r) => (typeof r?.label === "string" ? r.label.trim() : ""))
+    .filter((label) => label && label !== decisionRationale)
+    .slice(0, 3);
+  const hasTicket = canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2;
+  const specialBetPreview =
+    hasTicket && specialBetCombinedOdd
+      ? tr("detail.ticketPreview", { n: specialBetLegs.length, odd: specialBetCombinedOdd.toFixed(2) })
+      : undefined;
+  const refereeText = match.referee?.trim() || null;
+  const hasConditions = Boolean(refereeText);
+  const lockedFamilies: { label: string; tier: "premium" | "ultra" }[] =
+    showTierUpgradeLocks && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence
+      ? effectiveAccessTier === "free" || isFreeLike
+        ? [
+            { label: tr("match.featCorners"), tier: "premium" },
+            { label: tr("match.featShots"), tier: "ultra" },
+            { label: tr("match.featEdge"), tier: "ultra" }
+          ]
+        : [
+            { label: tr("match.featShots"), tier: "ultra" },
+            { label: tr("match.featEdge"), tier: "ultra" }
+          ]
+      : [];
+  const marketsBoundaryTier = lockedFamilies.length ? lockedFamilies[0].tier : null;
+
   return (
     <Overlay
       open
@@ -185,254 +221,298 @@ export default function MatchModal({
       aria-describedby="match-modal-desc"
       initialFocusRef={closeBtnRef}
       panelRef={modalRef}
-      backdropClassName={isFocus ? "bg-fp-navy/40 backdrop-blur-[2px]" : "bg-fp-navy/50 backdrop-blur-sm"}
+      backdropClassName={isFocus ? "bg-fp-navy/30 backdrop-blur-[1px] lg:bg-transparent lg:backdrop-blur-0" : "bg-fp-navy/50 backdrop-blur-sm"}
       panelClassName={
         isFocus
-          ? "fp-readable relative flex h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:max-w-3xl"
+          ? /* Mobile: bottom sheet. sm+: right drawer. lg+: a side panel at ~42% of the
+               viewport so the list stays readable behind it (UX-C §18). */
+            "fp-readable relative flex h-[min(92dvh,100%)] w-full max-w-xl flex-col overflow-y-auto rounded-t-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg sm:h-full sm:max-w-2xl sm:rounded-none sm:rounded-l-[var(--fp-radius-lg)] lg:w-[42vw] lg:min-w-[30rem] lg:max-w-[42vw]"
           : "fp-readable relative max-h-[min(92dvh,100%)] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg lg:max-w-5xl"
       }
     >
-        <div className="sticky top-2 z-10 ml-auto mr-2 mt-2 flex items-center gap-1">
-          {onReport && (
-            <IconButton
-              shape="round"
-              onClick={onReport}
-              title={tr("predictionReport.cardAction")}
-              aria-label={tr("predictionReport.cardAction")}
-            >
-              ⚑
-            </IconButton>
-          )}
-          <IconButton
-            ref={closeBtnRef}
-            shape="round"
-            onClick={onClose}
-            title={tr("match.close")}
-            aria-label={tr("match.close")}
-          >
-            ✕
-          </IconButton>
-        </div>
-
-        {hasLiveScore && match.momentum && (
-          <MatchMomentumStickyStrip
-            minute={match.score?.minute ?? null}
-            status={match.status}
-            homeTeam={match.teams.home}
-            awayTeam={match.teams.away}
-            homeScore={match.score?.home ?? null}
-            awayScore={match.score?.away ?? null}
-            homeMomentum={match.momentum.homeMomentum}
-            awayMomentum={match.momentum.awayMomentum}
-            confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
-            onJumpToTop={() => {
-              const reduceMotion =
-                typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-              modalRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
-            }}
-          />
-        )}
-
-        <div className="border-b border-[var(--fp-border)] px-4 pb-4 pt-1 sm:px-6">
-          <p id="match-modal-title" className="mb-3 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-            {tr("match.analysis")}
+        {/* 1 · HEADER — orientation only: who, score-or-kickoff, status. ≤ 64 px. */}
+        <header
+          data-layer="header"
+          className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--fp-border)] bg-fp-bg-card/95 px-3 backdrop-blur-md sm:h-16 sm:px-4"
+        >
+          <h2 id="match-modal-title" className="sr-only">
+            {match.teams.home} {tr("common.vs")} {match.teams.away}
+          </h2>
+          <p id="match-modal-desc" className="sr-only">
+            {statusLabel} · {centreLabel}
           </p>
-          <div className="mb-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center justify-center gap-2 max-xs:gap-1.5 sm:mb-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3">
-            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-xs:w-[4rem] sm:w-full sm:gap-1.5">
-              <img
-                src={match.logos?.home}
-                className="h-14 w-14 shrink-0 object-contain opacity-95 max-xs:h-12 max-xs:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
-                alt=""
-              />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-xs:text-[10px] sm:text-sm lg:text-base">
-                {match.teams.home}
-              </div>
-            </div>
-            <div className="flex w-full min-w-0 max-w-[15.5rem] shrink-0 flex-col items-center px-0.5 max-xs:max-w-[12.75rem] sm:w-auto sm:min-w-[10rem] sm:max-w-[23rem] sm:px-2">
-              <div className="mb-0.5 text-center text-[10px] font-bold uppercase leading-tight tracking-wider text-[var(--fp-text-muted)] max-xs:text-[10px]">
-                {match.league}
-              </div>
-              <div className="font-display text-3xl font-bold leading-none tracking-tighter text-[var(--fp-text)] max-xs:text-2xl sm:text-5xl">
-                {hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}-${match.score?.away}` : "—"}
-              </div>
-              {/* Pick / odds / confidence intentionally NOT repeated here — they are
-                  the Decision Block's job, directly below. */}
-              {hasFinalScore && (
-                <div
-                    className={`mt-2 inline-block max-w-full truncate rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide max-xs:text-[10px] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px] ${finalScoreBadgeClass(finalPickResult)}`}
-                >
-                  {finalScoreLabel(finalPickResult)} · {match.score?.home}-{match.score?.away}
-                </div>
-              )}
-              {hasLiveScore && (
-                <div className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-fp-danger/35 bg-fp-danger/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-danger)] sm:mt-3 sm:px-3 sm:py-1.5 sm:text-[10px]">
-                  <span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--fp-live)] motion-reduce:animate-none" /> Live ·{" "}
-                  {match.score?.home}-{match.score?.away}
-                  {Number.isFinite(Number(match.score?.minute)) ? ` · ${match.score?.minute}'` : ""}
-                </div>
-              )}
-              <div id="match-modal-desc" className="mt-2 flex max-w-full flex-wrap justify-center gap-x-1.5 gap-y-0.5 text-center text-[10px] text-[var(--fp-text-muted)] sm:mt-3 sm:gap-x-3 sm:text-[10px]">
-                <span className="font-mono tabular-nums">{kickoffDate.toLocaleDateString([], { day: "2-digit", month: "2-digit" })}</span>
-                <span>·</span>
-                <span className="font-mono tabular-nums">{new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                <span>·</span>
-                <span className="max-w-[6rem] truncate sm:max-w-[10rem]">{match.referee || "—"}</span>
-              </div>
-            </div>
-            <div className="flex w-[4.5rem] min-w-0 flex-col items-center gap-1 max-xs:w-[4rem] sm:w-full sm:gap-1.5">
-              <img
-                src={match.logos?.away}
-                className="h-14 w-14 shrink-0 object-contain opacity-95 max-xs:h-12 max-xs:w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
-                alt=""
-              />
-              <div className="w-full px-0.5 text-center font-display text-[11px] font-bold leading-tight text-[var(--fp-text)] max-xs:text-[10px] sm:text-sm lg:text-base">
-                {match.teams.away}
-              </div>
-            </div>
+          <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-1.5">
+            <img src={match.logos?.home} alt="" className="h-6 w-6 shrink-0 object-contain" />
+            <span className="truncate text-[13px] font-semibold text-[var(--fp-text)] sm:text-sm" data-slot="home">
+              {match.teams.home}
+            </span>
+            <span className="flex flex-col items-center px-1 leading-none">
+              <span
+                data-slot="centre"
+                className={`font-mono text-sm font-bold tabular-nums sm:text-base ${
+                  hasLiveScore ? "text-[var(--fp-live)]" : "text-[var(--fp-text)]"
+                }`}
+              >
+                {centreLabel}
+              </span>
+              <span
+                data-slot="status"
+                className={`mt-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tabular-nums ${
+                  hasLiveScore ? "text-[var(--fp-live)]" : "text-[var(--fp-text-muted)]"
+                }`}
+              >
+                {hasLiveScore && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--fp-live)] motion-safe:animate-pulse" />}
+                {statusLabel}
+              </span>
+            </span>
+            <span className="truncate text-right text-[13px] font-semibold text-[var(--fp-text)] sm:text-sm" data-slot="away">
+              {match.teams.away}
+            </span>
+            <img src={match.logos?.away} alt="" className="h-6 w-6 shrink-0 object-contain" />
           </div>
-          {/* Decision Layer — the last thing above the navigation, by design.
-              Everything a bet/no-bet call needs lives here; every other block
-              moved below the tabs. */}
-          <MatchDecisionBlock
-            pickLabel={recommendedLabel.label}
-            familyKey={recommendedLabel.familyKey}
-            odd={recommendedOdd}
-            confidencePct={hasExactConfidence ? confPct : null}
-            confidenceCategory={confidenceCategory}
-            evPct={decisionEvPct}
-            dataQuality={dq}
-            rationale={decisionRationale}
-            benchmark={decisionBenchmark}
-          />
-        </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {onReport && (
+              <IconButton shape="round" onClick={onReport} title={tr("predictionReport.cardAction")} aria-label={tr("predictionReport.cardAction")}>
+                ⚑
+              </IconButton>
+            )}
+            <IconButton ref={closeBtnRef} shape="round" onClick={onClose} title={tr("match.close")} aria-label={tr("match.close")}>
+              ✕
+            </IconButton>
+          </div>
+        </header>
 
-        {/* Navigation sits immediately after the Decision Block so the user learns
-            the modal has sections before scrolling through any of them. */}
-        <div className="sticky top-0 z-20 border-b border-[var(--fp-border)] bg-fp-bg-card/95 px-2 py-1.5 backdrop-blur-md sm:px-4">
-          <SegmentedControl
-            mode="tabs"
-            frame="bare"
-            aria-label={tr("match.analysis")}
-            className="overflow-x-auto pb-0.5"
-            optionClassName="px-2 py-1 text-[10px] uppercase tracking-wide"
-            options={DETAIL_TABS.filter((tabItem) => tabItem.id !== "advanced" || showModelInternals).map((tabItem) => ({
-              value: tabItem.id,
-              label: tr(tabItem.labelKey)
-            }))}
-            value={detailTab}
-            onChange={(next) => setDetailTab(next as (typeof DETAIL_TABS)[number]["id"])}
-          />
-        </div>
-
-        <div className="space-y-3 p-3 sm:space-y-4 sm:p-5">
-          {/* Live context — a single full-width timeline. Previously mounted twice
-              (a desktop copy inside the narrow score column plus a mobile copy). */}
-          <OverviewHero
-            match={match} tr={tr} tab={tab} detailTab={detailTab}
-            homeColor={homeColor} awayColor={awayColor}
-            hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
-            isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
-            confPct={confPct} confidenceCategory={confidenceCategory}
-            dq={dq} edgeScore={edgeScore}
-            recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
-            showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
-            canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
-            specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
-            specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
-            specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
-            specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
-          />
-
-          <AnalysisPanels
-            match={match} tr={tr} tab={tab}
-            homeColor={homeColor} awayColor={awayColor}
-            xgData={xgData} hasFinalScore={hasFinalScore}
-            recommendedLabel={recommendedLabel}
-            firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
-            correctScoreCandidates={correctScoreCandidates}
-          />
-          {/* Previously un-gated: these market panels rendered in every tab, which is
-              what made every section feel equally heavy. They belong to Markets. */}
-          <div className={`grid grid-cols-1 gap-2 xl:grid-cols-3 xl:gap-3 ${tab(["markets"])}`}>
-            <CollapsiblePanel compact title={tr("panels.model1x2")}>
-              <ProbBar label={tr("panels.homeWin")} val={match.probs.p1} color={homeColor} />
-              <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#475569" />
-              <ProbBar label={tr("panels.awayWin")} val={match.probs.p2} color={awayColor} />
-            </CollapsiblePanel>
-            <CollapsiblePanel
-              compact
-              title={tr("panels.doubleChance")}
-              subtitle={tr("match.dcSubtitle")}
-            >
-              <ProbBar label={tr("match.dc1x")} val={ext.pDC1X} color={homeColor} />
-              <ProbBar label={tr("match.dc12")} val={ext.pDC12} color="#6d28d9" />
-              <ProbBar label={tr("match.dcx2")} val={ext.pDCX2} color={awayColor} />
-            </CollapsiblePanel>
-            <CollapsiblePanel compact title={tr("panels.goalsMarkets")}>
-              <ProbBar label={tr("match.over15")} val={match.probs.pO15} color="#0e7490" />
-              <ProbBar label={tr("match.under15")} val={ext.pU15} color="#334155" />
-              <ProbBar label={tr("match.over25")} val={match.probs.pO25} color="#0369a1" />
-              <ProbBar label={tr("match.under25")} val={ext.pU25} color="#1d4ed8" />
-              <ProbBar label={tr("match.over35")} val={clamp100(100 - match.probs.pU35)} color="#0f766e" />
-              <ProbBar label={tr("match.under35")} val={match.probs.pU35} color="#15803d" />
-              <ProbBar label={tr("match.bttsYes")} val={match.probs.pGG} color="#92400e" />
-              <ProbBar label={tr("match.bttsNo")} val={ext.pNGG} color="#475569" />
-            </CollapsiblePanel>
+        <div className="space-y-3 p-3 sm:space-y-4 sm:p-4">
+          {/* 2 · DECISION — recommendation, confidence, odds, value: stated here and
+              nowhere else. The rationale sentence moved to Why. */}
+          <div data-layer="decision">
+            <MatchDecisionBlock
+              pickLabel={recommendedLabel.label}
+              familyKey={recommendedLabel.familyKey}
+              odd={recommendedOdd}
+              confidencePct={hasExactConfidence ? confPct : null}
+              confidenceCategory={confidenceCategory}
+              evPct={decisionEvPct}
+              dataQuality={dq}
+              rationale={null}
+              benchmark={decisionBenchmark}
+            />
           </div>
 
-          <DerivedMarketsPanels
-            match={match} tr={tr} tab={tab}
-            homeColor={homeColor} awayColor={awayColor}
-            xgData={xgData} hasExactConfidence={hasExactConfidence}
-            isPremiumLike={isPremiumLike}
-            firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
-            htGoalsActual={htGoalsActual}
-          />
-          {showTierUpgradeLocks &&
-            !match.probs.shotsOnTarget &&
-            !match.probs.shotsTotal &&
-            !hasExactConfidence && (
-            <CollapsiblePanel
-              compact
-              title={tr("match.lockedMarkets")}
-              badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
-              className={tab(["markets"])}
-            >
-              <p className="text-sm font-medium text-[var(--fp-text)]">
-                {effectiveAccessTier === "free" || isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {(effectiveAccessTier === "free" || isFreeLike
-                  ? [
-                      { label: tr("match.featCorners"), tier: "premium" as const },
-                      { label: tr("match.featShots"), tier: "ultra" as const },
-                      { label: tr("match.featEdge"), tier: "ultra" as const }
-                    ]
-                  : [
-                      { label: tr("match.featShots"), tier: "ultra" as const },
-                      { label: tr("match.featEdge"), tier: "ultra" as const }
-                    ]
-                ).map(({ label, tier }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    title={tr("match.upgradeTo", { label, tier })}
-                    onClick={() => onUpgradeRequired?.(label, tier)}
-                    className="inline-flex h-9 items-center rounded-md border border-fp-warning/40 bg-fp-warning/10 px-2.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-fp-warning/20"
-                  >
-                    🔒 {label}
-                  </button>
-                ))}
-              </div>
-            </CollapsiblePanel>
+          {/* 3 · WHY THIS PICK — one authoritative explanation, three tiers. */}
+          <WhyThisPickPanel tr={tr} summary={decisionRationale} factors={whyFactors}>
+              <AnalysisPanels
+                match={match} tr={tr} tab={partsGate(["explanation", "keyFactors", "whyPrediction", "confidence"])}
+                homeColor={homeColor} awayColor={awayColor}
+                xgData={xgData} hasFinalScore={hasFinalScore}
+                recommendedLabel={recommendedLabel}
+                firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
+                correctScoreCandidates={correctScoreCandidates}
+              />
+          </WhyThisPickPanel>
+
+          {/* 4 · LIVE — only while the existing live-state semantics say so. Compact
+              strip by default; timeline and stats behind one disclosure. */}
+          {/* The two existing live predicates, unchanged: the strip follows hasLiveScore,
+              Momentum follows isFixtureInPlay (PR #139). The layer exists when either does. */}
+          {(hasLiveScore || isInPlay) && (
+            <section data-layer="live" aria-label={tr("detail.liveTitle")} className="space-y-2">
+              {hasLiveScore && <LiveWinProbabilityStrip match={match} compact />}
+              <CollapsiblePanel compact title={tr("detail.liveDetails")}>
+              <OverviewHero
+                match={match} tr={tr} tab={partsGate(["live"])}
+                homeColor={homeColor} awayColor={awayColor}
+                hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
+                isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
+                confPct={confPct} confidenceCategory={confidenceCategory}
+                dq={dq} edgeScore={edgeScore}
+                recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
+                showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
+                canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
+                specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
+                specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
+                specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
+                specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
+                hideLiveStrip
+              />
+              </CollapsiblePanel>
+            </section>
           )}
 
+          {/* 5 · MARKETS — collapsed; families expand independently. The entitlement
+              boundary is the section badge + one CTA, not a padlock per cell. */}
+          <div data-layer="markets">
+            <CollapsiblePanel
+              compact
+              title={tr("detail.marketsTitle")}
+              subtitle={tr("detail.marketsSub")}
+              badge={
+                marketsBoundaryTier ? (
+                  <span className="rounded-md border border-fp-warning/40 bg-fp-warning/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-[var(--fp-warning)]">
+                    {marketsBoundaryTier}
+                  </span>
+                ) : undefined
+              }
+            >
+              <div className="space-y-2">
+                <CollapsiblePanel compact title={tr("panels.model1x2")}>
+                  <ProbBar label={tr("panels.homeWin")} val={match.probs.p1} color={homeColor} />
+                  <ProbBar label={tr("panels.draw")} val={match.probs.pX} color="#475569" />
+                  <ProbBar label={tr("panels.awayWin")} val={match.probs.p2} color={awayColor} />
+                </CollapsiblePanel>
+                <CollapsiblePanel compact title={tr("panels.doubleChance")} subtitle={tr("match.dcSubtitle")}>
+                  <ProbBar label={tr("match.dc1x")} val={ext.pDC1X} color={homeColor} />
+                  <ProbBar label={tr("match.dc12")} val={ext.pDC12} color="#6d28d9" />
+                  <ProbBar label={tr("match.dcx2")} val={ext.pDCX2} color={awayColor} />
+                </CollapsiblePanel>
+                <CollapsiblePanel compact title={tr("panels.goalsMarkets")}>
+                  <ProbBar label={tr("match.over15")} val={match.probs.pO15} color="#0e7490" />
+                  <ProbBar label={tr("match.under15")} val={ext.pU15} color="#334155" />
+                  <ProbBar label={tr("match.over25")} val={match.probs.pO25} color="#0369a1" />
+                  <ProbBar label={tr("match.under25")} val={ext.pU25} color="#1d4ed8" />
+                  <ProbBar label={tr("match.over35")} val={clamp100(100 - match.probs.pU35)} color="#0f766e" />
+                  <ProbBar label={tr("match.under35")} val={match.probs.pU35} color="#15803d" />
+                  <ProbBar label={tr("match.bttsYes")} val={match.probs.pGG} color="#92400e" />
+                  <ProbBar label={tr("match.bttsNo")} val={ext.pNGG} color="#475569" />
+                </CollapsiblePanel>
+                <DerivedMarketsPanels
+                  match={match} tr={tr} tab={partsGate(["derived"])}
+                  homeColor={homeColor} awayColor={awayColor}
+                  xgData={xgData} hasExactConfidence={hasExactConfidence}
+                  isPremiumLike={isPremiumLike}
+                  firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
+                  htGoalsActual={htGoalsActual}
+                  showInternals={showModelInternals}
+                />
+                <CollapsiblePanel compact title={tr("detail.oddsValue")}>
+              <AnalysisPanels
+                match={match} tr={tr} tab={partsGate(["odds", "marketPicks"])}
+                homeColor={homeColor} awayColor={awayColor}
+                xgData={xgData} hasFinalScore={hasFinalScore}
+                recommendedLabel={recommendedLabel}
+                firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
+                correctScoreCandidates={correctScoreCandidates}
+              />
+                </CollapsiblePanel>
+                {lockedFamilies.length > 0 && (
+                  <div
+                    data-slot="markets-boundary"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--fp-radius)] border border-fp-warning/35 bg-fp-warning/10 px-3 py-2"
+                  >
+                    <p className="text-sm font-medium text-[var(--fp-text)]">
+                      {effectiveAccessTier === "free" || isFreeLike ? tr("match.lockedFree") : tr("match.lockedPremium")}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onUpgradeRequired?.(lockedFamilies[0].label, lockedFamilies[0].tier)}
+                      className="inline-flex h-9 items-center rounded-md border border-fp-warning/40 bg-fp-warning/10 px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--fp-text)] hover:bg-fp-warning/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+                    >
+                      {tr("card.unlock")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </CollapsiblePanel>
+          </div>
+
+          {/* 6 · SPECIAL BET — a secondary product: one collapsed row with a preview. */}
+          <div data-layer="specialBet">
+            <CollapsiblePanel compact title={tr("detail.ticketTitle")} subtitle={specialBetPreview}>
+              <OverviewHero
+                match={match} tr={tr} tab={partsGate(["specialBet"])}
+                homeColor={homeColor} awayColor={awayColor}
+                hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
+                isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
+                confPct={confPct} confidenceCategory={confidenceCategory}
+                dq={dq} edgeScore={edgeScore}
+                recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
+                showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
+                canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
+                specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
+                specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
+                specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
+                specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
+                hideLiveStrip
+              />
+              {canShowSpecialBet && !hasTicket && (
+                <p className="text-sm text-[var(--fp-text-muted)]">{tr("detail.ticketNone")}</p>
+              )}
+            </CollapsiblePanel>
+          </div>
+
+          {/* 7 · CONTEXT — collapsed: standings & form, and conditions only when present. */}
+          {(showStandingsBlock || hasConditions) && (
+            <div data-layer="context">
+              <CollapsiblePanel compact title={tr("detail.contextTitle")} subtitle={tr("detail.contextSub")}>
+                <div className="space-y-2">
+                  {showStandingsBlock && (
+                    <CollapsiblePanel compact title={tr("match.standingsForm")}>
+              <OverviewHero
+                match={match} tr={tr} tab={partsGate(["standings"])}
+                homeColor={homeColor} awayColor={awayColor}
+                hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
+                isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
+                confPct={confPct} confidenceCategory={confidenceCategory}
+                dq={dq} edgeScore={edgeScore}
+                recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
+                showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
+                canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
+                specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
+                specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
+                specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
+                specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
+                hideLiveStrip
+              />
+                    </CollapsiblePanel>
+                  )}
+                  {hasConditions && (
+                    <CollapsiblePanel compact title={tr("detail.conditionsTitle")}>
+                      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                        <dt className="text-[var(--fp-text-muted)]">{tr("card.referee")}</dt>
+                        <dd className="text-[var(--fp-text)]">{refereeText}</dd>
+                      </dl>
+                    </CollapsiblePanel>
+                  )}
+                </div>
+              </CollapsiblePanel>
+            </div>
+          )}
+
+          {/* 8 · ADVANCED — model internals. Absent unless Account says otherwise. */}
+          {showModelInternals && (
+            <div data-layer="advanced">
+              <CollapsiblePanel compact title={tr("detail.advancedTitle")} subtitle={tr("detail.advancedSub")}>
+                <div className="space-y-3">
+              <AnalysisPanels
+                match={match} tr={tr} tab={partsGate(["lab", "monteCarlo", "xg"])}
+                homeColor={homeColor} awayColor={awayColor}
+                xgData={xgData} hasFinalScore={hasFinalScore}
+                recommendedLabel={recommendedLabel}
+                firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
+                correctScoreCandidates={correctScoreCandidates}
+              />
+              <OverviewHero
+                match={match} tr={tr} tab={partsGate(["signals"])}
+                homeColor={homeColor} awayColor={awayColor}
+                hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
+                isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
+                confPct={confPct} confidenceCategory={confidenceCategory}
+                dq={dq} edgeScore={edgeScore}
+                recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
+                showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
+                canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
+                specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
+                specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
+                specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
+                specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
+                hideLiveStrip
+              />
           {match.modelMeta &&
             (match.modelMeta.method ||
               match.modelMeta.reasonCodes?.length ||
               match.modelMeta.stakeBucket ||
               match.evaluation) && (
-              <details className={`group rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5 ${tab(["advanced"])}`}>
+              <details className="group rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4 sm:p-5">
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/90 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
                   <span className="inline-flex items-center gap-2">
                     {tr("match.modelAudit")}
@@ -692,6 +772,10 @@ export default function MatchModal({
                 </div>
               </details>
             )}
+                </div>
+              </CollapsiblePanel>
+            </div>
+          )}
         </div>
     </Overlay>
   );

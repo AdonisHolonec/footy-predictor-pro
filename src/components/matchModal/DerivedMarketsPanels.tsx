@@ -6,7 +6,7 @@
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 import { PredictionRow, XGData } from "../../types";
 import { deriveAlignedOuPick, matchingMarketOdd, shotsDisplayOdd } from "../../utils/marketPicks";
-import type { DetailTabId } from "../MatchModal";
+import type { DetailPart } from "./detailParts";
 import type { TranslateFn } from "../../i18n";
 import PoissonMarketSection from "./PoissonMarketSection";
 import { ProbBar } from "./ProbBar";
@@ -15,7 +15,9 @@ import { marketResultBadge } from "./helpers";
 type DerivedMarketsPanelsProps = {
   match: PredictionRow;
   tr: TranslateFn;
-  tab: (ids: DetailTabId[]) => string;
+  tab: (ids: DetailPart[]) => string;
+  /** Account › Model internals. Off: λ / scale / sample lines stay out of the market rows. */
+  showInternals?: boolean;
   homeColor: string;
   awayColor: string;
   xgData: XGData | null;
@@ -29,7 +31,7 @@ type DerivedMarketsPanelsProps = {
 export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
   const {
     match, tr, tab, homeColor, awayColor, xgData, hasExactConfidence,
-    isPremiumLike, firstHalfPick, firstHalfVerdict, htGoalsActual
+    isPremiumLike, firstHalfPick, firstHalfVerdict, htGoalsActual, showInternals = false
   } = props;
   return (
     <>
@@ -39,9 +41,9 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               compact
               title={tr("panels.firstHalf")}
               subtitle={tr("match.htSubtitle")}
-              className={tab(["markets"])}
+              className={tab(["derived"])}
             >
-              {match.modelMeta?.firstHalf && (
+              {showInternals && match.modelMeta?.firstHalf && (
                 <div className="mb-3 text-right font-mono text-[10px] text-[var(--fp-text-muted)] tabular-nums">
                   <div>
                     λ FH · {match.modelMeta.firstHalf.lambdaHome.toFixed(2)} vs{" "}
@@ -110,7 +112,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               compact
               title={tr("match.htLockedTitle")}
               badge={<span className="text-[10px] font-bold text-[var(--fp-warning)]">🔒</span>}
-              className={tab(["markets"])}
+              className={tab(["derived"])}
             >
               <p className="text-sm text-[var(--fp-text-muted)]">
                 {isPremiumLike ? tr("match.htLockedUltra") : tr("match.htLocked")}
@@ -120,10 +122,11 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
 
           {/* === CORNERE + ŞUTURI LA POARTĂ + CARTONAŞE (Poisson pe rolling stats) === */}
           {(match.probs.corners || match.probs.shotsOnTarget || match.probs.shotsTotal || match.probs.cards) && (
-            <div className={`space-y-2 ${tab(["markets"])}`}>
+            <div className={`space-y-2 ${tab(["derived"])}`}>
               {match.probs.corners && (
                 <CollapsiblePanel compact title={tr("match.featCorners")} subtitle={tr("match.cornersSub")}>
                   <PoissonMarketSection
+                    showInternals={showInternals}
                     title={tr("match.featCorners")}
                     subtitle={tr("match.cornersSub")}
                     accent="var(--fp-accent)"
@@ -142,6 +145,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               {match.probs.shotsOnTarget && (
                 <CollapsiblePanel compact title={tr("match.featShots")} subtitle={tr("match.shotsSub")}>
                   <PoissonMarketSection
+                    showInternals={showInternals}
                     title={tr("match.featShots")}
                     subtitle={tr("match.shotsSub")}
                     accent="var(--fp-accent)"
@@ -178,6 +182,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               {match.probs.shotsTotal && (
                 <CollapsiblePanel compact title={tr("match.shotsTotalTitle")} subtitle={tr("match.shotsTotalSub")}>
                   <PoissonMarketSection
+                    showInternals={showInternals}
                     title={tr("match.shotsTotalTitle")}
                     subtitle={tr("match.shotsTotalSub")}
                     accent="var(--fp-warning)"
@@ -205,6 +210,7 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
               {match.probs.cards && (
                 <CollapsiblePanel compact title={tr("match.featCards")} subtitle={tr("match.cardsSub")}>
                   <PoissonMarketSection
+                    showInternals={showInternals}
                     title={tr("match.featCards")}
                     subtitle={tr("match.cardsSub")}
                     accent="var(--fp-warning)"
