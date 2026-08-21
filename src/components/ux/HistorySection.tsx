@@ -3,25 +3,28 @@ import type { HistoryEntry } from "../../types";
 import EmptyState from "../../design-system/EmptyState";
 import SectionHeader from "../../design-system/SectionHeader";
 import StatusBadge from "../../design-system/StatusBadge";
+import SegmentedControl from "../../design-system/SegmentedControl";
+import Button from "../../design-system/Button";
 import { useLocale } from "../../context/LocaleContext";
-import type { ReactNode } from "react";
-import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
 import HistorySpecialBetCard from "./HistorySpecialBetCard";
 import { formatRecommendedPick } from "../../utils/formatRecommendation";
-import type { FixtureLabel } from "../../utils/globalSpecialBetView";
+
+type OutcomeFilter = "all" | "won" | "lost" | "pending";
+const OUTCOME_GROUPS: Record<Exclude<OutcomeFilter, "all">, string[]> = {
+  won: ["win", "half_win"],
+  lost: ["loss", "half_loss"],
+  pending: ["pending"]
+};
 
 type Props = {
   history: HistoryEntry[];
-  trackerSlot?: ReactNode;
   /** Open full match analysis (MatchModal). */
   onOpenMatch?: (row: HistoryEntry) => void;
   /** Special Bet is Ultra-only; fails closed (locked) when omitted. */
   canShowSpecialBet?: boolean;
   onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
-  /** fixture_id -> readable labels for the Global Special Bet snapshots. */
-  gsbFixtureIndex?: Map<number, FixtureLabel>;
-  /** Gate for the Global Special Bet history; fails closed. */
-  canUseGlobalSpecialBet?: boolean;
+  /** Opens the Tickets destination, where accumulator results live now. */
+  onGoTickets?: () => void;
 };
 
 function toneFor(v?: string): "success" | "danger" | "warning" | "neutral" {
@@ -38,20 +41,29 @@ function rowKey(row: HistoryEntry): string {
 
 export default function HistorySection({
   history,
-  trackerSlot,
   onOpenMatch,
   canShowSpecialBet = false,
   onUpgradeRequired,
-  gsbFixtureIndex,
-  canUseGlobalSpecialBet = false
+  onGoTickets
 }: Props) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Outcome filter — session-local, like the Matches segment. */
+  const [outcome, setOutcome] = useState<OutcomeFilter>("all");
 
-  const rows = useMemo(
-    () => [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
-    [history]
-  );
+  const rows = useMemo(() => {
+    const sorted = [...history].sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || "")));
+    if (outcome === "all") return sorted;
+    return sorted.filter((row) => OUTCOME_GROUPS[outcome].includes(String(row.validation || "")));
+  }, [history, outcome]);
+
+  // Day groups: a header per calendar day, in the viewer's zone, newest first.
+  const dayOf = (row: HistoryEntry) => {
+    const d = new Date(String(row.kickoff || ""));
+    return Number.isFinite(d.getTime())
+      ? new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", { weekday: "long", day: "numeric", month: "long" }).format(d)
+      : "—";
+  };
 
   const labelFor = (v?: string) => {
     if (v === "win") return t("history.win");
@@ -66,31 +78,58 @@ export default function HistorySection({
   return (
     <section className="space-y-6">
       <header>
-        <SectionHeader as="h1" size="page" eyebrow={t("history.eyebrow")} title={t("history.title")} description={t("history.sub")} />
+        <SectionHeader as="h1" size="page" eyebrow={t("nav.results")} title={t("nav.results")} description={t("history.sub")} />
       </header>
 
-      {/* The single canonical performance block. A StatTile row used to sit
-          below it repeating hit rate, W/L, pending and settled — every one of
-          which the tracker already shows. */}
-      {trackerSlot}
-
-      {/* A list of accumulators, kept above and apart from the per-match list
-          below it — the two are different products and must never read as one. */}
-      <GlobalSpecialBetHistory
-        fixtureIndex={gsbFixtureIndex}
-        canUseGlobalSpecialBet={canUseGlobalSpecialBet}
-      />
+      {/* Results answers "what happened?" — the performance numbers live on
+          Performance, accumulator results on Tickets. Here: an outcome filter
+          and day-grouped rows. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="results-controls">
+        <SegmentedControl
+          mode="toggle"
+          options={(
+            [
+              ["all", "dash.filterAll"],
+              ["won", "history.win"],
+              ["lost", "history.loss"],
+              ["pending", "history.pendingBadge"]
+            ] as const
+          ).map(([id, key]) => ({ value: id, label: t(key), title: t("dash.filterTitle", { label: t(key) }) }))}
+          value={outcome}
+          onChange={(next) => setOutcome(next as OutcomeFilter)}
+        />
+        {onGoTickets && (
+          <Button size="sm" variant="ghost" onClick={onGoTickets} className="ml-auto">
+            {t("nav.tickets")} ›
+          </Button>
+        )}
+      </div>
 
       {!rows.length ? (
-        <EmptyState title={t("history.emptyTitle")} description={t("history.empty")} />
+        <EmptyState
+          title={t("history.emptyTitle")}
+          description={t("history.empty")}
+          actionLabel={outcome !== "all" ? t("dash.showAll") : undefined}
+          onAction={outcome !== "all" ? () => setOutcome("all") : undefined}
+        />
       ) : (
         <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
           {rows.slice(0, 80).map((row, idx, visibleRows) => {
             const id = rowKey(row);
             const active = selectedId === id;
             const isLast = idx === visibleRows.length - 1;
+            const day = dayOf(row);
+            const newDay = idx === 0 || dayOf(visibleRows[idx - 1]) !== day;
             return (
               <div key={id} className={!isLast || active ? "border-b border-[var(--fp-border)]" : ""}>
+                {newDay && (
+                  <h2
+                    data-testid="results-day"
+                    className="border-b border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
+                  >
+                    {day}
+                  </h2>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedId(active ? null : id)}

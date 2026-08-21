@@ -2,9 +2,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import HomeSection from "./HomeSection";
 import PredictionFocusCard from "./PredictionFocusCard";
-import ConsumerShell from "./ConsumerShell";
-import MatchesSection from "./MatchesSection";
-import { DESKTOP_NAV_ITEMS, MOBILE_TAB_ITEMS } from "./appNav";
 import { canShowSpecialBet } from "../../pages/userDashboard/helpers";
 import { en } from "../../i18n/en";
 import { ro } from "../../i18n/ro";
@@ -76,16 +73,10 @@ function renderHome(overrides: Record<string, unknown> = {}) {
       onGoLive={() => {}}
       onGoHistory={() => {}}
       onGoStatistics={() => {}}
+      onGoTickets={() => {}}
       onPredict={() => {}}
-      valueOnly={false}
-      onToggleValue={() => {}}
-      highConfActive={false}
-      onToggleHighConf={() => {}}
       trackerStats={{ wins: 0, losses: 0, winRate: 0, settled: 0, pending: 0 } as never}
-      history={[]}
-      betDate="2026-08-21"
       selectedDate="2026-08-25"
-      favoriteLeagueIds={[39]}
       {...overrides}
     />
   );
@@ -194,95 +185,6 @@ describe("UX-0 · card: favourite control owns a 44 px hit area", () => {
     expect(onToggleWatch).toHaveBeenCalledTimes(1);
     // The bigger target must not bubble into the card's own open action.
     expect(onOpen).not.toHaveBeenCalled();
-  });
-});
-
-function renderShell(overrides: Record<string, unknown> = {}) {
-  const onNavigate = vi.fn();
-  const onSearchChange = vi.fn();
-  render(
-    <ConsumerShell
-      activeNav="home"
-      onNavigate={onNavigate}
-      date="2026-08-21"
-      onDateChange={() => {}}
-      search=""
-      onSearchChange={onSearchChange}
-      onOpenLeagues={() => {}}
-      onRefresh={() => {}}
-      onToggleFavorites={() => {}}
-      onOpenNotifications={() => {}}
-      onOpenProfile={() => {}}
-      onOpenSettings={() => {}}
-      {...overrides}
-    >
-      <div>content</div>
-    </ConsumerShell>
-  );
-  return { onNavigate, onSearchChange };
-}
-
-describe("UX-0 · shell: Statistics has a pointer route on desktop", () => {
-  it("lists statistics in the desktop rail while the mobile bar keeps its five tabs", () => {
-    expect(DESKTOP_NAV_ITEMS.map((i) => i.id)).toEqual(["home", "matches", "live", "history", "statistics", "profile"]);
-    expect(MOBILE_TAB_ITEMS.map((i) => i.id)).toEqual(["home", "matches", "live", "history", "profile"]);
-  });
-
-  it("navigates to statistics from the rail", () => {
-    const { onNavigate } = renderShell();
-    const label = new RegExp(`^(${E.nav.statistics}|${R.nav.statistics})$`);
-    screen.getAllByRole("button", { name: label })[0].click();
-    expect(onNavigate).toHaveBeenCalledWith("statistics");
-  });
-
-  it("does not add statistics to the mobile bottom bar", () => {
-    renderShell();
-    const label = new RegExp(`^(${E.nav.statistics}|${R.nav.statistics})$`);
-    // Exactly one control: the desktop rail entry. A second one would be a new tab.
-    expect(screen.getAllByRole("button", { name: label })).toHaveLength(1);
-  });
-});
-
-describe("UX-0 · shell: search behaves like a plain input", () => {
-  it("keeps focus in the field and forwards keystrokes; no dialog opens", () => {
-    const { onSearchChange } = renderShell();
-    const input = screen.getByPlaceholderText(new RegExp(`^(${E.shell.searchTeams}|${R.shell.searchTeams})$`));
-    input.focus();
-    expect(document.activeElement).toBe(input);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.change(input, { target: { value: "ars" } });
-    expect(onSearchChange).toHaveBeenCalledWith("ars");
-    expect(document.activeElement).toBe(input);
-  });
-});
-
-describe("UX-0 · matches: the Live control is reachable on mobile", () => {
-  it("is not hidden below lg and still routes to the Live view", () => {
-    const onGoLive = vi.fn();
-    render(
-      <MatchesSection
-        mode="all"
-        matches={[]}
-        accessTier="free"
-        marketValidationsByFixtureId={new Map()}
-        isWatched={() => false}
-        onToggleWatch={() => {}}
-        onOpenMatch={() => {}}
-        onUpgradeRequired={() => {}}
-        onPredict={() => {}}
-        matchesFilter="all"
-        onSetFilter={() => {}}
-        onGoLive={onGoLive}
-        valueOnly={false}
-        onToggleValueOnly={() => {}}
-        loading={false}
-      />
-    );
-    const live = screen.getByRole("button", { name: new RegExp(`^(${E.dash.filterLive}|${R.dash.filterLive})$`) });
-    expect(live.className).not.toMatch(/\bhidden\b/);
-    expect(live.className).not.toMatch(/lg:inline-flex/);
-    fireEvent.click(live);
-    expect(onGoLive).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -160,7 +160,7 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
         {/* TEAMS: badge + name · vs/score · name + badge. Names truncate; crests never do. */}
         <span
           data-slot="teams"
-          className="col-start-2 row-start-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-1.5 text-[13px] font-semibold leading-tight text-[var(--fp-text)] sm:text-sm"
+          className="col-start-2 row-start-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-1.5 text-[13px] font-semibold leading-tight text-[var(--fp-text)] sm:text-sm lg:grid-cols-[auto_minmax(0,14rem)_auto_minmax(0,14rem)_auto] lg:justify-start"
         >
           <TeamBadge src={row.logos?.home} team={row.teams.home} />
           <span className="truncate" data-slot="home">

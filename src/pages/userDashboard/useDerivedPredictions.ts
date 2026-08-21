@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import type { AppNavView } from "../../components/ux/appNav";
 import type { MatchesSubFilterPref, UiPrefsV3 } from "../../hooks/useUiPrefs";
 import type { HistoryEntry, PredictionRow } from "../../types";
 import { deriveNotifications } from "../../utils/deriveNotifications";
@@ -17,7 +16,6 @@ export function useDerivedPredictions({
   preds,
   history,
   prefs,
-  navView,
   matchesFilter,
   matchSearch,
   showSettledMarketsOnly
@@ -25,7 +23,6 @@ export function useDerivedPredictions({
   preds: PredictionRow[];
   history: HistoryEntry[];
   prefs: UiPrefsV3;
-  navView: AppNavView;
   matchesFilter: MatchesSubFilterPref;
   matchSearch: string;
   showSettledMarketsOnly: boolean;
@@ -44,12 +41,8 @@ export function useDerivedPredictions({
       looking at the slate rather than a place, so it is a Matches filter now,
       beside all/favorites.
     */
-    const listFilter: MatchesSubFilter =
-      navView === "live"
-        ? "live"
-        : matchesFilter === "favorites" || matchesFilter === "live" || matchesFilter === "picks"
-          ? matchesFilter
-          : "all";
+    // Live is a segment of this list (UX-B), no longer a view of its own.
+    const listFilter: MatchesSubFilter = matchesFilter;
     if (listFilter === "live") {
       rows = rows.filter((row) => isFixtureInPlay(row.status));
     } else if (listFilter === "favorites") {
@@ -97,7 +90,6 @@ export function useDerivedPredictions({
   }, [
     preds,
     showSettledMarketsOnly,
-    navView,
     matchesFilter,
     prefs.watchlistFixtureIds,
     prefs.minConfidence,

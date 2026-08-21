@@ -279,16 +279,10 @@ function renderHome(overrides: Record<string, unknown> = {}) {
       onGoLive={() => {}}
       onGoHistory={() => {}}
       onGoStatistics={() => {}}
+      onGoTickets={() => {}}
       onPredict={() => {}}
-      valueOnly={false}
-      onToggleValue={() => {}}
-      highConfActive={false}
-      onToggleHighConf={() => {}}
       trackerStats={{ wins: 0, losses: 0, winRate: 0, settled: 0, pending: 0 } as never}
-      history={[]}
-      betDate="2026-08-21"
       selectedDate="2026-08-25"
-      favoriteLeagueIds={[39]}
       {...overrides}
     />
   );
@@ -316,7 +310,6 @@ describe("Matches · list composition", () => {
   it("renders every match as a row in one list, no cards, no table", () => {
     render(
       <MatchesSection
-        mode="all"
         matches={[row({ id: 1 }), row({ id: 2, status: "2H", score: { home: 0, away: 2, minute: 80 } })]}
         accessTier="free"
         marketValidationsByFixtureId={new Map()}
@@ -327,7 +320,6 @@ describe("Matches · list composition", () => {
         onPredict={() => {}}
         matchesFilter="all"
         onSetFilter={() => {}}
-        onGoLive={() => {}}
         valueOnly={false}
         onToggleValueOnly={() => {}}
         loading={false}

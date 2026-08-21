@@ -14,7 +14,15 @@ export const en: Dict = {
     picks: "Picks",
     alerts: "Alerts",
     stats: "Stats",
-    resultsShort: "Results"
+    resultsShort: "Results",
+    today: "Today",
+    results: "Results",
+    performance: "Performance",
+    account: "Account",
+    tickets: "Tickets",
+    primary: "Primary navigation",
+    liveCount: "{n} live now",
+    secondary: "More"
   },
   shell: {
     openProfile: "Open profile",
@@ -601,6 +609,22 @@ export const en: Dict = {
   list: {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
     fullTimeShort: "FT"
+  },
+  tickets: {
+    sub: "Multi-leg tickets built from your favourite leagues, and how they landed."
+  },
+  account: {
+    preferencesTitle: "Preferences",
+    modelInternals: "Show model internals",
+    modelInternalsSub: "Adds the Advanced tab to match analysis: pipeline stages, λ, calibration and model version."
+  },
+  perf: {
+    yoursEyebrow: "A",
+    yoursTitle: "Your results",
+    yoursSub: "Settled picks from this account only.",
+    modelEyebrow: "B",
+    modelTitle: "Model track record",
+    modelSub: "Public record across all accounts, last 45 days."
   },
   history: {
     eyebrow: "History",

@@ -14,7 +14,15 @@ export const ro: Dict = {
     picks: "Picks",
     alerts: "Alerte",
     stats: "Statistici",
-    resultsShort: "Rezultate"
+    resultsShort: "Rezultate",
+    today: "Azi",
+    results: "Rezultate",
+    performance: "Performanță",
+    account: "Cont",
+    tickets: "Bilete",
+    primary: "Navigare principală",
+    liveCount: "{n} live acum",
+    secondary: "Mai mult"
   },
   shell: {
     openProfile: "Deschide profilul",
@@ -601,6 +609,22 @@ export const ro: Dict = {
   list: {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
     fullTimeShort: "FT"
+  },
+  tickets: {
+    sub: "Bilete cu mai multe selecții din ligile tale favorite și cum s-au încheiat."
+  },
+  account: {
+    preferencesTitle: "Preferințe",
+    modelInternals: "Arată detaliile modelului",
+    modelInternalsSub: "Adaugă fila Avansat în analiza meciului: etapele pipeline-ului, λ, calibrare și versiunea modelului."
+  },
+  perf: {
+    yoursEyebrow: "A",
+    yoursTitle: "Rezultatele tale",
+    yoursSub: "Doar predicțiile validate din acest cont.",
+    modelEyebrow: "B",
+    modelTitle: "Istoricul modelului",
+    modelSub: "Record public, toate conturile, ultimele 45 de zile."
   },
   history: {
     eyebrow: "Istoric",

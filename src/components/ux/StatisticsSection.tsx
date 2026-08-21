@@ -26,28 +26,35 @@ export default function StatisticsSection({
   return (
     <section className="space-y-4">
       <header>
-        <SectionHeader as="h1" size="page" eyebrow={t("stats.eyebrow")} title={t("stats.title")} description={t("stats.sub")} />
+        <SectionHeader as="h1" size="page" eyebrow={t("nav.performance")} title={t("nav.performance")} description={t("stats.sub")} />
       </header>
 
-      {/* The single canonical performance block. A StatTile row used to sit
-          above it repeating hit rate, wins, losses and settled — every one of
-          which the tracker already shows. */}
-      {trackerSlot}
+      {/* A · YOUR RESULTS — the signed-in account’s own settled picks. One
+          tracker renders the hit rate; nothing below repeats it. */}
+      <section aria-labelledby="perf-yours" className="space-y-4" data-testid="performance-yours">
+        <SectionHeader as="h2" id="perf-yours" size="section" eyebrow={t("perf.yoursEyebrow")} title={t("perf.yoursTitle")} description={t("perf.yoursSub")} />
+        {trackerSlot}
 
-      <CalibrationChart history={history} />
+        <CalibrationChart history={history} />
 
       {/* The per-day / per-league / per-market tables used to sit on Home, where
           they answered a question Home does not ask. They belong beside the rest
           of the track record. */}
-      <HistoryTrustSection
-        history={history}
-        leagueBreakdown={leagueBreakdown}
-        onStartPredicting={onStartPredicting}
-      />
+        <HistoryTrustSection
+          history={history}
+          leagueBreakdown={leagueBreakdown}
+          onStartPredicting={onStartPredicting}
+        />
+      </section>
 
-      <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-        <TrackRecordSection days={45} showLinkToFull compact={false} />
-      </Suspense>
+      {/* B · MODEL TRACK RECORD — the public, all-accounts snapshot. Its own
+          population and window, named as such so the two never read as one. */}
+      <section aria-labelledby="perf-model" className="space-y-4" data-testid="performance-model">
+        <SectionHeader as="h2" id="perf-model" size="section" eyebrow={t("perf.modelEyebrow")} title={t("perf.modelTitle")} description={t("perf.modelSub")} />
+        <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+          <TrackRecordSection days={45} showLinkToFull compact={false} />
+        </Suspense>
+      </section>
     </section>
   );
 }

@@ -29,7 +29,6 @@ function renderMatches(overrides: Record<string, unknown> = {}) {
   const onPredict = vi.fn();
   render(
     <MatchesSection
-      mode="all"
       matches={[] as unknown as PredictionRow[]}
       accessTier="free"
       marketValidationsByFixtureId={new Map()}
@@ -40,7 +39,6 @@ function renderMatches(overrides: Record<string, unknown> = {}) {
       onPredict={onPredict}
       matchesFilter="all"
       onSetFilter={onSetFilter}
-      onGoLive={() => {}}
       valueOnly={false}
       onToggleValueOnly={() => {}}
       loading={false}

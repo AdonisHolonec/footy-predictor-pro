@@ -1,35 +1,25 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsumerShell from "./ConsumerShell";
-import { MOBILE_TAB_ITEMS } from "./appNav";
+import { PRIMARY_NAV_ITEMS } from "./appNav";
+import { en } from "../../i18n/en";
+import { ro } from "../../i18n/ro";
 
 /**
- * The shell owns navigation, and above `lg` it is the only thing that does: the
- * bottom tab bar is `lg:hidden`, and the Home performance card that used to
- * carry a History link hides itself on a first run. A desktop account with no
- * settled picks was therefore left with no way into its own history — caught
- * only by the post-merge smoke, days later. These tests pin the invariant here,
- * where it fails in seconds.
+ * The shell owns navigation. UX-B: one ≤56 px context bar; five primary
+ * destinations rendered identically in the bottom bar (mobile) and the rail
+ * (desktop); Tickets as a subordinate desktop entry; nothing else in the chrome.
  */
+
+type Leaves = Record<string, Record<string, string>>;
+const E = en as unknown as Leaves;
+const R = ro as unknown as Leaves;
+const either = (ns: string, key: string) => new RegExp(`^(${E[ns][key]}|${R[ns][key]})$`);
 
 function renderShell(overrides: Record<string, unknown> = {}) {
   const onNavigate = vi.fn();
   render(
-    <ConsumerShell
-      activeNav="home"
-      onNavigate={onNavigate}
-      date="2026-08-11"
-      onDateChange={() => {}}
-      search=""
-      onSearchChange={() => {}}
-      onOpenLeagues={() => {}}
-      onRefresh={() => {}}
-      onToggleFavorites={() => {}}
-      onOpenNotifications={() => {}}
-      onOpenProfile={() => {}}
-      onOpenSettings={() => {}}
-      {...overrides}
-    >
+    <ConsumerShell activeNav="home" onNavigate={onNavigate} date="2026-08-21" onDateChange={() => {}} {...overrides}>
       <div>content</div>
     </ConsumerShell>
   );
@@ -39,122 +29,90 @@ function renderShell(overrides: Record<string, unknown> = {}) {
 describe("ConsumerShell navigation", () => {
   afterEach(cleanup);
 
-  it("exposes a control for every primary destination", () => {
+  it("renders the five primary destinations twice — bottom bar and desktop rail — in the same order", () => {
     renderShell();
-    // Romanian is the default catalogue, so these are the labels users read.
-    for (const label of ["Acasă", "Meciuri", "Live", "Istoric", "Profil"]) {
-      expect(screen.getAllByRole("button", { name: label }).length).toBeGreaterThan(0);
+    const ids = PRIMARY_NAV_ITEMS.map((i) => i.id);
+    expect(ids).toEqual(["home", "matches", "history", "statistics", "profile"]);
+    for (const id of ids) {
+      expect(document.querySelectorAll(`[data-nav="${id}"]:not([data-nav-rank])`)).toHaveLength(2);
     }
   });
 
-  it("keeps a History route even when no other surface offers one", () => {
-    // The regression: this control did not exist, and the only alternative was
-    // a Home card that renders nothing until the account has history.
+  it("labels every primary destination with its product name (Today · Matches · Results · Performance · Account)", () => {
+    renderShell();
+    for (const key of ["today", "matches", "results", "performance", "account"]) {
+      expect(screen.getAllByRole("button", { name: either("nav", key) }).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("navigates from every primary control", () => {
     const { onNavigate } = renderShell();
-    screen.getAllByRole("button", { name: "Istoric" })[0].click();
-    expect(onNavigate).toHaveBeenCalledWith("history");
+    for (const item of PRIMARY_NAV_ITEMS) {
+      (document.querySelector(`[data-nav="${item.id}"]`) as HTMLButtonElement).click();
+      expect(onNavigate).toHaveBeenLastCalledWith(item.id);
+    }
   });
 
-  it("marks the active destination for assistive tech", () => {
+  it("marks the active destination for assistive tech on both bars", () => {
     renderShell({ activeNav: "history" });
-    const current = screen
-      .getAllByRole("button", { name: "Istoric" })
-      .filter((el) => el.getAttribute("aria-current") === "page");
-    expect(current.length).toBeGreaterThan(0);
+    const current = document.querySelectorAll('[data-nav="history"][aria-current="page"]');
+    expect(current).toHaveLength(2);
   });
 
-  it("stays in step with the mobile tab bar's destinations", () => {
-    // One source of truth: if MOBILE_TAB_ITEMS changes, this test says so.
-    expect(MOBILE_TAB_ITEMS.map((i) => i.id)).toEqual(["home", "matches", "live", "history", "profile"]);
+  it("offers Tickets only as a secondary desktop entry, never in the bottom bar", () => {
+    renderShell();
+    const tickets = document.querySelectorAll('[data-nav="tickets"]');
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0].getAttribute("data-nav-rank")).toBe("secondary");
+    expect(tickets[0].closest("nav")?.className).toMatch(/lg:flex/);
+  });
+
+  it("has no Live and no Predictions destination anywhere", () => {
+    renderShell();
+    expect(document.querySelector('[data-nav="live"]')).toBeNull();
+    expect(document.querySelector('[data-nav="predictions"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: either("nav", "predictions") })).toBeNull();
+  });
+
+  it("shows the live count on Matches as a badge, not a tab", () => {
+    renderShell({ liveCount: 3 });
+    const badges = document.querySelectorAll('[data-nav="matches"] [aria-label]');
+    expect(badges.length).toBe(2);
+    expect(badges[0].textContent).toBe("3");
   });
 });
 
-describe("ConsumerShell touch targets", () => {
+describe("ConsumerShell chrome", () => {
   afterEach(cleanup);
 
-  /**
-   * Predict is the shell's critical action, and IconButton records the rule it
-   * has to meet: "md = 44px (--fp-touch, the default for critical actions);
-   * sm = 36px, allowed in dense toolbars only". It stays visually `sm` so the
-   * toolbar keeps its 36px rhythm — the mobile header measured 139px and
-   * growing the box pushed it to 155px — and `touch-target` supplies the 44px
-   * pointer area instead.
-   */
-  it("gives the Predict action a 44px pointer target without growing its box", () => {
+  it("is a single 56 px context bar: brand, date, Predict — nothing else", () => {
     renderShell({ onPredict: () => {} });
-    const predict = screen.getAllByRole("button", { name: /Generează predicții pentru/ })[0];
+    const bar = screen.getByTestId("context-bar");
+    const tokens = bar.className.split(/\s+/);
+    expect(tokens).toContain("h-14"); // a fixed 56 px, not a min-height that can wrap taller
+    expect(tokens).not.toContain("flex-wrap");
+    expect(tokens.some((c) => /^min-h-/.test(c))).toBe(false);
+    expect(bar.querySelector('input[type="date"]')).toBeTruthy();
+    expect(bar.querySelector('input[type="search"]')).toBeNull();
+    expect(screen.queryByRole("group", { name: /limb|lang/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /ligi|leagues/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reincarca|Reload|Reîncarcă/i })).toBeNull();
+  });
+
+  it("keeps Predict as the critical action with a 44 px pointer target and a dense box", () => {
+    renderShell({ onPredict: () => {} });
+    const predict = screen.getAllByRole("button", { name: either("shell", "predictTip") })[0];
     expect(predict.className).toContain("touch-target");
-    // Still the dense-toolbar size: this is a hit-area fix, not a layout change.
-    expect(predict.className).toContain("min-h-9");
     expect(predict.className).not.toContain("min-h-[var(--fp-touch)]");
   });
-  /**
-   * Predict's neighbours in the same toolbar row were left at the dense size
-   * without the pointer pad, so the row mixed a 44px target with two 36px ones.
-   * Same rule, same fix, no visual change.
-   */
-  it("gives the league filter and refresh the same 44px pointer target", () => {
-    renderShell({ onPredict: () => {} });
-    for (const name of [/Filtreaza|ligi/i, /Reincarca picks|picks salvate/i]) {
-      const el = screen.getAllByRole("button", { name })[0];
-      expect(el, `no control matched ${name}`).toBeTruthy();
-      expect(el.className, `${el.getAttribute("aria-label")} lacks the pad`).toContain("touch-target");
+
+  it("gives every bottom-bar tab at least a 56 px tall, full-width target", () => {
+    renderShell();
+    const tabs = document.querySelectorAll('nav.lg\\:hidden [data-nav]');
+    expect(tabs).toHaveLength(5);
+    for (const tab of tabs) {
+      expect(tab.className).toMatch(/min-h-\[56px\]/);
+      expect(tab.className).toMatch(/\bflex-1\b/);
     }
-  });
-
-  it("keeps every padded control visually dense", () => {
-    renderShell({ onPredict: () => {} });
-    // The pad is invisible: nothing in the row may adopt the 44px BOX, or the
-    // mobile header grows (it measured 139px, and a box change pushed it 155px).
-    const padded = Array.from(document.querySelectorAll("button.touch-target"));
-    expect(padded.length).toBeGreaterThanOrEqual(3);
-    for (const el of padded) {
-      expect(el.className, "a padded control grew its box").not.toContain("min-h-[var(--fp-touch)]");
-    }
-  });
-});
-
-describe("ConsumerShell locale switch", () => {
-  afterEach(cleanup);
-
-  /**
-   * RO and EN are flush against each other, so an imprecise tap does not miss
-   * the control - it selects the OTHER language. The pad utility cannot fix
-   * that (the group clips ::after, and unclipped the pads fight over the shared
-   * edge), so the boxes themselves carry the 44px.
-   */
-  it("gives each language its own 44px box", () => {
-    renderShell({});
-    const group = screen.getByRole("group", { name: /limb|lang/i });
-    expect(group.className).toContain("h-11");
-    const langs = Array.from(group.querySelectorAll("button"));
-    expect(langs).toHaveLength(2);
-    for (const b of langs) {
-      expect(b.className, "a language button is narrower than the guideline").toContain("min-w-11");
-      // The pad would be clipped by the group and would steal from its
-      // neighbour; real width is what separates two flush controls.
-      expect(b.className).not.toContain("touch-target");
-    }
-  });
-
-  it("keeps both languages independently selectable", () => {
-    renderShell({});
-    const group = screen.getByRole("group", { name: /limb|lang/i });
-    const [ro, en] = Array.from(group.querySelectorAll("button"));
-    expect(ro.textContent).toBe("RO");
-    expect(en.textContent).toBe("EN");
-    // Each keeps its own accessible name and handler - one control, not a toggle.
-    expect(ro.getAttribute("title")).toBeTruthy();
-    expect(en.getAttribute("title")).toBeTruthy();
-    fireEvent.click(en);
-    fireEvent.click(ro);
-  });
-
-  it("leaves the neighbouring header controls at their own rhythm", () => {
-    renderShell({ onPredict: () => {} });
-    // The 44px decision is scoped to the flush pair. The desktop rail and the
-    // dense toolbar keep 36px (UX-07m tracks the rail separately).
-    const predict = screen.getAllByRole("button", { name: /Gener/ })[0];
-    expect(predict.className).toContain("min-h-9");
   });
 });
