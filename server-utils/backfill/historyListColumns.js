@@ -33,7 +33,7 @@ import {
  */
 
 /**
- * Only the payload keys the seven columns derive from — never the whole
+ * Only the payload keys the promoted columns derive from — never the whole
  * document. Same `alias:raw_payload->key` form as AGGREGATE_STATS_SELECT.
  */
 export const BACKFILL_SELECT = [
@@ -53,11 +53,24 @@ export const BACKFILL_SELECT = [
   "card_markets",
   "corners_total",
   "shots_on_target_total",
+  /*
+    057. shots_total / cards_total / cards_points / first_half_goals need NO new
+    payload projection: `src_market_results` already carries the whole
+    marketResults object, so all four come out of the projection this backfill has
+    always taken. Only the first-half predicate needs a new one, and it takes the
+    sub-key rather than `probs`, which is one of the largest blocks in the document.
+  */
+  "shots_total",
+  "cards_total",
+  "cards_points",
+  "first_half_goals",
+  "has_first_half_probs",
   "src_recommended:raw_payload->recommended",
   "src_logos:raw_payload->logos",
   "src_card_market_validations:raw_payload->cardMarketValidations",
   "src_card_markets:raw_payload->cardMarkets",
-  "src_market_results:raw_payload->marketResults"
+  "src_market_results:raw_payload->marketResults",
+  "src_probs_first_half:raw_payload->probs->firstHalf"
 ].join(", ");
 
 /**
@@ -90,7 +103,10 @@ export function planRowUpdate(row) {
     logos: row.src_logos,
     cardMarketValidations: row.src_card_market_validations,
     cardMarkets: row.src_card_markets,
-    marketResults: row.src_market_results
+    marketResults: row.src_market_results,
+    // Folded back into payload shape so the ONE shared derivation decides the
+    // predicate — this file must not re-implement "does a first-half block exist".
+    probs: { firstHalf: row.src_probs_first_half }
   });
 
   // Backfill-only reconciliation. Immutable columns keep whatever is already
@@ -139,7 +155,12 @@ function emptyStats() {
       card_market_validations: 0,
       card_markets: 0,
       corners_total: 0,
-      shots_on_target_total: 0
+      shots_on_target_total: 0,
+      shots_total: 0,
+      cards_total: 0,
+      cards_points: 0,
+      first_half_goals: 0,
+      has_first_half_probs: 0
     },
     elapsedMs: 0
   };

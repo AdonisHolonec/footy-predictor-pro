@@ -1,9 +1,20 @@
 /**
  * One-off backfill: populate the derived list columns from the `raw_payload`
- * they already contain — the seven added by migration 055 and the four
- * recommendation-metadata scalars added by 056.
+ * they already contain — the seven added by migration 055, the four
+ * recommendation-metadata scalars added by 056, and the five settlement inputs
+ * added by 057.
  *
  * DRY-RUN BY DEFAULT. Pass --apply to write.
+ *
+ * 057 note: prefer a SMALLER batch than the 200 default. This script projects
+ * raw_payload sub-keys, which still detoasts the row, and the document has grown
+ * to ~353 KB — the read D7 measured timing out at 250 rows. --batch=100 is the
+ * size measured to commit:
+ *
+ *   npm run backfill:history-columns -- --batch=100                 # dry run
+ *   npm run backfill:history-columns -- --batch=100 --max-batches=1 # one page
+ *   npm run backfill:history-columns -- --batch=100 --apply
+ *   npm run backfill:history-columns -- --batch=100 --after=<lastFixtureId> --apply
  *
  *   npm run backfill:history-columns
  *   npm run backfill:history-columns -- --batch=200

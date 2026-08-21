@@ -81,15 +81,63 @@ test("resolveRecommendedValidation grades 1X2/Double Chance/BTTS as before (regr
   assert.equal(resolveRecommendedValidation({ pick: "GG", family: "BTTS", status: "FT", score }), "loss");
 });
 
-test("resolveRecommendedValidation always returns pending for Cards (no cards totals tracked yet)", () => {
-  const out = resolveRecommendedValidation({
-    pick: "Cards Over 4.5",
-    family: "Cards",
-    status: "FT",
-    score: { home: 1, away: 1 },
-    marketTotals: { cornersTotal: 9 }
-  });
-  assert.equal(out, "pending");
+/*
+  Cards settlement (D8). The line is in RAW CARDS (yellow + red), because that is the
+  unit the line is generated in: deriveMarketLambdas("cards") reads
+  team_market_rolling.cards_for_avg, and teamMarketRolling.js pushes `teamCards.count`
+  into it — `.points` goes to the separate cards_points_* columns, which nothing
+  downstream consumes. Grading against points would settle nearly every fixture Over.
+*/
+const cards = (pick, marketTotals, score = { home: 1, away: 1 }) =>
+  resolveRecommendedValidation({ pick, family: "Cards", status: "FT", score, marketTotals });
+
+test("Cards grades against the raw card count", () => {
+  assert.equal(cards("Cards Over 4.5", { cardsTotal: 5 }), "win");
+  assert.equal(cards("Cards Over 4.5", { cardsTotal: 4 }), "loss");
+  assert.equal(cards("Cards Under 3.5", { cardsTotal: 3 }), "win");
+  assert.equal(cards("Cards Under 3.5", { cardsTotal: 4 }), "loss");
+});
+
+test("Cards is graded against cardsTotal, never against cardsPoints", () => {
+  // 2 yellows + 1 red: count = 3, points = 4. An Under 3.5 line wins on the count
+  // and would lose on the weighted convention — so this pins the unit, not just the
+  // arithmetic.
+  assert.equal(cards("Cards Under 3.5", { cardsTotal: 3, cardsPoints: 4 }), "win");
+  assert.equal(cards("Cards Over 3.5", { cardsTotal: 3, cardsPoints: 4 }), "loss");
+});
+
+test("Cards stays pending when the card total is absent — never assumed to be zero", () => {
+  assert.equal(cards("Cards Under 3.5", {}), "pending");
+  assert.equal(cards("Cards Under 3.5", { cardsTotal: null }), "pending");
+  // Other families' totals must not stand in for the missing one.
+  assert.equal(cards("Cards Under 3.5", { cornersTotal: 9, shotsTotal: 23 }), "pending");
+});
+
+test("an official zero card count settles normally", () => {
+  assert.equal(cards("Cards Under 3.5", { cardsTotal: 0 }), "win");
+  assert.equal(cards("Cards Over 3.5", { cardsTotal: 0 }), "loss");
+});
+
+test("Cards is never graded against goals scored", () => {
+  // 7 goals, 1 card. A goals fall-through would call Over 4.5 a win.
+  assert.equal(cards("Cards Over 4.5", { cardsTotal: 1 }, { home: 4, away: 3 }), "loss");
+});
+
+test("Cards without a parseable line stays pending", () => {
+  assert.equal(cards("Cards", { cardsTotal: 5 }), "pending");
+});
+
+test("Cards is pending before the match is final regardless of totals", () => {
+  assert.equal(
+    resolveRecommendedValidation({
+      pick: "Cards Over 4.5",
+      family: "Cards",
+      status: "1H",
+      score: { home: 1, away: 1 },
+      marketTotals: { cardsTotal: 9 }
+    }),
+    "pending"
+  );
 });
 
 test("resolveRecommendedValidation returns pending for any family before the match is final", () => {
@@ -371,6 +419,23 @@ test("every family marked settleable can actually be graded, and every unsettlea
   const { SETTLEABLE_VALUE_FAMILIES } = await import("../server-utils/value/valueMarkets.js");
   const FT = { status: "FT", score: { home: 2, away: 1 } };
 
+  /*
+    The interlock is asymmetric on purpose.
+
+    "settleable ⇒ gradeable" is the safety property and stays absolute: the app must
+    never recommend a bet it cannot score. That is asserted for every family below.
+
+    "unsettleable ⇒ ungradeable" was true when the registry meant only "we lack the
+    data". D8 gave Cards a real grading branch (against cardsTotal) while leaving the
+    registry false, because admitting Cards to the Recommended / Best Value pool is a
+    product decision that belongs in a change about selection, not in a settlement fix.
+    So Cards is now gradeable-but-not-selected, and that is recorded here rather than
+    weakening the assertion for everyone.
+
+    Correct Score stays in the strict branch: it has no grading branch at all.
+  */
+  const GRADEABLE_BUT_NOT_SELECTED = new Set(["Cards"]);
+
   // A representative gradeable pick per family, with the totals that family needs.
   const probes = {
     "1X2": { pick: "1", marketTotals: {} },
@@ -380,7 +445,12 @@ test("every family marked settleable can actually be graded, and every unsettlea
     Corners: { pick: "Over 7.5", marketTotals: { cornersTotal: 9 } },
     Shots: { pick: "Shots Over 22.5", marketTotals: { shotsTotal: 23 } },
     "Shots on Target": { pick: "SOT Over 8.5", marketTotals: { shotsOnTargetTotal: 9 } },
-    Cards: { pick: "Cards Under 5.5", marketTotals: { cornersTotal: 9, shotsTotal: 23, shotsOnTargetTotal: 9 } },
+    Cards: {
+      pick: "Cards Under 5.5",
+      // cardsTotal is what Cards grades against — the raw yellow+red count. The
+      // other totals are present to prove it does not fall through to any of them.
+      marketTotals: { cardsTotal: 4, cornersTotal: 9, shotsTotal: 23, shotsOnTargetTotal: 9 }
+    },
     "Correct Score": {
       pick: "Correct Score 2-1",
       marketTotals: { cornersTotal: 9, shotsTotal: 23, shotsOnTargetTotal: 9 }
@@ -396,6 +466,13 @@ test("every family marked settleable can actually be graded, and every unsettlea
         verdict,
         "pending",
         `"${family}" is declared settleable but resolveRecommendedValidation cannot grade it`
+      );
+    } else if (GRADEABLE_BUT_NOT_SELECTED.has(family)) {
+      // Deliberately gradeable while the registry still says false — see below.
+      assert.notEqual(
+        verdict,
+        "pending",
+        `"${family}" is listed as gradeable-but-not-selected, yet grading returned pending`
       );
     } else {
       assert.equal(
