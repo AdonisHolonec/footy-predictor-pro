@@ -38,7 +38,9 @@ function buildMatch(overrides: Record<string, unknown> = {}): PredictionRow {
     leagueId: 39,
     league: "Premier League",
     teams: { home: "Arsenal", away: "Chelsea" },
-    kickoff: new Date(Date.now() - HOUR).toISOString(),
+    // Fixed local 10:05 today: in the past (so the live window is open) and its
+    // digits never collide with the pick / confidence / odds the tests count.
+    kickoff: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 10, 5).toISOString(),
     status: "NS",
     logos: { home: "https://img/a.png", away: "https://img/c.png" },
     score: { home: null, away: null, minute: null },
@@ -183,7 +185,8 @@ describe("UX-C · Live layer", () => {
     const order = layers();
     expect(order.indexOf("live")).toBe(order.indexOf("why") + 1);
     expect(screen.queryAllByTestId("momentum-root")).toHaveLength(0);
-    const details = disclosure("detail", "liveDetails");
+    // UX-D: Momentum, events and stats are separate disclosures; Momentum is the one holding the timeline.
+    const details = disclosure("card", "momentum");
     expect(details.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(details);
     expect(layer("live")!.querySelector("[data-testid='momentum-root']")).toBeTruthy();
@@ -287,7 +290,7 @@ describe("UX-C · accessibility and layout", () => {
   });
 
   it("[25] every new label exists in RO and EN and is translated", () => {
-    for (const key of ["whyTitle", "whyFactors", "whyDeep", "liveDetails", "marketsTitle", "ticketTitle", "contextTitle", "conditionsTitle", "advancedTitle"]) {
+    for (const key of ["whyTitle", "whyFactors", "whyDeep", "eventsTitle", "statsTitle", "marketsTitle", "ticketTitle", "contextTitle", "conditionsTitle", "advancedTitle"]) {
       expect(E.detail[key], key).toBeTypeOf("string");
       expect(R.detail[key], key).toBeTypeOf("string");
       if (key !== "contextTitle") expect(E.detail[key], key).not.toBe(R.detail[key]);

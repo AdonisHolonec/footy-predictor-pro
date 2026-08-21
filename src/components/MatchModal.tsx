@@ -17,7 +17,7 @@ import OverviewHero from "./matchModal/OverviewHero";
 import AnalysisPanels from "./matchModal/AnalysisPanels";
 import DerivedMarketsPanels from "./matchModal/DerivedMarketsPanels";
 import WhyThisPickPanel from "./matchModal/WhyThisPickPanel";
-import LiveWinProbabilityStrip from "./ux/LiveWinProbabilityStrip";
+import LiveLayer from "./matchModal/LiveLayer";
 import { partsGate, type DetailPart } from "./matchModal/detailParts";
 import { formatLiveMinute } from "./matchCard/derivations";
 import { isFixtureInPlay } from "../utils/appUtils";
@@ -316,27 +316,13 @@ export default function MatchModal({
           {/* The two existing live predicates, unchanged: the strip follows hasLiveScore,
               Momentum follows isFixtureInPlay (PR #139). The layer exists when either does. */}
           {(hasLiveScore || isInPlay) && (
-            <section data-layer="live" aria-label={tr("detail.liveTitle")} className="space-y-2">
-              {hasLiveScore && <LiveWinProbabilityStrip match={match} compact />}
-              <CollapsiblePanel compact title={tr("detail.liveDetails")}>
-              <OverviewHero
-                match={match} tr={tr} tab={partsGate(["live"])}
-                homeColor={homeColor} awayColor={awayColor}
-                hasLiveScore={hasLiveScore} hasExactConfidence={hasExactConfidence}
-                isFreeLike={isFreeLike} isPremiumLike={isPremiumLike}
-                confPct={confPct} confidenceCategory={confidenceCategory}
-                dq={dq} edgeScore={edgeScore}
-                recommendedLabel={recommendedLabel} outcomeTextClass={outcomeTextClass}
-                showStandingsBlock={showStandingsBlock} standingsRows={standingsRows}
-                canShowSpecialBet={canShowSpecialBet} onUpgradeRequired={onUpgradeRequired}
-                specialLegCount={specialLegCount} setSpecialLegCount={setSpecialLegCount}
-                specialBetLegs={specialBetLegs} specialBetCandidatesLen={specialBetCandidatesLen}
-                specialBetCombinedOdd={specialBetCombinedOdd} specialCombinedOutcome={specialCombinedOutcome}
-                specialCombinedTone={specialCombinedTone} specialBetLiveAdjustmentBadge={specialBetLiveAdjustmentBadge}
-                hideLiveStrip
-              />
-              </CollapsiblePanel>
-            </section>
+            <LiveLayer
+              match={match}
+              tr={tr}
+              hasLiveScore={hasLiveScore}
+              recommendedPick={recommendedLabel.label}
+              confidenceLabel={hasExactConfidence ? `${confPct}%` : confidenceCategory || tr("match.locked")}
+            />
           )}
 
           {/* 5 · MARKETS — collapsed; families expand independently. The entitlement

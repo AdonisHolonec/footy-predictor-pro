@@ -7,7 +7,7 @@ import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
 type HistoryPoint = { minute: number; homeMomentum: number; awayMomentum: number };
-type TimelineEvent = {
+export type TimelineEvent = {
   minute: number;
   extra?: number | null;
   team: "home" | "away";
@@ -33,9 +33,11 @@ type Props = {
   confidenceLabel: string;
   /** Real AI-generated one-sentence narration from the server (opt-in) — takes priority over the local deterministic sentence when present; null/absent is a normal, expected state, not an error. */
   momentumNarrative?: string | null;
+  /** UX-D: the Live layer renders events, stats and the story as their own disclosures; false hides the nested panel here so nothing is stated twice. */
+  detailsPanel?: boolean;
 };
 
-function eventIcon(kind: MatchLiveEventType): string {
+export function eventIcon(kind: MatchLiveEventType): string {
   switch (kind) {
     case "goal":
     case "penalty":
@@ -56,7 +58,7 @@ function eventIcon(kind: MatchLiveEventType): string {
   }
 }
 
-function eventLabel(t: (key: string) => string, kind: MatchLiveEventType): string {
+export function eventLabel(t: (key: string) => string, kind: MatchLiveEventType): string {
   switch (kind) {
     case "goal":
       return t("match.eventGoal");
@@ -87,7 +89,7 @@ function eventGroup(kind: MatchLiveEventType): Exclude<EventFilter, "all"> {
 }
 
 /** "45'" or, when extra time is known, "45+2'". */
-function formatMinute(minute: number, extra?: number | null): string {
+export function formatMinute(minute: number, extra?: number | null): string {
   return extra ? `${minute}+${extra}'` : `${minute}'`;
 }
 
@@ -230,7 +232,7 @@ const STICK_TO_BOTTOM_PX = 24;
 /** Compact "moments" strip in the default view shows only the most recent events — full history lives in the detail panel. */
 const RECENT_MOMENTS_COUNT = 3;
 
-function statLabel(t: (key: string) => string, kind: keyof MomentumRawStats): string {
+export function statLabel(t: (key: string) => string, kind: keyof MomentumRawStats): string {
   switch (kind) {
     case "possession":
       return t("match.momentumPossession");
@@ -282,7 +284,7 @@ function deriveWhyChips(
  * fixed priority order and capped at 3; a rule only fires when its own threshold is
  * clearly met, so a quiet match legitimately yields zero observations.
  */
-function buildMatchStory(
+export function buildMatchStory(
   t: (key: string, params?: Record<string, string | number>) => string,
   momentum: Momentum,
   displayEvents: TimelineEvent[],
@@ -328,7 +330,7 @@ function buildMatchStory(
   return observations.slice(0, 3);
 }
 
-function StatRow({
+export function StatRow({
   label,
   home,
   away,
@@ -422,7 +424,8 @@ export default function MatchMomentumTimeline({
   liveEvents,
   recommendedPick,
   confidenceLabel,
-  momentumNarrative
+  momentumNarrative,
+  detailsPanel = true
 }: Props) {
   const { t } = useLocale();
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -910,7 +913,7 @@ export default function MatchMomentumTimeline({
         </div>
       </section>
 
-      <div className="mt-3">
+      {detailsPanel && <div className="mt-3">
         <CollapsiblePanel title={t("match.momentumDetails")} compact>
           <div className="mb-2 flex items-center justify-between gap-2">
             <span
@@ -1067,7 +1070,7 @@ export default function MatchMomentumTimeline({
             </div>
           )}
         </CollapsiblePanel>
-      </div>
+      </div>}
     </>
   );
 }
