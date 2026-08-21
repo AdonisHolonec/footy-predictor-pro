@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   SETTLEMENT_ROW_COLUMNS,
   SETTLEMENT_SELECT,
+  isSettlementRowComplete,
   rehydrateSettlementRow
 } from "../server-utils/predictionsHistory.js";
 import {
@@ -594,4 +595,90 @@ test("the backfill never nulls a seeded total from an absent source", async () =
     src_probs_first_half: null
   });
   assert.equal(update, null, "an absent source must never erase a value the column already holds");
+});
+
+/* ---------------------------------------------------------------------------
+ * D8b — the allSettled skip must not hide an ungraded top-level validation.
+ * Production shape from the D8 verification: fixture 1607172, Cards Under 3.5,
+ * cards_total 3, card_market_validations all graded, validation still pending.
+ * ------------------------------------------------------------------------- */
+
+const CARDS_SKIPPED_ROW = Object.freeze({
+  fixture_id: 1607172,
+  kickoff_at: "2026-08-11T16:00:00+00:00",
+  match_status: "FT",
+  score_home: 4,
+  score_away: 0,
+  validation: "pending",
+  recommended_pick: "Cards Under 3.5",
+  recommended_family: "Cards",
+  card_markets: { recommended: "Cards Under 3.5", goals: "Over 1.5", corners: "Over 8.5", shots: "Over 20.5" },
+  card_market_validations: { goals: "win", shots: "win", corners: "win", recommended: "win" },
+  corners_total: 11,
+  shots_on_target_total: 12,
+  shots_total: 43,
+  cards_total: 3,
+  cards_points: 30,
+  first_half_goals: 2,
+  has_first_half_probs: false
+});
+
+test("D8b: a row whose markets are graded but whose validation is pending is NOT complete", () => {
+  const row = rehydrateSettlementRow(CARDS_SKIPPED_ROW);
+  const complete = isSettlementRowComplete({
+    picks: row.raw_payload.cardMarkets,
+    storedValidations: row.raw_payload.cardMarketValidations,
+    validation: row.validation
+  });
+  assert.equal(complete, false);
+});
+
+test("D8b: once the row falls through, the promoted cards total grades the pick", () => {
+  const row = rehydrateSettlementRow(CARDS_SKIPPED_ROW);
+  const validation = resolveRecommendedValidation({
+    pick: row.recommended_pick,
+    family: row.raw_payload.recommended.family,
+    status: row.match_status,
+    score: { home: row.score_home, away: row.score_away },
+    marketTotals: { cardsTotal: row.raw_payload.marketResults.cardsTotal }
+  });
+  assert.equal(validation, "win");
+  // And the sibling production row with 4 cards against Under 3.5 grades as a loss.
+  assert.equal(
+    resolveRecommendedValidation({ pick: "Cards Under 3.5", family: "Cards", status: "FT", score: { home: 1, away: 0 }, marketTotals: { cardsTotal: 4 } }),
+    "loss"
+  );
+});
+
+test("D8b: a fully graded row (markets AND validation) is complete and is skipped", () => {
+  const row = rehydrateSettlementRow({ ...CARDS_SKIPPED_ROW, validation: "win" });
+  assert.equal(
+    isSettlementRowComplete({ picks: row.raw_payload.cardMarkets, storedValidations: row.raw_payload.cardMarketValidations, validation: "win" }),
+    true
+  );
+  assert.equal(
+    isSettlementRowComplete({ picks: row.raw_payload.cardMarkets, storedValidations: row.raw_payload.cardMarketValidations, validation: "loss" }),
+    true
+  );
+});
+
+test("D8b: a row with no recommended pick keeps the market-only completeness test", () => {
+  const picks = { goals: "Over 1.5", corners: "Over 8.5" };
+  assert.equal(isSettlementRowComplete({ picks, storedValidations: { goals: "win", corners: "loss" }, validation: "pending" }), true);
+  assert.equal(isSettlementRowComplete({ picks, storedValidations: { goals: "win", corners: "pending" }, validation: "pending" }), false);
+});
+
+test("D8b: missing first-half data or absent stored validations are never complete", () => {
+  const picks = { recommended: "Over 2.5" };
+  assert.equal(isSettlementRowComplete({ picks, storedValidations: { recommended: "win" }, validation: "win", missingFirstHalf: true }), false);
+  assert.equal(isSettlementRowComplete({ picks, storedValidations: null, validation: "win" }), false);
+  assert.equal(isSettlementRowComplete({ picks, storedValidations: undefined, validation: "pending" }), false);
+});
+
+test("D8b: scan 3 uses the shared predicate and no longer carries the market-only allSettled block", () => {
+  // The predicate must BE the skip condition — not be short-circuited beside it.
+  assert.match(HISTORY_SOURCE, /if \(\s*isSettlementRowComplete\(\{/);
+  assert.doesNotMatch(HISTORY_SOURCE, /(true|false)\s*(&&|\|\|)\s*isSettlementRowComplete/);
+  assert.match(HISTORY_SOURCE, /validation: row\.validation,\s*missingFirstHalf: missingHt/);
+  assert.doesNotMatch(HISTORY_SOURCE, /const allSettled =/);
 });
