@@ -70,11 +70,11 @@ describe("UX-E · Results", () => {
   it("[1][3] the selected day drives the rows; previous / next / today navigate", () => {
     renderResults();
     expect(rows()).toEqual(["Rayo", "Wolves", "Leeds", "Arsenal"]);
-    expect(screen.getByTestId("results-day-label").textContent).toMatch(new RegExp(`${esc(E.history.dayToday)}|${esc(R.history.dayToday)}`));
+    expect(screen.getByTestId("results-day-nav").textContent).toMatch(new RegExp(`${esc(E.history.dayToday)}|${esc(R.history.dayToday)}`));
     expect(btn("history", "dayNext").disabled).toBe(true);
     fireEvent.click(btn("history", "dayPrev"));
     expect(rows()).toEqual(["Milan", "Genoa"]);
-    expect(screen.getByTestId("results-day-label").textContent).toMatch(new RegExp(`${esc(E.history.dayYesterday)}|${esc(R.history.dayYesterday)}`));
+    expect(screen.getByTestId("results-day-nav").textContent).toMatch(new RegExp(`${esc(E.history.dayYesterday)}|${esc(R.history.dayYesterday)}`));
     fireEvent.click(btn("history", "dayPrev"));
     expect(rows()).toEqual(["Lazio"]);
     expect(btn("history", "dayPrev").disabled).toBe(true);
@@ -113,7 +113,7 @@ describe("UX-E · Results", () => {
     expect(first.querySelector("[data-slot='prediction']")?.textContent).toMatch(/2\.5/);
     expect(first.querySelector("[data-slot='odds']")?.textContent).toMatch(/1\.90/);
     const summary = screen.getByTestId("results-summary").textContent || "";
-    expect(summary).toMatch(/3 .*2 .*1 .*67%/);
+    expect(summary).toMatch(/3\D+2\D+1\D+67%/);
     expect((document.body.textContent!.match(/67%/g) || []).length).toBe(1);
   });
 
@@ -200,6 +200,9 @@ describe("UX-E · Tickets", () => {
     expect(APP_NAV_ITEMS.some((i) => i.id === "tickets" && i.slug === "tickets")).toBe(true);
     expect(DESKTOP_SECONDARY_NAV_ITEMS.map((i) => i.id)).toEqual(["tickets"]);
     render(<TicketsSection betDate={TODAY} favoriteLeagueIds={[39]} canUseGlobalSpecialBet />);
+    // Redesign: the builder is closed until the one primary action asks for it.
+    expect(screen.queryByTestId("gsb-builder")).toBeNull();
+    fireEvent.click(screen.getByTestId("tickets-build-cta"));
     expect(screen.getByTestId("tickets-build").contains(screen.getByTestId("gsb-builder"))).toBe(true);
     expect(screen.getByTestId("tickets-history").contains(screen.getByTestId("gsb-history"))).toBe(true);
     expect(screen.getByTestId("tickets-build").textContent).toMatch(new RegExp(`${esc(E.tickets.buildTitle)}|${esc(R.tickets.buildTitle)}`));

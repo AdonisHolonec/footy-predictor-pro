@@ -611,6 +611,10 @@ export const en: Dict = {
     fullTimeShort: "FT"
   },
   tickets: {
+    buildCta: "Build ticket",
+    emptyCta: "Build a ticket",
+    emptyDesc: "Combine a few of your strongest picks into one ticket and follow how it lands here.",
+    legs: "{n} legs",
     buildTitle: "Build ticket",
     buildSub: "A multi-leg ticket from your favourite leagues.",
     historyTitle: "Ticket history",
@@ -623,15 +627,17 @@ export const en: Dict = {
     modelInternalsSub: "Adds the Advanced tab to match analysis: pipeline stages, λ, calibration and model version."
   },
   perf: {
+    trendTitle: "Last {n} days",
+    trendNone: "No settled picks",
     viewResults: "View results",
     breakdownTitle: "Breakdown",
     breakdownSub: "By day · league · market",
     reliabilityTitle: "Model reliability",
     reliabilitySub: "Calibration of your settled picks",
-    yoursEyebrow: "A",
+    yoursEyebrow: "This account",
     yoursTitle: "Your results",
     yoursSub: "Settled picks from this account only.",
-    modelEyebrow: "B",
+    modelEyebrow: "Public · all accounts",
     modelTitle: "Model track record",
     modelSub: "Public record across all accounts, last 45 days."
   },
@@ -658,6 +664,8 @@ export const en: Dict = {
     advancedSub: "Laboratory · Monte Carlo · xG · audit"
   },
   history: {
+    sumSettled: "Settled",
+    sumRate: "Hit rate",
     dayNav: "Day",
     dayPrev: "Previous day",
     dayNext: "Next day",

@@ -515,6 +515,7 @@ export default function UserDashboard() {
       displayedPredsCount={visiblePreds.length}
       pendingAmongDisplayedPreds={pendingAmongDisplayedPreds}
       onBreakdownClick={() => setPerfCounterModalOpen(true)}
+      variant="hero"
     />
   );
 

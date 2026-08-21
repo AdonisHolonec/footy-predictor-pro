@@ -237,7 +237,9 @@ describe("UX-B · reachability and deep links", () => {
     expect(heading()).toMatch(either("nav", "results"));
     cleanup();
     mount(["/workspace/tickets"]);
-    expect(screen.getByTestId("gsb")).toBeTruthy();
+    // The builder opens on request; the destination itself is the CTA + the history.
+    expect(screen.getByTestId("tickets-build-cta")).toBeTruthy();
+    expect(screen.getByTestId("gsb-history")).toBeTruthy();
     cleanup();
     mount(["/workspace/whatever"]);
     expect(screen.getByTestId("today-context")).toBeTruthy();

@@ -47,6 +47,8 @@ type Props = {
   /** Fails closed, matching the per-match Special Bet card's convention. */
   canUseGlobalSpecialBet?: boolean;
   onUpgradeRequired?: (feature: string, requiredTier: "ultra") => void;
+  /** UX-E Tickets: the surface around it owns the heading; no competing title inside. */
+  embedded?: boolean;
 };
 
 /**
@@ -67,7 +69,8 @@ export default function GlobalSpecialBetSection({
   favoriteLeagueIds,
   fixtureIndex,
   canUseGlobalSpecialBet = false,
-  onUpgradeRequired
+  onUpgradeRequired,
+  embedded = false
 }: Props) {
   const { t, locale } = useLocale();
   const { product, setProduct, state, isGenerating, generate } = useGlobalSpecialBet({
@@ -126,12 +129,19 @@ export default function GlobalSpecialBetSection({
 
   const shell = (children: ReactNode) => (
     <section
-      aria-labelledby="gsb-heading"
-      className="rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] p-4 shadow-fp-sm sm:p-5"
+      aria-labelledby={embedded ? "tickets-build" : "gsb-heading"}
+      data-testid="ticket-builder"
+      className={
+        embedded
+          ? "rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-bg-card)] p-4 shadow-fp-sm sm:p-5"
+          : "rounded-[var(--fp-radius-lg)] border border-fp-accent/30 bg-[var(--fp-accent-muted)] p-4 shadow-fp-sm sm:p-5"
+      }
     >
-      <header className="min-w-0">
-        <SectionHeader id="gsb-heading" eyebrow={t("gsb.eyebrow")} title={t("gsb.subtitle")} />
-      </header>
+      {!embedded && (
+        <header className="min-w-0">
+          <SectionHeader id="gsb-heading" eyebrow={t("gsb.eyebrow")} title={t("gsb.subtitle")} />
+        </header>
+      )}
       {children}
     </section>
   );

@@ -3,7 +3,7 @@ import { useLocale } from "../../context/LocaleContext";
 import Badge from "../../design-system/Badge";
 import Banner from "../../design-system/Banner";
 import Button from "../../design-system/Button";
-import Card from "../../design-system/Card";
+import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
 import GlobalSpecialBetSelectionRow from "./GlobalSpecialBetSelectionRow";
 import { useGlobalSpecialBetHistory } from "../../hooks/useGlobalSpecialBetHistory";
@@ -23,6 +23,8 @@ type Props = {
   /** Which product this list shows. Sent to the server; never used to filter a received page. */
   kind: GlobalSpecialBetKind;
   fixtureIndex?: Map<number, FixtureLabel>;
+  /** Empty-state CTA (UX-E): opens the builder. */
+  onBuild?: () => void;
 };
 
 /** Empty copy is per product: "no combos yet" and "no systems yet" are different facts. */
@@ -45,7 +47,7 @@ const EMPTY_KEY: Record<GlobalSpecialBetKind, string> = {
  * `describeTicketOutcome` owns the return and the net figure, exactly as they
  * did before this list was split out of the section around it.
  */
-export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props) {
+export default function GlobalSpecialBetTicketList({ kind, fixtureIndex, onBuild }: Props) {
   const { t, locale } = useLocale();
   const { state, loadMore, retry } = useGlobalSpecialBetHistory({ kind });
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -88,9 +90,12 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props
 
   if (state.bets.length === 0) {
     return (
-      <Card>
-        <p className="text-sm text-[var(--fp-text-muted)]">{t(EMPTY_KEY[kind])}</p>
-      </Card>
+      <EmptyState
+        title={t(EMPTY_KEY[kind])}
+        description={t("tickets.emptyDesc")}
+        actionLabel={onBuild ? t("tickets.emptyCta") : undefined}
+        onAction={onBuild}
+      />
     );
   }
 
@@ -120,58 +125,44 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex }: Props
                 onClick={() => setExpandedId(expanded ? null : bet.id)}
                 aria-expanded={expanded}
                 aria-label={expanded ? t("gsb.collapse") : t("gsb.expand")}
-                className={`flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
+                className={`flex min-h-[var(--fp-touch)] w-full items-start gap-3 px-3 py-2 text-left sm:px-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
                   expanded ? "bg-[var(--fp-accent-muted)]" : "hover:bg-[var(--fp-bg-muted)]"
                 }`}
               >
-                <div className="min-w-0">
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-                    {formatDay(bet.bet_date)} · {t(shape.key, shape.vars)}
-                  </p>
-                  {/* The numbers stay on the collapsed row: shape and price are
-                      what the user scans a history for. For a system the product
-                      of the odds is the ALL-legs combination, not the ticket's
-                      price, so it is labelled as such and sits next to how many
-                      combinations the ticket actually covers. */}
-                  <p className="mt-0.5 font-mono text-sm tabular-nums text-[var(--fp-text)]">
-                    {t("gsb.summarySelections")} {bet.selections.length} ·{" "}
-                    {isSystem ? t("gsb.summaryAllLegsOdds", { n: bet.variant }) : t("gsb.summaryTotalOdds")}{" "}
-                    <span className="font-bold">{totalOdds ?? "—"}</span>
-                    {isSystem && shape.combinationCount
-                      ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}`
-                      : ""}
-                  </p>
-                  {/* The settled figure is a sentence, not a bare odd: "returned
-                      0.80× · net −20%" is the answer to the question a history is
-                      opened to ask, and a bare 0.80 next to "settled odds" is not. */}
-                  <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
-                    {t(outcome.detailKey, outcome.vars)}
-                  </p>
-                  {outcome.warningKey ? (
-                    <p className="mt-0.5 text-[11px] font-semibold text-[var(--fp-warning)]">
-                      {t(outcome.warningKey)}
-                    </p>
-                  ) : null}
-                  {/* The reading sits above the confidence digit on purpose:
-                      "a picat pe o singură selecție" is what the user came to
-                      find out, and it reads as a sentence, not as more data. */}
-                  <p className="mt-1 text-[length:var(--fp-body)] text-[var(--fp-text)]">
-                    {t(reading.key, reading.vars)}
-                  </p>
-                  {ticketChance ? (
-                    <p
-                      className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]"
-                      aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}
-                    >
-                      {t("gsb.ticketChance")}: {ticketChance}
-                    </p>
-                  ) : (
-                    <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]">
-                      {t("gsb.summaryAvgConfidence")} {confidence ?? "—"}
-                    </p>
-                  )}
-                </div>
-                <Badge tone={outcome.tone}>{t(outcome.labelKey)}</Badge>
+                {/* UX-E: a compact row — line 1 scans (status · shape · odds · date),
+                    line 2 answers (what happened · what came back · chance). The legs
+                    are the only thing behind the disclosure. */}
+                <span className="shrink-0"><Badge tone={outcome.tone}>{t(outcome.labelKey)}</Badge></span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm text-[var(--fp-text)]" data-slot="ticket-shape">
+                      {t(shape.key, shape.vars)} · {t("tickets.legs", { n: bet.selections.length })}
+                      {isSystem && shape.combinationCount ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}` : ""}
+                    </span>
+                    <span className="shrink-0 font-mono text-sm tabular-nums text-[var(--fp-text)]" data-slot="ticket-odds">
+                      <span className="text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
+                        {isSystem ? t("gsb.summaryAllLegsOdds", { n: bet.variant }) : t("gsb.summaryTotalOdds")}
+                      </span>{" "}
+                      <span className="font-bold">{totalOdds ?? "—"}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]" data-slot="ticket-date">{formatDay(bet.bet_date)}</span>
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-[var(--fp-text-muted)]" data-slot="ticket-reading">
+                    <span className="font-semibold text-[var(--fp-text)]">{t(reading.key, reading.vars)}</span>
+                    {" · "}
+                    <span className="font-mono tabular-nums">{t(outcome.detailKey, outcome.vars)}</span>
+                    {outcome.warningKey ? <span className="font-semibold text-[var(--fp-warning)]"> · {t(outcome.warningKey)}</span> : null}
+                    {" · "}
+                    {ticketChance ? (
+                      <span className="font-mono tabular-nums" aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}>
+                        {t("gsb.ticketChance")}: {ticketChance}
+                      </span>
+                    ) : (
+                      <span className="font-mono tabular-nums">{t("gsb.summaryAvgConfidence")} {confidence ?? "—"}</span>
+                    )}
+                  </span>
+                </span>
+                <span aria-hidden className={`shrink-0 text-[var(--fp-text-faint)] transition-transform ${expanded ? "rotate-90" : ""}`}>›</span>
               </button>
 
               {expanded && (

@@ -201,7 +201,7 @@ describe("GlobalSpecialBetSection", () => {
 
     expect(screen.getAllByText("Câștigat").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Anulat").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("În desfășurare").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("În așteptare").length).toBeGreaterThan(0);
 
     expect(screen.getByText("Over 7.5")).toBeTruthy();
     expect(screen.getByText("Cornere")).toBeTruthy();

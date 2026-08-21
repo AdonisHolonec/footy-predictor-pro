@@ -28,6 +28,10 @@ type SuccessRateTrackerProps = {
   excludedWorstLossDaysCount?: number;
   onExcludedWorstLossDaysCountChange?: (count: number) => void;
   excludedLossDays?: ExcludedLossDay[];
+  /** card = the self-titled console (default). hero = UX-E Performance: the
+      section around it owns the title, the hit rate is the one dominant
+      figure and wins / losses / settled are its supporting line. */
+  variant?: "card" | "hero";
 };
 
 function healthToneClass(value: number | null, good: number, warn: number) {
@@ -51,18 +55,53 @@ export default function SuccessRateTracker({
   modelHealth = null,
   excludedWorstLossDaysCount = 0,
   onExcludedWorstLossDaysCountChange,
-  excludedLossDays = []
+  excludedLossDays = [],
+  variant = "card"
 }: SuccessRateTrackerProps) {
   const { t } = useLocale();
+  const isHero = variant === "hero";
+  const hasRate = stats.settled > 0;
   const inner = (
     <>
-      <div className="mb-3 flex flex-col gap-0.5 border-b border-[var(--fp-border)] pb-2 sm:flex-row sm:items-end sm:justify-between">
+      {!isHero && (<div className="mb-3 flex flex-col gap-0.5 border-b border-[var(--fp-border)] pb-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("tracker.performance")}</p>
           <h3 className="font-display text-base font-semibold text-[var(--fp-text)] sm:text-lg">{t("tracker.successRate")}</h3>
         </div>
         <p className="text-sm font-medium tabular-nums text-[var(--fp-text-muted)]">{t("tracker.settledN", { n: stats.settled })}</p>
-      </div>
+      </div>)}
+
+      {isHero && (
+        /* ONE dominant figure. The rate is the answer to "how am I doing";
+           the counts are its evidence, in one quiet line, not three tiles. */
+        <div data-slot="tracker-hero" className={isWinRatePulsing ? "rounded-[var(--fp-radius)] ring-2 ring-fp-accent/30" : ""}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("tracker.hitRate")}</p>
+          <p className="mt-1 font-display text-5xl font-bold leading-none tabular-nums text-[var(--fp-text)] sm:text-6xl" data-slot="tracker-rate">
+            {hasRate ? `${animatedWinRate.toFixed(1)}%` : "—"}
+          </p>
+          {hasRate && (
+            <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-[var(--fp-bg-muted)]">
+              <div
+                className="h-full w-full origin-left rounded-full bg-[var(--fp-accent)] transition-transform duration-700"
+                style={{ transform: `scaleX(${Math.max(0, Math.min(100, stats.winRate)) / 100})` }}
+              />
+            </div>
+          )}
+          <dl className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm" data-slot="tracker-support">
+            <div className="flex items-baseline gap-1.5">
+              <dd className="font-display text-xl font-bold tabular-nums text-[var(--fp-success)]">{animatedWins}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("tracker.wins")}</dt>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <dd className="font-display text-xl font-bold tabular-nums text-[var(--fp-danger)]">{animatedLosses}</dd>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">{t("tracker.losses")}</dt>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <dd className="font-mono text-sm tabular-nums text-[var(--fp-text)]">{t("tracker.settledN", { n: stats.settled })}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
 
       {(onExcludedWorstLossDaysCountChange || excludedWorstLossDaysCount > 0) && (
         <div className="mb-4 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-2">
@@ -108,7 +147,7 @@ export default function SuccessRateTracker({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+      {!isHero && (<div className="grid grid-cols-3 gap-1.5 sm:gap-3">
         <div className="rounded-[var(--fp-radius-sm)] border border-fp-success/35 bg-fp-success/10 px-2 py-3 sm:px-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--fp-success)] sm:text-[10px]">{t("tracker.wins")}</p>
           <p className="mt-1 font-display text-xl font-bold tabular-nums text-[var(--fp-text)] sm:text-2xl">{animatedWins}</p>
@@ -148,7 +187,7 @@ export default function SuccessRateTracker({
             </div>
           )}
         </div>
-      </div>
+      </div>)}
 
       {modelHealth && (modelHealth.brier != null || modelHealth.logLoss != null || modelHealth.ece != null) && (
         <div className="mt-4 grid grid-cols-3 gap-2 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-2 py-2 text-xs">
@@ -196,7 +235,7 @@ export default function SuccessRateTracker({
       {isHistorySyncing && (
         <p className="mt-2 text-center text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">{t("tracker.sync")}</p>
       )}
-      {onBreakdownClick && (
+      {onBreakdownClick && !isHero && (
         <p className="mt-2 text-center text-xs font-semibold text-[var(--fp-accent)]">{t("tracker.openConsole")}</p>
       )}
     </>
@@ -204,6 +243,25 @@ export default function SuccessRateTracker({
 
   const shellClass =
     "relative mt-2 w-full max-w-[880px] overflow-hidden rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-3 py-3 shadow-fp-sm sm:px-4 sm:py-4";
+
+  if (isHero) {
+    // The console stays one tap away, as a named action rather than the
+    // whole panel being a button — a hero that is secretly clickable is a trap.
+    return (
+      <div data-testid="tracker-hero">
+        {inner}
+        {onBreakdownClick && (
+          <button
+            type="button"
+            onClick={onBreakdownClick}
+            className="touch-target mt-3 text-xs font-semibold text-[var(--fp-accent)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
+          >
+            {t("tracker.openConsole")} ›
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (onBreakdownClick) {
     return (
