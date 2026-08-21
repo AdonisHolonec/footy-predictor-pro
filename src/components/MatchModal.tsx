@@ -34,6 +34,8 @@ export type MatchModalProps = {
   onUpgradeRequired?: (feature: string, requiredTier: "premium" | "ultra") => void;
   /** Opens the prediction report dialog. Moved here from the list card in UX-A: the list row carries no secondary actions. */
   onReport?: () => void;
+  /** Account › Model internals. When false the Advanced tab (λ, ρ, Shin z, pipeline, version) is not offered. */
+  showModelInternals?: boolean;
 };
 
 /**
@@ -69,7 +71,8 @@ export default function MatchModal({
   accessTier = "free",
   presentation = "focus",
   onUpgradeRequired,
-  onReport
+  onReport,
+  showModelInternals = false
 }: MatchModalProps) {
   const model = useMatchModalModel({ match, accessTier, presentation, hashColor, logoColors });
   const {
@@ -312,7 +315,10 @@ export default function MatchModal({
             aria-label={tr("match.analysis")}
             className="overflow-x-auto pb-0.5"
             optionClassName="px-2 py-1 text-[10px] uppercase tracking-wide"
-            options={DETAIL_TABS.map((tabItem) => ({ value: tabItem.id, label: tr(tabItem.labelKey) }))}
+            options={DETAIL_TABS.filter((tabItem) => tabItem.id !== "advanced" || showModelInternals).map((tabItem) => ({
+              value: tabItem.id,
+              label: tr(tabItem.labelKey)
+            }))}
             value={detailTab}
             onChange={(next) => setDetailTab(next as (typeof DETAIL_TABS)[number]["id"])}
           />

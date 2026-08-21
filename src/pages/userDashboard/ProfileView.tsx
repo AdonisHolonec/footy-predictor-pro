@@ -36,6 +36,9 @@ type ProfileViewProps = {
   billingConfigured: boolean;
   formatRemaining: (ms: number) => string;
   handleNav: (view: AppNavView) => void;
+  /** Opens the favourite-leagues drawer (moved here from the global header). */
+  onOpenLeagues?: () => void;
+  showModelInternals: boolean;
 };
 
 export default function ProfileView(props: ProfileViewProps) {
@@ -57,13 +60,15 @@ export default function ProfileView(props: ProfileViewProps) {
     setBillingBusy,
     billingConfigured,
     formatRemaining,
-    handleNav
+    handleNav,
+    onOpenLeagues,
+    showModelInternals
   } = props;
-  const { t } = useLocale();
+  const { t, locale, setLocale } = useLocale();
   return (
         <section className="space-y-6">
           <header>
-            <SectionHeader as="h1" size="page" eyebrow={t("nav.profile")} title={t("nav.profile")} />
+            <SectionHeader as="h1" size="page" eyebrow={t("nav.account")} title={t("nav.account")} />
           </header>
 
           <div className="flex items-center gap-3.5 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm">
@@ -239,6 +244,49 @@ export default function ProfileView(props: ProfileViewProps) {
             </Card>
           )}
 
+          <Card className="space-y-3" data-testid="account-preferences">
+            <SectionHeader as="h2" size="section" title={t("account.preferencesTitle")} />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-[var(--fp-text)]">{t("shell.switchLang")}</span>
+              <div className="inline-flex h-11 overflow-hidden rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)]" role="group" aria-label={t("shell.switchLang")}>
+                {(["ro", "en"] as const).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setLocale(code)}
+                    aria-pressed={locale === code}
+                    className={`min-w-11 px-3 text-xs font-bold ${
+                      locale === code ? "bg-[var(--fp-accent)] text-white" : "bg-[var(--fp-bg-card)] text-[var(--fp-text-muted)]"
+                    }`}
+                  >
+                    {code === "ro" ? t("shell.langRo") : t("shell.langEn")}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {onOpenLeagues && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-[var(--fp-text)]">{t("shell.leagues")}</span>
+                <Button size="sm" variant="secondary" onClick={onOpenLeagues} className="touch-target">
+                  {t("shell.filterLeagues")}
+                </Button>
+              </div>
+            )}
+            <label className="flex items-center justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[var(--fp-text)]">{t("account.modelInternals")}</span>
+                <span className="block text-xs text-[var(--fp-text-muted)]">{t("account.modelInternalsSub")}</span>
+              </span>
+              <input
+                type="checkbox"
+                data-testid="model-internals-toggle"
+                checked={showModelInternals}
+                onChange={(e) => updateFilters({ showModelInternals: e.target.checked })}
+                className="h-5 w-5 shrink-0 accent-[var(--fp-accent)]"
+              />
+            </label>
+          </Card>
+
           <div className="overflow-hidden rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)]">
             {!tierQuotaExempt && (
               <button
@@ -269,7 +317,6 @@ export default function ProfileView(props: ProfileViewProps) {
             <button
               type="button"
               onClick={() => {
-                updateFilters({ matchesFilter: "favorites" });
                 handleNav("matches");
               }}
               className="flex w-full items-center gap-3 border-b border-[var(--fp-border)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--fp-bg-muted)]"

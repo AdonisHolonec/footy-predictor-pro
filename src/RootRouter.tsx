@@ -87,7 +87,9 @@ export default function RootRouter() {
             <Route path="/track-record" element={<TrackRecordPage />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/login" element={<Login />} />
+            {/* One route per destination: /workspace, /workspace/matches, /results, /performance, /account, /tickets … UserDashboard reads the slug. */}
             <Route path="/workspace" element={<AuthGate />} />
+            <Route path="/workspace/:view" element={<AuthGate />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

@@ -35,6 +35,8 @@ export type UiPrefsV3 = {
   preferredMarkets: MarketPref[];
   /** In-app "big live swing" alerts (client-derived, never emailed) — on by default. */
   notifyLiveSwing: boolean;
+  /** Account › Model internals. Off: the Advanced tab and λ/version/pipeline data stay out of the UI. */
+  showModelInternals: boolean;
 };
 
 const DEFAULT_PREFS: UiPrefsV3 = {
@@ -54,7 +56,8 @@ const DEFAULT_PREFS: UiPrefsV3 = {
   dashboardWidgets: ["kpi", "continue", "recommended", "value", "matches"],
   notificationsSeenIds: [],
   preferredMarkets: [],
-  notifyLiveSwing: true
+  notifyLiveSwing: true,
+  showModelInternals: false
 };
 
 /* Key shape owned by design-system/theme.ts so the pre-paint bootstrap and
@@ -165,6 +168,7 @@ export function useUiPrefs(userId?: string | null) {
           | "matchesFilter"
           | "preferredMarkets"
           | "notifyLiveSwing"
+          | "showModelInternals"
         >
       >
     ) => {

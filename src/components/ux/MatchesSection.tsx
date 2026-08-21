@@ -1,18 +1,19 @@
+import type { ReactNode } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import SegmentedControl from "../../design-system/SegmentedControl";
+import FilterChip from "../../design-system/FilterChip";
+import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
 import MatchList from "./MatchList";
 import MatchListRow from "./MatchListRow";
+import type { MatchesSubFilter } from "./appNav";
 
 type AccessTier = UpgradeTier | "free" | string;
-/** "picks" ranks the slate by confidence; see useDerivedPredictions. */
-type MatchesSubFilter = "all" | "favorites" | "picks";
 
 type Props = {
-  mode: "all" | "live";
   matches: PredictionRow[];
   accessTier: AccessTier;
   marketValidationsByFixtureId: Map<number, CardMarketValidations>;
@@ -21,17 +22,37 @@ type Props = {
   onOpenMatch: (row: PredictionRow) => void;
   onUpgradeRequired: (feature: string, requiredTier: UpgradeTier) => void;
   onPredict: () => void;
+  /** Segment state — session-local, owned by the page, never a route. */
   matchesFilter?: MatchesSubFilter;
   onSetFilter?: (filter: MatchesSubFilter) => void;
-  onGoLive?: () => void;
+  /** Free-text filter — session-local, owned by the page. */
+  search?: string;
+  onSearchChange?: (q: string) => void;
+  /** Persistent "saved filters" (Settings can reset them). */
   valueOnly?: boolean;
   onToggleValueOnly?: (checked: boolean) => void;
-  /** True while a fetch is in flight and no cached rows exist yet — shows skeleton cards instead of the empty state. */
+  highConfActive?: boolean;
+  onToggleHighConf?: () => void;
+  /** Scope controls that used to live in the global header. */
+  onOpenLeagues?: () => void;
+  onRefresh?: () => void;
+  refreshBusy?: boolean;
+  extraDates?: ReactNode;
+  /** True while a fetch is in flight and no cached rows exist yet — shows skeleton rows instead of the empty state. */
   loading?: boolean;
 };
 
+/**
+ * Matches — the main scan surface (UX-B).
+ *
+ * Primary control: All | Live | Favorites, a real segment of ONE list. Live is
+ * a filter here, not a destination: choosing it narrows the rows and leaving it
+ * restores exactly the segment the user had before — nothing resets on the way
+ * in or out. "Top picks" (confidence-ranked) is the fourth, optional segment
+ * value; Value / High confidence are the persistent saved filters; search,
+ * leagues, the date range and Refresh act on this list, so they live here.
+ */
 export default function MatchesSection({
-  mode,
   matches,
   marketValidationsByFixtureId,
   isWatched,
@@ -40,65 +61,100 @@ export default function MatchesSection({
   onPredict,
   matchesFilter = "all",
   onSetFilter,
-  onGoLive,
+  search = "",
+  onSearchChange,
   valueOnly = false,
   onToggleValueOnly,
+  highConfActive = false,
+  onToggleHighConf,
+  onOpenLeagues,
+  onRefresh,
+  refreshBusy = false,
+  extraDates,
   loading = false
 }: Props) {
   const { t } = useLocale();
+  const mode = matchesFilter === "live" ? "live" : "all";
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <header>
         <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--fp-text)] sm:text-[length:var(--fp-hero)]">
-          {mode === "live" ? t("nav.live") : t("nav.matches")}
+          {t("nav.matches")}
         </h1>
         <p className="mt-0.5 text-xs text-[var(--fp-text-muted)] sm:text-sm">
           {mode === "live" ? t("dash.liveSub") : t("dash.matchesSub")}
         </p>
       </header>
 
-      {/* The all/favorites pair is the FILTER (toggle semantics). "Live" is a
-          navigation shortcut and the Value checkbox is a separate control —
-          both stay in the same track via `trailing`, in today's exact order. */}
-      {mode === "all" && (
+      <div className="flex flex-wrap items-center gap-2" data-testid="matches-controls">
         <SegmentedControl
           mode="toggle"
           options={(
             [
               ["all", "dash.filterAll"],
-              ["picks", "dash.filterPicks"],
-              ["favorites", "dash.filterFavorites"]
+              ["live", "dash.filterLive"],
+              ["favorites", "dash.filterFavorites"],
+              ["picks", "dash.filterPicks"]
             ] as const
           ).map(([id, key]) => ({
             value: id,
             label: t(key),
             title: t("dash.filterTitle", { label: t(key) })
           }))}
-          value={matchesFilter ?? "all"}
+          value={matchesFilter}
           onChange={(id) => onSetFilter?.(id)}
-          trailing={
-            <>
-              <button
-                type="button"
-                onClick={onGoLive}
-                title={t("dash.filterTitle", { label: t("dash.filterLive") })}
-                className="inline-flex h-9 items-center rounded-md px-2.5 text-xs font-bold text-[var(--fp-text-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
-              >
-                {t("dash.filterLive")}
-              </button>
-              <label className="flex h-9 items-center gap-1.5 border-l border-[var(--fp-border)] px-2.5 text-xs font-bold text-[var(--fp-text-muted)]">
-                {t("dash.filterValue")}
-                <input
-                  type="checkbox"
-                  checked={valueOnly}
-                  onChange={(e) => onToggleValueOnly?.(e.target.checked)}
-                  className="h-4 w-4 accent-[var(--fp-accent)]"
-                />
-              </label>
-            </>
-          }
         />
+        {onToggleValueOnly && (
+          <FilterChip selected={valueOnly} onClick={() => onToggleValueOnly(!valueOnly)} title={t("dash.filterTitle", { label: t("dash.filterValue") })}>
+            {t("dash.filterValue")}
+          </FilterChip>
+        )}
+        {onToggleHighConf && (
+          <FilterChip selected={highConfActive} onClick={onToggleHighConf} title={t("dash.filterTitle", { label: t("dash.filterHighConf") })}>
+            {t("dash.filterHighConf")}
+          </FilterChip>
+        )}
+      </div>
+
+      {(onSearchChange || onOpenLeagues || extraDates || onRefresh) && (
+        <div className="flex flex-wrap items-center gap-2" data-testid="matches-scope">
+          {onSearchChange && (
+            <>
+              <label className="sr-only" htmlFor="matches-search">
+                {t("shell.search")}
+              </label>
+              <input
+                id="matches-search"
+                type="search"
+                title={t("shell.searchTeams")}
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder={t("shell.searchTeams")}
+                className="h-9 min-w-[8rem] flex-[1_1_10rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-2.5 text-sm font-medium text-[var(--fp-text)] placeholder:text-[var(--fp-text-faint)] sm:max-w-[16rem]"
+              />
+            </>
+          )}
+          {extraDates}
+          {onOpenLeagues && (
+            <Button size="sm" variant="secondary" onClick={onOpenLeagues} className="touch-target" aria-label={t("shell.filterLeagues")}>
+              {t("shell.leagues")}
+            </Button>
+          )}
+          {onRefresh && (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={refreshBusy}
+              onClick={onRefresh}
+              className="touch-target ml-auto"
+              aria-label={t("shell.refreshPredictions")}
+              aria-busy={refreshBusy}
+            >
+              {t("shell.refresh")}
+            </Button>
+          )}
+        </div>
       )}
 
       {!matches.length && loading ? (
@@ -139,23 +195,13 @@ export default function MatchesSection({
                   ? t("dash.emptyPicksDesc")
                   : t("dash.emptyPredsDesc")
           }
-          actionLabel={
-            mode === "live"
-              ? undefined
-              : matchesFilter === "favorites" || matchesFilter === "picks"
-                ? t("dash.showAll")
-                : t("shell.predict")
-          }
-          onAction={
-            mode === "live"
-              ? undefined
-              : matchesFilter === "favorites" || matchesFilter === "picks"
-                ? () => onSetFilter?.("all")
-                : onPredict
-          }
+          /* Every narrowed segment — live included — offers the way back out;
+             only the unfiltered slate offers Predict. */
+          actionLabel={matchesFilter === "all" ? t("shell.predict") : t("dash.showAll")}
+          onAction={matchesFilter === "all" ? onPredict : () => onSetFilter?.("all")}
         />
       ) : (
-        <MatchList label={mode === "live" ? t("nav.live") : t("nav.matches")}>
+        <MatchList label={mode === "live" ? t("dash.filterLive") : t("nav.matches")}>
           {matches.map((row) => (
             <MatchListRow
               key={row.id}

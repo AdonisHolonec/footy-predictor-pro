@@ -16,12 +16,11 @@ export function NavIcon({ id }: { id: AppNavView }) {
           <path d="M12 3v18M3 12h18M5.5 5.5c2.5 2 5 3 6.5 3s4-1 6.5-3M5.5 18.5c2.5-2 5-3 6.5-3s4 1 6.5 3" />
         </svg>
       );
-    case "live":
+    case "tickets":
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-          <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-          <circle cx="12" cy="12" r="7" />
-          <circle cx="12" cy="12" r="10" opacity="0.45" />
+          <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8Z" />
+          <path d="M10 6v12" strokeDasharray="2 2" />
         </svg>
       );
     case "history":

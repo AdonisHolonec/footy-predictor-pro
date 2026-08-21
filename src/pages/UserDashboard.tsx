@@ -2,7 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 import LeaguePanel from "../components/LeaguePanel";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
-import type { AppNavView } from "../components/ux/appNav";
+import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
+import { useWorkspaceRoute } from "./userDashboard/useWorkspaceRoute";
+import TicketsSection from "../components/ux/TicketsSection";
 import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
 import HomeSection from "../components/ux/HomeSection";
@@ -129,7 +131,16 @@ export default function UserDashboard() {
   const [trialBusy, setTrialBusy] = useState<"premium" | "ultra" | null>(null);
   const [billingBusy, setBillingBusy] = useState<"premium" | "ultra" | "portal" | null>(null);
   const [billingConfigured, setBillingConfigured] = useState(false);
-  const [navView, setNavView] = useState<AppNavView>("home");
+  // Destination = URL (/workspace/<slug>): deep links, Back/Forward, reload. See useWorkspaceRoute.
+  const { navView, setNavView } = useWorkspaceRoute();
+  /*
+   * Matches segment + search are a way of LOOKING at the slate, not an
+   * account preference: they live for the session and survive tab switches,
+   * but a new session starts on "all" with an empty search. (valueOnly /
+   * minConfidence stay persistent — Settings calls them "saved filters".)
+   */
+  const [matchesFilter, setMatchesFilter] = useState<MatchesSubFilter>("all");
+  const [matchSearch, setMatchSearch] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; requiredTier: UpgradeTier } | null>(null);
   const { t, setLocale, locale } = useLocale();
@@ -150,8 +161,6 @@ export default function UserDashboard() {
   useEffect(() => {
     if (locale !== prefs.locale) setPrefsLocale(locale);
   }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
-  const matchesFilter = prefs.matchesFilter;
-  const matchSearch = prefs.matchSearch;
   const showSettledMarketsOnly = prefs.settledOnly;
   const todayKey = localCalendarDateKey();
   // One predicate for both Special Bet surfaces (list modal + history) — see helpers.
@@ -219,7 +228,6 @@ export default function UserDashboard() {
     preds,
     history,
     prefs,
-    navView,
     matchesFilter,
     matchSearch,
     showSettledMarketsOnly
@@ -487,14 +495,13 @@ export default function UserDashboard() {
 
   const openMatch = useCallback((match: PredictionRow) => setSelectedMatch(match), []);
 
-  const handleNav = useCallback(
-    (view: AppNavView) => {
-      setNavView(view);
-      if (view === "matches") updateFilters({ matchesFilter: "all" });
-      if (view === "live") updateFilters({ matchesFilter: "live" });
-    },
-    [updateFilters]
-  );
+  // Navigation changes the destination and nothing else: the Matches segment
+  // a user chose is still there when they come back (it used to reset to "all").
+  const handleNav = useCallback((view: AppNavView) => setNavView(view), [setNavView]);
+  const goLive = useCallback(() => {
+    setMatchesFilter("live");
+    setNavView("matches");
+  }, [setNavView]);
 
   const trackerSlot = (
     <SuccessRateTracker
@@ -521,31 +528,9 @@ export default function UserDashboard() {
         setSelectedDates(normalizeSelectedDates([next]));
         void fetchDays([next]);
       }}
-      search={matchSearch}
-      onSearchChange={(q) => updateFilters({ matchSearch: q })}
-      onOpenLeagues={() => setIsLeaguesOpen(true)}
-      onRefresh={() => void restoreOrPredict()}
-      refreshBusy={warmPredictBusy}
       onPredict={() => void warmAndPredict()}
       predictBusy={warmPredictBusy}
-      favoritesActive={matchesFilter === "favorites"}
-      onToggleFavorites={() =>
-        updateFilters({ matchesFilter: matchesFilter === "favorites" ? "all" : "favorites" })
-      }
-      onOpenNotifications={() => setNavView("notifications")}
-      onOpenProfile={() => setNavView("profile")}
-      onOpenSettings={() => setNavView("settings")}
-      email={user?.email}
-      tier={userTier}
-      extraDates={
-        <DateRangeChips
-          date={date}
-          userTier={userTier}
-          activePredictDates={activePredictDates}
-          setSelectedDates={setSelectedDates}
-          setStatus={setStatus}
-        />
-      }
+      liveCount={homeLiveCount}
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
         <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
@@ -596,35 +581,18 @@ export default function UserDashboard() {
           onOpenMatch={openMatch}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
           onGoMatches={() => handleNav("matches")}
-          onGoLive={() => handleNav("live")}
+          onGoLive={goLive}
           onGoHistory={() => handleNav("history")}
           onGoStatistics={() => handleNav("statistics")}
+          onGoTickets={() => handleNav("tickets")}
           onPredict={() => void warmAndPredict()}
-          valueOnly={prefs.valueOnly}
-          onToggleValue={() => updateFilters({ valueOnly: !prefs.valueOnly })}
-          highConfActive={prefs.minConfidence > 0}
-          onToggleHighConf={() =>
-            updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : HIGH_CONFIDENCE_THRESHOLD })
-          }
           trackerStats={trackerStats}
-          history={history}
-          /* Generation date, not a pool filter: the GSB pool is every upcoming
-             predicted fixture, so the card no longer follows the browsed date. */
-          betDate={todayKey}
           selectedDate={activePredictDates[0] ?? date}
-          /* The profile's favourite leagues, not the local league filter: the
-             server validates the scope against profiles.favorite_leagues and
-             rejects anything outside it. */
-          favoriteLeagueIds={user?.favoriteLeagues ?? []}
-          gsbFixtureIndex={gsbFixtureIndex}
-          /* No tier gate exists for /api/special-bets, so the UI adds none. */
-          canUseGlobalSpecialBet={Boolean(user)}
         />
       )}
 
-      {(navView === "matches" || navView === "live") && (
+      {navView === "matches" && (
         <MatchesSection
-          mode={navView === "live" ? "live" : "all"}
           matches={visiblePreds}
           accessTier={userTier}
           marketValidationsByFixtureId={marketValidationsByFixtureId}
@@ -633,15 +601,28 @@ export default function UserDashboard() {
           onOpenMatch={openMatch}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
           onPredict={() => void warmAndPredict()}
-          /* Collapse only "live" — it is a VIEW, not one of this control's
-             options. Listing the options instead silently dropped any new one:
-             "picks" arrived, the old `=== "favorites" ? … : "all"` flattened it
-             away, and the chip never showed as selected. */
-          matchesFilter={matchesFilter === "live" ? "all" : matchesFilter}
-          onSetFilter={(f) => updateFilters({ matchesFilter: f })}
-          onGoLive={() => handleNav("live")}
+          matchesFilter={matchesFilter}
+          onSetFilter={setMatchesFilter}
+          search={matchSearch}
+          onSearchChange={setMatchSearch}
           valueOnly={prefs.valueOnly}
           onToggleValueOnly={(checked) => updateFilters({ valueOnly: checked })}
+          highConfActive={prefs.minConfidence > 0}
+          onToggleHighConf={() =>
+            updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : HIGH_CONFIDENCE_THRESHOLD })
+          }
+          onOpenLeagues={() => setIsLeaguesOpen(true)}
+          onRefresh={() => void restoreOrPredict()}
+          refreshBusy={warmPredictBusy}
+          extraDates={
+            <DateRangeChips
+              date={date}
+              userTier={userTier}
+              activePredictDates={activePredictDates}
+              setSelectedDates={setSelectedDates}
+              setStatus={setStatus}
+            />
+          }
           loading={warmPredictBusy && !visiblePreds.length}
         />
       )}
@@ -649,12 +630,21 @@ export default function UserDashboard() {
       {navView === "history" && (
         <HistorySection
           history={history}
-          trackerSlot={trackerSlot}
           onOpenMatch={openMatch}
           canShowSpecialBet={canShowSpecialBet}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-          gsbFixtureIndex={gsbFixtureIndex}
+          onGoTickets={() => handleNav("tickets")}
+        />
+      )}
+
+      {navView === "tickets" && (
+        <TicketsSection
+          betDate={todayKey}
+          favoriteLeagueIds={user?.favoriteLeagues ?? []}
+          fixtureIndex={gsbFixtureIndex}
+          /* No tier gate exists for /api/special-bets, so the UI adds none (UX-G). */
           canUseGlobalSpecialBet={Boolean(user)}
+          onUpgradeRequired={(feature) => setUpgradePrompt({ feature, requiredTier: "ultra" })}
         />
       )}
 
@@ -710,6 +700,8 @@ export default function UserDashboard() {
           billingConfigured={billingConfigured}
           formatRemaining={formatRemaining}
           handleNav={handleNav}
+          onOpenLeagues={() => setIsLeaguesOpen(true)}
+          showModelInternals={prefs.showModelInternals}
         />
       )}
 
@@ -748,6 +740,7 @@ export default function UserDashboard() {
             onClose={() => setSelectedMatch(null)}
             onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
             onReport={() => setReportRow(modalMatch)}
+            showModelInternals={prefs.showModelInternals}
           />
         </Suspense>
       )}

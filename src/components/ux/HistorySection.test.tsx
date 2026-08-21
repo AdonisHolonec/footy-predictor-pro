@@ -7,7 +7,6 @@ import { ro } from "../../i18n/ro";
 afterEach(cleanup);
 
 /** The one performance block. Its content is irrelevant here — its count is not. */
-const TRACKER = <div data-testid="tracker">performance tracker</div>;
 
 /**
  * Whichever locale the environment resolves to, the copy must be one of these.
@@ -22,20 +21,14 @@ function eitherLocale(key: "emptyTitle" | "empty"): RegExp {
 }
 
 describe("HistorySection", () => {
-  it("shows the performance tracker once, with no stat row repeating it", () => {
-    render(<HistorySection history={[]} trackerSlot={TRACKER} />);
-
-    expect(screen.getAllByTestId("tracker")).toHaveLength(1);
-
-    // "W / L" was the hardcoded label of the duplicate StatTile row that sat
-    // directly beneath the tracker, restating wins and losses the tracker had
-    // just shown. It is the locale-independent fingerprint of that row: if it
-    // ever comes back, the view is repeating itself again.
+  it("renders no performance tracker — Results answers what happened, Performance answers how well", () => {
+    render(<HistorySection history={[]} />);
+    expect(screen.queryByTestId("tracker")).toBeNull();
     expect(screen.queryByText("W / L")).toBeNull();
   });
 
   it("explains an empty history instead of stating it", () => {
-    render(<HistorySection history={[]} trackerSlot={TRACKER} />);
+    render(<HistorySection history={[]} />);
 
     // EmptyState gives the user a heading plus a reason. The old bare Card gave
     // one muted line that named "sync" — an internal concept, not a user action.
@@ -54,10 +47,9 @@ describe("HistorySection", () => {
       }
     ] as unknown as Parameters<typeof HistorySection>[0]["history"];
 
-    render(<HistorySection history={history} trackerSlot={TRACKER} />);
+    render(<HistorySection history={history} />);
 
     expect(screen.getByText(/Rapid/)).toBeTruthy();
-    expect(screen.getAllByTestId("tracker")).toHaveLength(1);
   });
 });
 
@@ -86,7 +78,7 @@ const LIGHT_ROW = {
 
 describe("HistorySection on the light list projection", () => {
   it("renders a row that carries no analytical payload", () => {
-    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    render(<HistorySection history={[LIGHT_ROW]} />);
 
     // Teams, score and recommendation all come from the light contract now.
     expect(screen.getByText(/FCSB Bucuresti/)).toBeTruthy();
@@ -95,14 +87,14 @@ describe("HistorySection on the light list projection", () => {
   });
 
   it("still renders the logos the light projection carries", () => {
-    const { container } = render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    const { container } = render(<HistorySection history={[LIGHT_ROW]} />);
     const logos = Array.from(container.querySelectorAll("img")).map((i) => i.getAttribute("src") || "");
     expect(logos.some((s) => s.includes("2246.png")), "home logo missing from the light row").toBe(true);
     expect(logos.some((s) => s.includes("2249.png")), "away logo missing from the light row").toBe(true);
   });
 
   it("does not fall back to the empty state for a light row", () => {
-    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    render(<HistorySection history={[LIGHT_ROW]} />);
     expect(screen.queryByText(eitherLocale("emptyTitle"))).toBeNull();
   });
 });
