@@ -32,6 +32,8 @@ export type MatchModalProps = {
   presentation?: "modal" | "focus";
   /** Called when user clicks a plan-locked control. */
   onUpgradeRequired?: (feature: string, requiredTier: "premium" | "ultra") => void;
+  /** Opens the prediction report dialog. Moved here from the list card in UX-A: the list row carries no secondary actions. */
+  onReport?: () => void;
 };
 
 /**
@@ -66,7 +68,8 @@ export default function MatchModal({
   canShowSpecialBet = false,
   accessTier = "free",
   presentation = "focus",
-  onUpgradeRequired
+  onUpgradeRequired,
+  onReport
 }: MatchModalProps) {
   const model = useMatchModalModel({ match, accessTier, presentation, hashColor, logoColors });
   const {
@@ -186,16 +189,27 @@ export default function MatchModal({
           : "fp-readable relative max-h-[min(92dvh,100%)] w-full max-w-lg overflow-y-auto rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] shadow-fp-lg lg:max-w-5xl"
       }
     >
-        <IconButton
-          ref={closeBtnRef}
-          shape="round"
-          onClick={onClose}
-          title={tr("match.close")}
-          aria-label={tr("match.close")}
-          className="sticky top-2 z-10 ml-auto mr-2 mt-2"
-        >
-          ✕
-        </IconButton>
+        <div className="sticky top-2 z-10 ml-auto mr-2 mt-2 flex items-center gap-1">
+          {onReport && (
+            <IconButton
+              shape="round"
+              onClick={onReport}
+              title={tr("predictionReport.cardAction")}
+              aria-label={tr("predictionReport.cardAction")}
+            >
+              ⚑
+            </IconButton>
+          )}
+          <IconButton
+            ref={closeBtnRef}
+            shape="round"
+            onClick={onClose}
+            title={tr("match.close")}
+            aria-label={tr("match.close")}
+          >
+            ✕
+          </IconButton>
+        </div>
 
         {hasLiveScore && match.momentum && (
           <MatchMomentumStickyStrip

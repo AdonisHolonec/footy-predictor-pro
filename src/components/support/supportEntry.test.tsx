@@ -177,11 +177,14 @@ describe("prediction report reaches both prediction trees", () => {
     recommended: { pick: "BTTS Yes", family: "BTTS" }
   } as unknown as PredictionRow;
 
-  it("[9] the workspace card is wired", () => {
-    const section = src("components/ux/MatchesSection.tsx");
-    expect(section).toMatch(/onReport=\{onReportMatch/);
-    expect(src("components/ux/PredictionFocusCard.tsx")).toMatch(/onReport &&/);
-    expect(src("pages/UserDashboard.tsx")).toMatch(/onReportMatch=\{setReportRow\}/);
+  it("[9] the workspace tree is wired through Match Detail", () => {
+    // UX-A: the list row carries no secondary actions, so the report entry
+    // moved from the card flag to the detail sheet the row opens. The list
+    // must not grow it back, and the sheet must keep it.
+    expect(src("components/ux/MatchListRow.tsx")).not.toMatch(/onReport/);
+    expect(src("components/ux/MatchesSection.tsx")).not.toMatch(/onReportMatch/);
+    expect(src("components/MatchModal.tsx")).toMatch(/onReport &&/);
+    expect(src("pages/UserDashboard.tsx")).toMatch(/onReport=\{\(\) => setReportRow\(modalMatch\)\}/);
   });
 
   it("[10] the admin card is wired through the whole chain", () => {

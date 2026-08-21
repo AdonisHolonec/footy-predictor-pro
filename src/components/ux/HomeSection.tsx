@@ -6,7 +6,8 @@ import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import GlobalSpecialBetSection from "./GlobalSpecialBetSection";
-import PredictionFocusCard from "./PredictionFocusCard";
+import MatchList from "./MatchList";
+import MatchListRow from "./MatchListRow";
 import RecentPerformanceCard from "./RecentPerformanceCard";
 import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 import { getGreeting } from "../../utils/greeting";
@@ -15,6 +16,9 @@ import { confidenceOf, expectedValueOf, isHighConfidenceRow, isValueRow } from "
 import { CHAMPIONS_LEAGUE_ID, EUROPA_LEAGUE_ID } from "../../constants/appConstants";
 
 type AccessTier = UpgradeTier | "free" | string;
+
+/** Home is list-first: enough rows to scan, few enough to stay above the secondary modules. */
+const HOME_LIST_ROWS = 8;
 
 /** Sizes of the sets the filter chips select, taken before any chip is applied. */
 export type HomeCounts = {
@@ -62,7 +66,6 @@ export default function HomeSection({
   counts,
   analysisMatch,
   liveCount,
-  accessTier,
   marketValidationsByFixtureId,
   isWatched,
   onToggleWatch,
@@ -101,7 +104,7 @@ export default function HomeSection({
     const pool = eligible.length ? eligible : upcoming;
     return [...pool]
       .sort((a, b) => confidenceOf(b) - confidenceOf(a) || expectedValueOf(b) - expectedValueOf(a))
-      .slice(0, 3);
+      .slice(0, HOME_LIST_ROWS);
   }, [matches, analysisMatch]);
 
   const hasLiveChampionsLeague = useMemo(
@@ -194,20 +197,18 @@ export default function HomeSection({
                   {t("dash.showAll")} · {liveMatches.length}
                 </Button>
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <MatchList label={t("dash.homeLiveTitle")}>
                 {liveMatches.slice(0, 3).map((row) => (
-                  <PredictionFocusCard
+                  <MatchListRow
                     key={row.id}
                     row={row}
-                    accessTier={accessTier}
                     marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
                     watched={isWatched(Number(row.id))}
                     onToggleWatch={() => onToggleWatch(Number(row.id))}
                     onOpen={() => onOpenMatch(row)}
-                    onUpgradeRequired={onUpgradeRequired}
                   />
                 ))}
-              </div>
+              </MatchList>
             </div>
           )}
 
@@ -253,20 +254,18 @@ export default function HomeSection({
                   {t("dash.showAll")}
                 </Button>
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <MatchList label={t("dash.topPicksTitle")}>
                 {topPicks.map((row) => (
-                  <PredictionFocusCard
+                  <MatchListRow
                     key={row.id}
                     row={row}
-                    accessTier={accessTier}
                     marketValidations={marketValidationsByFixtureId.get(Number(row.id)) ?? row.cardMarketValidations ?? null}
                     watched={isWatched(Number(row.id))}
                     onToggleWatch={() => onToggleWatch(Number(row.id))}
                     onOpen={() => onOpenMatch(row)}
-                    onUpgradeRequired={onUpgradeRequired}
                   />
                 ))}
-              </div>
+              </MatchList>
             </div>
           )}
         </>
