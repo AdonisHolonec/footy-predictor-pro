@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import SuccessRateTracker from "../components/SuccessRateTracker";
 import { ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useLocale } from "../context/LocaleContext";
@@ -230,18 +229,7 @@ export default function Login() {
               </div>
             </section>
 
-            <section>
-              <h2 className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.pulseTitle")}</h2>
-              <SuccessRateTracker
-                stats={globalStats}
-                animatedWins={globalStats.wins}
-                animatedLosses={globalStats.losses}
-                animatedWinRate={globalStats.winRate}
-                isWinRatePulsing={false}
-                isHistorySyncing={false}
-                pendingHistoryCount={0}
-              />
-            </section>
+
           </div>
 
           <section className="lg:sticky lg:top-8">

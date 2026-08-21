@@ -3,6 +3,8 @@ import type { HistoryEntry, PerformanceLeagueBreakdown } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import Skeleton from "../../design-system/Skeleton";
 import SectionHeader from "../../design-system/SectionHeader";
+import CollapsiblePanel from "../../design-system/CollapsiblePanel";
+import Button from "../../design-system/Button";
 import CalibrationChart from "./CalibrationChart";
 import HistoryTrustSection from "./HistoryTrustSection";
 
@@ -14,13 +16,16 @@ type Props = {
   leagueBreakdown?: PerformanceLeagueBreakdown[];
   /** Next step for an account with no settled results yet. */
   onStartPredicting?: () => void;
+  /** Results = records; Performance = interpretation. One-directional link down. */
+  onViewResults?: () => void;
 };
 
 export default function StatisticsSection({
   trackerSlot,
   history = [],
   leagueBreakdown = [],
-  onStartPredicting
+  onStartPredicting,
+  onViewResults
 }: Props) {
   const { t } = useLocale();
   return (
@@ -34,17 +39,28 @@ export default function StatisticsSection({
       <section aria-labelledby="perf-yours" className="space-y-4" data-testid="performance-yours">
         <SectionHeader as="h2" id="perf-yours" size="section" eyebrow={t("perf.yoursEyebrow")} title={t("perf.yoursTitle")} description={t("perf.yoursSub")} />
         {trackerSlot}
+        {onViewResults && (
+          <Button size="sm" variant="ghost" onClick={onViewResults} data-testid="performance-view-results">
+            {t("perf.viewResults")} ›
+          </Button>
+        )}
 
-        <CalibrationChart history={history} />
+        {/* Mobile-first: the breakdowns and calibration are interpretation on top of
+            interpretation — one disclosure each, so the first viewport is the tracker. */}
+        <CollapsiblePanel compact title={t("perf.breakdownTitle")} subtitle={t("perf.breakdownSub")}>
+          <HistoryTrustSection
+            history={history}
+            leagueBreakdown={leagueBreakdown}
+            onStartPredicting={onStartPredicting}
+          />
+        </CollapsiblePanel>
+        <CollapsiblePanel compact title={t("perf.reliabilityTitle")} subtitle={t("perf.reliabilitySub")}>
+          <CalibrationChart history={history} />
+        </CollapsiblePanel>
 
       {/* The per-day / per-league / per-market tables used to sit on Home, where
           they answered a question Home does not ask. They belong beside the rest
           of the track record. */}
-        <HistoryTrustSection
-          history={history}
-          leagueBreakdown={leagueBreakdown}
-          onStartPredicting={onStartPredicting}
-        />
       </section>
 
       {/* B · MODEL TRACK RECORD — the public, all-accounts snapshot. Its own

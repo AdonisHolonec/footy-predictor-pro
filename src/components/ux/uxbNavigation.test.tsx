@@ -354,9 +354,10 @@ describe("UX-B · Today, Results, Performance composition", () => {
     expect(screen.queryByRole("button", { name: either("dash", "filterHighConf") })).toBeNull();
   });
 
-  it("Results: no tracker on top, an outcome filter, day groups, a Tickets link", () => {
+  it("Results: no tracker on top, a day with navigation, an outcome filter, a Tickets link", () => {
     render(
       <HistorySection
+        today="2026-08-20"
         history={
           [
             { id: 1, kickoff: "2026-08-20T18:00:00Z", teams: { home: "Rapid", away: "Farul" }, validation: "win" },
@@ -368,11 +369,16 @@ describe("UX-B · Today, Results, Performance composition", () => {
     );
     expect(screen.queryByTestId("tracker")).toBeNull();
     expect(screen.getByTestId("results-controls")).toBeTruthy();
-    expect(screen.getAllByTestId("results-day")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: either("history", "win") }));
-    expect(screen.getAllByTestId("results-day")).toHaveLength(1);
+    expect(screen.getByTestId("results-day-nav")).toBeTruthy();
+    // The selected day shows its own rows only; the previous day is one tap back.
     expect(screen.getByText(/Rapid/)).toBeTruthy();
     expect(screen.queryByText(/CFR/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: either("history", "dayPrev") }));
+    expect(screen.getByText(/CFR/)).toBeTruthy();
+    expect(screen.queryByText(/Rapid/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: either("history", "win") }));
+    expect(screen.queryByText(/CFR/)).toBeNull();
+    expect(screen.getByTestId("results-tickets-link")).toBeTruthy();
   });
 
   it("Performance: 'Your results' and 'Model track record' are two labelled sections, one tracker", () => {

@@ -43,14 +43,20 @@ export default function TicketsSection({
           description={t("tickets.sub")}
         />
       </header>
-      <GlobalSpecialBetSection
+      <section aria-labelledby="tickets-build" data-testid="tickets-build" className="space-y-3">
+        <SectionHeader as="h2" id="tickets-build" size="section" title={t("tickets.buildTitle")} description={t("tickets.buildSub")} />
+        <GlobalSpecialBetSection
         betDate={betDate}
         favoriteLeagueIds={favoriteLeagueIds}
         fixtureIndex={fixtureIndex}
         canUseGlobalSpecialBet={canUseGlobalSpecialBet}
-        onUpgradeRequired={onUpgradeRequired}
-      />
-      <GlobalSpecialBetHistory fixtureIndex={fixtureIndex} canUseGlobalSpecialBet={canUseGlobalSpecialBet} />
+          onUpgradeRequired={onUpgradeRequired}
+        />
+      </section>
+      <section aria-labelledby="tickets-history" data-testid="tickets-history" className="space-y-3">
+        <SectionHeader as="h2" id="tickets-history" size="section" title={t("tickets.historyTitle")} description={t("tickets.historySub")} />
+        <GlobalSpecialBetHistory fixtureIndex={fixtureIndex} canUseGlobalSpecialBet={canUseGlobalSpecialBet} />
+      </section>
     </section>
   );
 }
