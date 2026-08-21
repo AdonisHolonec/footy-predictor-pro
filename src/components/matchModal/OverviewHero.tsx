@@ -8,6 +8,7 @@ import LiveWinProbabilityStrip from "../ux/LiveWinProbabilityStrip";
 import MatchMomentumTimeline from "../ux/MatchMomentumTimeline";
 import { EdgeCompass, FormRibbon, SignalLens } from "../SignalLab";
 import { LeagueStandingEntry, PredictionRow } from "../../types";
+import { isFixtureInPlay } from "../../utils/appUtils";
 import type { DetailTabId, MatchModalProps } from "../MatchModal";
 import type { TranslateFn } from "../../i18n";
 import type { Dispatch, SetStateAction } from "react";
@@ -60,7 +61,12 @@ export default function OverviewHero(props: OverviewHeroProps) {
   return (
     <>
           {hasLiveScore && <LiveWinProbabilityStrip match={match} className={`w-full ${tab(["overview"])}`} />}
-          {hasLiveScore && match.momentum && (
+          {/* Momentum is gated on real in-play status, NOT on hasLiveScore. hasLiveScore
+              stays deliberately loose — it also covers a fixture still reported NS/TBD past
+              kickoff, so the score strip above keeps working while upstream status lags.
+              That looseness must not leak here: it let PST/CANC/ABD/AWD/WO fixtures (none of
+              which isFinalStatus recognises) render a live Momentum block. */}
+          {isFixtureInPlay(match.status) && match.momentum && (
             <div className={`w-full ${tab(["overview"])}`}>
               <MatchMomentumTimeline
                 fixtureId={Number(match.id)}
@@ -76,7 +82,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
               />
             </div>
           )}
-          {hasLiveScore && !match.momentum && (
+          {isFixtureInPlay(match.status) && !match.momentum && (
             <div className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center ${tab(["overview"])}`}>
               <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
                 <path
