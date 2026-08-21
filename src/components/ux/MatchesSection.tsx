@@ -87,7 +87,7 @@ export default function MatchesSection({
                 type="button"
                 onClick={onGoLive}
                 title={t("dash.filterTitle", { label: t("dash.filterLive") })}
-                className="hidden h-9 rounded-md px-2.5 text-xs font-bold text-[var(--fp-text-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] lg:inline-flex"
+                className="inline-flex h-9 items-center rounded-md px-2.5 text-xs font-bold text-[var(--fp-text-muted)] hover:text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)]"
               >
                 {t("dash.filterLive")}
               </button>

@@ -47,6 +47,8 @@ type Props = {
   history: HistoryEntry[];
   /** Calendar day the Global Special Bet is built from — the dashboard's active date. */
   betDate: string;
+  /** ISO `YYYY-MM-DD` the feed is browsed for — drives the header date line. */
+  selectedDate: string;
   /** The user's favourite leagues; the only scope /api/special-bets accepts. */
   favoriteLeagueIds: number[];
   /** fixture_id -> readable labels, so a snapshot that stores ids can still name its matches. */
@@ -78,6 +80,7 @@ export default function HomeSection({
   trackerStats,
   history,
   betDate,
+  selectedDate,
   favoriteLeagueIds,
   gsbFixtureIndex,
   canUseGlobalSpecialBet = false
@@ -88,13 +91,18 @@ export default function HomeSection({
   const topPicks = useMemo(() => {
     // In-play rows own the "Live now" section at the top of the page — Top picks
     // stays the upcoming, still-actionable shortlist (no duplicate cards).
-    const upcoming = matches.filter((m) => !isFixtureInPlay(m.status));
+    // The Featured card above already shows `analysisMatch` — the top-confidence
+    // upcoming row, i.e. exactly the row that would sort first here. Drop it so one
+    // fixture never renders twice on the same screen. The slice still yields up to
+    // three *other* picks and never invents placeholders when fewer exist.
+    const featuredId = analysisMatch?.id ?? null;
+    const upcoming = matches.filter((m) => !isFixtureInPlay(m.status) && m.id !== featuredId);
     const eligible = upcoming.filter((m) => isHighConfidenceRow(m) || isValueRow(m));
     const pool = eligible.length ? eligible : upcoming;
     return [...pool]
       .sort((a, b) => confidenceOf(b) - confidenceOf(a) || expectedValueOf(b) - expectedValueOf(a))
       .slice(0, 3);
-  }, [matches]);
+  }, [matches, analysisMatch]);
 
   const hasLiveChampionsLeague = useMemo(
     () => matches.some((m) => m.leagueId === CHAMPIONS_LEAGUE_ID && isFixtureInPlay(m.status)),
@@ -117,15 +125,18 @@ export default function HomeSection({
     [locale, liveCount, hasLiveChampionsLeague, hasLiveEuropaLeague]
   );
 
-  const todayLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", {
-        weekday: "long",
-        day: "numeric",
-        month: "long"
-      }).format(new Date()),
-    [locale]
-  );
+  // The browsed date, not the wall clock: the list below follows `selectedDate`,
+  // so the line above it must too. Parsed at local midnight so a "YYYY-MM-DD"
+  // key never shifts a day across time zones.
+  const todayLabel = useMemo(() => {
+    const [y, m, d] = selectedDate.split("-").map(Number);
+    const when = y && m && d ? new Date(y, m - 1, d) : new Date(selectedDate);
+    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-US", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    }).format(when);
+  }, [locale, selectedDate]);
 
   // Each chip carries the size of the set it selects, so the numbers the page used
   // to show as standalone KPI tiles now sit on the control that acts on them.

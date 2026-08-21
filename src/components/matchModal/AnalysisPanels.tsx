@@ -220,9 +220,9 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["markets"])}`}>
             <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">04 — Piețe & scor</h3>
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.marketsScore")}</h3>
                 <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
-                  probabilitate · încredere
+                  {tr("match.probConfidence")}
                 </span>
               </div>
               {(() => {

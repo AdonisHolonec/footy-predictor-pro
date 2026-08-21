@@ -290,7 +290,6 @@ export default function OverviewHero(props: OverviewHeroProps) {
             ) : (
               <p className="text-[11px] leading-relaxed text-[var(--fp-text-muted)]">
                 {tr("match.noStandingsBody")}
-                <span className="mt-2 block font-mono text-[10px] text-fp-accent/90">{tr("match.noStandingsHint")}</span>
               </p>
             )}
           </section>

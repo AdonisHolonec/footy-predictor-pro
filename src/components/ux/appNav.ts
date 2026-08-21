@@ -33,3 +33,14 @@ export const APP_NAV_ITEMS: { id: AppNavView; labelKey: string; shortKey: string
 export const MOBILE_TAB_ITEMS = APP_NAV_ITEMS.filter((i) =>
   (["home", "matches", "live", "history", "profile"] as AppNavView[]).includes(i.id)
 );
+
+/**
+ * Desktop icon rail: the bottom-bar set plus Statistics. The bottom bar is
+ * `lg:hidden`, so above that breakpoint this rail is the only pointer route to a
+ * destination (⌘K aside). Statistics had none — its only Home link lives on a
+ * card that hides itself until the account has settled picks — which is the
+ * same gap History closed in UX-07n. Five mobile tabs stay five.
+ */
+export const DESKTOP_NAV_ITEMS = APP_NAV_ITEMS.filter((i) =>
+  (["home", "matches", "live", "history", "statistics", "profile"] as AppNavView[]).includes(i.id)
+);
