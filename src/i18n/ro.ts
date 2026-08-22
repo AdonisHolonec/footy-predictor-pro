@@ -153,6 +153,7 @@ export const ro: Dict = {
     showingSaved: "Afișez {n} predicții salvate pentru această dată.",
     generated: "Au fost generate {n} predicții.",
     restoredHistory: "Am restaurat {n} predicții din istoric.",
+    planUpgraded: "Plan actualizat — rulează Predict din nou pentru piețele complete.",
     restoredNotice: "Am restaurat {n} predicții salvate — fără generare nouă.",
     legacyNotice: "Afișez picks-urile salvate. Piețele avansate se pot actualiza din istoric.",
     close: "Închide",
