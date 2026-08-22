@@ -6,6 +6,7 @@ import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
 import { LocaleProvider } from "../../context/LocaleContext";
 import { en } from "../../i18n/en";
 import { ro } from "../../i18n/ro";
+import StatusBadge from "../../design-system/StatusBadge";
 import type { HistoryEntry } from "../../types";
 
 /**
@@ -343,5 +344,106 @@ describe("Tickets · two-line overview", () => {
     expect(rows[0].getAttribute("aria-expanded")).toBe("false");
     expect(rows[1].getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelectorAll('[data-slot="ticket-detail"]')).toHaveLength(1);
+  });
+});
+
+// ── Tickets · mobile status = icon only ───────────────────────────────────
+//
+// jsdom has no layout, so "mobile" and "desktop" are the `sm` class contract the
+// project uses everywhere (StatusBadge, MatchListRow): the text is `hidden
+// sm:inline`, the icon carries no breakpoint class and is present at every width.
+
+const STATUSES = [
+  ["pending", "statusPending", "pending"],
+  ["won", "statusWon", "win"],
+  ["lost", "statusLost", "loss"]
+] as const;
+const statusLabel = (key: string) => either("gsb", key);
+const MOBILE_HIDDEN = /(^|\s)hidden(\s|$)/;
+const DESKTOP_SHOWN = /(^|\s)sm:inline(\s|$)/;
+
+describe("Tickets · mobile status is the icon alone", () => {
+  for (const [status, labelKey, kind] of STATUSES) {
+    it(`1-6. ${status}: the icon is unconditional, the text is switched off below sm`, async () => {
+      const { slot } = await renderTickets([ticket({ status })]);
+      const st = slot("ticket-status")!;
+      const icon = st.querySelector("svg") as SVGElement;
+      const text = slot("ticket-status-text")!;
+      expect(icon).toBeTruthy();
+      expect(icon.getAttribute("class") || "").not.toMatch(/hidden/);
+      expect(text.textContent).toMatch(statusLabel(labelKey));
+      expect(text.className).toMatch(MOBILE_HIDDEN);
+      expect(text.className).toMatch(DESKTOP_SHOWN);
+      // Nothing else inside the status slot carries the words at mobile widths.
+      const visibleAtMobile = [...st.querySelectorAll("*")].filter((el) => !MOBILE_HIDDEN.test(el.className as string) && !el.closest("[class~='hidden']"));
+      for (const el of visibleAtMobile) {
+        if (el === text) continue;
+        const own = [...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("");
+        expect(own.trim(), `${status}: stray text in <${el.tagName}>`).toBe("");
+      }
+      // The icon is the status's own kind, not any icon.
+      expect(icon.getAttribute("aria-label")).toMatch(new RegExp(`^(${esc(E.common.status[kind])}|${esc(R.common.status[kind])})$`));
+    });
+
+    it(`7-9. ${status}: the status stays exposed to AT and on hover`, async () => {
+      const { row, slot } = await renderTickets([ticket({ status })]);
+      expect(row.getAttribute("aria-label")).toMatch(statusLabel(labelKey));
+      expect(slot("ticket-status")!.getAttribute("title")).toMatch(statusLabel(labelKey));
+      // Announced once: the glyph is inert, the row names the status.
+      expect(slot("ticket-status")!.querySelector("svg")!.closest("[aria-hidden='true']")).toBeTruthy();
+      expect(row.getAttribute("aria-label")!.split(slot("ticket-status-text")!.textContent!.trim()).length - 1).toBe(1);
+    });
+
+    it(`10-12. ${status}: the desktop badge is still icon + text in the existing Badge tone`, async () => {
+      const { slot } = await renderTickets([ticket({ status })]);
+      const badge = slot("ticket-status")!.firstElementChild as HTMLElement;
+      expect(badge.className).toMatch(/rounded-full/);
+      expect([...badge.children].map((c) => c.tagName.toLowerCase())).toEqual(["span", "span"]);
+      expect(badge.querySelector("svg")).toBeTruthy();
+      expect(badge.textContent).toMatch(statusLabel(labelKey));
+    });
+  }
+
+  it("13/14/18. two information rows; the status lives on line 1, never on line 2, never a third line", async () => {
+    const { row, slot } = await renderTickets([ticket({ status: "pending", total_odds: 19.04 })]);
+    expect(contentLines(row).map((l) => l.getAttribute("data-slot"))).toEqual(["ticket-line-1", "ticket-line-2"]);
+    expect(slot("ticket-line-1")!.contains(slot("ticket-status"))).toBe(true);
+    expect(slot("ticket-line-2")!.querySelector("[data-slot='ticket-status'], svg")).toBeNull();
+    expect(row.querySelectorAll("[data-slot='ticket-status']")).toHaveLength(1);
+    expect(slot("ticket-status")!.className).toMatch(/\bshrink-0\b/);
+    expect(slot("ticket-status")!.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
+  it("15/16/17. long id, long metadata, many legs, high odds: line 1 truncates, line 2 truncates, count + odds stay on line 2", async () => {
+    const legs = Array.from({ length: 8 }, (_, i) => leg(`l${i}`, "pending"));
+    const { slot } = await renderTickets([
+      ticket({ id: "97c7bf4a-ffff-4eee-8ddd-cccccccccccc-extra-long-identifier", status: "pending", variant: 8, total_odds: 19.04, selections: legs, created_at: "2026-08-22T13:08:00.000Z" })
+    ]);
+    expect(slot("ticket-meta")!.className).toMatch(/\btruncate\b/);
+    expect(slot("ticket-meta")!.className).toMatch(/\bmin-w-0\b/);
+    expect(slot("ticket-line-2")!.className).toMatch(/\btruncate\b/);
+    expect(slot("ticket-line-2")!.textContent).toMatch(/8 (selecții|legs)/);
+    expect(slot("ticket-line-2")!.textContent).toMatch(/19\.04/);
+    expect(slot("ticket-line-2")!.contains(slot("ticket-odds"))).toBe(true);
+    expect(slot("ticket-line-1")!.className).toMatch(/grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  });
+
+  it("19. the icon is the prediction-status icon: byte-identical artwork to StatusBadge for the same status", async () => {
+    for (const [status] of STATUSES) {
+      cleanup();
+      const { slot } = await renderTickets([ticket({ status })]);
+      const ticketSvg = slot("ticket-status")!.querySelector("svg")!.innerHTML;
+      cleanup();
+      render(<StatusBadge status={status} tone="neutral" label="x" />);
+      const referenceSvg = document.querySelector("svg")!.innerHTML;
+      expect(ticketSvg, status).toBe(referenceSvg);
+    }
+  });
+
+  it("20. an unmodelled status keeps its text at every width rather than disappearing", async () => {
+    const { slot } = await renderTickets([ticket({ status: "weird" })]);
+    expect(slot("ticket-status")!.querySelector("svg")).toBeNull();
+    expect(slot("ticket-status-text")!.className).not.toMatch(MOBILE_HIDDEN);
+    expect(slot("ticket-status-text")!.textContent!.trim()).not.toBe("");
   });
 });

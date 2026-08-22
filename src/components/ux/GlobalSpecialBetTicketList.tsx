@@ -160,14 +160,26 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex, onBuild
                         <span className="text-[var(--fp-text-muted)]"> · </span>
                         <span className="font-mono text-xs tabular-nums text-[var(--fp-text-muted)]" data-slot="ticket-date">{builtAt}</span>
                       </span>
-                      <span className="flex shrink-0 items-center justify-self-end whitespace-nowrap" data-slot="ticket-status">
+                      {/* Status, the same way MatchListRow / StatusBadge do it: the icon
+                          alone below `sm`, icon + text from `sm` up. The text is switched
+                          off with display:none, so nothing is announced twice; the row's
+                          aria-label already names the status, and `title` keeps it on
+                          hover for the icon-only widths. An unmodelled status (no icon)
+                          keeps its text at every width rather than vanishing. */}
+                      <span
+                        className="flex shrink-0 items-center justify-self-end whitespace-nowrap"
+                        data-slot="ticket-status"
+                        title={statusLabel}
+                      >
                         <Badge tone={outcome.tone} className="whitespace-nowrap">
                           {statusKind ? (
                             <span aria-hidden="true" className="inline-flex">
                               <StatusIcon kind={statusKind} label={t(statusA11yKey(statusKind))} />
                             </span>
                           ) : null}
-                          <span>{statusLabel}</span>
+                          <span className={statusKind ? "hidden sm:inline" : ""} data-slot="ticket-status-text">
+                            {statusLabel}
+                          </span>
                         </Badge>
                       </span>
                     </span>
