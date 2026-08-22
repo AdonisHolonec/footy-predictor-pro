@@ -21,6 +21,7 @@ import {
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
+import { rehydrateSettlementRow } from "./predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 const BETS_TABLE = "special_bets";
@@ -451,26 +452,66 @@ export async function listGlobalSpecialBets({
 }
 
 /**
+ * Columns settlement reads for a fixture. The totals are the PROMOTED columns
+ * (migration 057) — the history sync writes them and no longer guarantees
+ * `raw_payload.marketResults`. The legacy document is read only as a JSON path
+ * (`raw_payload->marketResults`), never the 353 KB document, and only to cover
+ * rows written before 057 that were never backfilled.
+ */
+export const FIXTURE_STATE_SELECT =
+  "fixture_id, match_status, score_home, score_away, " +
+  "corners_total, shots_total, shots_on_target_total, " +
+  "legacy_market_results:raw_payload->marketResults";
+
+/** The totals a selection can settle against, in the key names settlement reads. */
+const TOTAL_KEYS = Object.freeze(["cornersTotal", "shotsTotal", "shotsOnTargetTotal"]);
+
+/**
+ * One fixture's settlement state from a `FIXTURE_STATE_SELECT` row.
+ *
+ * Source of truth is the promoted columns, mapped by `rehydrateSettlementRow` —
+ * the same function the history sync's own settlement pass uses, so a total
+ * means exactly one thing across both paths. Per key:
+ *
+ *   promoted present          → promoted (legacy ignored, even when it differs)
+ *   promoted NULL, legacy set → legacy `raw_payload.marketResults` (pre-057 row)
+ *   both absent               → key absent; the leg stays ungraded
+ *
+ * NULL is never coerced: a statistic the provider did not publish stays missing
+ * and the selection stays pending (then voids at 48h), exactly as before.
+ */
+export function fixtureStateFromRow(row) {
+  const promoted = rehydrateSettlementRow(row).raw_payload.marketResults || {};
+  const legacy =
+    row?.legacy_market_results && typeof row.legacy_market_results === "object"
+      ? row.legacy_market_results
+      : {};
+  const marketTotals = {};
+  for (const key of TOTAL_KEYS) {
+    const value = promoted[key] != null ? promoted[key] : legacy[key];
+    if (value != null) marketTotals[key] = value;
+  }
+  return {
+    status: row?.match_status ?? null,
+    score: { home: row?.score_home ?? null, away: row?.score_away ?? null },
+    marketTotals
+  };
+}
+
+/**
  * Fixture state for the selections of the bets being settled: status, score and
- * the official totals the history sync hydrated into `raw_payload.marketResults`.
+ * the official totals, keyed by fixture id. One query for all fixtures, as before.
  */
 export async function loadFixtureStates(supabase, fixtureIds) {
   const ids = [...new Set((fixtureIds || []).map((id) => Number(id)))].filter(Number.isFinite);
   if (ids.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from(HISTORY_TABLE)
-    .select("fixture_id, match_status, score_home, score_away, raw_payload")
-    .in("fixture_id", ids);
+  const { data, error } = await supabase.from(HISTORY_TABLE).select(FIXTURE_STATE_SELECT).in("fixture_id", ids);
   if (error) throw error;
 
   const byFixtureId = new Map();
   for (const row of data || []) {
-    byFixtureId.set(Number(row.fixture_id), {
-      status: row.match_status,
-      score: { home: row.score_home, away: row.score_away },
-      marketTotals: row.raw_payload?.marketResults || {}
-    });
+    byFixtureId.set(Number(row.fixture_id), fixtureStateFromRow(row));
   }
   return byFixtureId;
 }
@@ -629,6 +670,7 @@ export default {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   createGlobalSystemBets,
+  fixtureStateFromRow,
   loadFixtureStates,
   persistSettledBet,
   settlePendingGlobalSpecialBets,
