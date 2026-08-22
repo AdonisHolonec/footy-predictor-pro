@@ -1,5 +1,5 @@
 import type { MarketPref } from "../../hooks/useUiPrefs";
-import type { PredictionRow } from "../../types";
+import type { PredictionRow, User } from "../../types";
 import { normalizeSelectedDates } from "../../utils/appUtils";
 
 /**
@@ -7,6 +7,20 @@ import { normalizeSelectedDates } from "../../utils/appUtils";
  * remediation program). No React, no state — the component keeps the wiring,
  * this module keeps the arithmetic.
  */
+
+/**
+ * Whether to ask this user to onboard.
+ *
+ * Deliberately `=== false`, not `!completed`. Since L1 the session is
+ * established before the profile is fetched, so `user` legitimately exists with
+ * `onboardingCompleted === undefined` for the length of that request — and
+ * "we do not know yet" must not be answered with a modal. Only a loaded profile
+ * that actually says "not onboarded" opens the carousel; `undefined` (profile
+ * pending, or unavailable during degraded auth) keeps it shut.
+ */
+export function shouldShowOnboarding(user: User | null | undefined): boolean {
+  return user?.onboardingCompleted === false;
+}
 
 /** True when cached rows are older than the UI expects, or under-masked for the user's effective tier. */
 export function hasLegacyPredictionShape(rows: PredictionRow[], accessTier?: string): boolean {
@@ -38,6 +52,21 @@ export function isFinalStatus(status?: string) {
 
 export function hasDerivateMarkets(row: PredictionRow) {
   return Boolean(row.probs?.corners || row.probs?.shotsOnTarget || row.probs?.shotsTotal || row.probs?.firstHalf);
+}
+
+/**
+ * Per-match Special Bet is an Ultra feature.
+ *
+ * `quotaExempt` is the SERVER's verdict, not a role string: api/fixtures.js
+ * resolves quota-exempt accounts (DB-role admins and the bootstrap admin list —
+ * see isWarmPredictQuotaExempt) to the Ultra tier for prediction data, and the
+ * client mirrors that flag as `tierQuotaExempt`. Reading it here keeps the UI on
+ * the same source of truth as the data it shows, and retires the old
+ * `role === "admin"` fallback without changing who sees what:
+ *   free ✗ · premium ✗ · ultra ✓ · admin (quota-exempt) ✓
+ */
+export function canShowSpecialBet(tier: string | undefined, quotaExempt: boolean): boolean {
+  return tier === "ultra" || quotaExempt === true;
 }
 
 export function tierPredictWindowDays(tier?: string) {

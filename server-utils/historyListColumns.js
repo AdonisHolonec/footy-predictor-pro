@@ -1,6 +1,7 @@
 /**
  * The single definition of how the promoted list columns are derived from
- * `raw_payload` — the seven from migration 055 plus the four from 056.
+ * `raw_payload` — the seven from migration 055, the four from 056 and the
+ * five from 057.
  *
  * `raw_payload` is authoritative; these columns are a cache that lets the
  * History list be answered without touching the JSONB document. Measured on 452
@@ -49,14 +50,30 @@ export const IMMUTABLE_COLUMNS = Object.freeze([
   "recommended_scope",
   "recommended_book_line",
   "logo_home",
-  "logo_away"
+  "logo_away",
+  /*
+    Migration 057. `probs` is written once at creation and no settlement path
+    touches it, so this belongs with the other write-once columns: putting it
+    here is what makes deriveMutableHistoryListColumns structurally unable to
+    return it.
+  */
+  "has_first_half_probs"
 ]);
 /** Rewritten by settlement as results arrive. */
 export const MUTABLE_COLUMNS = Object.freeze([
   "card_market_validations",
   "card_markets",
   "corners_total",
-  "shots_on_target_total"
+  "shots_on_target_total",
+  /*
+    Migration 057. Settlement fills these as /fixtures/statistics arrives, the
+    same lifecycle as corners_total above. They are what let scan 3 settle
+    Shots and Cards without reading the document.
+  */
+  "shots_total",
+  "cards_total",
+  "cards_points",
+  "first_half_goals"
 ]);
 
 /**
@@ -150,6 +167,48 @@ export function deriveHistoryListColumnsWithDiagnostics(payload) {
     "shots_on_target_total",
     "integerRejected"
   );
+  /*
+    Migration 057's four totals, through the SAME INTEGER_GUARD as corners above.
+    An observed total is always a whole count — a LINE may be 3.5 or 6.75, an
+    observation never is — so a non-integer here is rejected to null and counted,
+    never rounded into a number the provider did not report.
+
+    cards_total is the raw count (yellow + red); cards_points is the weighted
+    convention (red*2 + yellow) from migration 038. Both are carried because they
+    are not interchangeable, and only cards_total is graded against.
+  */
+  const shotsTotal = noteGuard(
+    parseGuardedNumber(p.marketResults?.shotsTotal, INTEGER_GUARD),
+    "shots_total",
+    "integerRejected"
+  );
+  const cardsTotal = noteGuard(
+    parseGuardedNumber(p.marketResults?.cardsTotal, INTEGER_GUARD),
+    "cards_total",
+    "integerRejected"
+  );
+  const cardsPoints = noteGuard(
+    parseGuardedNumber(p.marketResults?.cardsPoints, INTEGER_GUARD),
+    "cards_points",
+    "integerRejected"
+  );
+  const firstHalfGoals = noteGuard(
+    parseGuardedNumber(p.marketResults?.firstHalfGoals, INTEGER_GUARD),
+    "first_half_goals",
+    "integerRejected"
+  );
+  /*
+    A PREDICATE, not data. Settlement reads this path only as
+    `Boolean(raw.probs?.firstHalf)`, so the boolean is the whole of what it needs
+    and promoting the block would re-import the JSONB 057 exists to avoid.
+
+    Absence is null, not false — the module-wide rule that every absent source
+    derives to null, which is also what lets the backfill treat an all-null
+    derivation as "nothing to write" instead of writing a row of falses. The
+    consumer asks `has_first_half_probs === true`, so null reads as "no first-half
+    block" without the column ever having to claim it knows that for certain.
+  */
+  const hasFirstHalf = note(parseJson(p.probs?.firstHalf));
 
   return {
     columns: {
@@ -163,19 +222,24 @@ export function deriveHistoryListColumnsWithDiagnostics(payload) {
       card_market_validations: cmv.value,
       card_markets: cm.value,
       corners_total: corners.value,
-      shots_on_target_total: shots.value
+      shots_on_target_total: shots.value,
+      shots_total: shotsTotal.value,
+      cards_total: cardsTotal.value,
+      cards_points: cardsPoints.value,
+      first_half_goals: firstHalfGoals.value,
+      has_first_half_probs: hasFirstHalf.present ? true : null
     },
     diagnostics
   };
 }
 
-/** All seven columns. Every key is always present; absent sources are null. */
+/** All sixteen columns. Every key is always present; absent sources are null. */
 export function deriveHistoryListColumns(payload) {
   return deriveHistoryListColumnsWithDiagnostics(payload).columns;
 }
 
 /**
- * Only the four columns settlement may change.
+ * Only the eight columns settlement may change.
  *
  * Exists so a settlement writer CANNOT accidentally write an immutable column:
  * the restriction is structural rather than a rule the caller has to remember.

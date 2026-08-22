@@ -46,9 +46,14 @@ type Props = {
   days?: 30 | 45 | 90;
   showLinkToFull?: boolean;
   compact?: boolean;
+  /** UX-E Performance: the zone around it owns the heading and population
+      label, so the section renders no eyebrow / title / note of its own —
+      only the window selector, the link and the metrics. Default false keeps
+      the standalone page (TrackRecordPage) exactly as it was. */
+  embedded?: boolean;
 };
 
-export default function TrackRecordSection({ days = 45, showLinkToFull = true, compact = false }: Props) {
+export default function TrackRecordSection({ days = 45, showLinkToFull = true, compact = false, embedded = false }: Props) {
   const { t } = useLocale();
   const [selectedDays, setSelectedDays] = useState<30 | 45 | 90>(days);
   const [data, setData] = useState<PublicTrackRecord | null>(null);
@@ -77,15 +82,22 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
   const s = data?.summary;
 
   return (
-    <section id="track-record" className="scroll-mt-28 border-t border-[var(--fp-border)] py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("track.verified")}</p>
-          <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
-            {t("track.settledPerf", { days: selectedDays })}
-          </h2>
-          <p className="mt-1.5 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">{t("track.metricsNote")}</p>
-        </div>
+    <section
+      id="track-record"
+      data-testid="track-record-section"
+      data-embedded={embedded ? "true" : undefined}
+      className={embedded ? "mt-4" : "scroll-mt-28 border-t border-[var(--fp-border)] py-8"}
+    >
+      <div className={`flex flex-wrap items-end gap-3 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">{t("track.verified")}</p>
+            <h2 className="font-display mt-1 text-xl font-semibold text-[var(--fp-text)] sm:text-2xl">
+              {t("track.settledPerf", { days: selectedDays })}
+            </h2>
+            <p className="mt-1.5 max-w-2xl text-sm font-medium text-[var(--fp-text-muted)]">{t("track.metricsNote")}</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-1 rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-1">
             {RANGE_OPTIONS.map((d) => (
@@ -116,17 +128,17 @@ export default function TrackRecordSection({ days = 45, showLinkToFull = true, c
       </div>
 
       {loading && (
-        <p className="mt-6 text-sm font-medium text-[var(--fp-text-muted)]">{t("track.loading")}</p>
+        <p className={`${embedded ? "mt-4" : "mt-6"} text-sm font-medium text-[var(--fp-text-muted)]`}>{t("track.loading")}</p>
       )}
       {error && !loading && (
-        <p className="mt-8 rounded-[var(--fp-radius)] border border-fp-danger/30 bg-fp-danger/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]">
+        <p className={`${embedded ? "mt-4" : "mt-8"} rounded-[var(--fp-radius)] border border-fp-danger/30 bg-fp-danger/10 px-4 py-3 text-sm font-medium text-[var(--fp-danger)]`}>
           {error}
         </p>
       )}
 
       {!loading && !error && s && (
         <>
-          <div className={`mt-8 grid gap-2 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
+          <div className={`${embedded ? "mt-4" : "mt-8"} grid gap-2 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"}`}>
             {(
               [
                 { label: t("stats.settled"), value: String(s.settled), tone: "neutral" },

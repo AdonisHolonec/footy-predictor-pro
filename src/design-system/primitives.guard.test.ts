@@ -55,12 +55,10 @@ describe("primitive consolidation", () => {
     }
   });
 
-  it("the emoji shell controls are IconButtons with accessible names", () => {
+  it("the shell carries no emoji controls — they moved to Account in UX-B", () => {
     const shell = readFileSync(join(SRC, "components", "ux", "ConsumerShell.tsx"), "utf8");
-    for (const glyph of ["🔔", "👤", "⚙"]) {
-      const idx = shell.indexOf(glyph);
-      expect(idx, glyph).toBeGreaterThan(-1);
-      expect(shell.slice(Math.max(0, idx - 400), idx)).toMatch(/IconButton/);
+    for (const glyph of ["🔔", "👤", "⚙", "★"]) {
+      expect(shell.includes(glyph), glyph).toBe(false);
     }
   });
 });

@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { markStage } from "./observability/historyTiming.js";
 import { MODEL_VERSION } from "./modelConstants.js";
 import {
   aggregateCardMarketStats,
@@ -408,48 +409,218 @@ export async function readPredictionsHistory(days = 30, limit = 500) {
  * to produce a ~130 byte response - enough to cross Postgres' statement_timeout,
  * which is why GET /api/history?days=30 failed intermittently in production.
  */
-export const AGGREGATE_PAYLOAD_KEYS = Object.freeze([
-  "cardMarketValidations",
-  "cardMarkets",
-  "marketOdds",
-  "marketResults",
-  "probs",
-  "recommended",
-  "score",
-  "status",
-  "validation"
-]);
-
-const AGGREGATE_PAYLOAD_PREFIX = "pl_";
-
-/** Scalar columns the aggregate reads straight off the row. */
+/**
+ * D2: promoted columns only - the aggregate no longer touches raw_payload.
+ *
+ * Projecting `raw_payload->key` narrowed the WIRE but not the read: to evaluate
+ * a key Postgres must de-TOAST the whole document. Measured in production on
+ * identical rows, same filter/order/limit: columns-only 0.278s / 82KB versus
+ * nine key extractions 3.381s / 2.28MB - 12.2x slower for a 136 byte response,
+ * because one raw_payload row is ~339KB and the 30-day window holds ~452 of
+ * them. That is what reached statement_timeout and produced the 500s.
+ *
+ * Every value below already exists as a column (055/056 promoted them), so this
+ * is a projection change, not a schema change. Verified against production
+ * before the switch: 0/811 rows have a null match_status, validation or
+ * recommended_pick; corners_total and card_markets agree with their payload
+ * counterparts on every sampled row; and of the 41 rows with a null score_home,
+ * none carry a payload score - so the dropped `payload.score` fallback never
+ * fired.
+ */
 const AGGREGATE_ROW_COLUMNS = Object.freeze([
   "validation",
   "match_status",
   "score_home",
   "score_away",
-  "recommended_pick"
+  "recommended_pick",
+  "recommended_family",
+  "card_markets",
+  "card_market_validations",
+  "corners_total",
+  "shots_on_target_total"
 ]);
 
-/** `pl_status:raw_payload->status, ...` - PostgREST projects the keys, not the blob. */
-export const AGGREGATE_STATS_SELECT = [
-  ...AGGREGATE_ROW_COLUMNS,
-  ...AGGREGATE_PAYLOAD_KEYS.map((key) => `${AGGREGATE_PAYLOAD_PREFIX}${key}:raw_payload->${key}`)
-].join(", ");
+export const AGGREGATE_STATS_SELECT = AGGREGATE_ROW_COLUMNS.join(", ");
 
 /**
- * Rebuild the row shape the settlement helpers expect. They take a DB row and
- * reach into `row.raw_payload`, so the projected keys are folded back into
- * exactly that shape - the helpers are untouched and cannot tell the difference.
+ * Rebuild the row shape the settlement helpers expect, from columns.
+ *
+ * The helpers reach into `row.raw_payload`, so the promoted columns are folded
+ * back into exactly that shape and the helpers cannot tell the difference.
+ *
+ * `probs` and `marketOdds` are deliberately absent. They feed only
+ * deriveCardMarketPicks, which runs when `cardMarkets` is missing or no market
+ * is decided - measured at 0 of 811 production rows, since card_markets is
+ * always populated and every row has at least one decided market. A row that
+ * did reach it would now yield no derived goals/corners/shots picks rather than
+ * deriving them from a document this path no longer reads: it contributes
+ * nothing instead of contributing something wrong.
  */
 export function rehydrateAggregateRow(row) {
   const source = row && typeof row === "object" ? row : {};
   const rawPayload = {};
-  for (const key of AGGREGATE_PAYLOAD_KEYS) {
-    const value = source[`${AGGREGATE_PAYLOAD_PREFIX}${key}`];
-    if (value !== undefined && value !== null) rawPayload[key] = value;
+  if (source.card_markets != null) rawPayload.cardMarkets = source.card_markets;
+  if (source.card_market_validations != null) {
+    rawPayload.cardMarketValidations = source.card_market_validations;
+  }
+  /*
+    Only when a total exists. `payload.marketResults?.x ?? null` yielded null for
+    an absent marketResults, and yields null for an explicit null here - the same
+    value, and null must never become 0 or a pending market would settle as a loss.
+  */
+  if (source.corners_total != null || source.shots_on_target_total != null) {
+    rawPayload.marketResults = {
+      cornersTotal: source.corners_total ?? null,
+      shotsOnTargetTotal: source.shots_on_target_total ?? null
+    };
+  }
+  if (source.recommended_pick != null) {
+    rawPayload.recommended = {
+      pick: source.recommended_pick,
+      family: source.recommended_family ?? null
+    };
   }
   return {
+    validation: source.validation ?? null,
+    match_status: source.match_status ?? null,
+    score_home: source.score_home ?? null,
+    score_away: source.score_away ?? null,
+    recommended_pick: source.recommended_pick ?? null,
+    raw_payload: rawPayload
+  };
+}
+
+/**
+ * The columns settlement needs, and the shape it needs them in.
+ *
+ * Same idea as AGGREGATE_STATS_SELECT above, for the heavier caller: scan 3 of
+ * the settlement cron. It differs in what it must carry, so it is a separate
+ * list rather than a reuse — the aggregate needs no totals it cannot already
+ * grade, while settlement needs every total plus the first-half predicate.
+ *
+ * D7 measured why this exists. Scan 3 selected raw_payload for all 472 FINAL
+ * rows in the window in one statement; at ~353 KB/row that is ~151 MB, and
+ * production reproduces the failure at a quarter of it:
+ *
+ *   raw_payload      limit=250   10,441 ms   500  57014 statement timeout
+ *   promoted columns limit=250      269 ms   200
+ *
+ * Scan 3 is the only pass that can settle Corners / Shots / SOT / Cards, so
+ * when it aborts those families stay pending forever while score-derived
+ * families — settled by scan 1, which is small enough to commit — go through.
+ */
+export const SETTLEMENT_ROW_COLUMNS = Object.freeze([
+  "fixture_id",
+  "kickoff_at",
+  "match_status",
+  "score_home",
+  "score_away",
+  "validation",
+  "recommended_pick",
+  "recommended_family",
+  "card_markets",
+  "card_market_validations",
+  "corners_total",
+  "shots_on_target_total",
+  "shots_total",
+  "cards_total",
+  "cards_points",
+  "first_half_goals",
+  "has_first_half_probs"
+]);
+
+export const SETTLEMENT_SELECT = SETTLEMENT_ROW_COLUMNS.join(", ");
+
+/**
+ * Scan 3 may skip a finished row only when there is nothing left to grade.
+ *
+ * D8b. Before this, "nothing left" was read from `card_market_validations` alone:
+ * when every market the row carries was already win/loss, the row was skipped.
+ * That test ignored the top-level `validation` column. Production carried Cards
+ * rows whose market validations had been graded by an earlier path while
+ * `validation` was never promoted from them — and because the markets read as
+ * settled, scan 3 skipped those rows on every run, so `validation` stayed
+ * `pending` forever (D8 verification: fixtures 1607172, 1552118).
+ *
+ * A row with a recommended pick whose `validation` is not win/loss still has a
+ * gap, whatever its markets say; it must reach the grading step below. Rows
+ * without a recommended pick keep the market-only test: there is no top-level
+ * outcome for them to miss.
+ */
+export function isSettlementRowComplete({ picks, storedValidations, validation, missingFirstHalf = false }) {
+  if (missingFirstHalf) return false;
+  const vals = storedValidations && typeof storedValidations === "object" ? storedValidations : null;
+  if (!vals) return false;
+  const settled = (v) => v === "win" || v === "loss";
+  const marketsSettled = ["recommended", "goals", "corners", "shots"].every((key) =>
+    picks?.[key] ? settled(vals[key]) : true
+  );
+  if (!marketsSettled) return false;
+  // The top-level outcome is the record users and the tracker read; a graded
+  // market does not stand in for it.
+  if (picks?.recommended && !settled(validation)) return false;
+  return true;
+}
+
+/**
+ * Rebuild the row shape the settlement helpers expect, from columns only.
+ *
+ * The sibling of rehydrateAggregateRow, and it keeps that function's two rules:
+ *
+ *   · `probs.corners` / `probs.shotsOnTarget` / `marketOdds` are deliberately
+ *     absent. They feed only deriveCardMarketPicks, which runs when cardMarkets
+ *     is missing — measured at 0 of 821 production rows, since card_markets is
+ *     populated on every one. A row that did reach it yields no derived picks
+ *     rather than deriving them from a document this path no longer reads: it
+ *     contributes nothing instead of contributing something wrong.
+ *
+ *   · A total is copied only when it exists. `null` and "absent" must stay the
+ *     same value, because a null total that became 0 would settle a pending
+ *     Under line as a win against a match nobody has counted.
+ *
+ * `probs.firstHalf` is reconstructed as an EMPTY OBJECT when the predicate says
+ * one existed. Settlement reads it only through `Boolean(raw.probs?.firstHalf)`,
+ * so an empty object is the exact truth this path can state — and anything more
+ * would be inventing probabilities the columns do not carry.
+ */
+export function rehydrateSettlementRow(row) {
+  const source = row && typeof row === "object" ? row : {};
+  const rawPayload = {};
+
+  if (source.card_markets != null) rawPayload.cardMarkets = source.card_markets;
+  if (source.card_market_validations != null) {
+    rawPayload.cardMarketValidations = source.card_market_validations;
+  }
+
+  const totals = {
+    cornersTotal: source.corners_total,
+    shotsOnTargetTotal: source.shots_on_target_total,
+    shotsTotal: source.shots_total,
+    cardsTotal: source.cards_total,
+    cardsPoints: source.cards_points,
+    firstHalfGoals: source.first_half_goals
+  };
+  // Only build marketResults when at least one total is real, so a row with no
+  // statistics keeps `marketResults` absent exactly as the payload had it.
+  if (Object.values(totals).some((v) => v != null)) {
+    rawPayload.marketResults = {};
+    for (const [key, value] of Object.entries(totals)) {
+      if (value != null) rawPayload.marketResults[key] = value;
+    }
+  }
+
+  if (source.recommended_pick != null) {
+    rawPayload.recommended = {
+      pick: source.recommended_pick,
+      family: source.recommended_family ?? null
+    };
+  }
+
+  if (source.has_first_half_probs === true) rawPayload.probs = { firstHalf: {} };
+
+  return {
+    fixture_id: source.fixture_id ?? null,
+    kickoff_at: source.kickoff_at ?? null,
     validation: source.validation ?? null,
     match_status: source.match_status ?? null,
     score_home: source.score_home ?? null,
@@ -463,18 +634,32 @@ export function rehydrateAggregateRow(row) {
  * Win/loss aggregates for marketing / login stats.
  * Uses raw_payload card markets when present so goals/corners/shots count too.
  */
-export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500) {
+export async function readPredictionsHistoryAggregateStats(days = 30, limit = 500, timing) {
+  /*
+    D3 split, nested inside the caller's dbReadMs.
+
+    getSupabaseAdmin() caches its client at module scope, so on a warm instance
+    this is a property read and on a cold one a synchronous createClient() that
+    opens no socket - which is exactly what supabaseClientMs is here to confirm
+    or refute, rather than assume.
+  */
+  const clientStartedAt = Date.now();
   const supabase = getSupabaseAdmin();
+  markStage(timing, "supabaseClientMs", Date.now() - clientStartedAt);
   if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
   const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+  // The request itself: the client is untouched, no fetch option is overridden
+  // and no payload is intercepted - only the await is bracketed.
+  const requestStartedAt = Date.now();
   const { data, error } = await supabase
     .from(HISTORY_TABLE)
     .select(AGGREGATE_STATS_SELECT)
     .gte("kickoff_at", cutoff)
     .order("kickoff_at", { ascending: false })
     .limit(safeLimit);
+  markStage(timing, "supabaseRequestMs", Date.now() - requestStartedAt);
   if (error) throw error;
   const rows = (data || []).map(rehydrateAggregateRow);
   return { stats: aggregateCardMarketStats(rows) };

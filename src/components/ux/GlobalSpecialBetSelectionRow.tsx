@@ -31,7 +31,7 @@ type Props = {
   deciding?: boolean;
   /**
    * This leg has kicked off and is not graded yet. The status badge cannot say
-   * it: "În desfășurare" is what every pending leg reads, kicked off or not.
+   * it: "În așteptare" is what every pending leg reads, kicked off or not.
    */
   underway?: boolean;
 };

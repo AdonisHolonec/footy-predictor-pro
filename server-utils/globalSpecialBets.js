@@ -20,7 +20,8 @@ import {
   // values any more. The engine validates the single requested k.
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
-import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
+import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
+import { rehydrateSettlementRow } from "./predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
 const BETS_TABLE = "special_bets";
@@ -451,26 +452,66 @@ export async function listGlobalSpecialBets({
 }
 
 /**
+ * Columns settlement reads for a fixture. The totals are the PROMOTED columns
+ * (migration 057) — the history sync writes them and no longer guarantees
+ * `raw_payload.marketResults`. The legacy document is read only as a JSON path
+ * (`raw_payload->marketResults`), never the 353 KB document, and only to cover
+ * rows written before 057 that were never backfilled.
+ */
+export const FIXTURE_STATE_SELECT =
+  "fixture_id, match_status, score_home, score_away, " +
+  "corners_total, shots_total, shots_on_target_total, " +
+  "legacy_market_results:raw_payload->marketResults";
+
+/** The totals a selection can settle against, in the key names settlement reads. */
+const TOTAL_KEYS = Object.freeze(["cornersTotal", "shotsTotal", "shotsOnTargetTotal"]);
+
+/**
+ * One fixture's settlement state from a `FIXTURE_STATE_SELECT` row.
+ *
+ * Source of truth is the promoted columns, mapped by `rehydrateSettlementRow` —
+ * the same function the history sync's own settlement pass uses, so a total
+ * means exactly one thing across both paths. Per key:
+ *
+ *   promoted present          → promoted (legacy ignored, even when it differs)
+ *   promoted NULL, legacy set → legacy `raw_payload.marketResults` (pre-057 row)
+ *   both absent               → key absent; the leg stays ungraded
+ *
+ * NULL is never coerced: a statistic the provider did not publish stays missing
+ * and the selection stays pending (then voids at 48h), exactly as before.
+ */
+export function fixtureStateFromRow(row) {
+  const promoted = rehydrateSettlementRow(row).raw_payload.marketResults || {};
+  const legacy =
+    row?.legacy_market_results && typeof row.legacy_market_results === "object"
+      ? row.legacy_market_results
+      : {};
+  const marketTotals = {};
+  for (const key of TOTAL_KEYS) {
+    const value = promoted[key] != null ? promoted[key] : legacy[key];
+    if (value != null) marketTotals[key] = value;
+  }
+  return {
+    status: row?.match_status ?? null,
+    score: { home: row?.score_home ?? null, away: row?.score_away ?? null },
+    marketTotals
+  };
+}
+
+/**
  * Fixture state for the selections of the bets being settled: status, score and
- * the official totals the history sync hydrated into `raw_payload.marketResults`.
+ * the official totals, keyed by fixture id. One query for all fixtures, as before.
  */
 export async function loadFixtureStates(supabase, fixtureIds) {
   const ids = [...new Set((fixtureIds || []).map((id) => Number(id)))].filter(Number.isFinite);
   if (ids.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from(HISTORY_TABLE)
-    .select("fixture_id, match_status, score_home, score_away, raw_payload")
-    .in("fixture_id", ids);
+  const { data, error } = await supabase.from(HISTORY_TABLE).select(FIXTURE_STATE_SELECT).in("fixture_id", ids);
   if (error) throw error;
 
   const byFixtureId = new Map();
   for (const row of data || []) {
-    byFixtureId.set(Number(row.fixture_id), {
-      status: row.match_status,
-      score: { home: row.score_home, away: row.score_away },
-      marketTotals: row.raw_payload?.marketResults || {}
-    });
+    byFixtureId.set(Number(row.fixture_id), fixtureStateFromRow(row));
   }
   return byFixtureId;
 }
@@ -485,13 +526,20 @@ export async function loadFixtureStates(supabase, fixtureIds) {
  *
  * @returns {{ ok: boolean, error?: string }}
  */
-export async function persistSettledBet(supabase, bet, settlement, now) {
+/**
+ * Write a set of selection status changes for one bet, exactly as many rows
+ * as intended. Shared by the bet settlement below and by the re-grade of legs
+ * left pending on tickets that already reached their verdict.
+ *
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export async function persistSelectionChanges(supabase, betId, selectionChanges, now) {
   const settledAt = new Date(now).toISOString();
 
   // Selections grouped by target status: one statement per status, still exact
   // about how many rows each is allowed to move.
   const byStatus = new Map();
-  for (const change of settlement.selectionChanges) {
+  for (const change of selectionChanges) {
     if (!byStatus.has(change.status)) byStatus.set(change.status, []);
     byStatus.get(change.status).push(change.id);
   }
@@ -511,10 +559,18 @@ export async function persistSettledBet(supabase, bet, settlement, now) {
         ok: false,
         error:
           `selections update touched ${affected} of ${ids.length} rows for status "${status}" ` +
-          `on bet ${bet.id} — refusing to report success (check the Supabase role and RLS policies)`
+          `on bet ${betId} — refusing to report success (check the Supabase role and RLS policies)`
       };
     }
   }
+  return { ok: true };
+}
+
+export async function persistSettledBet(supabase, bet, settlement, now) {
+  const settledAt = new Date(now).toISOString();
+
+  const legs = await persistSelectionChanges(supabase, bet.id, settlement.selectionChanges, now);
+  if (!legs.ok) return legs;
 
   const { data, error } = await supabase
     .from(BETS_TABLE)
@@ -567,7 +623,10 @@ export async function settlePendingGlobalSpecialBets({
     .order("bet_date", { ascending: true })
     .limit(Math.max(1, Math.min(Number(limit) || 200, 1000)));
   if (error) throw error;
-  if (!bets?.length) return summary;
+  if (!bets?.length) {
+    // No ticket to settle — legs left behind on already-settled tickets still get their grade.
+    return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+  }
 
   summary.scanned = bets.length;
 
@@ -622,15 +681,86 @@ export async function settlePendingGlobalSpecialBets({
     }
   }
 
-  return summary;
+  return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+}
+
+function mergeRegrade(summary, regrade) {
+  return {
+    ...summary,
+    legsRegraded: regrade.regraded,
+    legsRegradeScanned: regrade.scanned,
+    failures: [...summary.failures, ...regrade.failures]
+  };
+}
+
+/**
+ * Grade the legs a verdict left behind.
+ *
+ * A combo is LOST the moment one leg loses, and a system the moment too few
+ * legs can still reach k — before its other legs have finished. The ticket's
+ * verdict is final and correct, but those legs stayed `pending` forever,
+ * because settlement only ever scans PENDING tickets. This pass scans the
+ * other way round: pending LEGS whose ticket is no longer pending, grades each
+ * one with the same `settleSelection` and the same fixture state, and writes
+ * only the selection rows. The ticket row is never touched — nothing here can
+ * change a verdict, a settled price or a `settled_at`.
+ *
+ * Idempotent and bounded: a leg whose computed status matches what is stored
+ * issues no write; the 48-hour void applies exactly as it does for live tickets.
+ *
+ * @param {{ now?: number, limit?: number, supabase?: object }} params
+ * @returns {Promise<{ scanned: number, regraded: number, failures: Array<{ betId: string, error: string }> }>}
+ */
+export async function regradeLegsOnSettledBets({ now = Date.now(), limit = 500, supabase = getSupabaseAdmin() } = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const result = { scanned: 0, regraded: 0, failures: [] };
+
+  // PostgREST inner join on the parent: only legs whose ticket already has a verdict.
+  const { data: legs, error } = await supabase
+    .from(SELECTIONS_TABLE)
+    .select("id, special_bet_id, fixture_id, market, selection, side, line, odds, status, kickoff_at, special_bets!inner(id, status)")
+    .eq("status", "pending")
+    .neq("special_bets.status", "pending")
+    .limit(Math.max(1, Math.min(Number(limit) || 500, 2000)));
+  if (error) throw error;
+  if (!legs?.length) return result;
+
+  result.scanned = legs.length;
+  const fixturesById = await loadFixtureStates(
+    supabase,
+    legs.map((leg) => leg.fixture_id)
+  );
+
+  const byBetId = new Map();
+  for (const leg of legs) {
+    const fixture = fixturesById.get(Number(leg.fixture_id)) ?? { status: "", score: {}, marketTotals: {} };
+    const status = settleSelection(leg, fixture, now);
+    if (status === leg.status) continue;
+    if (!byBetId.has(leg.special_bet_id)) byBetId.set(leg.special_bet_id, []);
+    byBetId.get(leg.special_bet_id).push({ id: leg.id, status });
+  }
+
+  for (const [betId, changes] of byBetId) {
+    const written = await persistSelectionChanges(supabase, betId, changes, now);
+    if (written.ok) {
+      result.regraded += changes.length;
+    } else {
+      console.error("[global-special-bet-regrade]", written.error);
+      result.failures.push({ betId, error: written.error });
+    }
+  }
+  return result;
 }
 
 export default {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   createGlobalSystemBets,
+  fixtureStateFromRow,
   loadFixtureStates,
+  persistSelectionChanges,
   persistSettledBet,
+  regradeLegsOnSettledBets,
   settlePendingGlobalSpecialBets,
   isValidBetDate,
   isValidVariant,

@@ -41,18 +41,22 @@ function Probe({ id }: { id: number | null }) {
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
+/** Per-fixture status for the mocked endpoint; FT unless a test says otherwise. */
+let itemStatus: Record<number, string> = {};
 
 /** A resolved detail response for one fixture. */
 function itemResponse(id: number) {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ ok: true, scope: "fixture_detail", item: { id, teams: { home: "H", away: "A" } } })
+    // FT by default: the "held" guarantees are about settled rows (cache policy).
+    json: async () => ({ ok: true, scope: "fixture_detail", item: { id, status: itemStatus[id] ?? "FT", teams: { home: "H", away: "A" } } })
   };
 }
 
 beforeEach(() => {
   __clearHistoryDetailCache();
+  itemStatus = {};
   currentSession = { access_token: ACCESS_TOKEN };
   fetchMock = vi.fn(async (url: string) => itemResponse(Number(String(url).split("fixtureId=")[1])));
   vi.stubGlobal("fetch", fetchMock);
@@ -235,5 +239,39 @@ describe("useHistoryDetail", () => {
     render(<Probe id={505} />);
     await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("505"));
     expect(detailCalls().length, "a network failure poisoned the cache").toBe(2);
+  });
+});
+
+describe("useHistoryDetail - cache policy (live-detail fix)", () => {
+  function calls(): string[] {
+    return fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("fixtureId="));
+  }
+
+  it("9 - a pending (NS) row is NOT cached - 12 - reopening refetches", async () => {
+    itemStatus = { 7: "NS" };
+    const first = render(<Probe id={7} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("7"));
+    first.unmount();
+    render(<Probe id={7} />);
+    await waitFor(() => expect(calls().length).toBe(2));
+  });
+
+  it("10 - an in-play (2H) row is NOT cached", async () => {
+    itemStatus = { 8: "2H" };
+    const first = render(<Probe id={8} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("8"));
+    first.unmount();
+    render(<Probe id={8} />);
+    await waitFor(() => expect(calls().length).toBe(2));
+  });
+
+  it("11 - a final row IS cached - 13 - reopening uses the cache, no request, no loading flash", async () => {
+    itemStatus = { 9: "FT" };
+    const first = render(<Probe id={9} />);
+    await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("9"));
+    first.unmount();
+    render(<Probe id={9} />);
+    expect(screen.getByTestId("state").textContent).toBe("9");
+    expect(calls().length).toBe(1);
   });
 });

@@ -69,7 +69,14 @@ function mapSupabaseUser(user: SupabaseAuthUser | null, profile: ProfileRow | nu
     role: profile?.role ?? "user",
     favoriteLeagues,
     isBlocked: Boolean(profile?.is_blocked),
-    onboardingCompleted: Boolean(profile?.onboarding_completed),
+    /*
+      Tri-state on purpose: `undefined` means "the profile has not loaded", which
+      is NOT the same as "this user never onboarded". Collapsing both to false is
+      what made the carousel flash — L1 establishes the session before enriching
+      it, so there is now a real window where `user` exists with no profile, and
+      `Boolean(undefined)` told the dashboard to onboard an existing user.
+    */
+    onboardingCompleted: profile ? Boolean(profile.onboarding_completed) : undefined,
     tier: profile?.tier || "free",
     subscription_expires_at: profile?.subscription_expires_at ?? null,
     premium_trial_activated_at: profile?.premium_trial_activated_at ?? null,

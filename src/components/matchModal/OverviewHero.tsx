@@ -8,7 +8,9 @@ import LiveWinProbabilityStrip from "../ux/LiveWinProbabilityStrip";
 import MatchMomentumTimeline from "../ux/MatchMomentumTimeline";
 import { EdgeCompass, FormRibbon, SignalLens } from "../SignalLab";
 import { LeagueStandingEntry, PredictionRow } from "../../types";
-import type { DetailTabId, MatchModalProps } from "../MatchModal";
+import { isFixtureInPlay } from "../../utils/appUtils";
+import type { MatchModalProps } from "../MatchModal";
+import type { DetailPart } from "./detailParts";
 import type { TranslateFn } from "../../i18n";
 import type { Dispatch, SetStateAction } from "react";
 import type { pickSpecialBetLegs } from "../../utils/specialBet";
@@ -20,8 +22,9 @@ import LeagueStandingsTable from "./LeagueStandingsTable";
 type OverviewHeroProps = {
   match: PredictionRow;
   tr: TranslateFn;
-  tab: (ids: DetailTabId[]) => string;
-  detailTab: DetailTabId;
+  tab: (ids: DetailPart[]) => string;
+  /** The Live layer renders the compact strip itself; the full one here would repeat it. */
+  hideLiveStrip?: boolean;
   homeColor: string;
   awayColor: string;
   hasLiveScore: boolean;
@@ -50,18 +53,23 @@ type OverviewHeroProps = {
 
 export default function OverviewHero(props: OverviewHeroProps) {
   const {
-    match, tr, tab, detailTab, homeColor, awayColor, hasLiveScore, hasExactConfidence,
+    match, tr, tab, homeColor, awayColor, hasLiveScore, hasExactConfidence,
     isFreeLike, isPremiumLike, confPct, confidenceCategory, dq, edgeScore,
     recommendedLabel, outcomeTextClass, showStandingsBlock, standingsRows,
     canShowSpecialBet, onUpgradeRequired, specialLegCount, setSpecialLegCount,
     specialBetLegs, specialBetCandidatesLen, specialBetCombinedOdd,
-    specialCombinedOutcome, specialCombinedTone, specialBetLiveAdjustmentBadge
+    specialCombinedOutcome, specialCombinedTone, specialBetLiveAdjustmentBadge, hideLiveStrip = false
   } = props;
   return (
     <>
-          {hasLiveScore && <LiveWinProbabilityStrip match={match} className={`w-full ${tab(["overview"])}`} />}
-          {hasLiveScore && match.momentum && (
-            <div className={`w-full ${tab(["overview"])}`}>
+          {hasLiveScore && !hideLiveStrip && <LiveWinProbabilityStrip match={match} className={`w-full ${tab(["live"])}`} />}
+          {/* Momentum is gated on real in-play status, NOT on hasLiveScore. hasLiveScore
+              stays deliberately loose — it also covers a fixture still reported NS/TBD past
+              kickoff, so the score strip above keeps working while upstream status lags.
+              That looseness must not leak here: it let PST/CANC/ABD/AWD/WO fixtures (none of
+              which isFinalStatus recognises) render a live Momentum block. */}
+          {isFixtureInPlay(match.status) && match.momentum && (
+            <div className={`w-full ${tab(["live"])}`}>
               <MatchMomentumTimeline
                 fixtureId={Number(match.id)}
                 status={match.status}
@@ -76,8 +84,8 @@ export default function OverviewHero(props: OverviewHeroProps) {
               />
             </div>
           )}
-          {hasLiveScore && !match.momentum && (
-            <div className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center ${tab(["overview"])}`}>
+          {isFixtureInPlay(match.status) && !match.momentum && (
+            <div className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-3 py-3 text-center ${tab(["live"])}`}>
               <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[var(--fp-text-muted)]">
                 <path
                   fill="currentColor"
@@ -91,7 +99,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
               recommendation has been justified, so it can no longer compete with the
               single-pick decision for attention. */}
           {!canShowSpecialBet && (
-            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
+            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["specialBet"])}`}>
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-warning/35 bg-fp-warning/10 px-3.5 py-3 text-center shadow-fp-sm max-xs:max-w-[21rem] max-xs:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-warning)] sm:text-xs">
@@ -113,7 +121,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
             </div>
           )}
           {canShowSpecialBet && hasExactConfidence && specialBetLegs.length >= 2 && (
-            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["overview"])}`}>
+            <div className={`mx-auto flex w-full max-w-[32rem] items-center justify-center px-1 ${tab(["specialBet"])}`}>
               <div className="relative w-full max-w-[20.5rem] min-w-0 overflow-hidden rounded-xl border border-fp-success/45 bg-fp-success/10 px-3.5 py-3 text-center shadow-fp-sm max-xs:max-w-[21rem] max-xs:px-4 sm:max-w-[28rem]">
                 <div className="flex min-h-[1.75rem] flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--fp-success)] sm:text-xs">
@@ -206,7 +214,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
           {/* Desktop-only today (unchanged behaviour) — see follow-ups for surfacing
               these signals on mobile, which needs its own responsive pass. Explicit
               ternary rather than tab(): "hidden" alone would lose to `sm:block`. */}
-          <div className={`mx-auto max-w-2xl ${detailTab === "overview" ? "hidden sm:block" : "hidden"}`}>
+          <div className={`mx-auto max-w-2xl ${tab(["signals"])}`}>
             {hasExactConfidence ? (
               <CollapsiblePanel compact title={tr("panels.advancedSignals")} lazy={false}>
                 <div className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-4">
@@ -257,7 +265,7 @@ export default function OverviewHero(props: OverviewHeroProps) {
           </div>
 
           <section
-            className={`mx-auto max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm sm:p-5 ${tab(["overview"])}`}
+            className={`mx-auto max-w-2xl rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-4 shadow-fp-sm sm:p-5 ${tab(["standings"])}`}
           >
             <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[var(--fp-accent)]">
               {tr("match.standingsForm")}
@@ -284,7 +292,6 @@ export default function OverviewHero(props: OverviewHeroProps) {
             ) : (
               <p className="text-[11px] leading-relaxed text-[var(--fp-text-muted)]">
                 {tr("match.noStandingsBody")}
-                <span className="mt-2 block font-mono text-[10px] text-fp-accent/90">{tr("match.noStandingsHint")}</span>
               </p>
             )}
           </section>

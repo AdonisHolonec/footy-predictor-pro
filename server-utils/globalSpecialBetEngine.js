@@ -27,7 +27,8 @@
  * cannot fill is UNAVAILABLE — never padded with legs below the safety floor.
  */
 
-import { parseOverUnder, resolveMarketFamily } from "./metaLearning/marketFamily.js";
+import { resolveMarketFamily } from "./metaLearning/marketFamily.js";
+import { parseOuPickAnywhere } from "./cardMarketSettlement.js";
 import { formatLineLabel } from "./marketIdentity.js";
 import { isQuarterLine } from "./asianTotals.js";
 
@@ -142,10 +143,27 @@ function finiteOrNull(value) {
  * shape the settlement layer compares against.
  */
 function buildSelectionLabel(type, side, line) {
+  const text = String(type || "").trim();
+  if (!side || line == null) return text;
   // formatLineLabel is lossless: a real 10.25 asian line stays "10.25" in the
   // stored snapshot instead of the nonexistent "10.3" toFixed(1) produced.
-  if (side && line != null) return `${side === "over" ? "Over" : "Under"} ${formatLineLabel(line)}`;
-  return String(type || "").trim();
+  const canonical = `${side === "over" ? "Over" : "Under"} ${formatLineLabel(line)}`;
+  // A shots label keeps its statistic prefix ("SOT Over 7.5" / "Shots Under 29.5").
+  // Both land in the same `market` family; the prefix is the only thing that says
+  // WHICH statistic the leg settles against, so dropping it would make the stored
+  // row ungradeable (shotsStatisticFor in the settlement module reads it back).
+  const prefix = shotsStatisticPrefix(text);
+  return prefix ? `${prefix} ${canonical}` : canonical;
+}
+
+/**
+ * The statistic prefix of a shots label, as the value layer wrote it, or null.
+ * valueMarkets.js#pushLineSelections is the single producer: "Shots " for total
+ * shots, "SOT " for shots on target; corners and goals carry no prefix.
+ */
+function shotsStatisticPrefix(label) {
+  const m = String(label || "").match(/^(SOT|Shots)\s+(?:Over|Under)\s/i);
+  return m ? m[1] : null;
 }
 
 /** A name we actually have, or null. Never the empty string a caller must retest. */
@@ -245,7 +263,10 @@ export function collectGlobalCandidates({ rows, leagueIds, now }) {
       const valueScore = finiteOrNull(market?.valueScore);
       const probability = finiteOrNull(market?.probability);
       const line = finiteOrNull(market?.line);
-      const side = parseOverUnder(market?.type)?.side ?? null;
+      // Prefix-tolerant on purpose: shots market types are "SOT Over 7.5" /
+      // "Shots Under 29.5", which the ^-anchored goals parser rejects — every
+      // shots leg was stored with side=null and could never settle (T2 audit).
+      const side = parseOuPickAnywhere(market?.type)?.side ?? null;
       const selection = buildSelectionLabel(market?.type, side, line);
 
       // Missing inputs are disqualifying, not defaultable. Probability must be

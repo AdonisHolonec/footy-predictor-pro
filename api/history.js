@@ -19,6 +19,24 @@ import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
+  createTransportCollector,
+  withTransportScope
+} from "../server-utils/observability/transportTiming.js";
+import {
+  HISTORY_ROUTE,
+  attachTransport,
+  createHistoryTiming,
+  emitHistoryTiming,
+  markStage,
+  recordError,
+  recordFinalBytes,
+  recordRows,
+  timeStage
+} from "../server-utils/observability/historyTiming.js";
+import {
+  SETTLEMENT_SELECT,
+  isSettlementRowComplete,
+  rehydrateSettlementRow,
   mapDbRowToHistoryEntry,
   readPredictionsHistory,
   readPredictionsHistoryList,
@@ -411,6 +429,15 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const readList = deps.readPredictionsHistoryListForUser || readPredictionsHistoryListForUser;
   const readPredictions = deps.readPredictionsForHydration || readPredictionsForHydration;
   const readFull = deps.readPredictionsHistoryForUser || readPredictionsHistoryForUser;
+  // The anonymous and admin branches were previously unreachable from a test,
+  // which is why their timing and error paths went unverified until production
+  // showed them failing. Same injectable-deps convention as the readers above.
+  const bearerOf = deps.readBearer || readBearer;
+  const adminOf = deps.assertAdmin || assertAdmin;
+  const rateLimit = deps.checkAnonymousRateLimit || checkAnonymousRateLimit;
+  const readGlobalList = deps.readPredictionsHistoryList || readPredictionsHistoryList;
+  const readGlobal = deps.readPredictionsHistory || readPredictionsHistory;
+  const readAggregate = deps.readPredictionsHistoryAggregateStats || readPredictionsHistoryAggregateStats;
 
   if (req.method && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -446,16 +473,27 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const predictionListView = shouldServePredictionList(req.query);
 
   if (mine) {
-    const requester = await requestUser(req);
+    const timing = deps.timing;
+    const requester = await timeStage(timing, "authMs", () => requestUser(req));
     if (!requester.ok) {
       return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
     try {
-      const { items, stats } = listView
-        ? await readList(requester.user.id, days, limit)
-        : predictionListView
-          ? await readPredictions(requester.user.id, days, limit)
-          : await readFull(requester.user.id, days, limit);
+      /*
+        One span around the whole read: the RPC, the row mapping and the card
+        aggregate all live inside these functions. Splitting further would mean
+        threading a timer through predictionsHistory's signatures, which is a
+        change to P3-B's code for a diagnostic — deliberately left to a later
+        phase. `dbReadMs` vs `responseMs` is already the split that separates
+        "the database was slow" from "the payload was large".
+      */
+      const { items, stats } = await timeStage(timing, "dbReadMs", () =>
+        listView
+          ? readList(requester.user.id, days, limit)
+          : predictionListView
+            ? readPredictions(requester.user.id, days, limit)
+            : readFull(requester.user.id, days, limit)
+      );
       return res.status(200).json({
         ok: true,
         mine: true,
@@ -464,6 +502,7 @@ export async function handleHistoryRead(req, res, deps = {}) {
         items
       });
     } catch (error) {
+      recordError(deps.timing, error, "dbReadMs");
       return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
     }
   }
@@ -471,13 +510,13 @@ export async function handleHistoryRead(req, res, deps = {}) {
   const safeDays = Math.max(1, Math.min(days || 30, 120));
   const safeLimit = Math.max(1, Math.min(limit || 500, 2000));
 
-  if (readBearer(req)) {
-    const adminCheck = await assertAdmin(req);
+  if (bearerOf(req)) {
+    const adminCheck = await timeStage(deps.timing, "authMs", () => adminOf(req));
     if (adminCheck.ok) {
       try {
-        const { items, stats } = listView
-          ? await readPredictionsHistoryList(days, limit)
-          : await readPredictionsHistory(days, limit);
+        const { items, stats } = await timeStage(deps.timing, "dbReadMs", () =>
+          listView ? readGlobalList(days, limit) : readGlobal(days, limit)
+        );
         return res.status(200).json({
           ok: true,
           days: safeDays,
@@ -486,30 +525,46 @@ export async function handleHistoryRead(req, res, deps = {}) {
           scope: "global_admin"
         });
       } catch (error) {
+        recordError(deps.timing, error, "dbReadMs");
         return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
       }
     }
   }
 
-  const rl = await checkAnonymousRateLimit(req, {
-    namespace: "history-public",
-    maxPerHour: Math.max(30, Math.min(Number(process.env.ANON_RATE_HISTORY_PUBLIC || 90), 300))
-  });
+  /*
+    Timed separately: this is the anonymous branch's FIRST await and it talks to
+    Redis, not Postgres. Production showed 12-29s anonymous 500s with 100% of
+    the duration unattributed, and a limiter stall would look exactly like a
+    slow query without this boundary.
+  */
+  const rl = await timeStage(deps.timing, "rateLimitMs", () =>
+    rateLimit(req, {
+      namespace: "history-public",
+      maxPerHour: Math.max(30, Math.min(Number(process.env.ANON_RATE_HISTORY_PUBLIC || 90), 300))
+    })
+  );
   if (!rl.ok) {
     if (rl.retryAfterSec) res.setHeader("Retry-After", String(rl.retryAfterSec));
     return res.status(429).json({ ok: false, error: "Prea multe cereri." });
   }
 
   try {
-    const { stats } = await readPredictionsHistoryAggregateStats(safeDays, safeLimit);
+    const { stats } = await timeStage(deps.timing, "dbReadMs", () =>
+      readAggregate(safeDays, safeLimit, deps.timing)
+    );
     return res.status(200).json({
       ok: true,
       days: safeDays,
       stats,
+      // Always empty by design: the public scope serves aggregate stats only,
+      // which is why a healthy anonymous response is ~136 bytes with rows 0.
       items: [],
       scope: "aggregate_public"
     });
   } catch (error) {
+    // Previously absent here, which is why every production anonymous 500
+    // emitted a record with no errorKind at all.
+    recordError(deps.timing, error, "dbReadMs");
     return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
   }
 }
@@ -536,7 +591,17 @@ async function handleHistorySync(req, res) {
   const supabase = getSupabaseAdmin();
   const days = Math.max(1, Math.min(Number(req.query.days || 30), 120));
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const scanChunkSize = Math.max(200, Math.min(Number(process.env.HISTORY_SYNC_SCAN_CHUNK || 1000), 2000));
+  /*
+    D8 mitigation, kept after the read-path fix as defence in depth.
+
+    Scans 1 and 2 still read raw_payload (they need valueBet/valueEngine, which are
+    not promoted), so their statement size still tracks document growth: ~353 KB/row
+    in August against ~10 KB in May. Measured, 100 rows of raw_payload is 31 MB and
+    2.2 s while 250 rows times out, so 100 is the largest page that demonstrably
+    commits. Scan 3 no longer reads the document at all and is unaffected by this
+    number — it is bounded by the projection, not by the chunk.
+  */
+  const scanChunkSize = Math.max(25, Math.min(Number(process.env.HISTORY_SYNC_SCAN_CHUNK || 100), 2000));
   const scanMaxRows = Math.max(scanChunkSize, Math.min(Number(process.env.HISTORY_SYNC_SCAN_MAX_ROWS || 10000), 50000));
 
   try {
@@ -798,11 +863,18 @@ async function handleHistorySync(req, res) {
     // processed ahead of everything else — priority is meaningless while paging inline.
     const finishedRows = [];
     for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+      /*
+        PROMOTED COLUMNS ONLY — never raw_payload. This scan covers every FINAL row
+        in the window (472 in production), and at ~353 KB/row the document read is
+        ~151 MB in one statement. Production reproduces the failure at a quarter of
+        that: limit=250 with raw_payload → 10,441 ms → 57014 statement timeout,
+        against 269 ms for this projection. The throw aborted the whole handler, so
+        the only pass that can settle Corners / Shots / SOT / Cards never ran and
+        those families stayed pending while score-derived ones went through scan 1.
+      */
       const { data: page, error: cardErr } = await supabase
         .from(HISTORY_TABLE)
-        .select(
-          "fixture_id, recommended_pick, match_status, score_home, score_away, validation, raw_payload"
-        )
+        .select(SETTLEMENT_SELECT)
         .gte("kickoff_at", cutoff)
         .in("match_status", ["FT", "AET", "PEN"])
         .order("kickoff_at", { ascending: false })
@@ -810,7 +882,9 @@ async function handleHistorySync(req, res) {
         .range(offset, offset + scanChunkSize - 1);
       if (cardErr) throw cardErr;
       if (!page?.length) break;
-      finishedRows.push(...page);
+      // Columns → the shape the settlement helpers already expect, so they cannot
+      // tell the difference. `probs`/`marketOdds` stay absent by design.
+      finishedRows.push(...page.map(rehydrateSettlementRow));
       if (page.length < scanChunkSize) break;
     }
 
@@ -846,14 +920,18 @@ async function handleHistorySync(req, res) {
         const missingHt = hasFirstHalfPick && !htKnown;
         if (!hasAnyPick && !missingHt) continue;
 
-        const allSettled =
-          storedVals &&
-          typeof storedVals === "object" &&
-          ["recommended", "goals", "corners", "shots"].every((key) => {
-            if (!picks[key]) return true;
-            return storedVals[key] === "win" || storedVals[key] === "loss";
-          });
-        if (allSettled && !missingHt) continue;
+        // D8b: "complete" also requires the top-level validation to be graded when
+        // a recommended pick exists — settled markets alone used to skip rows whose
+        // `validation` was never promoted, leaving them pending on every run.
+        if (
+          isSettlementRowComplete({
+            picks,
+            storedValidations: storedVals,
+            validation: row.validation,
+            missingFirstHalf: missingHt
+          })
+        )
+          continue;
 
         let marketTotals = {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
@@ -947,10 +1025,29 @@ async function handleHistorySync(req, res) {
         cardUpdates.push({
           fixture_id: Number(row.fixture_id),
           validation,
-          raw_payload: enriched,
-          // Same rule as the recommended-settlement pass: derived from `enriched`,
-          // the exact object being persisted. This path CAN introduce totals the
-          // provider has just supplied.
+          /*
+            NO raw_payload. This pass no longer reads the document, so it must not
+            write it either: persisting `enriched` here would store a payload
+            rebuilt from columns, silently truncating every key the projection does
+            not carry (probs, marketOdds, valueEngine, momentum, ...).
+
+            The columns are what the read paths use — the History list, the detail
+            endpoint and the aggregate all read them, and none reads
+            raw_payload.cardMarkets / cardMarketValidations. So the settlement
+            result is fully published by the columns below.
+
+            The derivation rule at the top of historyListColumns.js still holds,
+            with `enriched` as the exact object being persisted-from: preservation
+            is inside it, because rehydrateSettlementRow put the previous column
+            values into marketResults and attachCardMarketsToPayload carries them
+            forward when no new totals arrived. The carrier changed from the
+            document to the columns; the rule did not.
+
+            Consequence, stated plainly: raw_payload.cardMarketValidations now goes
+            stale on newly settled rows. That is acceptable only because the columns
+            are authoritative for every reader — it is not a licence for a future
+            reader to prefer the payload copy.
+          */
           ...deriveMutableHistoryListColumns(enriched),
           updated_at: new Date().toISOString()
         });
@@ -1097,7 +1194,7 @@ async function handleClosingOdds(req, res) {
  * GET or POST /api/history?view=special-bets — Global Special Bet, reached as
  *   /api/special-bets through the rewrite in vercel.json (Hobby function cap).
  */
-async function handlerImpl(req, res) {
+async function handlerImpl(req, res, timing) {
   // Checked first: Global Special Bet is its own resource, not a projection of
   // predictions_history, and it must not inherit this handler's read defaults.
   if (String(req.query.view || "") === "special-bets") {
@@ -1118,7 +1215,7 @@ async function handlerImpl(req, res) {
   if (perfOn) {
     return handlePerformanceRead(req, res);
   }
-  return handleHistoryRead(req, res);
+  return handleHistoryRead(req, res, { timing });
 }
 
 /**
@@ -1128,6 +1225,65 @@ async function handlerImpl(req, res) {
  * the invocation boundary — requestMonitor only covers predict and fixtures,
  * and the warm/cron paths that issue the most cache telemetry never reach it.
  */
+/**
+ * Observes rows and final bytes without re-serialising anything.
+ *
+ * `res.json` already stringifies the body; measuring it again solely for
+ * telemetry would mean a second pass over a payload that reaches 7.7MB on the
+ * full `mine=1` path. So the row count comes from the array that is already in
+ * hand, and the size comes from the Content-Length the runtime has already
+ * computed — absent that header, bytes stay UNKNOWN rather than guessed.
+ */
+function observeResponse(res, timing) {
+  const original = typeof res?.json === "function" ? res.json.bind(res) : null;
+  if (!original) return;
+  res.json = (body) => {
+    recordRows(timing, Array.isArray(body?.items) ? body.items.length : null);
+    const startedAt = Date.now();
+    try {
+      return original(body);
+    } finally {
+      markStage(timing, "responseMs", Date.now() - startedAt);
+      recordFinalBytes(timing, readContentLength(res));
+    }
+  };
+}
+
+function readContentLength(res) {
+  try {
+    const raw = typeof res?.getHeader === "function" ? res.getHeader("content-length") : null;
+    const n = Number(Array.isArray(raw) ? raw[0] : raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One buffered metrics document per invocation, and one timing record.
+ *
+ * The wrapper is the only place that can cover every branch — special-bets,
+ * sync, closing, performance, detail and the read views all return from
+ * handlerImpl — so total duration, status, mode, rows and bytes are captured
+ * once here rather than duplicated into each path.
+ */
 export default async function handler(req, res) {
-  return withObservationScope(() => handlerImpl(req, res));
+  const timing = createHistoryTiming(req?.query || {}, req?.method);
+  const startedAt = Date.now();
+  observeResponse(res, timing);
+  // D4: bind a transport collector to the async context so the module-cached
+  // Supabase client — which has no idea which request it is serving — can
+  // attribute its HTTP phases back to this invocation.
+  const transport = createTransportCollector(HISTORY_ROUTE);
+  attachTransport(timing, transport);
+  try {
+    return await withTransportScope(transport, () =>
+      withObservationScope(() => handlerImpl(req, res, timing))
+    );
+  } catch (error) {
+    recordError(timing, error);
+    throw error;
+  } finally {
+    emitHistoryTiming(timing, { status: res?.statusCode, durationMs: Date.now() - startedAt });
+  }
 }

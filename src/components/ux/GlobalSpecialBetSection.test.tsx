@@ -176,14 +176,14 @@ describe("GlobalSpecialBetSection", () => {
     await act(async () => {
       screen.getByRole("button", { name: "Generează" }).click();
     });
-    expect(screen.getByText("Îți construim Global Special Bet…")).toBeTruthy();
+    expect(screen.getByText("Îți construim biletul…")).toBeTruthy();
     // The variant selector locks too, so a switch mid-flight cannot desync the answer.
     expect(screen.getByRole("button", { name: "5 selecții" }).hasAttribute("disabled")).toBe(true);
 
     await act(async () => {
       release(jsonResponse(201, READY_BODY));
     });
-    await waitFor(() => expect(screen.queryByText("Îți construim Global Special Bet…")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Îți construim biletul…")).toBeNull());
   });
 
   it("renders each selection with its own status, and falls back to the id it cannot name", async () => {
@@ -201,7 +201,7 @@ describe("GlobalSpecialBetSection", () => {
 
     expect(screen.getAllByText("Câștigat").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Anulat").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("În desfășurare").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("În așteptare").length).toBeGreaterThan(0);
 
     expect(screen.getByText("Over 7.5")).toBeTruthy();
     expect(screen.getByText("Cornere")).toBeTruthy();
@@ -479,7 +479,7 @@ describe("GlobalSpecialBetSection", () => {
     );
     expect(screen.queryByRole("group")).toBeNull();
     screen.getByRole("button", { name: /Deblochează/ }).click();
-    expect(onUpgradeRequired).toHaveBeenCalledWith("Global Special Bet", "ultra");
+    expect(onUpgradeRequired).toHaveBeenCalledWith("Bilete", "ultra");
   });
 
   describe("Bilet Sistem", () => {

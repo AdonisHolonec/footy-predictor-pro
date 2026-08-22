@@ -14,7 +14,7 @@ import PredictionLaboratoryPanel from "../PredictionLaboratory";
 import ValueCard from "../ValueCard";
 import XGPerformanceBar from "../XGPerformanceBar";
 import { PredictionRow, XGData } from "../../types";
-import type { DetailTabId } from "../MatchModal";
+import type { DetailPart } from "./detailParts";
 import type { TranslateFn } from "../../i18n";
 import type { ValueEngine } from "../../types";
 import type { formatRecommendedPick } from "../../utils/formatRecommendation";
@@ -24,7 +24,7 @@ import { evaluateScoreDerivedPick, fallbackTierFromProb } from "./helpers";
 type AnalysisPanelsProps = {
   match: PredictionRow;
   tr: TranslateFn;
-  tab: (ids: DetailTabId[]) => string;
+  tab: (ids: DetailPart[]) => string;
   homeColor: string;
   awayColor: string;
   xgData: XGData | null;
@@ -42,22 +42,22 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
   } = props;
   return (
     <>
-          <div className={tab(["analysis"])}>
+          <div className={tab(["lab"])}>
             <CollapsiblePanel compact title={tr("panels.predictionAnalysis")}>
               <PredictionLaboratoryPanel match={match} framed={false} />
             </CollapsiblePanel>
           </div>
 
           {match.monteCarlo?.probabilityDistribution ? (
-            <div className={tab(["analysis"])}>
+            <div className={tab(["monteCarlo"])}>
               <CollapsiblePanel compact title={tr("panels.monteCarlo")}>
                 <MonteCarloPanel match={match} homeColor={homeColor} awayColor={awayColor} framed={false} />
               </CollapsiblePanel>
             </div>
           ) : null}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["overview", "analysis", "markets"])}`}>
-            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["analysis"])}`}>
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds"])}`}>
+            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["xg"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.xgLuck")}</h3>
               <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
               {match.luckStats && (
@@ -71,7 +71,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
               )}
             </section>
 
-            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["overview", "markets"])}`}>
+            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["odds"])}`}>
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">
@@ -185,7 +185,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           </div>
 
           {match.explanation && (match.explanation.reasons?.length || match.explanation.reasoning?.length) ? (
-            <div className={tab(["overview", "analysis"])}>
+            <div className={tab(["explanation"])}>
               <CollapsiblePanel compact title={tr("panels.predictionExplanation")}>
                 <ExplanationCard explanation={match.explanation} framed={false} />
               </CollapsiblePanel>
@@ -193,7 +193,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           ) : null}
 
           {match.featureImportance?.items?.length || match.featureImportance?.contributions ? (
-            <div className={tab(["analysis"])}>
+            <div className={tab(["keyFactors"])}>
               <CollapsiblePanel compact title={tr("panels.keyFactors")} subtitle={tr("panels.keyFactorsSub")}>
                 <FeatureImportanceChart importance={match.featureImportance} framed={false} />
               </CollapsiblePanel>
@@ -201,7 +201,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           ) : null}
 
           {match.predictionContributions?.items?.length ? (
-            <div className={tab(["analysis"])}>
+            <div className={tab(["whyPrediction"])}>
               <CollapsiblePanel compact title={tr("panels.whyPrediction")}>
                 <PredictionContributionsChart data={match.predictionContributions} framed={false} />
               </CollapsiblePanel>
@@ -209,7 +209,7 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
           ) : null}
 
           {match.confidenceEngine && (
-            <div className={tab(["overview", "analysis"])}>
+            <div className={tab(["confidence"])}>
               <ConfidenceEnginePanel
                 engine={match.confidenceEngine}
                 recommendationPick={match.recommended?.pick ? recommendedLabel.label : null}
@@ -217,12 +217,12 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
             </div>
           )}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["markets"])}`}>
+          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["marketPicks"])}`}>
             <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 lg:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">04 — Piețe & scor</h3>
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.marketsScore")}</h3>
                 <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">
-                  probabilitate · încredere
+                  {tr("match.probConfidence")}
                 </span>
               </div>
               {(() => {

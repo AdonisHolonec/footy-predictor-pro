@@ -130,17 +130,28 @@ test("attachCardMarketsToPayload persists cardsTotal/cardsPoints into marketResu
   assert.equal(out.marketResults.cardsPoints, 7);
 });
 
-test("recording card totals does NOT settle the Cards family (still pending)", () => {
-  // The whole point of this increment: the observed total is captured, but no
-  // selection's outcome moves. Cards grading arrives with its own change.
+test("recorded card totals now settle the Cards family (D8)", () => {
+  // This is the change the earlier increment deferred: the total was captured then,
+  // and grading arrives here. Same fixture, inverted expectation — 6 cards LOSES an
+  // Under 3.5, and it is graded against cardsTotal (6), not cardsPoints (7).
   const out = attachCardMarketsToPayload(
     { recommended: { pick: "Cards Under 3.5", family: "Cards" } },
     {
       status: "FT",
       score: { home: 1, away: 2 },
-      // 6 cards would LOSE an Under 3.5 if anything graded it.
       marketTotals: { cardsTotal: 6, cardsPoints: 7 }
     }
+  );
+  assert.equal(out.cardMarketValidations.recommended, "loss");
+  // The totals are still recorded verbatim — grading did not consume or alter them.
+  assert.equal(out.marketResults.cardsTotal, 6);
+  assert.equal(out.marketResults.cardsPoints, 7);
+});
+
+test("a Cards pick with no recorded total stays pending, not lost", () => {
+  const out = attachCardMarketsToPayload(
+    { recommended: { pick: "Cards Under 3.5", family: "Cards" } },
+    { status: "FT", score: { home: 1, away: 2 }, marketTotals: {} }
   );
   assert.equal(out.cardMarketValidations.recommended, "pending");
 });

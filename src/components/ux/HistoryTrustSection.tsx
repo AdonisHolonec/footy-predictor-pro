@@ -21,6 +21,9 @@ type Props = {
    * never handed any data to show.
    */
   onStartPredicting?: () => void;
+  /** UX-E Performance: the panel around it owns the title and the 7-day
+      trend is drawn above it, so this renders only ROI + league + market. */
+  embedded?: boolean;
 };
 
 const MARKET_LABEL_KEY: Record<MarketBreakdownRow["market"], string> = {
@@ -35,7 +38,7 @@ const tableWrap = "overflow-x-auto rounded-[var(--fp-radius-sm)] border border-[
 /** No observation to report: the em dash the accuracy column has always used. */
 const noValue = "text-right font-mono text-[var(--fp-text-muted)]";
 
-export default function HistoryTrustSection({ history, leagueBreakdown, onStartPredicting }: Props) {
+export default function HistoryTrustSection({ history, leagueBreakdown, onStartPredicting, embedded = false }: Props) {
   const { t, locale } = useLocale();
 
   const last7Days = useMemo(() => computeLastNDaysAccuracy(history, 7), [history]);
@@ -61,12 +64,13 @@ export default function HistoryTrustSection({ history, leagueBreakdown, onStartP
     [locale]
   );
 
+  const Shell = embedded ? "div" : Card;
   return (
-    <Card>
-      <h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
+    <Shell>
+      {!embedded && (<><h2 className="font-display text-[length:var(--fp-section)] font-semibold text-[var(--fp-text)]">
         {t("dash.historyTrustTitle")}
       </h2>
-      <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("dash.historyTrustSub")}</p>
+      <p className="mt-1 text-xs text-[var(--fp-text-muted)]">{t("dash.historyTrustSub")}</p></>)}
 
       {/* Kept ABOVE the tables rather than replacing them: the empty columns are
           the clearest statement of what this page will track, and a new user
@@ -83,7 +87,7 @@ export default function HistoryTrustSection({ history, leagueBreakdown, onStartP
         </div>
       )}
 
-      <div className="mt-4">
+      {!embedded && (<div className="mt-4">
         <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
           {t("dash.last7DaysTitle")}
         </h3>
@@ -120,9 +124,9 @@ export default function HistoryTrustSection({ history, leagueBreakdown, onStartP
             </tbody>
           </table>
         </div>
-      </div>
+      </div>)}
 
-      <div className="mt-4">
+      <div className={embedded ? "" : "mt-4"}>
         <StatTile
           label={t("dash.yieldRoiTitle")}
           value={roi != null ? `${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%` : "—"}
@@ -206,6 +210,6 @@ export default function HistoryTrustSection({ history, leagueBreakdown, onStartP
           </div>
         </div>
       </div>
-    </Card>
+    </Shell>
   );
 }

@@ -7,7 +7,6 @@ import { ro } from "../../i18n/ro";
 afterEach(cleanup);
 
 /** The one performance block. Its content is irrelevant here — its count is not. */
-const TRACKER = <div data-testid="tracker">performance tracker</div>;
 
 /**
  * Whichever locale the environment resolves to, the copy must be one of these.
@@ -15,32 +14,26 @@ const TRACKER = <div data-testid="tracker">performance tracker</div>;
  * `Dict` is recursive (`string | Dict`), so the leaf is narrowed explicitly
  * rather than reached through dotted access, which does not typecheck.
  */
-function eitherLocale(key: "emptyTitle" | "empty"): RegExp {
+function eitherLocale(key: "emptyDayTitle" | "emptyDayDesc"): RegExp {
   const leaf = (d: typeof en) => (d.history as unknown as Record<string, string>)[key];
   const variants = [leaf(en), leaf(ro)].map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return new RegExp(variants.join("|"));
 }
 
 describe("HistorySection", () => {
-  it("shows the performance tracker once, with no stat row repeating it", () => {
-    render(<HistorySection history={[]} trackerSlot={TRACKER} />);
-
-    expect(screen.getAllByTestId("tracker")).toHaveLength(1);
-
-    // "W / L" was the hardcoded label of the duplicate StatTile row that sat
-    // directly beneath the tracker, restating wins and losses the tracker had
-    // just shown. It is the locale-independent fingerprint of that row: if it
-    // ever comes back, the view is repeating itself again.
+  it("renders no performance tracker — Results answers what happened, Performance answers how well", () => {
+    render(<HistorySection history={[]} />);
+    expect(screen.queryByTestId("tracker")).toBeNull();
     expect(screen.queryByText("W / L")).toBeNull();
   });
 
   it("explains an empty history instead of stating it", () => {
-    render(<HistorySection history={[]} trackerSlot={TRACKER} />);
+    render(<HistorySection history={[]} />);
 
     // EmptyState gives the user a heading plus a reason. The old bare Card gave
     // one muted line that named "sync" — an internal concept, not a user action.
-    expect(screen.getByText(eitherLocale("emptyTitle"))).toBeTruthy();
-    expect(screen.getByText(eitherLocale("empty"))).toBeTruthy();
+    expect(screen.getByText(eitherLocale("emptyDayTitle"))).toBeTruthy();
+    expect(screen.getByText(eitherLocale("emptyDayDesc"))).toBeTruthy();
     expect(screen.queryByText(/sync/i)).toBeNull();
   });
 
@@ -54,10 +47,9 @@ describe("HistorySection", () => {
       }
     ] as unknown as Parameters<typeof HistorySection>[0]["history"];
 
-    render(<HistorySection history={history} trackerSlot={TRACKER} />);
+    render(<HistorySection history={history} today="2026-08-17" />);
 
     expect(screen.getByText(/Rapid/)).toBeTruthy();
-    expect(screen.getAllByTestId("tracker")).toHaveLength(1);
   });
 });
 
@@ -86,7 +78,7 @@ const LIGHT_ROW = {
 
 describe("HistorySection on the light list projection", () => {
   it("renders a row that carries no analytical payload", () => {
-    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    render(<HistorySection history={[LIGHT_ROW]} today="2026-08-01" />);
 
     // Teams, score and recommendation all come from the light contract now.
     expect(screen.getByText(/FCSB Bucuresti/)).toBeTruthy();
@@ -95,14 +87,14 @@ describe("HistorySection on the light list projection", () => {
   });
 
   it("still renders the logos the light projection carries", () => {
-    const { container } = render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
+    const { container } = render(<HistorySection history={[LIGHT_ROW]} today="2026-08-01" />);
     const logos = Array.from(container.querySelectorAll("img")).map((i) => i.getAttribute("src") || "");
     expect(logos.some((s) => s.includes("2246.png")), "home logo missing from the light row").toBe(true);
     expect(logos.some((s) => s.includes("2249.png")), "away logo missing from the light row").toBe(true);
   });
 
   it("does not fall back to the empty state for a light row", () => {
-    render(<HistorySection history={[LIGHT_ROW]} trackerSlot={TRACKER} />);
-    expect(screen.queryByText(eitherLocale("emptyTitle"))).toBeNull();
+    render(<HistorySection history={[LIGHT_ROW]} today="2026-08-01" />);
+    expect(screen.queryByText(eitherLocale("emptyDayTitle"))).toBeNull();
   });
 });

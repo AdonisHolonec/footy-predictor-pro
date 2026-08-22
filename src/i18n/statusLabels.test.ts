@@ -57,10 +57,30 @@ describe("outcome status accessible names", () => {
     expect(translate("ro", "common.status.nope")).toBe("common.status.nope");
   });
 
-  test("the accessible name is a full word, not the terse visible badge text", () => {
-    // The visible badge stays "WIN" / "LOSE"; the accessible name must not
-    // collapse back onto it, or the icon would announce as an abbreviation.
-    expect(translate("ro", "common.status.win")).not.toBe(translate("ro", "history.win"));
-    expect(translate("ro", "common.status.loss")).not.toBe(translate("ro", "history.loss"));
+  test("pending is one unresolved state, one word: per-match, ticket and accessible name agree", () => {
+    // gsb.statusPending labels a ticket whose status is still `pending` — unsettled
+    // from creation until every leg is graded, kicked off or not. That is the
+    // same state the per-match badge calls pending, so it must not read as
+    // "in progress" (a different claim the product expresses via `underway`).
+    for (const locale of ["en", "ro"] as const) {
+      const perMatch = translate(locale, "history.pendingBadge");
+      expect(translate(locale, "gsb.statusPending")).toBe(perMatch);
+      expect(translate(locale, "common.status.pending")).toBe(perMatch);
+    }
+    expect(translate("ro", "gsb.statusPending")).toBe("În așteptare");
+    expect(translate("en", "gsb.statusPending")).toBe("Pending");
+  });
+
+  test("neither the accessible name nor the visible badge is an all-caps abbreviation", () => {
+    // UX-E: the visible badge is a full Title-case word ("Won" / "Lost"), the
+    // same token the ticket history uses — so neither surface can announce or
+    // read as "WIN" / "LOSE" shouting.
+    const fullWord = /^\p{Lu}\p{Ll}/u;
+    for (const locale of ["en", "ro"] as const) {
+      for (const key of ["win", "loss"]) {
+        expect(translate(locale, `common.status.${key}`)).toMatch(fullWord);
+        expect(translate(locale, `history.${key}`)).toMatch(fullWord);
+      }
+    }
   });
 });

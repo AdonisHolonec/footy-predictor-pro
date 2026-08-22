@@ -33,7 +33,7 @@ export const VALUE_MARKET_FAMILIES = Object.freeze([
  *   Corners                                  -> marketTotals.cornersTotal
  *   Shots                                    -> marketTotals.shotsTotal
  *   Shots on Target                          -> marketTotals.shotsOnTargetTotal
- *   Cards                                    -> NO total exists in the statistics payload
+ *   Cards                                    -> marketTotals.cardsTotal (raw yellow+red)
  *   Correct Score                            -> evaluateTopPick has no scoreline branch
  *
  * Flip a `false` to `true` in the same change that lands its settlement support, and the
@@ -47,6 +47,18 @@ export const SETTLEABLE_VALUE_FAMILIES = Object.freeze({
   Corners: true,
   Shots: true,
   "Shots on Target": true,
+  /*
+    D8 landed Cards SETTLEMENT — resolveRecommendedValidation now grades a Cards line
+    against marketTotals.cardsTotal — so the blocker this flag was raised for is gone.
+    It stays false deliberately, and the flip is a separate decision.
+
+    Settling a Cards pick that already exists and admitting Cards into the Recommended
+    / Best Value pool are two different changes. The first is a defect fix: production
+    carries rows with recommended_family = "Cards" that could never reach win/loss.
+    The second changes what the product offers users, and belongs in a change that is
+    about selection, with its own backtest — flipping it here would silently widen the
+    candidate pool as a side effect of a settlement fix.
+  */
   Cards: false,
   "Correct Score": false
 });

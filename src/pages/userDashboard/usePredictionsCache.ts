@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useLocale } from "../../context/LocaleContext";
-import type { useAuth } from "../../hooks/useAuth";
+import type { AuthStatus, useAuth } from "../../hooks/useAuth";
 import type { HistoryEntry, PredictionRow } from "../../types";
 import {
   isoToday,
@@ -10,7 +10,7 @@ import {
   normalizeSelectedDates,
   useLocalStorageState
 } from "../../utils/appUtils";
-import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
+import { applyLiveStateCarryForward, demoteStaleLiveStatus } from "../../utils/liveState";
 import { projectPredictionsByUserForStorage } from "../../utils/predictionListProjection";
 import { hasLegacyPredictionShape } from "./helpers";
 
@@ -31,7 +31,8 @@ export function usePredictionsCache({
   setSelectedDates,
   selectedLeagueIds,
   history,
-  setStatus
+  setStatus,
+  authStatus
 }: {
   user: AuthUser;
   userTier: string;
@@ -42,8 +43,19 @@ export function usePredictionsCache({
   selectedLeagueIds: number[];
   history: HistoryEntry[];
   setStatus: (message: string) => void;
+  /**
+   * useAuth publishes the user twice on login: first with `profile = null`
+   * (tier defaults to "free", status "profile-pending"), then with the real
+   * profile. Without this the tier-promotion effect below read that second
+   * publish as free → paid on every paid login: it deleted the cached
+   * predictions, emptied the list and announced "Plan upgraded" (UX-H).
+   * Optional so existing callers/tests that never see a pending profile are
+   * unchanged.
+   */
+  authStatus?: AuthStatus;
 }) {
   const { t } = useLocale();
+  const isProfileResolved = authStatus === undefined || (authStatus !== "profile-pending" && authStatus !== "unresolved");
   /*
     State stays FULL; only the serialized copy is narrowed. Every reader in this
     hook — the date/league filter, the live-poll carry-forward, the history merge
@@ -94,28 +106,15 @@ export function usePredictionsCache({
       if (!selectedLeagueSet.size) return true;
       return selectedLeagueSet.has(Number(row.leagueId));
     });
-    // predictionsByUser never receives live poll data (score/momentum/liveAdjustment)
-    // — it lives only in-memory on `preds`. Re-filtering from the cache on every
-    // predictionsByUser change (history sync, xg hydrate, tier promotion, etc.)
-    // would otherwise silently discard it mid-match. Carry it forward unless the
-    // cache shows the match freshly settled (then trust the settled snapshot).
-    setPreds((prevPreds) => {
-      const prevById = new Map(prevPreds.map((p) => [Number(p.id), p]));
-      return filtered.map((row) => {
-        const prev = prevById.get(Number(row.id));
-        if (!prev) return row;
-        if (isFinalMatchStatus(row.status) && !isFinalMatchStatus(prev.status)) return row;
-        return {
-          ...row,
-          status: prev.status || row.status,
-          score: prev.score ?? row.score,
-          momentum: prev.momentum ?? row.momentum,
-          confidenceEngine: row.confidenceEngine
-            ? { ...row.confidenceEngine, liveAdjustment: prev.confidenceEngine?.liveAdjustment ?? row.confidenceEngine?.liveAdjustment }
-            : row.confidenceEngine
-        };
-      });
-    });
+    // predictionsByUser never receives live poll data (score/momentum/liveEvents/
+    // liveAdjustment) — it lives only in-memory on `preds`. Re-filtering from the
+    // cache on every predictionsByUser change (history sync, xg hydrate, tier
+    // promotion, etc.) would otherwise silently discard it mid-match. The rule now
+    // lives in one place and is shared with the history rehydration below, which
+    // was missing it entirely.
+    // Same freshness boundary for the locally cached rows: a status cached as 1H in
+    // an earlier session is a historical observation by now.
+    setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, filtered.map((row) => demoteStaleLiveStatus(row))));
     if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
@@ -133,7 +132,12 @@ export function usePredictionsCache({
     });
   }, [history, user?.id, setPredictionsByUser]);
 
-  async function runHydration(): Promise<PredictionRow[]> {
+  /**
+   * @param silent Startup / effect-driven hydration is a restoration, not an
+   *   event: nothing is announced. User-initiated hydration (Refresh) keeps
+   *   its messages.
+   */
+  async function runHydration(silent: boolean): Promise<PredictionRow[]> {
     try {
       if (!user?.id || !accessToken) return [];
       /*
@@ -159,7 +163,10 @@ export function usePredictionsCache({
       const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
       const selectedDateSet = new Set(effectiveDates);
       const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
+      // Freshness normalization BEFORE carry-forward: a stale persisted 1H must not
+      // become current LIVE on first paint (no previous state to carry forward).
       const hydrated = (json.items as PredictionRow[])
+        .map((row) => demoteStaleLiveStatus(row))
         .filter((row) => {
           const kickoffDate = kickoffLocalDateKey(row.kickoff);
           if (!selectedDateSet.has(kickoffDate)) return false;
@@ -170,7 +177,12 @@ export function usePredictionsCache({
 
       if (!hydrated.length) return [];
 
-      setPreds(hydrated);
+      // History describes the match as STORED — it carries no momentum, no live
+      // events and no minute for a match still in play. It also answers seconds
+      // after `/api/fixtures?view=live`, so a wholesale assignment here lands last
+      // and erases the live poll's work: momentum vanished and the widget fell back
+      // to "Momentum unavailable" a couple of seconds after opening a live match.
+      setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, hydrated));
       if (user?.id) {
         setPredictionsByUser((prev) => ({
           ...prev,
@@ -182,8 +194,10 @@ export function usePredictionsCache({
           return { ...prev, [user.id]: merged };
         });
       }
-      setStatus(t("dash.restoredHistory", { n: hydrated.length }));
-      setRehydratedNotice(t("dash.restoredNotice", { n: hydrated.length }));
+      if (!silent) {
+        setStatus(t("dash.restoredHistory", { n: hydrated.length }));
+        setRehydratedNotice(t("dash.restoredNotice", { n: hydrated.length }));
+      }
       return hydrated;
     } catch {
       return [];
@@ -210,11 +224,11 @@ export function usePredictionsCache({
    * latches hydration off — `runHydration` resolves to [] rather than rejecting,
    * and an empty result is deliberately not remembered as a successful hydration.
    */
-  function rehydratePredictionsFromHistory(): Promise<PredictionRow[]> {
+  function rehydratePredictionsFromHistory({ silent = false }: { silent?: boolean } = {}): Promise<PredictionRow[]> {
     const pending = inFlightHydrationRef.current;
     if (pending) return pending;
 
-    const started = runHydration();
+    const started = runHydration(silent);
     inFlightHydrationRef.current = started;
     // Attached directly to `started`, not through a .catch().finally() chain:
     // handlers run in attachment order, so registering here — before the caller
@@ -240,7 +254,7 @@ export function usePredictionsCache({
       if (tierShapeRehydrateKeyRef.current === shapeKey) return;
       tierShapeRehydrateKeyRef.current = shapeKey;
     }
-    void rehydratePredictionsFromHistory();
+    void rehydratePredictionsFromHistory({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard
   }, [user?.id, accessToken, preds, userTier, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
 
@@ -248,6 +262,10 @@ export function usePredictionsCache({
   const prevEffectiveTierRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!user?.id) return;
+    // A tier read before the profile resolved is the "free" placeholder, not a
+    // plan. It is neither remembered nor compared: the first tier this effect
+    // records is the first one that came from a loaded profile.
+    if (!isProfileResolved) return;
     const nextTier = String(userTier || user.tier || "free").toLowerCase();
     const prevTier = prevEffectiveTierRef.current;
     prevEffectiveTierRef.current = nextTier;
@@ -261,9 +279,9 @@ export function usePredictionsCache({
       return copy;
     });
     setPreds((prev) => (prev.length ? [] : prev));
-    setStatus("Plan upgraded — run Predict again for full markets.");
+    setStatus(t("dash.planUpgraded"));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard
-  }, [user?.id, userTier, user?.tier, setPredictionsByUser]);
+  }, [user?.id, userTier, user?.tier, isProfileResolved, setPredictionsByUser]);
 
   useEffect(() => {
     if (!rehydratedNotice) return;

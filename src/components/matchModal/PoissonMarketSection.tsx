@@ -19,12 +19,14 @@ export default function PoissonMarketSection({
   quoteSource,
   badgeTone = "neutral",
   framed = true
-}: {
+, showInternals = false }: {
   title: string;
   subtitle: string;
   accent: string;
   icon: string;
   data: PoissonMarketProbs;
+  /** Account › Model internals. Off: λ, expected-total and sample lines are not rendered. */
+  showInternals?: boolean;
   homeLabel: string;
   awayLabel: string;
   actualTotal?: number | null;
@@ -87,7 +89,7 @@ export default function PoissonMarketSection({
             </h3>
             <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-[var(--fp-text-muted)]">{subtitle}</p>
           </div>
-          <div className="text-right font-mono text-[10px] tabular-nums">
+          {showInternals && <div className="text-right font-mono text-[10px] tabular-nums">
             <div className="text-[var(--fp-text-muted)]">
               λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)}
             </div>
@@ -95,14 +97,14 @@ export default function PoissonMarketSection({
               total aşteptat ≈ {data.expectedTotal.toFixed(1)}
               {data.usedFallback ? " · fallback" : ""}
             </div>
-          </div>
+          </div>}
         </div>
-      ) : (
+      ) : showInternals ? (
         <div className="mb-3 text-right font-mono text-[10px] tabular-nums text-[var(--fp-text-muted)]">
           λ · {data.lambdaHome.toFixed(1)} vs {data.lambdaAway.toFixed(1)} · ≈ {data.expectedTotal.toFixed(1)}
           {data.usedFallback ? " · fallback" : ""}
         </div>
-      )}
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* TOTAL */}
@@ -166,12 +168,14 @@ export default function PoissonMarketSection({
         ) : null}
       </div>
 
-      {(data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
+      {showInternals && (data.sampleHome != null || data.sampleAway != null || data.leagueBaseline != null) && (
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--fp-border)] pt-2 font-mono text-[10px] text-[var(--fp-text-muted)]">
-          {data.sampleHome != null && <span>n gazde · {data.sampleHome}</span>}
-          {data.sampleAway != null && <span>n oaspeţi · {data.sampleAway}</span>}
-          {data.leagueBaseline != null && <span>medie ligă · {data.leagueBaseline.toFixed(1)}</span>}
-          {data.usedFallback && <span className="text-[var(--fp-warning)]">⚠ fallback (rolling stats incomplete)</span>}
+          {data.sampleHome != null && <span>{tr("match.sampleHome", { n: data.sampleHome })}</span>}
+          {data.sampleAway != null && <span>{tr("match.sampleAway", { n: data.sampleAway })}</span>}
+          {data.leagueBaseline != null && (
+            <span>{tr("match.leagueAverage", { n: data.leagueBaseline.toFixed(1) })}</span>
+          )}
+          {data.usedFallback && <span className="text-[var(--fp-warning)]">{tr("match.sampleFallback")}</span>}
         </div>
       )}
       {bestPick && (
