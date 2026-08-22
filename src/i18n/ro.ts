@@ -609,7 +609,10 @@ export const ro: Dict = {
   },
   list: {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
-    fullTimeShort: "FT"
+    fullTimeShort: "FT",
+    dayToday: "Astăzi",
+    dayTomorrow: "Mâine",
+    dayAfterTomorrow: "Poimâine"
   },
   tickets: {
     buildCta: "Construiește bilet",

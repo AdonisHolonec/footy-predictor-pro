@@ -126,7 +126,7 @@ describe("UX-D · Today live ticker", () => {
     const rows = ticker.querySelectorAll("li[data-match-row='live']");
     expect(rows).toHaveLength(2);
     const r = rows[0];
-    expect(r.querySelector("[data-slot='time']")?.textContent).toBe("67'");
+    expect(r.querySelector("[data-slot='time-value']")?.textContent).toBe("67'");
     expect(r.querySelector("[data-slot='score']")?.textContent).toBe("2–1");
     expect(r.querySelector("[data-slot='prediction']")?.textContent).toMatch(/2\.5/);
     expect(r.querySelector("[data-slot='confidence']")?.textContent).toMatch(/%/);
@@ -164,8 +164,8 @@ describe("UX-D · Matches › Live", () => {
     const pre = document.querySelector("li[data-match-row='upcoming'] > button")!;
     const live = document.querySelector("li[data-match-row='live'] > button")!;
     expect(live.className).toBe(pre.className);
-    expect(live.querySelector("[data-slot='time']")?.textContent).toBe("67'");
-    expect(pre.querySelector("[data-slot='time']")?.textContent).not.toMatch(/'/);
+    expect(live.querySelector("[data-slot='time-value']")?.textContent).toBe("67'");
+    expect(pre.querySelector("[data-slot='time-value']")?.textContent).not.toMatch(/'/);
     expect(live.querySelector("[data-slot='score']")?.textContent).toBe("2–1");
     expect(pre.querySelector("[data-slot='score']")?.textContent).toMatch(/vs/i);
     for (const slot of ["prediction", "confidence", "odds"]) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
+import { relativeDayLabel } from "../../utils/relativeDay";
 import StatusBadge from "../../design-system/StatusBadge";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { formatBookOdd, recommendedOdd } from "../../utils/marketPicks";
@@ -97,6 +98,10 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
   const minuteLabel = live ? formatLiveMinute(row.score?.minute, row.score?.extra) : null;
   // The time slot: minute while in play, "FT" once final, kickoff otherwise.
   const timeLabel = live ? (minuteLabel ?? t("card.live")) : finished ? t("list.fullTimeShort") : kickoffLabel;
+  // Day context from the SAME Date the time above is formatted from — Today /
+  // Tomorrow / Day after tomorrow, else the short date. Shown on every row;
+  // stacked above the time on narrow screens, inline ("Astăzi · 14:30") from `sm`.
+  const dayLabel = relativeDayLabel(kickoff, t);
 
   const pick = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
   const conf = Number(row.recommended?.confidence);
@@ -122,9 +127,12 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
 
   const scoreLabel = hasScore ? `${row.score?.home}–${row.score?.away}` : t("common.vs");
   const stateLabel = live ? t("card.live") : settled ? outcomeLabel : "";
+  // The day is spoken once, here: the visible spans below sit inside a button
+  // whose aria-label replaces its content, so nothing is read twice.
+  const whenLabel = live ? `${timeLabel} ${scoreLabel}` : finished ? `${t("list.fullTimeShort")} ${scoreLabel}` : kickoffLabel;
   const accessibleName = [
     `${row.teams.home} ${t("common.vs")} ${row.teams.away}`,
-    live ? `${timeLabel} ${scoreLabel}` : finished ? `${t("list.fullTimeShort")} ${scoreLabel}` : kickoffLabel,
+    dayLabel ? `${dayLabel}, ${whenLabel}` : whenLabel,
     `${t("card.topPick")} ${pick.ariaLabel}`,
     `${t("match.confidence")} ${confidenceLabel}`,
     `${t("match.odds")} ${oddLabel}`,
@@ -142,19 +150,37 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
         type="button"
         onClick={onOpen}
         aria-label={accessibleName}
-        className="group grid min-w-0 flex-1 grid-cols-[3.5rem_minmax(0,1fr)_1rem] items-center gap-x-2 gap-y-1 px-2 py-2.5 text-left transition-colors hover-fine:bg-[var(--fp-bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:grid-cols-[4.25rem_minmax(0,1fr)_minmax(7.5rem,auto)_2.75rem_minmax(3rem,auto)_1rem] sm:gap-x-3 sm:px-3 sm:py-3.5"
+        className="group grid min-w-0 flex-1 grid-cols-[3.5rem_minmax(0,1fr)_1rem] items-center gap-x-2 gap-y-1 px-2 py-2.5 text-left transition-colors hover-fine:bg-[var(--fp-bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:grid-cols-[8.5rem_minmax(0,1fr)_minmax(7.5rem,auto)_2.75rem_minmax(3rem,auto)_1rem] sm:gap-x-3 sm:px-3 sm:py-3.5"
       >
-        {/* TIME / MINUTE / FT — one slot, three states, one type scale. */}
+        {/* DAY + TIME / MINUTE / FT — one slot, three states, one type scale.
+            Narrow: the day stacks above the time inside the two-row height the
+            slot already spans. From `sm`: "Astăzi · 14:30" on the row's single
+            line — no extra row, no extra height. */}
         <span
           data-slot="time"
-          className={`col-start-1 row-start-1 row-span-2 flex items-center gap-1 whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums sm:row-span-1 sm:text-xs ${
+          className={`col-start-1 row-start-1 row-span-2 flex flex-col items-center justify-center gap-y-0.5 whitespace-nowrap font-mono text-[11px] font-semibold leading-none tabular-nums sm:row-span-1 sm:flex-row sm:justify-start sm:gap-x-1 sm:gap-y-0 sm:text-xs ${
             live ? "text-[var(--fp-live)]" : "text-[var(--fp-text-muted)]"
           }`}
         >
-          {live && (
-            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fp-live)] motion-safe:animate-pulse" />
+          {dayLabel && (
+            <>
+              <span
+                data-slot="day"
+                className="text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fp-text-faint)]"
+              >
+                {dayLabel}
+              </span>
+              <span aria-hidden data-slot="day-separator" className="hidden text-[var(--fp-text-faint)] sm:inline">
+                ·
+              </span>
+            </>
           )}
-          {timeLabel}
+          <span data-slot="time-value" className="flex items-center gap-1">
+            {live && (
+              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fp-live)] motion-safe:animate-pulse" />
+            )}
+            {timeLabel}
+          </span>
         </span>
 
         {/* TEAMS: badge + name · vs/score · name + badge. Names truncate; crests never do. */}
