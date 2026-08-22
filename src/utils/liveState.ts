@@ -1,5 +1,6 @@
 import type { PredictionRow } from "../types";
 import { isFinalMatchStatus } from "./cardMarketOutcome";
+import { isFixtureInPlay } from "./appUtils";
 
 /**
  * Which parts of a prediction row only ever exist in memory.
@@ -41,6 +42,46 @@ export const CARRIED_LIVE_FIELDS = Object.freeze([
  * @param previous the in-memory row, when one exists
  * @param incoming the stored row (localStorage cache or /api/history)
  */
+
+/**
+ * How long after kickoff a persisted in-play status may still be read as
+ * CURRENT live state. A football match — 90 minutes, half-time, stoppage,
+ * extra time and penalties — is over well inside 3 hours; a status older than
+ * that is a historical observation the sync cron has not refreshed yet (the
+ * sync runs 2.5–8.5 h apart and writes whatever the provider said at that
+ * moment), not a claim that the ball is still rolling.
+ */
+export const MAX_LIVE_AGE_MS = 3 * 60 * 60 * 1000;
+
+/** The effective status of a demoted row: unresolved, neither live nor final. */
+export const STALE_LIVE_STATUS = "TBD";
+
+/**
+ * Read-boundary freshness rule (live-state freshness audit).
+ *
+ * predictions_history is authoritative for the LAST OBSERVED provider status;
+ * it says nothing about now. A row persisted as 1H/2H/HT… by a sync that ran
+ * mid-match keeps that status until the next sync, hours later. This helper
+ * answers one question only — "may this old status be treated as current live
+ * UI?" — and when the answer is no it returns a copy whose `status` is
+ * unresolved (TBD) with the provider value kept in `rawStatus`. It never
+ * invents FT, a score, a minute or a validation, and never mutates its input.
+ *
+ * Boundary: stale strictly AFTER kickoff + MAX_LIVE_AGE_MS (exactly 3 h is
+ * still fresh). No kickoff, or an unparseable one, never demotes.
+ */
+export function demoteStaleLiveStatus<T extends Pick<PredictionRow, "status" | "kickoff">>(row: T, nowMs: number = Date.now()): T {
+  if (!isFixtureInPlay(row.status)) return row;
+  const koMs = new Date(row.kickoff ?? "").getTime();
+  if (!Number.isFinite(koMs)) return row;
+  if (nowMs <= koMs + MAX_LIVE_AGE_MS) return row;
+  return { ...row, rawStatus: row.status, status: STALE_LIVE_STATUS };
+}
+
+export function demoteStaleLiveStatuses<T extends Pick<PredictionRow, "status" | "kickoff">>(rows: T[], nowMs: number = Date.now()): T[] {
+  return (rows || []).map((row) => demoteStaleLiveStatus(row, nowMs));
+}
+
 export function carryForwardLiveState(
   previous: PredictionRow | undefined,
   incoming: PredictionRow
@@ -85,4 +126,12 @@ export function applyLiveStateCarryForward(
   return (incoming || []).map((row) => carryForwardLiveState(previousById.get(Number(row.id)), row));
 }
 
-export default { CARRIED_LIVE_FIELDS, carryForwardLiveState, applyLiveStateCarryForward };
+export default {
+  CARRIED_LIVE_FIELDS,
+  MAX_LIVE_AGE_MS,
+  STALE_LIVE_STATUS,
+  demoteStaleLiveStatus,
+  demoteStaleLiveStatuses,
+  carryForwardLiveState,
+  applyLiveStateCarryForward
+};

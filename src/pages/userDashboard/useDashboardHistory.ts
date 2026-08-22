@@ -3,6 +3,7 @@ import { useHistorySync } from "../../hooks/useHistorySync";
 import type { HistoryEntry, HistoryStats, PerformanceLeagueBreakdown } from "../../types";
 import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
 import { historyStatsFromRows, tallyEntryCardMarkets } from "../../utils/historyStats";
+import { demoteStaleLiveStatuses } from "../../utils/liveState";
 
 /**
  * Istoricul predicțiilor + statisticile derivate, mutate verbatim din
@@ -33,7 +34,10 @@ export function useDashboardHistory({
       });
       const json = await response.json();
       if (!json?.ok) return;
-      const items = (Array.isArray(json.items) ? json.items : []) as HistoryEntry[];
+      // Read boundary: a persisted in-play status older than MAX_LIVE_AGE_MS is a
+      // historical observation, not current live state (Results must not show LIVE
+      // for a match the cron last saw at 35'). Stats keep the server's numbers.
+      const items = demoteStaleLiveStatuses((Array.isArray(json.items) ? json.items : []) as HistoryEntry[]);
       setHistory(items);
       setHistoryStats(json.stats || historyStatsFromRows(items));
     } catch {
