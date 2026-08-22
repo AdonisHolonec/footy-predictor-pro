@@ -20,7 +20,7 @@ import {
   // values any more. The engine validates the single requested k.
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
-import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
+import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
 import { rehydrateSettlementRow } from "./predictionsHistory.js";
 
 const HISTORY_TABLE = "predictions_history";
@@ -526,13 +526,20 @@ export async function loadFixtureStates(supabase, fixtureIds) {
  *
  * @returns {{ ok: boolean, error?: string }}
  */
-export async function persistSettledBet(supabase, bet, settlement, now) {
+/**
+ * Write a set of selection status changes for one bet, exactly as many rows
+ * as intended. Shared by the bet settlement below and by the re-grade of legs
+ * left pending on tickets that already reached their verdict.
+ *
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export async function persistSelectionChanges(supabase, betId, selectionChanges, now) {
   const settledAt = new Date(now).toISOString();
 
   // Selections grouped by target status: one statement per status, still exact
   // about how many rows each is allowed to move.
   const byStatus = new Map();
-  for (const change of settlement.selectionChanges) {
+  for (const change of selectionChanges) {
     if (!byStatus.has(change.status)) byStatus.set(change.status, []);
     byStatus.get(change.status).push(change.id);
   }
@@ -552,10 +559,18 @@ export async function persistSettledBet(supabase, bet, settlement, now) {
         ok: false,
         error:
           `selections update touched ${affected} of ${ids.length} rows for status "${status}" ` +
-          `on bet ${bet.id} — refusing to report success (check the Supabase role and RLS policies)`
+          `on bet ${betId} — refusing to report success (check the Supabase role and RLS policies)`
       };
     }
   }
+  return { ok: true };
+}
+
+export async function persistSettledBet(supabase, bet, settlement, now) {
+  const settledAt = new Date(now).toISOString();
+
+  const legs = await persistSelectionChanges(supabase, bet.id, settlement.selectionChanges, now);
+  if (!legs.ok) return legs;
 
   const { data, error } = await supabase
     .from(BETS_TABLE)
@@ -608,7 +623,10 @@ export async function settlePendingGlobalSpecialBets({
     .order("bet_date", { ascending: true })
     .limit(Math.max(1, Math.min(Number(limit) || 200, 1000)));
   if (error) throw error;
-  if (!bets?.length) return summary;
+  if (!bets?.length) {
+    // No ticket to settle — legs left behind on already-settled tickets still get their grade.
+    return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+  }
 
   summary.scanned = bets.length;
 
@@ -663,7 +681,75 @@ export async function settlePendingGlobalSpecialBets({
     }
   }
 
-  return summary;
+  return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+}
+
+function mergeRegrade(summary, regrade) {
+  return {
+    ...summary,
+    legsRegraded: regrade.regraded,
+    legsRegradeScanned: regrade.scanned,
+    failures: [...summary.failures, ...regrade.failures]
+  };
+}
+
+/**
+ * Grade the legs a verdict left behind.
+ *
+ * A combo is LOST the moment one leg loses, and a system the moment too few
+ * legs can still reach k — before its other legs have finished. The ticket's
+ * verdict is final and correct, but those legs stayed `pending` forever,
+ * because settlement only ever scans PENDING tickets. This pass scans the
+ * other way round: pending LEGS whose ticket is no longer pending, grades each
+ * one with the same `settleSelection` and the same fixture state, and writes
+ * only the selection rows. The ticket row is never touched — nothing here can
+ * change a verdict, a settled price or a `settled_at`.
+ *
+ * Idempotent and bounded: a leg whose computed status matches what is stored
+ * issues no write; the 48-hour void applies exactly as it does for live tickets.
+ *
+ * @param {{ now?: number, limit?: number, supabase?: object }} params
+ * @returns {Promise<{ scanned: number, regraded: number, failures: Array<{ betId: string, error: string }> }>}
+ */
+export async function regradeLegsOnSettledBets({ now = Date.now(), limit = 500, supabase = getSupabaseAdmin() } = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const result = { scanned: 0, regraded: 0, failures: [] };
+
+  // PostgREST inner join on the parent: only legs whose ticket already has a verdict.
+  const { data: legs, error } = await supabase
+    .from(SELECTIONS_TABLE)
+    .select("id, special_bet_id, fixture_id, market, selection, side, line, odds, status, kickoff_at, special_bets!inner(id, status)")
+    .eq("status", "pending")
+    .neq("special_bets.status", "pending")
+    .limit(Math.max(1, Math.min(Number(limit) || 500, 2000)));
+  if (error) throw error;
+  if (!legs?.length) return result;
+
+  result.scanned = legs.length;
+  const fixturesById = await loadFixtureStates(
+    supabase,
+    legs.map((leg) => leg.fixture_id)
+  );
+
+  const byBetId = new Map();
+  for (const leg of legs) {
+    const fixture = fixturesById.get(Number(leg.fixture_id)) ?? { status: "", score: {}, marketTotals: {} };
+    const status = settleSelection(leg, fixture, now);
+    if (status === leg.status) continue;
+    if (!byBetId.has(leg.special_bet_id)) byBetId.set(leg.special_bet_id, []);
+    byBetId.get(leg.special_bet_id).push({ id: leg.id, status });
+  }
+
+  for (const [betId, changes] of byBetId) {
+    const written = await persistSelectionChanges(supabase, betId, changes, now);
+    if (written.ok) {
+      result.regraded += changes.length;
+    } else {
+      console.error("[global-special-bet-regrade]", written.error);
+      result.failures.push({ betId, error: written.error });
+    }
+  }
+  return result;
 }
 
 export default {
@@ -672,7 +758,9 @@ export default {
   createGlobalSystemBets,
   fixtureStateFromRow,
   loadFixtureStates,
+  persistSelectionChanges,
   persistSettledBet,
+  regradeLegsOnSettledBets,
   settlePendingGlobalSpecialBets,
   isValidBetDate,
   isValidVariant,

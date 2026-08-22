@@ -254,7 +254,21 @@ function fakeSettlementClient({ bets, selections, fixtureRows }) {
   function table(name) {
     return {
       select: (cols) => ({
-        eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: betsTable.filter((b) => b.status === "pending"), error: null }) }) }),
+        eq: () => ({
+          // Bets: status = pending, ordered, limited.
+          order: () => ({ limit: () => Promise.resolve({ data: betsTable.filter((b) => b.status === "pending"), error: null }) }),
+          // Legs on settled tickets: status = pending AND special_bets.status <> pending (the inner join).
+          neq: () => ({
+            limit: () =>
+              Promise.resolve({
+                data: selectionsTable
+                  .filter((sel) => sel.status === "pending")
+                  .map((sel) => ({ ...sel, special_bets: betsTable.find((b) => b.id === sel.special_bet_id) }))
+                  .filter((sel) => sel.special_bets && sel.special_bets.status !== "pending"),
+                error: null
+              })
+          })
+        }),
         in: (col, ids) =>
           name === "predictions_history"
             ? Promise.resolve({ data: fixtureRows.filter((r) => ids.includes(r.fixture_id)), error: null })
@@ -283,6 +297,7 @@ function fakeSettlementClient({ bets, selections, fixtureRows }) {
   }
   return { from: table, writes, betsTable, selectionsTable };
 }
+export { fakeSettlementClient };
 
 const PROD_BET = { id: "bet-3fb8f3d4", status: "pending", settled_total_odds: null, bet_kind: "combo", system_k: null };
 const PROD_LEGS = [
