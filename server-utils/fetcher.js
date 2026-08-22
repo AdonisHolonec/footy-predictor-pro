@@ -192,6 +192,28 @@ async function recordUsageFromHeaders(res, provider) {
   await kv.set(key, usagePayload);
 }
 
+/**
+ * recordUsageFromHeaders behind a boundary that cannot throw.
+ *
+ * Same shape as the cache.read_failed / cache.write_failed guards in
+ * getWithCache: the failure is observed (counter + structured warn), the
+ * provider result is untouched. Only the event name and the error message go to
+ * the log — never the KV URL, token or the provider payload.
+ *
+ * @returns {Promise<boolean>} true when telemetry was recorded, false when it
+ *   failed — diagnostic only; getWithCache does not branch on it.
+ */
+async function recordUsageTelemetry(res, provider, endpoint) {
+  try {
+    await recordUsageFromHeaders(res, provider);
+    return true;
+  } catch (err) {
+    void recordObservation("cache", { durationMs: 0, ok: false, failureKind: "cache" });
+    logWarn("api.usage_telemetry_failed", { endpoint, provider, error: err?.message || "kv_usage_write" });
+    return false;
+  }
+}
+
 async function bumpDailyCacheStats({ hit, miss, inflightJoin }) {
   const field = hit ? "hits" : miss ? "misses" : inflightJoin ? "inflightJoins" : null;
   if (!field) return;
@@ -319,7 +341,13 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
         }
       }
 
-      await recordUsageFromHeaders(attempt.res, attempt.upstreamCfg.provider);
+      // Usage telemetry is bookkeeping about the response, never a verdict on it.
+      // It runs in its own boundary because a KV failure here (the 2026-08-18
+      // Upstash request cap: "ERR max requests limit exceeded") used to surface
+      // through the catch below and turn an already-successful provider response
+      // into ok:false — which is how /fixtures/statistics stopped hydrating
+      // marketResults and Corners/Shots ticket legs stayed pending.
+      await recordUsageTelemetry(attempt.res, attempt.upstreamCfg.provider, endpoint);
 
       const json = attempt.json;
       const hasErrors =
