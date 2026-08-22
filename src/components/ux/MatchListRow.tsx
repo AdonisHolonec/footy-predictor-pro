@@ -99,9 +99,13 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
   // The time slot: minute while in play, "FT" once final, kickoff otherwise.
   const timeLabel = live ? (minuteLabel ?? t("card.live")) : finished ? t("list.fullTimeShort") : kickoffLabel;
   // Day context from the SAME Date the time above is formatted from — Today /
-  // Tomorrow / Day after tomorrow, else the short date. Shown on every row;
-  // stacked above the time on narrow screens, inline ("Astăzi · 14:30") from `sm`.
-  const dayLabel = relativeDayLabel(kickoff, t);
+  // Tomorrow / Day after tomorrow, else the short date. PRE-MATCH rows only:
+  // gated by the row's own live / final semantics (the same predicates that
+  // choose the time slot), never by the kickoff date. A live match is today by
+  // definition and a finished one has no upcoming day to announce, so both keep
+  // their existing "● 72'" / "FT" slot and accessible name untouched.
+  // Stacked above the time on narrow screens, inline ("Astăzi · 14:30") from `sm`.
+  const dayLabel = live || finished ? "" : relativeDayLabel(kickoff, t);
 
   const pick = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
   const conf = Number(row.recommended?.confidence);
