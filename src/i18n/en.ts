@@ -153,6 +153,7 @@ export const en: Dict = {
     showingSaved: "Showing {n} saved predictions for this date.",
     generated: "{n} predictions were generated.",
     restoredHistory: "Restored {n} predictions from history.",
+    planUpgraded: "Plan upgraded — run Predict again for full markets.",
     restoredNotice: "Restored {n} saved predictions — no new generation used.",
     legacyNotice: "Showing saved picks. Advanced markets may refresh from history.",
     close: "Close",

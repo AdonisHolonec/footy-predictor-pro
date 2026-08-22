@@ -86,7 +86,8 @@ export default function UserDashboard() {
     refreshTierStatus,
     updateFavoriteLeagues,
     updateNotificationPreferences,
-    markOnboardingComplete
+    markOnboardingComplete,
+    authStatus
   } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
@@ -195,6 +196,7 @@ export default function UserDashboard() {
   } = usePredictionsCache({
     user,
     userTier,
+    authStatus,
     accessToken: session?.access_token,
     date,
     selectedDates,
