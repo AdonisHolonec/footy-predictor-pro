@@ -188,8 +188,12 @@ function deriveAlignedOuPick(totalLines, quote, maxLineDelta = 1.5) {
  * Deliberately separate from parseGoalsOuPick, whose `^` anchor is what stops a prefixed
  * label being mistaken for a goals pick — only callers that already know the market from
  * `family` may use this looser parse.
+ *
+ * Exported for the Global Special Bet engine and settlement, which carry the same
+ * prefixed labels ("SOT Over 7.5", "Shots Under 29.5") and previously re-derived the
+ * side with the anchored parser — which returned null for every shots leg.
  */
-function parseOuPickAnywhere(pick) {
+export function parseOuPickAnywhere(pick) {
   const m = String(pick || "")
     .trim()
     .toLowerCase()
