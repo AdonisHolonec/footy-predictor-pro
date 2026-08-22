@@ -116,13 +116,19 @@ describe("MatchListRow · live", () => {
 
   it("[3] is the same component with the same structure as pre-match", () => {
     const pre = renderRow(row());
-    const preSlots = [...pre.li.querySelectorAll("[data-slot]")].map((el) => el.getAttribute("data-slot"));
+    // The day label ("Astăzi") is pre-match-only by design: a live match is
+    // today by definition and a finished one has no upcoming day. Everything
+    // else must be structurally identical across states.
+    const DAY_SLOTS = new Set(["day", "day-separator"]);
+    const slotsOf = (root: HTMLElement) =>
+      [...root.querySelectorAll("[data-slot]")].map((el) => el.getAttribute("data-slot")).filter((s) => !DAY_SLOTS.has(s || ""));
+    const preSlots = slotsOf(pre.li);
     const preClasses = (pre.li.querySelector("button") as HTMLElement).className;
     const [preBadge] = pre.li.querySelectorAll("[data-team-badge]");
     const preBadgeClass = preBadge.className;
     cleanup();
     const live = renderRow(liveRow);
-    const liveSlots = [...live.li.querySelectorAll("[data-slot]")].map((el) => el.getAttribute("data-slot"));
+    const liveSlots = slotsOf(live.li);
     const liveClasses = (live.li.querySelector("button") as HTMLElement).className;
     expect(liveSlots).toEqual(preSlots);
     expect(liveClasses).toBe(preClasses);
@@ -130,7 +136,7 @@ describe("MatchListRow · live", () => {
     // DATA changes colour by design (time → live token, score → live token).
     const classesOf = (root: HTMLElement) =>
       [...root.querySelectorAll("[data-slot]")]
-        .filter((el) => !["time", "score"].includes(el.getAttribute("data-slot") || ""))
+        .filter((el) => !["time", "score"].includes(el.getAttribute("data-slot") || "") && !DAY_SLOTS.has(el.getAttribute("data-slot") || ""))
         .map((el) => `${el.getAttribute("data-slot")}:${el.className}`);
     expect(classesOf(live.li)).toEqual(classesOf(pre.li));
     // Badges keep the same size in play.
