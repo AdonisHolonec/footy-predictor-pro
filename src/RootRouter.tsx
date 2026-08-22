@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ThemeBoot from "./design-system/ThemeBoot";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -25,8 +25,45 @@ function RouteFallback() {
   );
 }
 
+/**
+ * Which dashboard a user gets is decided by the DB profile role, and only by a
+ * role that actually came from a loaded profile.
+ *
+ * useAuth deliberately publishes the user BEFORE enriching it with the profile
+ * (login must not hang on a slow profile read), and every later
+ * `getSession()` — saving favourite leagues, a predict — republishes that same
+ * placeholder: `role: "user"`, `authStatus: "profile-pending"`. For a non-admin
+ * the placeholder equals the real role and nothing moves. For an admin it read
+ * as a demotion: AdminDashboard unmounted, UserDashboard mounted, the profile
+ * arrived, AdminDashboard mounted again — and its mount-time favourite-leagues
+ * save called getSession() once more. That was the Admin ↔ Today flicker.
+ *
+ * The placeholder role is therefore not authoritative. While the profile is
+ * pending (or its read failed) the tree the user last had from a RESOLVED
+ * profile is kept; a resolved profile — including a genuine admin → user or
+ * user → admin change — switches exactly once. Nothing is persisted and no
+ * second source of truth exists: with no prior resolved role (first load) the
+ * published role is used as before, so nobody is ever guessed into Admin.
+ */
+function useResolvedRole(user: { id: string; role: string } | null, authStatus: string): string | null {
+  const lastResolved = useRef<{ id: string; role: string } | null>(null);
+  const isResolved = authStatus === "authenticated";
+  useEffect(() => {
+    if (!user) {
+      lastResolved.current = null;
+      return;
+    }
+    if (isResolved) lastResolved.current = { id: user.id, role: user.role };
+  }, [user, isResolved]);
+  if (!user) return null;
+  if (isResolved) return user.role;
+  const remembered = lastResolved.current;
+  return remembered && remembered.id === user.id ? remembered.role : user.role;
+}
+
 export function AuthGate() {
   const { user, loading, session, authStatus } = useAuth();
+  const role = useResolvedRole(user, authStatus);
 
   /*
     `!user` used to mean five different things at once, and this gate read all of
@@ -65,7 +102,7 @@ export function AuthGate() {
       </div>
     );
   }
-  return user.role === "admin" ? <AdminDashboard /> : <UserDashboard />;
+  return role === "admin" ? <AdminDashboard /> : <UserDashboard />;
 }
 
 export default function RootRouter() {
