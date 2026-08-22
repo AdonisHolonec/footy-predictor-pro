@@ -100,13 +100,16 @@ export function carryForwardLiveState(
     score: previous.score ?? incoming.score,
     momentum: previous.momentum ?? incoming.momentum,
     liveEvents: previous.liveEvents ?? incoming.liveEvents,
+    // liveAdjustment is a carried live field; it lives inside confidenceEngine.
+    // A persisted row (history detail, hydration) carries no engine object at
+    // all, so the previous one is kept whole — the same rule as momentum/events.
     confidenceEngine: incoming.confidenceEngine
       ? {
           ...incoming.confidenceEngine,
           liveAdjustment:
             previous.confidenceEngine?.liveAdjustment ?? incoming.confidenceEngine?.liveAdjustment
         }
-      : incoming.confidenceEngine
+      : previous.confidenceEngine ?? incoming.confidenceEngine
   };
 }
 
