@@ -97,6 +97,9 @@ export function carryForwardLiveState(
   return {
     ...incoming,
     status: previous.status || incoming.status,
+    // A status travels with its provenance: a demoted status without its
+    // rawStatus would be indistinguishable from a provider "TBD".
+    rawStatus: previous.status ? previous.rawStatus : incoming.rawStatus,
     score: previous.score ?? incoming.score,
     momentum: previous.momentum ?? incoming.momentum,
     liveEvents: previous.liveEvents ?? incoming.liveEvents,

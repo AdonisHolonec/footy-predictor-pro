@@ -336,3 +336,25 @@ describe("resolveModalMatch - live/detail ownership", () => {
     expect(out.extraLiveOnly).toBeUndefined();
   });
 });
+
+describe("useHistoryDetailSource · a demoted list status (and its provenance) survives the detail merge", () => {
+  function StatusProbe({ selected, history }: { selected: PredictionRow; history: PredictionRow[] }) {
+    const { match } = useHistoryDetailSource(selected, history);
+    return <span data-testid="status">{`${match?.status ?? "-"}:${(match as { rawStatus?: string } | null)?.rawStatus ?? "-"}`}</span>;
+  }
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+  it("list TBD/rawStatus HT + raw HT detail 4 h after kickoff → TBD:HT, never live truth", async () => {
+    fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, scope: "fixture_detail", item: { ...detailItem(101), status: "HT", kickoff: hoursAgo(4), score: { home: 1, away: 0 } } }) }));
+    const selected = { ...narrowRow(101), status: "TBD", rawStatus: "HT", kickoff: hoursAgo(4) } as unknown as PredictionRow;
+    render(<StatusProbe selected={selected} history={[selected]} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("TBD:HT"));
+  });
+
+  it("list HT + HT detail 1 h after kickoff is still current live state", async () => {
+    fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, scope: "fixture_detail", item: { ...detailItem(102), status: "HT", kickoff: hoursAgo(1), score: { home: 1, away: 0 } } }) }));
+    const selected = { ...narrowRow(102), status: "HT", kickoff: hoursAgo(1) } as unknown as PredictionRow;
+    render(<StatusProbe selected={selected} history={[selected]} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("HT:-"));
+  });
+});
