@@ -332,6 +332,8 @@ export const en: Dict = {
     tabAnalysis: "Analysis",
     tabAdvanced: "Advanced",
     decisionTitle: "Recommendation",
+    detailUnavailableTitle: "Match detail unavailable",
+    detailUnavailableBody: "We couldn't load this match's detail. Your Results list is unchanged.",
     decisionEv: "Value",
     decisionEvHint: "Expected value of this pick at the shown odds. Positive means the price is in your favour.",
     decisionEvPositive: "positive",

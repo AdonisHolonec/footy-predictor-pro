@@ -42,6 +42,8 @@ export type HistoryDetailSource = {
   detailRequested: boolean;
   /** True once the modal is rendering detail rather than the list row. */
   usingDetail: boolean;
+  /** A match is selected but no renderable object exists yet (list row without modal shape, detail pending or failed). */
+  awaitingDetail: boolean;
 };
 
 /**
@@ -50,12 +52,35 @@ export type HistoryDetailSource = {
  * Exported for tests, and deliberately pure: the fallback precedence is the one
  * rule that must never regress, so it is verified without a React tree.
  */
+/**
+ * Can the modal render this object at all?
+ *
+ * The modal reads `match.probs.p1/pX/p2` unconditionally (OverviewHero's form
+ * ribbon, the 1X2 model panel, the analysis panels, the first-half pick). A
+ * `view=list` history row deliberately ships no `probs` (the read cutover,
+ * predictionsHistory.js), so handing it to the modal threw on first paint and
+ * — with no boundary above — unmounted the whole workspace (UX-J). Full
+ * prediction rows (Home, Matches, the palette) and by-fixture detail rows
+ * always carry probs, so they keep their immediate render.
+ *
+ * A READ-ONLY check: nothing is invented, nothing is defaulted to zero.
+ */
+export function hasMatchDetailShape(match: PredictionRow | null | undefined): boolean {
+  const probs = (match as { probs?: { p1?: unknown; pX?: unknown; p2?: unknown } } | null | undefined)?.probs;
+  if (!probs || typeof probs !== "object") return false;
+  return [probs.p1, probs.pX, probs.p2].every((v) => typeof v === "number" && Number.isFinite(v));
+}
+
 export function resolveModalMatch(
   selected: PredictionRow | null,
   detail: PredictionRow | null
 ): PredictionRow | null {
   if (!selected) return null;
-  if (!detail || Number(detail.id) !== Number(selected.id)) return selected;
+  if (!detail || Number(detail.id) !== Number(selected.id)) {
+    // A list projection is not a modal model. Until the detail for this fixture
+    // arrives the modal has nothing safe to render — the Results list stays.
+    return hasMatchDetailShape(selected) ? selected : null;
+  }
   /*
     Live-detail ownership (production forensic, Aug 21): the by-fixture detail
     row is the PERSISTED record — recommendation, validation, market
@@ -103,6 +128,9 @@ export function useHistoryDetailSource(
     loading: detailFixtureId != null && loading,
     error: detailFixtureId != null ? error : null,
     detailRequested: detailFixtureId != null,
-    usingDetail: Boolean(detail) && match === detail
+    usingDetail: Boolean(detail) && match === detail,
+    // The caller has a selection but nothing renderable — the list row had no
+    // modal shape and the detail has not (yet, or at all) supplied one.
+    awaitingDetail: Boolean(selectedMatch) && match === null
   };
 }
