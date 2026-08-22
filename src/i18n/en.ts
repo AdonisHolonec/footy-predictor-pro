@@ -619,6 +619,8 @@ export const en: Dict = {
     emptyCta: "Build a ticket",
     emptyDesc: "Combine a few of your strongest picks into one ticket and follow how it lands here.",
     legs: "{n} legs",
+    ticketNumber: "Ticket #{id}",
+    oddsShort: "Odds {odds}",
     buildTitle: "Build ticket",
     buildSub: "A multi-leg ticket from your favourite leagues.",
     historyTitle: "Ticket history",

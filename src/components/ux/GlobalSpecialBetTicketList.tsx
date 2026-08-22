@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import Badge from "../../design-system/Badge";
 import Banner from "../../design-system/Banner";
+import StatusIcon, { normalizeStatus, statusA11yKey } from "../icons/StatusIcon";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
@@ -52,15 +53,23 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex, onBuild
   const { state, loadMore, retry } = useGlobalSpecialBetHistory({ kind });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const intlLocale = locale === "ro" ? "ro-RO" : "en-GB";
   const formatDay = (value: string) => {
     const ms = Date.parse(value);
     if (!Number.isFinite(ms)) return value;
-    return new Intl.DateTimeFormat(locale === "ro" ? "ro-RO" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }).format(new Date(ms));
+    return new Intl.DateTimeFormat(intlLocale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(ms));
   };
+  /** "18 aug · 16:08" — when the ticket was built; falls back to the bet date. */
+  const formatBuiltAt = (bet: { created_at?: string | null; bet_date: string }) => {
+    const ms = Date.parse(String(bet.created_at || ""));
+    if (!Number.isFinite(ms)) return formatDay(bet.bet_date);
+    const d = new Date(ms);
+    const day = new Intl.DateTimeFormat(intlLocale, { day: "numeric", month: "short" }).format(d);
+    const time = new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(d);
+    return `${day} · ${time}`;
+  };
+  /** Short, stable ticket number from the stored id — the first block of the UUID. */
+  const ticketNumber = (id: string) => String(id).split("-")[0].slice(0, 8).toUpperCase();
 
   if (state.phase === "loading") {
     return (
@@ -120,53 +129,100 @@ export default function GlobalSpecialBetTicketList({ kind, fixtureIndex, onBuild
           const reading = readGlobalSpecialBet(bet);
           return (
             <div key={bet.id} className={!isLast || expanded ? "border-b border-[var(--fp-border)]" : ""}>
-              <button
-                type="button"
-                onClick={() => setExpandedId(expanded ? null : bet.id)}
-                aria-expanded={expanded}
-                aria-label={expanded ? t("gsb.collapse") : t("gsb.expand")}
-                className={`flex min-h-[var(--fp-touch)] w-full items-start gap-3 px-3 py-2 text-left sm:px-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
-                  expanded ? "bg-[var(--fp-accent-muted)]" : "hover:bg-[var(--fp-bg-muted)]"
-                }`}
-              >
-                {/* UX-E: a compact row — line 1 scans (status · shape · odds · date),
-                    line 2 answers (what happened · what came back · chance). The legs
-                    are the only thing behind the disclosure. */}
-                <span className="shrink-0"><Badge tone={outcome.tone}>{t(outcome.labelKey)}</Badge></span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm text-[var(--fp-text)]" data-slot="ticket-shape">
-                      {t(shape.key, shape.vars)} · {t("tickets.legs", { n: bet.selections.length })}
-                      {isSystem && shape.combinationCount ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}` : ""}
-                    </span>
-                    <span className="shrink-0 font-mono text-sm tabular-nums text-[var(--fp-text)]" data-slot="ticket-odds">
-                      <span className="text-[10px] uppercase tracking-wide text-[var(--fp-text-muted)]">
-                        {isSystem ? t("gsb.summaryAllLegsOdds", { n: bet.variant }) : t("gsb.summaryTotalOdds")}
-                      </span>{" "}
-                      <span className="font-bold">{totalOdds ?? "—"}</span>
-                    </span>
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums text-[var(--fp-text-muted)]" data-slot="ticket-date">{formatDay(bet.bet_date)}</span>
-                  </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-[var(--fp-text-muted)]" data-slot="ticket-reading">
-                    <span className="font-semibold text-[var(--fp-text)]">{t(reading.key, reading.vars)}</span>
-                    {" · "}
-                    <span className="font-mono tabular-nums">{t(outcome.detailKey, outcome.vars)}</span>
-                    {outcome.warningKey ? <span className="font-semibold text-[var(--fp-warning)]"> · {t(outcome.warningKey)}</span> : null}
-                    {" · "}
-                    {ticketChance ? (
-                      <span className="font-mono tabular-nums" aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}>
-                        {t("gsb.ticketChance")}: {ticketChance}
+              {(() => {
+                const statusLabel = t(outcome.labelKey);
+                const statusKind = normalizeStatus(bet.status);
+                const legsLabel = t("tickets.legs", { n: bet.selections.length });
+                const oddsLabel = t("tickets.oddsShort", { odds: totalOdds ?? "—" });
+                const numberLabel = t("tickets.ticketNumber", { id: ticketNumber(bet.id) });
+                const builtAt = formatBuiltAt(bet);
+                /* The whole row in one name, the status exactly once: the icon is
+                   decorative inside a button that already names it. */
+                const accessibleName = [numberLabel, statusLabel, isSystem ? `${t(shape.key, shape.vars)}, ${legsLabel}` : t(shape.key, shape.vars), oddsLabel, builtAt].join(", ");
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : bet.id)}
+                    aria-expanded={expanded}
+                    aria-label={accessibleName}
+                    data-slot="ticket-row"
+                    className={`block min-h-[var(--fp-touch)] w-full px-3 py-2.5 text-left sm:px-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--fp-accent)] ${
+                      expanded ? "bg-[var(--fp-accent-muted)]" : "hover:bg-[var(--fp-bg-muted)]"
+                    }`}
+                  >
+                    {/* The compact row is an OVERVIEW: exactly two lines.
+                        Line 1 — ticket number · built at | status (fixed `auto` track, never wraps).
+                        Line 2 — selections · combined odds, on line 1's left edge.
+                        Everything else (shape, reading, return, chance, legs) lives behind the disclosure. */}
+                    <span className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3" data-slot="ticket-line-1">
+                      <span className="min-w-0 truncate text-sm text-[var(--fp-text)]" data-slot="ticket-meta">
+                        <span className="font-semibold" data-slot="ticket-number">{numberLabel}</span>
+                        <span className="text-[var(--fp-text-muted)]"> · </span>
+                        <span className="font-mono text-xs tabular-nums text-[var(--fp-text-muted)]" data-slot="ticket-date">{builtAt}</span>
                       </span>
-                    ) : (
-                      <span className="font-mono tabular-nums">{t("gsb.summaryAvgConfidence")} {confidence ?? "—"}</span>
-                    )}
-                  </span>
-                </span>
-                <span aria-hidden className={`shrink-0 text-[var(--fp-text-faint)] transition-transform ${expanded ? "rotate-90" : ""}`}>›</span>
-              </button>
+                      <span className="flex shrink-0 items-center justify-self-end whitespace-nowrap" data-slot="ticket-status">
+                        <Badge tone={outcome.tone} className="whitespace-nowrap">
+                          {statusKind ? (
+                            <span aria-hidden="true" className="inline-flex">
+                              <StatusIcon kind={statusKind} label={t(statusA11yKey(statusKind))} />
+                            </span>
+                          ) : null}
+                          <span>{statusLabel}</span>
+                        </Badge>
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block truncate font-mono text-xs tabular-nums text-[var(--fp-text-muted)]" data-slot="ticket-line-2">
+                      {/* The product shape is part of the ticket's identity (Combo vs
+                          Sistem 3/5), so it stays in the overview; combinations do not.
+                          A Combo's shape string already carries the leg count, so the
+                          count is stated once: "Combo · 3 selecții" / "Sistem 3/5 · 5 selecții". */}
+                      {isSystem ? (
+                        <>
+                          <span data-slot="ticket-shape-short">{t(shape.key, shape.vars)}</span>
+                          <span> · </span>
+                          <span data-slot="ticket-legs">{legsLabel}</span>
+                        </>
+                      ) : (
+                        <span data-slot="ticket-legs">{t(shape.key, shape.vars)}</span>
+                      )}
+                      <span> · </span>
+                      <span data-slot="ticket-odds" className="font-semibold text-[var(--fp-text)]">{oddsLabel}</span>
+                    </span>
+                  </button>
+                );
+              })()}
 
               {expanded && (
-                <div className="border-t border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-3">
+                <div className="border-t border-[var(--fp-border)] bg-[var(--fp-bg-muted)] px-4 py-3" data-slot="ticket-detail">
+                  {/* Everything the compact row no longer shows — unchanged content,
+                      moved behind the disclosure: shape & combinations, the date the
+                      ticket was placed for, the reading, the return and the chance. */}
+                  <div className="mb-2 space-y-1 text-[11px] text-[var(--fp-text-muted)]">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="text-[var(--fp-text)]" data-slot="ticket-shape">
+                        {t(shape.key, shape.vars)} · {t("tickets.legs", { n: bet.selections.length })}
+                        {isSystem && shape.combinationCount ? ` · ${t("gsb.summaryCombinations")} ${shape.combinationCount}` : ""}
+                      </span>
+                      <span className="font-mono tabular-nums" data-slot="ticket-total-odds">
+                        {isSystem ? t("gsb.summaryAllLegsOdds", { n: bet.variant }) : t("gsb.summaryTotalOdds")} <span className="font-bold text-[var(--fp-text)]">{totalOdds ?? "—"}</span>
+                      </span>
+                      <span className="font-mono tabular-nums" data-slot="ticket-bet-date">{formatDay(bet.bet_date)}</span>
+                    </div>
+                    <div data-slot="ticket-reading">
+                      <span className="font-semibold text-[var(--fp-text)]">{t(reading.key, reading.vars)}</span>
+                      {" · "}
+                      <span className="font-mono tabular-nums">{t(outcome.detailKey, outcome.vars)}</span>
+                      {outcome.warningKey ? <span className="font-semibold text-[var(--fp-warning)]"> · {t(outcome.warningKey)}</span> : null}
+                      {" · "}
+                      {ticketChance ? (
+                        <span className="font-mono tabular-nums" aria-label={t("gsb.ticketChanceAria", { value: ticketChance.replace("%", "") })}>
+                          {t("gsb.ticketChance")}: {ticketChance}
+                        </span>
+                      ) : (
+                        <span className="font-mono tabular-nums">{t("gsb.summaryAvgConfidence")} {confidence ?? "—"}</span>
+                      )}
+                    </div>
+                  </div>
                   <ul className="space-y-2">
                     {bet.selections.map((selection) => (
                       <GlobalSpecialBetSelectionRow

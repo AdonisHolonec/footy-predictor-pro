@@ -55,6 +55,12 @@ function shiftDay(iso: string, delta: number): string {
   return localCalendarDateKey(new Date(y, m - 1, d + delta));
 }
 
+/** Kick-off as a comparable instant; unparseable values sort last, deterministically. */
+function kickoffMs(kickoff?: string | null): number {
+  const ms = Date.parse(String(kickoff || ""));
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER;
+}
+
 function rowKey(row: HistoryEntry): string {
   return String(row.id ?? `${row.teams?.home}-${row.teams?.away}-${row.kickoff}`);
 }
@@ -94,7 +100,10 @@ export default function HistorySection({ history, onOpenMatch, onGoTickets, toda
     () =>
       history
         .filter((row) => kickoffLocalDateKey(row.kickoff) === day)
-        .sort((a, b) => String(b.kickoff || "").localeCompare(String(a.kickoff || ""))),
+        // Earliest kick-off first, top to bottom, on the normalised instant —
+        // never on a formatted or localised string. Array.prototype.sort is
+        // stable, so equal kick-offs keep their incoming order.
+        .sort((a, b) => kickoffMs(a.kickoff) - kickoffMs(b.kickoff)),
     [history, day]
   );
   const summary = useMemo(() => historyStatsFromRows(dayRows), [dayRows]);

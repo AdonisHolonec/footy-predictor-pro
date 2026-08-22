@@ -287,13 +287,17 @@ describe("UX-E redesign · Tickets", () => {
     expect(precedes(screen.getByTestId("tickets-build"), screen.getByTestId("tickets-history"))).toBe(true);
   });
 
-  it("compact ticket rows: status · shape · legs · odds · date on one line, legs behind the disclosure", () => {
+  it("compact ticket rows: two lines (number · date | status / legs · odds); shape, reading and legs behind the disclosure", () => {
     const list = src("components/ux/GlobalSpecialBetTicketList.tsx");
-    for (const slot of ["ticket-shape", "ticket-odds", "ticket-date", "ticket-reading"]) expect(list).toContain(`data-slot="${slot}"`);
+    for (const slot of ["ticket-line-1", "ticket-line-2", "ticket-status", "ticket-odds", "ticket-date", "ticket-shape", "ticket-reading", "ticket-detail"]) {
+      expect(list).toContain(`data-slot="${slot}"`);
+    }
     expect(list).toMatch(/min-h-\[var\(--fp-touch\)\]/);
     expect(list).toMatch(/EmptyState/);
     expect(list).toMatch(/tickets\.emptyCta/);
-    expect(list).not.toMatch(/flex-wrap/);
+    // The compact row itself never wraps; only the detail block may.
+    const row = list.slice(list.indexOf('data-slot="ticket-row"'), list.indexOf('data-slot="ticket-detail"'));
+    expect(row).not.toMatch(/flex-wrap/);
   });
 
   it("locked accounts see the CTA and the locked copy; the gate itself is unchanged", () => {
@@ -320,8 +324,8 @@ describe("UX-E redesign · responsive contract + accessibility", () => {
 
   it("status is never colour-only: the result row carries a labelled icon and Title-case tokens", () => {
     render(<HistorySection history={HISTORY} today={TODAY} onOpenMatch={vi.fn()} />);
-    // Newest first: row 0 is the pending Rayo fixture; row 1 (Wolves) is settled.
-    const first = document.querySelectorAll("li[data-match-row]")[1]!;
+    // Earliest first: row 0 is the settled Arsenal fixture (a win).
+    const first = document.querySelectorAll("li[data-match-row]")[0]!;
     // The badge carries a text label at sm+ and a labelled icon below sm — never colour alone.
     const odds = first.querySelector("[data-slot='odds']")!;
     expect(odds.textContent).toMatch(either("history", "win"));
