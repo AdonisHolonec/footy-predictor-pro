@@ -94,6 +94,16 @@ async function openSystemTab() {
   });
 }
 
+/** Combinations, settled odds and the odds wording live behind the row's disclosure. */
+async function openAllTickets() {
+  await waitFor(() => expect(document.querySelectorAll('[data-slot="ticket-row"]').length).toBeGreaterThan(0));
+  await act(async () => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-slot="ticket-row"]')) {
+      if (b.getAttribute("aria-expanded") !== "true") b.click();
+    }
+  });
+}
+
 describe("Bilete — Combo and Sistem", () => {
   beforeEach(() => {
     fetchWithAuth.mockReset();
@@ -177,9 +187,15 @@ describe("Bilete — Combo and Sistem", () => {
       await openSystemTab();
 
       expect(await screen.findByText(/Sistem 3\/5/)).toBeTruthy();
-      expect(screen.getByText(/Combinații 10/)).toBeTruthy();
-      expect(screen.getByText(/Combinații 5$/)).toBeTruthy();
-      expect(screen.getByText(/Combinații 1$/)).toBeTruthy();
+      // One ticket opens at a time: the combination count lives in each row's detail.
+      const rows = [...document.querySelectorAll<HTMLButtonElement>('[data-slot="ticket-row"]')];
+      expect(rows).toHaveLength(3);
+      for (const [i, pattern] of [/Combinații 10/, /Combinații 5$/, /Combinații 1$/].entries()) {
+        await act(async () => {
+          rows[i].click();
+        });
+        expect(screen.getByText(pattern)).toBeTruthy();
+      }
     });
 
     it("never calls a System's product of odds the ticket price", async () => {
@@ -187,6 +203,7 @@ describe("Bilete — Combo and Sistem", () => {
       await renderTickets();
       await openSystemTab();
 
+      await openAllTickets();
       expect(await screen.findByText(/Cota celor 5/)).toBeTruthy();
       expect(screen.queryByText(/Cotă totală/)).toBeNull();
     });
@@ -194,6 +211,7 @@ describe("Bilete — Combo and Sistem", () => {
     it("keeps calling a Combo's odds the ticket odds", async () => {
       fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: [bet()] }));
       await renderTickets();
+      await openAllTickets();
       expect(await screen.findByText(/Cotă totală/)).toBeTruthy();
       expect(screen.queryByText(/Cota celor/)).toBeNull();
     });

@@ -69,11 +69,12 @@ const btn = (ns: string, key: string) => screen.getByRole("button", { name: eith
 describe("UX-E · Results", () => {
   it("[1][3] the selected day drives the rows; previous / next / today navigate", () => {
     renderResults();
-    expect(rows()).toEqual(["Rayo", "Wolves", "Leeds", "Arsenal"]);
+    // Earliest kick-off first, top to bottom.
+    expect(rows()).toEqual(["Arsenal", "Leeds", "Wolves", "Rayo"]);
     expect(screen.getByTestId("results-day-nav").textContent).toMatch(new RegExp(`${esc(E.history.dayToday)}|${esc(R.history.dayToday)}`));
     expect(btn("history", "dayNext").disabled).toBe(true);
     fireEvent.click(btn("history", "dayPrev"));
-    expect(rows()).toEqual(["Milan", "Genoa"]);
+    expect(rows()).toEqual(["Genoa", "Milan"]);
     expect(screen.getByTestId("results-day-nav").textContent).toMatch(new RegExp(`${esc(E.history.dayYesterday)}|${esc(R.history.dayYesterday)}`));
     fireEvent.click(btn("history", "dayPrev"));
     expect(rows()).toEqual(["Lazio"]);
@@ -96,7 +97,7 @@ describe("UX-E · Results", () => {
     expect(R.history.win).toBe(R.gsb.statusWon);
     expect(R.history.loss).toBe(R.gsb.statusLost);
     fireEvent.click(btn("history", "win"));
-    expect(rows()).toEqual(["Wolves", "Arsenal"]);
+    expect(rows()).toEqual(["Arsenal", "Wolves"]);
     fireEvent.click(btn("history", "pendingBadge"));
     expect(rows()).toEqual(["Rayo"]);
     fireEvent.click(btn("history", "dayPrev"));

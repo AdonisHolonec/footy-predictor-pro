@@ -619,6 +619,8 @@ export const ro: Dict = {
     emptyCta: "Construiește un bilet",
     emptyDesc: "Combină câteva dintre cele mai puternice predicții într-un bilet și urmărește aici cum se încheie.",
     legs: "{n} selecții",
+    ticketNumber: "Bilet #{id}",
+    oddsShort: "Cotă {odds}",
     buildTitle: "Construiește bilet",
     buildSub: "Un bilet cu mai multe selecții din ligile tale favorite.",
     historyTitle: "Istoric bilete",
