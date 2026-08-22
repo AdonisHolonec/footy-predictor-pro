@@ -258,7 +258,9 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
           onClick={onToggleWatch}
           /* Sibling of the row button, never inside it: a 44×44 control that
              cannot open the match, and a row that cannot toggle the favourite. */
-          className="my-auto flex h-11 w-11 shrink-0 items-center justify-center text-sm focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+          /* UX-I: hidden below `sm` - on narrow screens the favourite lives in
+             Match Detail's recommendation card, and the row reclaims the column. */
+          className="my-auto hidden h-11 w-11 shrink-0 items-center justify-center text-sm focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:flex"
           title={watched ? t("card.removeFavorite") : t("card.addFavorite")}
           aria-label={watched ? t("card.removeFavorite") : t("card.addFavorite")}
           aria-pressed={watched}
