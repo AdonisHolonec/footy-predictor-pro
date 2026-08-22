@@ -332,6 +332,8 @@ export const ro: Dict = {
     tabAnalysis: "Analiză",
     tabAdvanced: "Avansat",
     decisionTitle: "Recomandare",
+    detailUnavailableTitle: "Detaliile meciului nu sunt disponibile",
+    detailUnavailableBody: "Nu am putut încărca detaliile acestui meci. Lista de rezultate rămâne neschimbată.",
     decisionEv: "Valoare",
     decisionEvHint: "Valoarea estimată a pick-ului la cota afișată. Pozitiv înseamnă că prețul e în favoarea ta.",
     decisionEvPositive: "pozitiv",

@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PredictionRow } from "../types";
 import { __clearHistoryDetailCache } from "./useHistoryDetail";
-import { resolveModalMatch, useHistoryDetailSource } from "./useHistoryDetailSource";
+import { hasMatchDetailShape, resolveModalMatch, useHistoryDetailSource } from "./useHistoryDetailSource";
 
 /**
  * Phase A2: the match modal's source becomes the by-fixture detail row, with the
@@ -15,8 +15,13 @@ import { resolveModalMatch, useHistoryDetailSource } from "./useHistoryDetailSou
  */
 
 /** A list row — the fallback source. `src` marks which object won. */
+/** A FULL selected row (Home / Matches / palette shape): carries probs, renders immediately. */
 function listRow(id: number): PredictionRow {
-  return { id, src: "list", teams: { home: "H", away: "A" } } as unknown as PredictionRow;
+  return { id, src: "list", teams: { home: "H", away: "A" }, probs: { p1: 0.4, pX: 0.3, p2: 0.3 } } as unknown as PredictionRow;
+}
+/** A Results `view=list` projection: no probs — not a modal model until its detail arrives (UX-J). */
+function narrowRow(id: number): PredictionRow {
+  return { id, src: "narrow", teams: { home: "H", away: "A" }, status: "FT", validation: "win" } as unknown as PredictionRow;
 }
 
 /** What the detail endpoint returns for the same fixture. */
@@ -176,6 +181,51 @@ describe("useHistoryDetailSource", () => {
   });
 });
 
+describe("useHistoryDetailSource · list projection (UX-J)", () => {
+  it("a narrow Results row is NOT handed to the modal before its detail arrives", async () => {
+    let resolve!: (v: unknown) => void;
+    fetchMock.mockImplementation(() => new Promise((r) => (resolve = r)));
+    render(<Probe selected={narrowRow(101)} history={[narrowRow(101)]} />);
+    // Nothing renderable while the request is out — whatever the loading flag's first tick says.
+    expect(state()).toMatch(/^none:-:(loading|idle):ok$/);
+    await waitFor(() => expect(state()).toBe("none:-:loading:ok"));
+    resolve(okResponse(101));
+    await waitFor(() => expect(state()).toBe("detail:101:idle:ok"));
+  });
+
+  it("a narrow row whose detail fails stays unrenderable and reports the error — the caller shows a notice, not a modal", async () => {
+    fetchMock.mockImplementation(async () => ({ ok: false, status: 500, json: async () => ({ ok: false, error: "boom" }) }));
+    render(<Probe selected={narrowRow(101)} history={[narrowRow(101)]} />);
+    await waitFor(() => expect(state()).toBe("none:-:idle:err"));
+  });
+
+  it("a narrow row not in history (no detail possible) is never rendered either", () => {
+    render(<Probe selected={narrowRow(999)} history={[narrowRow(101)]} />);
+    expect(state()).toBe("none:-:idle:ok");
+    expect(detailCalls()).toEqual([]);
+  });
+
+  it("a cached final detail renders a narrow row immediately on reopen", async () => {
+    const first = render(<Probe selected={narrowRow(101)} history={[narrowRow(101)]} />);
+    await waitFor(() => expect(state()).toBe("detail:101:idle:ok"));
+    first.unmount();
+    render(<Probe selected={narrowRow(101)} history={[narrowRow(101)]} />);
+    expect(state()).toBe("detail:101:idle:ok");
+    expect(detailCalls()).toHaveLength(1);
+  });
+});
+
+describe("hasMatchDetailShape", () => {
+  it("accepts finite 1X2 probabilities only; never zero-fills", () => {
+    expect(hasMatchDetailShape(listRow(1))).toBe(true);
+    expect(hasMatchDetailShape(narrowRow(1))).toBe(false);
+    expect(hasMatchDetailShape({ probs: { p1: 0.5, pX: NaN, p2: 0.2 } } as never)).toBe(false);
+    expect(hasMatchDetailShape({ probs: { p1: "0.5", pX: 0.3, p2: 0.2 } } as never)).toBe(false);
+    expect(hasMatchDetailShape({ probs: null } as never)).toBe(false);
+    expect(hasMatchDetailShape(null)).toBe(false);
+  });
+});
+
 describe("resolveModalMatch", () => {
   it("prefers detail only when it is the same fixture", () => {
     const selected = listRow(101);
@@ -188,7 +238,7 @@ describe("resolveModalMatch", () => {
 
   it("matches ids across string and number forms", () => {
     // The list carries fixture ids from JSON; the detail row from Postgres.
-    const selected = { id: "101", src: "list" } as unknown as PredictionRow;
+    const selected = { id: "101", src: "list", probs: { p1: 0.4, pX: 0.3, p2: 0.3 } } as unknown as PredictionRow;
     expect(resolveModalMatch(selected, detailItem(101) as unknown as PredictionRow)).toMatchObject({ src: "detail" });
   });
 });
@@ -210,7 +260,9 @@ function liveSelected(id = 101): PredictionRow {
     liveEvents: EVENTS,
     confidenceEngine: { liveAdjustment: { delta: 2, reason: "aligned" } },
     recommended: { pick: "Over 2.5", confidence: 70 },
-    teams: { home: "Arsenal", away: "Coventry" }
+    teams: { home: "Arsenal", away: "Coventry" },
+    // A live in-memory row is a FULL prediction (Home / Matches shape).
+    probs: { p1: 0.5, pX: 0.25, p2: 0.25 }
   } as unknown as PredictionRow;
 }
 function persistedDetail(id = 101, extra: Record<string, unknown> = {}): PredictionRow {
