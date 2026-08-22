@@ -63,7 +63,7 @@ const kickoffText = new Date("2026-08-25T17:30:00.000Z").toLocaleTimeString([], 
 describe("MatchListRow · pre-match", () => {
   it("[1][11] renders kickoff and 'vs' in the time and centre slots", () => {
     const { slot } = renderRow(row());
-    expect(slot("time")?.textContent).toBe(kickoffText);
+    expect(slot("time-value")?.textContent).toBe(kickoffText);
     expect(slot("score")?.textContent).toMatch(either("common", "vs"));
     expect(slot("score")?.textContent).not.toMatch(/\d/);
   });
@@ -105,13 +105,13 @@ describe("MatchListRow · live", () => {
 
   it("[2][10] renders minute and score in the same two slots", () => {
     const { slot } = renderRow(liveRow);
-    expect(slot("time")?.textContent).toBe("67'");
+    expect(slot("time-value")?.textContent).toBe("67'");
     expect(slot("score")?.textContent).toBe("1–0");
   });
 
   it("formats stoppage time from upstream minute + extra", () => {
     const { slot } = renderRow(row({ status: "1H", score: { home: 0, away: 0, minute: 45, extra: 2 } }));
-    expect(slot("time")?.textContent).toBe("45+2'");
+    expect(slot("time-value")?.textContent).toBe("45+2'");
   });
 
   it("[3] is the same component with the same structure as pre-match", () => {
@@ -182,7 +182,7 @@ describe("MatchListRow · fallbacks and settled", () => {
     const { slot, li } = renderRow(
       row({ status: "FT", score: { home: 3, away: 1 }, cardMarketValidations: { recommended: "win" } })
     );
-    expect(slot("time")?.textContent).toBe(E.list.fullTimeShort);
+    expect(slot("time-value")?.textContent).toBe(E.list.fullTimeShort);
     expect(slot("score")?.textContent).toBe("3–1");
     expect(slot("prediction")?.className).not.toMatch(/--fp-accent/);
     expect(li.getAttribute("data-match-row")).toBe("final");
