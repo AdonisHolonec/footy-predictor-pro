@@ -23,6 +23,12 @@ function sessionFor(token: string) {
 
 vi.mock("../utils/supabaseClient", () => ({
   isSupabaseConfigured: true,
+  /*
+    A real sign-out purges the stored record, so this returns null: the listener
+    reads storage to tell a genuine sign-out from a transient null-session event,
+    and these tests exercise the genuine one.
+  */
+  readPersistedSession: () => null,
   supabase: {
     auth: {
       getSession: vi.fn(async () => {
