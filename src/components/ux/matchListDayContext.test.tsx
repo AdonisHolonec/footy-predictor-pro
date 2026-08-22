@@ -142,16 +142,72 @@ describe("MatchListRow — day context", () => {
     }
   });
 
-  it("12/13. live minute and FT are preserved under the day label — never 'day · kickoff · minute'", () => {
+  it("12/13. live and finished rows carry NO day label — only their existing minute / FT", () => {
+    for (const [status, score, expected] of [
+      ["1H", { home: 0, away: 0, minute: 23 }, "23'"],
+      ["HT", { home: 1, away: 0, minute: 45 }, null],
+      ["2H", { home: 1, away: 0, minute: 72 }, "72'"],
+      ["ET", { home: 1, away: 1, minute: 100 }, "100'"],
+      ["2H", null, null], // live with no score object → the live fallback, still no day
+      ["FT", { home: 2, away: 1 }, E.list.fullTimeShort],
+      ["AET", { home: 2, away: 1 }, E.list.fullTimeShort],
+      ["PEN", { home: 2, away: 1 }, E.list.fullTimeShort]
+    ] as Array<[string, Record<string, number> | null, string | null]>) {
+      cleanup();
+      const { slot, li } = renderRow(row({ status, score: score ?? undefined }));
+      expect(slot("day"), status).toBeNull();
+      expect(slot("day-separator"), status).toBeNull();
+      expect(slot("time")!.textContent, status).not.toContain(time(at(0, 16, 30)));
+      if (expected) expect(slot("time-value")!.textContent, status).toMatch(new RegExp(`^${expected}$|^(${E.list.fullTimeShort}|${R.list.fullTimeShort})$`));
+      expect(li.getAttribute("data-match-row"), status).not.toBe("upcoming");
+    }
+  });
+
+  it("the gate is the row's own pre-match semantics: every row the list calls 'upcoming' has a day, no other row does", () => {
+    for (const status of ["NS", "TBD", "PST", "CANC", "1H", "HT", "2H", "ET", "BT", "P", "FT", "AET", "PEN"]) {
+      cleanup();
+      const { slot, li } = renderRow(row({ status, score: { home: 0, away: 0, minute: 10 } }));
+      const upcoming = li.getAttribute("data-match-row") === "upcoming";
+      expect(Boolean(slot("day")), status).toBe(upcoming);
+    }
+  });
+
+  it("15/16. live and FT accessible names never announce a day; pre-match announces it once", () => {
     const live = renderRow(row({ status: "2H", score: { home: 1, away: 0, minute: 72 } }));
-    expect(live.slot("day")?.textContent).toMatch(either(DAY.today));
-    expect(live.slot("time-value")?.textContent).toBe("72'");
-    expect(live.slot("time")?.textContent).not.toContain(time(at(0, 16, 30)));
+    const liveName = live.button.getAttribute("aria-label") || "";
+    for (const key of ["dayToday", "dayTomorrow", "dayAfterTomorrow"]) {
+      expect(liveName).not.toContain(E.list[key]);
+      expect(liveName).not.toContain(R.list[key]);
+    }
+    expect(liveName).toContain("72'");
     cleanup();
     const ft = renderRow(row({ status: "FT", score: { home: 2, away: 1 } }));
-    expect(ft.slot("day")?.textContent).toMatch(either(DAY.today));
-    expect(ft.slot("time-value")?.textContent).toMatch(either("fullTimeShort"));
-    expect(ft.slot("time")?.textContent).not.toContain(time(at(0, 16, 30)));
+    const ftName = ft.button.getAttribute("aria-label") || "";
+    for (const key of ["dayToday", "dayTomorrow", "dayAfterTomorrow"]) {
+      expect(ftName).not.toContain(E.list[key]);
+      expect(ftName).not.toContain(R.list[key]);
+    }
+    expect(ftName).toMatch(new RegExp(`(${E.list.fullTimeShort}|${R.list.fullTimeShort}) 2–1`));
+    cleanup();
+    const pre = renderRow(row({ kickoff: at(1, 18, 0).toISOString() }));
+    const day = pre.slot("day")!.textContent!;
+    expect((pre.button.getAttribute("aria-label") || "").split(day).length - 1).toBe(1);
+  });
+
+  it("18/19/21/22. live and FT keep the slot's exact structure and classes — single child, same spans, no extra height", () => {
+    const pre = renderRow(row());
+    const preClass = pre.slot("time")!.className;
+    for (const r of [row({ status: "2H", score: { home: 1, away: 0, minute: 72 } }), row({ status: "FT", score: { home: 2, away: 1 } })]) {
+      cleanup();
+      const { slot } = renderRow(r);
+      const s = slot("time")!;
+      expect([...s.children].map((c) => c.getAttribute("data-slot"))).toEqual(["time-value"]);
+      // Same responsive geometry classes as pre-match (only the colour token differs by design).
+      const geometry = (c: string) => c.split(/\s+/).filter((x) => !/fp-live|fp-text-muted/.test(x)).sort().join(" ");
+      expect(geometry(s.className)).toBe(geometry(preClass));
+      expect(s.className).toMatch(/\brow-span-2\b/);
+      expect(s.className).toMatch(/\bsm:row-span-1\b/);
+    }
   });
 
   it("8. chronological order is untouched: rows render in the order given, whatever their day", () => {
