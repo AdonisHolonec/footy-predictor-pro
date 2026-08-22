@@ -20,7 +20,9 @@ import assert from "node:assert/strict";
 
 const KV_LIMIT_ERROR = "ERR max requests limit exceeded. Limit: 500000, Usage: 500000";
 const FAKE_TOKEN = "AXbzSECRET-kv-token-DO-NOT-LOG";
-const FAKE_KV_URL = "https://secret-host.upstash.io";
+// The host carries a marker so the leak check can look for a plain word, not a URL.
+const KV_HOST_MARKER = "kvhostmarker";
+const FAKE_KV_URL = `https://${KV_HOST_MARKER}.upstash.io`;
 
 /** Scripted KV: every command succeeds, or every command throws `failure`. */
 const kvState = { failure: null, store: new Map(), calls: [] };
@@ -239,12 +241,12 @@ test("telemetry failure log carries the event and message only — no KV URL, to
   assert.equal(parsed.endpoint, "/fixtures/statistics");
   assert.equal(parsed.provider, "apisports");
   assert.equal(parsed.error, KV_LIMIT_ERROR);
-  for (const forbidden of [FAKE_TOKEN, FAKE_KV_URL, "test-provider-key", "Corner Kicks"]) {
+  for (const forbidden of [FAKE_TOKEN, KV_HOST_MARKER, "test-provider-key", "Corner Kicks"]) {
     assert.equal(line.includes(forbidden), false, `log must not contain ${forbidden}`);
   }
   for (const l of [...warnLines, ...errorLines]) {
     assert.equal(l.includes(FAKE_TOKEN), false);
-    assert.equal(l.includes(FAKE_KV_URL), false);
+    assert.equal(l.includes(KV_HOST_MARKER), false);
   }
 });
 
