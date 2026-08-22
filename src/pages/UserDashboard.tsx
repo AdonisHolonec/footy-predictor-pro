@@ -738,6 +738,8 @@ export default function UserDashboard() {
             onClose={() => setSelectedMatch(null)}
             onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
             onReport={() => setReportRow(modalMatch)}
+            watched={isWatched(Number(modalMatch.id))}
+            onToggleWatch={() => toggleWatchlist(Number(modalMatch.id))}
             showModelInternals={prefs.showModelInternals}
           />
         </Suspense>

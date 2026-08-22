@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useLocale } from "../../context/LocaleContext";
+import { IconButton } from "../../design-system";
 import { ConfidenceAura } from "../SignalLab";
 import MarketFamilyIcon from "../icons/MarketFamilyIcon";
 import type { MarketFamilyKey } from "../../utils/formatRecommendation";
@@ -39,6 +40,20 @@ type MatchDecisionBlockProps = {
   /** One-sentence, plain-language reason — no formulas. */
   rationale: string | null;
   benchmark?: BenchmarkConsensus | null;
+  /**
+   * UX-I. Contextual actions the card owns on NARROW screens: the favourite
+   * star the list row no longer shows there, and the report flag the modal
+   * header no longer shows there. Same handlers, same state - only the
+   * presentation moved. Hidden from `sm` up, where the row and header keep
+   * their own controls.
+   */
+  actions?: DecisionActions;
+};
+
+export type DecisionActions = {
+  watched?: boolean;
+  onToggleWatch?: () => void;
+  onReport?: () => void;
 };
 
 function Metric({
@@ -69,9 +84,11 @@ export default function MatchDecisionBlock({
   evPct,
   dataQuality,
   rationale,
-  benchmark = null
+  benchmark = null,
+  actions
 }: MatchDecisionBlockProps) {
   const { t: tr } = useLocale();
+  const hasActions = Boolean(actions?.onToggleWatch || actions?.onReport);
 
   const hasExactConfidence = confidencePct != null && Number.isFinite(confidencePct);
   const confidenceValue = hasExactConfidence
@@ -109,36 +126,77 @@ export default function MatchDecisionBlock({
       className="mx-auto mt-3 w-full max-w-2xl rounded-[var(--fp-radius)] border border-fp-accent/25 bg-[var(--fp-bg-muted)] p-3 shadow-fp-sm sm:p-4"
       aria-label={tr("match.decisionTitle")}
     >
-      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-        {tr("match.decisionTitle")}
+      {/* Header: title + (narrow screens only) the favourite / report cluster.
+          Its own flex row, outside the decision grid, so the cluster can never
+          push confidence, pick or odds. */}
+      <div className="mb-2 flex min-h-[var(--fp-touch)] items-center justify-between gap-2 sm:min-h-0" data-slot="decision-header">
+        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
+          {tr("match.decisionTitle")}
+        </div>
+        {hasActions && (
+          <div className="flex shrink-0 items-center gap-1 sm:hidden" data-slot="decision-actions">
+            {actions?.onToggleWatch && (
+              <IconButton
+                variant="ghost"
+                shape="round"
+                onClick={actions.onToggleWatch}
+                pressed={Boolean(actions.watched)}
+                title={actions.watched ? tr("card.removeFavorite") : tr("card.addFavorite")}
+                aria-label={actions.watched ? tr("card.removeFavorite") : tr("card.addFavorite")}
+                data-slot="decision-favorite"
+              >
+                <span className={actions.watched ? "text-[var(--fp-warning)]" : "text-[var(--fp-text-faint)]"}>
+                  {actions.watched ? "★" : "☆"}
+                </span>
+              </IconButton>
+            )}
+            {actions?.onReport && (
+              <IconButton
+                variant="ghost"
+                shape="round"
+                onClick={actions.onReport}
+                title={tr("predictionReport.cardAction")}
+                aria-label={tr("predictionReport.cardAction")}
+                data-slot="decision-report"
+              >
+                ⚑
+              </IconButton>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Row 1 — the bet itself: confidence ring, pick + family, price. */}
-      <div className="flex items-center gap-3">
-        <div className="shrink-0">
+      {/* Row 1 — the bet itself. FIXED tracks for confidence and odds, one
+          flexible track for the pick: the pick's length can only ever change
+          how the middle column wraps or truncates, never where the metrics sit. */}
+      <div
+        className="grid grid-cols-[3.25rem_minmax(0,1fr)_3.75rem] items-center gap-3 sm:grid-cols-[3.25rem_minmax(0,1fr)_4.5rem]"
+        data-slot="decision-row"
+      >
+        <div className="flex w-[3.25rem] justify-center" data-slot="decision-confidence">
           {hasExactConfidence ? (
             <ConfidenceAura value={confidencePct} size="compact" />
           ) : (
-            <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-2.5 py-1.5 text-center">
+            <div className="w-full rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] px-1 py-1.5 text-center">
               <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
                 {tr("match.confidence")}
               </div>
-              <div className="mt-0.5 text-[11px] font-bold text-[var(--fp-accent)]">{confidenceValue}</div>
+              <div className="mt-0.5 truncate text-[11px] font-bold text-[var(--fp-accent)]">{confidenceValue}</div>
             </div>
           )}
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0" data-slot="decision-pick">
           <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-fp-accent/70">
             {tr("match.pick")}
           </div>
-          <div className="flex items-center gap-1.5 break-words font-display text-lg font-bold leading-tight text-[var(--fp-accent)] sm:text-2xl">
+          <div className="flex min-w-0 items-center gap-1.5 font-display text-lg font-bold leading-tight text-[var(--fp-accent)] sm:text-2xl">
             <MarketFamilyIcon familyKey={familyKey} className="shrink-0" />
-            <span className="line-clamp-2">{pickLabel}</span>
+            <span className="line-clamp-2 min-w-0 break-words">{pickLabel}</span>
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
+        <div className="w-full text-right" data-slot="decision-odds">
           <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-text-muted)]">
             {tr("match.odd")}
           </div>
