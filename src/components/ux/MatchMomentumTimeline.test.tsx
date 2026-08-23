@@ -259,7 +259,7 @@ describe("MatchMomentumTimeline — mirrored momentum chart", () => {
   });
 });
 
-describe("dominant period — grouping only, never new dominance logic", () => {
+describe("dominant period — read from the series, never from the current leader", () => {
   const seg = (fromMinute: number, toMinute: number, side: "home" | "away" | "neutral") => ({
     fromMinute,
     toMinute,
@@ -269,23 +269,23 @@ describe("dominant period — grouping only, never new dominance logic", () => {
     awayMomentum: 40
   });
 
-  it("returns the longest unbroken run belonging to the dominant team", () => {
-    const period = findDominantPeriod(
-      [seg(0, 5, "home"), seg(5, 10, "away"), seg(10, 40, "home"), seg(40, 45, "home")],
-      "home"
-    );
+  it("returns the longest sustained run in the series", () => {
+    const period = findDominantPeriod([seg(0, 5, "home"), seg(5, 10, "away"), seg(10, 40, "home"), seg(40, 45, "home")]);
     expect(period).toEqual({ fromMinute: 10, toMinute: 45, side: "home" });
   });
 
-  it("follows the engine dominantTeam rather than picking a winner itself", () => {
-    const segments = [seg(0, 30, "home"), seg(30, 40, "away")];
-    expect(findDominantPeriod(segments, "away")).toEqual({ fromMinute: 30, toMinute: 40, side: "away" });
-    expect(findDominantPeriod(segments, "balanced")).toBeNull();
+  it("picks the run the intervals actually show, whichever side owns it", () => {
+    const period = findDominantPeriod([seg(0, 10, "home"), seg(10, 20, "away"), seg(20, 30, "away"), seg(30, 40, "away")]);
+    expect(period).toEqual({ fromMinute: 10, toMinute: 40, side: "away" });
   });
 
-  it("has no period when the dominant team never held one", () => {
-    expect(findDominantPeriod([seg(0, 30, "neutral")], "home")).toBeNull();
-    expect(findDominantPeriod([], "home")).toBeNull();
+  it("a single interval is a moment, not a period", () => {
+    expect(findDominantPeriod([seg(0, 30, "home"), seg(30, 40, "away")])).toBeNull();
+  });
+
+  it("has no period without a run at all", () => {
+    expect(findDominantPeriod([seg(0, 30, "neutral")])).toBeNull();
+    expect(findDominantPeriod([])).toBeNull();
   });
 
   it("annotates the dominant period on the chart when one exists", () => {

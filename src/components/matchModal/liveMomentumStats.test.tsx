@@ -76,7 +76,10 @@ describe("A · momentum rendering — one reading is a point, not a 0'→now sla
     expect(only.style.flexGrow).toBe("1");
     expect(screen.getByTestId("momentum-unobserved").style.flexGrow).toBe("63");
     expect(screen.queryByTestId("momentum-dominant-bracket")).toBeNull();
-    expect(screen.getByTestId("momentum-collecting").textContent).toBe(R.match.momentumCollecting);
+    // Opened at 63': the specific statement is "partial history from 63'", not the generic
+    // "still collecting" — both are true, the more informative one wins.
+    expect(screen.getByTestId("momentum-partial").textContent).toContain("63");
+    expect(screen.queryByTestId("momentum-collecting")).toBeNull();
   });
 
   it("draws one bar per observed interval from the row history, home above and away below, in order", () => {
