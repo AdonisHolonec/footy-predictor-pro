@@ -403,6 +403,36 @@ export function settleCardMarkets({ status, score, picks, marketTotals = {} }) {
   return out;
 }
 
+/**
+ * The one place the observed-totals bag is assembled (C2).
+ *
+ * Every grader reads the same six keys from the same bag, so a total can no longer be
+ * carried by one path and dropped by another — which is exactly what happened to
+ * cardsTotal: settlement (scan 3) passed it, the read-path re-settle in
+ * resolveCardMarketValidations did not, and a Cards pick graded by the cron was re-read
+ * as "pending" by every aggregate. `override` wins per key, `source` is the persisted
+ * marketResults (columns rehydrated into that shape — raw_payload is never read here).
+ *
+ * NULL STAYS NULL. `??` only substitutes for null/undefined; a real 0 is a real total.
+ */
+export function canonicalMarketTotals(source, override) {
+  const src = source && typeof source === "object" ? source : {};
+  const ov = override && typeof override === "object" ? override : {};
+  return {
+    cornersTotal: ov.cornersTotal ?? src.cornersTotal ?? null,
+    shotsOnTargetTotal: ov.shotsOnTargetTotal ?? src.shotsOnTargetTotal ?? null,
+    // Combined match shots — settles a Recommended from the Shots family. Distinct from
+    // shotsOnTargetTotal: the two markets are graded against their own totals.
+    shotsTotal: ov.shotsTotal ?? src.shotsTotal ?? null,
+    // Observed card totals. cardsTotal (raw yellow+red, the unit the Poisson line is built
+    // in) is GRADED AGAINST by resolveRecommendedValidation. cardsPoints stays
+    // recorded-only: it feeds rolling/backtest, and no market settles against it.
+    cardsTotal: ov.cardsTotal ?? src.cardsTotal ?? null,
+    cardsPoints: ov.cardsPoints ?? src.cardsPoints ?? null,
+    firstHalfGoals: ov.firstHalfGoals ?? src.firstHalfGoals ?? null
+  };
+}
+
 /** Attach picks + validations onto a prediction payload (mutates copy). */
 export function attachCardMarketsToPayload(prediction, { status, score, marketTotals } = {}) {
   const base = prediction && typeof prediction === "object" ? { ...prediction } : {};
@@ -414,21 +444,7 @@ export function attachCardMarketsToPayload(prediction, { status, score, marketTo
     home: base.score?.home ?? null,
     away: base.score?.away ?? null
   };
-  const totals = {
-    cornersTotal: marketTotals?.cornersTotal ?? base.marketResults?.cornersTotal ?? null,
-    shotsOnTargetTotal:
-      marketTotals?.shotsOnTargetTotal ?? base.marketResults?.shotsOnTargetTotal ?? null,
-    // Combined match shots — settles a Recommended from the Shots family. Distinct from
-    // shotsOnTargetTotal: the two markets are graded against their own totals.
-    shotsTotal: marketTotals?.shotsTotal ?? base.marketResults?.shotsTotal ?? null,
-    // Observed card totals. cardsTotal is now GRADED AGAINST by
-    // resolveRecommendedValidation (raw yellow+red, the unit the Poisson line is
-    // built in). cardsPoints stays recorded-only: it feeds the rolling averages and
-    // the backtest, and no market settles against the weighted convention.
-    cardsTotal: marketTotals?.cardsTotal ?? base.marketResults?.cardsTotal ?? null,
-    cardsPoints: marketTotals?.cardsPoints ?? base.marketResults?.cardsPoints ?? null,
-    firstHalfGoals: marketTotals?.firstHalfGoals ?? base.marketResults?.firstHalfGoals ?? null
-  };
+  const totals = canonicalMarketTotals(base.marketResults, marketTotals);
   const validations = settleCardMarkets({ status: st, score: sc, picks, marketTotals: totals });
   base.cardMarkets = picks;
   base.cardMarketValidations = validations;
@@ -502,12 +518,11 @@ export function resolveCardMarketValidations(rowOrEntry) {
     MARKET_KEYS.some((k) => stored[k] === "win" || stored[k] === "loss" || stored[k] === "pending");
 
   if (hasStored) {
-    // Re-settle markets still pending when the match is final / totals arrive.
+    // Re-settle markets still pending when the match is final / totals arrive. The
+    // totals bag is the canonical one (C2): cardsTotal and shotsTotal are carried, so a
+    // Cards / Total Shots recommended re-read here grades exactly as scan 3 graded it.
     const picks = payload.cardMarkets || deriveCardMarketPicks(payload);
-    const totals = {
-      cornersTotal: payload.marketResults?.cornersTotal ?? null,
-      shotsOnTargetTotal: payload.marketResults?.shotsOnTargetTotal ?? null
-    };
+    const totals = canonicalMarketTotals(payload.marketResults);
     const fresh = settleCardMarkets({ status, score, picks, marketTotals: totals });
     const keepOrFresh = (prev, next) =>
       prev === "win" || prev === "loss" ? prev : next ?? prev ?? null;
@@ -526,10 +541,7 @@ export function resolveCardMarketValidations(rowOrEntry) {
       pick: rowOrEntry?.recommended_pick || payload.recommended?.pick || ""
     }
   });
-  const totals = {
-    cornersTotal: payload.marketResults?.cornersTotal ?? null,
-    shotsOnTargetTotal: payload.marketResults?.shotsOnTargetTotal ?? null
-  };
+  const totals = canonicalMarketTotals(payload.marketResults);
   const settled = settleCardMarkets({ status, score, picks, marketTotals: totals });
 
   // If we couldn't derive goals/corners/shots, fall back to single recommended validation.
@@ -569,13 +581,29 @@ export function aggregateCardMarketStats(rows) {
   return { wins, losses, settled, winRate };
 }
 
-/** True when corners/shots still need fixture statistics to grade. */
+/** Families whose Recommended can only be graded from fixture statistics. */
+const STATISTIC_RECOMMENDED_FAMILIES = new Set(["Cards", "Shots", "Shots on Target", "Corners"]);
+
+/**
+ * True when a market on this row still needs fixture statistics to grade: the corners /
+ * shots market rows, or (C2) a Recommended from a statistic-graded family — Cards above
+ * all, whose only grader input is cardsTotal. Cards statistics are therefore requested
+ * only for a row that carries a pending Cards recommendation, never for every fixture.
+ */
 export function needsMarketTotalsForSettlement(validations, picks) {
   if (!picks) return false;
   if (picks.corners && (validations?.corners === "pending" || validations?.corners == null)) {
     return true;
   }
   if (picks.shots && (validations?.shots === "pending" || validations?.shots == null)) {
+    return true;
+  }
+  const family = picks.recommended?.family;
+  if (
+    picks.recommended &&
+    STATISTIC_RECOMMENDED_FAMILIES.has(String(family)) &&
+    (validations?.recommended === "pending" || validations?.recommended == null)
+  ) {
     return true;
   }
   return false;

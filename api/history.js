@@ -13,6 +13,7 @@ import {
   attachCardMarketsToPayload,
   deriveCardMarketPicks,
   needsMarketTotalsForSettlement,
+  canonicalMarketTotals,
   resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
@@ -937,9 +938,8 @@ async function handleHistorySync(req, res) {
           cornersTotal: raw.marketResults?.cornersTotal ?? null,
           shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
           shotsTotal: raw.marketResults?.shotsTotal ?? null,
-          // Recorded, not yet graded against: Cards still short-circuits to "pending" in
-          // resolveRecommendedValidation. Capturing the observed total is what makes the
-          // later settlement/backtest work possible — it changes no outcome today.
+          // Graded against since D8: resolveRecommendedValidation settles a Cards pick on
+          // cardsTotal (null stays pending). cardsPoints is carried, never graded.
           cardsTotal: raw.marketResults?.cardsTotal ?? null,
           cardsPoints: raw.marketResults?.cardsPoints ?? null,
           firstHalfGoals: htKnown ? Number(raw.marketResults.firstHalfGoals) : null
@@ -1018,7 +1018,11 @@ async function handleHistorySync(req, res) {
           JSON.stringify(raw.cardMarketValidations || null) !==
             JSON.stringify(enriched.cardMarketValidations || null) ||
           JSON.stringify(raw.cardMarkets || null) !== JSON.stringify(enriched.cardMarkets || null) ||
-          JSON.stringify(raw.marketResults || null) !== JSON.stringify(enriched.marketResults || null);
+          // C2: compare the canonical totals, not the document shape. The rehydrated row
+          // carries only observed totals while the enriched one carries every key (nulls
+          // included), so a byte comparison re-wrote every still-pending row on every run.
+          JSON.stringify(canonicalMarketTotals(raw.marketResults)) !==
+            JSON.stringify(canonicalMarketTotals(enriched.marketResults));
         const validationChanged = String(validation) !== String(row.validation || "");
         if (!cardChanged && !validationChanged) continue;
 

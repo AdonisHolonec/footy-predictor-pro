@@ -437,7 +437,12 @@ const AGGREGATE_ROW_COLUMNS = Object.freeze([
   "card_markets",
   "card_market_validations",
   "corners_total",
-  "shots_on_target_total"
+  "shots_on_target_total",
+  // C2: the aggregate re-settles through resolveCardMarketValidations, which now grades a
+  // Cards / Total Shots recommended from these totals (057 promoted them; scan 3 already
+  // selects them). Without them a cron-graded Cards pick read back as "pending".
+  "shots_total",
+  "cards_total"
 ]);
 
 export const AGGREGATE_STATS_SELECT = AGGREGATE_ROW_COLUMNS.join(", ");
@@ -468,11 +473,19 @@ export function rehydrateAggregateRow(row) {
     an absent marketResults, and yields null for an explicit null here - the same
     value, and null must never become 0 or a pending market would settle as a loss.
   */
-  if (source.corners_total != null || source.shots_on_target_total != null) {
+  if (
+    source.corners_total != null ||
+    source.shots_on_target_total != null ||
+    source.shots_total != null ||
+    source.cards_total != null
+  ) {
     rawPayload.marketResults = {
       cornersTotal: source.corners_total ?? null,
       shotsOnTargetTotal: source.shots_on_target_total ?? null
     };
+    // C2: carried only when observed, so the shape of every pre-C2 row is unchanged.
+    if (source.shots_total != null) rawPayload.marketResults.shotsTotal = source.shots_total;
+    if (source.cards_total != null) rawPayload.marketResults.cardsTotal = source.cards_total;
   }
   if (source.recommended_pick != null) {
     rawPayload.recommended = {
