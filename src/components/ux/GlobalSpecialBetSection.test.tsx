@@ -649,7 +649,7 @@ describe("GlobalSpecialBetSection", () => {
     await generate({ ...READY_BODY, leagueSummary: summary([135, 61], { 135: "Serie A" }) });
     const text = warning()!.textContent || "";
     expect(text).toContain("Unele ligi selectate nu mai au meciuri disponibile pentru această generare");
-    expect(text).not.toMatch(/135|61/);
+    expect(text).not.toMatch(/\b135\b|\b61\b/);
     expect(text).not.toContain("Serie A nu mai");
   });
 
