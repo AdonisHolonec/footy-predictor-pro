@@ -194,7 +194,7 @@ function buildOuQuotePayload(pick, quote, block, sourceKind = null, expectSource
  * @param {{ oddsReq: object, cornersBlock: object|null, shotsOnTargetBlock: object|null,
  *   shotsTotalBlock: object|null, firstHalfProbs: object|null }} params
  */
-export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBlock, shotsTotalBlock, firstHalfProbs }) {
+export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBlock, shotsTotalBlock, firstHalfProbs, cardsBlock = null }) {
   let marketOdds;
   let goals15Quote = null;
   let goals25Quote = null;
@@ -265,9 +265,20 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
       );
       bttsQuote = consensusBttsOdds(oddsReq.data);
       doubleChanceQuote = consensusDoubleChanceOdds(oddsReq.data);
-      const cardsLine = Number(process.env.VALUE_CARDS_LINE || 3.5);
-      cardsQuote = consensusOverUnderOddsAtLine(oddsReq.data, CARDS_MARKET_NAMES, cardsLine);
-      if (cardsQuote) cardsQuote.line = cardsLine;
+      // C3: with a Cards block the quote is resolved like corners — at the model's own
+      // best line, sided, repriced at the book's line by buildOuQuotePayload below. The
+      // sideless VALUE_CARDS_LINE quote remains only for rows without a block.
+      const cardsPick = cardsBlock ? deriveBestOverUnderPick(cardsBlock.total) : null;
+      if (cardsPick) {
+        cardsQuote = consensusOverUnderOddsAtLine(oddsReq.data, CARDS_MARKET_NAMES, cardsPick.line, {
+          maxLineDelta: 1
+        });
+        if (cardsQuote && cardsQuote.line == null) cardsQuote.line = cardsPick.line;
+      } else {
+        const cardsLine = Number(process.env.VALUE_CARDS_LINE || 3.5);
+        cardsQuote = consensusOverUnderOddsAtLine(oddsReq.data, CARDS_MARKET_NAMES, cardsLine);
+        if (cardsQuote) cardsQuote.line = cardsLine;
+      }
 
       // Goals lines are requested exact-only (maxLineDelta defaults to 0), so the book
       // line always equals the model line — these are tradable by construction.
@@ -382,8 +393,12 @@ export function resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBl
               scope: "match"
             }
           : undefined,
-        // Cards are requested exact-only at VALUE_CARDS_LINE, so book line == model line.
-        cards: cardsQuote
+        // Cards (C3): a peer of corners when a block exists — sided pick, book line,
+        // probability and odd resolved together or marked non-tradable. Legacy sideless
+        // shape only for rows without a Cards block.
+        cards: cardsPick
+          ? buildOuQuotePayload(cardsPick, cardsQuote, cardsBlock, null, null, expectedIdentityForKind("generic"))
+          : cardsQuote
           ? {
               pick: "Cards Over/Under",
               line: cardsQuote.line ?? 3.5,

@@ -211,6 +211,13 @@ export default function MatchModal({
       ? tr("detail.ticketPreview", { n: specialBetLegs.length, odd: specialBetCombinedOdd.toFixed(2) })
       : undefined;
   const refereeText = match.referee?.trim() || null;
+  // C3: supporting context only (the Cards λ ignores the referee). Absent = nothing shown.
+  const refereeCards =
+    match.refereeCards &&
+    Number.isFinite(Number(match.refereeCards.avgCards)) &&
+    Number(match.refereeCards.sampleSize) > 0
+      ? match.refereeCards
+      : null;
   const hasConditions = Boolean(refereeText);
   const lockedFamilies: { label: string; tier: "premium" | "ultra" }[] =
     showTierUpgradeLocks && !match.probs.shotsOnTarget && !match.probs.shotsTotal && !hasExactConfidence
@@ -482,7 +489,21 @@ export default function MatchModal({
                     <CollapsiblePanel compact title={tr("detail.conditionsTitle")}>
                       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
                         <dt className="text-[var(--fp-text-muted)]">{tr("card.referee")}</dt>
-                        <dd className="text-[var(--fp-text)]">{refereeText}</dd>
+                        <dd className="text-[var(--fp-text)]">
+                          {refereeText}
+                          {refereeCards && (
+                            <span
+                              className="mt-0.5 block text-xs text-[var(--fp-text-muted)]"
+                              data-testid="referee-cards-context"
+                              title={tr("match.refereeCardsNote")}
+                            >
+                              {tr("match.refereeCardsAvg", {
+                                avg: refereeCards.avgCards.toFixed(1),
+                                n: refereeCards.sampleSize
+                              })}
+                            </span>
+                          )}
+                        </dd>
                       </dl>
                     </CollapsiblePanel>
                   )}

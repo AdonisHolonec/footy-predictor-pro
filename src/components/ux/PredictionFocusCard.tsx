@@ -208,10 +208,16 @@ export default function PredictionFocusCard({
   const shotsTotal = row.probs?.shotsTotal
     ? deriveAlignedOuPick(row.probs.shotsTotal.total, row.marketOdds?.shotsTotal)
     : null;
+  // C3: Cards is a peer of Corners / Shots. Mirrors accessTier.js: probs.cards survives
+  // masking on Ultra only, so the lock follows the same rule as shots.
+  const cards = row.probs?.cards
+    ? deriveAlignedOuPick(row.probs.cards.total, row.marketOdds?.cards)
+    : null;
 
   const cornersLocked = !canSeeCorners && !row.probs?.corners;
   const shotsLocked = !canSeeShots && !row.probs?.shotsOnTarget;
   const shotsTotalLocked = !canSeeShots && !row.probs?.shotsTotal;
+  const cardsLocked = !canSeeShots && !row.probs?.cards;
 
   const confLabel = hasExactConfidence
     ? `${Math.round(conf)}%`
@@ -229,6 +235,7 @@ export default function PredictionFocusCard({
   const shotsTotalOdd = shotsTotal
     ? matchingMarketOdd(row.marketOdds?.shotsTotal, shotsTotal.side, shotsTotal.line)
     : null;
+  const cardsOdd = cards ? matchingMarketOdd(row.marketOdds?.cards, cards.side, cards.line) : null;
   const recOdd = recommendedOdd(row);
   const recommendedLabel = formatRecommendedPick(row.recommended?.pick, row.recommended?.family, t, row.recommended);
 
@@ -295,6 +302,17 @@ export default function PredictionFocusCard({
       confidence: shotsTotal ? `${Math.round(shotsTotal.probability)}%` : "—",
       odd: fmtOdd(shotsTotalOdd, noBook),
       outcome: null
+    },
+    {
+      id: "cards",
+      marketLabel: t("match.featCards"),
+      locked: cardsLocked,
+      lockTier: "ultra",
+      lockFeature: t("match.featCards"),
+      pick: cards ? sidePickLabel(t, cards.side, cards.line) : "—",
+      confidence: cards ? `${Math.round(cards.probability)}%` : "—",
+      odd: fmtOdd(cardsOdd, noBook),
+      outcome: cardsLocked ? null : resolveCardMarketOutcome("cards", row, stored)
     }
   ];
 

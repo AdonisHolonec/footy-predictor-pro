@@ -184,4 +184,30 @@ export async function computeRefereeStatsFromHistory(refereeName, opts = {}) {
   }
 }
 
-export default { computeRefereeStatsFromHistory, aggregateRefereeCards, refereeMinSamples };
+/**
+ * C3 — the referee's discipline figure as SUPPORTING CONTEXT for the response.
+ *
+ * Not a model input: the Cards λ ignores the referee by design (measured effect ≈ noise,
+ * see analysis/deriveCardsLambdaCandidate.js). This is the number a user may read next
+ * to the referee's name, and nothing else. Null unless the sample clears the minimum —
+ * an under-sampled average is not shown as a value.
+ *
+ * @returns {{ avgCards: number, sampleSize: number, unit: "cardsTotal" } | null}
+ */
+export function toRefereeCardsContext(stats) {
+  const cards = stats?.cards;
+  if (!cards || cards.sufficient !== true) return null;
+  // Number(null) === 0: an absent average must not read as "zero cards per match".
+  if (cards.avgCards == null || cards.avgCards === "") return null;
+  const avg = Number(cards.avgCards);
+  const n = Number(cards.sampleSize);
+  if (!Number.isFinite(avg) || avg < 0 || !Number.isFinite(n) || n <= 0) return null;
+  return { avgCards: avg, sampleSize: n, unit: "cardsTotal" };
+}
+
+export default {
+  computeRefereeStatsFromHistory,
+  aggregateRefereeCards,
+  refereeMinSamples,
+  toRefereeCardsContext
+};

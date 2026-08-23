@@ -1,7 +1,7 @@
 import type { CardMarketValidations, PredictionRow, SettlementOutcome } from "../types";
 import { deriveAlignedOuPick, deriveCardGoalsPick } from "./marketPicks";
 
-export type CardMarketId = "recommended" | "goals" | "corners" | "shots";
+export type CardMarketId = "recommended" | "goals" | "corners" | "shots" | "cards";
 export type MarketOutcome = SettlementOutcome | null;
 
 const FINAL = new Set(["FT", "AET", "PEN"]);
@@ -62,6 +62,9 @@ export function deriveCardMarketPick(
   if (marketId === "corners") {
     return row.probs?.corners ? deriveAlignedOuPick(row.probs.corners.total, row.marketOdds?.corners) : null;
   }
+  if (marketId === "cards") {
+    return row.probs?.cards ? deriveAlignedOuPick(row.probs.cards.total, row.marketOdds?.cards) : null;
+  }
   return row.probs?.shotsOnTarget
     ? deriveAlignedOuPick(row.probs.shotsOnTarget.total, row.marketOdds?.shotsOnTarget)
     : null;
@@ -80,8 +83,13 @@ export function officialTotalFor(
     const total = Number(row.score.home) + Number(row.score.away);
     return Number.isFinite(total) ? total : null;
   }
+  // Each family reads its own total — cards is the raw count (yellow + red), never cardsPoints.
   const raw =
-    marketId === "corners" ? row.marketResults?.cornersTotal : row.marketResults?.shotsOnTargetTotal;
+    marketId === "corners"
+      ? row.marketResults?.cornersTotal
+      : marketId === "cards"
+        ? row.marketResults?.cardsTotal
+        : row.marketResults?.shotsOnTargetTotal;
   const total = Number(raw);
   return raw == null || !Number.isFinite(total) ? null : total;
 }
@@ -144,6 +152,7 @@ export function resolveAllCardMarketOutcomes(
     recommended: resolveCardMarketOutcome("recommended", row, stored),
     goals: resolveCardMarketOutcome("goals", row, stored),
     corners: resolveCardMarketOutcome("corners", row, stored),
-    shots: resolveCardMarketOutcome("shots", row, stored)
+    shots: resolveCardMarketOutcome("shots", row, stored),
+    cards: resolveCardMarketOutcome("cards", row, stored)
   };
 }

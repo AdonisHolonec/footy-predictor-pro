@@ -21,15 +21,21 @@ function needsMarketTotals(row: PredictionRow): boolean {
   if (row.insufficientData) return false;
   const hasCorners = Boolean(row.probs?.corners);
   const hasShots = Boolean(row.probs?.shotsOnTarget);
+  const hasCards = Boolean(row.probs?.cards);
   const cornersOut = resolveCardMarketOutcome("corners", row);
   const shotsOut = resolveCardMarketOutcome("shots", row);
+  const cardsOut = resolveCardMarketOutcome("cards", row);
   const cornersPending = hasCorners && cornersOut !== "win" && cornersOut !== "loss";
   const shotsPending = hasShots && shotsOut !== "win" && shotsOut !== "loss";
+  // C3: a Cards panel needs cardsTotal exactly like corners needs cornersTotal — same
+  // /fixtures?view=xg response, no extra request; nothing is fetched for rows without it.
+  const cardsPending = hasCards && cardsOut !== "win" && cardsOut !== "loss";
   const htPending = needsHtGoals(row);
-  if (!cornersPending && !shotsPending && !htPending) return false;
+  if (!cornersPending && !shotsPending && !cardsPending && !htPending) return false;
   const missing =
     (cornersPending && row.marketResults?.cornersTotal == null) ||
     (shotsPending && row.marketResults?.shotsOnTargetTotal == null) ||
+    (cardsPending && row.marketResults?.cardsTotal == null) ||
     htPending;
   return missing;
 }

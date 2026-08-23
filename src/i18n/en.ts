@@ -431,6 +431,8 @@ export const en: Dict = {
     shotsTotalTitle: "Total shots",
     shotsTotalSub: "on + off target",
     cardsSub: "Yellow + red cards",
+    refereeCardsAvg: "{avg} cards / match · {n} matches",
+    refereeCardsNote: "Context, not a prediction driver",
     poissonTotal: "Total (Over/Under)",
     mostLikely: "Most likely",
     perTeamOver: "Per team (Over)",

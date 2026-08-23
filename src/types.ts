@@ -432,6 +432,8 @@ export type CardMarketValidations = {
   goals?: SettlementOutcome | null;
   corners?: SettlementOutcome | null;
   shots?: SettlementOutcome | null;
+  /** C3: client-derived from marketResults.cardsTotal; the server does not persist this key yet. */
+  cards?: SettlementOutcome | null;
 };
 
 export type MomentumRawStats = {
@@ -628,13 +630,19 @@ export type PredictionRow = {
     };
     cards?: MarketOddQuote & { over?: number | null; under?: number | null };
   };
-  /** Post-match totals (corners / shots) — used to settle FocusCard markets client-side. */
+  /** Post-match totals (corners / shots / cards) — used to settle FocusCard markets client-side. */
   marketResults?: {
     cornersTotal?: number | null;
     shotsOnTargetTotal?: number | null;
     shotsTotal?: number | null;
+    /** Raw card count (yellow + red) — the unit every Cards line settles against. NULL = not observed, never 0. */
+    cardsTotal?: number | null;
+    /** Weighted convention (red×2 + yellow). Recorded only; no market settles against it. */
+    cardsPoints?: number | null;
     firstHalfGoals?: number | null;
   };
+  /** Referee discipline context (C3) — supporting statistic only, not a model input. Null when under-sampled. */
+  refereeCards?: { avgCards: number; sampleSize: number; unit: "cardsTotal" } | null;
   predictions: {
     oneXtwo: string;
     gg: string;
@@ -870,6 +878,8 @@ export type XGData = {
     cornersTotal?: number | null;
     shotsOnTargetTotal?: number | null;
     shotsTotal?: number | null;
+    cardsTotal?: number | null;
+    cardsPoints?: number | null;
     firstHalfGoals?: number | null;
   };
 };
