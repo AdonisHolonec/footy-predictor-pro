@@ -62,10 +62,14 @@ function payload(id, leagueId, overrides = {}) {
 }
 
 /** Minimal Supabase stand-in: records every call so tests can assert on them. */
-function fakeSupabase({ historyRows = [], rpcResult = null, bets = [], selections = [] } = {}) {
+function fakeSupabase({ historyRows = [], dayRows = [], rpcResult = null, bets = [], selections = [] } = {}) {
   const calls = { rpc: [], from: [], filters: [] };
 
+  // Two reads hit predictions_history: the candidate pool (`.gt kickoff_at`)
+  // and the bet_date day scan (`.gte/.lte kickoff_at`, league summary). The
+  // chain answers with the rows that match the filter it was built with.
   const historyQuery = () => {
+    let source = historyRows;
     const chain = {
       select: () => chain,
       in: (col, val) => {
@@ -76,6 +80,15 @@ function fakeSupabase({ historyRows = [], rpcResult = null, bets = [], selection
         calls.filters.push({ op: "gt", col, val });
         return chain;
       },
+      gte: (col, val) => {
+        calls.filters.push({ op: "gte", col, val });
+        source = dayRows;
+        return chain;
+      },
+      lte: (col, val) => {
+        calls.filters.push({ op: "lte", col, val });
+        return chain;
+      },
       order: (col, opts) => {
         calls.filters.push({ op: "order", col, val: opts });
         return chain;
@@ -84,7 +97,7 @@ function fakeSupabase({ historyRows = [], rpcResult = null, bets = [], selection
         calls.filters.push({ op: "limit", col: null, val: n });
         return chain;
       },
-      then: (resolve) => resolve({ data: historyRows, error: null })
+      then: (resolve) => resolve({ data: source, error: null })
     };
     return chain;
   };
@@ -463,7 +476,7 @@ test("an unbuildable variant writes nothing and says why", async () => {
     supabase
   });
 
-  const { examined, rejected, ...rest } = result;
+  const { examined, rejected, leagueSummary, ...rest } = result;
   assert.deepEqual(rest, {
     ok: true,
     created: false,
@@ -472,6 +485,9 @@ test("an unbuildable variant writes nothing and says why", async () => {
     required: 8,
     availableCandidates: 2
   });
+  // Additive: the unavailable answer also says which leagues fed the pool.
+  assert.deepEqual(leagueSummary.eligibleLeagueIds, [39]);
+  assert.deepEqual(leagueSummary.noEligibleBecauseAlreadyStartedLeagueIds, []);
   // The rejection breakdown is what lets the UI explain WHY the pool is thin.
   assert.equal(examined, 2);
   assert.equal(typeof rejected.probabilityBelowFloor, "number");

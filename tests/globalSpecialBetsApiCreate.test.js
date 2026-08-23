@@ -123,6 +123,8 @@ function fakeSupabase({ historyRows = [] } = {}) {
     select: () => chain,
     in: () => chain,
     gt: () => chain,
+    gte: () => chain,
+    lte: () => chain,
     order: () => chain,
     limit: () => chain,
     then: (resolve) => resolve({ data: historyRows, error: null })

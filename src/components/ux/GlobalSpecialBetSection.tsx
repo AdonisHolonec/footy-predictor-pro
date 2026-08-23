@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import StatusBadge from "../../design-system/StatusBadge";
+import Banner from "../../design-system/Banner";
 import Button from "../../design-system/Button";
 import SectionHeader from "../../design-system/SectionHeader";
 import SegmentedControl from "../../design-system/SegmentedControl";
@@ -96,6 +97,30 @@ export default function GlobalSpecialBetSection({
     () => (summary ? formatDateTime(summary.createdAt, locale) : null),
     [summary, locale]
   );
+
+  /**
+   * Selected leagues that added nothing because every fixture of the bet_date
+   * day had already kicked off (server-proven, see leagueSummary). Named when
+   * every affected league has a name; generic otherwise — never an id.
+   */
+  const exhaustedLeagues = useMemo(() => {
+    if (state.phase !== "ready" || !state.leagueSummary) return null;
+    const { noEligibleBecauseAlreadyStartedLeagueIds: ids, names } = state.leagueSummary;
+    if (!ids.length) return null;
+    const resolved = ids.map((id) => names[String(id)]).filter((n): n is string => Boolean(n));
+    return { count: ids.length, names: resolved.length === ids.length ? resolved : null };
+  }, [state]);
+  const exhaustedLeaguesLabel = useMemo(() => {
+    if (!exhaustedLeagues?.names) return null;
+    // Intl.ListFormat is ES2021; the project's lib is ES2020, so reach it
+    // through a typed probe and fall back to a plain join where it is missing.
+    const ListFormat = (Intl as unknown as { ListFormat?: new (loc: string, o: { style: string; type: string }) => { format(items: string[]): string } }).ListFormat;
+    try {
+      return ListFormat ? new ListFormat(locale, { style: "long", type: "conjunction" }).format(exhaustedLeagues.names) : exhaustedLeagues.names.join(", ");
+    } catch {
+      return exhaustedLeagues.names.join(", ");
+    }
+  }, [exhaustedLeagues, locale]);
 
   /**
    * How the bet reads right now: what is settled, what is on, what is next.
@@ -358,6 +383,21 @@ export default function GlobalSpecialBetSection({
               disclaimer under a dash would explain a number that is not there. */}
           {summary.ticketProbability && (
             <p className="mt-1.5 text-[11px] text-[var(--fp-text-muted)]">{t("gsb.ticketChanceDisclaimer")}</p>
+          )}
+          {/* Why the ticket may look like the previous one: a selected league
+              whose day is over added no match. Secondary to the ticket above,
+              persistent (no toast), never a failure. */}
+          {exhaustedLeagues && (
+            <div className="mt-3" data-testid="gsb-exhausted-leagues">
+              <Banner tone="warning" live="status" className="!px-3 !py-2.5">
+                <p className="text-sm font-semibold text-[var(--fp-text)]" data-slot="exhausted-title">
+                  {exhaustedLeaguesLabel
+                    ? t(exhaustedLeagues.count === 1 ? "gsb.exhaustedLeagueNamed" : "gsb.exhaustedLeaguesNamed", { leagues: exhaustedLeaguesLabel })
+                    : t("gsb.exhaustedLeaguesTitle")}
+                </p>
+                <p className="mt-0.5 text-[length:var(--fp-body)] text-[var(--fp-text-muted)]">{t("gsb.exhaustedLeaguesBody")}</p>
+              </Banner>
+            </div>
           )}
 
           <div className="mt-4 flex items-center justify-between gap-2">

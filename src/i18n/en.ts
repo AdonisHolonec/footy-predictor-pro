@@ -967,6 +967,10 @@ export const en: Dict = {
     productSystemHint: "5 selections · wins with at least 3 correct",
     generate: "Generate",
     regenerate: "Regenerate",
+    exhaustedLeaguesTitle: "Some selected leagues have no matches left for this generation",
+    exhaustedLeagueNamed: "{leagues} has no matches left for this generation",
+    exhaustedLeaguesNamed: "{leagues} have no matches left for this generation",
+    exhaustedLeaguesBody: "Today's matches have already kicked off and are not included. The ticket was built from the remaining leagues.",
     generating: "Building your ticket…",
     // The group now offers two products, not just a selection count: a Combo of
     // 3, 5 or 8 fixtures, and the System ticket. The old wording ("pick how many

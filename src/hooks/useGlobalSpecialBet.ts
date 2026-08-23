@@ -8,7 +8,8 @@ import type {
   GlobalSpecialBet,
   GlobalSpecialBetKind,
   GlobalSpecialBetUnavailable,
-  GlobalSpecialBetVariant
+  GlobalSpecialBetVariant,
+  GlobalSpecialBetLeagueSummary
 } from "../types/globalSpecialBet";
 
 /**
@@ -29,7 +30,7 @@ import type {
 export type GlobalSpecialBetVariantState =
   | { phase: "idle" }
   | { phase: "generating" }
-  | { phase: "ready"; bet: GlobalSpecialBet; created: boolean }
+  | { phase: "ready"; bet: GlobalSpecialBet; created: boolean; leagueSummary?: GlobalSpecialBetLeagueSummary }
   | { phase: "unavailable"; unavailable: GlobalSpecialBetUnavailable }
   | { phase: "error"; error: GlobalSpecialBetErrorView };
 
@@ -117,7 +118,7 @@ export function useGlobalSpecialBet({
       if (!mounted.current) return;
       const next: GlobalSpecialBetVariantState =
         result.available === true
-          ? { phase: "ready", bet: result.bet, created: result.created }
+          ? { phase: "ready", bet: result.bet, created: result.created, ...(result.leagueSummary ? { leagueSummary: result.leagueSummary } : {}) }
           : { phase: "unavailable", unavailable: result.unavailable };
       setByProduct((prev) => ({ ...prev, [key]: next }));
     } catch (error) {

@@ -967,6 +967,10 @@ export const ro: Dict = {
     productSystemHint: "5 selecții · câștigi cu minimum 3 corecte",
     generate: "Generează",
     regenerate: "Regenerează",
+    exhaustedLeaguesTitle: "Unele ligi selectate nu mai au meciuri disponibile pentru această generare",
+    exhaustedLeagueNamed: "{leagues} nu mai are meciuri disponibile pentru această generare",
+    exhaustedLeaguesNamed: "{leagues} nu mai au meciuri disponibile pentru această generare",
+    exhaustedLeaguesBody: "Meciurile de azi au început deja și nu sunt incluse. Biletul a fost generat din ligile rămase.",
     generating: "Îți construim biletul…",
     // Grupul oferă acum două produse, nu doar un număr de selecții: Combo la 3,
     // 5 sau 8 meciuri şi Biletul Sistem. Formularea veche („alege câte selecții
