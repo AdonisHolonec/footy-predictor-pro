@@ -22,8 +22,10 @@ import {
 } from "./globalSpecialBetEngine.js";
 import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
 import { rehydrateSettlementRow } from "./predictionsHistory.js";
+import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
 
 const HISTORY_TABLE = "predictions_history";
+const DAY_MS = 24 * 60 * 60 * 1000;
 const BETS_TABLE = "special_bets";
 const SELECTIONS_TABLE = "special_bet_selections";
 
@@ -187,6 +189,84 @@ export async function loadCandidatePayloads(supabase, leagueIds, now = Date.now(
 }
 
 /**
+ * The UTC instants that safely bracket one Europe/Bucharest calendar day.
+ *
+ * Deliberately a SUPERSET, not the exact boundary: Bucharest runs UTC+2 in
+ * winter and UTC+3 in summer, so its day D begins at 21:00Z or 22:00Z on D-1.
+ * One UTC day of slack either side covers both offsets and every DST
+ * transition. The database only narrows the scan; which day a kickoff belongs
+ * to is decided by `calendarDateKeyEuropeBucharest`, the same helper the rest
+ * of the app uses for `bet_date`.
+ */
+export function betDateScanWindow(betDate) {
+  const base = Date.parse(`${betDate}T00:00:00.000Z`);
+  if (!Number.isFinite(base)) return null;
+  return { from: new Date(base - DAY_MS).toISOString(), to: new Date(base + DAY_MS).toISOString() };
+}
+
+/**
+ * Every fixture (any status) of the selected leagues on the `bet_date`
+ * calendar day — kick-off instants and league names only. Read-only, and the
+ * only place the generation looks at fixtures that have already kicked off:
+ * `loadCandidatePayloads` excludes those in its query, so the engine never
+ * sees them and `rejected.alreadyStarted` cannot say which league lost its day.
+ */
+export async function loadBetDateFixtures(supabase, leagueIds, betDate) {
+  const window = betDateScanWindow(betDate);
+  if (!window || !leagueIds?.length) return [];
+  const { data, error } = await supabase
+    .from(HISTORY_TABLE)
+    .select("fixture_id, league_id, league_name, kickoff_at")
+    .in("league_id", leagueIds)
+    .gte("kickoff_at", window.from)
+    .lte("kickoff_at", window.to);
+  if (error) throw error;
+  return (data || []).filter((row) => calendarDateKeyEuropeBucharest(row?.kickoff_at) === betDate);
+}
+
+/**
+ * Which selected leagues fed the pool, and — for the ones that did not —
+ * whether the calendar day simply ran out. The temporal verdict needs all of:
+ * selected · zero eligible candidates · ≥1 fixture of `bet_date` already
+ * kicked off · zero fixtures of `bet_date` still to come. A league with a later
+ * kick-off today, or with no fixture today at all, or whose upcoming fixtures
+ * fell at another gate, is listed under `noEligibleLeagueIds` only — the UI
+ * must never blame kick-off time without this proof.
+ *
+ * Names come from what is already in hand (pool candidates, the day's rows);
+ * a league with no name resolved is simply absent from `names`.
+ *
+ * @returns {{ selectedLeagueIds: number[], eligibleLeagueIds: number[], noEligibleLeagueIds: number[],
+ *             noEligibleBecauseAlreadyStartedLeagueIds: number[], names: Record<number, string> }}
+ */
+export function summarizeLeagueCoverage({ selectedLeagueIds, pool, dayFixtures, now }) {
+  const selected = [...new Set((selectedLeagueIds || []).map(Number))].filter(Number.isFinite).sort((a, b) => a - b);
+  const eligible = new Set((pool || []).map((c) => Number(c?.leagueId)).filter(Number.isFinite));
+  const started = new Set();
+  const upcoming = new Set();
+  const names = {};
+  for (const c of pool || []) if (c?.leagueName && Number.isFinite(Number(c.leagueId))) names[Number(c.leagueId)] = String(c.leagueName);
+  for (const row of dayFixtures || []) {
+    const id = Number(row?.league_id);
+    const ko = Date.parse(row?.kickoff_at ?? "");
+    if (!Number.isFinite(id) || !Number.isFinite(ko)) continue;
+    (ko <= now ? started : upcoming).add(id);
+    if (row?.league_name && !names[id]) names[id] = String(row.league_name);
+  }
+  const eligibleLeagueIds = selected.filter((id) => eligible.has(id));
+  const noEligibleLeagueIds = selected.filter((id) => !eligible.has(id));
+  const noEligibleBecauseAlreadyStartedLeagueIds = noEligibleLeagueIds.filter((id) => started.has(id) && !upcoming.has(id));
+  const keptNames = {};
+  for (const id of selected) if (names[id]) keptNames[id] = names[id];
+  return { selectedLeagueIds: selected, eligibleLeagueIds, noEligibleLeagueIds, noEligibleBecauseAlreadyStartedLeagueIds, names: keptNames };
+}
+
+async function buildLeagueSummary(supabase, selectedLeagueIds, betDate, pool, now) {
+  const dayFixtures = await loadBetDateFixtures(supabase, selectedLeagueIds, betDate);
+  return summarizeLeagueCoverage({ selectedLeagueIds, pool, dayFixtures, now });
+}
+
+/**
  * Generate (or return) the Global Special Bet for one user/date/variant/scope.
  *
  * Idempotent through the database: create_global_special_bet() owns the
@@ -214,6 +294,8 @@ export async function createGlobalSpecialBet({
 
   const built = buildGlobalSpecialBets({ rows, leagueIds: canonicalLeagues, now }, [Number(variant)]);
   const bet = built.bets[Number(variant)];
+  // Additive: which selected leagues fed the pool and which ran out of day.
+  const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);
 
   // Not enough SAFE selections: say so, write nothing, and say WHY the pool is
   // thin — the rejection counters are what lets the UI explain "doar 6 selecții
@@ -224,7 +306,8 @@ export async function createGlobalSpecialBet({
       created: false,
       ...unavailableResponse(variant, built.pool.length),
       examined: built.examined,
-      rejected: built.rejected
+      rejected: built.rejected,
+      leagueSummary
     };
   }
 
@@ -260,7 +343,8 @@ export async function createGlobalSpecialBet({
         ? Number(data.bet.ticket_probability)
         : null,
     examined: built.examined,
-    rejected: built.rejected
+    rejected: built.rejected,
+    leagueSummary
   };
 }
 
@@ -306,6 +390,7 @@ export async function createGlobalSystemBets({
   const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
   const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
   const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now, systemK });
+  const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);
 
   // Nothing to write: either the requested k is not a shape the product sells,
   // or fewer than five safe candidates survived the gates. Both answers carry
@@ -317,7 +402,8 @@ export async function createGlobalSystemBets({
       available: false,
       unavailable: built.unavailable,
       examined: built.examined,
-      rejected: built.rejected
+      rejected: built.rejected,
+      leagueSummary
     };
   }
 
@@ -381,7 +467,8 @@ export async function createGlobalSystemBets({
         ? Number(data.bet.ticket_probability)
         : null,
     examined: built.examined,
-    rejected: built.rejected
+    rejected: built.rejected,
+    leagueSummary
   };
 }
 
