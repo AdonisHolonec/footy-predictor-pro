@@ -8,6 +8,18 @@ import type {
   PredictionRow
 } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
+import {
+  buildMatchFlowSegments,
+  eventKindsPresent,
+  findDominantPeriod,
+  layoutEventMarkers,
+  mergeHistoryPoints,
+  threatLevel,
+  type DominantPeriod,
+  type EventMarker,
+  type MomentumSegment,
+  type ThreatLevel
+} from "../../utils/matchFlow";
 import Tooltip from "../../design-system/Tooltip";
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 
@@ -111,91 +123,22 @@ export function formatMinute(minute: number, extra?: number | null): string {
  * for `dominantTeam` (diff > 10 → home, < -10 → away, otherwise balanced), so the
  * strip never invents a dominance rule of its own.
  */
-export type MomentumSegment = {
-  /** Minute the interval starts at (previous point's minute, 0 for the first). */
-  fromMinute: number;
-  /** Minute the interval ends at (this point's minute). */
-  toMinute: number;
-  side: "home" | "away" | "neutral";
-  /** 0..1 dominance magnitude — drives opacity within the team colour, never the hue. */
-  magnitude: number;
-  homeMomentum: number;
-  awayMomentum: number;
+/**
+ * The series itself, its geometry ladder and the event-marker layout live in
+ * src/utils/matchFlow.ts — this file only renders them. They are re-exported here
+ * because LiveLayer and the existing tests import them from this module.
+ */
+export {
+  buildMatchFlowSegments,
+  // The series builder's original name, kept so existing importers do not churn.
+  buildMatchFlowSegments as buildTimelineSegments,
+  eventKindsPresent,
+  findDominantPeriod,
+  layoutEventMarkers,
+  mergeHistoryPoints,
+  threatLevel
 };
-
-/** Same threshold as MomentumEngine's dominantTeam — see server-utils/momentum/MomentumEngine.js. */
-const DOMINANCE_THRESHOLD_PP = 10;
-
-/** A reading is usable only when every number that becomes geometry is finite. */
-function isFinitePoint(pt: HistoryPoint | null | undefined): pt is HistoryPoint {
-  return (
-    pt != null && Number.isFinite(pt.minute) && Number.isFinite(pt.homeMomentum) && Number.isFinite(pt.awayMomentum)
-  );
-}
-
-/**
- * Chronological union of two sample lists, one point per minute (the earlier list wins a
- * tie). Invalid points are dropped here so NaN/Infinity never reach the chart.
- */
-export function mergeHistoryPoints(primary: HistoryPoint[] | undefined, secondary: HistoryPoint[]): HistoryPoint[] {
-  const byMinute = new Map<number, HistoryPoint>();
-  for (const pt of [...(primary ?? []), ...secondary]) {
-    if (!isFinitePoint(pt) || byMinute.has(pt.minute)) continue;
-    byMinute.set(pt.minute, pt);
-  }
-  return Array.from(byMinute.values()).sort((a, b) => a.minute - b.minute);
-}
-
-/**
- * Each interval runs from the PREVIOUS reading to this one. The first reading has no
- * predecessor, so it is a point (fromMinute === toMinute): momentum is computed from
- * cumulative stats, and one sample taken at 63' says nothing about how the first hour
- * was distributed — drawing it as a 0'–63' block is what made the chart a single slab.
- */
-export function buildTimelineSegments(history: HistoryPoint[]): MomentumSegment[] {
-  const segments: MomentumSegment[] = [];
-  let from: number | null = null;
-  for (const pt of history) {
-    if (!isFinitePoint(pt)) continue;
-    const diff = pt.homeMomentum - pt.awayMomentum;
-    segments.push({
-      fromMinute: from ?? pt.minute,
-      toMinute: pt.minute,
-      side: diff > DOMINANCE_THRESHOLD_PP ? "home" : diff < -DOMINANCE_THRESHOLD_PP ? "away" : "neutral",
-      magnitude: Math.min(1, Math.abs(diff) / 100),
-      homeMomentum: pt.homeMomentum,
-      awayMomentum: pt.awayMomentum
-    });
-    from = pt.minute;
-  }
-  return segments;
-}
-
-/**
- * Threat level for one interval — PRESENTATION ONLY.
- *
- * The bar's DIRECTION and its `magnitude` both come from buildTimelineSegments above,
- * which classifies with MomentumEngine's own +/-10pp rule. Nothing here re-derives
- * dominance or touches the momentum numbers; this maps an existing magnitude onto one
- * of three heights so the chart is readable without reading digits.
- *
- * The low boundary is not a new number: DOMINANCE_THRESHOLD_PP (10pp) is already the
- * point at which the engine stops calling an interval balanced, so anything at or below
- * it is the shortest bar. The medium/high split at 30pp is the one purely visual choice
- * in this file — three tiers need two cuts, and the engine only supplies one.
- */
-export type ThreatLevel = "low" | "medium" | "high";
-
-/** 30pp of separation — the visual cut between "on top" and "camped in their half". */
-const HIGH_THREAT_PP = 30;
-
-export function threatLevel(segment: Pick<MomentumSegment, "side" | "magnitude">): ThreatLevel {
-  if (segment.side === "neutral") return "low";
-  const pp = segment.magnitude * 100;
-  if (pp <= DOMINANCE_THRESHOLD_PP) return "low";
-  if (pp <= HIGH_THREAT_PP) return "medium";
-  return "high";
-}
+export type { DominantPeriod, EventMarker, MomentumSegment, ThreatLevel };
 
 /** Share of the half-height a bar fills, per tier. Neutral keeps a visible stub so a
  *  balanced passage reads as "measured and quiet", never as "no data". */
@@ -225,35 +168,8 @@ export const BAR_OPACITY = Object.freeze({
   neutral: 0.3
 });
 
-export type DominantPeriod = { fromMinute: number; toMinute: number; side: "home" | "away" };
-
-/**
- * The longest unbroken run of intervals already classified to the CURRENTLY dominant
- * team. This is grouping, not new logic: every `side` was decided by
- * buildTimelineSegments, and `dominantTeam` comes from the engine. Returns null when the
- * match is balanced or no run exists, so the annotation simply does not render.
- */
-export function findDominantPeriod(
-  segments: MomentumSegment[],
-  dominantTeam: Momentum["dominantTeam"]
-): DominantPeriod | null {
-  if (dominantTeam !== "home" && dominantTeam !== "away") return null;
-  let best: DominantPeriod | null = null;
-  let run: DominantPeriod | null = null;
-  for (const seg of segments) {
-    if (seg.side === dominantTeam) {
-      run = run
-        ? { ...run, toMinute: seg.toMinute }
-        : { fromMinute: seg.fromMinute, toMinute: seg.toMinute, side: dominantTeam };
-      const span = run.toMinute - run.fromMinute;
-      if (!best || span > best.toMinute - best.fromMinute) best = run;
-    } else {
-      run = null;
-    }
-  }
-  // A single zero-length point is a blip, not a period.
-  return best && best.toMinute > best.fromMinute ? best : null;
-}
+/** Vertical pitch between stacked event-marker lanes, in px — one marker plus breathing room. */
+const MARKER_LANE_PX = 18;
 
 const EVENT_FILTERS: Array<{ id: EventFilter; labelKey: string }> = [
   { id: "all", labelKey: "match.filterAll" },
@@ -613,6 +529,13 @@ export default function MatchMomentumTimeline({
   const posPct = (m: number) => Math.min(100, Math.max(0, (m / maxMinute) * 100));
   const xPct = (m: number) => `${posPct(m)}%`;
   const ticks = [0, 15, 30, 45, 60, 75, 90].filter((m) => m <= maxMinute);
+  /**
+   * 45' and 90' are boundaries, not just minutes, so the axis names them. FT is only a
+   * label when 90' really is the end of the axis: once added time pushes past it, 90' is
+   * an ordinary minute again and calling it full time would be wrong.
+   */
+  const tickLabel = (m: number) =>
+    m === 45 ? t("match.momentumHalfTime") : m === 90 && maxMinute <= 90 ? t("match.momentumFullTime") : `${m}'`;
 
   const dominantLabel =
     momentum.dominantTeam === "home"
@@ -640,15 +563,24 @@ export default function MatchMomentumTimeline({
   const firstObservedMinute = history[0]?.minute ?? 0;
   const lastObservedMinute = history[history.length - 1]?.minute ?? 0;
   const isCollecting = history.length < 2;
+  // Events carry real minutes from kick-off, so they span the whole axis even when the
+  // momentum series only covers the minutes this client was there for.
+  const eventMarkers = layoutEventMarkers(
+    displayEvents.map((ev) => ({ ...ev, type: ev.kind })),
+    maxMinute
+  );
+  const markerLanes = eventMarkers.reduce((n, m) => Math.max(n, m.lane + 1), 0);
+  const eventKinds = eventKindsPresent(eventMarkers);
 
   // Transparent segmented timeline — the approved momentum visual. Each segment is one
   // observed interval, coloured by the team identity colour the whole app already uses
   // for Home/Away (--fp-accent / --fp-danger — the same pair as the legend dots, StatRow
   // and every other Home/Away cue); balanced intervals get a discreet neutral treatment.
-  const timelineSegments = buildTimelineSegments(history);
+  const timelineSegments = buildMatchFlowSegments(history);
   const stripEndMinute = Math.max(maxMinute, 1);
 
-  const dominantPeriod = findDominantPeriod(timelineSegments, momentum.dominantTeam);
+  // Derived from the series, not from whoever leads the cumulative totals right now.
+  const dominantPeriod = findDominantPeriod(timelineSegments);
   const latestSegment = timelineSegments[timelineSegments.length - 1];
   /*
     ACCESSIBILITY (a11y): the chart encodes meaning in colour AND vertical direction, so
@@ -699,20 +631,18 @@ export default function MatchMomentumTimeline({
           </p>
         </div>
 
-        {/* LEGEND — team identity. Swatches are the same colours the bars use, so the
-            key teaches the chart rather than sitting beside it. */}
-        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--fp-momentum-home)]" />
-            <span className="truncate">{homeTeam}</span>
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate">{awayTeam}</span>
-            <span
-              aria-hidden
-              className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-[var(--fp-border)] bg-[var(--fp-momentum-away)]"
-            />
-          </span>
+        {/* LEGEND, UPPER — the away name sits where the away bars do, above the axis.
+            The two halves of the key bracket the chart (see the lower half below the
+            ticks), so the direction reads off the layout instead of needing a caption. */}
+        <div
+          data-testid="momentum-legend-away"
+          className="mb-1 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
+        >
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-[var(--fp-border)] bg-[var(--fp-momentum-away)]"
+          />
+          <span className="truncate">{awayTeam}</span>
         </div>
 
         {/* GRAPH — one bar per observed interval, mirrored about a central baseline.
@@ -760,6 +690,7 @@ export default function MatchMomentumTimeline({
               const isLatest = i === timelineSegments.length - 1;
               const isNeutral = seg.side === "neutral";
               const isHome = seg.side === "home";
+              const isAway = seg.side === "away";
               const inDominant =
                 dominantPeriod != null &&
                 seg.side === dominantPeriod.side &&
@@ -790,14 +721,14 @@ export default function MatchMomentumTimeline({
                   style={{ flexGrow: Math.max(1, seg.toMinute - seg.fromMinute), flexBasis: 0 }}
                 >
                   {/*
-                    A BALANCED interval straddles the axis instead of sitting under it.
-                    Below-the-line is the away identity, so rendering a neutral stub there
-                    read as "Chelsea had that spell" in QA when the engine had actually
-                    called it level. Symmetry is what says "neither".
+                    A BALANCED interval straddles the axis instead of picking a half.
+                    Each half carries a team identity, so a neutral stub drawn on one side
+                    only read as "that side had the spell" in QA when the engine had
+                    called the minute level. Symmetry is what says "neither".
                   */}
-                  {/* Upper half — home grows DOWN toward the baseline. */}
+                  {/* Upper half — the AWAY side, growing up from the baseline. */}
                   <div className="flex h-1/2 flex-col justify-end">
-                    {(isHome || isNeutral) && (
+                    {(isAway || isNeutral) && (
                       <span
                         className="block w-full rounded-t-[2px]"
                         style={{
@@ -808,9 +739,9 @@ export default function MatchMomentumTimeline({
                       />
                     )}
                   </div>
-                  {/* Lower half — away grows DOWN away from the baseline. */}
+                  {/* Lower half — the HOME side, growing down from the baseline. */}
                   <div className="flex h-1/2 flex-col justify-start">
-                    {(!isHome || isNeutral) && (
+                    {(isHome || isNeutral) && (
                       <span
                         className="block w-full rounded-b-[2px]"
                         style={{
@@ -847,6 +778,52 @@ export default function MatchMomentumTimeline({
           />
         </div>
 
+        {/* EVENT MARKERS — facts on the same axis as the bars, at their real minute.
+            They are NEVER an input to the series above: a card is not dominance and a
+            goal is not pressure (see utils/matchFlow.ts). Corners are absent because
+            /fixtures/events has no corner event — only a cumulative total with no minute. */}
+        {eventMarkers.length > 0 && (
+          <div
+            data-testid="momentum-events"
+            className="relative mt-1 w-full"
+            style={{ height: `${markerLanes * MARKER_LANE_PX}px` }}
+          >
+            {eventMarkers.map((m, i) => {
+              const teamName = m.event.team === "home" ? homeTeam : awayTeam;
+              const label = `${teamName} · ${formatMinute(m.event.minute, m.event.extra)} · ${eventLabel(
+                t,
+                m.event.type
+              )}${m.event.player ? ` · ${m.event.player}` : ""}`;
+              // Edge markers are clamped inward for the same reason the end ticks are.
+              const shift = m.pct <= 2 ? "none" : m.pct >= 98 ? "translateX(-100%)" : "translateX(-50%)";
+              return (
+                <span
+                  key={`${m.minute}-${m.event.type}-${m.event.team}-${i}`}
+                  data-testid="momentum-event-marker"
+                  data-team={m.event.team}
+                  data-kind={m.event.type}
+                  data-lane={m.lane}
+                  role="img"
+                  title={label}
+                  aria-label={label}
+                  className="absolute flex h-4 items-center justify-center rounded-[3px] border-b-2 px-0.5 text-[10px] leading-none"
+                  style={{
+                    left: `${m.pct}%`,
+                    top: `${m.lane * MARKER_LANE_PX}px`,
+                    transform: shift,
+                    // The one cue that says WHOSE event this is, in the same two colours
+                    // the bars and the legend use for the two teams.
+                    borderBottomColor:
+                      m.event.team === "home" ? "var(--fp-momentum-home)" : "var(--fp-momentum-away)"
+                  }}
+                >
+                  {eventIcon(m.event.type)}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
         <div className="relative mt-1 h-3 w-full" aria-hidden>
           {ticks.map((m) => {
             /*
@@ -865,10 +842,19 @@ export default function MatchMomentumTimeline({
                 className={`absolute ${align} font-mono text-[10px] text-[var(--fp-text-muted)] sm:text-[10px]`}
                 style={{ left: xPct(m) }}
               >
-                {m}'
+                {tickLabel(m)}
               </span>
             );
           })}
+        </div>
+
+        {/* LEGEND, LOWER — the home name closes the bracket under the axis. */}
+        <div
+          data-testid="momentum-legend-home"
+          className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
+        >
+          <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--fp-momentum-home)]" />
+          <span className="truncate">{homeTeam}</span>
         </div>
 
         {/* THREAT LEGEND — real bars, not words alone, so height becomes readable.
@@ -906,10 +892,33 @@ export default function MatchMomentumTimeline({
           )}
         </div>
 
-        {isCollecting && (
-          <p data-testid="momentum-collecting" className="mt-1.5 text-[10px] text-[var(--fp-text-muted)]">
-            {t("match.momentumCollecting")}
+        {eventKinds.length > 0 && (
+          <div
+            data-testid="momentum-event-legend"
+            className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--fp-text-muted)]"
+          >
+            {eventKinds.map((kind) => (
+              <span key={kind} className="flex items-center gap-1">
+                <span aria-hidden>{eventIcon(kind)}</span>
+                <span>{eventLabel(t, kind)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* One honest sentence about what the series does and does not cover. "Partial"
+            wins over "collecting": it is the more specific statement, and both are true
+            for the reader who opened the match late. */}
+        {firstObservedMinute > 0 ? (
+          <p data-testid="momentum-partial" className="mt-1.5 text-[10px] text-[var(--fp-text-muted)]">
+            {t("match.momentumPartialHistory", { from: firstObservedMinute })}
           </p>
+        ) : (
+          isCollecting && (
+            <p data-testid="momentum-collecting" className="mt-1.5 text-[10px] text-[var(--fp-text-muted)]">
+              {t("match.momentumCollecting")}
+            </p>
+          )
         )}
 
         <p

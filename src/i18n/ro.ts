@@ -356,7 +356,11 @@ export const ro: Dict = {
     momentumCards: "Cartonașe",
     momentumYellowCards: "Galbene",
     momentumRedCards: "Roșii",
+    momentumHalfTime: "Pauză",
+    momentumFullTime: "Final",
     momentumCollecting: "Seria se construiește din citirile live — o bară nouă la fiecare minut observat.",
+    momentumPartialHistory:
+      "Istoric parțial — seria începe la {from}'; minutele anterioare nu au fost observate. Evenimentele sunt complete.",
     momentumHowToRead: "Direcţia barei arată cine domină; înălţimea arată cât de periculoasă e presiunea.",
     momentumThreatLow: "Redus",
     momentumThreatMedium: "Mediu",

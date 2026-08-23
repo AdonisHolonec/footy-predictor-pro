@@ -43,14 +43,24 @@ export const MAX_MOMENTUM_HISTORY_POINTS = 160;
 export function appendMomentumHistory(
   previous: MomentumHistoryPoint[] | undefined,
   minute: number | null | undefined,
-  momentum: Pick<Momentum, "homeMomentum" | "awayMomentum">
+  momentum: Pick<Momentum, "homeMomentum" | "awayMomentum" | "raw">
 ): MomentumHistoryPoint[] {
   const base = Array.isArray(previous) ? previous : [];
   if (minute == null || !Number.isFinite(minute)) return base;
   if (!Number.isFinite(momentum.homeMomentum) || !Number.isFinite(momentum.awayMomentum)) return base;
   const last = base[base.length - 1];
   if (last && last.minute === minute) return base;
-  const next = [...base, { minute, homeMomentum: momentum.homeMomentum, awayMomentum: momentum.awayMomentum }];
+  // The raw snapshot rides along: consecutive snapshots differ by exactly the action of
+  // the interval between them, which is the only per-interval signal upstream affords.
+  const next = [
+    ...base,
+    {
+      minute,
+      homeMomentum: momentum.homeMomentum,
+      awayMomentum: momentum.awayMomentum,
+      ...(momentum.raw ? { raw: momentum.raw } : {})
+    }
+  ];
   return next.length > MAX_MOMENTUM_HISTORY_POINTS ? next.slice(next.length - MAX_MOMENTUM_HISTORY_POINTS) : next;
 }
 

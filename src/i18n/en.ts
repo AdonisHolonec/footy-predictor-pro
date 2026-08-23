@@ -356,7 +356,11 @@ export const en: Dict = {
     momentumCards: "Cards",
     momentumYellowCards: "Yellow",
     momentumRedCards: "Red",
+    momentumHalfTime: "HT",
+    momentumFullTime: "FT",
     momentumCollecting: "The series builds from live readings — one new bar per observed minute.",
+    momentumPartialHistory:
+      "Partial history — the series starts at {from}'; earlier minutes were not observed. Events are complete.",
     momentumHowToRead: "Bar direction shows who is on top; bar height shows how dangerous the spell is.",
     momentumThreatLow: "Low",
     momentumThreatMedium: "Medium",

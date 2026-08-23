@@ -445,8 +445,18 @@ export type MomentumRawStats = {
   redCards: number | null;
 };
 
-/** One observed momentum reading at a match minute. */
-export type MomentumHistoryPoint = { minute: number; homeMomentum: number; awayMomentum: number };
+/**
+ * One observed momentum reading at a match minute. `raw` is the cumulative statistics
+ * snapshot the reading came from: the difference between two consecutive snapshots is
+ * what actually happened in between, which is how the match-flow series gets a per-interval
+ * signal out of counters that are otherwise only ever totals (see utils/matchFlow.ts).
+ */
+export type MomentumHistoryPoint = {
+  minute: number;
+  homeMomentum: number;
+  awayMomentum: number;
+  raw?: { home: MomentumRawStats; away: MomentumRawStats };
+};
 
 export type MatchLiveEventType =
   | "goal"

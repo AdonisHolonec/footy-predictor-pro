@@ -76,10 +76,13 @@ describe("A · momentum rendering — one reading is a point, not a 0'→now sla
     expect(only.style.flexGrow).toBe("1");
     expect(screen.getByTestId("momentum-unobserved").style.flexGrow).toBe("63");
     expect(screen.queryByTestId("momentum-dominant-bracket")).toBeNull();
-    expect(screen.getByTestId("momentum-collecting").textContent).toBe(R.match.momentumCollecting);
+    // Opened at 63': the specific statement is "partial history from 63'", not the generic
+    // "still collecting" — both are true, the more informative one wins.
+    expect(screen.getByTestId("momentum-partial").textContent).toContain("63");
+    expect(screen.queryByTestId("momentum-collecting")).toBeNull();
   });
 
-  it("draws one bar per observed interval from the row history, home above and away below, in order", () => {
+  it("draws one bar per observed interval from the row history, away above and home below, in order", () => {
     renderLive(
       frosinoneJuventus({
         history: [
@@ -95,13 +98,13 @@ describe("A · momentum rendering — one reading is a point, not a 0'→now sla
     expect(all.map((b) => b.dataset.side)).toEqual(["home", "neutral", "away", "away"]);
     expect(all.map((b) => b.style.flexGrow)).toEqual(["1", "4", "5", "6"]);
     expect(screen.queryByTestId("momentum-collecting")).toBeNull();
-    // Both series coexist: a home bar only above the axis, an away bar only below it.
+    // Both series coexist: an away bar only above the axis, a home bar only below it.
     const home = all[0].children;
-    expect(home[0].querySelector("span")).not.toBeNull();
-    expect(home[1].querySelector("span")).toBeNull();
+    expect(home[0].querySelector("span")).toBeNull();
+    expect(home[1].querySelector("span")).not.toBeNull();
     const away = all[3].children;
-    expect(away[0].querySelector("span")).toBeNull();
-    expect(away[1].querySelector("span")).not.toBeNull();
+    expect(away[0].querySelector("span")).not.toBeNull();
+    expect(away[1].querySelector("span")).toBeNull();
   });
 
   it("marks the live minute on the chart", () => {
