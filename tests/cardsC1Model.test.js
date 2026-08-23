@@ -13,7 +13,8 @@ import { deriveCardsLambda, buildCardsPricingBlock } from "../server-utils/pipel
 import {
   deriveCardsLambdaCandidate,
   CARDS_LAMBDA_MIN,
-  CARDS_LAMBDA_MAX
+  CARDS_LAMBDA_MAX,
+  CARDS_TEAM_SIGNAL_ALPHA
 } from "../server-utils/analysis/deriveCardsLambdaCandidate.js";
 import {
   aggregateRollingForTeam,
@@ -232,7 +233,7 @@ test("9. λ outside [CARDS_LAMBDA_MIN, CARDS_LAMBDA_MAX] is rejected, not clampe
   assert.equal(CARDS_LAMBDA_MIN, 1.0);
   assert.equal(CARDS_LAMBDA_MAX, 12.0);
   const wild = rolling(30, 30, 10);
-  const out = deriveCardsLambda({ leagueParams, rollingHome: wild, rollingAway: wild });
+  const out = deriveCardsLambda({ leagueParams, rollingHome: wild, rollingAway: wild, teamSignalAlpha: 1 });
   assert.equal(out.lambda, null);
   assert.equal(out.lambdaHome, null);
   assert.equal(out.reason, "lambda_out_of_plausible_range");
@@ -299,7 +300,45 @@ test("1c. Stage08 prices from a two-sided block; a rejected λ yields no block",
   assert.ok(Math.abs(block.lambdaHome + block.lambdaAway - ok.lambda) < 0.002);
   assert.equal(block.correlation, 0);
   assert.equal(block.unit, "cardsTotal");
-  const rejected = deriveCardsLambda({ leagueParams, rollingHome: rolling(30, 30), rollingAway: rolling(30, 30) });
+  const rejected = deriveCardsLambda({ leagueParams, rollingHome: rolling(30, 30), rollingAway: rolling(30, 30), teamSignalAlpha: 1 });
   assert.equal(buildCardsPricingBlock(rejected), null);
   assert.equal(buildCardsPricingBlock(null), null);
+});
+
+// ---------------------------------------------------------------- C1b. damped team term
+
+test("C1b-1. production alpha is 0: λ equals the baseline split, whatever the rolling says", () => {
+  assert.equal(CARDS_TEAM_SIGNAL_ALPHA, 0);
+  const calm = deriveCardsLambda({ leagueParams, rollingHome: rolling(1.2, 1.2), rollingAway: rolling(1.2, 1.2) });
+  const rough = deriveCardsLambda({ leagueParams, rollingHome: rolling(3.4, 3.4), rollingAway: rolling(3.4, 3.4) });
+  const none = deriveCardsLambda({ leagueParams });
+  assert.equal(calm.lambda, rough.lambda);
+  assert.equal(calm.lambda, none.lambda);
+  assert.equal(calm.lambdaHome, none.lambdaHome);
+  assert.equal(calm.teamSignalAlpha, 0);
+  const expected = 2.4 * Math.sqrt(1.06) + 2.4 * Math.sqrt(0.96);
+  assert.ok(Math.abs(calm.lambda - expected) < 0.002, "baseline split by home/away advantage");
+});
+
+test("C1b-2. rolling infrastructure is retained: team λ and samples are still reported at alpha 0", () => {
+  const out = deriveCardsLambda({ leagueParams, rollingHome: rolling(3.0, 3.0), rollingAway: rolling(3.0, 3.0) });
+  assert.ok(out.teamLambdaHome > out.lambdaHome, "team term computed and visible");
+  assert.equal(out.sampleQuality.homeSample, 10);
+  assert.equal(out.usedFallback, false, "data-quality report unchanged by damping");
+});
+
+test("C1b-3. alpha is monotone: 0 = baseline, 1 = full team term, in between is in between", () => {
+  const at = (a) => deriveCardsLambda({ leagueParams, rollingHome: rolling(3.0, 3.0), rollingAway: rolling(3.0, 3.0), teamSignalAlpha: a }).lambda;
+  const l0 = at(0), l25 = at(0.25), l1 = at(1);
+  const cand1 = deriveCardsLambdaCandidate({ baseline: { mean: 4.8, sampleSize: 0, sufficient: true }, rollingHome: rolling(3.0, 3.0), rollingAway: rolling(3.0, 3.0), homeAdv: 1.06, awayAdv: 0.96, teamSignalAlpha: 1 });
+  assert.ok(l0 < l25 && l25 < l1);
+  assert.equal(l1, cand1.lambda, "alpha 1 reproduces the C1 team term exactly");
+  assert.equal(at(undefined), l0, "default is the production constant");
+});
+
+test("C1b-4. confidence reflects the damping: baseline-rooted at alpha 0", () => {
+  const out = deriveCardsLambda({ leagueParams, rollingHome: rolling(3.0, 3.0), rollingAway: rolling(3.0, 3.0) });
+  assert.equal(out.confidence, 0.35);
+  const full = deriveCardsLambda({ leagueParams, rollingHome: rolling(3.0, 3.0), rollingAway: rolling(3.0, 3.0), teamSignalAlpha: 1 });
+  assert.equal(full.confidence, 0.8);
 });

@@ -6,7 +6,7 @@
 import { getWithCache } from "../fetcher.js";
 import { extractFixtureMarketStats, aggregateRollingForTeam, MIN_MARKET_SAMPLES } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
-import { deriveCardsLambdaCandidate } from "../analysis/deriveCardsLambdaCandidate.js";
+import { deriveCardsLambdaCandidate, CARDS_TEAM_SIGNAL_ALPHA } from "../analysis/deriveCardsLambdaCandidate.js";
 import { deriveCardsBaselineFromRolling, resolveCardsBaseline } from "../analysis/empiricalCardsBaseline.js";
 import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, poissonOverLineCorrelated, clampLambda } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
@@ -337,10 +337,12 @@ function leaguePriorLambdas(leagueParams = {}) {
  * The previous-season branch of the resolver is not fed: that would cost a second query
  * per fixture, which the hot path does not pay.
  *
- * TEAM SIDES: `deriveMarketLambdas(marketKey: "cards")` — Dixon-Coles multiplicative form
- * shared with corners/shots, gated per side by `MIN_MARKET_SAMPLES` real cards samples.
- * Below the gate on both sides the candidate reports `usedFallback` with the baseline split
- * in two — it does not manufacture a team signal.
+ * TEAM SIDES (C1b): `deriveMarketLambdas(marketKey: "cards")` — Dixon-Coles multiplicative
+ * form shared with corners/shots, gated per side by `MIN_MARKET_SAMPLES` real cards samples
+ * — is computed and reported (`teamLambdaHome/Away`, `sampleQuality`) but enters λ only to
+ * the power `CARDS_TEAM_SIGNAL_ALPHA`, which is 0 in production after the C1 backtest showed
+ * the full term degrading Brier/ECE. λ = baseline split by home/away advantage. The rolling
+ * infrastructure is retained and measured so a later season can re-earn a non-zero α.
  *
  * BOUNDS: the candidate REJECTS a λ outside [CARDS_LAMBDA_MIN, CARDS_LAMBDA_MAX] (1–12
  * cards) instead of clamping it — `lambda` is null and `reason` says why. The old
@@ -366,6 +368,9 @@ function deriveCardsLambda({
   marketRollingMap = null,
   leagueId = null,
   season = null,
+  // C1b: damping of the team term. Production uses the module constant (0); analysis and
+  // tests may pass an explicit value to exercise the rolling contribution.
+  teamSignalAlpha = CARDS_TEAM_SIGNAL_ALPHA,
   // Accepted, ignored — documented above. Named so a test can assert the independence.
   modularScores: _modularScores = null,
   cornersBlock: _cornersBlock = null,
@@ -401,7 +406,8 @@ function deriveCardsLambda({
     rollingHome,
     rollingAway,
     homeAdv,
-    awayAdv
+    awayAdv,
+    teamSignalAlpha
   });
 
   const rejected = candidate.lambda == null || candidate.outOfBounds;
@@ -416,6 +422,9 @@ function deriveCardsLambda({
     fallbackReason: candidate.sampleQuality?.fallbackReason ?? null,
     reason: candidate.reason ?? null,
     source: candidate.source,
+    teamSignalAlpha: candidate.components?.teamSignalAlpha ?? teamSignalAlpha,
+    teamLambdaHome: candidate.components?.teamLambdaHome ?? null,
+    teamLambdaAway: candidate.components?.teamLambdaAway ?? null,
     unit: "cardsTotal"
   };
 }

@@ -208,7 +208,8 @@ test("lambda candidat: echipe neutre → lambda in jurul baseline-ului", () => {
   const r = deriveCardsLambdaCandidate({
     baseline: okBaseline,
     rollingHome: rolling(2.15, 2.15),
-    rollingAway: rolling(2.15, 2.15)
+    rollingAway: rolling(2.15, 2.15),
+    teamSignalAlpha: 1
   });
   assert.ok(Math.abs(r.lambda - 4.3) < 0.15, `lambda=${r.lambda}`);
   assert.equal(r.outOfBounds, false);
@@ -220,12 +221,14 @@ test("lambda candidat: opponent adjustment misca lambda in directia corecta", ()
   const calm = deriveCardsLambdaCandidate({
     baseline: okBaseline,
     rollingHome: rolling(1.8, 1.8),
-    rollingAway: rolling(1.8, 1.8)
+    rollingAway: rolling(1.8, 1.8),
+    teamSignalAlpha: 1
   });
   const rough = deriveCardsLambdaCandidate({
     baseline: okBaseline,
     rollingHome: rolling(2.6, 2.6),
-    rollingAway: rolling(2.6, 2.6)
+    rollingAway: rolling(2.6, 2.6),
+    teamSignalAlpha: 1
   });
   assert.ok(calm.lambda < 4.3, `calm=${calm.lambda}`);
   assert.ok(rough.lambda > 4.3, `rough=${rough.lambda}`);

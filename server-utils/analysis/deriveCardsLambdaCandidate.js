@@ -50,12 +50,28 @@ export const CARDS_LAMBDA_MIN = 1.0;
 export const CARDS_LAMBDA_MAX = 12.0;
 
 /**
+ * C1b — strength of the team-side signal, 0..1.
+ *
+ * λ_side = baseline_side × (λ_team_side / baseline_side) ^ α
+ *
+ * α = 1 is the full Dixon-Coles team term (C1). α = 0 is the league/season baseline split
+ * by home/away advantage and nothing else. The C1 walk-forward backtest (1109 fixtures,
+ * PL / La Liga / Serie A 2025) measured the full team term at Brier 0.2096 / ECE 0.040
+ * against 0.1996 / 0.007 for the baseline alone, and a damped term (α 0.15–0.25) within
+ * 0.0005 Brier of the baseline — noise, on one season. The conservative production value
+ * is therefore 0: the rolling infrastructure stays wired and measured, and the team term
+ * is switched back on only when more than one season shows it earns its place.
+ */
+export const CARDS_TEAM_SIGNAL_ALPHA = 0;
+
+/**
  * @param {object} input
  * @param {{mean: number|null, sampleSize: number, sufficient: boolean}} input.baseline
  * @param {object|null} [input.rollingHome] team_market_rolling-shaped row (cards_* fields)
  * @param {object|null} [input.rollingAway]
  * @param {number} [input.homeAdv]
  * @param {number} [input.awayAdv]
+ * @param {number} [input.teamSignalAlpha] 0..1 damping of the team term; default CARDS_TEAM_SIGNAL_ALPHA.
  * @param {object|null} [input.refereeStats] ACCEPTED AND IGNORED — see module note.
  * @returns {{lambda, components, confidence, sampleQuality, source, outOfBounds, reason}}
  */
@@ -65,8 +81,10 @@ export function deriveCardsLambdaCandidate({
   rollingAway = null,
   homeAdv = 1.06,
   awayAdv = 0.96,
+  teamSignalAlpha = CARDS_TEAM_SIGNAL_ALPHA,
   refereeStats: _refereeStats = null
 } = {}) {
+  const alpha = Math.max(0, Math.min(1, num(teamSignalAlpha) ?? CARDS_TEAM_SIGNAL_ALPHA));
   const baseMean = num(baseline?.mean);
 
   const fail = (reason) => ({
@@ -102,9 +120,18 @@ export function deriveCardsLambdaCandidate({
     awayAdv
   });
 
-  const lambdaHome = num(split?.lambdaHome);
-  const lambdaAway = num(split?.lambdaAway);
-  if (lambdaHome == null || lambdaAway == null) return fail("lambda_not_finite");
+  const teamHome = num(split?.lambdaHome);
+  const teamAway = num(split?.lambdaAway);
+  if (teamHome == null || teamAway == null) return fail("lambda_not_finite");
+
+  // Baseline split — the same halves deriveMarketLambdas uses for its own fallback, so
+  // α = 0 and the insufficient-data path are literally the same number.
+  const baseSide = Math.max(0.5, baseMean / 2);
+  const baseHome = baseSide * Math.pow(homeAdv, 0.5);
+  const baseAway = baseSide * Math.pow(awayAdv, 0.5);
+  // Damped team term: baseline × (team / baseline)^α. α = 0 → baseline, α = 1 → full C1.
+  const lambdaHome = alpha === 0 ? baseHome : baseHome * Math.pow(teamHome / baseHome, alpha);
+  const lambdaAway = alpha === 0 ? baseAway : baseAway * Math.pow(teamAway / baseAway, alpha);
 
   const lambda = round3(lambdaHome + lambdaAway);
   const outOfBounds = lambda < CARDS_LAMBDA_MIN || lambda > CARDS_LAMBDA_MAX;
@@ -116,9 +143,11 @@ export function deriveCardsLambdaCandidate({
 
   // Confidence describes how much of the estimate rests on observation rather than on the
   // league prior. It is a data-quality report, not a probability.
-  let confidence = 0.35; // baseline alone — neither team has a usable card sample
-  if (bothObserved && !split?.usedFallback) confidence = 0.8;
-  else if (eitherObserved) confidence = 0.55;
+  // With the team term damped, only the α-share of the estimate rests on team observation.
+  let observed = 0.35; // baseline alone — neither team has a usable card sample
+  if (bothObserved && !split?.usedFallback) observed = 0.8;
+  else if (eitherObserved) observed = 0.55;
+  let confidence = round3(0.35 + alpha * (observed - 0.35));
   if (outOfBounds) confidence = 0;
 
   return {
@@ -127,6 +156,9 @@ export function deriveCardsLambdaCandidate({
       baseline: round3(baseMean),
       lambdaHome: round3(lambdaHome),
       lambdaAway: round3(lambdaAway),
+      teamLambdaHome: round3(teamHome),
+      teamLambdaAway: round3(teamAway),
+      teamSignalAlpha: alpha,
       homeAdv,
       awayAdv
     },
@@ -146,4 +178,4 @@ export function deriveCardsLambdaCandidate({
   };
 }
 
-export default { deriveCardsLambdaCandidate, CARDS_LAMBDA_MIN, CARDS_LAMBDA_MAX };
+export default { deriveCardsLambdaCandidate, CARDS_LAMBDA_MIN, CARDS_LAMBDA_MAX, CARDS_TEAM_SIGNAL_ALPHA };
