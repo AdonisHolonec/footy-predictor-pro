@@ -599,4 +599,78 @@ describe("GlobalSpecialBetSection", () => {
       expect(screen.getByRole("button", { name: "5 selecții" }).getAttribute("aria-pressed")).toBe("false");
     });
   });
+
+  // ── Generation feedback: a selected league whose day is over added nothing ──
+  const summary = (affected: number[], names: Record<string, string>) => ({
+    selectedLeagueIds: [39, 135, 61],
+    eligibleLeagueIds: [39],
+    noEligibleLeagueIds: [135, 61],
+    noEligibleBecauseAlreadyStartedLeagueIds: affected,
+    names
+  });
+  const generate = async (body: unknown) => {
+    fetchWithAuth.mockResolvedValue(jsonResponse(201, body));
+    renderSection();
+    await act(async () => {
+      screen.getByRole("button", { name: "Generează" }).click();
+    });
+  };
+  const warning = () => screen.queryByTestId("gsb-exhausted-leagues");
+
+  it("feedback 1: no affected league → no warning (and no warning when the server sends no summary at all)", async () => {
+    await generate({ ...READY_BODY, leagueSummary: summary([], { 135: "Serie A" }) });
+    expect(warning()).toBeNull();
+    cleanup();
+    await generate(READY_BODY);
+    expect(warning()).toBeNull();
+  });
+
+  it("feedback 2/3: one affected league, named — shown beneath the still-successful ticket, as a status, not an alert", async () => {
+    await generate({ ...READY_BODY, leagueSummary: summary([135], { 135: "Serie A", 39: "Premier League" }) });
+    const w = warning()!;
+    expect(w).toBeTruthy();
+    expect(w.textContent).toContain("Serie A nu mai are meciuri disponibile pentru această generare");
+    expect(w.textContent).toContain("Meciurile de azi au început deja");
+    expect(w.querySelector("[role='status']")).toBeTruthy();
+    expect(w.querySelector("[role='alert']")).toBeNull();
+    // The ticket is still the primary content and precedes the warning.
+    const builder = screen.getByTestId("ticket-builder");
+    expect(builder.textContent).toMatch(/4[.,]81/);
+    expect(builder.compareDocumentPosition(w) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Regenerează" })).toBeTruthy();
+  });
+
+  it("feedback 3b: several affected leagues are listed with the locale's conjunction", async () => {
+    await generate({ ...READY_BODY, leagueSummary: summary([135, 61], { 135: "Serie A", 61: "Ligue 1" }) });
+    expect(warning()!.textContent).toMatch(/Serie A și Ligue 1 nu mai au meciuri disponibile/);
+  });
+
+  it("feedback 4: a missing name falls back to the generic sentence — never an id", async () => {
+    await generate({ ...READY_BODY, leagueSummary: summary([135, 61], { 135: "Serie A" }) });
+    const text = warning()!.textContent || "";
+    expect(text).toContain("Unele ligi selectate nu mai au meciuri disponibile pentru această generare");
+    expect(text).not.toMatch(/\b135\b|\b61\b/);
+    expect(text).not.toContain("Serie A nu mai");
+  });
+
+  it("feedback 5: the warning never appears on an unavailable generation", async () => {
+    await generate({ ok: true, created: false, available: false, variant: 3, required: 3, availableCandidates: 0, leagueSummary: summary([135, 61], { 135: "Serie A" }) });
+    expect(warning()).toBeNull();
+    expect(screen.getByTestId("ticket-builder").textContent).toMatch(/indisponibil|Indisponibil|disponibil/i);
+  });
+
+  it("feedback 6: an identical-looking ticket is still rendered as created — nothing is suppressed or deduplicated", async () => {
+    await generate({ ...READY_BODY, created: true, leagueSummary: summary([135], { 135: "Serie A" }) });
+    expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("ticket-builder").textContent).toMatch(/4[.,]81/);
+    expect(warning()).toBeTruthy();
+  });
+
+  it("feedback 7: mobile — the warning is a block inside the card, no fixed/absolute positioning, no nowrap", async () => {
+    await generate({ ...READY_BODY, leagueSummary: summary([135, 61], { 135: "Serie A", 61: "Ligue 1 Uber Eats Championnat de France" }) });
+    const w = warning()!;
+    expect(w.className).not.toMatch(/fixed|absolute/);
+    expect([...w.querySelectorAll("*")].some((el) => /whitespace-nowrap/.test((el as HTMLElement).className))).toBe(false);
+    expect(screen.getByTestId("ticket-builder").contains(w)).toBe(true);
+  });
 });

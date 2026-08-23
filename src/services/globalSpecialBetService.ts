@@ -3,7 +3,8 @@ import type {
   GlobalSpecialBet,
   GlobalSpecialBetGenerateResult,
   GlobalSpecialBetKind,
-  GlobalSpecialBetSelection
+  GlobalSpecialBetSelection,
+  GlobalSpecialBetLeagueSummary
 } from "../types/globalSpecialBet";
 
 /**
@@ -39,7 +40,27 @@ type ApiEnvelope = {
   variant?: number;
   required?: number;
   availableCandidates?: number;
+  leagueSummary?: unknown;
 };
+
+const idList = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : []);
+
+/** Accept only the documented shape; anything else is "no summary", never a guess. */
+function asLeagueSummary(value: unknown): GlobalSpecialBetLeagueSummary | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const names: Record<string, string> = {};
+  if (v.names && typeof v.names === "object") {
+    for (const [id, name] of Object.entries(v.names as Record<string, unknown>)) if (typeof name === "string" && name.trim()) names[id] = name;
+  }
+  return {
+    selectedLeagueIds: idList(v.selectedLeagueIds),
+    eligibleLeagueIds: idList(v.eligibleLeagueIds),
+    noEligibleLeagueIds: idList(v.noEligibleLeagueIds),
+    noEligibleBecauseAlreadyStartedLeagueIds: idList(v.noEligibleBecauseAlreadyStartedLeagueIds),
+    names
+  };
+}
 
 async function readEnvelope(res: Response): Promise<ApiEnvelope> {
   try {
@@ -115,10 +136,12 @@ export async function generateGlobalSpecialBet(params: {
   if (!bet || typeof bet !== "object") {
     throw new GlobalSpecialBetApiError(res.status, null);
   }
+  const leagueSummary = asLeagueSummary(json.leagueSummary);
   return {
     available: true,
     created: Boolean(json.created),
-    bet: { ...bet, selections: asSelections(json.selections) }
+    bet: { ...bet, selections: asSelections(json.selections) },
+    ...(leagueSummary ? { leagueSummary } : {})
   };
 }
 

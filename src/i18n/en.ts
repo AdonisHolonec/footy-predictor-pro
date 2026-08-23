@@ -153,6 +153,7 @@ export const en: Dict = {
     showingSaved: "Showing {n} saved predictions for this date.",
     generated: "{n} predictions were generated.",
     restoredHistory: "Restored {n} predictions from history.",
+    planUpgraded: "Plan upgraded — run Predict again for full markets.",
     restoredNotice: "Restored {n} saved predictions — no new generation used.",
     legacyNotice: "Showing saved picks. Advanced markets may refresh from history.",
     close: "Close",
@@ -331,6 +332,8 @@ export const en: Dict = {
     tabAnalysis: "Analysis",
     tabAdvanced: "Advanced",
     decisionTitle: "Recommendation",
+    detailUnavailableTitle: "Match detail unavailable",
+    detailUnavailableBody: "We couldn't load this match's detail. Your Results list is unchanged.",
     decisionEv: "Value",
     decisionEvHint: "Expected value of this pick at the shown odds. Positive means the price is in your favour.",
     decisionEvPositive: "positive",
@@ -608,13 +611,18 @@ export const en: Dict = {
   },
   list: {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
-    fullTimeShort: "FT"
+    fullTimeShort: "FT",
+    dayToday: "Today",
+    dayTomorrow: "Tomorrow",
+    dayAfterTomorrow: "Day after tomorrow"
   },
   tickets: {
     buildCta: "Build ticket",
     emptyCta: "Build a ticket",
     emptyDesc: "Combine a few of your strongest picks into one ticket and follow how it lands here.",
     legs: "{n} legs",
+    ticketNumber: "Ticket #{id}",
+    oddsShort: "Odds {odds}",
     buildTitle: "Build ticket",
     buildSub: "A multi-leg ticket from your favourite leagues.",
     historyTitle: "Ticket history",
@@ -959,6 +967,10 @@ export const en: Dict = {
     productSystemHint: "5 selections · wins with at least 3 correct",
     generate: "Generate",
     regenerate: "Regenerate",
+    exhaustedLeaguesTitle: "Some selected leagues have no matches left for this generation",
+    exhaustedLeagueNamed: "{leagues} has no matches left for this generation",
+    exhaustedLeaguesNamed: "{leagues} have no matches left for this generation",
+    exhaustedLeaguesBody: "Today's matches have already kicked off and are not included. The ticket was built from the remaining leagues.",
     generating: "Building your ticket…",
     // The group now offers two products, not just a selection count: a Combo of
     // 3, 5 or 8 fixtures, and the System ticket. The old wording ("pick how many

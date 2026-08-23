@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PredictionRow } from "../types";
 import { fetchWithAuth } from "../utils/apiAuth";
+import { isFinalMatchStatus } from "../utils/cardMarketOutcome";
 
 /**
  * One history row, fetched by fixture id.
@@ -89,7 +90,10 @@ export function useHistoryDetail(fixtureId: number | null | undefined): HistoryD
           setLoading(false);
           return;
         }
-        detailCache.set(id, json.item);
+        // Cache policy: only a FINAL row is stable. A pending / in-play row
+        // changes with every sync (and its status is a snapshot, not live
+        // truth), so it is refetched each time the fixture is opened.
+        if (isFinalMatchStatus(json.item.status)) detailCache.set(id, json.item);
         setDetail(json.item);
         setLoading(false);
       } catch (err: unknown) {

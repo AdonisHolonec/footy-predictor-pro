@@ -153,6 +153,7 @@ export const ro: Dict = {
     showingSaved: "Afișez {n} predicții salvate pentru această dată.",
     generated: "Au fost generate {n} predicții.",
     restoredHistory: "Am restaurat {n} predicții din istoric.",
+    planUpgraded: "Plan actualizat — rulează Predict din nou pentru piețele complete.",
     restoredNotice: "Am restaurat {n} predicții salvate — fără generare nouă.",
     legacyNotice: "Afișez picks-urile salvate. Piețele avansate se pot actualiza din istoric.",
     close: "Închide",
@@ -331,6 +332,8 @@ export const ro: Dict = {
     tabAnalysis: "Analiză",
     tabAdvanced: "Avansat",
     decisionTitle: "Recomandare",
+    detailUnavailableTitle: "Detaliile meciului nu sunt disponibile",
+    detailUnavailableBody: "Nu am putut încărca detaliile acestui meci. Lista de rezultate rămâne neschimbată.",
     decisionEv: "Valoare",
     decisionEvHint: "Valoarea estimată a pick-ului la cota afișată. Pozitiv înseamnă că prețul e în favoarea ta.",
     decisionEvPositive: "pozitiv",
@@ -608,13 +611,18 @@ export const ro: Dict = {
   },
   list: {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
-    fullTimeShort: "FT"
+    fullTimeShort: "FT",
+    dayToday: "Astăzi",
+    dayTomorrow: "Mâine",
+    dayAfterTomorrow: "Poimâine"
   },
   tickets: {
     buildCta: "Construiește bilet",
     emptyCta: "Construiește un bilet",
     emptyDesc: "Combină câteva dintre cele mai puternice predicții într-un bilet și urmărește aici cum se încheie.",
     legs: "{n} selecții",
+    ticketNumber: "Bilet #{id}",
+    oddsShort: "Cotă {odds}",
     buildTitle: "Construiește bilet",
     buildSub: "Un bilet cu mai multe selecții din ligile tale favorite.",
     historyTitle: "Istoric bilete",
@@ -959,6 +967,10 @@ export const ro: Dict = {
     productSystemHint: "5 selecții · câștigi cu minimum 3 corecte",
     generate: "Generează",
     regenerate: "Regenerează",
+    exhaustedLeaguesTitle: "Unele ligi selectate nu mai au meciuri disponibile pentru această generare",
+    exhaustedLeagueNamed: "{leagues} nu mai are meciuri disponibile pentru această generare",
+    exhaustedLeaguesNamed: "{leagues} nu mai au meciuri disponibile pentru această generare",
+    exhaustedLeaguesBody: "Meciurile de azi au început deja și nu sunt incluse. Biletul a fost generat din ligile rămase.",
     generating: "Îți construim biletul…",
     // Grupul oferă acum două produse, nu doar un număr de selecții: Combo la 3,
     // 5 sau 8 meciuri şi Biletul Sistem. Formularea veche („alege câte selecții

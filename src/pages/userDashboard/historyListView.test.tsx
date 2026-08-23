@@ -102,3 +102,35 @@ describe("history list view opt-in", () => {
     expect(rehydrateCall).toContain("mine=1");
   });
 });
+
+describe("history read boundary (live-state freshness fix)", () => {
+  it("a persisted in-play status older than the live age reaches Results demoted, FT untouched", async () => {
+    const stale = { id: 1565227, leagueId: 283, league: "Liga I", teams: { home: "A", away: "B" }, kickoff: "2026-08-18T17:30:00+00:00", status: "1H", score: { home: 0, away: 0 }, validation: "pending" };
+    const final = { ...stale, id: 2, status: "FT", score: { home: 2, away: 1 }, validation: "win" };
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, mine: true, items: [stale, final], stats: { wins: 1, losses: 0, settled: 1, winRate: 100 } })
+    }));
+    let seen: Array<{ id: number; status: string; rawStatus?: string; validation?: string; score?: unknown }> = [];
+    function Probe() {
+      const h = useDashboardHistory({ userId: "user-1", accessToken: "token-1" });
+      seen = h.history as typeof seen;
+      return null;
+    }
+    render(
+      <LocaleProvider>
+        <Probe />
+      </LocaleProvider>
+    );
+    await waitFor(() => expect(seen.length).toBe(2));
+    const [a, b] = seen;
+    expect(a.status).not.toBe("1H");
+    expect(a.status).not.toMatch(/^(FT|AET|PEN)$/);
+    expect(a.rawStatus).toBe("1H");
+    expect(a.validation).toBe("pending");
+    expect(a.score).toEqual({ home: 0, away: 0 });
+    expect(b.status).toBe("FT");
+    expect(b.rawStatus).toBeUndefined();
+  });
+});

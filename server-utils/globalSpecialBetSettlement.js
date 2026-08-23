@@ -15,7 +15,7 @@
  */
 
 import { CANCELLED } from "./closingOddsCapture.js";
-import { validationFromOu } from "./cardMarketSettlement.js";
+import { parseOuPickAnywhere, validationFromOu } from "./cardMarketSettlement.js";
 import { evaluateTopPick, isFinalStatus } from "./predictionsHistory.js";
 
 /**
@@ -40,21 +40,70 @@ export const SELECTION_STATUS = Object.freeze({
 export const BET_STATUS = SELECTION_STATUS;
 
 /**
+ * Which `marketResults` figure a shots leg settles against, read from the label
+ * the engine stored: "SOT …" is shots on target, "Shots …" is total shots. Both
+ * share the `shots` market family (metaLearning/marketFamily.js collapses them),
+ * so the label prefix is the only record of the statistic. An unprefixed or
+ * unrecognised label returns null — the leg stays ungraded rather than being
+ * scored against a statistic it may not be about.
+ */
+export function shotsStatisticFor(selectionLabel) {
+  const label = String(selectionLabel || "").trim().toLowerCase();
+  if (/^sot\b/.test(label) || label.includes("on target")) return "shotsOnTargetTotal";
+  if (/^shots?\b/.test(label)) return "shotsTotal";
+  return null;
+}
+
+/**
  * The official figure a totals selection settles against.
  *
- * Goals come from the score; corners and shots on target from the fixture
- * statistics the history sync already hydrates into `marketResults`.
+ * Goals come from the score; corners, total shots and shots on target from the
+ * fixture statistics the history sync already hydrates into `marketResults`.
+ *
+ * @param {string} market stored family ("ou" | "corners" | "shots")
+ * @param {{ score?: object, marketTotals?: object }} fixture
+ * @param {string} [selectionLabel] the stored selection label — required to
+ *   tell a total-shots leg from a shots-on-target leg
  */
-export function officialTotalForFamily(market, { score, marketTotals } = {}) {
+export function officialTotalForFamily(market, { score, marketTotals } = {}, selectionLabel = "") {
   if (market === "ou") {
     if (score?.home == null || score?.away == null) return null;
     const total = Number(score.home) + Number(score.away);
     return Number.isFinite(total) ? total : null;
   }
-  const raw = market === "corners" ? marketTotals?.cornersTotal : marketTotals?.shotsOnTargetTotal;
+  let raw;
+  if (market === "corners") {
+    raw = marketTotals?.cornersTotal;
+  } else if (market === "shots") {
+    const key = shotsStatisticFor(selectionLabel);
+    if (!key) return null;
+    raw = marketTotals?.[key];
+  } else {
+    return null;
+  }
   if (raw === null || raw === undefined || raw === "") return null;
   const total = Number(raw);
   return Number.isFinite(total) ? total : null;
+}
+
+/**
+ * The side and line a totals leg is graded on.
+ *
+ * New rows carry both explicitly. Rows written before T2 carry `line` but
+ * `side = null` for every shots leg (the engine derived it with the anchored
+ * goals parser, which rejects the "SOT " / "Shots " prefix), so the side is
+ * recovered from the stored label — the same text the user was shown — and the
+ * stored line is kept as the authority when both are present.
+ */
+export function resolveTotalsSelection(selection) {
+  const storedSide = selection?.side === "over" || selection?.side === "under" ? selection.side : null;
+  const storedLine = selection?.line === null || selection?.line === undefined ? null : Number(selection.line);
+  if (storedSide && storedLine !== null) return { side: storedSide, line: storedLine };
+  const parsed = parseOuPickAnywhere(selection?.selection);
+  return {
+    side: storedSide ?? parsed?.side ?? null,
+    line: storedLine ?? parsed?.line ?? null
+  };
 }
 
 /**
@@ -79,12 +128,8 @@ export function settleSelection(selection, fixture, now) {
     // An absent total is rejected inside settleOuValidation, which is the one
     // place that decides what "no answer" means. This module previously guarded
     // here as well; that duplicate is gone now the boundary itself is correct.
-    outcome = validationFromOu(
-      status,
-      selection?.side,
-      selection?.line,
-      officialTotalForFamily(market, fixture)
-    );
+    const { side, line } = resolveTotalsSelection(selection);
+    outcome = validationFromOu(status, side, line, officialTotalForFamily(market, fixture, selection?.selection));
   } else if (PICK_FAMILIES.has(market)) {
     if (isFinalStatus(status)) {
       const hit = evaluateTopPick(selection?.selection, fixture?.score);
@@ -361,6 +406,8 @@ export default {
   aggregateBetStatus,
   computeSettledTotalOdds,
   officialTotalForFamily,
+  resolveTotalsSelection,
+  shotsStatisticFor,
   settleGlobalSpecialBet,
   settleSelection,
   ticketCombinationCount,

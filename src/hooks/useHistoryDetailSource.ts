@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PredictionRow } from "../types";
 import { useHistoryDetail } from "./useHistoryDetail";
+import { carryForwardLiveState } from "../utils/liveState";
 
 /**
  * Chooses which object the match modal renders from.
@@ -41,6 +42,8 @@ export type HistoryDetailSource = {
   detailRequested: boolean;
   /** True once the modal is rendering detail rather than the list row. */
   usingDetail: boolean;
+  /** A match is selected but no renderable object exists yet (list row without modal shape, detail pending or failed). */
+  awaitingDetail: boolean;
 };
 
 /**
@@ -49,13 +52,54 @@ export type HistoryDetailSource = {
  * Exported for tests, and deliberately pure: the fallback precedence is the one
  * rule that must never regress, so it is verified without a React tree.
  */
+/**
+ * Can the modal render this object at all?
+ *
+ * The modal reads `match.probs.p1/pX/p2` unconditionally (OverviewHero's form
+ * ribbon, the 1X2 model panel, the analysis panels, the first-half pick). A
+ * `view=list` history row deliberately ships no `probs` (the read cutover,
+ * predictionsHistory.js), so handing it to the modal threw on first paint and
+ * — with no boundary above — unmounted the whole workspace (UX-J). Full
+ * prediction rows (Home, Matches, the palette) and by-fixture detail rows
+ * always carry probs, so they keep their immediate render.
+ *
+ * A READ-ONLY check: nothing is invented, nothing is defaulted to zero.
+ */
+export function hasMatchDetailShape(match: PredictionRow | null | undefined): boolean {
+  const probs = (match as { probs?: { p1?: unknown; pX?: unknown; p2?: unknown } } | null | undefined)?.probs;
+  if (!probs || typeof probs !== "object") return false;
+  return [probs.p1, probs.pX, probs.p2].every((v) => typeof v === "number" && Number.isFinite(v));
+}
+
 export function resolveModalMatch(
   selected: PredictionRow | null,
   detail: PredictionRow | null
 ): PredictionRow | null {
   if (!selected) return null;
-  if (detail && Number(detail.id) === Number(selected.id)) return detail;
-  return selected;
+  if (!detail || Number(detail.id) !== Number(selected.id)) {
+    // A list projection is not a modal model. Until the detail for this fixture
+    // arrives the modal has nothing safe to render — the Results list stays.
+    return hasMatchDetailShape(selected) ? selected : null;
+  }
+  /*
+    Live-detail ownership (production forensic, Aug 21): the by-fixture detail
+    row is the PERSISTED record — recommendation, validation, market
+    validations, settlement — and it is authoritative for those. It is NOT a
+    live snapshot: its status/score are whatever the last sync wrote (NS before
+    the first cron after kickoff, 2H hours later) and it never carries
+    momentum, events or the live confidence nudge, because the poll never
+    persists them. Returning it verbatim made the modal disagree with the list
+    ("57' 3–0 LIVE" in the row, "10:00 PM" in the header) and dropped Momentum
+    the moment the request resolved.
+
+    So the merge is the one already approved for hydration (PR #138): the
+    fresh selected row is `previous`, the detail is `incoming`; the explicit
+    carried set (status, score, momentum, liveEvents, liveAdjustment) stays
+    live, everything else comes from the detail — and a FINAL detail wins
+    outright through the helper's own final-status escape, so a settled row
+    still replaces a stale in-memory 2H. No second final rule lives here.
+  */
+  return carryForwardLiveState(selected, detail);
 }
 
 export function useHistoryDetailSource(
@@ -84,6 +128,9 @@ export function useHistoryDetailSource(
     loading: detailFixtureId != null && loading,
     error: detailFixtureId != null ? error : null,
     detailRequested: detailFixtureId != null,
-    usingDetail: Boolean(detail) && match === detail
+    usingDetail: Boolean(detail) && match === detail,
+    // The caller has a selection but nothing renderable — the list row had no
+    // modal shape and the detail has not (yet, or at all) supplied one.
+    awaitingDetail: Boolean(selectedMatch) && match === null
   };
 }

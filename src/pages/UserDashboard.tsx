@@ -61,6 +61,7 @@ import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
+import MatchModalErrorBoundary, { MatchDetailUnavailable } from "../components/matchModal/MatchModalErrorBoundary";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
 import { useLeagueSelection } from "./userDashboard/useLeagueSelection";
@@ -86,7 +87,8 @@ export default function UserDashboard() {
     refreshTierStatus,
     updateFavoriteLeagues,
     updateNotificationPreferences,
-    markOnboardingComplete
+    markOnboardingComplete,
+    authStatus
   } = useAuth();
   const [date, setDate] = useLocalStorageState<string>("footy.user.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.user.selectedDates", [isoToday()]);
@@ -182,7 +184,7 @@ export default function UserDashboard() {
     See useHistoryDetailSource for why membership, not the opening section,
     decides whether a request happens.
   */
-  const { match: modalMatch } = useHistoryDetailSource(selectedMatch, history);
+  const { match: modalMatch, error: modalDetailError, awaitingDetail } = useHistoryDetailSource(selectedMatch, history);
   const trackerStats = historyStats;
   const {
     preds,
@@ -195,6 +197,7 @@ export default function UserDashboard() {
   } = usePredictionsCache({
     user,
     userTier,
+    authStatus,
     accessToken: session?.access_token,
     date,
     selectedDates,
@@ -722,9 +725,18 @@ export default function UserDashboard() {
         isAdmin={false}
         leagueTableHeading="Predicțiile tale · pe ligă (ultimele 30 zile)"
       />
+      {/* UX-J: a detail that could not be loaded for a list-only row gets a
+          small, closable notice — never a modal fed a partial row, never a
+          crash that takes Results with it. */}
+      {awaitingDetail && modalDetailError && (
+        <MatchDetailUnavailable message={modalDetailError} onClose={() => setSelectedMatch(null)} />
+      )}
       {modalMatch && (
         // Null fallback: the first open pays one cached network roundtrip; a
-        // spinner for that beat would flash more than it informs.
+        // spinner for that beat would flash more than it informs. The boundary
+        // keeps any render failure inside the modal from unmounting the
+        // workspace around it (UX-J).
+        <MatchModalErrorBoundary onClose={() => setSelectedMatch(null)}>
         <Suspense fallback={null}>
           <MatchModal
             match={modalMatch}
@@ -736,9 +748,12 @@ export default function UserDashboard() {
             onClose={() => setSelectedMatch(null)}
             onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
             onReport={() => setReportRow(modalMatch)}
+            watched={isWatched(Number(modalMatch.id))}
+            onToggleWatch={() => toggleWatchlist(Number(modalMatch.id))}
             showModelInternals={prefs.showModelInternals}
           />
         </Suspense>
+        </MatchModalErrorBoundary>
       )}
       <UpgradePrompt
         open={Boolean(upgradePrompt)}

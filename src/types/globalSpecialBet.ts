@@ -175,6 +175,21 @@ export type GlobalSpecialBetUnavailable = {
   availableCandidates: number;
 };
 
+/**
+ * Which selected leagues fed the generation, server-derived (additive response
+ * field). `noEligibleBecauseAlreadyStartedLeagueIds` is the only list the UI
+ * explains: a league whose every fixture of the bet_date day has kicked off and
+ * which therefore added nothing. `names` holds only the names the server could
+ * resolve from data already in hand — a missing name means "say it generically".
+ */
+export type GlobalSpecialBetLeagueSummary = {
+  selectedLeagueIds: number[];
+  eligibleLeagueIds: number[];
+  noEligibleLeagueIds: number[];
+  noEligibleBecauseAlreadyStartedLeagueIds: number[];
+  names: Record<string, string>;
+};
+
 export type GlobalSpecialBetGenerateResult =
-  | { available: true; created: boolean; bet: GlobalSpecialBet }
+  | { available: true; created: boolean; bet: GlobalSpecialBet; leagueSummary?: GlobalSpecialBetLeagueSummary }
   | { available: false; created: false; unavailable: GlobalSpecialBetUnavailable };

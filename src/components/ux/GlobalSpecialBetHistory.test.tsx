@@ -53,6 +53,16 @@ function storedBet(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The compact row is a two-line overview; everything else sits behind its disclosure. */
+const rowButtons = () => [...document.querySelectorAll<HTMLButtonElement>('[data-slot="ticket-row"]')];
+const rowButton = () => rowButtons()[0];
+async function openAll() {
+  await waitFor(() => expect(rowButtons().length).toBeGreaterThan(0));
+  await act(async () => {
+    for (const b of rowButtons()) if (b.getAttribute("aria-expanded") !== "true") b.click();
+  });
+}
+
 describe("GlobalSpecialBetHistory", () => {
   beforeEach(() => {
     fetchWithAuth.mockReset();
@@ -91,10 +101,14 @@ describe("GlobalSpecialBetHistory", () => {
 
     await waitFor(() => expect(screen.getByText("Câștigat")).toBeTruthy());
     expect(screen.getByText(/4\.81/)).toBeTruthy();
+    // Collapsed: the overview shows status, legs and price only — no settled
+    // odds, no confidence, no legs in the tree yet.
+    expect(screen.queryByText(/3\.21/)).toBeNull();
+    expect(screen.queryByText(/78%/)).toBeNull();
+    expect(screen.queryByText("Over 7.5")).toBeNull();
+    await openAll();
     expect(screen.getByText(/3\.21/)).toBeTruthy();
     expect(screen.getByText(/78%/)).toBeTruthy();
-    // Collapsed: the legs are not in the tree yet.
-    expect(screen.queryByText("Over 7.5")).toBeNull();
   });
 
   it("a post-050 bet shows its stored ticket chance instead of the confidence line", async () => {
@@ -105,6 +119,7 @@ describe("GlobalSpecialBetHistory", () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
 
+    await openAll();
     await waitFor(() => expect(screen.getByText(/Șansă estimată bilet: 33%/)).toBeTruthy());
     expect(screen.queryByText(/Încredere medie/)).toBeNull();
   });
@@ -116,6 +131,7 @@ describe("GlobalSpecialBetHistory", () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
 
+    await openAll();
     await waitFor(() => expect(screen.getByText(/Încredere medie/)).toBeTruthy());
     expect(screen.queryByText(/Șansă estimată bilet/)).toBeNull();
     expect(screen.queryByText(/0%/)).toBeNull();
@@ -126,17 +142,17 @@ describe("GlobalSpecialBetHistory", () => {
     await act(async () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Vezi selecțiile" })).toBeTruthy());
+    await waitFor(() => expect(rowButton()).toBeTruthy());
 
     await act(async () => {
-      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+      rowButton().click();
     });
     expect(screen.getByText("Over 7.5")).toBeTruthy();
     // Pre-048 and no fixture loaded: the id is the honest answer.
     expect(screen.getByText("Meci #999001")).toBeTruthy();
 
     await act(async () => {
-      screen.getByRole("button", { name: "Ascunde selecțiile" }).click();
+      rowButton().click();
     });
     expect(screen.queryByText("Over 7.5")).toBeNull();
   });
@@ -154,10 +170,10 @@ describe("GlobalSpecialBetHistory", () => {
     await act(async () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Vezi selecțiile" })).toBeTruthy());
+    await waitFor(() => expect(rowButton()).toBeTruthy());
 
     await act(async () => {
-      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+      rowButton().click();
     });
 
     expect(screen.getByText("Arsenal – Chelsea")).toBeTruthy();
@@ -179,11 +195,8 @@ describe("GlobalSpecialBetHistory", () => {
     });
 
     // Visible while collapsed: this is the thing the user opened the history for.
+    await openAll();
     await waitFor(() => expect(screen.getByText("A picat pe o singură selecție")).toBeTruthy());
-
-    await act(async () => {
-      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
-    });
     expect(screen.getByText("Selecția care a pierdut biletul")).toBeTruthy();
   });
 
@@ -197,10 +210,10 @@ describe("GlobalSpecialBetHistory", () => {
     await act(async () => {
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Vezi selecțiile" })).toBeTruthy());
+    await waitFor(() => expect(rowButton()).toBeTruthy());
 
     await act(async () => {
-      screen.getByRole("button", { name: "Vezi selecțiile" }).click();
+      rowButton().click();
     });
 
     // Every leg had to land, so naming one would tell a story settlement does
@@ -251,7 +264,8 @@ describe("GlobalSpecialBetHistory", () => {
       fetchWithAuth.mockResolvedValue(jsonResponse(200, { ok: true, bets: day }));
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
 
-      expect(await screen.findByText(/Combo · 5/)).toBeTruthy();
+    // The shape is part of the overview line, readable without opening anything.
+    expect(await screen.findByText(/Combo · 5/)).toBeTruthy();
       expect(screen.getByText(/Sistem 3\/5/)).toBeTruthy();
       expect(screen.getByText(/Sistem 4\/5/)).toBeTruthy();
       expect(screen.getByText(/Sistem 5\/5/)).toBeTruthy();
@@ -267,7 +281,8 @@ describe("GlobalSpecialBetHistory", () => {
       );
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
 
-      expect(await screen.findByText(/Cota celor 5/)).toBeTruthy();
+      await openAll();
+    expect(await screen.findByText(/Cota celor 5/)).toBeTruthy();
       expect(screen.getByText(/Combinații 10/)).toBeTruthy();
       expect(screen.queryByText(/Cotă totală/)).toBeNull();
     });
@@ -277,7 +292,8 @@ describe("GlobalSpecialBetHistory", () => {
         jsonResponse(200, { ok: true, bets: [storedBet({ bet_kind: "combo", system_k: null })] })
       );
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
-      expect(await screen.findByText(/Cotă totală/)).toBeTruthy();
+      await openAll();
+    expect(await screen.findByText(/Cotă totală/)).toBeTruthy();
       expect(screen.queryByText(/Cota celor/)).toBeNull();
     });
   });
@@ -302,12 +318,14 @@ describe("GlobalSpecialBetHistory", () => {
       );
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
 
-      expect(await screen.findByText(/Returnarea este sub miză/)).toBeTruthy();
+      await openAll();
+    expect(await screen.findByText(/Returnarea este sub miză/)).toBeTruthy();
       expect(screen.getByText(/0\.80×/)).toBeTruthy();
       expect(screen.getByText(/-20%/)).toBeTruthy();
       // The status word still says WON — the shortfall is stated beside it, not
       // instead of it.
-      expect(screen.getByText("Câștigat")).toBeTruthy();
+      // Opened: the ticket status and each won leg both read "Câștigat".
+      expect(screen.getAllByText("Câștigat").length).toBeGreaterThan(0);
     });
 
     it("says nothing about a shortfall when the win beat the stake", async () => {
@@ -327,6 +345,7 @@ describe("GlobalSpecialBetHistory", () => {
       );
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
 
+      await openAll();
       expect(await screen.findByText(/3\.20×/)).toBeTruthy();
       expect(screen.getByText(/\+220%/)).toBeTruthy();
       expect(screen.queryByText(/sub miză/)).toBeNull();
@@ -340,6 +359,7 @@ describe("GlobalSpecialBetHistory", () => {
         })
       );
       render(<GlobalSpecialBetHistory canUseGlobalSpecialBet />);
+      await openAll();
       expect(await screen.findByText(/Fără returnare/)).toBeTruthy();
     });
   });

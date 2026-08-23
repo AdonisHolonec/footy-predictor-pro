@@ -174,7 +174,7 @@ export const RUNNING_SCORE_WINDOW_AFTER_MS = 4 * 60 * 60 * 1000;
  * polling that could refresh it ends).
  */
 export function hasRunningScore(
-  row: { status?: string; kickoff?: string; score?: { home?: number | null; away?: number | null } | null },
+  row: { status?: string; rawStatus?: string; kickoff?: string; score?: { home?: number | null; away?: number | null } | null },
   nowMs: number = Date.now()
 ): boolean {
   const home = row.score?.home;
@@ -182,6 +182,12 @@ export function hasRunningScore(
   if (typeof home !== "number" || typeof away !== "number") return false;
   if (!Number.isFinite(home) || !Number.isFinite(away)) return false;
   if (isTerminalOrAbandonedStatus(row.status)) return false;
+  // A status the read boundary demoted (liveState.demoteStaleLiveStatus keeps
+  // the in-play provider value in `rawStatus`) is an old observation, not a
+  // running score: Udinese–Como 2026-08-22 sat at "HT" in the DB after full
+  // time and read "1–0 · LIVE". A provider "TBD" carries no rawStatus and keeps
+  // the grace window below.
+  if (isFixtureInPlay(row.rawStatus)) return false;
   if (isFixtureInPlay(row.status)) return true;
   const koMs = new Date(row.kickoff ?? "").getTime();
   if (!Number.isFinite(koMs)) return false;

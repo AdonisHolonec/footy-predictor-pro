@@ -20,9 +20,12 @@ import {
   // values any more. The engine validates the single requested k.
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
-import { settleGlobalSpecialBet } from "./globalSpecialBetSettlement.js";
+import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
+import { rehydrateSettlementRow } from "./predictionsHistory.js";
+import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
 
 const HISTORY_TABLE = "predictions_history";
+const DAY_MS = 24 * 60 * 60 * 1000;
 const BETS_TABLE = "special_bets";
 const SELECTIONS_TABLE = "special_bet_selections";
 
@@ -186,6 +189,84 @@ export async function loadCandidatePayloads(supabase, leagueIds, now = Date.now(
 }
 
 /**
+ * The UTC instants that safely bracket one Europe/Bucharest calendar day.
+ *
+ * Deliberately a SUPERSET, not the exact boundary: Bucharest runs UTC+2 in
+ * winter and UTC+3 in summer, so its day D begins at 21:00Z or 22:00Z on D-1.
+ * One UTC day of slack either side covers both offsets and every DST
+ * transition. The database only narrows the scan; which day a kickoff belongs
+ * to is decided by `calendarDateKeyEuropeBucharest`, the same helper the rest
+ * of the app uses for `bet_date`.
+ */
+export function betDateScanWindow(betDate) {
+  const base = Date.parse(`${betDate}T00:00:00.000Z`);
+  if (!Number.isFinite(base)) return null;
+  return { from: new Date(base - DAY_MS).toISOString(), to: new Date(base + DAY_MS).toISOString() };
+}
+
+/**
+ * Every fixture (any status) of the selected leagues on the `bet_date`
+ * calendar day — kick-off instants and league names only. Read-only, and the
+ * only place the generation looks at fixtures that have already kicked off:
+ * `loadCandidatePayloads` excludes those in its query, so the engine never
+ * sees them and `rejected.alreadyStarted` cannot say which league lost its day.
+ */
+export async function loadBetDateFixtures(supabase, leagueIds, betDate) {
+  const window = betDateScanWindow(betDate);
+  if (!window || !leagueIds?.length) return [];
+  const { data, error } = await supabase
+    .from(HISTORY_TABLE)
+    .select("fixture_id, league_id, league_name, kickoff_at")
+    .in("league_id", leagueIds)
+    .gte("kickoff_at", window.from)
+    .lte("kickoff_at", window.to);
+  if (error) throw error;
+  return (data || []).filter((row) => calendarDateKeyEuropeBucharest(row?.kickoff_at) === betDate);
+}
+
+/**
+ * Which selected leagues fed the pool, and — for the ones that did not —
+ * whether the calendar day simply ran out. The temporal verdict needs all of:
+ * selected · zero eligible candidates · ≥1 fixture of `bet_date` already
+ * kicked off · zero fixtures of `bet_date` still to come. A league with a later
+ * kick-off today, or with no fixture today at all, or whose upcoming fixtures
+ * fell at another gate, is listed under `noEligibleLeagueIds` only — the UI
+ * must never blame kick-off time without this proof.
+ *
+ * Names come from what is already in hand (pool candidates, the day's rows);
+ * a league with no name resolved is simply absent from `names`.
+ *
+ * @returns {{ selectedLeagueIds: number[], eligibleLeagueIds: number[], noEligibleLeagueIds: number[],
+ *             noEligibleBecauseAlreadyStartedLeagueIds: number[], names: Record<number, string> }}
+ */
+export function summarizeLeagueCoverage({ selectedLeagueIds, pool, dayFixtures, now }) {
+  const selected = [...new Set((selectedLeagueIds || []).map(Number))].filter(Number.isFinite).sort((a, b) => a - b);
+  const eligible = new Set((pool || []).map((c) => Number(c?.leagueId)).filter(Number.isFinite));
+  const started = new Set();
+  const upcoming = new Set();
+  const names = {};
+  for (const c of pool || []) if (c?.leagueName && Number.isFinite(Number(c.leagueId))) names[Number(c.leagueId)] = String(c.leagueName);
+  for (const row of dayFixtures || []) {
+    const id = Number(row?.league_id);
+    const ko = Date.parse(row?.kickoff_at ?? "");
+    if (!Number.isFinite(id) || !Number.isFinite(ko)) continue;
+    (ko <= now ? started : upcoming).add(id);
+    if (row?.league_name && !names[id]) names[id] = String(row.league_name);
+  }
+  const eligibleLeagueIds = selected.filter((id) => eligible.has(id));
+  const noEligibleLeagueIds = selected.filter((id) => !eligible.has(id));
+  const noEligibleBecauseAlreadyStartedLeagueIds = noEligibleLeagueIds.filter((id) => started.has(id) && !upcoming.has(id));
+  const keptNames = {};
+  for (const id of selected) if (names[id]) keptNames[id] = names[id];
+  return { selectedLeagueIds: selected, eligibleLeagueIds, noEligibleLeagueIds, noEligibleBecauseAlreadyStartedLeagueIds, names: keptNames };
+}
+
+async function buildLeagueSummary(supabase, selectedLeagueIds, betDate, pool, now) {
+  const dayFixtures = await loadBetDateFixtures(supabase, selectedLeagueIds, betDate);
+  return summarizeLeagueCoverage({ selectedLeagueIds, pool, dayFixtures, now });
+}
+
+/**
  * Generate (or return) the Global Special Bet for one user/date/variant/scope.
  *
  * Idempotent through the database: create_global_special_bet() owns the
@@ -213,6 +294,8 @@ export async function createGlobalSpecialBet({
 
   const built = buildGlobalSpecialBets({ rows, leagueIds: canonicalLeagues, now }, [Number(variant)]);
   const bet = built.bets[Number(variant)];
+  // Additive: which selected leagues fed the pool and which ran out of day.
+  const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);
 
   // Not enough SAFE selections: say so, write nothing, and say WHY the pool is
   // thin — the rejection counters are what lets the UI explain "doar 6 selecții
@@ -223,7 +306,8 @@ export async function createGlobalSpecialBet({
       created: false,
       ...unavailableResponse(variant, built.pool.length),
       examined: built.examined,
-      rejected: built.rejected
+      rejected: built.rejected,
+      leagueSummary
     };
   }
 
@@ -259,7 +343,8 @@ export async function createGlobalSpecialBet({
         ? Number(data.bet.ticket_probability)
         : null,
     examined: built.examined,
-    rejected: built.rejected
+    rejected: built.rejected,
+    leagueSummary
   };
 }
 
@@ -305,6 +390,7 @@ export async function createGlobalSystemBets({
   const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
   const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
   const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now, systemK });
+  const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);
 
   // Nothing to write: either the requested k is not a shape the product sells,
   // or fewer than five safe candidates survived the gates. Both answers carry
@@ -316,7 +402,8 @@ export async function createGlobalSystemBets({
       available: false,
       unavailable: built.unavailable,
       examined: built.examined,
-      rejected: built.rejected
+      rejected: built.rejected,
+      leagueSummary
     };
   }
 
@@ -380,7 +467,8 @@ export async function createGlobalSystemBets({
         ? Number(data.bet.ticket_probability)
         : null,
     examined: built.examined,
-    rejected: built.rejected
+    rejected: built.rejected,
+    leagueSummary
   };
 }
 
@@ -451,26 +539,66 @@ export async function listGlobalSpecialBets({
 }
 
 /**
+ * Columns settlement reads for a fixture. The totals are the PROMOTED columns
+ * (migration 057) — the history sync writes them and no longer guarantees
+ * `raw_payload.marketResults`. The legacy document is read only as a JSON path
+ * (`raw_payload->marketResults`), never the 353 KB document, and only to cover
+ * rows written before 057 that were never backfilled.
+ */
+export const FIXTURE_STATE_SELECT =
+  "fixture_id, match_status, score_home, score_away, " +
+  "corners_total, shots_total, shots_on_target_total, " +
+  "legacy_market_results:raw_payload->marketResults";
+
+/** The totals a selection can settle against, in the key names settlement reads. */
+const TOTAL_KEYS = Object.freeze(["cornersTotal", "shotsTotal", "shotsOnTargetTotal"]);
+
+/**
+ * One fixture's settlement state from a `FIXTURE_STATE_SELECT` row.
+ *
+ * Source of truth is the promoted columns, mapped by `rehydrateSettlementRow` —
+ * the same function the history sync's own settlement pass uses, so a total
+ * means exactly one thing across both paths. Per key:
+ *
+ *   promoted present          → promoted (legacy ignored, even when it differs)
+ *   promoted NULL, legacy set → legacy `raw_payload.marketResults` (pre-057 row)
+ *   both absent               → key absent; the leg stays ungraded
+ *
+ * NULL is never coerced: a statistic the provider did not publish stays missing
+ * and the selection stays pending (then voids at 48h), exactly as before.
+ */
+export function fixtureStateFromRow(row) {
+  const promoted = rehydrateSettlementRow(row).raw_payload.marketResults || {};
+  const legacy =
+    row?.legacy_market_results && typeof row.legacy_market_results === "object"
+      ? row.legacy_market_results
+      : {};
+  const marketTotals = {};
+  for (const key of TOTAL_KEYS) {
+    const value = promoted[key] != null ? promoted[key] : legacy[key];
+    if (value != null) marketTotals[key] = value;
+  }
+  return {
+    status: row?.match_status ?? null,
+    score: { home: row?.score_home ?? null, away: row?.score_away ?? null },
+    marketTotals
+  };
+}
+
+/**
  * Fixture state for the selections of the bets being settled: status, score and
- * the official totals the history sync hydrated into `raw_payload.marketResults`.
+ * the official totals, keyed by fixture id. One query for all fixtures, as before.
  */
 export async function loadFixtureStates(supabase, fixtureIds) {
   const ids = [...new Set((fixtureIds || []).map((id) => Number(id)))].filter(Number.isFinite);
   if (ids.length === 0) return new Map();
 
-  const { data, error } = await supabase
-    .from(HISTORY_TABLE)
-    .select("fixture_id, match_status, score_home, score_away, raw_payload")
-    .in("fixture_id", ids);
+  const { data, error } = await supabase.from(HISTORY_TABLE).select(FIXTURE_STATE_SELECT).in("fixture_id", ids);
   if (error) throw error;
 
   const byFixtureId = new Map();
   for (const row of data || []) {
-    byFixtureId.set(Number(row.fixture_id), {
-      status: row.match_status,
-      score: { home: row.score_home, away: row.score_away },
-      marketTotals: row.raw_payload?.marketResults || {}
-    });
+    byFixtureId.set(Number(row.fixture_id), fixtureStateFromRow(row));
   }
   return byFixtureId;
 }
@@ -485,13 +613,20 @@ export async function loadFixtureStates(supabase, fixtureIds) {
  *
  * @returns {{ ok: boolean, error?: string }}
  */
-export async function persistSettledBet(supabase, bet, settlement, now) {
+/**
+ * Write a set of selection status changes for one bet, exactly as many rows
+ * as intended. Shared by the bet settlement below and by the re-grade of legs
+ * left pending on tickets that already reached their verdict.
+ *
+ * @returns {{ ok: boolean, error?: string }}
+ */
+export async function persistSelectionChanges(supabase, betId, selectionChanges, now) {
   const settledAt = new Date(now).toISOString();
 
   // Selections grouped by target status: one statement per status, still exact
   // about how many rows each is allowed to move.
   const byStatus = new Map();
-  for (const change of settlement.selectionChanges) {
+  for (const change of selectionChanges) {
     if (!byStatus.has(change.status)) byStatus.set(change.status, []);
     byStatus.get(change.status).push(change.id);
   }
@@ -511,10 +646,18 @@ export async function persistSettledBet(supabase, bet, settlement, now) {
         ok: false,
         error:
           `selections update touched ${affected} of ${ids.length} rows for status "${status}" ` +
-          `on bet ${bet.id} — refusing to report success (check the Supabase role and RLS policies)`
+          `on bet ${betId} — refusing to report success (check the Supabase role and RLS policies)`
       };
     }
   }
+  return { ok: true };
+}
+
+export async function persistSettledBet(supabase, bet, settlement, now) {
+  const settledAt = new Date(now).toISOString();
+
+  const legs = await persistSelectionChanges(supabase, bet.id, settlement.selectionChanges, now);
+  if (!legs.ok) return legs;
 
   const { data, error } = await supabase
     .from(BETS_TABLE)
@@ -567,7 +710,10 @@ export async function settlePendingGlobalSpecialBets({
     .order("bet_date", { ascending: true })
     .limit(Math.max(1, Math.min(Number(limit) || 200, 1000)));
   if (error) throw error;
-  if (!bets?.length) return summary;
+  if (!bets?.length) {
+    // No ticket to settle — legs left behind on already-settled tickets still get their grade.
+    return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+  }
 
   summary.scanned = bets.length;
 
@@ -622,15 +768,86 @@ export async function settlePendingGlobalSpecialBets({
     }
   }
 
-  return summary;
+  return mergeRegrade(summary, await regradeLegsOnSettledBets({ now, supabase }));
+}
+
+function mergeRegrade(summary, regrade) {
+  return {
+    ...summary,
+    legsRegraded: regrade.regraded,
+    legsRegradeScanned: regrade.scanned,
+    failures: [...summary.failures, ...regrade.failures]
+  };
+}
+
+/**
+ * Grade the legs a verdict left behind.
+ *
+ * A combo is LOST the moment one leg loses, and a system the moment too few
+ * legs can still reach k — before its other legs have finished. The ticket's
+ * verdict is final and correct, but those legs stayed `pending` forever,
+ * because settlement only ever scans PENDING tickets. This pass scans the
+ * other way round: pending LEGS whose ticket is no longer pending, grades each
+ * one with the same `settleSelection` and the same fixture state, and writes
+ * only the selection rows. The ticket row is never touched — nothing here can
+ * change a verdict, a settled price or a `settled_at`.
+ *
+ * Idempotent and bounded: a leg whose computed status matches what is stored
+ * issues no write; the 48-hour void applies exactly as it does for live tickets.
+ *
+ * @param {{ now?: number, limit?: number, supabase?: object }} params
+ * @returns {Promise<{ scanned: number, regraded: number, failures: Array<{ betId: string, error: string }> }>}
+ */
+export async function regradeLegsOnSettledBets({ now = Date.now(), limit = 500, supabase = getSupabaseAdmin() } = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const result = { scanned: 0, regraded: 0, failures: [] };
+
+  // PostgREST inner join on the parent: only legs whose ticket already has a verdict.
+  const { data: legs, error } = await supabase
+    .from(SELECTIONS_TABLE)
+    .select("id, special_bet_id, fixture_id, market, selection, side, line, odds, status, kickoff_at, special_bets!inner(id, status)")
+    .eq("status", "pending")
+    .neq("special_bets.status", "pending")
+    .limit(Math.max(1, Math.min(Number(limit) || 500, 2000)));
+  if (error) throw error;
+  if (!legs?.length) return result;
+
+  result.scanned = legs.length;
+  const fixturesById = await loadFixtureStates(
+    supabase,
+    legs.map((leg) => leg.fixture_id)
+  );
+
+  const byBetId = new Map();
+  for (const leg of legs) {
+    const fixture = fixturesById.get(Number(leg.fixture_id)) ?? { status: "", score: {}, marketTotals: {} };
+    const status = settleSelection(leg, fixture, now);
+    if (status === leg.status) continue;
+    if (!byBetId.has(leg.special_bet_id)) byBetId.set(leg.special_bet_id, []);
+    byBetId.get(leg.special_bet_id).push({ id: leg.id, status });
+  }
+
+  for (const [betId, changes] of byBetId) {
+    const written = await persistSelectionChanges(supabase, betId, changes, now);
+    if (written.ok) {
+      result.regraded += changes.length;
+    } else {
+      console.error("[global-special-bet-regrade]", written.error);
+      result.failures.push({ betId, error: written.error });
+    }
+  }
+  return result;
 }
 
 export default {
   canonicalizeLeagueScope,
   createGlobalSpecialBet,
   createGlobalSystemBets,
+  fixtureStateFromRow,
   loadFixtureStates,
+  persistSelectionChanges,
   persistSettledBet,
+  regradeLegsOnSettledBets,
   settlePendingGlobalSpecialBets,
   isValidBetDate,
   isValidVariant,

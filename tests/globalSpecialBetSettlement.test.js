@@ -49,12 +49,15 @@ test("each totals family reads its own official figure", () => {
 
   assert.equal(officialTotalForFamily("ou", fixture), 3);
   assert.equal(officialTotalForFamily("corners", fixture), 11);
-  assert.equal(officialTotalForFamily("shots", fixture), 7);
+  // A shots leg names its statistic in the label (T2): "SOT …" is shots on
+  // target, "Shots …" is total shots. The bare family alone cannot say which.
+  assert.equal(officialTotalForFamily("shots", fixture, "SOT Over 6.5"), 7);
+  assert.equal(officialTotalForFamily("shots", fixture), null);
 });
 
 test("a missing official figure is null, never zero", () => {
   assert.equal(officialTotalForFamily("corners", finished()), null);
-  assert.equal(officialTotalForFamily("shots", finished({ marketTotals: { shotsOnTargetTotal: "" } })), null);
+  assert.equal(officialTotalForFamily("shots", finished({ marketTotals: { shotsOnTargetTotal: "" } }), "SOT Over 6.5"), null);
   assert.equal(officialTotalForFamily("ou", { status: "FT", score: {} }), null);
 });
 
@@ -68,7 +71,10 @@ test("a totals selection settles against its own market", () => {
 
   assert.equal(settleSelection(sel({ market: "ou", side: "over", line: 1.5 }), fixture, JUST_AFTER), "won");
   assert.equal(settleSelection(sel({ market: "corners", side: "over", line: 7.5 }), fixture, JUST_AFTER), "won");
-  assert.equal(settleSelection(sel({ market: "shots", side: "under", line: 10.5 }), fixture, JUST_AFTER), "won");
+  assert.equal(
+    settleSelection(sel({ market: "shots", selection: "SOT Under 10.5", side: "under", line: 10.5 }), fixture, JUST_AFTER),
+    "won"
+  );
   assert.equal(settleSelection(sel({ market: "corners", side: "under", line: 7.5 }), fixture, JUST_AFTER), "lost");
 });
 

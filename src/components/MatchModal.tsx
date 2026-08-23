@@ -36,6 +36,13 @@ export type MatchModalProps = {
   onUpgradeRequired?: (feature: string, requiredTier: "premium" | "ultra") => void;
   /** Opens the prediction report dialog. Moved here from the list card in UX-A: the list row carries no secondary actions. */
   onReport?: () => void;
+  /**
+   * UX-I. Favourite state + toggle for THIS match - the same handler the list
+   * row's star calls. On narrow screens the star lives in the recommendation
+   * card (the row hides it there); from `sm` the row keeps its own.
+   */
+  watched?: boolean;
+  onToggleWatch?: () => void;
   /** Account › Model internals. When false the Advanced tab (λ, ρ, Shin z, pipeline, version) is not offered. */
   showModelInternals?: boolean;
 };
@@ -67,6 +74,8 @@ export default function MatchModal({
   presentation = "focus",
   onUpgradeRequired,
   onReport,
+  watched = false,
+  onToggleWatch,
   showModelInternals = false
 }: MatchModalProps) {
   const model = useMatchModalModel({ match, accessTier, presentation, hashColor, logoColors });
@@ -280,7 +289,16 @@ export default function MatchModal({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {onReport && (
-              <IconButton shape="round" onClick={onReport} title={tr("predictionReport.cardAction")} aria-label={tr("predictionReport.cardAction")}>
+              /* Narrow screens: the report flag sits in the recommendation card
+                 (UX-I); the header keeps only Close. From `sm` it stays here. */
+              <IconButton
+                shape="round"
+                onClick={onReport}
+                title={tr("predictionReport.cardAction")}
+                aria-label={tr("predictionReport.cardAction")}
+                className="hidden sm:inline-flex"
+                data-slot="header-report"
+              >
                 ⚑
               </IconButton>
             )}
@@ -304,6 +322,7 @@ export default function MatchModal({
               dataQuality={dq}
               rationale={null}
               benchmark={decisionBenchmark}
+              actions={{ watched, onToggleWatch, onReport }}
             />
           </div>
 
