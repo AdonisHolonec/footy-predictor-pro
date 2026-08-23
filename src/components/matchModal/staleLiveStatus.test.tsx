@@ -73,9 +73,16 @@ describe("MatchModal · a stale persisted in-play status is never rendered as LI
     expect(saysLive()).toBe(false);
   });
 
-  it("a provider TBD (kick-off time unconfirmed, no rawStatus) past kickoff keeps the existing live-score fallback", () => {
+  it("a provider TBD (kick-off time unconfirmed, no rawStatus) past kickoff keeps its running score — without the LIVE identity (#150)", () => {
     renderModal(row({ status: "TBD", kickoff: new Date(Date.now() - HOUR).toISOString(), score: { home: 0, away: 0 } }));
-    expect(saysLive()).toBe(true);
+    expect(header().textContent).toMatch(/0–0/);
+    expect(saysLive()).toBe(false);
+  });
+
+  it("a demoted row shows neither a running score nor LIVE: the score is an old observation", () => {
+    renderModal(demoteStaleLiveStatus(row()));
+    expect(header().textContent).not.toMatch(/1–0/);
+    expect(saysLive()).toBe(false);
   });
 
   it("the demotion survives the list↔detail merge in both directions", () => {
@@ -96,9 +103,10 @@ describe("MatchModal · a stale persisted in-play status is never rendered as LI
     expect(document.querySelector("[data-layer='live']")).toBeTruthy();
   });
 
-  it("a pre-match row after the poll window (NS, numeric score from the poll) still renders live — the existing fallback is untouched", () => {
+  it("a pre-match row inside the poll window (NS, numeric score from the poll) shows its running score but no LIVE identity (#150)", () => {
     renderModal(row({ status: "NS", kickoff: new Date(Date.now() - 10 * 60_000).toISOString(), score: { home: 0, away: 0 } }));
-    expect(saysLive()).toBe(true);
+    expect(header().textContent).toMatch(/0–0/);
+    expect(saysLive()).toBe(false);
   });
 
   it("a final row renders FT with its score, never live", () => {

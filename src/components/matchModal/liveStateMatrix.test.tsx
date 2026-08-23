@@ -222,6 +222,13 @@ describe("hasRunningScore — the predicate itself", () => {
     expect(hasRunningScore({ status: " abd ", kickoff: new Date(ko).toISOString(), score: { home: 1, away: 0 } }, at(HOUR))).toBe(false);
   });
 
+  it("a status demoted at the read boundary (TBD with an in-play rawStatus) is never a running score, even inside the grace window", () => {
+    const demoted = { ...ns({ home: 1, away: 0 }), status: "TBD", rawStatus: "HT" };
+    expect(hasRunningScore(demoted, at(HOUR))).toBe(false);
+    // A provider TBD carries no rawStatus and keeps the grace window.
+    expect(hasRunningScore({ ...ns({ home: 1, away: 0 }), status: "TBD" }, at(HOUR))).toBe(true);
+  });
+
   it("an unparseable kickoff gives no grace (status alone must carry it)", () => {
     expect(hasRunningScore({ status: "NS", kickoff: "nope", score: { home: 0, away: 0 } }, at(HOUR))).toBe(false);
     expect(hasRunningScore({ status: "1H", kickoff: "nope", score: { home: 0, away: 0 } }, at(HOUR))).toBe(true);
