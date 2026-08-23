@@ -6,7 +6,13 @@
 import { computeMatchProbs, deriveFirstHalfLambdas } from "../../math.js";
 import { computeExactMatchDistribution } from "../../monteCarlo/MonteCarloEngine.js";
 import { deriveMarketLambdas } from "../../teamMarketRolling.js";
-import { isGoodNum, roundDisplayRate, clampPct, buildPoissonMarketBlock } from "../predictHelpers.js";
+import {
+  isGoodNum,
+  roundDisplayRate,
+  clampPct,
+  buildPoissonMarketBlock,
+  deriveCardsLambda
+} from "../predictHelpers.js";
 
 
 export const STAGE_ID = "Stage05Simulation";
@@ -210,33 +216,39 @@ export async function run(context) {
       liveRollingApplied
     };
 
-    // === PIAŢĂ CARTONAŞE (Poisson din rolling stats, puncte ponderate red*2+yellow) ===
-    // Neactivă implicit — PREDICT_ENABLE_CARDS trebuie setat explicit la "1".
-    // Liniile de mai jos sunt provizorii (puncte, nu număr de cartonaşe), în aşteptarea
-    // calibrării pe date rolling reale acumulate offline via rebuildTeamMarketRolling.js.
+    // === PIAŢĂ CARTONAŞE (Poisson pe λ C1, unitate cardsTotal = galbene + roşii) ===
+    // Neactivă implicit — PREDICT_ENABLE_CARDS trebuie setat explicit la "1". Acelaşi λ
+    // pe care Stage08 îl foloseşte la preţuire (un singur model Cards); un λ respins de
+    // model (fără baseline, în afara intervalului plauzibil) nu produce bloc.
     if (String(process.env.PREDICT_ENABLE_CARDS || "").trim() === "1") {
-      const cardsLambdas = deriveMarketLambdas({
+      const cardsLambdas = deriveCardsLambda({
+        leagueParams,
         rollingHome,
         rollingAway,
-        baseAvgTotal: leagueParams.cardsAvgTotal,
-        marketKey: "cards",
-        homeAdv: leagueParams.homeAdv,
-        awayAdv: leagueParams.awayAdv
+        marketRollingMap,
+        leagueId: league.lId,
+        season: league.leagueSeason
       });
-      cardsBlock = {
-        ...buildPoissonMarketBlock({
-          lambdaHome: cardsLambdas.lambdaHome,
-          lambdaAway: cardsLambdas.lambdaAway,
-          lines: [3.5, 4.5, 5.5, 6.5],
-          teamLines: [1.5, 2.5, 3.5],
-          correlation: 0.07
-        }),
-        sampleHome: cardsLambdas.sampleHome,
-        sampleAway: cardsLambdas.sampleAway,
-        usedFallback: cardsLambdas.usedFallback,
-        liveRollingApplied,
-        leagueBaseline: leagueParams.cardsAvgTotal
-      };
+      cardsBlock =
+        cardsLambdas.lambda == null
+          ? null
+          : {
+              ...buildPoissonMarketBlock({
+                lambdaHome: cardsLambdas.lambdaHome,
+                lambdaAway: cardsLambdas.lambdaAway,
+                lines: [3.5, 4.5, 5.5, 6.5],
+                teamLines: [1.5, 2.5, 3.5],
+                correlation: 0.07
+              }),
+              sampleHome: cardsLambdas.sampleQuality?.homeSample ?? 0,
+              sampleAway: cardsLambdas.sampleQuality?.awaySample ?? 0,
+              usedFallback: cardsLambdas.usedFallback,
+              fallbackReason: cardsLambdas.fallbackReason ?? null,
+              liveRollingApplied,
+              leagueBaseline: cardsLambdas.baseline?.mean ?? null,
+              baselineSource: cardsLambdas.baseline?.source ?? null,
+              unit: "cardsTotal"
+            };
     }
 
     // === PRIMA REPRIZĂ ===

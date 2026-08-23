@@ -13,7 +13,8 @@ import {
   buildTeamContext,
   extendProbsWithMarkets,
   applyStakePolicyV2,
-  deriveCardsLambda
+  deriveCardsLambda,
+  buildCardsPricingBlock
 } from "../predictHelpers.js";
 import { alignMarketProbsAndCalibrate } from "../decision/alignMarketProbsAndCalibrate.js";
 import { selectRecommendation } from "../decision/selectRecommendation.js";
@@ -206,14 +207,19 @@ export async function run(context) {
     // Recommended, Alternative or Best Value. Parses the odds payload already fetched
     // in Stage07 — no new network call.
     const oddsData = oddsReq?.ok ? oddsReq.data : null;
-    // Cards keep using deriveCardsLambda when the (opt-in) cardsBlock is absent, so the
-    // probability math is identical to before — only the set of lines widens.
-    const cardsLambda = deriveCardsLambda({ leagueParams, modularScores, cornersBlock });
-    const cardsPricingBlock =
-      cardsBlock ||
-      (cardsLambda > 0
-        ? { lambdaHome: cardsLambda, lambdaAway: 0, correlation: 0, total: {} }
-        : null);
+    // Cards: when the (opt-in) cardsBlock is absent, price from the same two-sided C1 λ
+    // Stage05 would have used — one Cards model, two consumers. A rejected λ (no baseline,
+    // out of plausible range) yields no pricing block, so no cards line is ever priced
+    // from a number the model does not stand behind.
+    const cardsLambda = deriveCardsLambda({
+      leagueParams,
+      rollingHome,
+      rollingAway,
+      marketRollingMap: league.marketRollingMap,
+      leagueId: league.lId,
+      season: league.leagueSeason
+    });
+    const cardsPricingBlock = cardsBlock || buildCardsPricingBlock(cardsLambda);
 
     const cornersSelections = enumerateLineSelections({
       oddsData,

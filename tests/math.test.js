@@ -2905,20 +2905,23 @@ test("DC-only default (correlation 0) still produces valid 1X2 + draws via rho",
   assert.ok(Math.abs(sum - 100) < 0.2);
 });
 
-test("deriveCardsLambda blends league + referee + corners aggression", async () => {
+test("deriveCardsLambda (C1) is two-sided, baseline-driven and ignores referee/corners", async () => {
   const { deriveCardsLambda } = await import("../server-utils/pipeline/predictHelpers.js");
   const base = deriveCardsLambda({ leagueParams: { cardsAvgTotal: 4.2 } });
-  assert.ok(Math.abs(base - 4.2) < 0.05);
+  assert.equal(base.unit, "cardsTotal");
+  assert.ok(Math.abs(base.lambda - 4.2) < 0.05);
+  assert.ok(Math.abs(base.lambdaHome + base.lambdaAway - base.lambda) < 0.002);
+  assert.equal(base.usedFallback, true);
   const withRef = deriveCardsLambda({
     leagueParams: { cardsAvgTotal: 4.2 },
     modularScores: { referee: { detail: { avgCards: 5.0, cardsBoost: 5.0 / 4.2 } } }
   });
-  assert.ok(withRef > base);
+  assert.equal(withRef.lambda, base.lambda);
   const withCorners = deriveCardsLambda({
     leagueParams: { cardsAvgTotal: 4.2, cornersAvgTotal: 10 },
     cornersBlock: { expectedTotal: 13 }
   });
-  assert.ok(withCorners > base);
+  assert.equal(withCorners.lambda, base.lambda);
 });
 
 test("MotivationEngine is directional on large rank gaps", async () => {
