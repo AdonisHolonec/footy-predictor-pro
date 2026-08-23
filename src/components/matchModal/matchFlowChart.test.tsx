@@ -205,6 +205,48 @@ describe("C/T in the DOM — the chart alternates instead of painting one colour
     renderFlow();
     expect(bars().filter((b) => b.dataset.side === "home").length).toBeGreaterThan(0);
   });
+
+  it("alternating initiative alternates ACROSS the axis: away above, home below, level straddling", () => {
+    renderFlow();
+    // [upper half, lower half] per column — which half is filled is the whole message.
+    const filled = (b: HTMLElement) => [
+      b.children[0].querySelector("span") != null,
+      b.children[1].querySelector("span") != null
+    ];
+    for (const bar of bars()) {
+      const [above, below] = filled(bar);
+      if (bar.dataset.side === "away") expect([above, below], "away sits above").toEqual([true, false]);
+      if (bar.dataset.side === "home") expect([above, below], "home sits below").toEqual([false, true]);
+      if (bar.dataset.side === "neutral") expect([above, below], "level straddles").toEqual([true, true]);
+    }
+    // Both directions really occur in this fixture, so the assertions above are not vacuous.
+    const sides = bars().map((b) => b.dataset.side);
+    expect(sides.filter((s) => s === "away").length).toBeGreaterThan(0);
+    expect(sides.filter((s) => s === "home").length).toBeGreaterThan(0);
+  });
+
+  it("the legend says which half is whose, in the same order as the chart", () => {
+    renderFlow();
+    const root = screen.getByTestId("momentum-root");
+    const order = (Array.from(root.querySelectorAll("[data-testid]")) as HTMLElement[]).map((n) => n.dataset.testid);
+    expect(order.indexOf("momentum-legend-away")).toBeLessThan(order.indexOf("momentum-chart"));
+    expect(order.indexOf("momentum-chart")).toBeLessThan(order.indexOf("momentum-legend-home"));
+    expect(screen.getByTestId("momentum-legend-away").textContent).toContain("Juventus");
+    expect(screen.getByTestId("momentum-legend-home").textContent).toContain("Frosinone");
+  });
+
+  it("event markers are independent of bar direction — they stay on the time axis", () => {
+    renderFlow();
+    // A home event and an away event both live in the same marker strip, outside the
+    // chart's two halves: markers report WHAT happened, bars report WHO was on top.
+    const strip = screen.getByTestId("momentum-events");
+    const home = markers().find((m) => m.dataset.kind === "red")!;
+    const away = markers().find((m) => m.dataset.kind === "goal")!;
+    expect(strip.contains(home)).toBe(true);
+    expect(strip.contains(away)).toBe(true);
+    expect(screen.getByTestId("momentum-chart").contains(home)).toBe(false);
+    expect(home.style.top).toBe(away.style.top);
+  });
 });
 
 describe("U — the axis is not a second events list, and not a second stats panel", () => {

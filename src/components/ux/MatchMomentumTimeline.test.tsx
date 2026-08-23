@@ -101,20 +101,30 @@ describe("MatchMomentumTimeline — mirrored momentum chart", () => {
     expect(bars().map((b) => b.dataset.side)).toEqual(["home", "away", "neutral"]);
   });
 
-  it("puts the home bar above the baseline and the away bar below it", () => {
+  it("puts the away bar above the baseline and the home bar below it", () => {
     const { rerender } = render(<MatchMomentumTimeline {...baseProps(10, 80)} />);
     rerender(<MatchMomentumTimeline {...baseProps(20, 20)} />);
     const [home, away] = bars();
     // Each column is [upper half, lower half]; the filled span tells us which side.
-    expect(home.children[0].querySelector("span")).not.toBeNull();
-    expect(home.children[1].querySelector("span")).toBeNull();
-    expect(away.children[0].querySelector("span")).toBeNull();
-    expect(away.children[1].querySelector("span")).not.toBeNull();
+    expect(away.children[0].querySelector("span")).not.toBeNull();
+    expect(away.children[1].querySelector("span")).toBeNull();
+    expect(home.children[0].querySelector("span")).toBeNull();
+    expect(home.children[1].querySelector("span")).not.toBeNull();
   });
 
-  it("draws a balanced interval symmetrically about the axis, not as an away bar", () => {
-    // Below-the-line is the away identity. A neutral stub rendered only underneath read
-    // as "the away side had that spell" when the engine had called the minute level.
+  it("the legend brackets the chart: the away name above it, the home name below", () => {
+    render(<MatchMomentumTimeline {...baseProps(10, 80)} />);
+    const root = screen.getByTestId("momentum-root");
+    const order = (Array.from(root.querySelectorAll("[data-testid]")) as HTMLElement[]).map((n) => n.dataset.testid);
+    expect(order.indexOf("momentum-legend-away")).toBeLessThan(order.indexOf("momentum-chart"));
+    expect(order.indexOf("momentum-chart")).toBeLessThan(order.indexOf("momentum-legend-home"));
+    expect(screen.getByTestId("momentum-legend-away").textContent).toContain("Dinamo");
+    expect(screen.getByTestId("momentum-legend-home").textContent).toContain("Steaua");
+  });
+
+  it("draws a balanced interval symmetrically about the axis, not as one side's bar", () => {
+    // Each half carries a team identity. A neutral stub rendered on one side only read
+    // as "that side had the spell" when the engine had called the minute level.
     render(<MatchMomentumTimeline {...baseProps(10, 51)} />);
     const [neutral] = bars();
     expect(neutral.dataset.side).toBe("neutral");

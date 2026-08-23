@@ -631,20 +631,18 @@ export default function MatchMomentumTimeline({
           </p>
         </div>
 
-        {/* LEGEND — team identity. Swatches are the same colours the bars use, so the
-            key teaches the chart rather than sitting beside it. */}
-        <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--fp-momentum-home)]" />
-            <span className="truncate">{homeTeam}</span>
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate">{awayTeam}</span>
-            <span
-              aria-hidden
-              className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-[var(--fp-border)] bg-[var(--fp-momentum-away)]"
-            />
-          </span>
+        {/* LEGEND, UPPER — the away name sits where the away bars do, above the axis.
+            The two halves of the key bracket the chart (see the lower half below the
+            ticks), so the direction reads off the layout instead of needing a caption. */}
+        <div
+          data-testid="momentum-legend-away"
+          className="mb-1 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
+        >
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-[var(--fp-border)] bg-[var(--fp-momentum-away)]"
+          />
+          <span className="truncate">{awayTeam}</span>
         </div>
 
         {/* GRAPH — one bar per observed interval, mirrored about a central baseline.
@@ -692,6 +690,7 @@ export default function MatchMomentumTimeline({
               const isLatest = i === timelineSegments.length - 1;
               const isNeutral = seg.side === "neutral";
               const isHome = seg.side === "home";
+              const isAway = seg.side === "away";
               const inDominant =
                 dominantPeriod != null &&
                 seg.side === dominantPeriod.side &&
@@ -722,14 +721,14 @@ export default function MatchMomentumTimeline({
                   style={{ flexGrow: Math.max(1, seg.toMinute - seg.fromMinute), flexBasis: 0 }}
                 >
                   {/*
-                    A BALANCED interval straddles the axis instead of sitting under it.
-                    Below-the-line is the away identity, so rendering a neutral stub there
-                    read as "Chelsea had that spell" in QA when the engine had actually
-                    called it level. Symmetry is what says "neither".
+                    A BALANCED interval straddles the axis instead of picking a half.
+                    Each half carries a team identity, so a neutral stub drawn on one side
+                    only read as "that side had the spell" in QA when the engine had
+                    called the minute level. Symmetry is what says "neither".
                   */}
-                  {/* Upper half — home grows DOWN toward the baseline. */}
+                  {/* Upper half — the AWAY side, growing up from the baseline. */}
                   <div className="flex h-1/2 flex-col justify-end">
-                    {(isHome || isNeutral) && (
+                    {(isAway || isNeutral) && (
                       <span
                         className="block w-full rounded-t-[2px]"
                         style={{
@@ -740,9 +739,9 @@ export default function MatchMomentumTimeline({
                       />
                     )}
                   </div>
-                  {/* Lower half — away grows DOWN away from the baseline. */}
+                  {/* Lower half — the HOME side, growing down from the baseline. */}
                   <div className="flex h-1/2 flex-col justify-start">
-                    {(!isHome || isNeutral) && (
+                    {(isHome || isNeutral) && (
                       <span
                         className="block w-full rounded-b-[2px]"
                         style={{
@@ -847,6 +846,15 @@ export default function MatchMomentumTimeline({
               </span>
             );
           })}
+        </div>
+
+        {/* LEGEND, LOWER — the home name closes the bracket under the axis. */}
+        <div
+          data-testid="momentum-legend-home"
+          className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fp-text-muted)]"
+        >
+          <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[var(--fp-momentum-home)]" />
+          <span className="truncate">{homeTeam}</span>
         </div>
 
         {/* THREAT LEGEND — real bars, not words alone, so height becomes readable.
