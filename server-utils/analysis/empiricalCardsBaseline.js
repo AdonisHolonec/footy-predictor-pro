@@ -1,8 +1,8 @@
 /**
  * Empirical Cards baseline per (league, season) — O(1), no new storage.
  *
- * INFRASTRUCTURE ONLY. Not wired into the predictor: `deriveCardsLambda` still reads the
- * static `leagueProfiles.cards`. Connecting this is a separate, separately-approved step.
+ * PRODUCTION DEPENDENCY since C1: `deriveCardsLambda` resolves its baseline through
+ * `deriveCardsBaselineFromRolling` + `resolveCardsBaseline` (current season → static prior).
  *
  * WHY NO NEW TABLE
  * ----------------

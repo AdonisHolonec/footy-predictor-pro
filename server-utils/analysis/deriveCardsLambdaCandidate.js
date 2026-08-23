@@ -1,9 +1,9 @@
 /**
- * Candidate Cards λ — laboratory only.
+ * Cards λ — the validated two-sided model, PROMOTED TO PRODUCTION in C1.
  *
- * ISOLATED FROM PRODUCTION. `deriveCardsLambda` in pipeline/predictHelpers.js is untouched
- * and remains the only λ the engine uses. This is the proposal being validated, kept in a
- * separate module precisely so it can be measured before anything depends on it.
+ * `deriveCardsLambda` in pipeline/predictHelpers.js delegates here (baseline resolution +
+ * shape adaptation only); Stage05 and Stage08 consume that. This module is therefore a
+ * production dependency, not a laboratory: a change here changes live Cards pricing.
  *
  * What it changes versus the production formula:
  *

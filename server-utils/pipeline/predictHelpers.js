@@ -6,6 +6,8 @@
 import { getWithCache } from "../fetcher.js";
 import { extractFixtureMarketStats, aggregateRollingForTeam, MIN_MARKET_SAMPLES } from "../teamMarketRolling.js";
 import { computeRollingXg } from "../xg/RollingXgModel.js";
+import { deriveCardsLambdaCandidate } from "../analysis/deriveCardsLambdaCandidate.js";
+import { deriveCardsBaselineFromRolling, resolveCardsBaseline } from "../analysis/empiricalCardsBaseline.js";
 import { extractAdvancedGoalsAverages, normalizeTeamStatisticsPayload, poissonOverLine, poissonOverLineCorrelated, clampLambda } from "../math.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../supabaseAdmin.js";
 
@@ -317,27 +319,125 @@ function leaguePriorLambdas(leagueParams = {}) {
 }
 
 /**
- * Team-aware cards λ: league prior × referee cards (or goals) factor × mild aggression from corners.
+ * Production Cards λ — C1.
+ *
+ * This is the validated two-sided candidate (`analysis/deriveCardsLambdaCandidate.js`),
+ * promoted: the arithmetic lives in that module and is NOT re-implemented here. This
+ * function only (1) resolves the league baseline and (2) adapts the result to the shape
+ * the stages consume. There is exactly one Cards model.
+ *
+ * UNIT: cardsTotal (yellow + red) end to end — the unit of `cards_for_avg`, of
+ * `marketResults.cardsTotal` and of the bookmaker "Total Cards" line. cardsPoints is
+ * never read here.
+ *
+ * BASELINE (fallback order, `resolveCardsBaseline`):
+ *   1. empirical current-season mean from the league's rolling rows (≥ 40 matches);
+ *   2. static `leagueParams.cardsAvgTotal ?? leagueParams.cards` (a prior, always usable);
+ *   3. unavailable → λ null.
+ * The previous-season branch of the resolver is not fed: that would cost a second query
+ * per fixture, which the hot path does not pay.
+ *
+ * TEAM SIDES: `deriveMarketLambdas(marketKey: "cards")` — Dixon-Coles multiplicative form
+ * shared with corners/shots, gated per side by `MIN_MARKET_SAMPLES` real cards samples.
+ * Below the gate on both sides the candidate reports `usedFallback` with the baseline split
+ * in two — it does not manufacture a team signal.
+ *
+ * BOUNDS: the candidate REJECTS a λ outside [CARDS_LAMBDA_MIN, CARDS_LAMBDA_MAX] (1–12
+ * cards) instead of clamping it — `lambda` is null and `reason` says why. The old
+ * clamp [2, 7.5] hid broken inputs behind a healthy-looking number; the rejection does not.
+ *
+ * REFEREE IS NOT AN INPUT. `modularScores` / `refereeStats` are accepted for call-site
+ * compatibility and deliberately ignored (see the candidate's module note: measured effect
+ * ≈ noise). `cornersBlock` is likewise ignored — aggression-by-proxy was the old model.
+ *
+ * Deterministic: same rolling rows + same league params ⇒ same output, no I/O.
+ *
+ * @returns {{
+ *   lambda: number|null, lambdaHome: number|null, lambdaAway: number|null,
+ *   baseline: {mean: number|null, sampleSize: number, sufficient: boolean, source: string},
+ *   confidence: number, sampleQuality: object, usedFallback: boolean,
+ *   fallbackReason: string|null, reason: string|null, source: string, unit: "cardsTotal"
+ * }}
  */
-function deriveCardsLambda({ leagueParams = {}, modularScores = null, cornersBlock = null } = {}) {
-  const base = Math.max(2, Number(leagueParams.cardsAvgTotal ?? leagueParams.cards) || 4.2);
-  const ref = modularScores?.referee?.detail || modularScores?.referee?.details || null;
-  let refFactor = 1;
-  if (ref && Number.isFinite(Number(ref.avgCards)) && Number(ref.avgCards) > 0) {
-    refFactor = Math.max(0.88, Math.min(1.12, Number(ref.avgCards) / base));
-  } else if (ref && Number.isFinite(Number(ref.cardsBoost))) {
-    refFactor = Math.max(0.88, Math.min(1.12, Number(ref.cardsBoost)));
-  } else if (ref && Number.isFinite(Number(ref.home)) && Number(ref.home) > 0) {
-    // Mild: goals-based referee boost is a weak cards prior
-    refFactor = Math.max(0.92, Math.min(1.08, 1 + (Number(ref.home) - 1) * 0.5));
-  }
-  let teamFactor = 1;
-  const cornersExp = Number(cornersBlock?.expectedTotal ?? cornersBlock?.lambdaTotal);
-  const cornersBase = Math.max(6, Number(leagueParams.cornersAvgTotal) || 10);
-  if (Number.isFinite(cornersExp) && cornersExp > 0) {
-    teamFactor = Math.max(0.9, Math.min(1.12, 0.75 + 0.25 * (cornersExp / cornersBase)));
-  }
-  return Math.max(2, Math.min(7.5, base * refFactor * teamFactor));
+function deriveCardsLambda({
+  leagueParams = {},
+  rollingHome = null,
+  rollingAway = null,
+  marketRollingMap = null,
+  leagueId = null,
+  season = null,
+  // Accepted, ignored — documented above. Named so a test can assert the independence.
+  modularScores: _modularScores = null,
+  cornersBlock: _cornersBlock = null,
+  refereeStats: _refereeStats = null
+} = {}) {
+  const rollingRows =
+    marketRollingMap instanceof Map
+      ? [...marketRollingMap.values()]
+      : Array.isArray(marketRollingMap)
+        ? marketRollingMap
+        : [];
+  const current = rollingRows.length
+    ? deriveCardsBaselineFromRolling(rollingRows, { leagueId, season })
+    : null;
+  const resolved = resolveCardsBaseline({
+    current,
+    staticCards: leagueParams.cardsAvgTotal ?? leagueParams.cards ?? null,
+    leagueId,
+    season
+  });
+  const baseline = {
+    mean: resolved.cards_total_mean,
+    sampleSize: resolved.sample_size,
+    sufficient: resolved.sufficient,
+    source: resolved.source
+  };
+
+  const homeAdv = Number.isFinite(Number(leagueParams.homeAdv)) ? Number(leagueParams.homeAdv) : 1.06;
+  const awayAdv = Number.isFinite(Number(leagueParams.awayAdv)) ? Number(leagueParams.awayAdv) : 0.96;
+
+  const candidate = deriveCardsLambdaCandidate({
+    baseline,
+    rollingHome,
+    rollingAway,
+    homeAdv,
+    awayAdv
+  });
+
+  const rejected = candidate.lambda == null || candidate.outOfBounds;
+  return {
+    lambda: rejected ? null : candidate.lambda,
+    lambdaHome: rejected ? null : candidate.components.lambdaHome,
+    lambdaAway: rejected ? null : candidate.components.lambdaAway,
+    baseline,
+    confidence: candidate.confidence,
+    sampleQuality: candidate.sampleQuality,
+    usedFallback: Boolean(candidate.sampleQuality?.usedFallback),
+    fallbackReason: candidate.sampleQuality?.fallbackReason ?? null,
+    reason: candidate.reason ?? null,
+    source: candidate.source,
+    unit: "cardsTotal"
+  };
+}
+
+/**
+ * The minimal Poisson block Stage08 prices cards lines from when the (opt-in) full
+ * `cardsBlock` is absent. Two-sided — both team λ carried — so a per-line price is
+ * `P(total > line)` on λ_home + λ_away, the same total the model reports. Correlation 0:
+ * the candidate does not estimate a cards correlation and none is invented here.
+ * A rejected λ yields no block: nothing is priced from a number the model withheld.
+ */
+function buildCardsPricingBlock(cardsLambda) {
+  if (!cardsLambda || cardsLambda.lambda == null) return null;
+  if (!Number.isFinite(cardsLambda.lambdaHome) || !Number.isFinite(cardsLambda.lambdaAway)) return null;
+  return {
+    lambdaHome: cardsLambda.lambdaHome,
+    lambdaAway: cardsLambda.lambdaAway,
+    lambdaTotal: cardsLambda.lambda,
+    correlation: 0,
+    total: {},
+    unit: "cardsTotal"
+  };
 }
 
 /**
@@ -889,6 +989,7 @@ export {
   syntheticLeagueAvgStats,
   leaguePriorLambdas,
   deriveCardsLambda,
+  buildCardsPricingBlock,
   isGoodNum,
   roundDisplayRate,
   clampPct,

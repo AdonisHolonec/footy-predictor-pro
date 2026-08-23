@@ -28,16 +28,16 @@ const OWN_SAMPLE_ONLY_MARKETS = new Set(["cards"]);
 
 /**
  * Sample-ul real pentru o familie de piaţă. Rândurile agregate in-memory au
- * samples_by_market per familie; rândurile persistate (team_market_rolling) nu au
- * coloana → cădem pe matches_sampled, cea mai bună informaţie disponibilă acolo.
+ * samples_by_market per familie; din migraţia 058 coloana există şi pe rândurile
+ * persistate (C1), deci contorul supravieţuieşte upsert-ului. Rândurile scrise înainte de
+ * rebuild au coloana null → cădem pe matches_sampled, cea mai bună informaţie de acolo.
  *
  * CARDS IS THE EXCEPTION, AND IT FAILS CLOSED. When the cards counter is absent the honest
  * answer is "unknown", and an unknown sample count must not clear a threshold — so cards
  * report 0 and `deriveMarketLambdas` returns its existing `insufficient_data` fallback to
- * the league prior. That is an already-tested path, not new behaviour. A persisted row
- * carries no cards counter today, so cards rolling is trusted only where the count is
- * known; restoring it for persisted rows means persisting the count, which needs its own
- * column and is deliberately not done here.
+ * the league prior. A row persisted before the 058 rebuild therefore still reports 0 cards
+ * samples; only a row carrying the counter is trusted. Missing is not zero, and it is not
+ * "borrow another market's count" either.
  *
  * `Number(null)` is 0 and finite, so an explicit null counter reads as zero observations —
  * which is the correct reading: none were recorded.
@@ -352,31 +352,87 @@ export async function persistTeamMarketRolling(rows) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "Supabase nu este configurat" };
   if (!Array.isArray(rows) || rows.length === 0) return { ok: true, count: 0 };
-  // Câmpuri exclusiv in-memory (nu există coloane în schema team_market_rolling) — le
-  // eliminăm ca upsert-ul să nu eşueze pe coloană necunoscută. samples_by_market e
-  // diagnostic; cards_points_* sunt unitatea alternativă păstrată pentru analiza care va
-  // decide empiric unitatea corectă, şi ar avea nevoie de propria migrare ca să persiste.
-  const payload = rows.map(
-    ({
-      samples_by_market: _samples,
-      cards_points_for_avg: _cpFor,
-      cards_points_against_avg: _cpAgainst,
-      cards_points_for_home_avg: _cpForHome,
-      cards_points_against_home_avg: _cpAgainstHome,
-      cards_points_for_away_avg: _cpForAway,
-      cards_points_against_away_avg: _cpAgainstAway,
-      ...cols
-    }) => ({
-      ...cols,
-      updated_at: new Date().toISOString()
-    })
-  );
+  // cards_points_* rămân exclusiv in-memory (nu au coloane): unitatea alternativă este
+  // păstrată pentru analiză şi ar avea nevoie de propria migrare ca să persiste.
+  // samples_by_market SE PERSISTĂ (migraţia 058, C1): fără el contorul de cartonaşe al
+  // unui rând reîncărcat este necunoscut şi `marketSampleCount` cade corect pe 0, ceea ce
+  // făcea mediile cards_* persistate inutilizabile pentru λ.
+  const payload = buildRollingPersistPayload(rows, new Date().toISOString());
   const { error } = await supabase.from(TABLE).upsert(payload, {
     onConflict: "team_id,league_id,season"
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Deploy-before-migrate window: the column is not there yet. Persist the averages
+    // without the counter rather than dropping the whole rebuild, and say so in the
+    // result — callers/logs can see the rolling is live but the cards counter is not.
+    if (isMissingSamplesColumnError(error)) {
+      const fallback = payload.map(({ samples_by_market: _s, ...cols }) => cols);
+      const retry = await supabase.from(TABLE).upsert(fallback, {
+        onConflict: "team_id,league_id,season"
+      });
+      if (retry.error) return { ok: false, error: retry.error.message };
+      cached = { fetchedAt: 0, byKey: new Map() };
+      return { ok: true, count: rows.length, samplesPersisted: false, warning: error.message };
+    }
+    return { ok: false, error: error.message };
+  }
   cached = { fetchedAt: 0, byKey: new Map() };
-  return { ok: true, count: rows.length };
+  return { ok: true, count: rows.length, samplesPersisted: true };
+}
+
+/**
+ * The exact rows handed to the upsert. Pure, so the round trip (aggregate → persist →
+ * reload → marketSampleCount) is testable without a database.
+ *
+ * Keeps every column the table has — including samples_by_market (058) — and strips the
+ * cards_points_* twins, which have no columns.
+ */
+export function buildRollingPersistPayload(rows, updatedAt) {
+  const stripPoints = ({
+    cards_points_for_avg: _cpFor,
+    cards_points_against_avg: _cpAgainst,
+    cards_points_for_home_avg: _cpForHome,
+    cards_points_against_home_avg: _cpAgainstHome,
+    cards_points_for_away_avg: _cpForAway,
+    cards_points_against_away_avg: _cpAgainstAway,
+    ...cols
+  }) => cols;
+  return rows.map((row) => {
+    const cols = stripPoints(row);
+    return {
+      ...cols,
+      samples_by_market: normalizeSamplesByMarket(cols.samples_by_market),
+      updated_at: updatedAt
+    };
+  });
+}
+
+/**
+ * Persisted shape of samples_by_market: integer counters only, one per family, nothing
+ * else. A counter that is not a finite number is written as null (unknown), never as 0.
+ */
+export const SAMPLES_BY_MARKET_KEYS = Object.freeze([
+  "corners",
+  "cards",
+  "cards_home",
+  "cards_away",
+  "sot",
+  "shots_total"
+]);
+
+export function normalizeSamplesByMarket(value) {
+  if (!value || typeof value !== "object") return null;
+  const out = {};
+  for (const key of SAMPLES_BY_MARKET_KEYS) {
+    const n = value[key];
+    out[key] = n == null || n === "" || !Number.isFinite(Number(n)) ? null : Math.trunc(Number(n));
+  }
+  return out;
+}
+
+export function isMissingSamplesColumnError(error) {
+  const msg = String(error?.message || "");
+  return /samples_by_market/i.test(msg) && /(column|schema cache|does not exist|PGRST204)/i.test(msg);
 }
 
 export function invalidateTeamMarketRollingCache() {
