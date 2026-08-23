@@ -11,7 +11,7 @@ import ValueCard from "./ValueCard";
 import ExplanationCard from "./ExplanationCard";
 import FeatureImportanceChart from "./FeatureImportanceChart";
 import { PredictionRow } from "../types";
-import { isFixtureInPlay } from "../utils/appUtils";
+import { hasRunningScore, isFixtureInPlay } from "../utils/appUtils";
 import { resolveCardMarketOutcome } from "../utils/cardMarketOutcome";
 import { formatRecommendedPick } from "../utils/formatRecommendation";
 import MarketFamilyIcon from "./icons/MarketFamilyIcon";
@@ -91,15 +91,9 @@ export default function MatchCard({
   const recommendedOutcome = resolveCardMarketOutcome("recommended", row);
   const finalPickResult =
     recommendedOutcome === "win" ? true : recommendedOutcome === "loss" ? false : null;
-  const hasNumericScore =
-    row.score != null && typeof row.score.home === "number" && typeof row.score.away === "number";
-  const koMs = new Date(row.kickoff).getTime();
-  const pastKickoffPollWindow = Number.isFinite(koMs) && Date.now() >= koMs - 15 * 60 * 1000;
-  /** Scor parțial: live sau după start până la FT (inclusiv când `status` încă e NS). */
-  const showRunningScore =
-    hasNumericScore &&
-    !hasFinalScore &&
-    (isLive || (pastKickoffPollWindow && !isFinalStatus(row.status)));
+  // Shared running-score predicate: terminal / abandoned statuses and fixtures
+  // past the poll grace never read as a running score (live-state audit).
+  const showRunningScore = hasRunningScore(row);
   const liveMinuteLabel = isLive ? formatLiveMinute(row.score?.minute, row.score?.extra) : null;
   const kickoffDate = new Date(row.kickoff);
   const chip = statusChip(row, confPct, hasFinalScore, finalPickResult, isLive, t);

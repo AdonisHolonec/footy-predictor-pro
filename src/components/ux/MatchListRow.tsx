@@ -88,8 +88,10 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
 
   const live = isFixtureInPlay(row.status);
   const finished = isFinalStatus(row.status);
+  // Explicit numeric check: Number(null) is 0, which printed "null–null" for an
+  // in-play fixture whose score had not arrived (live-state audit, case B).
   const hasScore =
-    (live || finished) && Number.isFinite(Number(row.score?.home)) && Number.isFinite(Number(row.score?.away));
+    (live || finished) && typeof row.score?.home === "number" && typeof row.score?.away === "number";
 
   const kickoff = new Date(row.kickoff);
   const kickoffLabel = Number.isFinite(kickoff.getTime())

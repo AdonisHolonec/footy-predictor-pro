@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import type { MatchLiveEvent, MomentumRawStats, PredictionRow } from "../types";
-import { isFixtureInPlay } from "../utils/appUtils";
+import { isFixtureInPlay, isTerminalOrAbandonedStatus } from "../utils/appUtils";
 import { fetchWithAuth } from "../utils/apiAuth";
 import { useLocale } from "../context/LocaleContext";
 
 /** Interval between live score polls — keep ≥ server LIVE_SCORES_CACHE_TTL_SEC for cache hits. */
 export const LIVE_SCORE_POLL_MS = 75_000;
-
-function isTerminalOrAbandonedStatus(status?: string): boolean {
-  const s = String(status ?? "")
-    .trim()
-    .toUpperCase();
-  return ["FT", "AET", "PEN", "CANC", "PST", "ABD", "AWD", "WO"].includes(s);
-}
 
 /**
  * Include meciuri în desfășurare și meciuri „NS” încă neactualizate după start (predict vechi),

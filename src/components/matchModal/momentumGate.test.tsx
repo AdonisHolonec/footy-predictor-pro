@@ -92,9 +92,24 @@ function momentumSlotShown(): boolean {
 }
 
 /** Live score in the compact header — gated on hasLiveScore, untouched here. */
-function liveScoreChipShown(): boolean {
+/** The SCORE question: the centre slot prints a score (digits with the en dash). */
+function runningScoreShown(): boolean {
   const centre = document.querySelector('[data-layer="header"] [data-slot="centre"]');
-  return Boolean(centre && /--fp-live/.test(centre.className) && /\d/.test(centre.textContent || ""));
+  return Boolean(centre && /\d+–\d+/.test(centre.textContent || ""));
+}
+
+/** The LIVE question: live colour on the centre slot and the pulsing dot in the status slot. */
+function liveIdentityShown(): boolean {
+  const centre = document.querySelector('[data-layer="header"] [data-slot="centre"]');
+  const status = document.querySelector('[data-layer="header"] [data-slot="status"]');
+  return Boolean(
+    centre && /--fp-live/.test(centre.className) && status && status.querySelector(".animate-pulse, [class*='animate-pulse']")
+  );
+}
+
+/** Both at once — what a genuinely live fixture with a score shows. */
+function liveScoreChipShown(): boolean {
+  return runningScoreShown() && liveIdentityShown();
 }
 
 /** LiveWinProbabilityStrip — the OverviewHero line directly above the Momentum gate. */
@@ -166,13 +181,16 @@ describe("live score strip is unaffected by the Momentum gate", () => {
     // lags behind reality, so a numeric score must still surface. Only Momentum waits
     // for a real in-play status.
     renderModal({ status: "NS" });
-    expect(liveScoreChipShown(), "live score chip lost for NS past kickoff").toBe(true);
+    expect(runningScoreShown(), "running score lost for NS past kickoff").toBe(true);
+    // Live-state fix: the score stays, but nothing claims the match is live.
+    expect(liveIdentityShown(), "NS in the grace window must not read as LIVE").toBe(false);
     expect(momentumSlotShown(), "Momentum shown for a fixture reported NS").toBe(false);
   });
 
   it("still shows a live score for a TBD fixture past kickoff while hiding Momentum", () => {
     renderModal({ status: "TBD" });
-    expect(liveScoreChipShown(), "live score chip lost for TBD past kickoff").toBe(true);
+    expect(runningScoreShown(), "running score lost for TBD past kickoff").toBe(true);
+    expect(liveIdentityShown(), "TBD in the grace window must not read as LIVE").toBe(false);
     expect(momentumSlotShown()).toBe(false);
   });
 
@@ -230,7 +248,9 @@ describe("Momentum gate is independent of score availability", () => {
     // hasLiveScore is false here (no numeric score), so the old gate hid Momentum
     // for a match that is demonstrably being played.
     renderModal({ status: "1H", score: { home: null, away: null, minute: 12 } });
-    expect(liveScoreChipShown(), "no numeric score means no live chip").toBe(false);
+    expect(runningScoreShown(), "no numeric score means no score in the slot").toBe(false);
+    // Live-state fix: in play is in play — the identity shows even before the score arrives.
+    expect(liveIdentityShown(), "in-play fixture must still read as LIVE without a score").toBe(true);
     expect(momentumSlotShown(), "Momentum hidden for an in-play fixture missing a score").toBe(true);
   });
 

@@ -181,9 +181,17 @@ export default function MatchModal({
   const isInPlay = isFixtureInPlay(match.status);
   const liveMinute = formatLiveMinute(match.score?.minute, match.score?.extra);
   const kickoffTime = new Date(match.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // In play with no score yet: "vs", never the kickoff time — the match has started.
   const centreLabel =
-    hasNumericScore && (hasFinalScore || hasLiveScore) ? `${match.score?.home}–${match.score?.away}` : kickoffTime;
-  const statusLabel = hasLiveScore
+    hasNumericScore && (hasFinalScore || hasLiveScore)
+      ? `${match.score?.home}–${match.score?.away}`
+      : isInPlay
+        ? tr("common.vs")
+        : kickoffTime;
+  // LIVE identity (label, colour, dot) is the in-play question; the score slot
+  // is the score question. An NS fixture in the poll grace shows its score in
+  // neutral colour with the date — it never claims to be live.
+  const statusLabel = isInPlay
     ? (liveMinute ?? tr("card.live"))
     : hasFinalScore
       // Settlement token in the header slot: the one place the outcome is stated.
@@ -259,7 +267,7 @@ export default function MatchModal({
               <span
                 data-slot="centre"
                 className={`font-mono text-sm font-bold tabular-nums sm:text-base ${
-                  hasLiveScore ? "text-[var(--fp-live)]" : "text-[var(--fp-text)]"
+                  isInPlay ? "text-[var(--fp-live)]" : "text-[var(--fp-text)]"
                 }`}
               >
                 {centreLabel}
@@ -267,10 +275,10 @@ export default function MatchModal({
               <span
                 data-slot="status"
                 className={`mt-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tabular-nums ${
-                  hasLiveScore ? "text-[var(--fp-live)]" : "text-[var(--fp-text-muted)]"
+                  isInPlay ? "text-[var(--fp-live)]" : "text-[var(--fp-text-muted)]"
                 }`}
               >
-                {hasLiveScore && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--fp-live)] motion-safe:animate-pulse" />}
+                {isInPlay && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--fp-live)] motion-safe:animate-pulse" />}
                 {statusLabel}
               </span>
             </span>
