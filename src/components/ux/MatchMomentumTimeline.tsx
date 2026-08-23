@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MatchLiveEvent, MatchLiveEventType, MatchScore, MomentumRawStats, PredictionRow } from "../../types";
+import type {
+  MatchLiveEvent,
+  MatchLiveEventType,
+  MatchScore,
+  MomentumHistoryPoint,
+  MomentumRawStats,
+  PredictionRow
+} from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import Tooltip from "../../design-system/Tooltip";
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
-type HistoryPoint = { minute: number; homeMomentum: number; awayMomentum: number };
+type HistoryPoint = MomentumHistoryPoint;
 export type TimelineEvent = {
   minute: number;
   extra?: number | null;
@@ -33,7 +40,12 @@ type Props = {
   confidenceLabel: string;
   /** Real AI-generated one-sentence narration from the server (opt-in) — takes priority over the local deterministic sentence when present; null/absent is a normal, expected state, not an error. */
   momentumNarrative?: string | null;
-  /** UX-D: the Live layer renders events, stats and the story as their own disclosures; false hides the nested panel here so nothing is stated twice. */
+  /**
+   * UX-D: the Live layer renders events, stats and the story as their own disclosures.
+   * false means the host owns those facts, so this widget hides its nested panel AND its
+   * own stat chips / recent-event strip — Momentum states who had the initiative and when,
+   * never the numbers or the event list a sibling section already shows.
+   */
   detailsPanel?: boolean;
 };
 
@@ -114,13 +126,40 @@ export type MomentumSegment = {
 /** Same threshold as MomentumEngine's dominantTeam — see server-utils/momentum/MomentumEngine.js. */
 const DOMINANCE_THRESHOLD_PP = 10;
 
+/** A reading is usable only when every number that becomes geometry is finite. */
+function isFinitePoint(pt: HistoryPoint | null | undefined): pt is HistoryPoint {
+  return (
+    pt != null && Number.isFinite(pt.minute) && Number.isFinite(pt.homeMomentum) && Number.isFinite(pt.awayMomentum)
+  );
+}
+
+/**
+ * Chronological union of two sample lists, one point per minute (the earlier list wins a
+ * tie). Invalid points are dropped here so NaN/Infinity never reach the chart.
+ */
+export function mergeHistoryPoints(primary: HistoryPoint[] | undefined, secondary: HistoryPoint[]): HistoryPoint[] {
+  const byMinute = new Map<number, HistoryPoint>();
+  for (const pt of [...(primary ?? []), ...secondary]) {
+    if (!isFinitePoint(pt) || byMinute.has(pt.minute)) continue;
+    byMinute.set(pt.minute, pt);
+  }
+  return Array.from(byMinute.values()).sort((a, b) => a.minute - b.minute);
+}
+
+/**
+ * Each interval runs from the PREVIOUS reading to this one. The first reading has no
+ * predecessor, so it is a point (fromMinute === toMinute): momentum is computed from
+ * cumulative stats, and one sample taken at 63' says nothing about how the first hour
+ * was distributed — drawing it as a 0'–63' block is what made the chart a single slab.
+ */
 export function buildTimelineSegments(history: HistoryPoint[]): MomentumSegment[] {
   const segments: MomentumSegment[] = [];
-  let from = 0;
+  let from: number | null = null;
   for (const pt of history) {
+    if (!isFinitePoint(pt)) continue;
     const diff = pt.homeMomentum - pt.awayMomentum;
     segments.push({
-      fromMinute: from,
+      fromMinute: from ?? pt.minute,
       toMinute: pt.minute,
       side: diff > DOMINANCE_THRESHOLD_PP ? "home" : diff < -DOMINANCE_THRESHOLD_PP ? "away" : "neutral",
       magnitude: Math.min(1, Math.abs(diff) / 100),
@@ -242,8 +281,16 @@ export function statLabel(t: (key: string) => string, kind: keyof MomentumRawSta
       return t("match.momentumShotsOnTarget");
     case "corners":
       return t("match.momentumCorners");
-    default:
-      return "";
+    case "yellowCards":
+      return t("match.momentumYellowCards");
+    case "redCards":
+      return t("match.momentumRedCards");
+    default: {
+      // NO VALUE WITHOUT LABEL: a new MomentumRawStats key is a compile error here until
+      // it gets a catalogue label.
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
   }
 }
 
@@ -342,10 +389,14 @@ export function StatRow({
   suffix?: string;
 }) {
   if (home == null && away == null) return null;
+  // Runtime twin of the exhaustive switch above: a value with no name is not rendered.
+  if (!label) return null;
   const h = home ?? 0;
   const a = away ?? 0;
   const total = h + a;
-  const homeShare = total > 0 ? h / total : 0.5;
+  // 0–0 is two empty bars, not two half bars: a share only exists once something was counted.
+  const homeShare = total > 0 ? h / total : 0;
+  const awayShare = total > 0 ? a / total : 0;
   return (
     <div className="flex items-center gap-2 text-[11px] sm:text-xs">
       <span className="w-8 shrink-0 text-right font-mono font-semibold tabular-nums text-[var(--fp-accent)]">
@@ -363,7 +414,7 @@ export function StatRow({
       <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-[var(--fp-border)]">
         <div
           className="ml-auto h-full origin-right bg-[var(--fp-danger)] transition-transform duration-500"
-          style={{ transform: `scaleX(${1 - homeShare})`, width: "100%" }}
+          style={{ transform: `scaleX(${awayShare})`, width: "100%" }}
         />
       </div>
       <span className="w-8 shrink-0 font-mono font-semibold tabular-nums text-[var(--fp-danger)]">
@@ -428,7 +479,7 @@ export default function MatchMomentumTimeline({
   detailsPanel = true
 }: Props) {
   const { t } = useLocale();
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [localHistory, setLocalHistory] = useState<HistoryPoint[]>([]);
   const [inferredEvents, setInferredEvents] = useState<TimelineEvent[]>([]);
   const [filter, setFilter] = useState<EventFilter>("all");
   const fixtureRef = useRef<number | null>(null);
@@ -456,12 +507,12 @@ export default function MatchMomentumTimeline({
     if (fixtureRef.current !== fixtureId) {
       fixtureRef.current = fixtureId;
       prevRef.current = null;
-      setHistory([]);
+      setLocalHistory([]);
       setInferredEvents([]);
     }
     if (minute == null) return;
 
-    setHistory((prev) => {
+    setLocalHistory((prev) => {
       if (prev.length && prev[prev.length - 1].minute === minute) return prev;
       const next = [...prev, { minute, homeMomentum: momentum.homeMomentum, awayMomentum: momentum.awayMomentum }];
       return next.length > MAX_HISTORY_POINTS ? next.slice(next.length - MAX_HISTORY_POINTS) : next;
@@ -526,6 +577,11 @@ export default function MatchMomentumTimeline({
     return inferredEvents;
   }, [hasRealEvents, liveEvents, inferredEvents]);
 
+  // The poll hook keeps a per-row sample history from the first poll after page load; the
+  // local samples only add readings taken while this widget was mounted (and carry the
+  // OverviewHero path, which has no row history of its own).
+  const history = useMemo(() => mergeHistoryPoints(momentum.history, localHistory), [momentum.history, localHistory]);
+
   const filteredEvents = useMemo(
     () => (filter === "all" ? displayEvents : displayEvents.filter((ev) => eventGroup(ev.kind) === filter)),
     [displayEvents, filter]
@@ -579,8 +635,11 @@ export default function MatchMomentumTimeline({
   // quiet match with neither source firing gets an explicit neutral statement, never a blank line.
   const isAiAnchor = Boolean(momentumNarrative);
   const anchorText = momentumNarrative || matchStory[0] || t("match.momentumNeutral");
-  const whyChips = deriveWhyChips(t, homeTeam, awayTeam, raw);
-  const recentMoments = displayEvents.slice(-RECENT_MOMENTS_COUNT);
+  const whyChips = detailsPanel ? deriveWhyChips(t, homeTeam, awayTeam, raw) : [];
+  const recentMoments = detailsPanel ? displayEvents.slice(-RECENT_MOMENTS_COUNT) : [];
+  const firstObservedMinute = history[0]?.minute ?? 0;
+  const lastObservedMinute = history[history.length - 1]?.minute ?? 0;
+  const isCollecting = history.length < 2;
 
   // Transparent segmented timeline — the approved momentum visual. Each segment is one
   // observed interval, coloured by the team identity colour the whole app already uses
@@ -691,6 +750,10 @@ export default function MatchMomentumTimeline({
           )}
 
           <div className="relative z-[1] flex h-[68px] w-full items-stretch gap-px sm:h-[92px]">
+            {/* Minutes before the first reading were not observed — blank, not a bar. */}
+            {firstObservedMinute > 0 && (
+              <div aria-hidden data-testid="momentum-unobserved" style={{ flexGrow: firstObservedMinute, flexBasis: 0 }} />
+            )}
             {timelineSegments.map((seg, i) => {
               const level = threatLevel(seg);
               const height = THREAT_HEIGHT_PCT[level];
@@ -762,13 +825,20 @@ export default function MatchMomentumTimeline({
               );
             })}
             {/* Un-played remainder — keeps minute proportions honest against the ticks. */}
-            {stripEndMinute > (history[history.length - 1]?.minute ?? 0) && (
-              <div
-                aria-hidden
-                style={{ flexGrow: stripEndMinute - (history[history.length - 1]?.minute ?? 0), flexBasis: 0 }}
-              />
+            {stripEndMinute > lastObservedMinute && (
+              <div aria-hidden style={{ flexGrow: stripEndMinute - lastObservedMinute, flexBasis: 0 }} />
             )}
           </div>
+
+          {/* NOW — the live minute, so the reader can tell observed from still-to-play. */}
+          {minute != null && (
+            <div
+              aria-hidden
+              data-testid="momentum-now"
+              className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-[var(--fp-live)]"
+              style={{ left: xPct(minute) }}
+            />
+          )}
 
           {/* The baseline itself — drawn over the bars so the mirror axis is unambiguous. */}
           <div
@@ -835,6 +905,12 @@ export default function MatchMomentumTimeline({
             </span>
           )}
         </div>
+
+        {isCollecting && (
+          <p data-testid="momentum-collecting" className="mt-1.5 text-[10px] text-[var(--fp-text-muted)]">
+            {t("match.momentumCollecting")}
+          </p>
+        )}
 
         <p
           key={anchorText}

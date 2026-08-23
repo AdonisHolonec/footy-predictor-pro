@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
-import type { MatchLiveEvent, MomentumRawStats, PredictionRow } from "../types";
+import type { MatchLiveEvent, MomentumHistoryPoint, MomentumRawStats, PredictionRow } from "../types";
 import { isFixtureInPlay, isTerminalOrAbandonedStatus } from "../utils/appUtils";
 import { fetchWithAuth } from "../utils/apiAuth";
 import { useLocale } from "../context/LocaleContext";
@@ -31,6 +31,29 @@ const MAX_LIVE_CONFIDENCE_DELTA = 5;
 type LiveAdjustment = NonNullable<NonNullable<PredictionRow["confidenceEngine"]>["liveAdjustment"]>;
 type Momentum = NonNullable<PredictionRow["momentum"]>;
 
+/** Cap on retained momentum samples per row — one per observed minute, so ~a full match plus extra time. */
+export const MAX_MOMENTUM_HISTORY_POINTS = 160;
+
+/**
+ * Append one observed momentum reading to the row's sample history. Pure: returns a new
+ * array. A reading is recorded only when its minute is known and differs from the last
+ * recorded one (the poll fires more often than the clock advances), and only when both
+ * momentum numbers are finite, so no NaN/Infinity ever reaches the chart geometry.
+ */
+export function appendMomentumHistory(
+  previous: MomentumHistoryPoint[] | undefined,
+  minute: number | null | undefined,
+  momentum: Pick<Momentum, "homeMomentum" | "awayMomentum">
+): MomentumHistoryPoint[] {
+  const base = Array.isArray(previous) ? previous : [];
+  if (minute == null || !Number.isFinite(minute)) return base;
+  if (!Number.isFinite(momentum.homeMomentum) || !Number.isFinite(momentum.awayMomentum)) return base;
+  const last = base[base.length - 1];
+  if (last && last.minute === minute) return base;
+  const next = [...base, { minute, homeMomentum: momentum.homeMomentum, awayMomentum: momentum.awayMomentum }];
+  return next.length > MAX_MOMENTUM_HISTORY_POINTS ? next.slice(next.length - MAX_MOMENTUM_HISTORY_POINTS) : next;
+}
+
 /**
  * Merge server momentum into the in-memory row.
  * Transient nulls (empty stats / rate limit / uncached miss) must NOT wipe a previously
@@ -40,15 +63,19 @@ type Momentum = NonNullable<PredictionRow["momentum"]>;
 export function mergeLiveMomentum(
   previous: PredictionRow["momentum"] | null | undefined,
   incoming: PredictionRow["momentum"] | null | undefined,
-  nextStatus: string
+  nextStatus: string,
+  minute: number | null = null
 ): PredictionRow["momentum"] | null {
   if (incoming) {
-    if (!previous) return incoming;
+    // The sample history is the client's own — the server never sends one, so it is
+    // carried over from the previous row and extended with this reading.
+    const history = appendMomentumHistory(previous?.history, minute, incoming);
+    if (!previous) return { ...incoming, history };
     const prevDiff = previous.homeMomentum - previous.awayMomentum;
     const nextDiff = incoming.homeMomentum - incoming.awayMomentum;
     const delta = nextDiff - prevDiff;
     const trend: Momentum["trend"] = delta > 3 ? "up" : delta < -3 ? "down" : "stable";
-    return { ...incoming, trend };
+    return { ...incoming, trend, history };
   }
   if (previous && isFixtureInPlay(nextStatus)) return previous;
   return null;
@@ -159,7 +186,9 @@ export function useLiveFixtureScorePoll(preds: PredictionRow[], setPreds: SetPre
             // by diffing against the previous in-memory momentum (no history stored).
             // Preserve last good momentum on transient null while still in play.
             const nextStatus = u.status || p.status;
-            const momentum = mergeLiveMomentum(p.momentum, u.momentum, nextStatus);
+            const nextMinute =
+              u.elapsed != null && Number.isFinite(Number(u.elapsed)) ? Number(u.elapsed) : (p.score?.minute ?? null);
+            const momentum = mergeLiveMomentum(p.momentum, u.momentum, nextStatus, nextMinute);
             const liveAdjustment = deriveLiveConfidenceAdjustment(p.recommended?.pick, momentum);
             return {
               ...p,

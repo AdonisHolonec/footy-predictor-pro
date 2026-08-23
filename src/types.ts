@@ -445,6 +445,9 @@ export type MomentumRawStats = {
   redCards: number | null;
 };
 
+/** One observed momentum reading at a match minute. */
+export type MomentumHistoryPoint = { minute: number; homeMomentum: number; awayMomentum: number };
+
 export type MatchLiveEventType =
   | "goal"
   | "ownGoal"
@@ -487,6 +490,13 @@ export type PredictionRow = {
     confidence: number;
     /** Raw per-team inputs behind the composite score — absent fields mean that stat wasn't reported. */
     raw?: { home: MomentumRawStats; away: MomentumRawStats };
+    /**
+     * Client-side sample history, one point per distinct minute observed by the live poll
+     * (useLiveFixtureScorePoll). The server is stateless and never sends this; it is what
+     * the momentum timeline draws, so the series exists from the first poll after page load
+     * rather than from the moment Match Detail was opened.
+     */
+    history?: MomentumHistoryPoint[];
   } | null;
   /** Real match events from /fixtures/events (in-play only) — absent/empty means the timeline falls back to inference. */
   liveEvents?: MatchLiveEvent[];
