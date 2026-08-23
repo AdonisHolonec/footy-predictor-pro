@@ -58,13 +58,15 @@ describe("buildTimelineSegments (pure presentation mapping)", () => {
       { minute: 25, homeMomentum: 70, awayMomentum: 30 },
       { minute: 30, homeMomentum: 30, awayMomentum: 70 }
     ]);
+    // The first reading has no predecessor: it is a point, never a 0'→first-minute block
+    // (that block was the "single slab" bug when Match Detail opened mid-match).
     expect(segments.map((s) => [s.fromMinute, s.toMinute])).toEqual([
-      [0, 5],
+      [5, 5],
       [5, 25],
       [25, 30]
     ]);
-    // Duration → width mapping input: 5, 20 and 5 minutes respectively.
-    expect(segments.map((s) => s.toMinute - s.fromMinute)).toEqual([5, 20, 5]);
+    // Duration → width mapping input: 0 (point), 20 and 5 minutes respectively.
+    expect(segments.map((s) => s.toMinute - s.fromMinute)).toEqual([0, 20, 5]);
   });
 
   it("maps dominance magnitude into 0..1 without altering the underlying numbers", () => {
@@ -201,7 +203,8 @@ describe("MatchMomentumTimeline — mirrored momentum chart", () => {
   it("bar widths still grow with the real minute interval they cover", () => {
     const { rerender } = render(<MatchMomentumTimeline {...baseProps(5, 70)} />);
     rerender(<MatchMomentumTimeline {...baseProps(25, 70)} />);
-    expect(bars().map((b) => b.style.flexGrow)).toEqual(["5", "20"]);
+    // First reading = point (min width 1), then the real 20-minute interval.
+    expect(bars().map((b) => b.style.flexGrow)).toEqual(["1", "20"]);
   });
 
   it("each bar still carries a minute/team label", () => {
