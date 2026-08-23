@@ -10,6 +10,7 @@ import { MODEL_VERSION } from "../../modelConstants.js";
 import { buildPredictionLaboratory } from "../../predictionLaboratory/PredictionLaboratory.js";
 import { PIPELINE_TRACE_VERSION, buildPipelineTrace } from "../pipelineTrace.js";
 import { roundDisplayRate, marketTier } from "../predictHelpers.js";
+import { toRefereeCardsContext } from "../../context/refereeStatsFromHistory.js";
 
 
 export const STAGE_ID = "Stage09Explainability";
@@ -177,6 +178,8 @@ export async function run(context) {
         away: typeof fx.goals?.away === "number" ? fx.goals.away : null
       },
       referee: refereeName || undefined,
+      // C3: referee discipline context (supporting statistic; the Cards λ does not use it).
+      refereeCards: toRefereeCardsContext(f.engineCtx?.refereeStats),
       venue: f.venue || undefined,
       lambdas: { home: roundDisplayRate(lambdaHome), away: roundDisplayRate(lambdaAway) },
       monteCarlo,

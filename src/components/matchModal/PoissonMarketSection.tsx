@@ -32,7 +32,7 @@ export default function PoissonMarketSection({
   actualTotal?: number | null;
   quotedOdd?: number | null;
   quoteSource?: string | null;
-  badgeTone?: "corners" | "shots" | "ht" | "neutral";
+  badgeTone?: "corners" | "shots" | "cards" | "ht" | "neutral";
   framed?: boolean;
 }) {
   const { t: tr } = useLocale();

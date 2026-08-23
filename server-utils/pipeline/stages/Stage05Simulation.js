@@ -216,11 +216,13 @@ export async function run(context) {
       liveRollingApplied
     };
 
-    // === PIAŢĂ CARTONAŞE (Poisson pe λ C1, unitate cardsTotal = galbene + roşii) ===
-    // Neactivă implicit — PREDICT_ENABLE_CARDS trebuie setat explicit la "1". Acelaşi λ
-    // pe care Stage08 îl foloseşte la preţuire (un singur model Cards); un λ respins de
-    // model (fără baseline, în afara intervalului plauzibil) nu produce bloc.
-    if (String(process.env.PREDICT_ENABLE_CARDS || "").trim() === "1") {
+    // === PIAŢĂ CARTONAŞE (Poisson pe λ C1b, unitate cardsTotal = galbene + roşii) ===
+    // C3: calculat pentru fiecare predicţie, ca Cornere / Şuturi. Vizibilitatea către
+    // utilizator o dă exclusiv maskPredictionForTier (probs.cards şters sub Ultra) — nu un
+    // flag de mediu. `PREDICT_ENABLE_CARDS=0` rămâne un kill-switch explicit, niciodată
+    // implicit. Acelaşi λ pe care Stage08 îl foloseşte la preţuire (un singur model Cards);
+    // un λ respins de model (fără baseline, în afara intervalului plauzibil) nu produce bloc.
+    if (String(process.env.PREDICT_ENABLE_CARDS || "").trim() !== "0") {
       const cardsLambdas = deriveCardsLambda({
         leagueParams,
         rollingHome,

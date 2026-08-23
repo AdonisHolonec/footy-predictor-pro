@@ -146,7 +146,14 @@ export async function run(context) {
       doubleChanceQuote,
       cardsQuote,
       cornersPick
-    } = resolveSideMarketQuotes({ oddsReq, cornersBlock, shotsOnTargetBlock, shotsTotalBlock, firstHalfProbs }));
+    } = resolveSideMarketQuotes({
+      oddsReq,
+      cornersBlock,
+      shotsOnTargetBlock,
+      shotsTotalBlock,
+      firstHalfProbs,
+      cardsBlock: f.cardsBlock ?? null
+    }));
 
     // --- Stage07ModelFusion: stacker / market / Model Lab ---
     // Stacker features use *calibrated* 1X2 (never raw Poisson alone). After stacker,

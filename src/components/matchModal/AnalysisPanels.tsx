@@ -300,12 +300,6 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
                         info={fhInfo}
                         outcome={firstHalfVerdict}
                       />
-                      {match.predictions.cards && (
-                        <div className="col-span-2 rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 text-center">
-                          <div className="text-[10px] font-semibold uppercase text-[var(--fp-text-muted)]">{tr("match.cards")}</div>
-                          <div className="mt-1 font-mono text-sm font-semibold">{match.predictions.cards}</div>
-                        </div>
-                      )}
                     </div>
                   </>
                 );

@@ -112,7 +112,7 @@ export function marketResultBadge(
   verdict: boolean | null,
   odd?: number | null,
   source?: string | null,
-  tone: "corners" | "shots" | "ht" | "neutral" = "neutral",
+  tone: "corners" | "shots" | "cards" | "ht" | "neutral" = "neutral",
   noBookOddLabel = "No book odd"
 ) {
   const base =
@@ -129,9 +129,11 @@ export function marketResultBadge(
       ? "border-fp-accent/45 bg-[var(--fp-accent-muted)] text-[var(--fp-text)]"
       : tone === "shots"
         ? "border-violet-500/40 bg-violet-500/10 text-[var(--fp-text)]"
-        : tone === "ht"
-          ? "border-fp-warning/45 bg-fp-warning/10 text-[var(--fp-text)]"
-          : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
+        : tone === "cards"
+          ? "border-amber-500/45 bg-amber-500/10 text-[var(--fp-text)]"
+          : tone === "ht"
+            ? "border-fp-warning/45 bg-fp-warning/10 text-[var(--fp-text)]"
+            : "border-[var(--fp-border)] bg-[var(--fp-bg-muted)] text-[var(--fp-text)]";
   const pulseClass = isHot ? " animate-pulse motion-reduce:animate-none ring-1 ring-white/35" : "";
   if (verdict === true) {
     return (

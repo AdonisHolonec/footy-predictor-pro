@@ -431,6 +431,8 @@ export const ro: Dict = {
     shotsTotalTitle: "Total șuturi",
     shotsTotalSub: "on + off target",
     cardsSub: "Cartonașe galbene + roșii",
+    refereeCardsAvg: "{avg} cartonașe / meci · {n} meciuri",
+    refereeCardsNote: "Context, nu un factor al predicției",
     poissonTotal: "Total (Peste/Sub)",
     mostLikely: "Cel mai probabil",
     perTeamOver: "Per echipă (Peste)",

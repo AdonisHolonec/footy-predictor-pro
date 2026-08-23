@@ -11,6 +11,7 @@ import type { TranslateFn } from "../../i18n";
 import PoissonMarketSection from "./PoissonMarketSection";
 import { ProbBar } from "./ProbBar";
 import { marketResultBadge } from "./helpers";
+import { isFinalMatchStatus } from "../../utils/cardMarketOutcome";
 
 type DerivedMarketsPanelsProps = {
   match: PredictionRow;
@@ -218,10 +219,15 @@ export default function DerivedMarketsPanels(props: DerivedMarketsPanelsProps) {
                     data={match.probs.cards}
                     homeLabel={match.teams.home}
                     awayLabel={match.teams.away}
-                    actualTotal={null}
+                    actualTotal={
+                      // C3: a card count is only "final" once the match is; in play it is not shown.
+                      isFinalMatchStatus(match.status)
+                        ? (xgData?.marketResults?.cardsTotal ?? match.marketResults?.cardsTotal ?? null)
+                        : null
+                    }
                     quotedOdd={match.marketOdds?.cards?.odd ?? null}
                     quoteSource={match.marketOdds?.cards?.bookmaker ?? null}
-                    badgeTone="shots"
+                    badgeTone="cards"
                     framed={false}
                   />
                 </CollapsiblePanel>
