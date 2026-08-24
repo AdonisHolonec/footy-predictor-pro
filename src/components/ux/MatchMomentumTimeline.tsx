@@ -11,12 +11,14 @@ import { useLocale } from "../../context/LocaleContext";
 import {
   buildMatchFlowSegments,
   eventKindsPresent,
+  eventSide,
   findDominantPeriod,
   layoutEventMarkers,
   mergeHistoryPoints,
   threatLevel,
   type DominantPeriod,
   type EventMarker,
+  type EventMarkerSide,
   type MomentumSegment,
   type ThreatLevel
 } from "../../utils/matchFlow";
@@ -133,12 +135,13 @@ export {
   // The series builder's original name, kept so existing importers do not churn.
   buildMatchFlowSegments as buildTimelineSegments,
   eventKindsPresent,
+  eventSide,
   findDominantPeriod,
   layoutEventMarkers,
   mergeHistoryPoints,
   threatLevel
 };
-export type { DominantPeriod, EventMarker, MomentumSegment, ThreatLevel };
+export type { DominantPeriod, EventMarker, EventMarkerSide, MomentumSegment, ThreatLevel };
 
 /** Share of the half-height a bar fills, per tier. Neutral keeps a visible stub so a
  *  balanced passage reads as "measured and quiet", never as "no data". */
@@ -170,6 +173,22 @@ export const BAR_OPACITY = Object.freeze({
 
 /** Vertical pitch between stacked event-marker lanes, in px — one marker plus breathing room. */
 const MARKER_LANE_PX = 18;
+
+/** The marker's own height (`h-4`), needed to reserve room for the neutral lane. */
+const MARKER_HEIGHT_PX = 16;
+
+/**
+ * The two team bands, plus the neutral one, anchored to the same mirror line the bars are
+ * drawn against: AWAY above the axis, HOME below it — the identical convention the bars
+ * and the two legend halves already use. Declaring them as data rather than as three
+ * hand-written blocks is what keeps the two halves provably symmetric.
+ */
+const EVENT_BANDS: ReadonlyArray<{ side: EventMarkerSide; testId: string; className: string }> = [
+  { side: "away", testId: "momentum-events-away", className: "top-0" },
+  { side: "home", testId: "momentum-events-home", className: "bottom-0" },
+  /* Unattributable events sit ON the axis: visibly in neither half, by construction. */
+  { side: "neutral", testId: "momentum-events-neutral", className: "top-1/2 -translate-y-1/2" }
+];
 
 const EVENT_FILTERS: Array<{ id: EventFilter; labelKey: string }> = [
   { id: "all", labelKey: "match.filterAll" },
@@ -569,7 +588,26 @@ export default function MatchMomentumTimeline({
     displayEvents.map((ev) => ({ ...ev, type: ev.kind })),
     maxMinute
   );
-  const markerLanes = eventMarkers.reduce((n, m) => Math.max(n, m.lane + 1), 0);
+  /*
+    Lanes are counted PER HALF. The away band and the home band grow independently, so a
+    crowded spell for one team can neither push the other team's markers across the axis
+    nor eat their share of MARKER_MAX_LANES.
+  */
+  const laneCount = (side: EventMarkerSide) =>
+    eventMarkers.reduce((n, m) => (m.side === side ? Math.max(n, m.lane + 1) : n), 0);
+  const awayLanes = laneCount("away");
+  const homeLanes = laneCount("home");
+  const hasNeutralMarkers = eventMarkers.some((m) => m.side === "neutral");
+  /*
+    Room for the bands is reserved OUTSIDE the bars, and symmetrically. Symmetric is what
+    keeps the baseline on the bars' own centre: the axis is an inset child of the chart
+    box, so padding the frame unevenly would slide the mirror line the bars are drawn
+    against away from the bars themselves.
+  */
+  const markerBandPx = Math.max(
+    Math.max(awayLanes, homeLanes) * MARKER_LANE_PX,
+    hasNeutralMarkers ? MARKER_HEIGHT_PX : 0
+  );
   const eventKinds = eventKindsPresent(eventMarkers);
 
   // Transparent segmented timeline — the approved momentum visual. Each segment is one
@@ -645,6 +683,14 @@ export default function MatchMomentumTimeline({
           <span className="truncate">{awayTeam}</span>
         </div>
 
+        {/* FLOW FRAME — the bars keep their own box (and their own accessible summary);
+            the event bands live in the room reserved above and below it, sharing the
+            chart's horizontal axis and its mirror line. */}
+        <div
+          data-testid="momentum-flow"
+          className="relative w-full"
+          style={{ paddingTop: markerBandPx, paddingBottom: markerBandPx }}
+        >
         {/* GRAPH — one bar per observed interval, mirrored about a central baseline.
             Direction is the interval's own `side`; height is its own `magnitude`. Both
             come from buildTimelineSegments, i.e. from MomentumEngine's numbers. */}
@@ -778,51 +824,95 @@ export default function MatchMomentumTimeline({
           />
         </div>
 
-        {/* EVENT MARKERS — facts on the same axis as the bars, at their real minute.
-            They are NEVER an input to the series above: a card is not dominance and a
-            goal is not pressure (see utils/matchFlow.ts). Corners are absent because
-            /fixtures/events has no corner event — only a cumulative total with no minute. */}
+        {/* EVENT MARKERS — facts on the same axis as the bars, at their real minute, in
+            their OWN TEAM'S HALF.
+
+            They are NEVER an input to the series above: a card is not dominance and a goal
+            is not pressure (see utils/matchFlow.ts, which reads only the statistics
+            counters). Independence from the momentum SCORE is not the same thing as
+            independence from the team, though, and conflating the two is what once put
+            every marker into a single strip beneath the home half — an away card drawn in
+            the home half is not a neutral presentation, it is a wrong one.
+
+            Vertical placement therefore comes from marker.side (i.e. from event.team) plus
+            that side's own lane, and from nothing else — never the index, the kind or the
+            order. AWAY takes the band above the bars, HOME the band below, matching the
+            halves the bars and the two legends already use. An event whose team the fixture
+            does not recognise goes to the neutral lane ON the axis; it is never quietly
+            filed under home.
+
+            Corners are absent because /fixtures/events has no corner event — only a
+            cumulative total with no minute. */}
         {eventMarkers.length > 0 && (
           <div
             data-testid="momentum-events"
-            className="relative mt-1 w-full"
-            style={{ height: `${markerLanes * MARKER_LANE_PX}px` }}
+            /* Overlay only: it must not swallow the bars' own hover titles. */
+            className="pointer-events-none absolute inset-0 z-[4]"
           >
-            {eventMarkers.map((m, i) => {
-              const teamName = m.event.team === "home" ? homeTeam : awayTeam;
-              const label = `${teamName} · ${formatMinute(m.event.minute, m.event.extra)} · ${eventLabel(
-                t,
-                m.event.type
-              )}${m.event.player ? ` · ${m.event.player}` : ""}`;
-              // Edge markers are clamped inward for the same reason the end ticks are.
-              const shift = m.pct <= 2 ? "none" : m.pct >= 98 ? "translateX(-100%)" : "translateX(-50%)";
+            {EVENT_BANDS.map((band) => {
+              const bandMarkers = eventMarkers.filter((m) => m.side === band.side);
+              if (!bandMarkers.length) return null;
               return (
-                <span
-                  key={`${m.minute}-${m.event.type}-${m.event.team}-${i}`}
-                  data-testid="momentum-event-marker"
-                  data-team={m.event.team}
-                  data-kind={m.event.type}
-                  data-lane={m.lane}
-                  role="img"
-                  title={label}
-                  aria-label={label}
-                  className="absolute flex h-4 items-center justify-center rounded-[3px] border-b-2 px-0.5 text-[10px] leading-none"
-                  style={{
-                    left: `${m.pct}%`,
-                    top: `${m.lane * MARKER_LANE_PX}px`,
-                    transform: shift,
-                    // The one cue that says WHOSE event this is, in the same two colours
-                    // the bars and the legend use for the two teams.
-                    borderBottomColor:
-                      m.event.team === "home" ? "var(--fp-momentum-home)" : "var(--fp-momentum-away)"
-                  }}
+                <div
+                  key={band.side}
+                  data-testid={band.testId}
+                  data-side={band.side}
+                  className={`absolute inset-x-0 ${band.className}`}
+                  style={{ height: band.side === "neutral" ? MARKER_HEIGHT_PX : markerBandPx }}
                 >
-                  {eventIcon(m.event.type)}
-                </span>
+                  {bandMarkers.map((m, i) => {
+                    const teamName = m.side === "home" ? homeTeam : m.side === "away" ? awayTeam : null;
+                    const label = `${teamName ? `${teamName} · ` : ""}${formatMinute(
+                      m.event.minute,
+                      m.event.extra
+                    )} · ${eventLabel(t, m.event.type)}${m.event.player ? ` · ${m.event.player}` : ""}`;
+                    // Edge markers are clamped inward for the same reason the end ticks are.
+                    const shiftX = m.pct <= 2 ? "" : m.pct >= 98 ? "translateX(-100%)" : "translateX(-50%)";
+                    /*
+                      Lane 0 is the row nearest the axis in BOTH bands, so the halves read
+                      as mirror images: away stacks upward off the bars, home downward.
+                    */
+                    const laneOffset = `${m.lane * MARKER_LANE_PX}px`;
+                    return (
+                      <span
+                        key={`${m.minute}-${m.event.type}-${m.side}-${i}`}
+                        data-testid="momentum-event-marker"
+                        data-team={m.event.team}
+                        data-side={m.side}
+                        data-kind={m.event.type}
+                        data-lane={m.lane}
+                        role="img"
+                        title={label}
+                        aria-label={label}
+                        className="pointer-events-auto absolute flex h-4 items-center justify-center rounded-[3px] border-b-2 px-0.5 text-[10px] leading-none"
+                        style={{
+                          left: `${m.pct}%`,
+                          ...(band.side === "away"
+                            ? { bottom: laneOffset }
+                            : band.side === "home"
+                              ? { top: laneOffset }
+                              : { top: 0 }),
+                          transform: shiftX || undefined,
+                          // The one cue that says WHOSE event this is, in the same two
+                          // colours the bars and the legend use for the two teams.
+                          borderBottomColor:
+                            m.side === "home"
+                              ? "var(--fp-momentum-home)"
+                              : m.side === "away"
+                                ? "var(--fp-momentum-away)"
+                                : "var(--fp-text-muted)"
+                        }}
+                      >
+                        {eventIcon(m.event.type)}
+                      </span>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
         )}
+        </div>
 
         <div className="relative mt-1 h-3 w-full" aria-hidden>
           {ticks.map((m) => {

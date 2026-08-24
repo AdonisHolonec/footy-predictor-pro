@@ -83,15 +83,26 @@ const markers = () =>
   Array.from(
     screen.getByTestId("momentum-events").querySelectorAll<HTMLElement>("[data-testid='momentum-event-marker']")
   );
+/** Markers of one half only, in the order they appear inside that half's band. */
+const bandMarkers = (side: "away" | "home" | "neutral") =>
+  Array.from(
+    screen
+      .getByTestId(`momentum-events-${side}`)
+      .querySelectorAll<HTMLElement>("[data-testid='momentum-event-marker']")
+  );
 const bars = () => Array.from(screen.getByTestId("momentum-chart").querySelectorAll<HTMLElement>("[data-side]"));
 const openPanel = (title: string) => fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${title}`) }));
 
 afterEach(cleanup);
 
 describe("H/I/J/K — every event kind reaches the axis, on the right side", () => {
-  it("goal, yellow, red, substitution and VAR each render a marker", () => {
+  it("goal, yellow, red, substitution and VAR each render a marker, each in its team's half", () => {
     renderFlow();
-    expect(markers().map((m) => m.dataset.kind)).toEqual(["goal", "yellow", "substitution", "var", "red"]);
+    // Grouped by half — away band first, then home — and chronological inside each. The
+    // grouping is the point: reading order now matches what the reader sees.
+    expect(bandMarkers("away").map((m) => m.dataset.kind)).toEqual(["goal", "substitution", "var"]);
+    expect(bandMarkers("home").map((m) => m.dataset.kind)).toEqual(["yellow", "red"]);
+    expect(markers()).toHaveLength(EVENTS.length);
   });
 
   it("a marker belongs to the team that caused it", () => {
@@ -111,17 +122,18 @@ describe("H/I/J/K — every event kind reaches the axis, on the right side", () 
     expect(goal.style.left).toBe(`${(22 / 90) * 100}%`);
   });
 
-  it("[G] neighbouring minutes stack rather than overlap", () => {
+  it("[G/E] neighbouring minutes stack rather than overlap — within a half, not across it", () => {
     renderFlow();
-    // 43', 46' and 47' all fall inside one marker's width of each other, so each takes
-    // its own lane instead of three icons landing on the same spot.
     const byKind = Object.fromEntries(markers().map((m) => [m.dataset.kind, m]));
-    expect([byKind.yellow.dataset.lane, byKind.substitution.dataset.lane, byKind.var.dataset.lane]).toEqual([
-      "0",
-      "1",
-      "2"
-    ]);
-    expect(new Set([byKind.yellow.style.top, byKind.substitution.style.top, byKind.var.style.top]).size).toBe(3);
+    // 46' and 47' are both AWAY and fall inside one marker's width of each other, so the
+    // second takes the next away lane instead of landing on top of the first.
+    expect(byKind.substitution.dataset.lane).toBe("0");
+    expect(byKind.var.dataset.lane).toBe("1");
+    expect(byKind.substitution.style.bottom).not.toBe(byKind.var.style.bottom);
+    // The home yellow at 43' is a minute from the away sub but not in its way: different
+    // half, own lane ladder, so it keeps lane 0.
+    expect(byKind.yellow.dataset.lane).toBe("0");
+    expect(byKind.yellow.dataset.side).toBe("home");
     // A well-separated event drops back to the first lane.
     expect(byKind.goal.dataset.lane).toBe("0");
   });
@@ -235,17 +247,30 @@ describe("C/T in the DOM — the chart alternates instead of painting one colour
     expect(screen.getByTestId("momentum-legend-home").textContent).toContain("Frosinone");
   });
 
-  it("event markers are independent of bar direction — they stay on the time axis", () => {
+  it("[M8] markers are independent of momentum SCORING, not of their own team", () => {
+    /*
+      Those are two different claims, and treating them as one is what once parked every
+      marker in a single strip under the home half. Momentum independence means the bars
+      do not move when the events change; team ownership means a marker is drawn in the
+      half of the team that caused it. Both must hold at once.
+    */
     renderFlow();
-    // A home event and an away event both live in the same marker strip, outside the
-    // chart's two halves: markers report WHAT happened, bars report WHO was on top.
-    const strip = screen.getByTestId("momentum-events");
+    const withEvents = bars().map((b) => [b.dataset.side, b.dataset.level, b.style.flexGrow].join("|"));
+    cleanup();
+    renderFlow(match({ liveEvents: [] }));
+    const withoutEvents = bars().map((b) => [b.dataset.side, b.dataset.level, b.style.flexGrow].join("|"));
+    expect(withoutEvents).toEqual(withEvents);
+    expect(screen.queryByTestId("momentum-events")).toBeNull();
+
+    cleanup();
+    renderFlow();
+    // ...and the same events land on opposite sides of the axis, by team.
     const home = markers().find((m) => m.dataset.kind === "red")!;
     const away = markers().find((m) => m.dataset.kind === "goal")!;
-    expect(strip.contains(home)).toBe(true);
-    expect(strip.contains(away)).toBe(true);
-    expect(screen.getByTestId("momentum-chart").contains(home)).toBe(false);
-    expect(home.style.top).toBe(away.style.top);
+    expect(screen.getByTestId("momentum-events-home").contains(home)).toBe(true);
+    expect(screen.getByTestId("momentum-events-away").contains(away)).toBe(true);
+    expect(screen.getByTestId("momentum-events-home").contains(away)).toBe(false);
+    expect(screen.getByTestId("momentum-events-away").contains(home)).toBe(false);
   });
 });
 
@@ -288,12 +313,23 @@ describe("V — geometry invariants that must hold at any width", () => {
     }
   });
 
-  it("the marker strip grows by lanes only, so it cannot silently become a tall band", () => {
+  it("the marker bands grow by lanes only, so neither can silently become a tall band", () => {
     renderFlow();
-    const strip = screen.getByTestId("momentum-events");
-    const lanes = Math.max(...markers().map((m) => Number(m.dataset.lane))) + 1;
-    expect(strip.style.height).toBe(`${lanes * 18}px`);
+    const deepest = (side: "away" | "home") =>
+      Math.max(...bandMarkers(side).map((m) => Number(m.dataset.lane))) + 1;
+    const lanes = Math.max(deepest("away"), deepest("home"));
     expect(lanes).toBeLessThanOrEqual(MARKER_MAX_LANES);
+    for (const side of ["away", "home"] as const) {
+      expect(screen.getByTestId(`momentum-events-${side}`).style.height).toBe(`${lanes * 18}px`);
+    }
+    /*
+      The room is reserved SYMMETRICALLY around the bars. Uneven padding would slide the
+      baseline off the mirror line the bars are drawn against, which is the one piece of
+      geometry the whole chart depends on.
+    */
+    const frame = screen.getByTestId("momentum-flow");
+    expect(frame.style.paddingTop).toBe(frame.style.paddingBottom);
+    expect(frame.style.paddingTop).toBe(`${lanes * 18}px`);
   });
 
   it("the chart still owns no scroll container of its own", () => {
