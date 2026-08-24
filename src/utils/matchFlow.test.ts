@@ -8,6 +8,7 @@ import {
   buildMatchFlowSegments,
   eventKindsPresent,
   findDominantPeriod,
+  eventSide,
   layoutEventMarkers,
   mergeHistoryPoints,
   scoreInterval,
@@ -269,11 +270,26 @@ describe("F/G/Q/L — event markers on the axis", () => {
 
   it("[G] events at the same or adjacent minutes stack instead of overlapping", () => {
     const markers = layoutEventMarkers(
-      [ev(46, "away", "substitution"), ev(46, "away", "substitution"), ev(47, "home", "yellow")],
+      [ev(46, "away", "substitution"), ev(46, "away", "substitution"), ev(47, "away", "yellow")],
       90
     );
     expect(markers.map((m) => m.lane)).toEqual([0, 1, 2]);
     expect(new Set(markers.map((m) => m.lane)).size).toBe(3);
+  });
+
+  it("[E] stacking is per-team: the other half's crowd never costs a team a lane", () => {
+    // Two away subs in the same minute plus a home yellow a minute later. The home marker
+    // is not in the away markers' way — it is not drawn in their half — so it takes lane 0
+    // of its own ladder instead of being pushed down to a third row.
+    const markers = layoutEventMarkers(
+      [ev(46, "away", "substitution"), ev(46, "away", "substitution"), ev(47, "home", "yellow")],
+      90
+    );
+    expect(markers.map((m) => [m.side, m.lane])).toEqual([
+      ["away", 0],
+      ["away", 1],
+      ["home", 0]
+    ]);
   });
 
   it("[G] stacking is bounded — a crowd shares the last lane rather than growing forever", () => {
@@ -314,6 +330,48 @@ describe("F/G/Q/L — event markers on the axis", () => {
       90
     );
     expect(eventKindsPresent(markers)).toEqual(["goal", "red", "substitution"]);
+  });
+
+  it("[H] every kind takes its side from its team, never from what kind it is", () => {
+    const kinds = ["goal", "penalty", "ownGoal", "penaltyMissed", "yellow", "red", "substitution", "var"] as const;
+    for (const kind of kinds) {
+      const [home] = layoutEventMarkers([ev(10, "home", kind)], 90);
+      const [away] = layoutEventMarkers([ev(10, "away", kind)], 90);
+      expect(home.side).toBe("home");
+      expect(away.side).toBe("away");
+    }
+  });
+
+  it("[F/G] an unknown or missing team is NEUTRAL — never quietly filed under home", () => {
+    const unknown = { minute: 30, extra: null, team: "Lazio", type: "yellow" } as unknown as MatchLiveEvent;
+    const missing = { minute: 31, extra: null, type: "yellow" } as unknown as MatchLiveEvent;
+    const empty = { minute: 32, extra: null, team: null, type: "yellow" } as unknown as MatchLiveEvent;
+    const markers = layoutEventMarkers([unknown, missing, empty], 90);
+    expect(markers.map((m) => m.side)).toEqual(["neutral", "neutral", "neutral"]);
+    expect(eventSide({ team: "home" })).toBe("home");
+    expect(eventSide({ team: "away" })).toBe("away");
+    expect(eventSide(undefined)).toBe("neutral");
+    expect(eventSide(null)).toBe("neutral");
+  });
+
+  it("[E] three away events and three home events near one minute all survive", () => {
+    // The 3-lane cap is spent per team, so six near-simultaneous events keep six distinct
+    // slots: nothing is pushed across the axis and nothing is silently collapsed.
+    const markers = layoutEventMarkers(
+      [
+        ev(60, "away", "yellow"),
+        ev(60, "away", "yellow"),
+        ev(60, "away", "substitution"),
+        ev(60, "home", "yellow"),
+        ev(60, "home", "yellow"),
+        ev(60, "home", "substitution")
+      ],
+      90
+    );
+    expect(markers).toHaveLength(6);
+    const lanesFor = (side: string) => markers.filter((m) => m.side === side).map((m) => m.lane);
+    expect(lanesFor("away")).toEqual([0, 1, 2]);
+    expect(lanesFor("home")).toEqual([0, 1, 2]);
   });
 
   it("markers never escape the axis, whatever the minute", () => {

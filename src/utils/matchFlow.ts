@@ -276,25 +276,58 @@ export function findDominantPeriod(segments: MomentumSegment[]): DominantPeriod 
  * cumulative total with no minute attached. Drawing corner markers would mean inventing
  * their timing.
  */
+/**
+ * Which half a marker belongs in. Derived from the event's own team and from nothing
+ * else — never from its index, its kind, its order, or from whoever the bars favour.
+ */
+export type EventMarkerSide = "home" | "away" | "neutral";
+
 export type EventMarker = {
   event: MatchLiveEvent;
   /** 0..100 position along the axis. */
   pct: number;
-  /** 0-based stacking row, assigned only when markers would otherwise collide. */
+  /** 0-based stacking row WITHIN this marker's own side. */
   lane: number;
   minute: number;
+  /** The half this marker is drawn in; see eventSide. */
+  side: EventMarkerSide;
 };
+
+/**
+ * Team ownership of an event.
+ *
+ * Only the two identities the normalizer emits map to a half. Anything else — a team the
+ * fixture does not recognise, a missing field, a payload that did not come through
+ * extractLiveEvents — is NEUTRAL. It is deliberately not "home": filing an unattributable
+ * event under the home side would make the chart state something the data never said, and
+ * `team` is a compile-time union over a value that arrives from an HTTP response, so the
+ * runtime check is the only one that actually holds.
+ */
+export function eventSide(event: { team?: unknown } | null | undefined): EventMarkerSide {
+  const team = event?.team;
+  return team === "home" || team === "away" ? team : "neutral";
+}
 
 /** Roughly one marker's own width at the narrowest supported viewport (16px on a ~324px chart). */
 export const MARKER_MIN_GAP_PCT = 5;
 
-/** Markers never stack deeper than this; beyond it they share the last lane. */
+/**
+ * Markers never stack deeper than this; beyond it they share the last lane. The cap is
+ * spent PER SIDE, so three crowded away events and three crowded home events coexist
+ * rather than competing for the same three rows.
+ */
 export const MARKER_MAX_LANES = 3;
 
 /**
- * Places events along the axis and stacks the ones that would overlap. Events without a
- * usable minute are dropped rather than parked at 0' — an unknown minute is not minute
- * zero. Order is chronological, so lane assignment is stable between renders.
+ * Places events along the axis, in their own team's half, and stacks the ones that would
+ * overlap. Events without a usable minute are dropped rather than parked at 0' — an
+ * unknown minute is not minute zero. Order is chronological, so lane assignment is stable
+ * between renders.
+ *
+ * Collision detection is horizontal (time) only, and is run SEPARATELY PER SIDE: two
+ * teams acting in the same minute are not in each other's way, because they are not drawn
+ * in the same half. Sharing one lane ladder — as this did before — silently let a busy
+ * away spell decide where a home marker sat.
  */
 export function layoutEventMarkers(
   events: MatchLiveEvent[] | undefined,
@@ -307,16 +340,19 @@ export function layoutEventMarkers(
     .map((ev) => ({ ev, minute: ev.minute + (ev.extra || 0) }))
     .sort((a, b) => a.minute - b.minute);
 
-  const laneLastPct: number[] = [];
+  /** AWAY_EVENT_LANES / HOME_EVENT_LANES / NEUTRAL_EVENT_LANES — one ladder each. */
+  const laneLastPct: Record<EventMarkerSide, number[]> = { home: [], away: [], neutral: [] };
   const out: EventMarker[] = [];
   for (const { ev, minute } of usable) {
+    const side = eventSide(ev);
+    const lanes = laneLastPct[side];
     const pct = Math.min(100, Math.max(0, (minute / span) * 100));
     let lane = 0;
-    while (lane < MARKER_MAX_LANES - 1 && laneLastPct[lane] != null && pct - laneLastPct[lane] < minGapPct) {
+    while (lane < MARKER_MAX_LANES - 1 && lanes[lane] != null && pct - lanes[lane] < minGapPct) {
       lane += 1;
     }
-    laneLastPct[lane] = pct;
-    out.push({ event: ev, pct, lane, minute });
+    lanes[lane] = pct;
+    out.push({ event: ev, pct, lane, minute, side });
   }
   return out;
 }
