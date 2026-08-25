@@ -1,14 +1,13 @@
 /**
- * D9b-2 — READ-ONLY dry run for the six promoted 1X2 columns (migration 059).
+ * Backfill the six promoted 1X2 columns (migration 059).
  *
- * There is deliberately NO --apply here. This script cannot write: the module it
- * calls contains no insert, update or upsert, and the apply path is a separate
- * change that should be reviewed against the numbers this produces.
+ * DRY RUN BY DEFAULT. Writing requires an explicit --apply; without it this
+ * process cannot issue a single UPDATE.
  *
- *   npm run dryrun:probability-columns
- *   npm run dryrun:probability-columns -- --batch=100
- *   npm run dryrun:probability-columns -- --max-batches=1         # one page only
- *   npm run dryrun:probability-columns -- --after=<lastFixtureId>  # resume
+ *   npm run dryrun:probability-columns                              # read only
+ *   npm run backfill:probability-columns -- --max-batches=1 --apply # one page
+ *   npm run backfill:probability-columns -- --apply                 # full run
+ *   npm run backfill:probability-columns -- --after=<id> --apply    # resume
  *
  * Batch size defaults to 100 because that is the largest page D7 measured
  * committing on this table (limit=250 reached a 57014 statement timeout at
@@ -20,21 +19,17 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-import { PROMOTED_COLUMNS, runDryRun } from "../server-utils/backfill/probabilityColumns.js";
+import { preflight, runBackfill } from "../server-utils/backfill/probabilityColumns.js";
 
 function parseArgs(argv) {
-  const args = { batch: 100, after: 0, maxBatches: Infinity };
+  const args = { batch: 100, after: 0, maxBatches: Infinity, apply: false, maxRows: 5000 };
   for (const raw of argv.slice(2)) {
     const [key, value] = raw.replace(/^--/, "").split("=");
     if (key === "batch") args.batch = Math.max(1, Math.min(Number(value) || 100, 500));
     else if (key === "after") args.after = Number(value) || 0;
     else if (key === "max-batches") args.maxBatches = Math.max(1, Number(value) || 1);
-    else if (key === "apply") {
-      console.error(
-        "This is the D9b-2 DRY RUN and has no --apply. Writing is a separate change (D9b-3)."
-      );
-      process.exit(2);
-    }
+    else if (key === "apply") args.apply = true;
+    else if (key === "max-rows") args.maxRows = Math.max(1, Number(value) || 5000);
   }
   return args;
 }
@@ -59,27 +54,46 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
-  // Fail loudly if 059 is missing, rather than reporting a table of zeros.
-  const probe = await supabase
-    .from("predictions_history")
-    .select(PROMOTED_COLUMNS.join(", "))
-    .limit(1);
-  if (probe.error) {
-    console.error(
-      `Cannot read the promoted columns — is migration 059 applied? ${probe.error.message}`
-    );
+  /*
+    Preconditions run for BOTH modes. A dry run whose preconditions fail is
+    reporting on a table it does not understand, which is exactly the report
+    somebody would later approve an --apply against.
+  */
+  const pre = await preflight({ supabase, maxRows: args.maxRows });
+  if (!pre.ok) {
+    console.error(`PRE-FLIGHT FAILED: ${pre.reason}`);
     process.exit(1);
   }
+  console.log(`pre-flight OK — population ${pre.population}, guardrail ${args.maxRows}`);
 
-  console.log(`D9b-2 dry run — batch=${args.batch}, after=${args.after}, READ ONLY`);
-  const stats = await runDryRun({
-    supabase,
-    batchSize: args.batch,
-    after: args.after,
-    maxBatches: args.maxBatches,
-    onBatch: (s) =>
-      console.log(`  …batch ${s.batches} — ${s.scanned} rows, cursor ${s.lastFixtureId}`)
-  });
+  const mode = args.apply ? "APPLY (writes enabled)" : "DRY RUN (read only)";
+  console.log(`D9b-3 ${mode} — batch=${args.batch}, after=${args.after}`);
+
+  let stats;
+  try {
+    stats = await runBackfill({
+      supabase,
+      batchSize: args.batch,
+      after: args.after,
+      maxBatches: args.maxBatches,
+      apply: args.apply,
+      onBatch: (s) =>
+        console.log(
+          `  …batch ${s.batches} — ${s.scanned} scanned, ${s.updated} updated, cursor ${s.lastFixtureId}`
+        )
+    });
+  } catch (error) {
+    // A failed chunk stops the run; the range and cursor make a retry safe.
+    const st = error?.stats;
+    console.error(`
+BACKFILL FAILED: ${error.message}`);
+    if (st) {
+      console.error(`  scanned ${st.scanned}, updated ${st.updated}, chunks ${st.batches}`);
+      console.error(`  resume with: --after=${st.lastFixtureId} --apply`);
+    }
+    process.exitCode = 1;
+    return;
+  }
 
   const n = stats.scanned;
   console.log("");
@@ -134,12 +148,28 @@ async function main() {
   }
 
   console.log("");
-  console.log("7. WHAT A BACKFILL WOULD DO");
-  console.log(pad("rows it would update", stats.wouldUpdate));
-  console.log(pad("rows that stay NULL (no source)", stats.wouldRemainNull));
+  console.log("D9b-3 BACKFILL RESULT");
+  console.log("---------------------");
+  console.log(pad("scanned", stats.scanned));
+  console.log(pad("candidates (would change)", stats.candidates));
+  console.log(pad("updated", args.apply ? stats.updated : 0));
+  console.log(pad("already correct (skipped)", stats.alreadyCorrect));
+  console.log(pad("probs fallback", stats.hasProbsTriple - stats.hasBoth));
+  console.log(pad("pick fallback", Math.max(0, stats.pickPresent - stats.hasEvaluationTriple)));
+  console.log(pad("rows with NULL promoted fields", stats.wouldRemainNull));
+  console.log(pad("values nulled out", stats.nulledOut));
+  console.log(pad("malformed", stats.tripleMalformed));
+  console.log(pad("failed", stats.failed));
+  console.log(pad("chunks", stats.batches));
+  console.log(pad("elapsed", `${stats.elapsedMs} ms`));
 
   console.log("");
-  console.log("DRY RUN — nothing was written, and this script cannot write.");
+  if (args.apply) {
+    console.log(`APPLIED — ${stats.updated} row(s) written, ${stats.alreadyCorrect} left untouched.`);
+    console.log("Only prob_1/prob_x/prob_2/model_method/model_data_quality/pick_1x2 were set.");
+  } else {
+    console.log("DRY RUN — nothing was written. Re-run with --apply to commit these changes.");
+  }
 
   if (stats.allZeroWithoutInsufficientData > 0) {
     console.log("");
