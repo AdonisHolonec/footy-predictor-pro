@@ -256,10 +256,10 @@ const layer = (name: string) => document.querySelector(`[data-layer="${name}"]`)
 const disclosure = (ns: string, key: string) => screen.getByRole("button", { name: startsWith(ns, key) });
 
 describe("UX-D · Match Detail › Live layer", () => {
-  it("[10][11] opens with the Live layer right after Why and the summary visible: minute, momentum direction, recent events", () => {
+  it("[10][11] opens with the Live layer right after xG and the summary visible: minute, momentum direction, recent events", () => {
     renderDetail(LIVE[0]);
     const order = [...document.querySelectorAll("[data-layer]")].map((e) => e.getAttribute("data-layer"));
-    expect(order.slice(0, 4)).toEqual(["header", "decision", "why", "live"]);
+    expect(order.slice(0, 4)).toEqual(["header", "decision", "xg", "live"]);
     const summary = layer("live")!.querySelector("[data-slot='live-summary']")!;
     expect(summary.textContent).toMatch(/67'/);
     expect(summary.querySelector("[data-slot='live-dominant']")?.textContent).toBe("Rayo");
