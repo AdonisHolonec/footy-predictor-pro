@@ -6,12 +6,13 @@ import { useLocale } from "../context/LocaleContext";
 import AuthLinkNotice from "../components/AuthLinkNotice";
 import { useAuth } from "../hooks/useAuth";
 import { readCapturedAuthHash } from "../utils/supabaseAuthHash";
+import { authErrorMessageKey, isEmailNotConfirmedError, isResendCooldownError } from "../utils/authError";
 import { isAuthTimeoutError } from "../utils/authTimeout";
 import { HistoryStats } from "../types";
 
 export default function Login() {
   const { t } = useLocale();
-  const { user, signup, login, sendPasswordResetEmail, updatePassword, lastAuthEvent, error } = useAuth();
+  const { user, signup, login, sendPasswordResetEmail, updatePassword, resendConfirmationEmail, lastAuthEvent, error } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
@@ -19,6 +20,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /*
+    Set only when Supabase says the password was RIGHT but the address is still
+    unconfirmed. Anything else — wrong password, unknown user, rate limit — must
+    not offer to send mail, so this stays false and the block renders as before.
+  */
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [localError, setLocalError] = useState("");
   const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
@@ -57,6 +66,40 @@ export default function Login() {
     */
   }, [lastAuthEvent, t]);
 
+  /**
+   * Explicit, never automatic: a failed login must not send mail on its own.
+   * The address is the one already typed, so nothing is re-entered, and the
+   * in-flight guard plus the disabled button block a double submit. Success
+   * means the email was accepted for delivery — never that the account is
+   * confirmed.
+   */
+  async function onResendConfirmation() {
+    if (resending) return;
+    const address = email.trim();
+    if (!address) {
+      setLocalError(t("auth.emailRequiredMsg"));
+      return;
+    }
+    setResending(true);
+    setResendNotice(null);
+    setLocalError("");
+    try {
+      await resendConfirmationEmail(address);
+      setResendNotice(t("auth.resendSentFromLogin"));
+    } catch (resendError: unknown) {
+      setResendNotice(null);
+      setLocalError(
+        isResendCooldownError(resendError)
+          ? t("auth.resendCooldownMsg", { seconds: String(resendError.secondsRemaining) })
+          : resendError instanceof Error
+            ? resendError.message
+            : t("auth.resendFailed")
+      );
+    } finally {
+      setResending(false);
+    }
+  }
+
   useEffect(() => {
     if (!user) return;
     navigate("/workspace", { replace: true });
@@ -94,6 +137,8 @@ export default function Login() {
     event.preventDefault();
     setLocalError("");
     setMessage("");
+    setNeedsConfirmation(false);
+    setResendNotice(null);
     if (mode !== "reset" && !email.trim()) {
       setLocalError(t("auth.emailRequiredMsg"));
       return;
@@ -126,14 +171,32 @@ export default function Login() {
         setMode("login");
       }
     } catch (submitError: unknown) {
-      // A stalled auth request is a connection problem, not a credentials
-      // problem, and must never surface as a raw Supabase dump.
+      /*
+        The password was right and only confirmation is missing: offer the fix
+        here rather than making the user hunt down the old email and click a
+        link that has already expired. Keyed on the classifier, so a wrong
+        password or a rate limit never reaches this branch.
+      */
+      if (mode === "login" && isEmailNotConfirmedError(submitError)) {
+        setNeedsConfirmation(true);
+      }
+      /*
+        A stalled auth request is a connection problem, not a credentials
+        problem, and must never surface as a raw Supabase dump. Neither must a
+        recognised auth failure: `AuthApiError` IS an Error, so without the
+        classifier the branch below printed GoTrue's English ("Email not
+        confirmed") straight into a Romanian screen. Unrecognised failures still
+        keep their own text rather than being flattened into one generic.
+      */
+      const messageKey = authErrorMessageKey(submitError);
       setLocalError(
         isAuthTimeoutError(submitError)
           ? t("auth.timeoutMsg")
-          : submitError instanceof Error
-            ? submitError.message
-            : t("auth.operationFailedMsg")
+          : messageKey
+            ? t(messageKey)
+            : submitError instanceof Error
+              ? submitError.message
+              : t("auth.operationFailedMsg")
       );
     } finally {
       setSubmitting(false);
@@ -317,9 +380,51 @@ export default function Login() {
                     </label>
                   )}
 
-                  {(localError || error) && (
-                    <div className="rounded-xl border border-fp-danger/35 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]">
-                      {t(localError || error || "")}
+                  {/*
+                    `needsConfirmation` keeps this block mounted on its own:
+                    clicking Resend clears the error text (to drop a stale
+                    cooldown line), and without it the message and the button
+                    both vanished the instant the user pressed them.
+                  */}
+                  {(localError || error || needsConfirmation) && (
+                    <div
+                      data-slot="login-error"
+                      className="rounded-xl border border-fp-danger/35 bg-fp-danger/10 px-3 py-2 text-xs font-semibold text-[var(--fp-danger)]"
+                    >
+                      <p>{t(localError || error || "auth.emailNotConfirmedTitle")}</p>
+                      {/*
+                        The resend lives INSIDE the error block, so the fix sits
+                        where the problem is stated. Secondary to Log in by
+                        design: a text button at the block's own size, full width
+                        on mobile so a long Romanian label cannot overflow the
+                        card.
+                      */}
+                      {needsConfirmation && (
+                        <>
+                          <p className="mt-1 font-medium text-fp-danger/85">
+                            {t("auth.emailNotConfirmedBody")}
+                          </p>
+                          <button
+                            type="button"
+                            data-slot="login-resend"
+                            onClick={() => void onResendConfirmation()}
+                            disabled={resending}
+                            aria-busy={resending}
+                            className="mt-2 inline-flex min-h-[var(--fp-touch)] w-full items-center justify-center rounded-[var(--fp-radius-sm)] border border-fp-danger/45 px-3 text-xs font-bold text-[var(--fp-danger)] transition-colors hover:bg-fp-danger/10 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:w-auto"
+                          >
+                            {resending ? t("auth.processing") : t("auth.resendConfirmationFromLogin")}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {resendNotice && (
+                    <div
+                      data-slot="login-resend-sent"
+                      role="status"
+                      className="rounded-xl border border-fp-success/35 bg-fp-success/10 px-3 py-2 text-xs font-semibold text-[var(--fp-success)]"
+                    >
+                      {resendNotice}
                     </div>
                   )}
                   {message && (

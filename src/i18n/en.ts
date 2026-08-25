@@ -909,7 +909,16 @@ export const en: Dict = {
     // Success side of the same journey. Announced from the auth STATE (a session
     // exists), never from the URL — auth-js has consumed the fragment by then.
     signupConfirmedTitle: "Email confirmed. Your account is active.",
-    signupConfirmedBody: "You're signed in — nothing else to do."
+    signupConfirmedBody: "You're signed in — nothing else to do.",
+    // Login refused because the address was never confirmed. Keyed on Supabase's
+    // stable `email_not_confirmed` code, never on its English message.
+    emailNotConfirmedTitle: "Your email is not confirmed.",
+    emailNotConfirmedBody: "Check your email or request a new confirmation link.",
+    resendConfirmationFromLogin: "Resend confirmation email",
+    resendSentFromLogin: "We sent you a new confirmation email.",
+    resendCooldownMsg: "Please wait {seconds}s before requesting another email.",
+    invalidCredentialsMsg: "Incorrect email or password.",
+    rateLimitedMsg: "Too many attempts. Please wait a moment and try again."
   },
   flow: {
     warmRateLimit: "Warm request was temporarily rate-limited by the server.",

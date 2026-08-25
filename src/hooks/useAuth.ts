@@ -3,6 +3,13 @@ import type { ReactNode } from "react";
 import type { AuthChangeEvent, Session, User as SupabaseAuthUser } from "@supabase/supabase-js";
 import type { User } from "../types";
 import { localCalendarDateKey } from "../utils/appUtils";
+import { ResendCooldownError, authErrorMessageKey } from "../utils/authError";
+
+/**
+ * Minimum gap between two confirmation emails, matched to Supabase's own default
+ * email rate limit so the local refusal lands before the server's does.
+ */
+export const RESEND_COOLDOWN_MS = 60_000;
 import { isSupabaseConfigured, readPersistedSession, supabase } from "../utils/supabaseClient";
 import {
   AUTH_REQUEST_TIMEOUT_MS,
@@ -134,6 +141,8 @@ function useAuthState() {
   const [tierQuotaExempt, setTierQuotaExempt] = useState(false);
   /** Access tokens already offered to the bootstrap-admin check. */
   const bootstrapAsked = useRef<Set<string>>(new Set());
+  /* One clock for every resend entry point — see resendConfirmationEmail. */
+  const lastResendAt = useRef(0);
 
   const loadProfile = useCallback(async (userId: string) => {
     if (!supabase) return null;
@@ -418,7 +427,15 @@ function useAuthState() {
     try {
       const result = await supabase.auth.signInWithPassword({ email, password });
       if (result.error) {
-        setError(result.error.message);
+        /*
+          Classified, not echoed. `t()` falls back to the key it is given, so
+          setting `result.error.message` here rendered Supabase's English
+          verbatim inside a Romanian screen — "Email not confirmed" read as a
+          wrong password. The key wins when we recognise the code; anything we
+          do not recognise keeps the original text rather than being flattened
+          into a useless generic.
+        */
+        setError(authErrorMessageKey(result.error) ?? result.error.message);
         throw result.error;
       }
       data = result.data;
@@ -525,6 +542,17 @@ function useAuthState() {
    * one. Rate limiting is Supabase's; the caller owns the in-flight guard.
    */
   const resendConfirmationEmail = useCallback(async (email: string) => {
+    /*
+      Cooldown lives HERE, in the one function both entry points call, so the
+      expired-link notice and the login error cannot each spend the allowance
+      unaware of the other. Supabase's own default email rate limit is a minute;
+      arriving there returns `over_email_send_rate_limit`, which the user reads
+      as a failure. Refusing locally first turns that into a wait we can name.
+    */
+    const waitedMs = Date.now() - lastResendAt.current;
+    if (lastResendAt.current > 0 && waitedMs < RESEND_COOLDOWN_MS) {
+      throw new ResendCooldownError(Math.ceil((RESEND_COOLDOWN_MS - waitedMs) / 1000));
+    }
     if (!supabase) {
       const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
       setError(missingConfigError.message);
@@ -537,9 +565,11 @@ function useAuthState() {
       options: { emailRedirectTo: window.location.origin }
     });
     if (resendError) {
-      setError(resendError.message);
+      setError(authErrorMessageKey(resendError) ?? resendError.message);
       throw resendError;
     }
+    // Stamped only on success: a refused send must not start the clock.
+    lastResendAt.current = Date.now();
   }, []);
 
   const sendPasswordResetEmail = useCallback(async (email: string) => {
