@@ -905,7 +905,11 @@ export const ro: Dict = {
     linkInvalidBody: "Deschide cel mai recent link din inbox sau autentifică-te din nou pentru a cere unul nou.",
     resendConfirmation: "Retrimite emailul",
     resendSent: "Email trimis. Verifică inboxul — linkul nou îl înlocuiește pe cel vechi.",
-    resendFailed: "Nu am putut retrimite emailul. Încearcă din nou."
+    resendFailed: "Nu am putut retrimite emailul. Încearcă din nou.",
+    // Partea de succes a aceluiași parcurs. Anunţată din STAREA de auth (există
+    // sesiune), niciodată din URL — auth-js a consumat deja fragmentul.
+    signupConfirmedTitle: "Email confirmat. Contul tău este activ.",
+    signupConfirmedBody: "Ești autentificat — nu mai ai nimic de făcut."
   },
   flow: {
     warmRateLimit: "Cererea Warm a fost limitată temporar de server.",

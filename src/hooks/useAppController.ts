@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAppAuthActions } from "./useAppAuthActions";
 import { useAuth } from "./useAuth";
-import { clearAuthHashFromUrl, readCapturedAuthHash } from "../utils/supabaseAuthHash";
+import { clearAuthHashFromUrl, consumeSignupConfirmation } from "../utils/supabaseAuthHash";
+import { useLocale } from "../context/LocaleContext";
 import { useBacktest } from "./useBacktest";
 import { useCallsCounter } from "./useCallsCounter";
 import { useDateRollover } from "./useDateRollover";
@@ -27,6 +28,9 @@ import { isoToday } from "../utils/appUtils";
 
 /** Orchestrates admin dashboard state/hooks without changing business behavior. */
 export function useAppController() {
+  // Status copy below is legacy Romanian-only; the signup-confirmed line is the
+  // one string here a user can reach from an email, so it goes through i18n.
+  const { t } = useLocale();
   const [date, setDate] = useLocalStorageState<string>("footy.date", isoToday());
   const [selectedDates, setSelectedDates] = useLocalStorageState<string[]>("footy.selectedDates", [isoToday()]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -215,12 +219,17 @@ export function useAppController() {
       return;
     }
     if (lastAuthEvent === "SIGNED_IN") {
-      if (readCapturedAuthHash().type === "signup") {
-        setStatus("Email confirmat cu succes. Bine ai revenit!");
+      /*
+        The workspace copy of the same announcement. `consumeSignupConfirmation`
+        is the SAME latch AuthLinkNotice uses, so whichever surface the user
+        actually lands on says it, and the other cannot repeat it.
+      */
+      if (consumeSignupConfirmation()) {
+        setStatus(t("auth.signupConfirmedTitle"));
         clearAuthHashFromUrl();
       }
     }
-  }, [lastAuthEvent]);
+  }, [lastAuthEvent, t]);
 
   useEffect(() => {
     if (user?.role !== "admin") return;

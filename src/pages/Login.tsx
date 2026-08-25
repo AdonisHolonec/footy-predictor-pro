@@ -5,7 +5,7 @@ import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useLocale } from "../context/LocaleContext";
 import AuthLinkNotice from "../components/AuthLinkNotice";
 import { useAuth } from "../hooks/useAuth";
-import { clearAuthHashFromUrl, readCapturedAuthHash } from "../utils/supabaseAuthHash";
+import { readCapturedAuthHash } from "../utils/supabaseAuthHash";
 import { isAuthTimeoutError } from "../utils/authTimeout";
 import { HistoryStats } from "../types";
 
@@ -46,11 +46,15 @@ export default function Login() {
       setMode("reset");
       setMessage(t("auth.recoveryPrompt"));
     }
-    if (hashParams.type === "signup") {
-      setMessage(t("auth.emailConfirmedMsg"));
-      setMode("login");
-      clearAuthHashFromUrl();
-    }
+    /*
+      The signup-confirmed branch that used to live here is gone. It set a
+      message on /login, but a confirmation lands on "/" (emailRedirectTo is the
+      origin), and this page navigates to /workspace the moment a user appears —
+      so it announced success where nobody was looking, and re-announced it on
+      every later auth event because the snapshot it read never expires.
+      AuthLinkNotice, mounted here AND on the landing page, now owns it through a
+      latch that fires once per page load.
+    */
   }, [lastAuthEvent, t]);
 
   useEffect(() => {

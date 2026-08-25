@@ -5,6 +5,7 @@ import Banner from "../design-system/Banner";
 import Button from "../design-system/Button";
 import Input from "../design-system/Input";
 import { useAuth } from "../hooks/useAuth";
+import { useSignupConfirmed } from "../hooks/useSignupConfirmed";
 import {
   clearAuthHashFromUrl,
   hasAuthLinkError,
@@ -22,8 +23,14 @@ import {
  * production that produced three link clicks and three failed logins in nine
  * minutes.
  *
- * Renders nothing at all unless the captured fragment carries an error, so both
- * hosts can mount it unconditionally and a successful confirmation is untouched.
+ * It now also owns the other half of the same question. A confirmation that
+ * SUCCEEDS is just as silent by default: auth-js consumes the fragment, reports
+ * a plain SIGNED_IN, and the user lands on the marketing page with no more
+ * acknowledgement than a failed one got. Both outcomes are announced here, in
+ * one component, so they cannot drift apart or both fire at once.
+ *
+ * Renders nothing at all when the fragment held neither, so both hosts can mount
+ * it unconditionally.
  */
 export default function AuthLinkNotice({ className = "" }: { className?: string }) {
   const { t } = useLocale();
@@ -36,13 +43,26 @@ export default function AuthLinkNotice({ className = "" }: { className?: string 
     would make this component's own cleanup erase its reason to exist.
   */
   const [parsed] = useState(readCapturedAuthHash);
+  /*
+    Success is driven by the auth STATE (a session exists), not by the URL; the
+    captured fragment only supplies the origin auth-js discards. Latched once per
+    page load inside the hook, so nothing below can re-announce it.
+  */
+  const signupConfirmed = useSignupConfirmed();
   const [dismissed, setDismissed] = useState(false);
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const visible = hasAuthLinkError(parsed) && !dismissed;
+  /*
+    Mutually exclusive by construction: `hasAuthLinkError` needs an error field,
+    `useSignupConfirmed` needs an access_token and no error path, so one fragment
+    can never satisfy both. The error branch is checked first regardless — a
+    confirmation that failed must never be reported as one that worked.
+  */
+  const failed = hasAuthLinkError(parsed);
+  const visible = (failed || signupConfirmed) && !dismissed;
 
   /*
     F — drop the fragment once, as a render side effect rather than an effect
@@ -50,11 +70,24 @@ export default function AuthLinkNotice({ className = "" }: { className?: string 
     address bar by the time the user reads the message and cannot be copied into
     a support ticket or a shared link. `replaceState` keeps the SPA mounted.
   */
-  if (visible && typeof window !== "undefined" && window.location.hash) {
+  if (failed && visible && typeof window !== "undefined" && window.location.hash) {
     clearAuthHashFromUrl();
   }
 
   if (!visible) return null;
+
+  if (!failed) {
+    return (
+      <Banner tone="success" live="status" className={className}>
+        <div data-slot="auth-link-notice" className="w-full">
+          <p data-slot="auth-confirmed" className="text-sm font-semibold text-[var(--fp-text)]">
+            {t("auth.signupConfirmedTitle")}
+          </p>
+          <p className="mt-0.5 text-sm text-[var(--fp-text-muted)]">{t("auth.signupConfirmedBody")}</p>
+        </div>
+      </Banner>
+    );
+  }
 
   const expired = isExpiredLinkError(parsed);
 

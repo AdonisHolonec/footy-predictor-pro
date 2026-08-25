@@ -905,7 +905,11 @@ export const en: Dict = {
     linkInvalidBody: "Open the most recent link in your inbox, or sign in again to request a new one.",
     resendConfirmation: "Resend email",
     resendSent: "Email sent. Check your inbox — the new link replaces the old one.",
-    resendFailed: "We couldn't resend the email. Please try again."
+    resendFailed: "We couldn't resend the email. Please try again.",
+    // Success side of the same journey. Announced from the auth STATE (a session
+    // exists), never from the URL — auth-js has consumed the fragment by then.
+    signupConfirmedTitle: "Email confirmed. Your account is active.",
+    signupConfirmedBody: "You're signed in — nothing else to do."
   },
   flow: {
     warmRateLimit: "Warm request was temporarily rate-limited by the server.",
