@@ -16,7 +16,7 @@
     "test:ownership": "node --test --experimental-test-module-mocks tests/predictionOwnership.test.js",
     "test:hydration": "node --test --experimental-test-module-mocks tests/predictionHydrationTransport.test.js",
     "test:dbspans": "node --test --experimental-test-module-mocks tests/historyDbSpans.test.js",
-    "test:d9": "node --test --experimental-test-module-mocks tests/d9HotPathCaching.test.js",
+    "test:d9": "node --test --experimental-test-module-mocks tests/d9HotPathCaching.test.js tests/d9cReadPath.test.js",
     "test:d9b": "node --test --experimental-test-module-mocks tests/d9bPromotedColumns.test.js",
     "test:fetcher": "node --test --experimental-test-module-mocks tests/fetcherUsageTelemetry.test.js",
     "test:pipeline": "node --test tests/pipeline/modelFusion/*.test.js",
