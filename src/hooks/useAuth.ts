@@ -483,17 +483,22 @@ function useAuthState() {
       setError(signupError.message);
       throw signupError;
     }
-    if (data.user) {
-      await supabase.from("profiles").upsert(
-        {
-          user_id: data.user.id,
-          role: "user",
-          favorite_leagues: [],
-          is_blocked: false
-        },
-        { onConflict: "user_id" }
-      );
-    }
+    /*
+      The profile row is created by the database, not here.
+
+      `on_auth_user_created_profile` (migration 004) fires AFTER INSERT on
+      auth.users and runs `handle_new_user_profile()` — SECURITY DEFINER,
+      inserting the same `(user_id, 'user', '{}', false)` with ON CONFLICT DO
+      NOTHING. The client upsert that used to sit here wrote byte-identical
+      values, so it could only ever be a no-op or a failure.
+
+      It was always the failure: with email confirmation on, signUp() returns no
+      session, so the request went out under the anon key, `auth.uid()` was NULL,
+      and the INSERT policy `with check (auth.uid() = user_id)` (migration 008)
+      rejected it. Its result was never checked, so every signup silently ate the
+      refusal. Removing it changes no observable behaviour — it only stops the
+      app claiming to do something the trigger had already done.
+    */
     const authUser = data.user ?? data.session?.user ?? null;
     let nextProfile = authUser ? await loadProfile(authUser.id) : null;
     const token = data.session?.access_token;
@@ -504,6 +509,38 @@ function useAuthState() {
     setUser(mapSupabaseUser(authUser, nextProfile));
     return data;
   }, [loadProfile, promoteBootstrapAdminInDb]);
+
+  /**
+   * Ask Supabase for a fresh signup-confirmation email.
+   *
+   * Same GoTrue client as everything else in this hook — `auth.resend` has been
+   * available since auth-js 2.x and needs no new client, endpoint or table.
+   *
+   * `emailRedirectTo` is the SAME value signup() sends, deliberately: the link in
+   * the replacement email must land where the first one did, or the new link
+   * fails differently from the old one.
+   *
+   * Returns nothing useful on purpose. A queued email says only that Supabase
+   * accepted the request — it is not confirmation, and no caller may treat it as
+   * one. Rate limiting is Supabase's; the caller owns the in-flight guard.
+   */
+  const resendConfirmationEmail = useCallback(async (email: string) => {
+    if (!supabase) {
+      const missingConfigError = new Error("Supabase auth is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setError(missingConfigError.message);
+      throw missingConfigError;
+    }
+    setError(null);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: window.location.origin }
+    });
+    if (resendError) {
+      setError(resendError.message);
+      throw resendError;
+    }
+  }, []);
 
   const sendPasswordResetEmail = useCallback(async (email: string) => {
     if (!supabase) {
@@ -908,6 +945,7 @@ function useAuthState() {
     managedProfiles,
     login,
     signup,
+    resendConfirmationEmail,
     sendPasswordResetEmail,
     updatePassword,
     logout,

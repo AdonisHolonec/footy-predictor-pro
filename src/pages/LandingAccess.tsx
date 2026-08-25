@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import AuthLinkNotice from "../components/AuthLinkNotice";
 import PricingCampaignBanner, { PlanCampaignPrice } from "../components/ux/PricingCampaignBanner";
 import { BRAND_IMAGES, LANDING_PREVIEW_LOGOS } from "../constants/brandAssets";
 import { PRICING_CAMPAIGN } from "../constants/pricingCampaign";
@@ -74,6 +75,14 @@ export default function LandingAccess() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+        {/*
+          `emailRedirectTo` is window.location.origin, so THIS is where a failed
+          confirmation lands — not /login. The notice renders nothing unless the
+          load-time fragment carried an error, so the marketing page is unchanged
+          for every other visitor.
+        */}
+        <AuthLinkNotice />
+
         {/* Hero */}
         <section className="text-center sm:text-left">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent-text)]">{t("landing.brand")}</p>

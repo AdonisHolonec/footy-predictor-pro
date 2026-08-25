@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Banner from "../design-system/Banner";
 import Overlay from "../design-system/Overlay";
+import { readCapturedAuthHash } from "../utils/supabaseAuthHash";
 
 type AuthProps = {
   isOpen: boolean;
@@ -45,8 +46,7 @@ export default function Auth({
       setLocalSuccess("");
       return;
     }
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    if (hashParams.get("type") === "recovery") {
+    if (readCapturedAuthHash().type === "recovery") {
       setMode("reset");
       setLocalSuccess("Seteaza o parola noua pentru contul tau.");
     }
