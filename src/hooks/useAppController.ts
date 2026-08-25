@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ELITE_LEAGUES } from "../constants/appConstants";
 import { useAppAuthActions } from "./useAppAuthActions";
 import { useAuth } from "./useAuth";
+import { clearAuthHashFromUrl, readCapturedAuthHash } from "../utils/supabaseAuthHash";
 import { useBacktest } from "./useBacktest";
 import { useCallsCounter } from "./useCallsCounter";
 import { useDateRollover } from "./useDateRollover";
@@ -214,10 +215,9 @@ export function useAppController() {
       return;
     }
     if (lastAuthEvent === "SIGNED_IN") {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      if (hashParams.get("type") === "signup") {
+      if (readCapturedAuthHash().type === "signup") {
         setStatus("Email confirmat cu succes. Bine ai revenit!");
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        clearAuthHashFromUrl();
       }
     }
   }, [lastAuthEvent]);

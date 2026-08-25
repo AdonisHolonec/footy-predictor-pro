@@ -896,7 +896,16 @@ export const ro: Dict = {
     passwordTooShortMsg: "Parola trebuie să aibă minim 6 caractere.",
     passwordMismatchMsg: "Parolele nu coincid.",
     passwordUpdatedMsg: "Parola actualizată. Te poți autentifica.",
-    operationFailedMsg: "Operațiune eșuată."
+    operationFailedMsg: "Operațiune eșuată.",
+    // Erori de link de confirmare. Cheia este `error_code` de la GoTrue, niciodată
+    // `error_description` in engleză, care nu ajunge niciodată la utilizator.
+    linkExpiredTitle: "Linkul de confirmare a expirat.",
+    linkExpiredBody: "Solicită un nou email de confirmare pentru a-ți activa contul.",
+    linkInvalidTitle: "Linkul de confirmare nu mai este valid.",
+    linkInvalidBody: "Deschide cel mai recent link din inbox sau autentifică-te din nou pentru a cere unul nou.",
+    resendConfirmation: "Retrimite emailul",
+    resendSent: "Email trimis. Verifică inboxul — linkul nou îl înlocuiește pe cel vechi.",
+    resendFailed: "Nu am putut retrimite emailul. Încearcă din nou."
   },
   flow: {
     warmRateLimit: "Cererea Warm a fost limitată temporar de server.",

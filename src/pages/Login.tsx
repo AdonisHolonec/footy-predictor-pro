@@ -3,7 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ModelPulseWave } from "../components/SignalLab";
 import { BRAND_IMAGES } from "../constants/brandAssets";
 import { useLocale } from "../context/LocaleContext";
+import AuthLinkNotice from "../components/AuthLinkNotice";
 import { useAuth } from "../hooks/useAuth";
+import { clearAuthHashFromUrl, readCapturedAuthHash } from "../utils/supabaseAuthHash";
 import { isAuthTimeoutError } from "../utils/authTimeout";
 import { HistoryStats } from "../types";
 
@@ -39,15 +41,15 @@ export default function Login() {
   }, []);
 
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    if (hashParams.get("type") === "recovery" || lastAuthEvent === "PASSWORD_RECOVERY") {
+    const hashParams = readCapturedAuthHash();
+    if (hashParams.type === "recovery" || lastAuthEvent === "PASSWORD_RECOVERY") {
       setMode("reset");
       setMessage(t("auth.recoveryPrompt"));
     }
-    if (hashParams.get("type") === "signup") {
+    if (hashParams.type === "signup") {
       setMessage(t("auth.emailConfirmedMsg"));
       setMode("login");
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      clearAuthHashFromUrl();
     }
   }, [lastAuthEvent, t]);
 
@@ -240,6 +242,13 @@ export default function Login() {
                 <div className="h-0.5 flex-1 rounded-full bg-gradient-to-r from-transparent via-fp-success/30 to-transparent" />
               </div>
               <div className="p-6 sm:p-7">
+                {/*
+                  Mounted here as well as on the landing page: origin is the
+                  configured redirect, but a user who reaches /login carrying the
+                  same failed fragment must get the same explanation rather than a
+                  bare form. Renders null when the fragment held no error.
+                */}
+                <AuthLinkNotice className="mb-4" />
                 <p className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-accent-text)]">{t("auth.secure")}</p>
                 <h2 className="lab-heading mt-1 text-xl">
                   {mode === "login" && t("auth.login")}

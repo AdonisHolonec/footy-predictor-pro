@@ -896,7 +896,16 @@ export const en: Dict = {
     passwordTooShortMsg: "Password must be at least 6 characters.",
     passwordMismatchMsg: "Passwords don't match.",
     passwordUpdatedMsg: "Password updated. You can log in now.",
-    operationFailedMsg: "Operation failed."
+    operationFailedMsg: "Operation failed.",
+    // Confirmation-link failures. Keyed on GoTrue's `error_code`, never on its
+    // English `error_description`, which is never shown to the user.
+    linkExpiredTitle: "This confirmation link has expired.",
+    linkExpiredBody: "Request a new confirmation email to activate your account.",
+    linkInvalidTitle: "This confirmation link is no longer valid.",
+    linkInvalidBody: "Open the most recent link in your inbox, or sign in again to request a new one.",
+    resendConfirmation: "Resend email",
+    resendSent: "Email sent. Check your inbox — the new link replaces the old one.",
+    resendFailed: "We couldn't resend the email. Please try again."
   },
   flow: {
     warmRateLimit: "Warm request was temporarily rate-limited by the server.",
