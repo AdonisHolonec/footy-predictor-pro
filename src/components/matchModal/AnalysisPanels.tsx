@@ -7,12 +7,10 @@ import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 import ConfidenceEnginePanel from "../ConfidenceEnginePanel";
 import ExplanationCard from "../ExplanationCard";
 import FeatureImportanceChart from "../FeatureImportanceChart";
-import LuckBadge from "../LuckBadge";
 import MonteCarloPanel from "../MonteCarloPanel";
 import PredictionContributionsChart from "../PredictionContributionsChart";
 import PredictionLaboratoryPanel from "../PredictionLaboratory";
 import ValueCard from "../ValueCard";
-import XGPerformanceBar from "../XGPerformanceBar";
 import { PredictionRow, XGData } from "../../types";
 import type { DetailPart } from "./detailParts";
 import type { TranslateFn } from "../../i18n";
@@ -37,7 +35,7 @@ type AnalysisPanelsProps = {
 
 export default function AnalysisPanels(props: AnalysisPanelsProps) {
   const {
-    match, tr, tab, homeColor, awayColor, xgData, hasFinalScore,
+    match, tr, tab, homeColor, awayColor, hasFinalScore,
     recommendedLabel, firstHalfPick, firstHalfVerdict, correctScoreCandidates
   } = props;
   return (
@@ -56,22 +54,13 @@ export default function AnalysisPanels(props: AnalysisPanelsProps) {
             </div>
           ) : null}
 
-          <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${tab(["xg", "odds"])}`}>
-            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["xg"])}`}>
-              <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.xgLuck")}</h3>
-              <div className="w-full">{xgData ? <XGPerformanceBar xg={xgData} /> : null}</div>
-              {match.luckStats && (
-                <div className="mt-3 flex flex-wrap justify-center gap-2">
-                  <LuckBadge goals={match.luckStats.hG} xg={xgData?.homeXG ?? match.luckStats.hXG} />
-                  <LuckBadge goals={match.luckStats.aG} xg={xgData?.awayXG ?? match.luckStats.aXG} />
-                </div>
-              )}
-              {!match.luckStats && (
-                <p className="text-center text-[10px] text-[var(--fp-text-muted)]">{tr("match.luckUnavailable")}</p>
-              )}
-            </section>
-
-            <section className={`rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6 ${tab(["odds"])}`}>
+          {/*
+            xG used to share this row as a second cell. It is now its own top-level card
+            in Match Detail (see XgCard) instead of a half-width panel buried here, so
+            this row carries the odds alone and spans the full width it already had.
+          */}
+          <div className={tab(["odds"])}>
+            <section className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-muted)] p-6">
               <h3 className="mb-4 font-mono text-[10px] uppercase tracking-[0.14em] text-fp-accent/80">{tr("match.oddsValue")}</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3">

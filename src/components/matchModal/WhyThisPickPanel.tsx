@@ -24,19 +24,19 @@ type Props = {
  * Nothing here is computed: every string comes from `match.explanation`, the
  * source the Decision block's rationale already used. The panel replaces the
  * five places that used to answer the same question at different depths.
+ *
+ * It is no longer a card of its own. It used to sit beside the recommendation as a
+ * sibling block, which gave the reason the same visual weight as the decision it
+ * explains; it now renders inside the Decision card, behind that card's disclosure.
+ * Only the frame moved — the tiers, their order, their strings and their
+ * collapsed-by-default state are exactly as they were, and the heading is gone only
+ * because the button that opens this region already carries it as its label.
  */
 export default function WhyThisPickPanel({ tr, summary, factors, children }: Props) {
   const shown = factors.slice(0, 3);
   return (
-    <section
-      aria-labelledby="detail-why-title"
-      data-layer="why"
-      className="rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-3 shadow-fp-sm sm:p-4"
-    >
-      <h2 id="detail-why-title" className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--fp-accent)]">
-        {tr("detail.whyTitle")}
-      </h2>
-      <p data-slot="why-summary" className="mt-1.5 text-sm leading-snug text-[var(--fp-text)]">
+    <div data-slot="why-body">
+      <p data-slot="why-summary" className="text-sm leading-snug text-[var(--fp-text)]">
         {summary ?? tr("detail.whyUnavailable")}
       </p>
       {shown.length > 0 && (
@@ -53,6 +53,6 @@ export default function WhyThisPickPanel({ tr, summary, factors, children }: Pro
           <div className="space-y-3">{children}</div>
         </CollapsiblePanel>
       )}
-    </section>
+    </div>
   );
 }

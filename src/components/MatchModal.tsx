@@ -1,5 +1,7 @@
 
 
+import { useState } from "react";
+
 import CollapsiblePanel from "../design-system/CollapsiblePanel";
 import IconButton from "../design-system/IconButton";
 import Overlay from "../design-system/Overlay";
@@ -17,6 +19,7 @@ import OverviewHero from "./matchModal/OverviewHero";
 import AnalysisPanels from "./matchModal/AnalysisPanels";
 import DerivedMarketsPanels from "./matchModal/DerivedMarketsPanels";
 import WhyThisPickPanel from "./matchModal/WhyThisPickPanel";
+import XgCard from "./matchModal/XgCard";
 import LiveLayer from "./matchModal/LiveLayer";
 import { partsGate, type DetailPart } from "./matchModal/detailParts";
 import { formatLiveMinute } from "./matchCard/derivations";
@@ -64,6 +67,9 @@ export type MatchModalProps = {
  */
 export type { DetailPart };
 
+/** Stable id so the Why trigger's aria-controls always resolves to its region. */
+const WHY_PANEL_ID = "detail-why-panel";
+
 export default function MatchModal({
   match,
   logoColors,
@@ -89,6 +95,14 @@ export default function MatchModal({
     specialBetCandidatesLen, specialBetCombinedOdd, specialBetLegs, specialCombinedOutcome,
     specialCombinedTone, specialLegCount, standingsRows, tr, xgData
   } = model;
+
+  /*
+    WHY THIS PICK is closed on open. The card must answer "what is the bet" at a
+    glance; the reasoning is one deliberate click away, the same depth-on-demand the
+    tiers inside it already use. Declared above the insufficientData early return so
+    hook order never depends on the data.
+  */
+  const [whyOpen, setWhyOpen] = useState(false);
 
   if (match.insufficientData) {
     const table = match.leagueStandings;
@@ -330,20 +344,38 @@ export default function MatchModal({
               rationale={null}
               benchmark={decisionBenchmark}
               actions={{ watched, onToggleWatch, onReport }}
+              /* WHY THIS PICK — the same three tiers, now owned by the card they
+                 explain rather than competing with it as a sibling block. */
+              why={{
+                label: tr("detail.whyTitle"),
+                panelId: WHY_PANEL_ID,
+                open: whyOpen,
+                onToggle: () => setWhyOpen((v) => !v),
+                content: (
+                  <WhyThisPickPanel tr={tr} summary={decisionRationale} factors={whyFactors}>
+                    <AnalysisPanels
+                      match={match} tr={tr} tab={partsGate(["explanation", "keyFactors", "whyPrediction", "confidence"])}
+                      homeColor={homeColor} awayColor={awayColor}
+                      xgData={xgData} hasFinalScore={hasFinalScore}
+                      recommendedLabel={recommendedLabel}
+                      firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
+                      correctScoreCandidates={correctScoreCandidates}
+                    />
+                  </WhyThisPickPanel>
+                )
+              }}
             />
           </div>
 
-          {/* 3 · WHY THIS PICK — one authoritative explanation, three tiers. */}
-          <WhyThisPickPanel tr={tr} summary={decisionRationale} factors={whyFactors}>
-              <AnalysisPanels
-                match={match} tr={tr} tab={partsGate(["explanation", "keyFactors", "whyPrediction", "confidence"])}
-                homeColor={homeColor} awayColor={awayColor}
-                xgData={xgData} hasFinalScore={hasFinalScore}
-                recommendedLabel={recommendedLabel}
-                firstHalfPick={firstHalfPick} firstHalfVerdict={firstHalfVerdict}
-                correctScoreCandidates={correctScoreCandidates}
-              />
-          </WhyThisPickPanel>
+          {/* 3 · xG — the model's shot-quality read, in the slot the explanation card
+              used to hold. The card is not new: it is the existing `xg` part of
+              AnalysisPanels (XGPerformanceBar + the two luck badges, fed by the same
+              `xgData`), which until now was only reachable through Advanced and so was
+              invisible to every default account. It renders HERE and nowhere else — the
+              Advanced gate below no longer lists `xg`, so exactly one exists. */}
+          <div data-layer="xg">
+            <XgCard match={match} tr={tr} xgData={xgData} />
+          </div>
 
           {/* 4 · LIVE — only while the existing live-state semantics say so. Compact
               strip by default; timeline and stats behind one disclosure. */}
@@ -518,7 +550,7 @@ export default function MatchModal({
               <CollapsiblePanel compact title={tr("detail.advancedTitle")} subtitle={tr("detail.advancedSub")}>
                 <div className="space-y-3">
               <AnalysisPanels
-                match={match} tr={tr} tab={partsGate(["lab", "monteCarlo", "xg"])}
+                match={match} tr={tr} tab={partsGate(["lab", "monteCarlo"])}
                 homeColor={homeColor} awayColor={awayColor}
                 xgData={xgData} hasFinalScore={hasFinalScore}
                 recommendedLabel={recommendedLabel}

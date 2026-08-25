@@ -48,12 +48,29 @@ type MatchDecisionBlockProps = {
    * their own controls.
    */
   actions?: DecisionActions;
+  /**
+   * The "why this pick" disclosure this card now owns. The explanation used to be a
+   * sibling card competing with the recommendation for attention; it is the same
+   * content, reached from here instead. Absent -> the card renders exactly as before.
+   */
+  why?: DecisionWhy;
 };
 
 export type DecisionActions = {
   watched?: boolean;
   onToggleWatch?: () => void;
   onReport?: () => void;
+};
+
+export type DecisionWhy = {
+  /** Button label AND the accessible name of the region it opens. */
+  label: string;
+  /** id of the disclosed region, for aria-controls. */
+  panelId: string;
+  open: boolean;
+  onToggle: () => void;
+  /** The existing explanation tiers, rendered verbatim when open. */
+  content: ReactNode;
 };
 
 function Metric({
@@ -85,7 +102,8 @@ export default function MatchDecisionBlock({
   dataQuality,
   rationale,
   benchmark = null,
-  actions
+  actions,
+  why
 }: MatchDecisionBlockProps) {
   const { t: tr } = useLocale();
   const hasActions = Boolean(actions?.onToggleWatch || actions?.onReport);
@@ -273,6 +291,41 @@ export default function MatchDecisionBlock({
           </span>
           {rationale}
         </p>
+      ) : null}
+
+      {/*
+        Row 5 — WHY THIS PICK, on demand.
+
+        A single right-aligned trigger, deliberately quiet: a text button at the metric
+        labels' own size rather than a filled control, so it reads as an affordance
+        beneath the decision instead of a second call to action beside the PICK. It owns
+        its own row, so it cannot overlap the odds, the metrics or the consensus line
+        however they wrap. Closed, it costs one line of height.
+      */}
+      {why ? (
+        <div className="mt-2.5 border-t border-[var(--fp-border)] pt-2">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              data-slot="decision-why-toggle"
+              onClick={why.onToggle}
+              aria-expanded={why.open}
+              aria-controls={why.panelId}
+              className="-mr-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--fp-text-muted)] transition-colors hover:text-[var(--fp-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+            >
+              <span className="truncate">{why.label}</span>
+              {/* Direction is decoration; aria-expanded is what actually reports state. */}
+              <span aria-hidden className={why.open ? "rotate-180 transition-transform" : "transition-transform"}>
+                ⌄
+              </span>
+            </button>
+          </div>
+          {why.open ? (
+            <div id={why.panelId} data-slot="decision-why-panel" role="region" aria-label={why.label} className="mt-2">
+              {why.content}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );
