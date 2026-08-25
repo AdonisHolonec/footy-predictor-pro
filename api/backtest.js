@@ -3,13 +3,6 @@ import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAu
 import { assertAdmin } from "../server-utils/authAdmin.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
-  actual1x2FromScore,
-  brier1x2,
-  bucketConfidence,
-  expectedCalibrationError,
-  logLoss1x2
-} from "../server-utils/probabilityMetrics.js";
-import {
   betsToCsv,
   buildBacktestReport,
   computeBacktestMetrics,
@@ -19,6 +12,7 @@ import {
   seasonStartIso,
   selectionClosingOdd
 } from "../server-utils/backtest/BacktestAnalytics.js";
+import { METRICS_SELECT, computeMetrics } from "../server-utils/backtest/metricsReducer.js";
 import { buildClvReport, computeClvPct } from "../server-utils/backtest/ClvReport.js";
 import { resolvePublishedTip } from "../server-utils/backtest/TipEvent.js";
 import { extractBenchmarkEvents } from "../server-utils/backtest/benchmarkEvents.js";
@@ -416,18 +410,17 @@ async function handleSnapshot(req, res) {
  * Model metrics are a 45-day aggregate served to a dashboard that polls every
  * 60 seconds.
  *
- * The query cannot drop `raw_payload`: the Brier/log-loss inputs
- * (`evaluation.modelProbs1x2Pct` / `probs`), `modelMeta.method`,
- * `modelMeta.dataQuality` and the 1X2 pick have NO promoted columns — see the D9
- * audit. `recommended_pick` is the market pick ("Over 2.5"), not the 1X2 one, so
- * it cannot stand in. Projecting `raw_payload->key` is worse, not better:
- * measured in this codebase at 12.2x slower, because Postgres de-TOASTs the
- * whole document to evaluate a key.
+ * D9 cached this result because the query had to read `raw_payload`, and D9b-4
+ * removed that need: migration 059 promoted the Brier/log-loss inputs, the
+ * method, the data quality and the 1X2 pick to columns, and the backfill
+ * populated all 914 rows. The cache stays, because the two solve different
+ * problems — the projection makes each read cheap, the cache makes most reads
+ * not happen at all.
  *
- * So the lever available without a schema change is FREQUENCY. The underlying
- * data moves when settlement runs — a handful of times a day — while the panel
- * asks sixty times an hour. Caching the computed result collapses those to one
- * read per TTL per window, with no change to the numbers a caller receives.
+ * Both still matter at 60-second polling. The underlying data moves when
+ * settlement runs, a handful of times a day, while the panel asks sixty times an
+ * hour; caching the computed result collapses those to one read per TTL per
+ * window, with no change to the numbers a caller receives.
  *
  * Keyed by `days` because the window is a parameter; storing the finished
  * payload rather than the rows keeps the memory cost at a few hundred bytes.
@@ -476,7 +469,7 @@ async function handleMetrics(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select("league_id, league_name, score_home, score_away, match_status, raw_payload, model_version, recommended_confidence, recommended_pick")
+      .select(METRICS_SELECT)
       .gte("kickoff_at", cutoff)
       .limit(8000);
 
@@ -486,106 +479,26 @@ async function handleMetrics(req, res) {
       return fin && row.score_home != null && row.score_away != null;
     });
 
-    let sumBrier = 0;
-    let sumLogLoss = 0;
-    let nProb = 0;
-
-    const byMethod = new Map();
-    const byLeague = new Map();
-    const byDq = new Map();
-    const byVersion = new Map();
-    const calib = new Map();
-
-    for (const row of rows) {
-      const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-      const actual = actual1x2FromScore(row.score_home, row.score_away);
-      if (!actual) continue;
-
-      const ev = payload.evaluation?.modelProbs1x2Pct;
-      const probs = payload.probs;
-      const p1p = (ev?.p1 ?? probs?.p1 ?? 0) / 100;
-      const pXp = (ev?.pX ?? probs?.pX ?? 0) / 100;
-      const p2p = (ev?.p2 ?? probs?.p2 ?? 0) / 100;
-      const s = p1p + pXp + p2p;
-      if (s < 0.1) continue;
-      const n1 = p1p / s;
-      const nX = pXp / s;
-      const n2 = p2p / s;
-
-      const b = brier1x2(n1, nX, n2, actual);
-      const ll = logLoss1x2(n1, nX, n2, actual);
-      sumBrier += b;
-      sumLogLoss += ll;
-      nProb += 1;
-
-      const method = String(payload.modelMeta?.method || "unknown");
-      const lid = Number(row.league_id) || 0;
-      const dq = Number(payload.modelMeta?.dataQuality ?? 0);
-      const dqBucket = dq >= 0.75 ? "high" : dq >= 0.55 ? "mid" : "low";
-      const ver = String(row.model_version || payload.modelVersion || "unknown");
-      const buck = bucketConfidence(Number(row.recommended_confidence ?? payload.recommended?.confidence ?? 0));
-
-      const bump = (map, key, delta) => {
-        if (!map.has(key)) map.set(key, { brier: 0, logLoss: 0, n: 0 });
-        const o = map.get(key);
-        o.brier += delta.b;
-        o.logLoss += delta.ll;
-        o.n += 1;
-      };
-
-      const delta = { b: b, ll: ll };
-      bump(byMethod, method, delta);
-      bump(byLeague, String(lid), delta);
-      bump(byDq, dqBucket, delta);
-      bump(byVersion, ver, delta);
-
-      const pick = String(payload.evaluation?.recommended1x2 || payload.predictions?.oneXtwo || "").trim();
-      if (["1", "X", "2"].includes(pick)) {
-        const hit = pick === actual ? 1 : 0;
-        if (!calib.has(buck)) calib.set(buck, { sumConf: 0, sumHit: 0, n: 0 });
-        const c = calib.get(buck);
-        c.sumConf += Number(row.recommended_confidence ?? 0);
-        c.sumHit += hit;
-        c.n += 1;
-      }
-    }
-
-    const serialize = (map) =>
-      Array.from(map.entries()).map(([k, v]) => ({
-        key: k,
-        n: v.n,
-        brier: v.n ? Number((v.brier / v.n).toFixed(5)) : 0,
-        logLoss: v.n ? Number((v.logLoss / v.n).toFixed(5)) : 0
-      }));
-
-    const calibration = Array.from(calib.entries()).map(([k, v]) => ({
-      bucket: k,
-      n: v.n,
-      avgConfidence: v.n ? Number((v.sumConf / v.n).toFixed(2)) : 0,
-      accuracy1x2: v.n ? Number(((v.sumHit / v.n) * 100).toFixed(2)) : 0
-    }));
-
     /*
-      Every field below is byte-identical to what this endpoint returned before
-      caching. `cachedAt` is additive and exists so a reader can tell a fresh
-      computation from a replay without another request — the client casts this
-      JSON, so an extra key changes nothing for it.
+      D9b-4: the arithmetic moved to server-utils/backtest/metricsReducer.js
+      unchanged, and this query no longer selects raw_payload. Every input it
+      needs is a promoted column now — prob_1/x/2 already encode the
+      evaluation-over-probs precedence the handler used to apply inline, and
+      migration 059 plus the D9b-3 backfill populate them for all 914 rows
+      (543 in this 45-day window, with 0 NULL on any input).
+
+      Measured on this table, same filter and limit: raw_payload at limit=250
+      reached a 57014 statement timeout, promoted columns answered in 269 ms.
+      The reducer is pure so the payload shape and the column shape can be run
+      through it side by side — see tests/d9b4MetricsParity.test.js.
     */
     const body = {
       ok: true,
       days,
-      nRows: rows.length,
-      nProb,
-      brier1x2: nProb ? Number((sumBrier / nProb).toFixed(5)) : null,
-      logLoss1x2: nProb ? Number((sumLogLoss / nProb).toFixed(5)) : null,
-      ece1x2: expectedCalibrationError(calibration),
-      byMethod: serialize(byMethod),
-      byLeague: serialize(byLeague),
-      byDataQuality: serialize(byDq),
-      byModelVersion: serialize(byVersion),
-      calibration1x2: calibration,
+      ...computeMetrics(rows),
       cachedAt: new Date().toISOString()
     };
+
     // Successes only: a thrown query must not be replayed for the whole TTL.
     if (METRICS_CACHE_TTL_MS > 0) metricsCache.set(days, { body, storedAt: Date.now() });
     return res.status(200).json(body);
