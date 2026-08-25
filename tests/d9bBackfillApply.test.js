@@ -95,20 +95,23 @@ test("[H] a numeric stored as a STRING still counts as already-correct", () => {
   assert.equal(columnMatches(43.5, null), false);
 });
 
-test("[I] the UPDATE carries exactly the six promoted columns, keyed by fixture_id", async () => {
+test("[I] the UPDATE carries exactly the eight promoted columns, keyed by fixture_id", async () => {
   const { client, writes } = writableStub([[rowOf(777, FULL)]]);
   await runBackfill({ supabase: client, batchSize: 10, apply: true });
 
   assert.equal(writes.length, 1);
   assert.equal(writes[0].col, "fixture_id");
   assert.equal(writes[0].id, 777);
+  // Six from D9b (migration 059) plus two from D9c (migration 060).
   assert.deepEqual(Object.keys(writes[0].payload).sort(), [
     "model_data_quality",
     "model_method",
     "pick_1x2",
     "prob_1",
     "prob_2",
-    "prob_x"
+    "prob_x",
+    "value_bet_kelly",
+    "value_bet_type"
   ]);
   // Nothing else may ride along.
   for (const forbidden of ["raw_payload", "saved_at", "updated_at", "fixture_id", "validation"]) {
@@ -149,7 +152,9 @@ test("[E][F] NULL is written as NULL — never as zero", async () => {
     prob_2: null,
     model_method: null,
     model_data_quality: null,
-    pick_1x2: null
+    pick_1x2: null,
+    value_bet_kelly: null,
+    value_bet_type: null
   });
   for (const value of Object.values(built)) assert.equal(value, null);
 });
@@ -254,5 +259,5 @@ test("pre-flight fails closed when the promoted columns are missing", async () =
   };
   const result = await preflight({ supabase: client });
   assert.equal(result.ok, false);
-  assert.match(result.reason, /migration 059/);
+  assert.match(result.reason, /migrations 059 and 060/);
 });

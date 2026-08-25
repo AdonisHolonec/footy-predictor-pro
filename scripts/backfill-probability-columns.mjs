@@ -1,5 +1,9 @@
 /**
- * Backfill the six promoted 1X2 columns (migration 059).
+ * Backfill the promoted columns on predictions_history.
+ *
+ * Six 1X2 columns from migration 059 (D9b) and two valueBet columns from
+ * migration 060 (D9c). The script name is historical; the column set comes from
+ * PROMOTED_COLUMNS, so it follows whatever that list holds.
  *
  * DRY RUN BY DEFAULT. Writing requires an explicit --apply; without it this
  * process cannot issue a single UPDATE.
@@ -13,8 +17,13 @@
  * committing on this table (limit=250 reached a 57014 statement timeout at
  * ~353 KB/row). Raise it only with evidence.
  *
- * Migration 059 must already be applied — the script fails loudly if the columns
- * are absent rather than silently reporting zero coverage.
+ * Migrations 059 and 060 must already be applied — pre-flight probes every
+ * column in PROMOTED_COLUMNS and fails loudly if any is absent, rather than
+ * silently reporting zero coverage.
+ *
+ * Re-running after a completed backfill is safe and expected: an already-correct
+ * row is compared column by column and skipped, so widening the column set
+ * updates only the rows that are actually missing the new ones.
  */
 
 import { createClient } from "@supabase/supabase-js";

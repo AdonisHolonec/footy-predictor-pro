@@ -117,6 +117,8 @@ export function extractPromotedModelColumns(prediction) {
     prediction?.evaluation && typeof prediction.evaluation === "object" ? prediction.evaluation : {};
   const modelMeta =
     prediction?.modelMeta && typeof prediction.modelMeta === "object" ? prediction.modelMeta : {};
+  const valueBet =
+    prediction?.valueBet && typeof prediction.valueBet === "object" ? prediction.valueBet : {};
 
   const triple = pickTriple(evaluation.modelProbs1x2Pct) || pickTriple(prediction?.probs);
 
@@ -124,6 +126,24 @@ export function extractPromotedModelColumns(prediction) {
   // Same trap as the triple: Number(null) would store a real dataQuality of 0,
   // which the metrics endpoint buckets as "low" rather than skipping.
   const dataQuality = strictNum(modelMeta.dataQuality);
+
+  /*
+    D9c — the two fields estimateRollingDrawdown reads out of the document.
+
+    Written INDEPENDENTLY of each other, unlike the probability triple. The
+    triple is all-or-nothing because a half-triple would be scored as if it were
+    whole; these two are not a set. Production carries kelly on 914/914 rows but
+    type on only 641, so pairing them would discard 273 real stakes — and the
+    consumer already treats them separately, skipping a row on a falsy stake
+    while reading a missing type as "neither 1 nor X".
+
+    `type` is stored VERBATIM. It reads like a 1X2 pick and is not: 56 distinct
+    values appear in production, most of them market text ("Peste 3.5",
+    "Cards Under 3.5", "Correct Score 0-0"). Normalising it here would change
+    which odds the drawdown prices each row at.
+  */
+  const kelly = strictNum(valueBet.kelly);
+  const betType = typeof valueBet.type === "string" ? valueBet.type.trim() : "";
 
   return {
     // NULL, never 0 — an absent probability is not a probability of zero.
@@ -133,7 +153,10 @@ export function extractPromotedModelColumns(prediction) {
     // NULL, never "" — an absent method must not become a real grouping key.
     model_method: method === "" ? null : method,
     model_data_quality: dataQuality,
-    pick_1x2: normalize1x2(evaluation.recommended1x2) ?? normalize1x2(prediction?.predictions?.oneXtwo)
+    pick_1x2: normalize1x2(evaluation.recommended1x2) ?? normalize1x2(prediction?.predictions?.oneXtwo),
+    // NULL, never 0 — 0 IS a real stake, and the consumer skips it deliberately.
+    value_bet_kelly: kelly,
+    value_bet_type: betType === "" ? null : betType
   };
 }
 
