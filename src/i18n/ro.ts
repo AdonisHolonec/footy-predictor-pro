@@ -909,7 +909,16 @@ export const ro: Dict = {
     // Partea de succes a aceluiași parcurs. Anunţată din STAREA de auth (există
     // sesiune), niciodată din URL — auth-js a consumat deja fragmentul.
     signupConfirmedTitle: "Email confirmat. Contul tău este activ.",
-    signupConfirmedBody: "Ești autentificat — nu mai ai nimic de făcut."
+    signupConfirmedBody: "Ești autentificat — nu mai ai nimic de făcut.",
+    // Login refuzat pentru că adresa nu a fost confirmată. Cheia este codul stabil
+    // `email_not_confirmed` de la Supabase, niciodată mesajul in engleză.
+    emailNotConfirmedTitle: "Emailul nu este confirmat.",
+    emailNotConfirmedBody: "Verifică emailul sau solicită un nou link de confirmare.",
+    resendConfirmationFromLogin: "Retrimite emailul de confirmare",
+    resendSentFromLogin: "Am trimis un nou email de confirmare.",
+    resendCooldownMsg: "Mai așteaptă {seconds}s înainte de a cere alt email.",
+    invalidCredentialsMsg: "Email sau parolă incorectă.",
+    rateLimitedMsg: "Prea multe încercări. Așteaptă puțin și reia."
   },
   flow: {
     warmRateLimit: "Cererea Warm a fost limitată temporar de server.",

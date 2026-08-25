@@ -141,7 +141,7 @@ export default function AuthLinkNotice({ className = "" }: { className?: string 
               label={t("auth.email")}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              error={failure ?? undefined}
+              error={failure ? t(failure) : undefined}
               data-slot="auth-link-notice-email"
             />
             <Button
