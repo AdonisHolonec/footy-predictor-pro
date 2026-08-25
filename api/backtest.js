@@ -412,6 +412,36 @@ async function handleSnapshot(req, res) {
   }
 }
 
+/**
+ * Model metrics are a 45-day aggregate served to a dashboard that polls every
+ * 60 seconds.
+ *
+ * The query cannot drop `raw_payload`: the Brier/log-loss inputs
+ * (`evaluation.modelProbs1x2Pct` / `probs`), `modelMeta.method`,
+ * `modelMeta.dataQuality` and the 1X2 pick have NO promoted columns — see the D9
+ * audit. `recommended_pick` is the market pick ("Over 2.5"), not the 1X2 one, so
+ * it cannot stand in. Projecting `raw_payload->key` is worse, not better:
+ * measured in this codebase at 12.2x slower, because Postgres de-TOASTs the
+ * whole document to evaluate a key.
+ *
+ * So the lever available without a schema change is FREQUENCY. The underlying
+ * data moves when settlement runs — a handful of times a day — while the panel
+ * asks sixty times an hour. Caching the computed result collapses those to one
+ * read per TTL per window, with no change to the numbers a caller receives.
+ *
+ * Keyed by `days` because the window is a parameter; storing the finished
+ * payload rather than the rows keeps the memory cost at a few hundred bytes.
+ */
+const METRICS_CACHE_TTL_MS = Math.max(
+  0,
+  Math.min(Number(process.env.BACKTEST_METRICS_CACHE_TTL_MS || 300_000), 3_600_000)
+);
+const metricsCache = new Map();
+
+export function invalidateMetricsCache() {
+  metricsCache.clear();
+}
+
 async function handleMetrics(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
@@ -431,6 +461,16 @@ async function handleMetrics(req, res) {
   }
 
   const days = Math.max(7, Math.min(Number(req.query.days || 45), 365));
+
+  /*
+    After the authorization and configuration checks above, never before: a
+    cached body must not become a way to read metrics without a valid token.
+  */
+  const cached = metricsCache.get(days);
+  if (cached && METRICS_CACHE_TTL_MS > 0 && Date.now() - cached.storedAt < METRICS_CACHE_TTL_MS) {
+    return res.status(200).json(cached.body);
+  }
+
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
@@ -525,7 +565,13 @@ async function handleMetrics(req, res) {
       accuracy1x2: v.n ? Number(((v.sumHit / v.n) * 100).toFixed(2)) : 0
     }));
 
-    return res.status(200).json({
+    /*
+      Every field below is byte-identical to what this endpoint returned before
+      caching. `cachedAt` is additive and exists so a reader can tell a fresh
+      computation from a replay without another request — the client casts this
+      JSON, so an extra key changes nothing for it.
+    */
+    const body = {
       ok: true,
       days,
       nRows: rows.length,
@@ -537,8 +583,12 @@ async function handleMetrics(req, res) {
       byLeague: serialize(byLeague),
       byDataQuality: serialize(byDq),
       byModelVersion: serialize(byVersion),
-      calibration1x2: calibration
-    });
+      calibration1x2: calibration,
+      cachedAt: new Date().toISOString()
+    };
+    // Successes only: a thrown query must not be replayed for the whole TTL.
+    if (METRICS_CACHE_TTL_MS > 0) metricsCache.set(days, { body, storedAt: Date.now() });
+    return res.status(200).json(body);
   } catch (err) {
     return res.status(500).json({ ok: false, error: err?.message || "Calculul metricilor a eșuat" });
   }
