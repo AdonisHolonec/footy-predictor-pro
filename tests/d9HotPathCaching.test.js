@@ -17,15 +17,22 @@ import assert from "node:assert/strict";
  *     ten minutes of degraded output.
  */
 
-/** A row carrying a probs document, as the live table stores it. */
+/**
+ * A row as the projection returns it after D9c: promoted columns, no document.
+ * The probabilities are PERCENTAGES 0-100, exactly as prob_* store them.
+ */
 function row(p1, pX, p2, extra = {}) {
   return {
-    raw_payload: { probs: { p1, pX, p2 } },
+    prob_1: p1,
+    prob_x: pX,
+    prob_2: p2,
     validation: "pending",
     odds_home: 2,
     odds_draw: 3,
     odds_away: 4,
     value_bet_validation: null,
+    value_bet_kelly: null,
+    value_bet_type: null,
     ...extra
   };
 }
@@ -76,7 +83,7 @@ test("[E] loadRiskContext still computes the same averaged distribution", async 
 
 test("[E] rows without usable probs are ignored, as before", async () => {
   const { mod } = await loadHelpers(
-    { rows: [row(50, 30, 20), { raw_payload: {}, validation: "pending" }, row(70, 20, 10)] },
+    { rows: [row(50, 30, 20), { validation: "pending" }, row(70, 20, 10)] },
     "skip"
   );
   const ctx = await mod.loadRiskContext();
@@ -137,22 +144,26 @@ test("the cached context is frozen, so a consumer cannot poison every later Pred
   assert.equal((await mod.loadRiskContext()).cooldownCap, 3);
 });
 
-test("[D] the risk-context projection is unchanged and still documented as needing raw_payload", async () => {
+test("[D] the risk-context projection carries NO raw_payload", async () => {
   const { mod, calls } = await loadHelpers({ rows: [row(50, 30, 20)] }, "projection");
   await mod.loadRiskContext();
 
   const projection = calls.selects[0];
   /*
-    Requirement D asked for proof that raw_payload is ABSENT. The D9 audit proved
-    the opposite is currently unavoidable: `probs` has no promoted column, so
-    removing it here would change the numbers rather than the cost. This pins the
-    projection instead — the exact column set, no more — so any future widening
-    is a deliberate edit that trips a test.
+    D9 pinned this projection WITH raw_payload and recorded why removing it was
+    impossible then: `probs` had no promoted column. Migration 059 gave it one
+    and 060 finished the job, so D9c narrows it. It stays pinned for the same
+    reason as before — on a table at ~353 KB/row, widening this select has to be
+    a deliberate edit that trips a test.
   */
   assert.equal(
     projection,
-    "raw_payload, validation, odds_home, odds_draw, odds_away, value_bet_validation"
+    "prob_1, prob_x, prob_2, validation, odds_home, odds_draw, odds_away, " +
+      "value_bet_validation, value_bet_kelly, value_bet_type"
   );
+  assert.ok(!projection.includes("raw_payload"), "the document must not come back");
+  assert.ok(!projection.includes("*"), "a wildcard would drag the document back in");
+  // One query, so nothing else can be fetching the document behind this.
   assert.equal(calls.selects.length, 1);
 });
 

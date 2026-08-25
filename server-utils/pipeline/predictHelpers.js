@@ -919,17 +919,41 @@ function applyStakePolicyV2({ stakePct, confidencePct, dataQuality, leagueStakeC
   };
 }
 
+/**
+ * D9c — reads the promoted columns instead of the document.
+ *
+ * `valueBet.kelly` and `valueBet.type` became real columns in migration 060 and
+ * were backfilled across all 916 rows, so this no longer needs `raw_payload`.
+ *
+ * The arithmetic and every comparison below are UNCHANGED, deliberately, down to
+ * the parts that look like bugs:
+ *
+ *   - `Number(kelly) || 0` still collapses a missing stake AND a real stake of 0
+ *     to 0, and `!stake` then skips the row. 272 production rows carry a genuine
+ *     kelly of 0 and have always been skipped this way.
+ *   - `type` is compared with `===` and no trimming. The column is trimmed at
+ *     write time while the document was not — a latent difference, not a live
+ *     one: measured across all 916 rows, 0 values need trimming and 0 rows take
+ *     a different odds branch.
+ *   - the odds ternary has no final guard, so any type that is not "1" or "X" is
+ *     priced at the away odds. Pre-existing and NOT touched here — see
+ *     SEPARATE FOLLOW-UP: VALUE-BET ODDS TYPE FALLTHROUGH.
+ *
+ * One deliberate removal: `row.value_bet_validation ?? payload.value_bet_validation`
+ * loses its second operand, which cannot survive without the document. Measured
+ * on all 916 rows, 374 have a NULL column and the payload rescues 0 of them, so
+ * the fallback was dead weight rather than behaviour.
+ */
 function estimateRollingDrawdown(rows) {
   let pnl = 0;
   let peak = 0;
   let maxDd = 0;
   for (const row of rows) {
-    const payload = row.raw_payload || {};
-    const val = payload.valueBet || {};
-    const stake = Math.max(0, Math.min((Number(val.kelly) || 0) / 100, 0.03));
-    const odd = val.type === "1" ? Number(row.odds_home) : val.type === "X" ? Number(row.odds_draw) : Number(row.odds_away);
+    const type = row.value_bet_type;
+    const stake = Math.max(0, Math.min((Number(row.value_bet_kelly) || 0) / 100, 0.03));
+    const odd = type === "1" ? Number(row.odds_home) : type === "X" ? Number(row.odds_draw) : Number(row.odds_away);
     if (!stake || !isFinite(odd) || odd <= 1) continue;
-    const vbOutcome = row.value_bet_validation ?? payload.value_bet_validation;
+    const vbOutcome = row.value_bet_validation;
     const won = vbOutcome === "win" || (vbOutcome == null && row.validation === "win");
     const lost = vbOutcome === "loss" || (vbOutcome == null && row.validation === "loss");
     if (won) pnl += stake * (odd - 1);
@@ -940,23 +964,115 @@ function estimateRollingDrawdown(rows) {
   return maxDd;
 }
 
+/** The columns the risk context needs. No raw_payload. */
+const RISK_CONTEXT_SELECT =
+  "prob_1, prob_x, prob_2, validation, odds_home, odds_draw, odds_away, " +
+  "value_bet_validation, value_bet_kelly, value_bet_type";
+
+/**
+ * A row joins the averaged distribution only if all three promoted
+ * probabilities are actually present.
+ *
+ * This is the one place the switch could have gone wrong silently. The previous
+ * filter was `isFinite(p.p1)` over the document's `probs` object, using the
+ * GLOBAL isFinite, which coerces: `isFinite(null)` is `isFinite(0)` — true.
+ * Carried across to columns verbatim, a NULL probability would have been
+ * averaged in as a real 0%, dragging avgDist down and, through Stage07's
+ * 24-percentage-point drift comparison, changing predictions.
+ *
+ * So NULL is rejected explicitly, before any coercion, while a genuine 0 still
+ * counts: 0% is a real probability, absent is not.
+ */
+function hasCompleteTriple(row) {
+  for (const column of ["prob_1", "prob_x", "prob_2"]) {
+    const value = row?.[column];
+    if (value === null || value === undefined || value === "") return false;
+    if (!Number.isFinite(Number(value))) return false;
+  }
+  return true;
+}
+
+/**
+ * The risk-context arithmetic, lifted out of the loader unchanged so it can be
+ * driven by tests and by an old-vs-new parity harness without a database.
+ *
+ * @param {Array<object>} rows rows carrying the promoted columns
+ * @returns {{avgDist: {p1: number, pX: number, p2: number}|null, cooldownCap: number}}
+ */
+function computeRiskContext(rows) {
+  const ctx = { avgDist: null, cooldownCap: 3 };
+
+  const withProbs = (rows || []).filter(hasCompleteTriple);
+  if (withProbs.length > 0) {
+    const mean = withProbs.reduce(
+      (acc, r) => {
+        acc.p1 += Number(r.prob_1);
+        acc.pX += Number(r.prob_x);
+        acc.p2 += Number(r.prob_2);
+        return acc;
+      },
+      { p1: 0, pX: 0, p2: 0 }
+    );
+    ctx.avgDist = {
+      p1: mean.p1 / withProbs.length,
+      pX: mean.pX / withProbs.length,
+      p2: mean.p2 / withProbs.length
+    };
+  }
+
+  const settled = (rows || []).filter((r) => r.validation === "win" || r.validation === "loss");
+  const dd = estimateRollingDrawdown(settled);
+  if (dd >= 3) ctx.cooldownCap = 1.5;
+  else if (dd >= 2) ctx.cooldownCap = 2.0;
+
+  return ctx;
+}
+
+/**
+ * The PRE-D9c resolution, kept for parity testing only.
+ *
+ * It maps a document row onto the column shape exactly as the old code read it,
+ * so both shapes can run through the same `computeRiskContext` and be compared.
+ * Nothing in production calls this.
+ */
+function legacyRiskRowFromPayload(row) {
+  const payload = row?.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+  const probs = payload.probs || {};
+  const valueBet = payload.valueBet || {};
+  return {
+    prob_1: probs.p1,
+    prob_x: probs.pX,
+    prob_2: probs.p2,
+    validation: row?.validation,
+    odds_home: row?.odds_home,
+    odds_draw: row?.odds_draw,
+    odds_away: row?.odds_away,
+    value_bet_validation: row?.value_bet_validation ?? payload.value_bet_validation,
+    value_bet_kelly: valueBet.kelly,
+    value_bet_type: valueBet.type
+  };
+}
+
 /**
  * Risk context is a 7-day aggregate, and it was recomputed on EVERY Predict.
  *
- * The query reads `raw_payload` for up to 400 rows to produce three averaged
- * floats and one cooldown cap. At the ~353 KB/row the document has grown to,
- * that is tens of MB of TOAST decompression per request — paid by every user
- * Predict AND by all fifteen daily cron jobs that reach the pipeline, whether or
- * not anyone is watching.
+ * D9 could only cut the FREQUENCY: the query had to read `raw_payload` for up to
+ * 400 rows to produce three averaged floats and one cooldown cap, and at the
+ * ~353 KB/row the document has grown to that was tens of MB of TOAST
+ * decompression per request — paid by every user Predict AND by all fifteen
+ * daily cron jobs that reach the pipeline, whether or not anyone is watching.
  *
- * Nothing it measures moves quickly: a seven-day mean probability distribution
- * and a drawdown band do not change between two Predicts a minute apart. Ten
- * minutes is the same TTL the other request-scoped model assets already use
- * (calibration maps, stacker weights, league Elo, market rolling), so this adds
- * a familiar shape rather than a new one.
+ * D9c cut the SIZE as well. Migration 060 promoted the last two fields that had
+ * no column (`valueBet.kelly`, `valueBet.type`) and the backfill populated all
+ * 916 rows, so the projection now names ten scalars and the document never
+ * leaves the database.
  *
- * The SELECT is deliberately untouched — the fields it needs have no promoted
- * columns (see D9 audit), so the fix here is frequency, not projection.
+ * The cache stays, because the two solve different problems: the projection
+ * makes each read cheap, the cache makes most reads not happen. Nothing this
+ * measures moves quickly — a seven-day mean distribution and a drawdown band do
+ * not change between two Predicts a minute apart — and ten minutes is the same
+ * TTL the other request-scoped model assets already use (calibration maps,
+ * stacker weights, league Elo, market rolling).
  */
 const RISK_CONTEXT_TTL_MS = 10 * 60 * 1000;
 let riskContextCache = { value: null, fetchedAt: 0 };
@@ -985,36 +1101,20 @@ async function loadRiskContext() {
 
   try {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    /*
+      D9c: this query no longer selects raw_payload. Same table, same 7-day
+      filter, same limit of 400 — only the projection narrowed, from a column
+      that has grown to ~353 KB/row down to ten scalars.
+    */
     const { data } = await supabase
       .from("predictions_history")
-      .select("raw_payload, validation, odds_home, odds_draw, odds_away, value_bet_validation")
+      .select(RISK_CONTEXT_SELECT)
       .gte("kickoff_at", cutoff)
       .limit(400);
 
-    const rows = data || [];
-    const withProbs = rows.map((r) => r.raw_payload?.probs).filter((p) => p && isFinite(p.p1) && isFinite(p.pX) && isFinite(p.p2));
-
-    if (withProbs.length > 0) {
-      const mean = withProbs.reduce(
-        (acc, p) => {
-          acc.p1 += Number(p.p1);
-          acc.pX += Number(p.pX);
-          acc.p2 += Number(p.p2);
-          return acc;
-        },
-        { p1: 0, pX: 0, p2: 0 }
-      );
-      ctx.avgDist = {
-        p1: mean.p1 / withProbs.length,
-        pX: mean.pX / withProbs.length,
-        p2: mean.p2 / withProbs.length
-      };
-    }
-
-    const settled = rows.filter((r) => r.validation === "win" || r.validation === "loss");
-    const dd = estimateRollingDrawdown(settled);
-    if (dd >= 3) ctx.cooldownCap = 1.5;
-    else if (dd >= 2) ctx.cooldownCap = 2.0;
+    const computed = computeRiskContext(data || []);
+    ctx.avgDist = computed.avgDist;
+    ctx.cooldownCap = computed.cooldownCap;
 
     /*
       Cached ONLY on a clean read. A failed query yields the same default-shaped
@@ -1075,6 +1175,9 @@ export {
   resolveConfidenceBucket,
   applyStakePolicyV2,
   estimateRollingDrawdown,
+  computeRiskContext,
+  legacyRiskRowFromPayload,
+  RISK_CONTEXT_SELECT,
   loadRiskContext,
   invalidateRiskContextCache,
   RISK_CONTEXT_TTL_MS
