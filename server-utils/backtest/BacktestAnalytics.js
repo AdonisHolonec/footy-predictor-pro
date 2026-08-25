@@ -53,12 +53,16 @@ export function getSelectedOdd(row, type) {
 }
 
 /** Resolve stakeable odds: value-bet quote first, then 1X2 columns. */
+/**
+ * D10a removed `valueBet.odds` and `valueBet.odd` from the head of this list.
+ * Both are absent on 0 of 916 production rows, so they never once decided the
+ * price. The remaining order is UNCHANGED and still active: `best.odds` wins on
+ * 495 rows and `ve.odds` on 539, which is why the valueEngine chain stays.
+ */
 function resolveBetOdd(row, payload, valueBet, type) {
   const ve = payload.valueEngine && typeof payload.valueEngine === "object" ? payload.valueEngine : {};
   const best = ve.bestMarket && typeof ve.bestMarket === "object" ? ve.bestMarket : {};
   const candidates = [
-    valueBet.odds,
-    valueBet.odd,
     best.odds,
     ve.odds,
     getSelectedOdd(row, type)
@@ -81,15 +85,32 @@ function resolveBetStakePct(valueBet, ve) {
   return clamp(raw, 0, 3);
 }
 
+/**
+ * D10a — the settlement inputs read from promoted columns, not the document.
+ *
+ * `value_bet_validation`, `score_home`, `score_away` and `recommended_pick` are
+ * all real columns, and the document copies below them were pure fallbacks.
+ * Measured before removal, across all 916 production rows and the 539-row
+ * snapshot population alike:
+ *
+ *   value_bet_validation  373 / 129 NULL columns, payload rescued 0
+ *   recommended_pick        0 NULL columns, payload rescued 0
+ *   score_home/away        12 NULL columns table-wide (0 in the snapshot
+ *                          window), and all 12 are NULL in the payload too
+ *
+ * So these were dead weight rather than behaviour. `payload` is still a
+ * parameter because the rest of this file genuinely needs it — valueBet.type,
+ * the valueEngine chain and closingOdds remain document-canonical (D10b/D10c).
+ */
 function resolveBetOutcome(row, payload, type) {
-  const vbOutcome = row.value_bet_validation ?? payload.value_bet_validation;
+  const vbOutcome = row.value_bet_validation;
   if (vbOutcome === "win") return { won: true, lost: false };
   if (vbOutcome === "loss") return { won: false, lost: true };
 
   // Re-settle from stored score when VB validation is missing/pending.
   const score = {
-    home: row.score_home ?? payload.score?.home ?? null,
-    away: row.score_away ?? payload.score?.away ?? null
+    home: row.score_home ?? null,
+    away: row.score_away ?? null
   };
   if (type && score.home != null && score.away != null) {
     const hit = evaluateTopPick(type, score);
@@ -98,7 +119,7 @@ function resolveBetOutcome(row, payload, type) {
   }
 
   // Fallback: recommended-pick validation only when markets align or no VB type.
-  const rec = String(row.recommended_pick || payload.recommended?.pick || "").trim().toUpperCase();
+  const rec = String(row.recommended_pick || "").trim().toUpperCase();
   const t = String(type || "").trim().toUpperCase();
   const aligned = !t || !rec || t === rec;
   if (aligned) {
@@ -122,7 +143,7 @@ function normalizeMarket(raw) {
  * Returns null when the row cannot contribute to PnL.
  */
 /** Model probability (0–1) of the staked selection, from stored evaluation/confidence. */
-function selectionProbability(payload, valueBet, type, confidence) {
+function selectionProbability(payload, type, confidence) {
   const evalBlock = payload.evaluation && typeof payload.evaluation === "object" ? payload.evaluation : {};
   const triple = evalBlock.modelProbs1x2Pct || evalBlock.calibratedProbs1x2Pct || null;
   if (triple && (type === "1" || type === "X" || type === "2")) {
@@ -130,8 +151,8 @@ function selectionProbability(payload, valueBet, type, confidence) {
     const v = Number(triple[key]);
     if (Number.isFinite(v)) return clamp(v > 1.5 ? v / 100 : v, 0, 1);
   }
-  const vbProb = Number(valueBet.prob ?? valueBet.probability);
-  if (Number.isFinite(vbProb)) return clamp(vbProb > 1.5 ? vbProb / 100 : vbProb, 0, 1);
+  // D10a: `valueBet.prob` / `.probability` removed — present on 0 of 916 rows,
+  // so confidence was always the real second source.
   if (Number.isFinite(confidence)) return clamp(confidence / 100, 0, 1);
   return null;
 }
@@ -193,9 +214,16 @@ function extractValueBetEvent(row) {
   const stake = stakePct / 100;
   const odd = resolveBetOdd(row, payload, valueBet, type);
   const ev = Number(valueBet.ev ?? valueBet.expectedValue ?? ve.expectedValue ?? ve.bestMarket?.expectedValue);
+  /*
+    D10a: `valueBet.confidence` removed from the head of this chain — absent on
+    0 of 916 rows, so it never decided the value. The rest is UNCHANGED, and
+    deliberately: `payload.recommended.confidence` is present on all 916 rows
+    and is still the effective source, so promoting it to
+    `row.recommended_confidence` would be a real behaviour change, not a
+    cleanup. That is D10b/D10c territory, not this PR.
+  */
   const confidence = Number(
-    valueBet.confidence ??
-      ve.confidencePct ??
+    ve.confidencePct ??
       payload.recommended?.confidence ??
       row.recommended_confidence ??
       0
@@ -206,7 +234,7 @@ function extractValueBetEvent(row) {
   if (stake <= 0 || !Number.isFinite(odd) || odd <= 1) return null;
 
   const pnl = won ? stake * (odd - 1) : -stake;
-  const prob = selectionProbability(payload, valueBet, type, confidence);
+  const prob = selectionProbability(payload, type, confidence);
   const closingOdd = selectionClosingOdd(payload, row, type);
   const clvPct = closingOdd && odd > 1 ? round((odd / closingOdd - 1) * 100, 3) : null;
 
