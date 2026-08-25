@@ -103,8 +103,58 @@ test("[9] a prediction carrying nothing leaves every promoted field NULL", () =>
     prob_2: null,
     model_method: null,
     model_data_quality: null,
-    pick_1x2: null
+    pick_1x2: null,
+    // D9c (migration 060)
+    value_bet_kelly: null,
+    value_bet_type: null
   });
+});
+
+test("[D9c] valueBet.kelly and .type map to their own columns", () => {
+  const out = promoted({ valueBet: { kelly: 1.9, type: "X2" } });
+  assert.equal(out.value_bet_kelly, 1.9);
+  assert.equal(out.value_bet_type, "X2");
+});
+
+test("[D9c] the two are INDEPENDENT — one present does not require the other", () => {
+  // Production carries kelly on 914/914 rows but type on only 641. Pairing them
+  // all-or-nothing, the way the probability triple is paired, would discard 273
+  // real stakes.
+  const kellyOnly = promoted({ valueBet: { kelly: 2.4 } });
+  assert.equal(kellyOnly.value_bet_kelly, 2.4);
+  assert.equal(kellyOnly.value_bet_type, null);
+
+  const typeOnly = promoted({ valueBet: { type: "1" } });
+  assert.equal(typeOnly.value_bet_kelly, null);
+  assert.equal(typeOnly.value_bet_type, "1");
+});
+
+test("[D9c] a kelly of ZERO survives — it is a real stake, not a missing one", () => {
+  assert.equal(promoted({ valueBet: { kelly: 0 } }).value_bet_kelly, 0);
+  // …whereas each way of being absent stays NULL, never 0.
+  for (const kelly of [null, undefined, ""]) {
+    assert.equal(promoted({ valueBet: { kelly } }).value_bet_kelly, null, String(kelly));
+  }
+  assert.equal(promoted({ valueBet: { kelly: "abc" } }).value_bet_kelly, null);
+});
+
+test("[D9c] type is stored VERBATIM — it is market text, not a 1X2 pick", () => {
+  // 56 distinct values appear in production; normalising would change which odds
+  // estimateRollingDrawdown prices the row at.
+  for (const type of ["X2", "1X", "Peste 3.5", "Cards Under 3.5", "Correct Score 0-0"]) {
+    assert.equal(promoted({ valueBet: { type } }).value_bet_type, type);
+  }
+  // Trimmed, and an empty string is NULL rather than a real selection.
+  assert.equal(promoted({ valueBet: { type: "  Over 2.5  " } }).value_bet_type, "Over 2.5");
+  assert.equal(promoted({ valueBet: { type: "   " } }).value_bet_type, null);
+});
+
+test("[D9c] a non-object valueBet does not throw", () => {
+  for (const valueBet of [null, undefined, "nope", 7]) {
+    const out = promoted({ valueBet });
+    assert.equal(out.value_bet_kelly, null);
+    assert.equal(out.value_bet_type, null);
+  }
 });
 
 test("[10] a PARTIAL triple populates none of it", () => {

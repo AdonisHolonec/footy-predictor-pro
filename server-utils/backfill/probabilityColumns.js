@@ -1,5 +1,10 @@
 /**
- * D9b-2 — dry run for the six promoted 1X2 columns (migration 059).
+ * Dry run and backfill for the promoted columns on predictions_history.
+ *
+ * The filename is historical: this began as the six 1X2 columns of migration 059
+ * (D9b) and now also covers the two valueBet columns of migration 060 (D9c).
+ * `PROMOTED_COLUMNS` is the single list both the walk and the writer work from,
+ * so widening the set is one edit here rather than a second copy of the walk.
  *
  * READ ONLY. This module contains no insert, update or upsert: it walks the
  * table, extracts what the backfill *would* write, and reports. The apply path
@@ -33,7 +38,10 @@ export const PROMOTED_COLUMNS = Object.freeze([
   "prob_2",
   "model_method",
   "model_data_quality",
-  "pick_1x2"
+  "pick_1x2",
+  // D9c (migration 060) — the valueBet fields loadRiskContext still detoasts for.
+  "value_bet_kelly",
+  "value_bet_type"
 ]);
 
 /**
@@ -91,7 +99,9 @@ export function emptyStats() {
       prob_2: 0,
       model_method: 0,
       model_data_quality: 0,
-      pick_1x2: 0
+      pick_1x2: 0,
+      value_bet_kelly: 0,
+      value_bet_type: 0
     },
     mismatchSamples: []
   };
@@ -161,7 +171,9 @@ export function buildUpdate(planned) {
     prob_2: planned.prob_2,
     model_method: planned.model_method,
     model_data_quality: planned.model_data_quality,
-    pick_1x2: planned.pick_1x2
+    pick_1x2: planned.pick_1x2,
+    value_bet_kelly: planned.value_bet_kelly,
+    value_bet_type: planned.value_bet_type
   };
 }
 
@@ -320,7 +332,7 @@ export async function preflight({ supabase, table = "predictions_history", maxRo
   if (probe.error) {
     return {
       ok: false,
-      reason: `cannot read the promoted columns — is migration 059 applied? ${probe.error.message}`
+      reason: `cannot read the promoted columns — are migrations 059 and 060 applied? ${probe.error.message}`
     };
   }
 
