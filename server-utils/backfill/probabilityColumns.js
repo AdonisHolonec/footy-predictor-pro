@@ -77,6 +77,14 @@ export function emptyStats() {
     alreadyPopulated: 0,
     wouldUpdate: 0,
     wouldRemainNull: 0,
+
+    // D9b-3 — apply
+    candidates: 0,
+    alreadyCorrect: 0,
+    updated: 0,
+    failed: 0,
+    nulledOut: 0,
+    failedRange: null,
     mismatches: {
       prob_1: 0,
       prob_x: 0,
@@ -113,6 +121,48 @@ function readTriple(source) {
   const { usable } = tripleShape(source);
   if (usable !== 3) return null;
   return { p1: Number(source.p1), pX: Number(source.pX), p2: Number(source.p2) };
+}
+
+/**
+ * Is the stored column already what the extractor would write?
+ *
+ * Null-aware and numeric-aware: PostgREST can hand back a `numeric` as a string,
+ * so a raw `===` would report every already-correct row as needing an update and
+ * turn an idempotent backfill into a full rewrite on every run.
+ */
+export function columnMatches(stored, planned) {
+  const sNull = stored === null || stored === undefined;
+  const pNull = planned === null || planned === undefined;
+  if (sNull || pNull) return sNull && pNull;
+  if (typeof planned === "number") return Number(stored) === planned;
+  return String(stored) === String(planned);
+}
+
+/**
+ * The SET clause — exactly the six promoted columns, never anything else.
+ *
+ * Built as its own object so the column set is a single readable list rather
+ * than something assembled inside the write call. `raw_payload`, `saved_at`,
+ * `fixture_id`, odds, settlement and every other column are absent by
+ * construction, not by convention.
+ *
+ * `updated_at` is NOT here either — but the table carries
+ * `trg_predictions_history_updated_at`, a BEFORE UPDATE trigger (migration 001),
+ * so Postgres bumps it on any UPDATE regardless of what this sends. That cannot
+ * be avoided without a schema change, and it is harmless: the staleness guard in
+ * upsertPredictionsHistory compares an incoming `generatedAt` (now, at Predict
+ * time) against the stored value, and a backfill timestamp is always in the past
+ * relative to a later Predict.
+ */
+export function buildUpdate(planned) {
+  return {
+    prob_1: planned.prob_1,
+    prob_x: planned.prob_x,
+    prob_2: planned.prob_2,
+    model_method: planned.model_method,
+    model_data_quality: planned.model_data_quality,
+    pick_1x2: planned.pick_1x2
+  };
 }
 
 /**
@@ -177,8 +227,21 @@ export function inspectRow(row) {
     (c) => row?.[c] !== null && row?.[c] !== undefined
   ).length;
 
+  /*
+    A row is a candidate only if at least one column would actually change. The
+    18 rows the dual-write already populated must therefore report updated = 0,
+    which is what makes re-running the backfill a no-op rather than a rewrite.
+  */
+  const changed = PROMOTED_COLUMNS.filter((c) => !columnMatches(row?.[c], planned[c]));
+  const nullsOut = changed.filter(
+    (c) => planned[c] === null && row?.[c] !== null && row?.[c] !== undefined
+  ).length;
+
   return {
     planned,
+    changed,
+    needsUpdate: changed.length > 0,
+    nullsOut,
     tripleState,
     allZero,
     insufficientData: payload?.insufficientData === true,
@@ -221,6 +284,10 @@ function accumulate(stats, row, seen) {
   if (seen.hasEvaluationTriple && seen.hasProbsTriple) stats.hasBoth += 1;
   if (seen.evaluationDiffers) stats.evaluationDiffersFromProbs += 1;
 
+  if (seen.needsUpdate) stats.candidates += 1;
+  else stats.alreadyCorrect += 1;
+  stats.nulledOut += seen.nullsOut;
+
   if (seen.storedNonNull > 0) stats.alreadyPopulated += 1;
   if (seen.plannedNonNull > 0 && seen.storedNonNull === 0) stats.wouldUpdate += 1;
   if (seen.plannedNonNull === 0 && seen.storedNonNull === 0) stats.wouldRemainNull += 1;
@@ -235,15 +302,66 @@ function accumulate(stats, row, seen) {
 }
 
 /**
- * Walk the table and report. Writes nothing, ever.
+ * Everything that must be true before the first write.
  *
- * @returns {Promise<object>} stats
+ * Ordered cheapest-first, and every one of them fails CLOSED: a backfill that
+ * cannot verify its preconditions must not start, because the failure mode of
+ * guessing here is a partially-written table.
+ *
+ * The population guardrail is the one that matters most. The audited population
+ * is ~914 rows; if the table has grown to something wildly different, the
+ * evidence this backfill was approved against no longer describes it, and the
+ * right response is to stop and re-audit rather than to write anyway.
  */
-export async function runDryRun({
+export async function preflight({ supabase, table = "predictions_history", maxRows = 5000 }) {
+  if (!supabase) return { ok: false, reason: "supabase client is required" };
+
+  const probe = await supabase.from(table).select(PROMOTED_COLUMNS.join(", ")).limit(1);
+  if (probe.error) {
+    return {
+      ok: false,
+      reason: `cannot read the promoted columns — is migration 059 applied? ${probe.error.message}`
+    };
+  }
+
+  const { count, error } = await supabase
+    .from(table)
+    .select("fixture_id", { count: "exact", head: true });
+  if (error) return { ok: false, reason: `cannot count ${table}: ${error.message}` };
+  if (count > maxRows) {
+    return {
+      ok: false,
+      reason: `population ${count} exceeds the --max-rows guardrail of ${maxRows}. The audited population was ~914; re-audit before writing.`
+    };
+  }
+
+  return { ok: true, population: count };
+}
+
+/**
+ * One walk, two behaviours.
+ *
+ * Candidate selection and extraction are shared by construction — `apply` only
+ * decides whether the rows the dry run would have changed are actually written.
+ * There is deliberately no second implementation of the mapping to drift from
+ * the first.
+ *
+ * Writes are per-row `UPDATE ... WHERE fixture_id = ?`, not a bulk upsert. An
+ * upsert would have to carry whole rows and could INSERT a fixture that no
+ * longer exists; an UPDATE touches the six columns of one existing row and can
+ * do nothing else. That is the same shape the 055/056/057 backfill already uses.
+ *
+ * PostgREST exposes no multi-statement transaction, so a chunk is not atomic.
+ * Rather than invent a transaction abstraction for this one job, the operation
+ * is idempotent: each row is atomic on its own, an interrupted run leaves only
+ * correct rows behind, and re-running skips them.
+ */
+export async function runBackfill({
   supabase,
   batchSize = 100,
   after = 0,
   maxBatches = Infinity,
+  apply = false,
   table = "predictions_history",
   now = () => Date.now(),
   onBatch = null
@@ -265,7 +383,38 @@ export async function runDryRun({
     const rows = data || [];
     if (rows.length === 0) break;
 
-    for (const row of rows) accumulate(stats, row, inspectRow(row));
+    const chunkFrom = Number(rows[0].fixture_id);
+    const chunkTo = Number(rows[rows.length - 1].fixture_id);
+
+    for (const row of rows) {
+      const seen = inspectRow(row);
+      accumulate(stats, row, seen);
+      if (!apply || !seen.needsUpdate) continue;
+
+      const { error: writeError } = await supabase
+        .from(table)
+        .update(buildUpdate(seen.planned))
+        .eq("fixture_id", row.fixture_id);
+
+      if (writeError) {
+        /*
+          Stop, do not continue. A database error mid-backfill means the next row
+          is as likely to fail, and silently pressing on would leave a partially
+          written table with no record of where it stopped. The cursor and the
+          chunk range are reported so a retry can resume from a known point.
+        */
+        stats.failed += 1;
+        stats.failedRange = { from: chunkFrom, to: chunkTo, fixture_id: row.fixture_id };
+        stats.lastFixtureId = cursor;
+        stats.elapsedMs = now() - started;
+        const err = new Error(
+          `update failed on fixture ${row.fixture_id} (chunk ${chunkFrom}..${chunkTo}): ${writeError.message}`
+        );
+        err.stats = stats;
+        throw err;
+      }
+      stats.updated += 1;
+    }
 
     /*
       Strictly increasing cursor, so the walk terminates even if a page comes
@@ -273,7 +422,7 @@ export async function runDryRun({
       is no OFFSET: on a TOASTed table OFFSET re-reads and discards every skipped
       document, so page N costs N pages' worth of detoasting.
     */
-    cursor = Number(rows[rows.length - 1].fixture_id);
+    cursor = chunkTo;
     stats.lastFixtureId = cursor;
     stats.batches += 1;
     if (onBatch) onBatch({ ...stats });
@@ -284,4 +433,22 @@ export async function runDryRun({
   return stats;
 }
 
-export default { runDryRun, inspectRow, emptyStats, PROMOTED_COLUMNS, DRYRUN_SELECT };
+/**
+ * Read-only walk. Kept as its own export so the D9b-2 dry run cannot acquire a
+ * write path by accident: `apply` is not a parameter here, it is hard-coded off.
+ */
+export async function runDryRun(options = {}) {
+  return runBackfill({ ...options, apply: false });
+}
+
+export default {
+  runBackfill,
+  runDryRun,
+  preflight,
+  inspectRow,
+  buildUpdate,
+  columnMatches,
+  emptyStats,
+  PROMOTED_COLUMNS,
+  DRYRUN_SELECT
+};
