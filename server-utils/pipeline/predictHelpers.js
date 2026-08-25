@@ -940,9 +940,45 @@ function estimateRollingDrawdown(rows) {
   return maxDd;
 }
 
+/**
+ * Risk context is a 7-day aggregate, and it was recomputed on EVERY Predict.
+ *
+ * The query reads `raw_payload` for up to 400 rows to produce three averaged
+ * floats and one cooldown cap. At the ~353 KB/row the document has grown to,
+ * that is tens of MB of TOAST decompression per request — paid by every user
+ * Predict AND by all fifteen daily cron jobs that reach the pipeline, whether or
+ * not anyone is watching.
+ *
+ * Nothing it measures moves quickly: a seven-day mean probability distribution
+ * and a drawdown band do not change between two Predicts a minute apart. Ten
+ * minutes is the same TTL the other request-scoped model assets already use
+ * (calibration maps, stacker weights, league Elo, market rolling), so this adds
+ * a familiar shape rather than a new one.
+ *
+ * The SELECT is deliberately untouched — the fields it needs have no promoted
+ * columns (see D9 audit), so the fix here is frequency, not projection.
+ */
+const RISK_CONTEXT_TTL_MS = 10 * 60 * 1000;
+let riskContextCache = { value: null, fetchedAt: 0 };
+
+/** Test seam, mirroring invalidateTeamMarketRollingCache / invalidateEloCache. */
+function invalidateRiskContextCache() {
+  riskContextCache = { value: null, fetchedAt: 0 };
+}
+
 async function loadRiskContext() {
+  const now = Date.now();
+  if (riskContextCache.value && now - riskContextCache.fetchedAt < RISK_CONTEXT_TTL_MS) {
+    return riskContextCache.value;
+  }
+
   const ctx = { avgDist: null, cooldownCap: 3 };
   const supabaseConfig = assertSupabaseConfigured();
+  /*
+    Neither of these ran a query, so there is nothing to save and nothing to
+    amortise. Returning uncached also means a late-arriving configuration is
+    picked up on the next Predict instead of ten minutes later.
+  */
   if (!supabaseConfig.ok) return ctx;
   const supabase = getSupabaseAdmin();
   if (!supabase) return ctx;
@@ -979,6 +1015,20 @@ async function loadRiskContext() {
     const dd = estimateRollingDrawdown(settled);
     if (dd >= 3) ctx.cooldownCap = 1.5;
     else if (dd >= 2) ctx.cooldownCap = 2.0;
+
+    /*
+      Cached ONLY on a clean read. A failed query yields the same default-shaped
+      object, and storing that would turn one bad moment into ten minutes of
+      degraded risk context; the fallback stays per-request so recovery is
+      immediate.
+
+      Frozen because the value is now shared across every Predict in the
+      instance. Stage07/08/09 only read it today — freezing means a future write
+      throws instead of silently poisoning every subsequent request.
+    */
+    if (ctx.avgDist) Object.freeze(ctx.avgDist);
+    Object.freeze(ctx);
+    riskContextCache = { value: ctx, fetchedAt: now };
   } catch {
     // silent fallback
   }
@@ -1025,5 +1075,7 @@ export {
   resolveConfidenceBucket,
   applyStakePolicyV2,
   estimateRollingDrawdown,
-  loadRiskContext
+  loadRiskContext,
+  invalidateRiskContextCache,
+  RISK_CONTEXT_TTL_MS
 };
