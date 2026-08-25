@@ -166,6 +166,12 @@ test("the TTL is ten minutes, matching the other request-scoped model assets", a
  * ------------------------------------------------------------------------- */
 
 /** A settled row the metrics reducer will actually score. */
+/**
+ * A stored row after migration 059 and the D9b-3 backfill: the promoted columns
+ * the metrics endpoint reads now, alongside the document it used to read. Both
+ * are present because a real row carries both — D9b-4 narrowed the projection,
+ * it did not empty the column.
+ */
 function metricsRow(p1, pX, p2, scoreHome, scoreAway) {
   return {
     league_id: 39,
@@ -176,6 +182,12 @@ function metricsRow(p1, pX, p2, scoreHome, scoreAway) {
     model_version: "v1",
     recommended_confidence: 72,
     recommended_pick: "Over 2.5",
+    prob_1: p1,
+    prob_x: pX,
+    prob_2: p2,
+    model_method: "poisson",
+    model_data_quality: 0.8,
+    pick_1x2: "1",
     raw_payload: {
       probs: { p1, pX, p2 },
       modelMeta: { method: "poisson", dataQuality: 0.8 },
@@ -299,15 +311,21 @@ test("[D] the metrics projection is pinned — widening it must be deliberate", 
   await callMetrics(mod);
 
   /*
-    raw_payload stays, and the D9 audit says why: probs / modelMeta.method /
-    modelMeta.dataQuality / the 1X2 pick have no promoted columns, and
-    `recommended_pick` is the MARKET pick ("Over 2.5"), not the 1X2 one. Pinned
-    so the day those columns exist, this test is what points at the query.
+    D9 pinned this projection WITH raw_payload, noting that the day the promoted
+    columns existed, this test would be what pointed at the query. Migration 059
+    and the D9b-3 backfill made that day arrive, so D9b-4 narrowed it. It stays
+    pinned for the same reason: on a table at ~353 KB/row, widening this select
+    has to be a decision someone made on purpose.
+
+    `recommended_pick` is gone because it was never an input here — it is the
+    MARKET pick ("Over 2.5"), not the 1X2 one, which is now `pick_1x2`.
   */
   assert.equal(
     calls.selects[0],
-    "league_id, league_name, score_home, score_away, match_status, raw_payload, model_version, recommended_confidence, recommended_pick"
+    "league_id, league_name, score_home, score_away, match_status, model_version, " +
+      "recommended_confidence, prob_1, prob_x, prob_2, model_method, model_data_quality, pick_1x2"
   );
+  assert.ok(!calls.selects[0].includes("raw_payload"), "the document must not come back");
 });
 
 test("an unauthorized caller is refused before any cache is consulted", async () => {
