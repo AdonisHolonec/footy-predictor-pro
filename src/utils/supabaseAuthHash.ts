@@ -96,6 +96,42 @@ export function readCapturedAuthHash(): SupabaseAuthHash {
 }
 
 /**
+ * True exactly once per page load, and only for a confirmation that WORKED.
+ *
+ * auth-js throws away the one fact that separates a signup confirmation from an
+ * ordinary sign-in. `_getSessionFromURL` returns `{session, redirectType}`, and
+ * `_initialize` uses `redirectType` only to choose between PASSWORD_RECOVERY and
+ * SIGNED_IN — so a confirmed signup reaches every subscriber as a plain
+ * SIGNED_IN, byte-identical to a password login. The distinction survives in
+ * exactly one place: the fragment as it was before auth-js touched it.
+ *
+ * Reading that is not a race. The hash is cleared inside `_getSessionFromURL`,
+ * AFTER `await this._getUser(access_token)` — a network round-trip — while
+ * `capturedAtLoad` above is assigned during synchronous module evaluation. Every
+ * synchronous module body in the graph runs before the first microtask, so the
+ * snapshot cannot lose, whatever the import order.
+ *
+ * `hasSession` is required as well as `type`: a `type=signup` fragment carrying
+ * an error rather than an access_token is a FAILED confirmation, and that path
+ * belongs to the expired-link notice, not here.
+ *
+ * The latch is module scope, not component state, because the thing being made
+ * exactly-once is the page load itself. A re-render, a re-mount, a token
+ * refresh, profile hydration, a second consumer or a client-side navigation all
+ * see the same spent latch. A real reload re-evaluates the module, but by then
+ * the fragment is gone from the URL, so the snapshot is empty and this stays
+ * false.
+ */
+let signupConfirmationConsumed = false;
+
+export function consumeSignupConfirmation(): boolean {
+  if (signupConfirmationConsumed) return false;
+  if (capturedAtLoad.type !== "signup" || !capturedAtLoad.hasSession) return false;
+  signupConfirmationConsumed = true;
+  return true;
+}
+
+/**
  * Drop the fragment without navigating.
  *
  * `replaceState` rather than assigning `location.hash`, so no history entry is
