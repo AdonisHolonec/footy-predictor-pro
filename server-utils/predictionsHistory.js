@@ -66,6 +66,77 @@ export function validationFromMatch(status, pick, score) {
   return result ? "win" : "loss";
 }
 
+/**
+ * The 1X2 model outputs, lifted out of the payload into promoted columns (D9b).
+ *
+ * Precedence is the metrics endpoint's own, deliberately: `evaluation` first,
+ * then the flat fallback. On rows written by the current pipeline the two are the
+ * SAME number — Stage08 writes `modelProbs1x2Pct = { p1: p1Adj, ... }` and
+ * `probs.p1 = clampPct(p1Adj)` in the same block — so the order only decides what
+ * happens to legacy rows, and matching the existing consumer is what guarantees
+ * the published Brier/log-loss cannot move when D9b-3 switches the read.
+ *
+ * Units are preserved, not converted: prob_* stay PERCENTAGES 0-100 (Stage07
+ * compares them against a threshold of 24 percentage points), and dataQuality
+ * stays a 0-1 fraction. Nothing here rounds or clamps — persistence stores what
+ * Stage08/09 produced.
+ */
+/**
+ * A number, or null — with `null` and `""` rejected BEFORE the coercion.
+ *
+ * `Number(null)` is 0 and `Number("")` is 0, both of which pass
+ * `Number.isFinite`. Reading a missing probability through a bare `Number()`
+ * therefore turns "no data" into "0% chance", which is the one substitution the
+ * promoted columns exist to avoid: a stored 0 is scored as a real prediction and
+ * would silently move the Brier score.
+ */
+function strictNum(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function pickTriple(source) {
+  if (!source || typeof source !== "object") return null;
+  const p1 = strictNum(source.p1);
+  const pX = strictNum(source.pX);
+  const p2 = strictNum(source.p2);
+  // All three or none: a half-filled triple would be scored as if it were whole.
+  if (p1 === null || pX === null || p2 === null) return null;
+  return { p1, pX, p2 };
+}
+
+/** `"1" | "X" | "2"`, or null. Anything else is what the metrics reducer already ignores. */
+function normalize1x2(value) {
+  const pick = String(value ?? "").trim();
+  return pick === "1" || pick === "X" || pick === "2" ? pick : null;
+}
+
+export function extractPromotedModelColumns(prediction) {
+  const evaluation =
+    prediction?.evaluation && typeof prediction.evaluation === "object" ? prediction.evaluation : {};
+  const modelMeta =
+    prediction?.modelMeta && typeof prediction.modelMeta === "object" ? prediction.modelMeta : {};
+
+  const triple = pickTriple(evaluation.modelProbs1x2Pct) || pickTriple(prediction?.probs);
+
+  const method = typeof modelMeta.method === "string" ? modelMeta.method.trim() : "";
+  // Same trap as the triple: Number(null) would store a real dataQuality of 0,
+  // which the metrics endpoint buckets as "low" rather than skipping.
+  const dataQuality = strictNum(modelMeta.dataQuality);
+
+  return {
+    // NULL, never 0 — an absent probability is not a probability of zero.
+    prob_1: triple ? triple.p1 : null,
+    prob_x: triple ? triple.pX : null,
+    prob_2: triple ? triple.p2 : null,
+    // NULL, never "" — an absent method must not become a real grouping key.
+    model_method: method === "" ? null : method,
+    model_data_quality: dataQuality,
+    pick_1x2: normalize1x2(evaluation.recommended1x2) ?? normalize1x2(prediction?.predictions?.oneXtwo)
+  };
+}
+
 /** Exported so the dual-write contract can be tested on the exact row INSERT/UPSERT receive. */
 export function mapPredictionToDbRow(prediction) {
   const kickoffAt = prediction.kickoff || null;
@@ -96,6 +167,13 @@ export function mapPredictionToDbRow(prediction) {
   );
 
   return {
+    /*
+      D9b dual-write: the six promoted 1X2 columns ride THIS object, which is the
+      one `upsertPredictionsHistory` maps over into the existing bulk
+      INSERT/UPSERT. No second request, no per-fixture write, no second
+      persistence path — the row simply carries six more scalars.
+    */
+    ...extractPromotedModelColumns(prediction),
     fixture_id: prediction.id,
     league_id: asNum(prediction.leagueId),
     league_name: prediction.league || null,
