@@ -44,6 +44,55 @@ function baseUser(): User {
   };
 }
 
+/**
+ * The no-bonus baselines. They look trivial — parse is a passthrough — which is
+ * exactly why they were missing: "obviously fine" is how a matrix ends up with
+ * holes. Asserted as PAIRS, because the whole point is that the two tiers agree
+ * when nothing elevates them and diverge only when something does.
+ */
+describe("no-bonus baseline matrix", () => {
+  const pair = (raw: Record<string, unknown>) => {
+    const ent = parseTierStatus(raw)!;
+    return { requested: applyEntitlementToUser(baseUser(), ent).tier, effective: ent.tier };
+  };
+
+  it("[A] FREE + no bonus -> free / free", () => {
+    expect(pair(FREE_STATUS)).toEqual({ requested: "free", effective: "free" });
+  });
+
+  it("[B] PREMIUM + no bonus -> premium / premium", () => {
+    expect(
+      pair({
+        ...FREE_STATUS,
+        tier: "premium",
+        requestedTier: "premium",
+        hasActiveSubscription: true,
+        subscriptionExpiresAt: "2099-01-01T00:00:00.000Z"
+      })
+    ).toEqual({ requested: "premium", effective: "premium" });
+  });
+
+  it("[C] ULTRA + no bonus -> ultra / ultra", () => {
+    expect(
+      pair({
+        ...FREE_STATUS,
+        tier: "ultra",
+        requestedTier: "ultra",
+        hasActiveSubscription: true,
+        subscriptionExpiresAt: "2099-01-01T00:00:00.000Z"
+      })
+    ).toEqual({ requested: "ultra", effective: "ultra" });
+  });
+
+  it("none of the baselines report a bonus", () => {
+    for (const tier of ["free", "premium", "ultra"]) {
+      const ent = parseTierStatus({ ...FREE_STATUS, tier, requestedTier: tier })!;
+      expect(ent.hasActiveBonus).toBe(false);
+      expect(ent.bonusUntil).toBeNull();
+    }
+  });
+});
+
 describe("parseTierStatus", () => {
   it("[B] takes the effective tier from the server verbatim", () => {
     expect(parseTierStatus(withBonus({}))?.tier).toBe("ultra");

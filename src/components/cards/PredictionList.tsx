@@ -11,6 +11,13 @@ type GroupedMatches = {
 type PredictionListProps = {
   variant: PredictionListVariant;
   user: { role?: string; tier?: string } | null;
+  /**
+   * EFFECTIVE access tier from the server, NOT `user.tier` (the requested
+   * plan). It reaches PredictionCard as `accessTier`, which MarketPicksGrid
+   * uses to mirror maskPredictionForTier() — so an admin served ULTRA must not
+   * be rendered from a FREE plan field.
+   */
+  userTier?: string;
   preds: PredictionRow[];
   groupedDisplayedMatches: GroupedMatches[];
   filterMode: FilterMode;
@@ -30,6 +37,7 @@ type PredictionListProps = {
 export default function PredictionList({
   variant,
   user,
+  userTier,
   preds,
   groupedDisplayedMatches,
   filterMode,
@@ -171,8 +179,8 @@ export default function PredictionList({
                     logoColors={logoColors}
                     hashColor={hashColor}
                     animationDelayMs={idx * 45}
-                    canShowSpecialBet={user?.role === "admin" || user?.tier === "ultra"}
-                    accessTier={user?.tier}
+                    canShowSpecialBet={user?.role === "admin" || userTier === "ultra"}
+                    accessTier={userTier}
                     onClick={() => onSelectMatch(m)}
                     onReport={onReportMatch ? () => onReportMatch(m) : undefined}
                   />

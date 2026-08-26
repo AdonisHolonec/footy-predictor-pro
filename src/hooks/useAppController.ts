@@ -51,6 +51,12 @@ export function useAppController() {
   const auth = useAuth();
   const {
     user,
+    /**
+     * EFFECTIVE access tier from the server. Distinct from `user.tier`, which
+     * is the requested/paid plan — an admin on a free plan is served ULTRA, so
+     * anything that gates or masks must read this, never `user.tier`.
+     */
+    userTier,
     session,
     loading: authLoading,
     error: authError,
@@ -292,6 +298,9 @@ export function useAppController() {
 
   const sharedListProps = {
     user,
+    // Travels beside `user` so the list surfaces gate on effective access
+    // rather than on the plan field they used to read.
+    userTier,
     leaguesSorted: leagues.leaguesSorted,
     selectedSet: leagues.selectedSet,
     selectedLeagueIds: leagues.selectedLeagueIds,
@@ -334,6 +343,7 @@ export function useAppController() {
     adminExpiryDraftByUser,
     setAdminExpiryDraftByUser,
     user,
+    userTier,
     session,
     authLoading,
     authError,

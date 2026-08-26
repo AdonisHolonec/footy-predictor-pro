@@ -24,6 +24,8 @@ type ObservatoryBodyProps = {
   accessToken?: string | null;
   isAdmin: boolean;
   user: { email?: string | null; role?: string; tier?: string } | null;
+  /** EFFECTIVE access tier (server), threaded to PredictionList for masking. */
+  userTier?: string;
   leaguesSorted: League[];
   selectedSet: Set<number>;
   selectedLeagueIds: number[];
@@ -136,6 +138,7 @@ export default function ObservatoryBody({
             variant="observatory"
             showDossierLabel
             user={rest.user}
+            userTier={rest.userTier}
             preds={rest.preds}
             groupedDisplayedMatches={rest.groupedDisplayedMatches}
             filterMode={rest.filterMode}

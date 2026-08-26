@@ -20,7 +20,7 @@ const harness = vi.hoisted(() => ({
   },
   profile: {
     user_id: "user-1",
-    role: "user" as const,
+    role: "user" as "user" | "admin",
     favorite_leagues: [],
     is_blocked: false,
     onboarding_completed: true,
@@ -128,6 +128,7 @@ beforeEach(() => {
   harness.onAuthStateChange = null;
   // `profiles.tier` is the REQUESTED tier — the default case is the lapsed
   // Premium user of §10. Tests that need another plan set it explicitly.
+  harness.profile.role = "user";
   harness.profile.tier = "premium";
 });
 
@@ -200,6 +201,36 @@ describe("useAuth entitlement wiring", () => {
     expect(state.userTier).toBe("ultra");
     expect(state.hasActiveSubscription).toBe(true);
     expect(state.isSubscriptionExpired).toBe(false);
+  });
+
+  it("[F] admin on a free plan: user.tier stays free, userTier is ultra", async () => {
+    /*
+      quotaExempt forces the server to ULTRA while requestedTier stays the
+      admin's own plan. This is the pair the admin workspace consumes — and
+      before the blocker fix, App.tsx and PredictionList read the "free" half
+      of it into accessTier and rendered an ULTRA payload as FREE.
+      accessTierSource.test.tsx pins the consuming end; this pins the source.
+    */
+    harness.profile.tier = "free";
+    harness.profile.role = "admin";
+    await signIn({
+      ...TIER_STATUS,
+      tier: "ultra",
+      requestedTier: "free",
+      hasActiveSubscription: false,
+      subscriptionExpiresAt: null,
+      bonusUntil: null,
+      hasActiveBonus: false,
+      quotaExempt: true,
+      predictLimit: null
+    });
+    const state = read();
+    expect(state.tier).toBe("free");
+    expect(state.userTier).toBe("ultra");
+    expect(state.hasActiveSubscription).toBe(false);
+    // No expiry was ever set, so nothing may claim the plan lapsed.
+    expect(state.isSubscriptionExpired).toBe(false);
+    expect(state.hasActiveBonus).toBe(false);
   });
 
   it("carries the quota fields the dashboard renders", async () => {
