@@ -111,11 +111,27 @@ const stateOf = (id) => psql(`select state from public.referral_attributions whe
 const grantCount = (source) =>
   psql(`select count(*) from public.time_grants${source ? ` where source = '${source}'` : ""};`);
 
-/** Fire N statements simultaneously in one container shell and wait for all. */
+/**
+ * Fire N statements simultaneously in one container shell and wait for all.
+ *
+ * VALIDATED, NOT ESCAPED. These statements are interpolated into a double-quoted
+ * shell string, and an escaper that handles a quote but not a backslash is a hole
+ * rather than a defence — CodeQL flags exactly that (js/incomplete-sanitization),
+ * and it is right to. Every statement this helper is ever given is built a few
+ * lines above from a function name and a uuid, so the honest fix is to REFUSE
+ * anything outside that shape instead of trying to neutralise it. A future test
+ * needing a character this allowlist rejects should pass its SQL on stdin rather
+ * than widen the pattern.
+ */
 function concurrently(statements) {
-  const jobs = statements
-    .map((s) => `psql -U postgres -d postgres -q -c "${s.replace(/"/g, '\\"')}" &`)
-    .join("\n");
+  for (const statement of statements) {
+    assert.match(
+      statement,
+      /^[A-Za-z0-9_ ().,;:'-]+$/,
+      `refusing to shell-interpolate an unexpected statement: ${statement}`
+    );
+  }
+  const jobs = statements.map((s) => `psql -U postgres -d postgres -q -c "${s}" &`).join("\n");
   return spawnSync("docker", ["exec", "-i", CONTAINER, "bash", "-lc", `(${jobs}\nwait)`], { encoding: "utf8" });
 }
 
