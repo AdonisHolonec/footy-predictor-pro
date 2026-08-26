@@ -22,7 +22,7 @@
     "test:timegrants": "node --test tests/timeGrants.test.js",
     "test:entitlement": "node --test tests/entitlementLoader.test.js",
     "test:tierstatus": "node --test tests/tierStatusPayload.test.js",
-    "test:referrals": "node --test tests/referrals.test.js",
+    "test:referrals": "node --test --experimental-test-module-mocks tests/referrals.test.js",
     "test:d9b": "node --test --experimental-test-module-mocks tests/d9bPromotedColumns.test.js",
     "test:fetcher": "node --test --experimental-test-module-mocks tests/fetcherUsageTelemetry.test.js",
     "test:pipeline": "node --test tests/pipeline/modelFusion/*.test.js",
