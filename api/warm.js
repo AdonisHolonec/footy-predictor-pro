@@ -4,6 +4,7 @@ import {
   tierDailyActionLimit,
   USER_TIERS
 } from "../server-utils/accessTier.js";
+import { loadEntitlement } from "../server-utils/entitlement.js";
 import { getWithCache } from "../server-utils/fetcher.js";
 import { prefetchOddsByDate } from "../server-utils/oddsPrefetch.js";
 import {
@@ -87,12 +88,10 @@ async function handlerImpl(req, res) {
       let effectiveTier;
       try {
         const sb = getSupabaseAdmin();
-        const { data: profile } = await sb
-          .from("profiles")
-          .select("tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at")
-          .eq("user_id", usageCtx.userId)
-          .maybeSingle();
-        effectiveTier = resolveEffectiveTierFromProfile(profile || {}).effectiveTier;
+        const { tierInfo } = await loadEntitlement(usageCtx.userId, { supabase: sb });
+        // Same fallback as before: an absent profile resolves through the empty
+        // object, which the tier rule reads as free.
+        effectiveTier = (tierInfo || resolveEffectiveTierFromProfile({})).effectiveTier;
       } catch {
         effectiveTier = USER_TIERS.FREE;
       }

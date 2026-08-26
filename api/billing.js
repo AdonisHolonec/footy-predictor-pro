@@ -11,7 +11,7 @@
  * Rewrites: /api/stripe-webhook → webhook, /api/activate-trial → trial
  */
 import { getRequester } from "../server-utils/authAdmin.js";
-import { resolveEffectiveTierFromProfile } from "../server-utils/accessTier.js";
+import { loadEntitlement } from "../server-utils/entitlement.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import {
   applySubscriptionToProfile,
@@ -237,7 +237,12 @@ async function handleTrial(req, res) {
   if (profileError) return res.status(500).json({ ok: false, error: profileError.message });
   if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
 
-  const tierInfo = resolveEffectiveTierFromProfile(profile);
+  // This handler needs stripe_subscription_id and the trial columns for reasons
+  // that are not entitlement, so it keeps its own wider SELECT and hands the row
+  // to the loader — only the bonus lookup runs, no second profile query.
+  // `hasActiveSubscription` stays PAID-only, so an active bonus does not make a
+  // free user look subscribed and does not block a 24h trial.
+  const { tierInfo } = await loadEntitlement(requester.user.id, { supabase, profile });
   if (tierInfo.hasActiveSubscription) {
     return res.status(409).json({
       ok: false,
