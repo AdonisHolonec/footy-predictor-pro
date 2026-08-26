@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoWorkspace, hasCreds } from "./helpers";
+import { gotoWorkspace, hasCreds, openResults } from "./helpers";
 
 test.describe("history", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
@@ -11,9 +11,7 @@ test.describe("history", () => {
     // below `lg`, the shell's destination icons above it. The old route was a
     // Home card that hides itself on a first run, which is why a fresh account
     // could not get here at all.
-    const historyButton = page.getByRole("button", { name: "Istoric", exact: true }).first();
-    await historyButton.scrollIntoViewIfNeeded();
-    await historyButton.click();
+    await openResults(page);
 
     // Entries or a real empty state are both correct products of a working
     // flow; an error banner is not.

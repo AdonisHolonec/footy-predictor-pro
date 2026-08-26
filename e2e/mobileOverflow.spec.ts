@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoWorkspace, hasCreds } from "./helpers";
+import { accountReady, gotoWorkspace, hasCreds, openAccount } from "./helpers";
 import { expectNoHorizontalOverflow } from "./overflowScan";
 
 /**
@@ -29,12 +29,36 @@ test.describe("mobile shell fits a 390px viewport", () => {
     // Profile is the mobile route to the rest of the app, and it carries the
     // longest content in the shell — worth measuring on its own. Reached via
     // the bottom tab: the shell's "Profil și upgrade" icon is desktop-only.
-    await page.getByRole("button", { name: /^Profil$/ }).first().click();
-    await expect(page.getByRole("heading", { name: /^Profil$/ }).first()).toBeVisible({ timeout: 15_000 });
-    await expectNoHorizontalOverflow(page, "profile");
+    // Account is the mobile route to the rest of the app and carries the
+    // longest content in the shell, so it is worth measuring on its own.
+    // "Profil" was retired with the old shell; "Cont" is in the primary nav
+    // at 390px, so no bottom-tab special case is needed any more.
+    await openAccount(page);
+    await accountReady(page);
+    await expectNoHorizontalOverflow(page, "account");
   });
 
-  test("the trailing toolbar tooltip stays inside the viewport when shown", async ({ page }) => {
+  /*
+    KNOWN PRODUCT-DECISION BLOCKER - not a stale selector.
+
+    This test hovers the trailing toolbar's "Reincarca picks salvate" button and
+    asserts its tooltip stays inside a 390px viewport. Verified against
+    production on 2026-08-26: at 390x844 that button returns ZERO nodes, so the
+    tooltip it guards has no subject to render from. The control was removed
+    from the mobile toolbar; the regression this test was written for (PR that
+    re-anchored an overhanging tooltip) can no longer occur there.
+
+    Left intact rather than rewritten or deleted. Inventing a different button
+    to hover would assert a different thing and silently drop the coverage this
+    was buying. `fixme` (not `skip`) on purpose: skip is this suite's signal for
+    "environment lacks credentials", and burying a product question in that
+    bucket is how it would get forgotten.
+
+    Resolve by deciding whether the mobile toolbar should regain a refresh
+    control. If yes, this test returns as-is once it does. If no, retarget it at
+    whichever tooltip the mobile shell still renders, or retire it deliberately.
+  */
+  test.fixme("the trailing toolbar tooltip stays inside the viewport when shown", async ({ page }) => {
     await gotoWorkspace(page);
 
     const refresh = page.getByRole("button", { name: /Reîncarcă picks salvate/ }).first();
