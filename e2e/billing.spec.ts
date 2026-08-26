@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoWorkspace, hasCreds, openProfile } from "./helpers";
+import { gotoWorkspace, hasCreds, openAccount } from "./helpers";
 
 test.describe("billing", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
@@ -8,7 +8,7 @@ test.describe("billing", () => {
     await gotoWorkspace(page);
 
     // The upgrade surface lives in the profile view (👤).
-    await openProfile(page);
+    await openAccount(page);
     const subscribeCta = page.getByRole("button", { name: /abonează-te premium/i }).first();
     await subscribeCta.scrollIntoViewIfNeeded();
 

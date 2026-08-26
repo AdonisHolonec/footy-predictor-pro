@@ -81,13 +81,57 @@ function workspaceEntered(page: Page) {
   return loggedInMarker(page).or(leagueDialog(page)).first();
 }
 
-/** Shell icon buttons (aria-labels from i18n shell.*). */
-export function openProfile(page: Page) {
-  return page.getByRole("button", { name: "Profil și upgrade" }).first().click();
+/*
+  Workspace navigation.
+
+  The shell used to carry icon buttons — "Profil și upgrade", "Setări", an
+  RO/EN toggle — and the specs drove the app through them. That shell is gone:
+  the workspace now has one primary nav (Azi · Meciuri · Rezultate ·
+  Performanță · Cont, plus Bilete) and everything those icons opened lives on a
+  dedicated /workspace/account route. Verified against production on
+  2026-08-26: the old names return zero nodes, at 1366px and at 390px alike.
+
+  Two consequences, and they are what actually broke the suite rather than the
+  renames:
+
+    - identity and tier are NO LONGER in the persistent shell. The email and
+      the plan render on the account route only, so a spec asserting them from
+      the workspace asserts something the product stopped promising.
+    - there is no "Mai mult" menu. Nothing routes through one.
+
+  Navigation asserts the URL as well as the landmark, so a spec fails where the
+  journey actually broke instead of 90 seconds later on a missing element.
+*/
+
+/** The account route: identity, plan, billing, language, preferences. */
+export async function openAccount(page: Page) {
+  await page.getByRole("button", { name: "Cont", exact: true }).first().click();
+  await page.waitForURL(/\/workspace\/account/, { timeout: 20_000 });
+  await accountReady(page);
 }
 
-export function openSettings(page: Page) {
-  return page.getByRole("button", { name: "Setări", exact: true }).first().click();
+/** The account route has painted its own heading, not merely changed URL. */
+export async function accountReady(page: Page) {
+  await expect(page.getByRole("heading", { name: /^Cont$/ }).first()).toBeVisible({ timeout: 20_000 });
+}
+
+/** The results route — what "Istoric" used to reach. */
+export async function openResults(page: Page) {
+  await page.getByRole("button", { name: "Rezultate", exact: true }).first().click();
+  await page.waitForURL(/\/workspace\/results/, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /^Rezultate$/ }).first()).toBeVisible({ timeout: 20_000 });
+}
+
+/**
+ * Switch the interface language.
+ *
+ * The RO/EN controls live on the account route, so this navigates there first
+ * unless we are already on it — the toggle is no longer reachable from the
+ * workspace, which is why the old global-toggle journey could not work.
+ */
+export async function setLanguage(page: Page, language: "RO" | "EN") {
+  if (!/\/workspace\/account/.test(page.url())) await openAccount(page);
+  await page.getByRole("button", { name: language, exact: true }).first().click();
 }
 
 /**
@@ -128,6 +172,39 @@ async function settleLeagueDialogIfPresent(page: Page) {
   await dialog.getByRole("button", { name: "Elite · toate" }).first().click();
   await dialog.getByRole("button", { name: "Închide", exact: true }).first().click();
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+}
+
+/*
+  Predict refuses to call the API until at least one league is selected - it
+  answers "Selecteaza o liga." client-side instead. The auto-opening drawer
+  settles that on a FIRST-RUN context (settleLeagueDialogIfPresent picks
+  "Elite - toate"), but a context restored from storage state never sees the
+  drawer, so the selection is whatever the account happened to be left with.
+  That is exactly the hidden state a spec should not depend on.
+
+  So the predict journey establishes its own precondition through the real UI:
+  open the league filter, take the elite set, close. The opener lives on the
+  Matches route (MatchesSection renders it with aria-label shell.filterLeagues);
+  the drawer itself is the dashboard-level dialog labelled "League filter", the
+  same one the first-run path already drives.
+
+  This DOES persist the account's league preference, deliberately: it is the
+  real user journey, and making it idempotent (always the elite set) keeps the
+  test deterministic rather than dependent on what a previous run left behind.
+*/
+export async function ensureLeagueSelected(page: Page) {
+  const dialog = leagueDialog(page);
+  if (!(await dialog.isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: "Meciuri", exact: true }).first().click();
+    await page.getByRole("button", { name: "Selectează ligi" }).first().click();
+    await dialog.waitFor({ state: "visible", timeout: 20_000 });
+  }
+  await dialog.getByRole("button", { name: "Elite · toate" }).first().click();
+  await dialog.getByRole("button", { name: "Închide", exact: true }).first().click();
+  await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+  // Back to the day feed, where Predict renders its results.
+  await page.getByRole("button", { name: "Azi", exact: true }).first().click();
+  await page.waitForURL(/\/workspace(\/|$|\?)/, { timeout: 20_000 });
 }
 
 /**
@@ -231,9 +308,9 @@ export async function gotoWorkspace(page: Page) {
   await loginViaUi(page);
 }
 
-/** Log out through the profile view and wait for the public site. */
+/** Log out through the account view and wait for the public site. */
 export async function logoutViaUi(page: Page) {
-  await openProfile(page);
+  await openAccount(page);
   await page.getByRole("button", { name: /deconectare/i }).first().click();
   // Logout may land on the public landing (auth link) or straight on the
   // login form (auth submit button) — both are logged-out states.

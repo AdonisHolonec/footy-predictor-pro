@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CREDS, gotoWorkspace, hasCreds, openProfile } from "./helpers";
+import { CREDS, gotoWorkspace, hasCreds, openAccount } from "./helpers";
 
 test.describe("profile & account surface", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
@@ -11,13 +11,17 @@ test.describe("profile & account surface", () => {
     // user needs to trust the workspace is really theirs. Both come from the
     // profile fetch, which lands after the shell paints, so the default 5s
     // expect timeout races a cold serverless call (CI, 2026-08-10).
+    // The redesign moved BOTH facts out of the persistent shell onto
+    // /workspace/account, so this asserts them where the product now shows
+    // them rather than where it once did.
+    await openAccount(page);
     await expect(page.getByText(CREDS.email).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/^free$/i).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("the profile view exposes the subscription surface with both paid plans", async ({ page }) => {
     await gotoWorkspace(page);
-    await openProfile(page);
+    await openAccount(page);
 
     await expect(page.getByRole("heading", { name: /abonament/i }).first()).toBeVisible({
       timeout: 15_000
