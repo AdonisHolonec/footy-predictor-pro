@@ -24,7 +24,9 @@ function getKv() {
   }
 }
 
-function clientIp(req) {
+/** Client address from the trusted proxy headers. Exported so referralIpHash.js
+ *  hashes exactly the address the limiter throttles — one precedence, one answer. */
+export function clientIp(req) {
   const xf = String(req.headers["x-forwarded-for"] || "")
     .split(",")[0]
     .trim();

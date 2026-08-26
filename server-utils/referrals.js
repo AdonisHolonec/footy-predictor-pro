@@ -20,16 +20,15 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
  * only there. A JavaScript twin would be a second implementation of one rule —
  * precisely the duplication PR2a and PR2b existed to remove.
  *
- * IP HASHING IS NOT IMPLEMENTED, DELIBERATELY. `referral_attributions.ip_hash`
- * exists and stays NULL. A useful IP signal must be (a) unguessable, so a leaked
- * hash does not reveal the address, and (b) STABLE, so two accounts an hour apart
- * still compare equal. Unsalted SHA-256 fails (a): IPv4 is 2^32, enumerable in
- * seconds. A per-row salt fails (b): nothing compares. It therefore needs a
- * dedicated, stable secret — and this repo has none. CRON_SECRET and
- * STRIPE_WEBHOOK_SECRET are authentication credentials on their own rotation
- * schedules; keying IP hashes to either means every rotation silently voids the
- * entire signal while the column still looks populated. Rather than invent a
- * secret, PR3a leaves the column null and reports it. See the PR body.
+ * IP HASHING NOW HAPPENS, in referralIpHash.js, keyed to REFERRAL_IP_HASH_SECRET.
+ * PR3a left `ip_hash` NULL because a useful signal must be both unguessable and
+ * stable, and no dedicated secret existed to be both at once. PR3b adds that
+ * secret; the reasoning and the refusal to reuse CRON_SECRET live in that module.
+ * The hash is written and never read back to a user, and the raw address is never
+ * stored or logged.
+ *
+ * THIS MODULE STILL CANNOT REWARD ANYTHING. The only state transition PR3b adds is
+ * attributed -> expired.
  */
 
 /**
@@ -60,8 +59,26 @@ export const CLAIM_REASONS = Object.freeze({
   SELF_SAME_ACCOUNT: "self_referral_same_account",
   SELF_SAME_EMAIL: "self_referral_same_email",
   SELF_NORMALIZED_EMAIL: "self_referral_normalized_email",
-  SELF_SAME_STRIPE: "self_referral_same_stripe_customer"
+  SELF_SAME_STRIPE: "self_referral_same_stripe_customer",
+  /*
+    PR3b. Produced by THIS layer, not by claim_referral: the RPC's job is to decide
+    who invited whom, and it answers that correctly for an expired row too. Whether
+    the 30-day window has elapsed is a question about the clock, and the clock is
+    read once, here, so a caller cannot get a different answer by asking differently.
+  */
+  EXPIRED: "attribution_expired"
 });
+
+/**
+ * Written to `rejected_reason` when the lazy transition fires.
+ *
+ * That column is the terminal-reason column — `expired` is a terminal state, and
+ * reusing it beats a migration for a second one. Without it the row records THAT it
+ * expired but not that a request observed it expiring, and "was this flipped by the
+ * window or by a human?" becomes unanswerable. Stable string, never prose: PR3d
+ * filters on it.
+ */
+export const EXPIRY_AUDIT_REASON = "attribution_window_elapsed";
 
 const MAX_CODE_ATTEMPTS = 5;
 
@@ -96,7 +113,30 @@ export function generateReferralCode(pick = () => randomInt(0, REFERRAL_CODE_ALP
 }
 
 /**
+ * When this attribution's window closes. DERIVED, never stored.
+ *
+ * There is no `expires_at` column on purpose: two columns describing one moment
+ * drift the first time a backfill touches one of them, and `attributed_at` is
+ * already the answer. Returns null rather than an "Invalid Date" string so the API
+ * omits the field instead of shipping garbage to a UI.
+ */
+export function attributionExpiresAt(attributedAt) {
+  if (!attributedAt) return null;
+  const started = new Date(attributedAt).getTime();
+  if (!Number.isFinite(started)) return null;
+  return new Date(started + ATTRIBUTION_WINDOW_MS).toISOString();
+}
+
+/**
  * Is this attribution past its 30-day qualification window?
+ *
+ * HALF-OPEN INTERVAL: the window is [attributed_at, attributed_at + 30d). The
+ * boundary instant itself is EXPIRED — `>=`, not `>`. PR3a shipped `>` and a test
+ * pinning "day 30 exactly is open", which quietly made the window 30 days plus one
+ * tick; PR3b's spec fixes the semantics at "at/after expiry -> EXPIRED", and both
+ * the comparison and that test move together. The practical difference is a single
+ * millisecond, but a boundary that is only correct on one side of a comparison is
+ * the kind of thing PR3c's qualification would inherit and disagree about.
  *
  * Fails OPEN on anything unreadable. Expiry is what DENIES a reward, so a null or
  * malformed timestamp must never be the reason someone loses one — and `null` is
@@ -107,7 +147,45 @@ export function isAttributionExpired(attributedAt, now = Date.now()) {
   if (!attributedAt) return false;
   const started = new Date(attributedAt).getTime();
   if (!Number.isFinite(started)) return false;
-  return now - started > ATTRIBUTION_WINDOW_MS;
+  return now - started >= ATTRIBUTION_WINDOW_MS;
+}
+
+/**
+ * Materialise attributed -> expired, once the window has closed.
+ *
+ * LAZY, because the alternative is a cron: a nightly sweep that must run forever to
+ * keep a derived fact honest, and that disagrees with the row every night it misses.
+ * The truth stays derived from `attributed_at`; this only writes down what a reader
+ * already computed, so PR3d's admin views and PR3c's queries can filter on `state`
+ * without every one of them re-deriving the window.
+ *
+ * COMPARE-AND-SWAP, not read-then-write. The `state = 'attributed'` filter is part
+ * of the UPDATE, so a row PR3c qualified or rewarded in the meantime is untouched
+ * even if this call was reading a stale copy of it. Nothing here can produce
+ * `qualified`, `rewarded` or `reversed`, and nothing here deletes: the row is
+ * evidence, and an expired referral that is later disputed needs to still exist.
+ *
+ * NEVER THROWS. A failed audit write must not fail the request that noticed it —
+ * the caller's answer is computed from `attributed_at` either way, so a lost UPDATE
+ * costs a bookkeeping row and nothing else. It is logged, not swallowed silently.
+ */
+export async function expireAttributionIfElapsed(inviteeId, attribution, deps = {}) {
+  if (!attribution || attribution.state !== "attributed") return false;
+  const now = deps.now ?? Date.now();
+  if (!isAttributionExpired(attribution.attributed_at, now)) return false;
+
+  try {
+    const { error } = await client(deps)
+      .from("referral_attributions")
+      .update({ state: "expired", rejected_reason: EXPIRY_AUDIT_REASON })
+      .eq("invitee_id", requireUserId(inviteeId))
+      .eq("state", "attributed");
+    if (error) throw new Error(error.message || "update failed");
+    return true;
+  } catch (err) {
+    console.error("[referrals] lazy_expiry_write_failed", err?.message || err);
+    return false;
+  }
 }
 
 /**
@@ -175,24 +253,58 @@ export async function getOrCreateReferralCode(userId, deps = {}) {
  * the RPC resolves one from the code, so the worst a hostile client can do is name
  * a code that already exists — which is what a referral link is.
  *
- * `ip` is accepted and currently discarded (see the module header). Kept in the
- * signature so PR3b/PR3c wire a hash in one place once a secret exists, rather than
- * threading a new argument through every call site later.
+ * `ipHash` is ALREADY HASHED by the caller. This function never sees a raw address:
+ * hashing lives in referralIpHash.js next to the secret, so there is exactly one
+ * place that can touch a raw IP and it is not this one. A raw-looking value passed
+ * here is refused rather than stored, because a column that sometimes holds an
+ * address is a column that leaks one.
+ *
+ * EXPIRY IS DECIDED HERE, NOT IN SQL. `claim_referral` converges a repeat claim on
+ * the existing row and reports success — correct, because the inviter genuinely is
+ * that inviter. Whether the 30-day window is still open is a separate question, and
+ * answering it in JavaScript keeps ONE clock: the same `isAttributionExpired` the
+ * status endpoint and PR3c's qualification will call.
  */
-export async function claimReferral({ userId, code, ip: _ip } = {}, deps = {}) {
+export async function claimReferral({ userId, code, ipHash = null } = {}, deps = {}) {
   const inviteeId = requireUserId(userId);
   const supabase = client(deps);
+  const now = deps.now ?? Date.now();
+
+  /*
+    A raw address reaching this argument is a caller bug, and the safe failure is a
+    loud one. Storing it would silently defeat the entire point of the hash, and
+    dropping it silently would leave a NULL that looks like "no IP available".
+  */
+  const hash = ipHash == null ? null : String(ipHash);
+  if (hash !== null && !/^[0-9a-f]{64}$/.test(hash)) {
+    throw new Error("referrals: ipHash must be a hex sha256 digest, never a raw address");
+  }
 
   const { data, error } = await supabase.rpc("claim_referral", {
     p_invitee_id: inviteeId,
     p_code: String(code ?? "").trim(),
-    p_ip_hash: null
+    p_ip_hash: hash
   });
   if (error) throw new Error(error.message || "referrals: claim failed");
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("referrals: claim returned no result");
   if (!row.ok) return { ok: false, reason: row.reason || CLAIM_REASONS.INVALID_CODE };
+
+  /*
+    A repeat claim on a window that has already closed. The row is NOT reassigned and
+    NOT replaced — UNIQUE(invitee_id) makes attribution permanent by design, so the
+    honest answer is "this one expired", not a second chance. A first-time claim
+    cannot reach this branch: its attributed_at is now.
+  */
+  if (isAttributionExpired(row.attributed_at, now)) {
+    await expireAttributionIfElapsed(
+      inviteeId,
+      { state: row.state, attributed_at: row.attributed_at },
+      { ...deps, supabase, now }
+    );
+    return { ok: false, reason: CLAIM_REASONS.EXPIRED, attributedAt: row.attributed_at };
+  }
 
   return {
     ok: true,
@@ -201,7 +313,8 @@ export async function claimReferral({ userId, code, ip: _ip } = {}, deps = {}) {
       inviterId: row.inviter_id,
       code: row.code,
       state: row.state,
-      attributedAt: row.attributed_at
+      attributedAt: row.attributed_at,
+      expiresAt: attributionExpiresAt(row.attributed_at)
     }
   };
 }
@@ -240,7 +353,25 @@ export async function getReferralStatus(userId, deps = {}) {
     .maybeSingle();
   if (mineError) throw new Error(mineError.message || "referrals: attribution read failed");
 
+  /*
+    Reading status is where the lazy transition fires. `expired` below stays DERIVED
+    from attributed_at — the single source of truth, and the reason there is no
+    expires_at column and no cron — and the write only records what this read already
+    concluded. Reporting the state as expired does NOT depend on that write landing:
+    the reported state is patched locally, so a failed audit UPDATE can never show a
+    user "attributed" for a window that closed weeks ago.
+  */
+  const expired = mine ? isAttributionExpired(mine.attributed_at, now) : false;
+  if (expired) {
+    await expireAttributionIfElapsed(id, mine, { ...deps, supabase, now });
+  }
+  const state = expired && mine.state === "attributed" ? "expired" : mine?.state;
+
   return {
+    // Named rather than left to `code !== null` at every call site: PR3d renders an
+    // invite panel off this, and a boolean the server owns is one fewer place for a
+    // UI to decide what "has a code" means.
+    hasReferralCode: Boolean(codeRow?.code),
     code: codeRow?.code ?? null,
     inviter: {
       attributed: Number(counts.attributed_count) || 0,
@@ -249,17 +380,12 @@ export async function getReferralStatus(userId, deps = {}) {
     },
     invitee: mine
       ? {
-          state: mine.state,
+          state,
           attributedAt: mine.attributed_at,
+          expiresAt: attributionExpiresAt(mine.attributed_at),
           qualifiedAt: mine.qualified_at,
           rewardedAt: mine.rewarded_at,
-          /*
-            DERIVED, never stored. `attributed_at` is the single source of truth for
-            the window; a stored `expired` state would need a cron to stay honest and
-            would disagree with the row the moment that cron missed a night. PR3c's
-            qualification refuses on this same computation.
-          */
-          expired: isAttributionExpired(mine.attributed_at, now)
+          expired
         }
       : null
   };
@@ -271,8 +397,11 @@ export default {
   ATTRIBUTION_WINDOW_DAYS,
   REFERRAL_STATES,
   CLAIM_REASONS,
+  EXPIRY_AUDIT_REASON,
   generateReferralCode,
+  attributionExpiresAt,
   isAttributionExpired,
+  expireAttributionIfElapsed,
   getOrCreateReferralCode,
   claimReferral,
   getReferralStatus

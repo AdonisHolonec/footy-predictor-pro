@@ -1,5 +1,6 @@
 import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { getRequester } from "./authAdmin.js";
+import { resolveClaimIpHash } from "./referralIpHash.js";
 import { CLAIM_REASONS, claimReferral, getOrCreateReferralCode, getReferralStatus } from "./referrals.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 
@@ -36,7 +37,14 @@ const CLAIM_STATUS = {
   [CLAIM_REASONS.SELF_SAME_ACCOUNT]: 403,
   [CLAIM_REASONS.SELF_SAME_EMAIL]: 403,
   [CLAIM_REASONS.SELF_NORMALIZED_EMAIL]: 403,
-  [CLAIM_REASONS.SELF_SAME_STRIPE]: 403
+  [CLAIM_REASONS.SELF_SAME_STRIPE]: 403,
+  /*
+    410 rather than 409, and the same code a disabled code gets: both mean "this
+    existed and is no longer usable", which is the distinction a client needs in
+    order to say something true. 409 would suggest a conflict the caller could
+    resolve, and there is none — UNIQUE(invitee_id) makes attribution permanent.
+  */
+  [CLAIM_REASONS.EXPIRED]: 410
 };
 
 function readBody(req) {
@@ -89,8 +97,21 @@ async function handleClaim(req, res, ctx) {
     return res.status(429).json({ ok: false, error: "Prea multe încercări. Reîncearcă mai târziu." });
   }
 
+  /*
+    Hashed HERE, from the proxy headers, before anything else touches the request.
+    The body is never consulted for an address: a client-supplied IP is a
+    client-chosen hash, which is worse than none. In production a missing secret is
+    a 503 rather than a NULL write — see referralIpHash.js for why a silently empty
+    fraud column is the worst of the three options.
+  */
+  const ip = resolveClaimIpHash(req);
+  if (!ip.ok) {
+    console.error("[referral] ip_hash_unavailable", ip.error);
+    return res.status(503).json({ ok: false, error: "Serviciul de recomandări nu este configurat complet." });
+  }
+
   const result = await claimReferral(
-    { userId: ctx.user.id, code: readBody(req).code, ip: null },
+    { userId: ctx.user.id, code: readBody(req).code, ipHash: ip.ipHash },
     { supabase: ctx.supabase }
   );
 
@@ -98,13 +119,18 @@ async function handleClaim(req, res, ctx) {
     return res.status(CLAIM_STATUS[result.reason] || 400).json({ ok: false, reason: result.reason });
   }
 
-  // `attribution.inviterId` exists on the service result and is deliberately not
-  // echoed. The invitee learns that they were attributed, not to whom.
+  /*
+    `attribution.id`, `attribution.inviterId` and the ip hash all exist on the
+    service result and are deliberately not echoed. The invitee learns THAT they
+    were attributed and for how long the window runs — not to whom, not under which
+    internal id, and never the signal a fraud reviewer will compare.
+  */
   return res.status(200).json({
     ok: true,
     attribution: {
       state: result.attribution.state,
-      attributedAt: result.attribution.attributedAt
+      attributedAt: result.attribution.attributedAt,
+      expiresAt: result.attribution.expiresAt
     }
   });
 }
