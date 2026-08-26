@@ -75,7 +75,29 @@ export function confidenceCategory(confidencePct) {
   return "Low";
 }
 
-export function resolveEffectiveTierFromProfile(profile) {
+/**
+ * Effective tier for one profile, optionally with an active ULTRA bonus window.
+ *
+ * BONUS TIME IS ALWAYS ULTRA. A bonus grant does not extend the user's paid tier —
+ * it replaces it with ultra for the length of the window, then the paid tier resumes
+ * untouched. Premium-until-Sep-10 plus a bonus ending Sep-15 is ultra through Sep 15,
+ * then premium again until Sep 10 if that is still in the future — the paid expiry is
+ * never moved, because `profiles.subscription_expires_at` belongs to Stripe and is
+ * overwritten by every webhook.
+ *
+ * `bonusUntil` is a PARAMETER, not a lookup. This function stays pure and
+ * synchronous — every consumer (Stage01, Stage10, Stage11, api/fixtures, api/warm)
+ * calls it per request, and a database round-trip hidden in here would be an N+1 on
+ * the predict hot path. The caller loads the profile and the bonus together and
+ * passes both; `getActiveBonusUntil` in server-utils/timeGrants.js is that loader.
+ *
+ * Omitting the argument reproduces the pre-bonus behaviour exactly, which is what
+ * every existing call site does today.
+ *
+ * @param {object} profile
+ * @param {string|Date|null} [bonusUntil] end of the active ULTRA bonus window, if any
+ */
+export function resolveEffectiveTierFromProfile(profile, bonusUntil = null) {
   const now = Date.now();
   const requestedTier = String(profile?.tier || USER_TIERS.FREE).toLowerCase();
   const subscriptionExpiresAt = parseDate(profile?.subscription_expires_at);
@@ -87,6 +109,9 @@ export function resolveEffectiveTierFromProfile(profile) {
   const premiumTrialRemainingMs = hoursRemaining(profile?.premium_trial_activated_at, 24);
   const ultraTrialRemainingMs = hoursRemaining(profile?.ultra_trial_activated_at, 24);
 
+  const bonusUntilDate = parseDate(bonusUntil);
+  const hasActiveBonus = Boolean(bonusUntilDate && bonusUntilDate.getTime() > now);
+
   // Paid subscription always beats free 24h trials so Upgrade/Checkout still grants access.
   let effectiveTier = USER_TIERS.FREE;
   if (hasActiveSubscription && (requestedTier === USER_TIERS.PREMIUM || requestedTier === USER_TIERS.ULTRA)) {
@@ -97,13 +122,23 @@ export function resolveEffectiveTierFromProfile(profile) {
     effectiveTier = USER_TIERS.PREMIUM;
   }
 
+  // An active bonus wins outright — it is ultra for everyone, including a free user
+  // and a paid premium user. It is applied AFTER the block above rather than inside
+  // it so that `requestedTier` and `hasActiveSubscription` keep meaning exactly what
+  // they meant before: the user's own plan, never the bonus.
+  if (hasActiveBonus) {
+    effectiveTier = USER_TIERS.ULTRA;
+  }
+
   return {
     requestedTier,
     effectiveTier,
     hasActiveSubscription,
     subscriptionExpiresAt: subscriptionExpiresAt ? subscriptionExpiresAt.toISOString() : null,
     premiumTrialRemainingMs,
-    ultraTrialRemainingMs
+    ultraTrialRemainingMs,
+    hasActiveBonus,
+    bonusUntil: bonusUntilDate ? bonusUntilDate.toISOString() : null
   };
 }
 

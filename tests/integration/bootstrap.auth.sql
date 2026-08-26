@@ -1,4 +1,4 @@
--- Test-harness only: the slice of Supabase that migration 043 depends on.
+-- Test-harness only: the slice of Supabase that the migrations depend on.
 --
 -- The project has no local Supabase stack (no supabase/config.toml), so the
 -- integration suite runs against a plain Postgres container. Migration 043
@@ -7,9 +7,15 @@
 -- `service_role` / `authenticated` / `anon` roles — so they are recreated here
 -- with Supabase's own definitions.
 --
--- `auth.uid()` is reproduced verbatim from Supabase's auth schema: it reads the
--- JWT claim the connection is running under, which is why a test can impersonate
--- a user with `set local request.jwt.claims`.
+-- `auth.uid()` and `auth.jwt()` are reproduced verbatim from Supabase's auth
+-- schema: they read the JWT claim the connection is running under, which is why
+-- a test can impersonate a user with `set local request.jwt.claims`.
+--
+-- `auth.jwt()` is needed by migrations 027 and 029, whose profile guards read
+-- `auth.jwt() ->> 'role'` to let service_role bypass. Without it any UPDATE or
+-- INSERT touching a guarded profiles column (role, is_blocked, tier,
+-- subscription_expires_at, the stripe_* pair) aborts under test with
+-- "function auth.jwt() does not exist" — a harness gap, not a migration defect.
 --
 -- This file is NEVER applied to a real database; it exists only so the container
 -- can run the production migration unmodified.
@@ -38,6 +44,24 @@ as $$
     nullif(current_setting('request.jwt.claim.sub', true), ''),
     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
   )::uuid
+$$;
+
+/*
+  Supabase's own definition. Returns the full claim set as jsonb so callers can
+  read any claim; migrations 027 and 029 use exactly one of them, `role`.
+  Outside a request (plain psql, no claims set) it returns NULL, which is what
+  those guards expect — `coalesce(auth.jwt() ->> 'role', '')` then yields '' and
+  the guard falls through to its `current_setting('role')` check.
+*/
+create or replace function auth.jwt()
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claim', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')
+  )::jsonb
 $$;
 
 grant usage on schema public to anon, authenticated, service_role;
