@@ -16,8 +16,23 @@
  *
  * Never throws and never blocks a response: a failed link is recoverable, a lost
  * prediction response is not.
+ *
+ * PR3c HOOKS REFERRAL QUALIFICATION HERE, and here only.
+ *
+ * This is the one place both producers meet, so one hook covers the live pipeline
+ * and the DB-cache short-circuits without a second call site to keep in sync. It is
+ * also the correct MOMENT: this function runs after `predictions_history` has
+ * persisted (Stage10) or after the rows were read back from it (Stage01), so an
+ * ownership row means the invitee durably received predictions. Hooking a click, a
+ * 200, or the pre-persistence attempt counter would reward a Predict that never
+ * landed — `rollback_predict_increment` in migration 012 exists because that counter
+ * moves before persistence and has to be walked back when persistence fails.
+ *
+ * The qualification attempt inherits this function's contract exactly: it cannot
+ * throw and it cannot delay a decision the response depends on.
  */
 
+import { attemptQualificationForUser } from "./referralRewards.js";
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 const OWNERSHIP_TABLE = "user_prediction_fixtures";
@@ -54,6 +69,29 @@ export async function linkUserPredictionFixtures(userId, fixtureIds) {
   if (error) {
     console.error("[user_prediction_fixtures]", error?.message || error);
     return { ok: false, linked: 0, error: error?.message || String(error) };
+  }
+
+  /*
+    Post-persistence referral qualification (PR3c). Only reached once ownership is
+    durably written, so the qualifying Predict this may reward is one that actually
+    landed.
+
+    Awaited rather than fired and forgotten: an unawaited promise on a serverless
+    function can be killed when the response returns, which would drop the reward
+    silently and leave the user waiting on a retry that only fires if they Predict
+    again. It costs one indexed probe on `referral_attributions.invitee_id` for a
+    user who was never referred, which is almost all of them.
+
+    `attemptQualificationForUser` already swallows every database failure, so this
+    try/catch is not for those. It is for a CONTRACT VIOLATION — a TypeError, a bad
+    import, a refactor that lets something escape — because "Predict must never fail
+    because of a referral" is too important to rest on another module keeping a
+    promise. The guarantee is structural here, not conventional.
+  */
+  try {
+    await attemptQualificationForUser(userId);
+  } catch (referralError) {
+    console.error("[referral] hook_escaped_contract", referralError?.message || referralError);
   }
 
   return { ok: true, linked: rows.length };
