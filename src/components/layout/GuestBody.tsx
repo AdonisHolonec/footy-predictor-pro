@@ -5,6 +5,8 @@ import { League, PredictionRow } from "../../types";
 
 type GuestBodyProps = {
   user: { email?: string | null; role?: string; tier?: string } | null;
+  /** EFFECTIVE access tier (server), threaded to PredictionList for masking. */
+  userTier?: string;
   leaguesSorted: League[];
   selectedSet: Set<number>;
   selectedLeagueIds: number[];
@@ -53,6 +55,7 @@ export default function GuestBody(props: GuestBodyProps) {
         <PredictionList
           variant="guest"
           user={props.user}
+          userTier={props.userTier}
           preds={props.preds}
           groupedDisplayedMatches={props.groupedDisplayedMatches}
           filterMode={props.filterMode}

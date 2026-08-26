@@ -142,8 +142,11 @@ export default function App() {
           match={c.predictions.selectedMatch}
           logoColors={c.predictions.logoColors}
           hashColor={hashColor}
-          canShowSpecialBet={c.user?.role === "admin" || c.user?.tier === "ultra"}
-          accessTier={c.user?.tier || "free"}
+          // EFFECTIVE tier, not `user.tier`: accessTier drives MarketPicksGrid,
+          // which mirrors maskPredictionForTier(). Reading the requested plan
+          // here rendered an admin's ULTRA payload as FREE.
+          canShowSpecialBet={c.user?.role === "admin" || c.userTier === "ultra"}
+          accessTier={c.userTier || "free"}
           onClose={() => c.predictions.setSelectedMatch(null)}
         />
       )}

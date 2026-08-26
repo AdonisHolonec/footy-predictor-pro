@@ -32,7 +32,8 @@ export function usePredictionsCache({
   selectedLeagueIds,
   history,
   setStatus,
-  authStatus
+  authStatus,
+  entitlementResolved
 }: {
   user: AuthUser;
   userTier: string;
@@ -53,9 +54,19 @@ export function usePredictionsCache({
    * unchanged.
    */
   authStatus?: AuthStatus;
+  /**
+   * PR2b: `userTier` is now the SERVER's effective tier, and it reads "free"
+   * until /api/fixtures?tierStatus=1 answers. `authStatus` no longer covers
+   * that window — a profile can resolve while entitlement is still in flight —
+   * so the promotion effect needs its own gate or it fires free → ultra on
+   * every paid page load. Optional so callers/tests that never observe the
+   * pending window are unchanged.
+   */
+  entitlementResolved?: boolean;
 }) {
   const { t } = useLocale();
   const isProfileResolved = authStatus === undefined || (authStatus !== "profile-pending" && authStatus !== "unresolved");
+  const isTierResolved = entitlementResolved === undefined || entitlementResolved;
   /*
     State stays FULL; only the serialized copy is narrowed. Every reader in this
     hook — the date/league filter, the live-poll carry-forward, the history merge
@@ -265,8 +276,10 @@ export function usePredictionsCache({
     // A tier read before the profile resolved is the "free" placeholder, not a
     // plan. It is neither remembered nor compared: the first tier this effect
     // records is the first one that came from a loaded profile.
-    if (!isProfileResolved) return;
-    const nextTier = String(userTier || user.tier || "free").toLowerCase();
+    if (!isProfileResolved || !isTierResolved) return;
+    // EFFECTIVE tier on purpose: this drops rows the server masked for a lower
+    // tier, and the server masks by effective tier — bonus included.
+    const nextTier = String(userTier || "free").toLowerCase();
     const prevTier = prevEffectiveTierRef.current;
     prevEffectiveTierRef.current = nextTier;
     if (!prevTier || prevTier === nextTier) return;
@@ -281,7 +294,7 @@ export function usePredictionsCache({
     setPreds((prev) => (prev.length ? [] : prev));
     setStatus(t("dash.planUpgraded"));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard
-  }, [user?.id, userTier, user?.tier, isProfileResolved, setPredictionsByUser]);
+  }, [user?.id, userTier, isProfileResolved, isTierResolved, setPredictionsByUser]);
 
   useEffect(() => {
     if (!rehydratedNotice) return;
