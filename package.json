@@ -28,6 +28,7 @@
     "test:benchmark": "node --test tests/predictionBenchmark/*.test.js",
     "test:meta": "node --test tests/metaLearning/*.test.js",
     "test:integration:support": "node scripts/run-gsb-integration.mjs tests/integration/supportRls.db.test.js",
+    "test:integration:time-grants": "node scripts/run-gsb-integration.mjs tests/integration/timeGrantsRls.db.test.js",
     "test:integration:global-special-bets": "node scripts/run-gsb-integration.mjs tests/integration/globalSpecialBets.db.test.js tests/integration/globalSpecialBetSettlement.db.test.js tests/integration/gsbSystemFoundation.db.test.js tests/integration/securityDefinerPrivileges.db.test.js",
     "test:unit": "vitest run src",
     "test:golden": "vitest run tests/pipeline/goldenFixture.test.js",

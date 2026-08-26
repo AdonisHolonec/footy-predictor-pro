@@ -135,6 +135,13 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+-- Every RETURNS TABLE column is ALSO a PL/pgSQL OUT variable, so a bare
+-- `on conflict (idempotency_key)` is ambiguous between the variable and the
+-- column and the function fails at RUNTIME while compiling clean. Resolving
+-- unqualified names to columns is what the body already assumes everywhere else
+-- (`v_`-prefixed locals and `p_`-prefixed parameters never collide), so this
+-- fixes the conflict without touching a single line of the logic below.
+#variable_conflict use_column
 declare
   v_base timestamptz;
   v_id uuid;
