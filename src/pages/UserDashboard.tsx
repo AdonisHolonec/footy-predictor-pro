@@ -75,6 +75,7 @@ export default function UserDashboard() {
   const {
     user,
     userTier,
+    entitlementResolved,
     isSubscriptionExpired,
     trialRemainingTime,
     tierQuotaExempt,
@@ -198,6 +199,7 @@ export default function UserDashboard() {
     user,
     userTier,
     authStatus,
+    entitlementResolved,
     accessToken: session?.access_token,
     date,
     selectedDates,

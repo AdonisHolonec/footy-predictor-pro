@@ -37,6 +37,7 @@ import {
   tierDailyLimit
 } from "../server-utils/accessTier.js";
 import { loadEntitlement } from "../server-utils/entitlement.js";
+import { buildTierStatusPayload } from "../server-utils/tierStatusPayload.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { corsOriginIfAllowed } from "../server-utils/publicBaseUrl.js";
@@ -232,16 +233,7 @@ async function handleDay(req, res) {
 
       return res.status(200).json({
         ok: true,
-        tierStatus: {
-          tier: effectiveTier,
-          requestedTier: tierInfo.requestedTier,
-          subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
-          premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
-          ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
-          predictCountToday: predictCount,
-          predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit,
-          quotaExempt
-        }
+        tierStatus: buildTierStatusPayload({ tierInfo, effectiveTier, predictCount, dailyLimit, quotaExempt })
       });
     }
 
@@ -318,16 +310,7 @@ async function handleDay(req, res) {
             }
             const predictCount = await getTierPredictCountToday(requester.user.id, date, effectiveTier);
             const dailyLimit = quotaExempt ? Number.POSITIVE_INFINITY : tierDailyLimit(effectiveTier);
-            tierStatus = {
-              tier: effectiveTier,
-              requestedTier: tierInfo.requestedTier,
-              subscriptionExpiresAt: tierInfo.subscriptionExpiresAt,
-              premiumTrialRemainingMs: tierInfo.premiumTrialRemainingMs,
-              ultraTrialRemainingMs: tierInfo.ultraTrialRemainingMs,
-              predictCountToday: predictCount,
-              predictLimit: quotaExempt || !Number.isFinite(dailyLimit) ? null : dailyLimit,
-              quotaExempt
-            };
+            tierStatus = buildTierStatusPayload({ tierInfo, effectiveTier, predictCount, dailyLimit, quotaExempt });
           }
         }
       }

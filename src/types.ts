@@ -880,9 +880,16 @@ export type DayResponse = {
   leagues: League[];
   usage: Usage;
   tierStatus?: {
+    /** EFFECTIVE tier — bonus and trials already applied. Feature gates read this. */
     tier: UserTier;
+    /** UNDERLYING requested/paid tier, independent of any bonus. Subscription UI reads this. */
     requestedTier?: UserTier;
     subscriptionExpiresAt?: string | null;
+    /** PAID-only: an active bonus never makes a user look subscribed. */
+    hasActiveSubscription?: boolean;
+    /** End of the active ULTRA bonus window, or null. */
+    bonusUntil?: string | null;
+    hasActiveBonus?: boolean;
     premiumTrialRemainingMs?: number;
     ultraTrialRemainingMs?: number;
     predictCountToday?: number;
@@ -1508,6 +1515,11 @@ export type User = {
   favoriteLeagues: number[];
   isBlocked?: boolean;
   onboardingCompleted?: boolean;
+  /**
+   * The user's OWN plan — the requested/paid tier, never the effective one.
+   * For what the user can actually do right now (bonus and trials applied),
+   * read `userTier` from useAuth(), which carries the server's answer.
+   */
   tier: UserTier;
   subscription_expires_at: string | null;
   premium_trial_activated_at: string | null;

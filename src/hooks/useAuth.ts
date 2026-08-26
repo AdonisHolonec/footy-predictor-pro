@@ -11,6 +11,8 @@ import { ResendCooldownError, authErrorMessageKey } from "../utils/authError";
  */
 export const RESEND_COOLDOWN_MS = 60_000;
 import { isSupabaseConfigured, readPersistedSession, supabase } from "../utils/supabaseClient";
+import type { ClientEntitlement } from "./entitlement";
+import { applyEntitlementToUser, isSubscriptionExpiredFrom, parseTierStatus } from "./entitlement";
 import {
   AUTH_REQUEST_TIMEOUT_MS,
   AUTH_TIMEOUT_MESSAGE_KEY,
@@ -139,6 +141,11 @@ function useAuthState() {
   const [predictCountToday, setPredictCountToday] = useState(0);
   const [predictLimitToday, setPredictLimitToday] = useState<number | null>(null);
   const [tierQuotaExempt, setTierQuotaExempt] = useState(false);
+  /**
+   * The server's entitlement answer, verbatim. `null` means "not asked yet",
+   * which is NOT the same as "free" — see `entitlementResolved` below.
+   */
+  const [entitlement, setEntitlement] = useState<ClientEntitlement | null>(null);
   /** Access tokens already offered to the bootstrap-admin check. */
   const bootstrapAsked = useRef<Set<string>>(new Set());
   /* One clock for every resend entry point — see resendConfirmationEmail. */
@@ -363,28 +370,18 @@ function useAuthState() {
       });
       const json = await response.json();
       if (!response.ok || !json?.ok || !json?.tierStatus) return null;
-      const ts = json.tierStatus as {
-        tier?: "free" | "premium" | "ultra";
-        subscriptionExpiresAt?: string | null;
-        premiumTrialRemainingMs?: number;
-        ultraTrialRemainingMs?: number;
-        predictCountToday?: number;
-        predictLimit?: number | null;
-        quotaExempt?: boolean;
-      };
-      setPredictCountToday(Math.max(0, Number(ts.predictCountToday) || 0));
-      setPredictLimitToday(ts.predictLimit == null ? null : Number(ts.predictLimit));
-      setTierQuotaExempt(Boolean(ts.quotaExempt));
-      setUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              tier: ts.tier || prev.tier,
-              subscription_expires_at: ts.subscriptionExpiresAt ?? prev.subscription_expires_at,
-              predict_count_today: Math.max(0, Number(ts.predictCountToday) || 0)
-            }
-          : prev
-      );
+      const ts = parseTierStatus(json.tierStatus);
+      if (!ts) return null;
+      setEntitlement(ts);
+      setPredictCountToday(ts.predictCountToday);
+      setPredictLimitToday(ts.predictLimit);
+      setTierQuotaExempt(ts.quotaExempt);
+      /*
+        `tier` receives requestedTier, NOT ts.tier. This line used to store the
+        EFFECTIVE tier here and let the memos below re-derive access from it —
+        the bug PR2b exists to remove. `user.tier` is the user's own plan.
+      */
+      setUser((prev) => (prev ? applyEntitlementToUser(prev, ts) : prev));
       return ts;
     } catch {
       return null;
@@ -902,6 +899,8 @@ function useAuthState() {
       setPredictCountToday(0);
       setPredictLimitToday(null);
       setTierQuotaExempt(false);
+      // Back to "not asked yet" — a signed-out client knows nothing about tier.
+      setEntitlement(null);
       return;
     }
     void refreshTierStatus();
@@ -921,30 +920,26 @@ function useAuthState() {
     };
   }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
 
-  /** Mirrors resolveEffectiveTierFromProfile() in server-utils/accessTier.js so the UI
-   *  never shows premium/ultra affordances the server has already stopped honoring. */
-  const isSubscriptionExpired = useMemo(() => {
-    if (!user?.subscription_expires_at) return false;
-    const t = new Date(user.subscription_expires_at).getTime();
-    return Number.isFinite(t) && t <= Date.now();
-  }, [user?.subscription_expires_at]);
+  /*
+    ENTITLEMENT IS READ, NOT COMPUTED.
 
-  const hasActiveSubscription = useMemo(() => {
-    const requestedTier = user?.tier || "free";
-    if (requestedTier !== "premium" && requestedTier !== "ultra") return false;
-    if (!user?.subscription_expires_at) return true; // open-ended paid tier, no expiry set
-    return !isSubscriptionExpired;
-  }, [user?.tier, user?.subscription_expires_at, isSubscriptionExpired]);
+    These three used to mirror resolveEffectiveTierFromProfile() in React —
+    subscription expiry by local clock, then paid-tier precedence, then a trial
+    fallback. That mirror could only ever be as current as the last rule change
+    it was hand-copied through, and PR1's bonus time was the change that broke
+    it. All three now read the server's answer.
 
-  const effectiveTier = useMemo(() => {
-    const requestedTier = user?.tier || "free";
-    if (hasActiveSubscription && (requestedTier === "premium" || requestedTier === "ultra")) {
-      return requestedTier;
-    }
-    if (trialRemainingTime.ultraMs > 0) return "ultra";
-    if (trialRemainingTime.premiumMs > 0) return "premium";
-    return "free";
-  }, [user?.tier, hasActiveSubscription, trialRemainingTime]);
+    Unresolved (`entitlement === null`) deliberately reports "free" rather than
+    guessing from the profile: until the server has answered, the client has not
+    been granted anything. This is also what the old memos returned before the
+    profile landed, so first paint is unchanged — but there is no longer an
+    intermediate, differently-wrong value in between.
+  */
+  const userTier = entitlement?.tier ?? "free";
+  const hasActiveSubscription = entitlement?.hasActiveSubscription ?? false;
+  const isSubscriptionExpired = isSubscriptionExpiredFrom(entitlement);
+  /** Distinguishes "free" from "not asked yet" for consumers that must not act on a placeholder. */
+  const entitlementResolved = entitlement !== null;
 
   const trialExpiresAt = useMemo(() => {
     const premiumStart = user?.premium_trial_activated_at ? new Date(user.premium_trial_activated_at).getTime() : NaN;
@@ -959,7 +954,10 @@ function useAuthState() {
 
   return {
     user,
-    userTier: effectiveTier,
+    /** EFFECTIVE tier from the server. Feature gates read this, never `user.tier`. */
+    userTier,
+    entitlement,
+    entitlementResolved,
     isSubscriptionExpired,
     hasActiveSubscription,
     trialRemainingTime,
