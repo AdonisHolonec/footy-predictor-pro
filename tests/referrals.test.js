@@ -48,7 +48,7 @@ import { handleReferralApi } from "../server-utils/referralApi.js";
 const DAY = 24 * 60 * 60 * 1000;
 
 /** Minimal PostgREST-shaped fake. Records every call so shape can be asserted. */
-function fakeSupabase({ rows = {}, rpc = {}, insertResults = [], updateResult = { error: null } } = {}) {
+function fakeSupabase({ rows = {}, rpc = {}, insertResults = [], updateResult = { error: null }, attributions = null } = {}) {
   const calls = [];
   const rpcCalls = [];
   const inserts = [...insertResults];
@@ -65,8 +65,38 @@ function fakeSupabase({ rows = {}, rpc = {}, insertResults = [], updateResult = 
       const q = { table, op: "select", filters: [] };
       calls.push(q);
       const chain = {
-        select() {
+        select(_cols, opts) {
+          /*
+            PR3d1: getReferralStatus counts inviter rows with head-only counted
+            queries. When `attributions` is supplied the fake evaluates the accrued
+            filters against it and answers with a count, which is what lets the
+            capped/reversed regressions below be expressed as ROWS rather than as a
+            hand-written number.
+          */
+          if (opts?.count && opts?.head && attributions) q.counted = true;
           return chain;
+        },
+        not(column, op, value) {
+          q.filters.push([column, `not.${op}`, value]);
+          return chain;
+        },
+        neq(column, value) {
+          q.filters.push([column, "neq", value]);
+          return chain;
+        },
+        then(resolve) {
+          if (!q.counted) return Promise.resolve({ data: null, error: null }).then(resolve);
+          const matches = attributions.filter((row) =>
+            q.filters.every(([column, opOrValue, value]) => {
+              // The fixture already represents exactly one inviter's rows, so the
+              // scoping filter is satisfied by construction rather than by a field.
+              if (column === "inviter_id") return true;
+              if (opOrValue === "not.is" && value === null) return row[column] !== null && row[column] !== undefined;
+              if (opOrValue === "neq") return row[column] !== value;
+              return row[column] === opOrValue;
+            })
+          );
+          return Promise.resolve({ count: matches.length, error: null }).then(resolve);
         },
         eq(c, v) {
           q.filters.push([c, v]);
@@ -343,7 +373,14 @@ function statusSupabase(attribution) {
   });
 }
 
-test("[status] reports inviter counts and the caller's own attribution", async () => {
+test("[status][PR3d1] reports inviter counts and the caller's own attribution", async () => {
+  /*
+    PR3a sourced these three numbers from referral_inviter_summary. PR3d1 counts the
+    table instead, because that RPC counts `state = 'rewarded'` and so credits a
+    capped inviter for a payout they never received. The assertion moves with the
+    source; the coverage is strictly larger (see the [inviter][PR3d1] block below,
+    which expresses the same numbers as ROWS).
+  */
   const now = Date.parse("2026-09-01T00:00:00.000Z");
   const supabase = statusSupabase({
     state: "attributed",
@@ -353,7 +390,10 @@ test("[status] reports inviter counts and the caller's own attribution", async (
   });
   const out = await getReferralStatus("user-1", { supabase, now });
   assert.equal(out.code, "ABCD234567");
-  assert.deepEqual(out.inviter, { attributed: 3, qualified: 2, rewarded: 1 });
+  assert.equal(out.inviter.attributed, 0, "no attribution rows in this fixture");
+  assert.equal(out.inviter.successful, 0);
+  assert.equal(out.inviter.earnedDays, 0);
+  assert.equal(out.inviter.capRemaining, 10, "a fresh inviter has the whole cap");
   assert.equal(out.invitee.state, "attributed");
   assert.equal(out.invitee.expired, false);
 });
@@ -1031,4 +1071,98 @@ test("[safety] PR3b can produce no state other than expired", async () => {
     );
   }
   assert.match(source, /state:\s*"expired"/, "expired is the one transition PR3b owns");
+});
+
+/* ======================================================================== */
+/*  PR3d1 — inviter metrics must count PAYOUTS, not states                   */
+/* ======================================================================== */
+
+/**
+ * Status with a real set of inviter attribution rows behind the counts.
+ *
+ * `referral_inviter_summary` (migration 062) counts `state = 'rewarded'`, which is
+ * the wrong question: PR3c marks a CAPPED referral rewarded — the invitee was paid —
+ * while leaving `inviter_rewarded_at` null because the inviter earned nothing.
+ * These fixtures are expressed as rows precisely so a regression to state-counting
+ * fails here rather than in production.
+ */
+function inviterStatus(attributions) {
+  return fakeSupabase({
+    attributions,
+    rows: {
+      referral_codes: { data: { code: "ABCD234567" }, error: null },
+      referral_attributions: { data: null, error: null }
+    },
+    rpc: {
+      // Present but deliberately WRONG: if anything still reads it, the numbers
+      // below will not match.
+      referral_inviter_summary: () => ({
+        data: [{ attributed_count: 99, qualified_count: 99, rewarded_count: 99 }],
+        error: null
+      })
+    }
+  });
+}
+
+const paid = (n) => Array.from({ length: n }, () => ({ state: "rewarded", inviter_rewarded_at: "2026-08-01T00:00:00Z" }));
+
+test("[inviter][PR3d1] successful referrals come from inviter_rewarded_at, not from state", async () => {
+  const out = await getReferralStatus("user-1", { supabase: inviterStatus(paid(3)) });
+  assert.equal(out.inviter.successful, 3);
+  assert.notEqual(out.inviter.successful, 99, "the 062 summary RPC must no longer be the source");
+});
+
+test("[inviter][PR3d1] a CAPPED referral is rewarded but does NOT count as successful", async () => {
+  // state='rewarded' with inviter_rewarded_at null — the invitee was paid, the
+  // inviter was not. Counting by state would claim 11 and imply 55 days.
+  const rows = [...paid(10), { state: "rewarded", inviter_rewarded_at: null }];
+  const out = await getReferralStatus("user-1", { supabase: inviterStatus(rows) });
+  assert.equal(out.inviter.successful, 10, "the capped referral earned the inviter nothing");
+  assert.equal(out.inviter.earnedDays, 50, "and must not inflate the day count");
+  assert.equal(out.inviter.capRemaining, 0);
+});
+
+test("[inviter][PR3d1] a REVERSED referral stops counting and frees a cap slot", async () => {
+  const rows = [...paid(9), { state: "reversed", inviter_rewarded_at: "2026-08-01T00:00:00Z" }];
+  const out = await getReferralStatus("user-1", { supabase: inviterStatus(rows) });
+  assert.equal(out.inviter.successful, 9, "reversed rows keep inviter_rewarded_at but stop counting");
+  assert.equal(out.inviter.capRemaining, 1, "which is exactly how the slot returns");
+});
+
+test("[inviter][PR3d1] attributed, qualified and expired rows never count as successful", async () => {
+  const rows = [
+    ...paid(2),
+    { state: "attributed", inviter_rewarded_at: null },
+    { state: "qualified", inviter_rewarded_at: null },
+    { state: "expired", inviter_rewarded_at: null },
+    { state: "rejected", inviter_rewarded_at: null }
+  ];
+  const out = await getReferralStatus("user-1", { supabase: inviterStatus(rows) });
+  assert.equal(out.inviter.successful, 2);
+  assert.equal(out.inviter.attributed, 1, "pending counts stay separate");
+  assert.equal(out.inviter.qualified, 1);
+});
+
+test("[inviter][PR3d1] earnedDays and capRemaining derive from the same count", async () => {
+  for (const n of [0, 1, 7, 10]) {
+    const out = await getReferralStatus("user-1", { supabase: inviterStatus(paid(n)) });
+    assert.equal(out.inviter.successful, n);
+    assert.equal(out.inviter.earnedDays, n * 5, `${n} referrals must be ${n * 5} days`);
+    assert.equal(out.inviter.capRemaining, Math.max(0, 10 - n));
+    assert.equal(out.inviter.cap, 10);
+  }
+});
+
+test("[inviter][PR3d1] capRemaining never goes negative", async () => {
+  // Reachable only through a data anomaly, but a negative "referrals left" in a UI
+  // is worse than a clamped zero.
+  const out = await getReferralStatus("user-1", { supabase: inviterStatus(paid(12)) });
+  assert.equal(out.inviter.capRemaining, 0);
+});
+
+test("[inviter][PR3d1] the status payload still leaks no identity", async () => {
+  const payload = JSON.stringify(await getReferralStatus("user-1", { supabase: inviterStatus(paid(2)) }));
+  for (const forbidden of ["inviter_id", "inviterId", "invitee_id", "ip_hash", "ipHash", "@"]) {
+    assert.ok(!payload.includes(forbidden), `${forbidden} must never reach the client`);
+  }
 });

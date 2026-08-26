@@ -29,6 +29,16 @@ import { getSupabaseAdmin } from "./supabaseAdmin.js";
 /** Lifetime cap on rewards an INVITER can earn. Mirrors v_cap in migration 063. */
 export const REFERRAL_INVITER_CAP = 10;
 
+/**
+ * Days each side of a referral receives. Mirrors v_days in migration 063.
+ *
+ * Re-exported from HERE rather than imported from timeGrants.js so that
+ * referrals.js can derive `earnedDays` without importing the grants ledger — a
+ * dependency tests/referrals.test.js deliberately forbids, because the claim path
+ * must have no route to a grant.
+ */
+export const REFERRAL_REWARD_DAYS = 5;
+
 /** Campaign tag written into grant metadata. Mirrors 'v1' in migration 063. */
 export const REFERRAL_CAMPAIGN = "v1";
 
@@ -213,13 +223,46 @@ export async function attemptQualificationForUser(userId, deps = {}) {
   }
 }
 
+/**
+ * Reverse a rewarded referral: revoke both grants and mark it reversed. Atomic.
+ *
+ * The three writes live in migration 064's `reverse_referral`, for the same reason
+ * the reward lives in 063 — any two of them without the third is a state the system
+ * cannot describe. This layer supplies an attribution id and a reason and reports.
+ *
+ * `reason` is required by the DATABASE, not merely by this function, so no future
+ * caller can reverse a reward without recording why. Grants are located inside the
+ * transaction from the attribution's own reference; no caller ever names a grant.
+ */
+export async function reverseReferral(attributionId, reason, deps = {}) {
+  const id = requireId(attributionId, "attributionId");
+  const { data, error } = await client(deps).rpc("reverse_referral", {
+    p_attribution_id: id,
+    p_reason: String(reason ?? "")
+  });
+  if (error) throw new Error(error.message || "referralRewards: reverse failed");
+
+  const row = firstRow(data);
+  if (!row) throw new Error("referralRewards: reverse returned no result");
+  return {
+    ok: Boolean(row.ok),
+    reason: row.reason ?? null,
+    state: row.state ?? null,
+    reversedAt: row.reversed_at ?? null,
+    inviterGrantRevoked: Boolean(row.inviter_grant_revoked),
+    inviteeGrantRevoked: Boolean(row.invitee_grant_revoked)
+  };
+}
+
 export default {
   REFERRAL_INVITER_CAP,
+  REFERRAL_REWARD_DAYS,
   REFERRAL_CAMPAIGN,
   BENIGN_QUALIFY_REASONS,
   PENDING_QUALIFY_REASONS,
   qualifyReferral,
   rewardReferral,
   attemptRewardForAttribution,
-  attemptQualificationForUser
+  attemptQualificationForUser,
+  reverseReferral
 };
