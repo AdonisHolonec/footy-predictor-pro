@@ -174,6 +174,39 @@ async function settleLeagueDialogIfPresent(page: Page) {
   await dialog.waitFor({ state: "hidden", timeout: 10_000 });
 }
 
+/*
+  Predict refuses to call the API until at least one league is selected - it
+  answers "Selecteaza o liga." client-side instead. The auto-opening drawer
+  settles that on a FIRST-RUN context (settleLeagueDialogIfPresent picks
+  "Elite - toate"), but a context restored from storage state never sees the
+  drawer, so the selection is whatever the account happened to be left with.
+  That is exactly the hidden state a spec should not depend on.
+
+  So the predict journey establishes its own precondition through the real UI:
+  open the league filter, take the elite set, close. The opener lives on the
+  Matches route (MatchesSection renders it with aria-label shell.filterLeagues);
+  the drawer itself is the dashboard-level dialog labelled "League filter", the
+  same one the first-run path already drives.
+
+  This DOES persist the account's league preference, deliberately: it is the
+  real user journey, and making it idempotent (always the elite set) keeps the
+  test deterministic rather than dependent on what a previous run left behind.
+*/
+export async function ensureLeagueSelected(page: Page) {
+  const dialog = leagueDialog(page);
+  if (!(await dialog.isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: "Meciuri", exact: true }).first().click();
+    await page.getByRole("button", { name: "Selectează ligi" }).first().click();
+    await dialog.waitFor({ state: "visible", timeout: 20_000 });
+  }
+  await dialog.getByRole("button", { name: "Elite · toate" }).first().click();
+  await dialog.getByRole("button", { name: "Închide", exact: true }).first().click();
+  await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+  // Back to the day feed, where Predict renders its results.
+  await page.getByRole("button", { name: "Azi", exact: true }).first().click();
+  await page.waitForURL(/\/workspace(\/|$|\?)/, { timeout: 20_000 });
+}
+
 /**
  * The workspace opens its first-run overlays per browser context, not per
  * account — a fresh storage-state context can still get the league dialog.
