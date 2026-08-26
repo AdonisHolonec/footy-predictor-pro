@@ -1,6 +1,7 @@
 import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { getRequester } from "./authAdmin.js";
 import { resolveClaimIpHash } from "./referralIpHash.js";
+import { attemptQualificationForUser } from "./referralRewards.js";
 import { CLAIM_REASONS, claimReferral, getOrCreateReferralCode, getReferralStatus } from "./referrals.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 
@@ -137,6 +138,23 @@ async function handleClaim(req, res, ctx) {
 
 /** GET /api/referral?view=status — counts as an inviter, attribution as an invitee. */
 async function handleStatus(req, res, ctx) {
+  /*
+    SECONDARY QUALIFICATION TRIGGER (PR3c).
+
+    The Predict hook is primary, but it can only see the facts that existed when it
+    ran. A user who Predicts and THEN confirms their email is qualified on durable
+    facts yet has no event left to notice it — the hook already fired and found the
+    address unverified. Re-evaluating here closes that ordering without a
+    verification webhook, because both preconditions are stored state rather than
+    events: whenever this runs, it computes the same answer.
+
+    Opportunistic and non-blocking. `attemptQualificationForUser` never throws, and
+    its result is deliberately ignored: a status read reports status. Surfacing a
+    reward decision through it would let an internal SQL reason reach the client,
+    and would make a read endpoint fail for a write-side problem.
+  */
+  await attemptQualificationForUser(ctx.user.id, { supabase: ctx.supabase });
+
   const status = await getReferralStatus(ctx.user.id, { supabase: ctx.supabase });
   return res.status(200).json({ ok: true, referral: status });
 }

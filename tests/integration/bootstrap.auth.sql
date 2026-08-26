@@ -32,8 +32,21 @@ create schema if not exists auth;
 
 create table if not exists auth.users (
   id uuid primary key,
-  email text
+  email text,
+  /*
+    Added for migration 063. `qualify_referral` reads this column directly rather
+    than trusting a caller: a JWT minted before the user confirmed their address
+    stays valid afterwards, so a session-derived boolean is stale in exactly the
+    direction that would pay out a reward wrongly. Supabase's own auth.users
+    carries it; the harness slice has to as well or the function fails at RUNTIME
+    while compiling clean — the same class of gap that let PR1's #variable_conflict
+    defect survive 26 green unit tests.
+  */
+  email_confirmed_at timestamptz
 );
+
+-- Idempotent for containers created before 063 (GSB_TEST_KEEP=1 reuses them).
+alter table auth.users add column if not exists email_confirmed_at timestamptz;
 
 create or replace function auth.uid()
 returns uuid
