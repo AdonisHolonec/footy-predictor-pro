@@ -1,6 +1,7 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
+import { handleReferralApi } from "../server-utils/referralApi.js";
 import { handleSupportApi } from "../server-utils/supportApi.js";
 
 function asNum(n) {
@@ -28,6 +29,16 @@ export default async function handler(req, res) {
   const view = String(req.query.view || "");
   if (view === "support" || view === "feedback" || view === "prediction-report") {
     return handleSupportApi(req, res);
+  }
+
+  /*
+    Referral (PR3a) rides here for the same reason support does — the function
+    budget. Marked with its own `referral=1` flag rather than a `view` value
+    because the referral endpoints use `view` themselves (code / claim / status),
+    and the rewrite in vercel.json merges the caller's query into the destination's.
+  */
+  if (String(req.query.referral || "") === "1") {
+    return handleReferralApi(req, res);
   }
 
   if (req.method !== "GET") {

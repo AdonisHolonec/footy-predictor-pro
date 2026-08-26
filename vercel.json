@@ -14,6 +14,7 @@
     { "source": "/api/support", "destination": "/api/alerts?view=support" },
     { "source": "/api/feedback", "destination": "/api/alerts?view=feedback" },
     { "source": "/api/prediction-report", "destination": "/api/alerts?view=prediction-report" },
+    { "source": "/api/referral", "destination": "/api/alerts?referral=1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
