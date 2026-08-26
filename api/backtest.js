@@ -33,6 +33,10 @@ import {
   runAndPromote,
   getActiveModel
 } from "../server-utils/modelLab/BlendRecipeSelection.js";
+import {
+  modelSelectionSelect,
+  rehydrateModelSelectionRows
+} from "../server-utils/modelLab/modelSelectionRows.js";
 
 /**
  * Auto Model Selection — every model competes over 30/90/365-day windows.
@@ -54,7 +58,7 @@ async function handleModelSelect(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+      .select(modelSelectionSelect())
       .gte("kickoff_at", cutoffIso)
       .in("validation", ["win", "loss"])
       .order("kickoff_at", { ascending: true })
@@ -62,10 +66,11 @@ async function handleModelSelect(req, res) {
     if (error) throw error;
 
     if (doRun) {
-      const result = await runAndPromote(data || []);
+      const rows = rehydrateModelSelectionRows(data);
+      const result = await runAndPromote(rows);
       return res.status(200).json({ ok: true, ran: true, ...result });
     }
-    const selection = runAutoSelection(data || []);
+    const selection = runAutoSelection(rehydrateModelSelectionRows(data));
     const active = await getActiveModel();
     return res.status(200).json({ ok: true, ran: false, active, ...selection });
   } catch (err) {
@@ -92,14 +97,14 @@ async function handleModelLab(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+      .select(modelSelectionSelect())
       .gte("kickoff_at", cutoffIso)
       .in("validation", ["win", "loss"])
       .order("kickoff_at", { ascending: true })
       .limit(6000);
     if (error) throw error;
 
-    const lab = runModelLab(data || []);
+    const lab = runModelLab(rehydrateModelSelectionRows(data));
     return res.status(200).json({ ok: true, days, cutoff: cutoffIso, ...lab });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err?.message || "Model lab a eșuat" });

@@ -34,6 +34,10 @@ import { recordSyncRun, SYNC_KINDS } from "../../server-utils/observability/sync
 import { captureOpsSnapshot } from "../../server-utils/observability/opsSnapshot.js";
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
+import {
+  modelSelectionSelect,
+  rehydrateModelSelectionRows
+} from "../../server-utils/modelLab/modelSelectionRows.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
 import {
   rehydratePayloadBlocks,
@@ -518,13 +522,13 @@ async function handlerImpl(req, res) {
       const cutoffIso = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from("predictions_history")
-        .select("fixture_id, league_id, kickoff_at, score_home, score_away, odds_home, odds_draw, odds_away, luck_hxg, luck_axg, raw_payload")
+        .select(modelSelectionSelect())
         .gte("kickoff_at", cutoffIso)
         .in("validation", ["win", "loss"])
         .order("kickoff_at", { ascending: true })
         .limit(12000);
       if (error) throw error;
-      const result = await runAndPromote(data || []);
+      const result = await runAndPromote(rehydrateModelSelectionRows(data));
       logInfo("cron.model_selection", { promoted: result.promoted?.id, composite: result.promoted?.compositeScore });
       return res.status(200).json({ ok: true, mode, promoted: result.promoted, selected: result.selected });
     } catch (err) {
