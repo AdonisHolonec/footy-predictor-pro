@@ -10,6 +10,7 @@ export type AdminSection =
   | "diagnostics"
   | "inbox"
   | "users"
+  | "referrals"
   | "workspace";
 
 const SECTIONS: { id: AdminSection; label: string }[] = [
@@ -22,6 +23,7 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: "diagnostics", label: "Diagnostics" },
   { id: "inbox", label: "Inbox" },
   { id: "users", label: "Users" },
+  { id: "referrals", label: "Referrals" },
   { id: "workspace", label: "← Workspace" }
 ];
 

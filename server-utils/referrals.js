@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 
+import { REFERRAL_INVITER_CAP, REFERRAL_REWARD_DAYS } from "./referralRewards.js";
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 
 /**
@@ -340,11 +341,37 @@ export async function getReferralStatus(userId, deps = {}) {
     .maybeSingle();
   if (codeError) throw new Error(codeError.message || "referrals: status code read failed");
 
-  const { data: summary, error: summaryError } = await supabase.rpc("referral_inviter_summary", {
-    p_user_id: id
-  });
-  if (summaryError) throw new Error(summaryError.message || "referrals: summary failed");
-  const counts = (Array.isArray(summary) ? summary[0] : summary) || {};
+  /*
+    INVITER COUNTS COME FROM THE TABLE, NOT FROM referral_inviter_summary.
+
+    That function (migration 062) counts `state = 'rewarded'`, which is the wrong
+    question for a capped inviter: PR3c marks a capped referral REWARDED — the
+    invitee was paid — while leaving `inviter_rewarded_at` null because the inviter
+    earned nothing. Counting by state would tell someone at the cap that they had
+    eleven successful referrals and imply 55 days, when they earned ten and 50.
+
+    `inviter_rewarded_at is not null and state <> 'reversed'` is the same predicate
+    reward_referral itself uses for the cap, so the number shown to a user and the
+    number the cap enforces can never disagree. 062 is production and untouched; its
+    summary function is simply no longer the source for this.
+
+    Three HEAD counts rather than one fetch-and-tally: each is an indexed count that
+    transfers no rows, and `referral_attributions_inviter_rewarded_idx` (063) covers
+    the one that matters.
+  */
+  const countBy = async (apply) => {
+    let query = supabase.from("referral_attributions").select("*", { count: "exact", head: true }).eq("inviter_id", id);
+    query = apply(query);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message || "referrals: inviter count failed");
+    return Number(count) || 0;
+  };
+
+  const [successful, attributedCount, qualifiedCount] = await Promise.all([
+    countBy((q) => q.not("inviter_rewarded_at", "is", null).neq("state", "reversed")),
+    countBy((q) => q.eq("state", "attributed")),
+    countBy((q) => q.eq("state", "qualified"))
+  ]);
 
   const { data: mine, error: mineError } = await supabase
     .from("referral_attributions")
@@ -374,9 +401,23 @@ export async function getReferralStatus(userId, deps = {}) {
     hasReferralCode: Boolean(codeRow?.code),
     code: codeRow?.code ?? null,
     inviter: {
-      attributed: Number(counts.attributed_count) || 0,
-      qualified: Number(counts.qualified_count) || 0,
-      rewarded: Number(counts.rewarded_count) || 0
+      attributed: attributedCount,
+      qualified: qualifiedCount,
+      /*
+        `rewarded` is kept for shape compatibility but now carries the SAME corrected
+        number as `successful`. There is no reading of "rewarded referrals" an
+        inviter cares about other than the ones that actually paid them.
+      */
+      rewarded: successful,
+      successful,
+      /*
+        Derived, never stored. Both mirror migration 063's constants through
+        referralRewards.js, so a change to the reward size or the cap moves the
+        displayed number with it.
+      */
+      earnedDays: successful * REFERRAL_REWARD_DAYS,
+      capRemaining: Math.max(0, REFERRAL_INVITER_CAP - successful),
+      cap: REFERRAL_INVITER_CAP
     },
     invitee: mine
       ? {

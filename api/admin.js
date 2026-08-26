@@ -1,5 +1,6 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
 import { handleAdminInbox } from "../server-utils/adminInboxApi.js";
+import { handleReferralAdmin } from "../server-utils/referralAdminApi.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { parseUsageDayFromQuery } from "../server-utils/userDailyWarmPredictUsage.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
@@ -39,6 +40,14 @@ export default async function handler(req, res) {
   // reads every user's messages while supportApi.js writes the caller's own — opposite
   // trust models, kept in opposite files.
   if (view === "inbox") return handleAdminInbox(req, res);
+  /*
+    PR3d1 referral review rides here for the same reason the inbox does — the api/
+    directory is at the Hobby plan's twelve-function ceiling and a thirteenth file
+    fails at deploy. Every one of these views calls assertAdmin itself.
+  */
+  if (view === "referrals" || view === "reverse-referral" || view === "retry-referral-reward") {
+    return handleReferralAdmin(req, res);
+  }
   return handleProfiles(req, res);
 }
 

@@ -13,6 +13,9 @@ const EnterpriseDashboard = lazy(() => import("../analytics/EnterpriseDashboard"
 const HealthDashboard = lazy(() => import("../monitoring/HealthDashboard"));
 const DiagnosticsDashboard = lazy(() => import("../monitoring/DiagnosticsDashboard"));
 const ModelLabPanel = lazy(() => import("../modelLab/ModelLabPanel"));
+// Lazy like every other admin section: the referral table is never on the first
+// paint of the workspace and should not sit in that bundle.
+const AdminReferralsPanel = lazy(() => import("./AdminReferralsPanel"));
 const BacktestAnalyticsPanel = lazy(() => import("../backtest/BacktestAnalyticsPanel"));
 const BenchmarkPanel = lazy(() => import("../admin/BenchmarkPanel"));
 const MetaDataHealthPanel = lazy(() => import("../admin/MetaDataHealthPanel"));
@@ -155,6 +158,11 @@ export default function PerformancePanel({
         {section === "diagnostics" && (
           <Suspense fallback={<LabFallback label="Diagnostics" />}>
             <DiagnosticsDashboard />
+          </Suspense>
+        )}
+        {section === "referrals" && (
+          <Suspense fallback={<LabFallback label="Referrals" />}>
+            <AdminReferralsPanel />
           </Suspense>
         )}
         {section === "inbox" && (
