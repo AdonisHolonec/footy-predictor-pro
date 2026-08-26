@@ -34,9 +34,9 @@ import {
   USER_TIERS,
   getTierPredictCountToday,
   isFreeWindowExpired,
-  resolveEffectiveTierFromProfile,
   tierDailyLimit
 } from "../server-utils/accessTier.js";
+import { loadEntitlement } from "../server-utils/entitlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { corsOriginIfAllowed } from "../server-utils/publicBaseUrl.js";
@@ -204,32 +204,20 @@ async function handleDay(req, res) {
       if (!sb) {
         return res.status(503).json({ ok: false, error: "Clientul Supabase admin nu este disponibil." });
       }
-      let profile = null;
-      let { data: profData, error: profileError } = await sb
-        .from("profiles")
-        .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
-        .eq("user_id", requester.user.id)
-        .maybeSingle();
-      if (profileError) {
-        const msg = String(profileError.message || "").toLowerCase();
-        const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
-        if (!missingTierCols) return res.status(500).json({ ok: false, error: profileError.message });
-        const { data: legacyData, error: legacyError } = await sb
-          .from("profiles")
-          .select("created_at")
-          .eq("user_id", requester.user.id)
-          .maybeSingle();
-        if (legacyError) return res.status(500).json({ ok: false, error: legacyError.message });
-        profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
-      } else {
-        profile = profData;
+      // One profile read + one indexed time_grants read, both inside the loader.
+      let entitlement;
+      try {
+        entitlement = await loadEntitlement(requester.user.id, { supabase: sb });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err?.message || "Nu am putut verifica profilul." });
       }
+      const profile = entitlement.profile;
       if (!profile) return res.status(404).json({ ok: false, error: "Profilul nu a fost găsit." });
 
       const quotaExempt =
         String(profile?.role || "").toLowerCase() === "admin" ||
         (await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase()));
-      const tierInfo = resolveEffectiveTierFromProfile(profile);
+      const tierInfo = entitlement.tierInfo;
       const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
       const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
       const usageDay = String(req.query.usageDay || date).slice(0, 10);
@@ -313,30 +301,13 @@ async function handleDay(req, res) {
       if (config.ok) {
         const sb = getSupabaseAdmin();
         if (sb) {
-          let profile = null;
-          let { data: profData, error: profileError } = await sb
-            .from("profiles")
-            .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
-            .eq("user_id", requester.user.id)
-            .maybeSingle();
-          if (profileError) {
-            const msg = String(profileError.message || "").toLowerCase();
-            const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
-            if (!missingTierCols) throw profileError;
-            const { data: legacyData } = await sb
-              .from("profiles")
-              .select("created_at")
-              .eq("user_id", requester.user.id)
-              .maybeSingle();
-            profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
-          } else {
-            profile = profData;
-          }
+          const entitlement = await loadEntitlement(requester.user.id, { supabase: sb });
+          const profile = entitlement.profile;
           if (profile) {
             const quotaExempt =
               String(profile?.role || "").toLowerCase() === "admin" ||
               (await isWarmPredictQuotaExempt(requester.user.id, String(requester.user.email || "").toLowerCase()));
-            const tierInfo = resolveEffectiveTierFromProfile(profile);
+            const tierInfo = entitlement.tierInfo;
             const effectiveTier = quotaExempt ? USER_TIERS.ULTRA : tierInfo.effectiveTier;
             const freeExpired = !quotaExempt && effectiveTier === USER_TIERS.FREE && isFreeWindowExpired(profile.created_at);
             if (freeExpired) {

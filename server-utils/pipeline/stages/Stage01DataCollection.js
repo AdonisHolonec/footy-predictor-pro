@@ -17,10 +17,10 @@ import {
   incrementPredictCountBy,
   maskPredictionForTier,
   pickUltraUniqueAllowedFixtures,
-  resolveEffectiveTierFromProfile,
   tierDailyActionLimit,
   tierDailyLimit
 } from "../../accessTier.js";
+import { loadEntitlement } from "../../entitlement.js";
 import { getSupabaseAdmin } from "../../supabaseAdmin.js";
 import { mapDbRowToHistoryEntry } from "../../predictionsHistory.js";
 import { linkUserPredictionFixtures } from "../../linkUserPredictionFixtures.js";
@@ -79,35 +79,20 @@ export async function run(context) {
 
   if (!isCron && !usageCtx.anonymous && usageCtx.userId) {
     const supabase = getSupabaseAdmin();
-    let profile;
-    let { data: profData, error: profileError } = await supabase
-      .from("profiles")
-      .select("role, tier, subscription_expires_at, premium_trial_activated_at, ultra_trial_activated_at, created_at")
-      .eq("user_id", usageCtx.userId)
-      .maybeSingle();
-    if (profileError) {
-      const msg = String(profileError.message || "").toLowerCase();
-      const missingTierCols = msg.includes("column") && (msg.includes("tier") || msg.includes("subscription_expires_at"));
-      if (!missingTierCols) {
-        return halt(context, 500, { ok: false, error: profileError.message || "Nu am putut verifica abonamentul." });
-      }
-      const { data: legacyData, error: legacyError } = await supabase
-        .from("profiles")
-        .select("created_at")
-        .eq("user_id", usageCtx.userId)
-        .maybeSingle();
-      if (legacyError) {
-        return halt(context, 500, { ok: false, error: legacyError.message || "Nu am putut verifica profilul." });
-      }
-      profile = { role: "user", tier: USER_TIERS.FREE, created_at: legacyData?.created_at };
-    } else {
-      profile = profData;
+    // The hot path: exactly one profile read and one indexed time_grants read,
+    // both inside the loader. No extra round-trip is added downstream.
+    let entitlement;
+    try {
+      entitlement = await loadEntitlement(usageCtx.userId, { supabase });
+    } catch (err) {
+      return halt(context, 500, { ok: false, error: err?.message || "Nu am putut verifica abonamentul." });
     }
+    const profile = entitlement.profile;
     if (!profile) {
       return halt(context, 404, { ok: false, error: "Profil utilizator inexistent." });
     }
 
-    const tierInfo = resolveEffectiveTierFromProfile(profile);
+    const tierInfo = entitlement.tierInfo;
     const role = String(profile?.role || "").toLowerCase();
     const quotaExempt =
       role === "admin" || (await isWarmPredictQuotaExempt(usageCtx.userId, usageCtx.userEmail));
