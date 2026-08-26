@@ -30,6 +30,10 @@ import {
 } from "./overlayStore.js";
 import { getSupabaseAdmin } from "../supabaseAdmin.js";
 import { extractPredictedTriple } from "../ml/extractRawTriple.js";
+import {
+  rehydratePayloadBlocks,
+  selectWithPayloadBlocks
+} from "../history/payloadProjection.js";
 
 export { extractPredictedTriple, extractRawTriple } from "../ml/extractRawTriple.js";
 
@@ -266,6 +270,26 @@ export function buildCalibrationReport({
   };
 }
 
+/*
+  extractSamplesFromHistory is the ONLY consumer of these rows — everything after
+  it works from `samples` — and it reads exactly four payload blocks:
+
+    extractPredictedTriple  -> evaluation.rawPoissonProbs1x2Pct / .modelProbs1x2Pct
+                               and probs   (alias of extractRawTriple, so the
+                               PREDICT_TRAIN_USE_FINAL_PROBS ordering is live here too)
+    payload.recommended     -> .pick / .confidence, the fallback behind the columns
+    payload.featureImportance -> .contributions / .items
+
+  Deliberately NOT the same list as calibration's: this job needs `recommended`
+  and `featureImportance`, and never touches `odds` or `modelMeta`.
+*/
+export const AUTO_CALIBRATION_PAYLOAD_BLOCKS = Object.freeze([
+  "evaluation",
+  "probs",
+  "recommended",
+  "featureImportance"
+]);
+
 async function loadSettledHistory({ days, limit }) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return { ok: false, error: "supabase_unavailable", rows: [] };
@@ -274,7 +298,10 @@ async function loadSettledHistory({ days, limit }) {
   const { data, error } = await supabase
     .from("predictions_history")
     .select(
-      "fixture_id, league_id, score_home, score_away, match_status, validation, recommended_pick, recommended_confidence, raw_payload, kickoff_at"
+      selectWithPayloadBlocks(
+        "fixture_id, league_id, score_home, score_away, match_status, validation, recommended_pick, recommended_confidence, kickoff_at",
+        AUTO_CALIBRATION_PAYLOAD_BLOCKS
+      )
     )
     .gte("kickoff_at", cutoff)
     .in("match_status", ["FT", "AET", "PEN"])
@@ -282,7 +309,9 @@ async function loadSettledHistory({ days, limit }) {
     .limit(limit);
 
   if (error) return { ok: false, error: error.message, rows: [] };
-  const rows = (data || []).filter((r) => r.score_home != null && r.score_away != null);
+  const rows = (data || [])
+    .filter((r) => r.score_home != null && r.score_away != null)
+    .map((row) => rehydratePayloadBlocks(row, AUTO_CALIBRATION_PAYLOAD_BLOCKS));
   return { ok: true, rows };
 }
 
