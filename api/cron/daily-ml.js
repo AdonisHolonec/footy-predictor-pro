@@ -35,6 +35,10 @@ import { captureOpsSnapshot } from "../../server-utils/observability/opsSnapshot
 import { logError, logInfo } from "../../server-utils/observability/logger.js";
 import { runAndPromote } from "../../server-utils/modelLab/BlendRecipeSelection.js";
 import { extractRawTriple, extractStackerModelTriple } from "../../server-utils/ml/extractRawTriple.js";
+import {
+  rehydratePayloadBlocks,
+  selectWithPayloadBlocks
+} from "../../server-utils/history/payloadProjection.js";
 import { getLeagueProfile } from "../../server-utils/leagueProfiles/LeagueProfile.js";
 import { computeLeagueProfileRecalibration } from "../../server-utils/leagueProfiles/computeLeagueProfileRecalibration.js";
 import { saveLeagueProfileOverlay } from "../../server-utils/leagueProfiles/leagueProfileOverlayStore.js";
@@ -60,6 +64,30 @@ const STACKER_WF_FOLDS = Math.max(2, Math.min(Number(process.env.STACKER_WF_FOLD
 const LEAGUE_PROFILE_WINDOW_DAYS = Math.max(30, Math.min(Number(process.env.LEAGUE_PROFILE_WINDOW_DAYS || 270), 720));
 const LEAGUE_PROFILE_MIN_SAMPLES = Math.max(20, Number(process.env.LEAGUE_PROFILE_MIN_SAMPLES || 60));
 const LEAGUE_PROFILE_SHRINKAGE_K = Math.max(1, Number(process.env.LEAGUE_PROFILE_SHRINKAGE_K || 80));
+
+/*
+  Which raw_payload blocks each job reads — the ONLY document data its query asks
+  for. Derived from source, not guessed; a consumer that starts reading a new
+  payload.<key> must add it here or it will silently read undefined.
+
+  Selecting the whole document instead of these blocks is what put this cron in
+  57014 every night since 2026-08-14; see server-utils/history/payloadProjection.js.
+*/
+
+// buildCalibrationGroups -> extractRawTriple (evaluation.rawPoissonProbs1x2Pct /
+// .modelProbs1x2Pct / probs) and extractSideMarketProbs
+// (evaluation.rawSideMarketsPct / .calibratedSideMarketsPct / probs).
+export const CALIBRATION_PAYLOAD_BLOCKS = Object.freeze(["evaluation", "probs"]);
+
+// buildStackerDataset -> extractStackerModelTriple (evaluation + probs, including
+// the raw inputs its Stage06 replay branch needs), payload.odds, and
+// payload.modelMeta.{eloSpread,dataQuality,leagueParams.homeAdv,leagueParams.rho}.
+export const STACKER_PAYLOAD_BLOCKS = Object.freeze(["evaluation", "probs", "odds", "modelMeta"]);
+
+// computeLeagueProfileRecalibration reads score_home / score_away / league_id and
+// NOTHING from the document — verified in source. So this job fetches no payload at
+// all, which is why it drops from a 57014 timeout to ~0.1 s.
+export const LEAGUE_PROFILE_PAYLOAD_BLOCKS = Object.freeze([]);
 
 function buildCalibrationGroups(rows) {
   const out = { "1": [], X: [], "2": [], O15: [], O25: [], U35: [], GG: [] };
@@ -224,21 +252,32 @@ async function upsertStackerWeights(supabase, { leagueId, modelVersion, weights,
   if (error) throw error;
 }
 
-async function loadSettledRows(supabase, days, limit) {
+/**
+ * Settled rows for one training window, carrying ONLY the payload blocks the
+ * caller named. Same filter, same order, same limit, same post-filter as before —
+ * the projection is the only thing that changed.
+ *
+ * @param {readonly string[]} blocks top-level raw_payload keys; [] fetches no document data
+ */
+async function loadSettledRows(supabase, days, limit, blocks) {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("predictions_history")
-    .select("league_id, score_home, score_away, match_status, raw_payload, kickoff_at")
+    .select(
+      selectWithPayloadBlocks("league_id, score_home, score_away, match_status, kickoff_at", blocks)
+    )
     .gte("kickoff_at", cutoff)
     .in("match_status", ["FT", "AET", "PEN"])
     .order("kickoff_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data || []).filter((r) => r.score_home != null && r.score_away != null);
+  return (data || [])
+    .filter((r) => r.score_home != null && r.score_away != null)
+    .map((row) => rehydratePayloadBlocks(row, blocks));
 }
 
 async function runCalibration(supabase, modelVersion) {
-  const rows = await loadSettledRows(supabase, CALIBRATION_WINDOW_DAYS, ROW_LIMIT);
+  const rows = await loadSettledRows(supabase, CALIBRATION_WINDOW_DAYS, ROW_LIMIT, CALIBRATION_PAYLOAD_BLOCKS);
   const byLeague = new Map();
   for (const r of rows) {
     const id = Number(r.league_id);
@@ -290,7 +329,7 @@ async function runCalibration(supabase, modelVersion) {
 }
 
 async function runStacker(supabase, modelVersion) {
-  const rows = await loadSettledRows(supabase, STACKER_WINDOW_DAYS, ROW_LIMIT);
+  const rows = await loadSettledRows(supabase, STACKER_WINDOW_DAYS, ROW_LIMIT, STACKER_PAYLOAD_BLOCKS);
   // Prefer current maps so historical rows without calibratedProbs replay Stage06.
   const allMaps = await loadCalibrationMaps(modelVersion).catch(() => ({}));
   const samples = buildStackerDataset(rows, allMaps);
@@ -354,7 +393,7 @@ async function runStacker(supabase, modelVersion) {
 }
 
 async function runLeagueProfileRecalibration(supabase, modelVersion) {
-  const rows = await loadSettledRows(supabase, LEAGUE_PROFILE_WINDOW_DAYS, ROW_LIMIT);
+  const rows = await loadSettledRows(supabase, LEAGUE_PROFILE_WINDOW_DAYS, ROW_LIMIT, LEAGUE_PROFILE_PAYLOAD_BLOCKS);
   const byLeague = new Map();
   for (const r of rows) {
     const id = Number(r.league_id);
