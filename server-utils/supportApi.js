@@ -1,4 +1,5 @@
-import { getRequester } from "./authAdmin.js";
+import { getRequester } from "./authAdmin.js";
+
 import { SAFETY_REASONS, validateAdminMessage } from "./contentSafety.js";
 import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
@@ -184,12 +185,18 @@ export function validateSupportPayload(body, { allowedCategories = SUPPORT_CATEG
     return { ok: false, error: `subject depăşeşte ${LIMITS.subject} caractere.` };
   }
 
-  const message = trimmedString(payload.message);
-  if (!message) return { ok: false, error: "message este obligatoriu." };
-  if (message.length > LIMITS.message) {
-    return { ok: false, error: `message depăşeşte ${LIMITS.message} caractere.` };
-  }
-
+  const message = trimmedString(payload.message);
+
+  if (!message) return { ok: false, error: "message este obligatoriu." };
+
+  if (message.length > LIMITS.message) {
+
+    return { ok: false, error: `message depăşeşte ${LIMITS.message} caractere.` };
+
+  }
+
+
+
   /*
     Content safety, on both fields a human administrator will actually read.
 
