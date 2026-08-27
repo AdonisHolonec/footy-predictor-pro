@@ -60,35 +60,52 @@ test.describe("profile & account surface", () => {
 
     /*
       The one thing the user CAN still do, and the only control in this card
-      that has to stay reachable. It is queried through the accessibility tree
-      on purpose — unlike everything above, it must be findable there.
+      that has to stay reachable. Queried through the accessibility tree on
+      purpose — unlike everything above, it must be findable there.
 
-      KNOWN DEFECT, which is why the assertions below stop where they do.
-      The card carries aria-disabled="true" and this CTA is a descendant of it,
-      so ARIA-aware consumers — a screen reader, and Playwright's own
-      actionability check — treat the button as disabled. The element itself is
-      not: no `disabled` attribute, tabIndex 0, outside the aria-hidden region,
-      and a sighted mouse user can click it and reach the support dialog. But
-      `toBeEnabled()` and `.click()` both fail against production today.
-
-      Asserting the element's own state is the honest limit here. Making the
-      stronger assertions pass needs aria-disabled moved off the card onto the
-      blurred content — an application change, and its own PR. This spec is
-      written so that it will keep passing once that lands, and the comment is
-      the record of why it does not assert more yet.
+      `toBeEnabled()` is the assertion that matters, and it is not redundant
+      with the attribute checks below it. The gate shipped with
+      aria-disabled="true" on the card, and because ARIA-aware consumers treat
+      a disabled ancestor as disabling its descendants, this CTA was announced
+      as unavailable while its own attributes looked perfectly correct. An
+      element-only assertion passed the entire time it was broken; this one did
+      not, which is how the defect surfaced.
     */
     const supportCta = page.getByRole("button", { name: /contactează administratorul/i }).first();
-    await expect(supportCta).toBeVisible();
+    await expect(supportCta).toBeEnabled();
     await expect(supportCta).not.toHaveAttribute("disabled", /.*/);
 
+    // Walking up is the part an element-scoped check cannot do.
     const ctaState = await supportCta.evaluate((el) => ({
+      insideAriaDisabled: Boolean(el.closest("[aria-disabled='true']")),
       insideAriaHidden: Boolean(el.closest("[aria-hidden='true']")),
       tabIndex: (el as { tabIndex: number }).tabIndex
     }));
+    expect(ctaState.insideAriaDisabled).toBe(false);
     // Inside the aria-hidden region it would be unreachable outright, rather
-    // than merely mislabelled — a much worse bug than the one above.
+    // than merely mislabelled — a worse bug than the one above.
     expect(ctaState.insideAriaHidden).toBe(false);
     expect(ctaState.tabIndex).toBe(0);
+
+    // Reachable by keyboard, which is exactly what the disabled controls
+    // around it deliberately skip.
+    await supportCta.focus();
+    await expect(supportCta).toBeFocused();
+
+    /*
+      The intended path out of the gate: unavailable → contact the
+      administrator → the support dialog the app already had. No new route, no
+      new endpoint, no mailto. We open it and stop there — the message is never
+      filled in and never sent.
+    */
+    await supportCta.click();
+    const dialog = page.getByRole("dialog").first();
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    await expect(dialog).toContainText(/raportează o problemă/i);
+
+    // Closed again, so this leaves nothing behind for the assertions after it.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
 
     // And the escape hatch back out of a subscription must exist too.
     await expect(page.getByRole("button", { name: /deconectare/i }).first()).toBeVisible();

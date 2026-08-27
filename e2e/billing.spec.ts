@@ -36,7 +36,10 @@ test.describe("billing", () => {
     // the wrong one: people expect their plan controls to exist.
     const card = page.getByTestId("subscription-card");
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card).toHaveAttribute("aria-disabled", "true");
+    // Deliberately NOT aria-disabled. The card is a plain div — role
+    // `generic`, which does not support the attribute — and marking it
+    // disabled leaked onto the support CTA inside it. See profile.spec.
+    await expect(card).not.toHaveAttribute("aria-disabled", /.*/);
 
     // Its content is unavailable: hidden from assistive technology and visibly
     // blurred. `aria-hidden` is the half that actually blocks the section —
