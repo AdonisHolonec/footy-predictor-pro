@@ -16,6 +16,8 @@ import DisplayNameCard from "../../components/ux/DisplayNameCard";
 import type { useAuth } from "../../hooks/useAuth";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 import { openBillingPortal, startCheckout } from "../../services/billingService";
+import SupportEntry from "../../components/support/SupportEntry";
+import { SUBSCRIPTIONS_TEMPORARILY_DISABLED } from "../../constants/featureGates";
 
 type AuthState = ReturnType<typeof useAuth>;
 
@@ -102,7 +104,34 @@ export default function ProfileView(props: ProfileViewProps) {
           )}
 
           {!tierQuotaExempt && (
-            <Card id="upgrade" className="scroll-mt-28">
+            <Card
+              id="upgrade"
+              className="relative scroll-mt-28 overflow-hidden"
+              aria-disabled={SUBSCRIPTIONS_TEMPORARILY_DISABLED || undefined}
+              data-testid="subscription-card"
+            >
+              {/*
+                TEMPORARY PRODUCT GATE — see constants/featureGates.ts.
+
+                The card keeps its place and its dimensions: collapsing it would
+                leave a hole where people expect their plan controls, and hiding
+                it entirely would read as "this feature is gone" rather than
+                "come back later". So the real content stays mounted and blurs,
+                and the explanation sits sharply on top of it.
+
+                `aria-hidden` plus disabled buttons is what actually blocks the
+                section: blur and opacity are decoration a screen reader cannot
+                see, and a disabled <button> is skipped by Tab. The support CTA
+                lives OUTSIDE this wrapper so it stays reachable.
+
+                Nothing here touches Stripe. startCheckout and openBillingPortal
+                are still imported, still wired, still correct — only unreachable.
+              */}
+              <div
+                data-testid="subscription-content"
+                aria-hidden={SUBSCRIPTIONS_TEMPORARILY_DISABLED || undefined}
+                className={SUBSCRIPTIONS_TEMPORARILY_DISABLED ? "select-none blur-[3px]" : undefined}
+              >
               <h2 className="font-display text-[length:var(--fp-section)] font-semibold">{t("dash.subscription")}</h2>
               <p className="mt-1 text-sm text-[var(--fp-text-muted)]">{t("dash.subscriptionSub")}</p>
               {isSubscriptionExpired && (
@@ -126,7 +155,7 @@ export default function ProfileView(props: ProfileViewProps) {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
-                  disabled={!billingConfigured || billingBusy !== null}
+                  disabled={SUBSCRIPTIONS_TEMPORARILY_DISABLED || !billingConfigured || billingBusy !== null}
                   loading={billingBusy === "premium"}
                   onClick={async () => {
                     setBillingBusy("premium");
@@ -142,7 +171,7 @@ export default function ProfileView(props: ProfileViewProps) {
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled={!billingConfigured || billingBusy !== null}
+                  disabled={SUBSCRIPTIONS_TEMPORARILY_DISABLED || !billingConfigured || billingBusy !== null}
                   loading={billingBusy === "ultra"}
                   onClick={async () => {
                     setBillingBusy("ultra");
@@ -158,7 +187,7 @@ export default function ProfileView(props: ProfileViewProps) {
                 </Button>
                 <Button
                   variant="ghost"
-                  disabled={!billingConfigured || billingBusy !== null}
+                  disabled={SUBSCRIPTIONS_TEMPORARILY_DISABLED || !billingConfigured || billingBusy !== null}
                   loading={billingBusy === "portal"}
                   onClick={async () => {
                     setBillingBusy("portal");
@@ -175,6 +204,42 @@ export default function ProfileView(props: ProfileViewProps) {
               </div>
               {!billingConfigured && (
                 <p className="mt-3 text-xs text-[var(--fp-text-muted)]">{t("dash.stripeMissing")}</p>
+              )}
+              </div>
+
+              {SUBSCRIPTIONS_TEMPORARILY_DISABLED && (
+                <div
+                  data-testid="subscription-gate"
+                  /*
+                    The registered `fp-bg-card` colour, not the raw token.
+                    Tailwind 3.4 silently drops an opacity modifier composed onto
+                    an arbitrary var() colour: the whole class disappears and the
+                    overlay renders with no background at all, leaving the blurred
+                    content bleeding through the message. tokens.guard.test.ts
+                    exists for exactly that and caught it here.
+                  */
+                  className="absolute inset-0 flex items-center justify-center bg-fp-bg-card/80 p-4"
+                >
+                  {/* Sharp on purpose: the blur belongs to what is unavailable,
+                      never to the sentence explaining why. */}
+                  <div className="max-w-sm space-y-3 text-center">
+                    <Badge tone="warning">{t("account.subscriptionUnavailable.badge")}</Badge>
+                    <p className="font-display text-sm font-semibold text-[var(--fp-text)]">
+                      {t("account.subscriptionUnavailable.title")}
+                    </p>
+                    <p className="text-sm text-[var(--fp-text-muted)]">
+                      {t("account.subscriptionUnavailable.message")}
+                    </p>
+                    {/* The SAME SupportEntry both authenticated trees already
+                        mount — one primary button opening the existing support
+                        dialog. No new route, no new endpoint, no email link. */}
+                    <SupportEntry
+                      variant="cta"
+                      label={t("account.subscriptionUnavailable.cta")}
+                      className="flex justify-center"
+                    />
+                  </div>
+                </div>
               )}
             </Card>
           )}

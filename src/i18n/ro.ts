@@ -707,6 +707,12 @@ export const ro: Dict = {
       unitHour: "h",
       unitMinute: "m"
     },
+    subscriptionUnavailable: {
+      title: "Secțiunea abonament este indisponibilă momentan.",
+      message: "Dacă îți dorești un plan suplimentar cu mai multe statistici, analize și predicții, contactează administratorul folosind formularul de suport.",
+      cta: "Contactează administratorul",
+      badge: "Indisponibil temporar"
+    },
     displayName: {
       hint: "Între {min} și {max} de caractere.",
       validation: {
