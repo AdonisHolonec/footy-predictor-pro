@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Button from "../../design-system/Button";
+import PredictCta from "./PredictCta";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
 import { DESKTOP_SECONDARY_NAV_ITEMS, PRIMARY_NAV_ITEMS, type AppNavView } from "./appNav";
@@ -121,7 +121,7 @@ export default function ConsumerShell({
             occupy the same 56px of height and about half the width, and the whole
             header fits on one line again.
           */}
-          <div className="flex min-w-0 shrink flex-col justify-center gap-0.5">
+          <div className="flex min-w-0 shrink flex-col justify-center gap-0.5 overflow-hidden">
             <button
               type="button"
               onClick={() => onNavigate("home")}
@@ -140,30 +140,32 @@ export default function ConsumerShell({
               title={t("shell.selectDate")}
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="h-6 w-[6.6rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[10px] font-medium leading-none text-[var(--fp-text)] sm:h-7 sm:w-[7.2rem] sm:text-xs"
+              className="h-6 w-full min-w-0 max-w-[6.6rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[10px] font-medium leading-none text-[var(--fp-text)] sm:h-7 sm:max-w-[7.2rem] sm:text-xs"
             />
           </div>
 
           {desktopNav}
 
           {/* The cards sit on the same line now — the stacked brand/date made room. */}
-          {statusSlot ? <div className="ml-auto flex min-w-0 shrink items-center">{statusSlot}</div> : null}
+          {/*
+            shrink-0: the cards size themselves to their own content and must
+            not be squeezed past it — letting this wrapper shrink slid the
+            referral card underneath Predict at 390px. The brand column, which
+            is min-w-0 and truncates, absorbs a narrow viewport instead.
+          */}
+          {statusSlot ? <div className="ml-auto flex shrink-0 items-center">{statusSlot}</div> : null}
 
           <div className={`${statusSlot ? "" : "ml-auto "}flex shrink-0 items-center gap-1.5 sm:gap-2`}>
             {onPredict ? (
               <Tooltip label={t("shell.predictTip")} align="end">
                 <span className="inline-flex">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    loading={predictBusy}
-                    onClick={onPredict}
-                    className="touch-target shrink-0 font-bold"
-                    aria-label={t("shell.predictTip")}
-                    aria-busy={predictBusy}
-                  >
-                    {t("shell.predict")}
-                  </Button>
+                  {/*
+                    PredictCta, not design-system/Button: this one control carries
+                    a layered animated treatment that would be wrong on the fifty
+                    other Buttons in the app. It owns no logic — the handler, the
+                    busy flag and the quota rules all still live above it.
+                  */}
+                  <PredictCta onPredict={onPredict} busy={predictBusy} hint={t("shell.predictTip")} />
                 </span>
               </Tooltip>
             ) : null}

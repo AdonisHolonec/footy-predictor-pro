@@ -29,8 +29,17 @@ type Props = {
   /** UNDERLYING paid tier, independent of any bonus. Explains the sub-label. */
   requestedTier: UserTier;
   hasActiveBonus: boolean;
-  /** ISO-8601 instant the bonus ends, or null. The countdown's only source. */
+  /** ISO-8601 instant the bonus ends, or null. */
   bonusUntil: string | null;
+  /** ISO-8601 instant the PAID subscription lapses, or null. */
+  subscriptionUntil?: string | null;
+  /** ISO-8601 instant the 24h trial lapses, or null. */
+  trialUntil?: string | null;
+  /**
+   * Free-tier daily predictions. A free plan does not expire, so this is the
+   * only honest answer to "how much have I got left" for it.
+   */
+  quota?: { used: number; limit: number | null } | null;
   /** Opens the full referral surface in Account. Never claims anything. */
   onOpenReferral: () => void;
   /**
@@ -74,11 +83,49 @@ export function formatBonusRemaining(ms: number, unitDay: string, unitHour: stri
   return parts.join(" ");
 }
 
+/**
+ * When does the access the user has RIGHT NOW run out?
+ *
+ * Three different grants can be running at once — a referral bonus, a 24h trial
+ * and a paid subscription — and the plan card has one line to answer one
+ * question. The honest answer is the LAST of them to expire: that is the moment
+ * the current tier actually stops.
+ *
+ * Every input is the server's, unchanged. Nothing here re-derives entitlement;
+ * it only picks which already-granted instant to display.
+ *
+ * Returns null when nothing is counting down, which is the normal state of a
+ * free plan — free does not expire, so it has no time to show.
+ */
+export function resolveAccessEnd(input: {
+  hasActiveBonus: boolean;
+  bonusUntil?: string | null;
+  subscriptionUntil?: string | null;
+  trialUntil?: string | null;
+  now: number;
+}): number | null {
+  const at = (iso?: string | null) => {
+    if (!iso) return Number.NaN;
+    const ts = Date.parse(iso);
+    // Already past counts as no grant: an expired instant is not "time available".
+    return Number.isFinite(ts) && ts > input.now ? ts : Number.NaN;
+  };
+  const ends = [
+    input.hasActiveBonus ? at(input.bonusUntil) : Number.NaN,
+    at(input.trialUntil),
+    at(input.subscriptionUntil)
+  ].filter(Number.isFinite) as number[];
+  return ends.length ? Math.max(...ends) : null;
+}
+
 export default function PlanHeaderStrip({
   tier,
   requestedTier,
   hasActiveBonus,
   bonusUntil,
+  subscriptionUntil = null,
+  trialUntil = null,
+  quota = null,
   onOpenReferral,
   bonus = null,
   now
@@ -94,7 +141,15 @@ export default function PlanHeaderStrip({
    */
   // Value unused: re-rendering each minute IS the effect.
   const [, setTick] = useState(0);
-  const counting = hasActiveBonus && Boolean(bonusUntil);
+  const clock = now ?? Date.now();
+  /*
+    STILL ONE TIMER. It used to start only for a bonus, which is why a paying
+    Premium user saw no time at all; it now covers every grant that can expire,
+    through the same single interval. A free plan with nothing running still
+    creates no interval.
+  */
+  const accessEnd = resolveAccessEnd({ hasActiveBonus, bonusUntil, subscriptionUntil, trialUntil, now: clock });
+  const counting = accessEnd !== null;
   useEffect(() => {
     if (!counting || now !== undefined) return;
     const id = setInterval(() => setTick((n) => n + 1), 60_000);
@@ -107,15 +162,23 @@ export default function PlanHeaderStrip({
     a dependency to work — the confusing spelling of the same thing, for a
     calculation this cheap.
   */
-  const end = counting && bonusUntil ? Date.parse(bonusUntil) : Number.NaN;
-  const remaining = Number.isFinite(end)
-    ? formatBonusRemaining(
-        end - (now ?? Date.now()),
-        t("account.header.unitDay"),
-        t("account.header.unitHour"),
-        t("account.header.unitMinute")
-      )
-    : "";
+  const remaining =
+    accessEnd !== null
+      ? formatBonusRemaining(
+          accessEnd - clock,
+          t("account.header.unitDay"),
+          t("account.header.unitHour"),
+          t("account.header.unitMinute")
+        )
+      : "";
+
+  /*
+    A free plan has no expiry, so there is no countdown to show — and inventing
+    one would be a lie. What a free user actually has left today is predictions,
+    which the server already sends, so that is what the second line reports.
+  */
+  const quotaLeft =
+    !remaining && quota && quota.limit !== null ? Math.max(0, quota.limit - quota.used) : null;
 
   /*
     The sub-label answers "why am I on this tier". A paying Premium user running
@@ -141,8 +204,28 @@ export default function PlanHeaderStrip({
           title: t("account.header.notice.planTitle", { days: bonus.days }),
           detail: t("account.header.notice.planSubject")
         },
+        /*
+          FIXED COPY AND THE NAME TRAVEL SEPARATELY.
+
+          They used to be one interpolated string, so the single clamp that
+          bounds an unknowable name also cut the product's own words — at 390px
+          "Invitație acceptată" lost its last characters despite being fixed
+          text that always fits when nothing else is competing for the space.
+
+          `name` is null whenever the whole message is fixed (invitee, or an
+          inviter with no display name), and the card renders one unclamped
+          span for those. `detail` keeps the assembled sentence for the screen
+          reader, which needs it whole.
+        */
         referral: {
           title: t("account.header.notice.referralTitle"),
+          name: bonus.role === "inviter" && bonus.inviteeName ? bonus.inviteeName : null,
+          fixed:
+            bonus.role === "invitee"
+              ? t("account.header.notice.referralAccepted")
+              : bonus.inviteeName
+                ? t("account.header.notice.referralJoinedSuffix")
+                : t("account.header.notice.referralJoinedAnonymous"),
           detail:
             bonus.role === "invitee"
               ? t("account.header.notice.referralAccepted")
@@ -155,7 +238,10 @@ export default function PlanHeaderStrip({
 
   return (
     <div
-      className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2"
+      /* gap-1: the fixed notification needed ~9px it did not have at 390.
+         Two px here and two px of card padding each is where it came from —
+         cheaper than clipping the product's own words. */
+      className="flex min-w-0 shrink items-center gap-1 sm:gap-2"
       data-testid="plan-header-strip"
       data-notice={notice ? "true" : undefined}
     >
@@ -167,7 +253,7 @@ export default function PlanHeaderStrip({
           min-w-0 the nowrap "+5 zile" spilled straight over the next card. The
           referral card beside it is the one that gives way, by truncating a name.
         */
-        className={`flex shrink-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border px-2 py-1 leading-tight ${TONE[tier]}`}
+        className={`flex shrink-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border px-1.5 py-1 leading-tight sm:px-2 ${TONE[tier]}`}
       >
         {/* nowrap: "+5 zile" breaking across two lines grew the card past the
             56px bar it has to live inside. */}
@@ -180,8 +266,34 @@ export default function PlanHeaderStrip({
           AND when it ends: showing only the clock hides what happens afterwards,
           showing only the words hides how long they have.
         */}
-        <span className="truncate whitespace-nowrap text-[10px] font-semibold opacity-80" data-testid="plan-detail">
-          {notice ? notice.plan.detail : remaining ? `${detail} · ${remaining}` : detail}
+        {/*
+          nowrap WITHOUT truncate. The card is shrink-0 and sized by this line,
+          so clipping here would produce exactly the "ULTRA …" / "11z…" that
+          showing the time is meant to prevent. The referral card gives way.
+        */}
+        <span className="whitespace-nowrap text-[10px] font-semibold opacity-80" data-testid="plan-detail">
+          {notice ? (
+            notice.plan.detail
+          ) : remaining ? (
+            <>
+              {/*
+                The REASON is the first thing to go when space runs out, and the
+                only thing: below sm the bar cannot hold tier + reason + time +
+                offer + CTA at once, and of those the reason is the one a user
+                can look up in Account. Tier and time both survive every width.
+              */}
+              <span className="hidden opacity-80 sm:inline">{detail}</span>
+              <span className="hidden sm:inline">{" · "}</span>
+              {/* Mono + bold: the number is the thing being looked up. */}
+              <span className="font-mono font-bold opacity-100" data-testid="plan-time">
+                {remaining}
+              </span>
+            </>
+          ) : quotaLeft !== null ? (
+            <span data-testid="plan-time">{t("account.header.quotaLeft", { count: quotaLeft })}</span>
+          ) : (
+            detail
+          )}
         </span>
       </div>
 
@@ -190,20 +302,58 @@ export default function PlanHeaderStrip({
         onClick={onOpenReferral}
         data-testid="referral-cta"
         title={t("account.header.referralHint")}
-        // min-w-0 so this card, not the plan card, absorbs a narrow viewport.
-        className="flex min-w-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/10 px-2 py-1 text-left leading-tight text-[var(--fp-accent)] transition-colors hover-fine:bg-fp-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+        /*
+          shrink-0, not min-w-0. Letting this card absorb the whole squeeze is
+          what clipped the offer: at 390px "+5 zile Ultra" became "+5 zile Ul…",
+          which sells nothing. Its content is short and fixed, so it is sized to
+          fit; only a NAME is unbounded, and the notice branch caps that itself.
+        */
+        className="flex shrink-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/10 px-1.5 py-1 text-left leading-tight sm:px-2 text-[var(--fp-accent)] transition-colors hover-fine:bg-fp-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
       >
         {/* nowrap: "+5 zile" breaking across two lines grew the card past the
             56px bar it has to live inside. */}
         <span className="whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-wider">
           {notice ? notice.referral.title : t("account.header.invite")}
         </span>
-        <span
-          className="max-w-[8rem] truncate whitespace-nowrap text-[10px] font-semibold"
-          data-testid="referral-detail"
-        >
-          {notice ? notice.referral.detail : t("account.header.inviteReward")}
-        </span>
+        {/*
+          The fixed offer and a dynamic name need opposite treatment, so they no
+          longer share one className: the offer must never be cut, the name must
+          always be allowed to be.
+        */}
+        {notice ? (
+          notice.referral.name ? (
+            /*
+              Name + fixed words, in two containers rather than one.
+
+              The clamp belongs to the name alone: it is the only unknowable
+              part, so it is the only part allowed to lose characters. The
+              words after it are the product's own and stay whole at every
+              width, which is why they carry shrink-0 rather than sharing the
+              truncate above them.
+            */
+            <span className="flex min-w-0 items-baseline gap-1 text-[10px] font-semibold" data-testid="referral-detail">
+              <span className="min-w-0 max-w-[3.2rem] truncate sm:max-w-[8rem]" data-testid="referral-name">
+                {notice.referral.name}
+              </span>
+              <span className="shrink-0 whitespace-nowrap" data-testid="referral-fixed">
+                {notice.referral.fixed}
+              </span>
+            </span>
+          ) : (
+            /* Entirely fixed copy — nothing here may ever be cut. */
+            <span
+              className="whitespace-nowrap text-[10px] font-semibold"
+              data-testid="referral-detail"
+              data-fixed="true"
+            >
+              {notice.referral.fixed}
+            </span>
+          )
+        ) : (
+          <span className="whitespace-nowrap text-[10px] font-semibold" data-testid="referral-detail">
+            {t("account.header.inviteReward")}
+          </span>
+        )}
       </button>
 
       {/*

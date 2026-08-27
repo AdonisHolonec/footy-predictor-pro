@@ -40,7 +40,7 @@ export const en: Dict = {
     searchTeams: "Search teams…",
     refresh: "Refresh",
     refreshPredictions: "Reload saved picks (no new generation)",
-    predict: "Predict",
+    predict: "Generate Predictions",
     predictTip: "Generate predictions for the selected dates",
     plus1Day: "+1 day",
     plus2Days: "+2 days",
@@ -693,6 +693,8 @@ export const en: Dict = {
         planSubject: "Ultra",
         referralTitle: "Congrats!",
         referralJoined: "{name} joined",
+        /* The fixed half, rendered beside the name so only the name may clip. */
+        referralJoinedSuffix: "joined",
         referralJoinedAnonymous: "Someone joined",
         referralAccepted: "Invitation accepted"
       },
@@ -703,6 +705,7 @@ export const en: Dict = {
       invite: "Invite",
       inviteReward: "+5 Ultra days",
       referralHint: "You and your friend both get 5 Ultra days",
+      quotaLeft: "{count} predictions today",
       unitDay: "d",
       unitHour: "h",
       unitMinute: "m"
