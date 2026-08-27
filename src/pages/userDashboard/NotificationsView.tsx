@@ -11,7 +11,8 @@ import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 import type { HistoryEntry, PredictionRow } from "../../types";
-import type { deriveNotifications } from "../../utils/deriveNotifications";
+import type { deriveNotifications } from "../../utils/deriveNotifications";
+import ReferralBonusHistory from "../../components/ux/ReferralBonusHistory";
 
 type NotificationItems = ReturnType<typeof deriveNotifications>;
 
@@ -61,6 +62,13 @@ export default function NotificationsView(props: NotificationsViewProps) {
   const { t } = useLocale();
   return (
         <section className="space-y-6">
+          {/*
+            The header cards announce a referral reward for five seconds in a few
+            words; this is where the full sentence stays afterwards. It renders
+            nothing at all for the majority of users, who have no bonuses.
+          */}
+          <ReferralBonusHistory />
+
           <NotificationsSection
             items={notificationItems}
             seenIds={prefs.notificationsSeenIds}

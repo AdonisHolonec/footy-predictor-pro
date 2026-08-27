@@ -79,7 +79,23 @@ export function sanitizeDisplayName(raw) {
  * Never throws. A notification is the least important thing on the page; if any
  * part of this fails the caller gets an empty list and the app carries on.
  */
+/**
+ * Every referral bonus this user has received, acknowledged or not.
+ *
+ * The header cards show a terse notice for five seconds and then it is gone;
+ * this is what Account › Notifications reads, so the full sentence stays
+ * available afterwards. Same shape, same allow-list, same name resolution — the
+ * only difference is that acknowledgement is not used as a filter.
+ */
+export async function listReferralBonusHistory(userId, { supabase } = {}) {
+  return listBonuses(userId, { supabase, onlyPending: false });
+}
+
 export async function listPendingReferralBonuses(userId, { supabase } = {}) {
+  return listBonuses(userId, { supabase, onlyPending: true });
+}
+
+async function listBonuses(userId, { supabase, onlyPending } = {}) {
   const db = supabase || getSupabaseAdmin();
   if (!db || !userId) return [];
 
@@ -106,7 +122,8 @@ export async function listPendingReferralBonuses(userId, { supabase } = {}) {
     if (seenError) return [];
     const acknowledged = new Set((seen || []).map((row) => row.grant_id));
 
-    const pending = grants.filter((g) => !acknowledged.has(g.id));
+    // History keeps everything; the header notice keeps only what is unannounced.
+    const pending = onlyPending ? grants.filter((g) => !acknowledged.has(g.id)) : grants;
     if (pending.length === 0) return [];
 
     // 3 + 4 — resolve invitee names, but ONLY for inviter grants. An invitee is

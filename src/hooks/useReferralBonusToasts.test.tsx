@@ -135,6 +135,73 @@ describe("activity-driven delivery", () => {
   });
 });
 
+/**
+ * Let the mocked fetch resolve WITHOUT advancing the clock.
+ *
+ * `vi.waitFor` drives fake timers forward while it polls, which silently ate the
+ * whole five-second window before the assertions below could run — the first
+ * version of these tests failed for that reason, not because the hook was wrong.
+ */
+async function flushFetch() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+describe("the five-second lifecycle", () => {
+  /**
+   * The timer moved HERE when the notice moved into the header cards. Those cards
+   * are permanent chrome with no dismissal of their own, so if the hook did not
+   * own the clock nothing would ever clear the notice. These tests deliberately
+   * exercise the hook the application actually mounts.
+   */
+  it("clears the notice after exactly five seconds", async () => {
+    vi.useFakeTimers();
+    fetchReferralBonuses.mockResolvedValue([bonus("a")]);
+    render(<Harness userId="u1" refreshKey={0} />);
+    await flushFetch();
+    expect(screen.getByTestId("current").textContent).toBe("a");
+
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(screen.getByTestId("current").textContent, "cleared early").toBe("a");
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(screen.getByTestId("current").textContent, "still showing at 5s").toBe("none");
+    vi.useRealTimers();
+  });
+
+  it("gives each queued reward its own full five seconds", async () => {
+    // Two rewards must not share one window — the second starts its own.
+    vi.useFakeTimers();
+    fetchReferralBonuses.mockResolvedValue([bonus("second"), bonus("first")]);
+    render(<Harness userId="u1" refreshKey={0} />);
+    await flushFetch();
+    expect(screen.getByTestId("current").textContent).toBe("first");
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(screen.getByTestId("current").textContent).toBe("second");
+
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(screen.getByTestId("current").textContent, "second reward was cut short").toBe("second");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(screen.getByTestId("current").textContent).toBe("none");
+    vi.useRealTimers();
+  });
+
+  it("does not leave a timer running after unmount", async () => {
+    vi.useFakeTimers();
+    fetchReferralBonuses.mockResolvedValue([bonus("a")]);
+    const { unmount } = render(<Harness userId="u1" refreshKey={0} />);
+    await flushFetch();
+    expect(screen.getByTestId("current").textContent).toBe("a");
+    unmount();
+    // No act() warning and no state update on an unmounted tree.
+    await vi.advanceTimersByTimeAsync(10_000);
+    vi.useRealTimers();
+  });
+});
+
 describe("resilience", () => {
   it("a failing fetch leaves the app with nothing to show and no throw", async () => {
     fetchReferralBonuses.mockResolvedValue([]);

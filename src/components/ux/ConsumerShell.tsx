@@ -15,6 +15,12 @@ type Props = {
   predictBusy?: boolean;
   /** In-play fixtures right now — a count badge on Matches, never a destination. */
   liveCount?: number;
+  /**
+   * Permanent status/action content for the chrome — the plan card and referral
+   * CTA. A SLOT rather than props, so the shell keeps knowing nothing about
+   * entitlement: the dashboard already holds that state and renders it here.
+   */
+  statusSlot?: ReactNode;
   children: ReactNode;
 };
 
@@ -40,6 +46,7 @@ export default function ConsumerShell({
   onPredict,
   predictBusy,
   liveCount = 0,
+  statusSlot,
   children
 }: Props) {
   const { t } = useLocale();
@@ -106,19 +113,24 @@ export default function ConsumerShell({
           data-testid="context-bar"
           className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8"
         >
-          <button
-            type="button"
-            onClick={() => onNavigate("home")}
-            title={t("nav.today")}
-            className="min-w-0 shrink truncate font-display text-base font-bold tracking-tight text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:text-lg"
-            aria-label={t("shell.brandAria")}
-          >
-            Footy<span className="text-[var(--fp-accent)]">Predictor</span>
-          </button>
+          {/*
+            BRAND OVER DATE, one stacked column.
 
-          {desktopNav}
-
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            Side by side these two ate roughly a third of the bar, which is why the
+            plan and referral cards had to spill onto a second row. Stacked, they
+            occupy the same 56px of height and about half the width, and the whole
+            header fits on one line again.
+          */}
+          <div className="flex min-w-0 shrink flex-col justify-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onNavigate("home")}
+              title={t("nav.today")}
+              className="min-w-0 truncate text-left font-display text-sm font-bold leading-none tracking-tight text-[var(--fp-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fp-accent)] sm:text-base"
+              aria-label={t("shell.brandAria")}
+            >
+              Footy<span className="text-[var(--fp-accent)]">Predictor</span>
+            </button>
             <label className="sr-only" htmlFor="consumer-date">
               {t("shell.date")}
             </label>
@@ -128,8 +140,16 @@ export default function ConsumerShell({
               title={t("shell.selectDate")}
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="h-9 w-[6.4rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[11px] font-medium text-[var(--fp-text)] sm:w-[7.5rem] sm:px-1.5 sm:text-sm"
+              className="h-6 w-[6.6rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[10px] font-medium leading-none text-[var(--fp-text)] sm:h-7 sm:w-[7.2rem] sm:text-xs"
             />
+          </div>
+
+          {desktopNav}
+
+          {/* The cards sit on the same line now — the stacked brand/date made room. */}
+          {statusSlot ? <div className="ml-auto flex min-w-0 shrink items-center">{statusSlot}</div> : null}
+
+          <div className={`${statusSlot ? "" : "ml-auto "}flex shrink-0 items-center gap-1.5 sm:gap-2`}>
             {onPredict ? (
               <Tooltip label={t("shell.predictTip")} align="end">
                 <span className="inline-flex">
@@ -149,6 +169,7 @@ export default function ConsumerShell({
             ) : null}
           </div>
         </div>
+
       </header>
 
       <main className="mx-auto max-w-[var(--fp-container)] px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8 lg:pb-5">

@@ -676,12 +676,36 @@ export const ro: Dict = {
       errorUnavailable: "Serviciul de invitații nu este disponibil momentan.",
       retry: "Reîncearcă",
       notification: {
+        historyTitle: "Bonusuri din recomandări",
+        historyDescription: "Toate zilele Ultra primite prin recomandări.",
+        planTitleLong: "+{days} zile Ultra",
         inviterTitle: "Felicitări!",
         inviterMessage: "{name} s-a alăturat prin recomandarea ta. Ai primit +{days} zile Ultra.",
         inviterMessageAnonymous: "Cineva s-a alăturat prin recomandarea ta. Ai primit +{days} zile Ultra.",
         inviteeTitle: "Felicitări!",
         inviteeMessage: "Ai primit +{days} zile Ultra pentru că ai acceptat o invitație."
       }
+    },
+    header: {
+      tier: { free: "Free", premium: "Premium", ultra: "Ultra" },
+      notice: {
+        planTitle: "+{days} zile",
+        planSubject: "Ultra",
+        referralTitle: "Felicitări!",
+        referralJoined: "{name} s-a alăturat",
+        referralJoinedAnonymous: "Cineva s-a alăturat",
+        referralAccepted: "Invitație acceptată"
+      },
+      freePlan: "Plan gratuit",
+      subscriptionActive: "Abonament activ",
+      bonusActive: "Bonus activ",
+      premiumPlusBonus: "Premium + bonus",
+      invite: "Invită",
+      inviteReward: "+5 zile Ultra",
+      referralHint: "Tu și prietenul tău primiți 5 zile Ultra",
+      unitDay: "z",
+      unitHour: "h",
+      unitMinute: "m"
     },
     displayName: {
       hint: "Între {min} și {max} de caractere.",

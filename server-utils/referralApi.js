@@ -2,7 +2,11 @@ import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { getRequester } from "./authAdmin.js";
 import { resolveClaimIpHash } from "./referralIpHash.js";
 import { attemptQualificationForUser } from "./referralRewards.js";
-import { acknowledgeReferralBonuses, listPendingReferralBonuses } from "./referralNotifications.js";
+import {
+  acknowledgeReferralBonuses,
+  listPendingReferralBonuses,
+  listReferralBonusHistory
+} from "./referralNotifications.js";
 import { validateDisplayName } from "./contentSafety.js";
 import { CLAIM_REASONS, claimReferral, getOrCreateReferralCode, getReferralStatus } from "./referrals.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
@@ -170,7 +174,15 @@ async function handleStatus(req, res, ctx) {
  * client, because none of them is in the payload to begin with.
  */
 async function handleBonus(req, res, ctx) {
-  const bonuses = await listPendingReferralBonuses(ctx.user.id, { supabase: ctx.supabase });
+  /*
+    `history=1` is what Account > Notifications reads: the same payload, minus the
+    acknowledgement filter. The header notice is transient by design, so without
+    this the full sentence would be unrecoverable the moment it faded.
+  */
+  const wantsHistory = String(req.query?.history || "") === "1";
+  const bonuses = wantsHistory
+    ? await listReferralBonusHistory(ctx.user.id, { supabase: ctx.supabase })
+    : await listPendingReferralBonuses(ctx.user.id, { supabase: ctx.supabase });
   return res.status(200).json({ ok: true, bonuses });
 }
 
