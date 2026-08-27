@@ -84,6 +84,8 @@ export default function UserDashboard() {
     tierQuotaExempt,
     predictCountToday,
     predictLimitToday,
+    /** Furthest-out active 24h trial expiry, or null. Already computed by useAuth. */
+    trialExpiresAt,
     session,
     logout,
     activate24hTrial,
@@ -573,6 +575,19 @@ export default function UserDashboard() {
           requestedTier={entitlement?.requestedTier ?? userTier}
           hasActiveBonus={Boolean(entitlement?.hasActiveBonus)}
           bonusUntil={entitlement?.bonusUntil ?? null}
+          /*
+            The other two grants that can be running. All three are the server's
+            own instants, forwarded unchanged — the card picks which one to show,
+            it never decides what the user is entitled to.
+
+            subscriptionUntil is gated on hasActiveSubscription because
+            subscriptionExpiresAt outlives a lapsed plan: passing it unguarded
+            would count down time that has already run out.
+          */
+          subscriptionUntil={entitlement?.hasActiveSubscription ? (entitlement?.subscriptionExpiresAt ?? null) : null}
+          trialUntil={trialExpiresAt}
+          /* A free plan does not expire; predictions left today is what it has. */
+          quota={{ used: predictCountToday, limit: predictLimitToday }}
           onOpenReferral={() => handleNav("profile")}
           /*
             The reward is announced in the cards themselves rather than in a

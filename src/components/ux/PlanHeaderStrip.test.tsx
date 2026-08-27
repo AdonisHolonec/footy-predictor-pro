@@ -254,9 +254,12 @@ describe("reward notice lives in the cards, not in a toast", () => {
 
   it("a long name truncates instead of stretching the header", () => {
     renderStrip({ bonus: { ...REWARD, inviteeName: "Alexandru-Constantin Dumitrescu" } });
-    const el = screen.getByTestId("referral-detail");
-    expect(el.className).toContain("truncate");
-    expect(el.className).toContain("whitespace-nowrap");
+    // The clamp moved off the whole message onto the name alone: it used to cut
+    // the product's own words along with the name it was there to bound.
+    const name = screen.getByTestId("referral-name");
+    expect(name.className).toContain("truncate");
+    expect(name.className).toMatch(/max-w-/);
+    expect(screen.getByTestId("referral-fixed").className).not.toContain("truncate");
     // The reward half stays fully readable regardless of the name's length.
     expect(card().textContent).toContain("+5");
   });

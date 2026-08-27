@@ -1,0 +1,160 @@
+/*
+  The Predict CTA's own surface treatment.
+
+  Adapted from a Uiverse concept, but only the IDEAS survived: layered inner and
+  drop shadows for depth, a top highlight that lifts on hover, and letters that
+  shimmer in sequence. Every colour is ours — the snippet's #101010 body and its
+  blue highlight hue would have put a black button in a red product.
+
+  It lives in its own file rather than index.css because it is one component's
+  treatment, not a token or a shared utility. Nothing else uses these classes.
+*/
+
+.fp-predict {
+  --fp-predict-radius: var(--fp-radius-sm);
+  /* Brand red, never a literal — theming and dark mode both flow through this. */
+  --fp-predict-face: var(--fp-accent);
+  --fp-predict-face-hi: var(--fp-accent-hover);
+  --fp-predict-transition: 0.32s;
+
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--fp-predict-radius);
+  background-color: var(--fp-predict-face);
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+
+  /* Depth, kept shallow: this sits in a 56px bar, not on a landing page. */
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.28),
+    inset 0 2px 4px rgba(255, 255, 255, 0.14),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.16),
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 2px 8px color-mix(in srgb, var(--fp-accent) 28%, transparent);
+
+  transition:
+    background-color var(--fp-predict-transition),
+    box-shadow var(--fp-predict-transition),
+    border-color var(--fp-predict-transition),
+    transform 0.12s ease-out;
+}
+
+/*
+  The top highlight. Hidden at rest, lifted on hover/focus — the snippet's
+  ::after idea, re-hued to white over red instead of blue over black.
+
+  ::before, NOT ::after. `.touch-target` expands this button's hit area to 44px
+  through its own ::after, and a second ::after here merges with it — the
+  pointer-events:none below would have silently switched the expanded target
+  off. The two pseudo-elements must not collide.
+*/
+.fp-predict::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(0deg, transparent 55%, rgba(255, 255, 255, 0.28));
+  opacity: 0;
+  transition: opacity var(--fp-predict-transition);
+}
+
+.fp-predict:hover:not(:disabled) {
+  background-color: var(--fp-predict-face-hi);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.34),
+    inset 0 2px 4px rgba(255, 255, 255, 0.18),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 3px 14px color-mix(in srgb, var(--fp-accent) 45%, transparent);
+}
+
+.fp-predict:hover:not(:disabled)::before,
+.fp-predict:focus-visible::before {
+  opacity: 1;
+}
+
+/* Pressed: seated, not shrunken. A 1.5% nudge reads as depression without
+   moving the label far enough to be noticed as motion. */
+.fp-predict:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.24),
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 1px 6px color-mix(in srgb, var(--fp-accent) 34%, transparent);
+}
+
+.fp-predict:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/*
+  Letter shimmer.
+
+  The Uiverse original dropped resting letters to #fff5 — half-transparent white
+  — and lit them in sequence. On a red face that fails contrast outright, so the
+  resting state here is fully opaque white and the animation only ADDS a brief
+  glow on top. The label is legible at every frame of the loop, which is the
+  point: the animation decorates the text, it never carries it.
+*/
+.fp-predict-letter {
+  display: inline-block;
+  white-space: pre;
+  animation: fp-predict-letter 2.6s ease-in-out infinite;
+}
+
+@keyframes fp-predict-letter {
+  50% {
+    text-shadow:
+      0 0 6px rgba(255, 255, 255, 0.75),
+      0 0 12px color-mix(in srgb, var(--fp-accent) 60%, transparent);
+  }
+}
+
+/* Focus quickens the same shimmer. No blur, no scale — the snippet's 2x-scale
+   blur made its own label unreadable, which a dashboard cannot afford. */
+.fp-predict:focus-visible .fp-predict-letter {
+  animation-duration: 1.4s;
+}
+
+.fp-predict:active:not(:disabled) .fp-predict-letter {
+  animation: none;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+}
+
+.fp-predict:disabled .fp-predict-letter {
+  animation: none;
+  text-shadow: none;
+}
+
+/*
+  Reduced motion: the looping shimmer stops, everything that communicates STATE
+  stays. Hover still brightens, focus still shows its ring and highlight, active
+  still seats. Removing those would take accessibility away in the name of it.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .fp-predict-letter {
+    animation: none !important;
+    text-shadow: none;
+  }
+
+  .fp-predict {
+    transition:
+      background-color var(--fp-predict-transition),
+      box-shadow var(--fp-predict-transition),
+      border-color var(--fp-predict-transition);
+  }
+
+  .fp-predict:active:not(:disabled) {
+    transform: none;
+  }
+}

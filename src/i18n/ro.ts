@@ -40,7 +40,7 @@ export const ro: Dict = {
     searchTeams: "Caută echipe…",
     refresh: "Reîmprospătează",
     refreshPredictions: "Reîncarcă picks salvate (fără generare nouă)",
-    predict: "Predict",
+    predict: "Generează Predicții",
     predictTip: "Generează predicții pentru zilele selectate",
     plus1Day: "+1 zi",
     plus2Days: "+2 zile",
@@ -693,6 +693,8 @@ export const ro: Dict = {
         planSubject: "Ultra",
         referralTitle: "Felicitări!",
         referralJoined: "{name} s-a alăturat",
+        /* The fixed half, rendered beside the name so only the name may clip. */
+        referralJoinedSuffix: "s-a alăturat",
         referralJoinedAnonymous: "Cineva s-a alăturat",
         referralAccepted: "Invitație acceptată"
       },
@@ -703,6 +705,7 @@ export const ro: Dict = {
       invite: "Invită",
       inviteReward: "+5 zile Ultra",
       referralHint: "Tu și prietenul tău primiți 5 zile Ultra",
+      quotaLeft: "{count} predicții azi",
       unitDay: "z",
       unitHour: "h",
       unitMinute: "m"
