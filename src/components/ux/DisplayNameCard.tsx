@@ -6,10 +6,11 @@ import Input from "../../design-system/Input";
 import SectionHeader from "../../design-system/SectionHeader";
 import {
   DISPLAY_NAME_MAX,
+  DISPLAY_NAME_MIN,
   fetchDisplayName,
   saveDisplayName,
-  validateDisplayName,
-  type DisplayNameError
+  validateDisplayNameShape,
+  type DisplayNameReason
 } from "../../services/displayNameService";
 
 /**
@@ -21,14 +22,17 @@ import {
  * choice and the default: an invitee who never fills it in stays anonymous, and
  * their inviter simply sees "someone joined".
  *
- * The copy says so plainly rather than implying the field is required, because a
- * name shown to another person should be opted into, not collected by default.
+ * THE SERVER DECIDES. The check below runs for speed, not authority: it knows
+ * about length and shape, never about which words are unacceptable. A rejection
+ * that only the server can make comes back as a reason code and is rendered here
+ * as a sentence — and the text the user typed is left untouched so they can edit
+ * it rather than retype it.
  */
 export default function DisplayNameCard({ userId }: { userId: string | null | undefined }) {
   const { t } = useLocale();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<DisplayNameError | null>(null);
+  const [reason, setReason] = useState<DisplayNameReason | null>(null);
   const [saved, setSaved] = useState(false);
   const loaded = useRef(false);
 
@@ -40,32 +44,36 @@ export default function DisplayNameCard({ userId }: { userId: string | null | un
 
   const onSave = useCallback(async () => {
     if (!userId) return;
-    const check = validateDisplayName(value);
-    if (check.reason) {
-      setError(check.reason);
+    const shape = validateDisplayNameShape(value);
+    if (shape.reason) {
+      setReason(shape.reason);
       setSaved(false);
       return;
     }
     setBusy(true);
-    setError(null);
-    const ok = await saveDisplayName(userId, check.value);
+    setReason(null);
+    const result = await saveDisplayName(shape.value);
     setBusy(false);
-    if (ok) {
+    if (result.ok) {
       setSaved(true);
-      setValue(check.value ?? "");
+      // The stored value, not the typed one — the server tidies whitespace.
+      setValue(result.value ?? "");
     } else {
-      setError("generic");
+      // The typed text is deliberately preserved for editing.
+      setReason(result.reason);
     }
   }, [userId, value]);
 
   if (!userId) return null;
 
-  const errorKey: Record<DisplayNameError, string> = {
-    tooShort: "account.displayName.errorTooShort",
-    tooLong: "account.displayName.errorTooLong",
-    email: "account.displayName.errorEmail",
-    generic: "account.displayName.errorGeneric"
+  const MESSAGES: Record<DisplayNameReason, string> = {
+    invalid_display_name_length: "account.displayName.validation.length",
+    invalid_display_name: "account.displayName.validation.shape",
+    inappropriate_display_name: "account.displayName.validation.inappropriate",
+    generic: "account.displayName.validation.generic"
   };
+
+  const used = value.trim().replace(/\s+/g, " ").length;
 
   return (
     <Card className="space-y-3" data-testid="account-display-name">
@@ -83,14 +91,24 @@ export default function DisplayNameCard({ userId }: { userId: string | null | un
         value={value}
         maxLength={DISPLAY_NAME_MAX}
         placeholder={t("account.displayName.placeholder")}
-        error={error ? t(errorKey[error]) : undefined}
+        description={t("account.displayName.hint", { min: DISPLAY_NAME_MIN, max: DISPLAY_NAME_MAX })}
+        error={reason ? t(MESSAGES[reason]) : undefined}
         onChange={(e) => {
           setValue(e.target.value);
-          setError(null);
+          setReason(null);
           setSaved(false);
         }}
       />
-      {/* Announced, not merely shown — the same contract the referral card uses. */}
+      {/*
+        The counter is plain text, NOT an aria-live region: it changes on every
+        keystroke, and announcing each one would bury the field's actual label and
+        error under a stream of numbers. The limit is already announced through the
+        description above, which is what assistive technology reads on focus.
+      */}
+      <p className="text-xs tabular-nums opacity-70" data-testid="display-name-counter">
+        {used} / {DISPLAY_NAME_MAX}
+      </p>
+      {/* Saving IS announced — it is a discrete outcome, not a running total. */}
       <p aria-live="polite" className="sr-only">
         {saved ? t("account.displayName.saved") : ""}
       </p>

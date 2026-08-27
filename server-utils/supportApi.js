@@ -1,4 +1,5 @@
-import { getRequester } from "./authAdmin.js";
+import { getRequester } from "./authAdmin.js";
+import { SAFETY_REASONS, validateAdminMessage } from "./contentSafety.js";
 import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 
@@ -183,10 +184,28 @@ export function validateSupportPayload(body, { allowedCategories = SUPPORT_CATEG
     return { ok: false, error: `subject depăşeşte ${LIMITS.subject} caractere.` };
   }
 
-  const message = trimmedString(payload.message);
-  if (!message) return { ok: false, error: "message este obligatoriu." };
-  if (message.length > LIMITS.message) {
-    return { ok: false, error: `message depăşeşte ${LIMITS.message} caractere.` };
+  const message = trimmedString(payload.message);
+  if (!message) return { ok: false, error: "message este obligatoriu." };
+  if (message.length > LIMITS.message) {
+    return { ok: false, error: `message depăşeşte ${LIMITS.message} caractere.` };
+  }
+
+  /*
+    Content safety, on both fields a human administrator will actually read.
+
+    Deliberately AFTER the shape checks and BEFORE anything is written: a rejected
+    message must leave no row behind, not even a partial one. The response carries
+    a stable reason code and never the matched term — naming the word that tripped
+    the filter is a recipe for working around it.
+  */
+  for (const field of [subject, message]) {
+    if (!validateAdminMessage(field).ok) {
+      return {
+        ok: false,
+        reason: SAFETY_REASONS.MESSAGE_CONTENT,
+        error: "Mesajul conține un termen nepotrivit."
+      };
+    }
   }
 
   const priority =
@@ -355,7 +374,7 @@ export async function handleSupport(req, res, deps = defaultDeps) {
   if (!limit.ok) return rateLimited(res, limit);
 
   const validated = validateSupportPayload(parseBody(req));
-  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error });
+  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error, reason: validated.reason });
 
   const created = await insertTicket(auth.supabase, auth.userId, validated.value);
   return res.status(201).json({ ok: true, ticket: created });
@@ -382,7 +401,7 @@ export async function handlePredictionReport(req, res, deps = defaultDeps) {
     },
     { allowedCategories: ["prediction", "gsb"], requireContext: true }
   );
-  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error });
+  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error, reason: validated.reason });
 
   const created = await insertTicket(auth.supabase, auth.userId, validated.value);
   return res.status(201).json({ ok: true, ticket: created });
@@ -400,7 +419,7 @@ export async function handleFeedback(req, res, deps = defaultDeps) {
   if (!limit.ok) return rateLimited(res, limit);
 
   const validated = validateFeedbackPayload(parseBody(req));
-  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error });
+  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error, reason: validated.reason });
 
   const { data, error } = await auth.supabase
     .from("feedback_entries")
@@ -424,7 +443,7 @@ export async function handleSupportReply(req, res, deps = defaultDeps) {
   if (!limit.ok) return rateLimited(res, limit);
 
   const validated = validateReplyPayload(parseBody(req));
-  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error });
+  if (!validated.ok) return res.status(400).json({ ok: false, error: validated.error, reason: validated.reason });
 
   // Ownership is checked here because persistence runs as the service role,
   // which RLS does not constrain. A ticket that is not the requester's answers

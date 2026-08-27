@@ -7,6 +7,8 @@ import {
   acknowledgeReferralBonuses,
   listPendingReferralBonuses
 } from "../../server-utils/referralNotifications.js";
+import { validateSupportPayload, SUPPORT_CATEGORIES } from "../../server-utils/supportApi.js";
+import { validateDisplayName as validateDisplayNameSafety } from "../../server-utils/contentSafety.js";
 
 /**
  * Migration 065 and the notification discovery path, against a REAL Postgres.
@@ -285,20 +287,45 @@ test("a client cannot INSERT, UPDATE or DELETE an acknowledgement", () => {
 
 /* ------------------------------------------------ display_name constraints */
 
-test("display_name refuses an email address, over-long values and control characters", () => {
+test("display_name enforces the 3-24 policy, refuses emails and control characters", () => {
   psql(`update public.profiles set display_name = 'andrei@example.test' where user_id = ${lit(INVITEE)};`, {
     expectFailure: true
   });
-  psql(`update public.profiles set display_name = repeat('A', 41) where user_id = ${lit(INVITEE)};`, {
+  // 24 is the ceiling; 25 is not.
+  psql(`update public.profiles set display_name = repeat('A', 25) where user_id = ${lit(INVITEE)};`, {
     expectFailure: true
   });
-  psql(`update public.profiles set display_name = 'A' where user_id = ${lit(INVITEE)};`, { expectFailure: true });
+  psql(`update public.profiles set display_name = repeat('A', 24) where user_id = ${lit(INVITEE)};`);
+  // 3 is the floor; 2 is not.
+  psql(`update public.profiles set display_name = 'Ab' where user_id = ${lit(INVITEE)};`, { expectFailure: true });
+  psql(`update public.profiles set display_name = 'Ana' where user_id = ${lit(INVITEE)};`);
   psql(`update public.profiles set display_name = E'Andrei\\nPopescu' where user_id = ${lit(INVITEE)};`, {
     expectFailure: true
   });
   // And accepts a real name.
   psql(`update public.profiles set display_name = 'Andrei Popescu' where user_id = ${lit(INVITEE)};`);
   assert.equal(psql(`select display_name from public.profiles where user_id = ${lit(INVITEE)};`), "Andrei Popescu");
+});
+
+test("a client cannot write display_name at all — the trigger refuses it", () => {
+  /*
+    The whole content-safety model rests on this. If `authenticated` can UPDATE the
+    column through PostgREST, it can set any name it likes and the profanity filter
+    in application code is decorative. The trigger is what makes the API the only
+    writer — a column-level REVOKE cannot work here, because Supabase grants UPDATE
+    on the whole table.
+  */
+  asUser(INVITEE, `update public.profiles set display_name = 'Ana' where user_id = ${lit(INVITEE)};`, {
+    expectFailure: true
+  });
+
+  // Everything else on the row is still the user's own to change.
+  asUser(INVITEE, `update public.profiles set favorite_leagues = '{39}' where user_id = ${lit(INVITEE)};`);
+  assert.equal(psql(`select favorite_leagues from public.profiles where user_id = ${lit(INVITEE)};`), "{39}");
+
+  // And the service role — which is what the API uses — still can.
+  psql(`update public.profiles set display_name = 'Ana' where user_id = ${lit(INVITEE)};`);
+  assert.equal(psql(`select display_name from public.profiles where user_id = ${lit(INVITEE)};`), "Ana");
 });
 
 /* ------------------------------------------- discovery through the module */
@@ -412,6 +439,49 @@ test("acknowledgement never mutates the grant ledger", async () => {
   await acknowledgeReferralBonuses(INVITER, [g], db());
   const after = psql(`select md5(row_to_json(t)::text) from public.time_grants t where id = ${lit(g)};`);
   assert.equal(after, before, "the time_grants row changed while acknowledging a notification");
+});
+
+/* ------------------------------------------------ admin message safety */
+
+test("a profane message to an administrator is refused and writes NO ticket row", () => {
+  /*
+    The point is the SECOND assertion. Rejecting the text is easy; proving the
+    rejection happens before anything touches the database is what guarantees a
+    blocked message cannot leave a half-written ticket behind for an admin to read.
+  */
+  const before = psql("select count(*) from public.support_tickets;");
+
+  const base = { category: SUPPORT_CATEGORIES[0], subject: "Problema", message: "Butonul nu merge." };
+  assert.equal(validateSupportPayload(base).ok, true, "a clean message must still be accepted");
+
+  for (const bad of [
+    { ...base, message: "sunteti niste f.u.c.k.e.r.i" },
+    { ...base, subject: "muie admin" },
+    { ...base, message: "ce sh1t de aplicatie" }
+  ]) {
+    const result = validateSupportPayload(bad);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "inappropriate_message");
+    // The matched term must never travel back to the caller.
+    const dump = JSON.stringify(result).toLowerCase();
+    assert.equal(dump.includes("fuck") || dump.includes("muie") || dump.includes("sh1t"), false);
+  }
+
+  const after = psql("select count(*) from public.support_tickets;");
+  assert.equal(after, before, "a rejected message created a ticket row");
+});
+
+test("a profane display name is refused before it can reach the column", () => {
+  // The database CHECK covers shape and length; the dictionary lives in JS, so
+  // this proves the two halves agree on the same value.
+  const check = validateDisplayNameSafety("Pula");
+  assert.equal(check.ok, false);
+  assert.equal(check.reason, "inappropriate_display_name");
+  // And a name the filter accepts is one the constraint also accepts.
+  const good = validateDisplayNameSafety("Andrei Pop");
+  assert.equal(good.ok, true);
+  psql(`update public.profiles set display_name = ${lit(good.value)} where user_id = ${lit(INVITEE)};`);
+  assert.equal(psql(`select display_name from public.profiles where user_id = ${lit(INVITEE)};`), "Andrei Pop");
 });
 
 /* ------------------------------------- the whole chain, no mocks anywhere */

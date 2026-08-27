@@ -1,41 +1,57 @@
+import { fetchWithAuth } from "../utils/apiAuth";
 import { supabase } from "../utils/supabaseClient";
 
 /**
  * The user's own public display name.
  *
- * WHY THIS IS A DIRECT SUPABASE WRITE and not an API endpoint: `profiles` already
- * carries RLS scoping updates to auth.uid(), the privilege-column trigger already
- * rejects any attempt to touch role/tier/is_blocked, and `updateFavoriteLeagues`
- * writes the same table the same way. Adding an endpoint would have spent one of
- * the twelve serverless functions on a column the database already protects.
+ * WRITES GO THROUGH THE API, NOT POSTGREST. Migration 065 revokes
+ * UPDATE(display_name) from `authenticated`, so this column can no longer be set
+ * from the browser directly — deliberately. It is the one value shown to ANOTHER
+ * user, so it must pass the server's content filter, and a client that could
+ * write the column itself would simply skip that.
  *
- * THE VALIDATION HERE IS FOR THE MESSAGE, NOT THE SAFETY. The CHECK constraint on
- * profiles_display_name_shape is the actual guarantee; this exists so the user
- * gets "don't use an email address" instead of a Postgres constraint violation.
+ * THE DICTIONARY IS NOT HERE. Client validation below covers shape only — length,
+ * "@", control characters — because those are cheap, obvious and safe to reveal.
+ * What counts as offensive stays on the server: shipping the word list in a
+ * bundle anyone can read is the same as publishing it.
  */
 
-export const DISPLAY_NAME_MIN = 2;
-export const DISPLAY_NAME_MAX = 40;
+export const DISPLAY_NAME_MIN = 3;
+export const DISPLAY_NAME_MAX = 24;
 
-export type DisplayNameError = "tooShort" | "tooLong" | "email" | "generic";
+/** Mirrors the server's stable reason codes; the UI maps these to sentences. */
+export type DisplayNameReason =
+  | "invalid_display_name_length"
+  | "invalid_display_name"
+  | "inappropriate_display_name"
+  | "generic";
 
-/** `null` means "no name" — a deliberate, valid choice that keeps the user anonymous. */
+export type DisplayNameCheck = { value: string | null; reason: DisplayNameReason | null };
+
+/** Same tidy the server applies, so the counter and the stored value agree. */
+export function tidyDisplayName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
 /**
- * One flat shape rather than a discriminated union: `reason === null` means the
- * value is good, and `value` is what should be saved. A union reads well until a
- * caller has to narrow it in a callback, and this has exactly one caller.
+ * Structural validation for immediate feedback. NOT authoritative — the server
+ * re-runs everything and adds the content check on top.
  */
-export type DisplayNameCheck = { value: string | null; reason: DisplayNameError | null };
-
-export function validateDisplayName(raw: string): DisplayNameCheck {
-  const value = raw.trim();
+export function validateDisplayNameShape(raw: string): DisplayNameCheck {
+  const value = tidyDisplayName(raw);
   if (!value) return { value: null, reason: null };
-  if (value.includes("@")) return { value: null, reason: "email" };
-  if (value.length < DISPLAY_NAME_MIN) return { value: null, reason: "tooShort" };
-  if (value.length > DISPLAY_NAME_MAX) return { value: null, reason: "tooLong" };
+  if (value.length < DISPLAY_NAME_MIN || value.length > DISPLAY_NAME_MAX) {
+    return { value: null, reason: "invalid_display_name_length" };
+  }
+  if (value.includes("@")) return { value: null, reason: "invalid_display_name" };
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return { value: null, reason: "invalid_display_name" };
+  }
   return { value, reason: null };
 }
 
+/** Reading stays a direct PostgREST select — only writing was revoked. */
 export async function fetchDisplayName(userId: string): Promise<string | null> {
   if (!supabase || !userId) return null;
   try {
@@ -47,12 +63,26 @@ export async function fetchDisplayName(userId: string): Promise<string | null> {
   }
 }
 
-export async function saveDisplayName(userId: string, value: string | null): Promise<boolean> {
-  if (!supabase || !userId) return false;
+/**
+ * Persist a name. Resolves with the reason the server refused, or null on success.
+ *
+ * The server's answer wins even when the client thought the value was fine: the
+ * content check only exists there.
+ */
+export async function saveDisplayName(value: string | null): Promise<{ ok: boolean; reason: DisplayNameReason | null; value: string | null }> {
   try {
-    const { error } = await supabase.from("profiles").update({ display_name: value }).eq("user_id", userId);
-    return !error;
+    const res = await fetchWithAuth("/api/referral?view=display-name", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: value ?? "" })
+    });
+    const json = (await res.json()) as { ok?: boolean; reason?: string; displayName?: string | null };
+    if (res.ok && json?.ok === true) {
+      return { ok: true, reason: null, value: json.displayName ?? null };
+    }
+    const reason = (json?.reason as DisplayNameReason) || "generic";
+    return { ok: false, reason, value: null };
   } catch {
-    return false;
+    return { ok: false, reason: "generic", value: null };
   }
 }

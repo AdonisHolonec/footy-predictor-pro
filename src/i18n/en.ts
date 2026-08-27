@@ -684,6 +684,13 @@ export const en: Dict = {
       }
     },
     displayName: {
+      hint: "Between {min} and {max} characters.",
+      validation: {
+        length: "Your name must be between 3 and 24 characters.",
+        shape: "That name contains characters that are not allowed.",
+        inappropriate: "This name contains inappropriate language. Please choose another name.",
+        generic: "Could not save the name. Try again."
+      },
       title: "Display name",
       description: "Friends you invite see this name when your referral succeeds. Leave it empty to stay anonymous.",
       label: "Display name",
@@ -691,10 +698,12 @@ export const en: Dict = {
       save: "Save",
       saved: "Name saved",
       clear: "Clear name",
-      errorTooShort: "The name must be at least 2 characters.",
-      errorTooLong: "The name can be at most 40 characters.",
-      errorEmail: "Do not use an email address as a display name.",
       errorGeneric: "Could not save the name. Try again."
+    },
+    adminMessage: {
+      validation: {
+        inappropriate: "Your message contains inappropriate language. Please rephrase it."
+      }
     },
     preferencesTitle: "Preferences",
     modelInternals: "Show model internals",

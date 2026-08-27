@@ -35,8 +35,9 @@ begin
       add constraint profiles_display_name_shape check (
         display_name is null
         or (
-          -- Trimmed length, so "   " cannot pass as a two-character name.
-          char_length(btrim(display_name)) between 2 and 40
+          -- Trimmed length, so "   " cannot pass as a short name. 3-24 matches
+          -- server-utils/contentSafety.js exactly; the two must never disagree.
+          char_length(btrim(display_name)) between 3 and 24
           -- An email address must never become a display name. Without this a
           -- user could paste their address here and the referral notification
           -- would hand it to their inviter — the precise leak this column
@@ -54,10 +55,62 @@ $$;
 comment on column public.profiles.display_name is
   'Optional public display name. The ONLY user identity that may be shown to another user (a referral inviter sees their invitee''s). Never an email — enforced by profiles_display_name_shape.';
 
--- display_name is intentionally absent from protect_profiles_privilege_columns
--- (027): it is the user's own to set, unlike role/tier/is_blocked. The existing
--- "users_update_own_profile" policy already scopes updates to auth.uid(), so no
--- new policy is required and none is added here.
+-- THE SERVER IS THE ONLY WRITER OF THIS COLUMN.
+--
+-- Every other column on `profiles` is the user's own to set through PostgREST, and
+-- display_name started that way too. It cannot stay that way: this is the one
+-- value shown to ANOTHER user, so it must pass the profanity filter, and a
+-- dictionary belongs in application code rather than in a CHECK constraint. A
+-- client able to UPDATE the column directly would simply skip that check.
+--
+-- A TRIGGER, NOT A COLUMN-LEVEL REVOKE. Supabase grants UPDATE on the whole table
+-- to `authenticated` (via ALTER DEFAULT PRIVILEGES), and Postgres will not let a
+-- single column be revoked out of a table-level grant — the REVOKE parses, runs,
+-- and changes nothing. Migration 027 already solved the identical problem for
+-- role/tier/is_blocked this way, so this follows the same shape rather than
+-- inventing a second mechanism.
+create or replace function public.protect_profiles_display_name()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  jwt_role text := coalesce(auth.jwt() ->> 'role', '');
+  db_role text := coalesce(current_setting('role', true), '');
+begin
+  -- The API writes with the service role, after contentSafety.js has run.
+  if jwt_role = 'service_role' or db_role = 'service_role' then
+    return new;
+  end if;
+  /*
+    No JWT at all means this is not a PostgREST request: a migration, a psql
+    session, a back-office script. PostgREST always sets request.jwt.claims for
+    anon and authenticated alike, so the absence of a role is direct database
+    access, which is privileged by definition and not what this guard defends
+    against.
+  */
+  if jwt_role = '' then
+    return new;
+  end if;
+  if new.display_name is distinct from old.display_name then
+    raise exception 'display_name is set through the API, not directly';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists tg_protect_profiles_display_name on public.profiles;
+create trigger tg_protect_profiles_display_name
+  before update on public.profiles
+  for each row execute function public.protect_profiles_display_name();
+
+revoke all on function public.protect_profiles_display_name() from public, anon, authenticated;
+
+-- No entry is added to protect_profiles_privilege_columns (027) and no new policy
+-- is created: the revoke above already removes the only way a client could write
+-- this column, and the existing "users_update_own_profile" policy continues to
+-- scope every other column to auth.uid() exactly as before.
 
 -- ------------------------------------------------- acknowledgement ledger
 

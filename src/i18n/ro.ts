@@ -684,6 +684,13 @@ export const ro: Dict = {
       }
     },
     displayName: {
+      hint: "Între {min} și {max} de caractere.",
+      validation: {
+        length: "Numele trebuie să aibă între 3 și 24 de caractere.",
+        shape: "Numele conține caractere care nu sunt permise.",
+        inappropriate: "Acest nume conține un termen nepotrivit. Te rugăm să alegi un alt nume.",
+        generic: "Nu am putut salva numele. Încearcă din nou."
+      },
       title: "Numele afișat",
       description: "Prietenii pe care îi inviți văd acest nume când recomandarea ta reușește. Lasă-l gol ca să rămâi anonim.",
       label: "Nume afișat",
@@ -691,10 +698,12 @@ export const ro: Dict = {
       save: "Salvează",
       saved: "Nume salvat",
       clear: "Șterge numele",
-      errorTooShort: "Numele trebuie să aibă cel puțin 2 caractere.",
-      errorTooLong: "Numele poate avea cel mult 40 de caractere.",
-      errorEmail: "Nu folosi o adresă de email ca nume afișat.",
       errorGeneric: "Nu am putut salva numele. Încearcă din nou."
+    },
+    adminMessage: {
+      validation: {
+        inappropriate: "Mesajul conține un termen nepotrivit. Te rugăm să îl reformulezi."
+      }
     },
     preferencesTitle: "Preferințe",
     modelInternals: "Arată detaliile modelului",
