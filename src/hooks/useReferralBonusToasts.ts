@@ -47,6 +47,9 @@ import {
  */
 const ACTIVITY_MIN_INTERVAL_MS = 30_000;
 
+/** How long one reward notice stays in the cards before the next takes its place. */
+const NOTICE_MS = 5000;
+
 export function useReferralBonusToasts(userId: string | null | undefined, refreshKey: number) {
   const [queue, setQueue] = useState<ReferralBonus[]>([]);
   /** Bumped by user activity; combined with `refreshKey` to trigger a re-read. */
@@ -120,6 +123,21 @@ export function useReferralBonusToasts(userId: string | null | undefined, refres
   const dismiss = useCallback(() => {
     setQueue((prev) => prev.slice(1));
   }, []);
+
+  /**
+   * The five-second lifecycle.
+   *
+   * It lives here rather than in the presentation because the notice is no longer
+   * a toast: it renders inside the plan and referral cards, which are permanent
+   * chrome and have no dismissal of their own. One timer per notice, cleared when
+   * it changes or the component unmounts, so a queue of rewards advances one
+   * every five seconds instead of stacking.
+   */
+  useEffect(() => {
+    if (!current) return;
+    const id = setTimeout(dismiss, NOTICE_MS);
+    return () => clearTimeout(id);
+  }, [current, dismiss]);
 
   return { current, dismiss, pending: queue.length };
 }

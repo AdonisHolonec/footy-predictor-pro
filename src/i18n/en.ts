@@ -676,12 +676,36 @@ export const en: Dict = {
       errorUnavailable: "The invitation service is unavailable right now.",
       retry: "Try again",
       notification: {
+        historyTitle: "Referral bonuses",
+        historyDescription: "Every Ultra day you have received through referrals.",
+        planTitleLong: "+{days} Ultra days",
         inviterTitle: "Congratulations!",
         inviterMessage: "{name} joined through your referral. You received +{days} Ultra days.",
         inviterMessageAnonymous: "Someone joined through your referral. You received +{days} Ultra days.",
         inviteeTitle: "Congratulations!",
         inviteeMessage: "You received +{days} Ultra days for accepting an invitation."
       }
+    },
+    header: {
+      tier: { free: "Free", premium: "Premium", ultra: "Ultra" },
+      notice: {
+        planTitle: "+{days} days",
+        planSubject: "Ultra",
+        referralTitle: "Congrats!",
+        referralJoined: "{name} joined",
+        referralJoinedAnonymous: "Someone joined",
+        referralAccepted: "Invitation accepted"
+      },
+      freePlan: "Free plan",
+      subscriptionActive: "Subscription active",
+      bonusActive: "Bonus active",
+      premiumPlusBonus: "Premium + bonus",
+      invite: "Invite",
+      inviteReward: "+5 Ultra days",
+      referralHint: "You and your friend both get 5 Ultra days",
+      unitDay: "d",
+      unitHour: "h",
+      unitMinute: "m"
     },
     displayName: {
       hint: "Between {min} and {max} characters.",

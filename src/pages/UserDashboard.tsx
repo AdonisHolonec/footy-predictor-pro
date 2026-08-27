@@ -26,7 +26,7 @@ import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
 import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
-import ReferralBonusToast from "../components/ux/ReferralBonusToast";
+import PlanHeaderStrip from "../components/ux/PlanHeaderStrip";
 import { useReferralBonusToasts } from "../hooks/useReferralBonusToasts";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import Overlay from "../design-system/Overlay";
@@ -77,6 +77,7 @@ export default function UserDashboard() {
   const {
     user,
     userTier,
+    entitlement,
     entitlementResolved,
     isSubscriptionExpired,
     trialRemainingTime,
@@ -127,7 +128,8 @@ export default function UserDashboard() {
   */
   const [bonusRefreshKey, setBonusRefreshKey] = useState(0);
   const bumpReferralBonuses = useCallback(() => setBonusRefreshKey((k) => k + 1), []);
-  const { current: referralBonus, dismiss: dismissReferralBonus } = useReferralBonusToasts(
+  // Dismissal is automatic after 5s inside the hook; the cards have no close control.
+  const { current: referralBonus } = useReferralBonusToasts(
     user?.id ?? null,
     bonusRefreshKey
   );
@@ -560,6 +562,26 @@ export default function UserDashboard() {
       onPredict={() => void warmAndPredict()}
       predictBusy={warmPredictBusy}
       liveCount={homeLiveCount}
+      statusSlot={
+        /*
+          The EFFECTIVE tier, straight from the server's entitlement. `user.tier`
+          is deliberately not used here: it is the requested/paid tier and would
+          show "Free" to somebody currently running on bonus Ultra.
+        */
+        <PlanHeaderStrip
+          tier={userTier}
+          requestedTier={entitlement?.requestedTier ?? userTier}
+          hasActiveBonus={Boolean(entitlement?.hasActiveBonus)}
+          bonusUntil={entitlement?.bonusUntil ?? null}
+          onOpenReferral={() => handleNav("profile")}
+          /*
+            The reward is announced in the cards themselves rather than in a
+            separate toast: the days belong to the plan card, the person to the
+            referral card. Account › Notifications keeps the full sentence.
+          */
+          bonus={referralBonus}
+        />
+      }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
         <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
@@ -804,9 +826,6 @@ export default function UserDashboard() {
         onPredict={() => void warmAndPredict()}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
-      {/* One toast on screen at a time: the shared primitive is a single-message
-          surface, so a reward waits for a transient status message to clear. */}
-      <ReferralBonusToast bonus={toast ? null : referralBonus} onDismiss={dismissReferralBonus} />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}

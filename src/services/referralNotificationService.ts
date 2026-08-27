@@ -46,9 +46,23 @@ function toBonus(raw: unknown): ReferralBonus | null {
  * notification is invisible; a rejected promise on the boot path is a broken app,
  * and this is the least important request the workspace makes.
  */
+/**
+ * Every referral bonus ever received, for Account > Notifications.
+ *
+ * The header notice lasts five seconds; this is where the full wording lives
+ * afterwards, so a user who looked away has not lost the news.
+ */
+export async function fetchReferralBonusHistory(): Promise<ReferralBonus[]> {
+  return readBonuses("/api/referral?view=bonus&history=1");
+}
+
 export async function fetchReferralBonuses(): Promise<ReferralBonus[]> {
+  return readBonuses("/api/referral?view=bonus");
+}
+
+async function readBonuses(url: string): Promise<ReferralBonus[]> {
   try {
-    const res = await fetchWithAuth("/api/referral?view=bonus");
+    const res = await fetchWithAuth(url);
     if (!res.ok) return [];
     const json = (await res.json()) as { ok?: boolean; bonuses?: unknown[] };
     if (json?.ok !== true || !Array.isArray(json.bonuses)) return [];
