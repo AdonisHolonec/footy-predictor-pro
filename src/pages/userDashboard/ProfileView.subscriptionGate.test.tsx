@@ -109,10 +109,27 @@ describe("the gated card", () => {
     expect(content().textContent).toMatch(/ultra/i);
   });
 
-  it("blurs the content and marks the card unavailable", async () => {
+  it("blurs the content", async () => {
     await renderProfile();
     expect(content().className).toContain("blur-");
-    expect(card().getAttribute("aria-disabled")).toBe("true");
+  });
+
+  /**
+   * REGRESSION GUARD for the defect this gate shipped with.
+   *
+   * The card used to carry aria-disabled="true". Card renders a plain <div>,
+   * whose implicit role is `generic` and does not support the attribute, so it
+   * described nothing — but ARIA-aware consumers treat a disabled ancestor as
+   * disabling everything inside it, and the support CTA is inside it. The one
+   * action deliberately left available was announced as unavailable, and
+   * Playwright refused to click it.
+   *
+   * Nothing in this card may reintroduce a disabled ancestor above the CTA.
+   */
+  it("never marks the whole card disabled, which would silence the CTA", async () => {
+    await renderProfile();
+    expect(card().getAttribute("aria-disabled")).toBeNull();
+    expect(card().querySelector("[aria-disabled='true']")).toBeNull();
   });
 
   it("hides the blurred content from assistive technology", async () => {
@@ -156,8 +173,20 @@ describe("the support CTA", () => {
     const cta = screen.getByRole("button", { name: /contacteaz/i });
     expect(cta.tagName).toBe("BUTTON");
     expect(cta.hasAttribute("disabled")).toBe(false);
+    expect(cta.tabIndex).toBe(0);
     cta.focus();
     expect(document.activeElement).toBe(cta);
+  });
+
+  it("has no disabled ancestor, so nothing announces it as unavailable", async () => {
+    // The precise shape of the shipped defect: the button was fine, an
+    // ancestor was not. Walking up is the only way to catch that — asserting
+    // the element in isolation passed the whole time it was broken.
+    await renderProfile();
+    const cta = screen.getByRole("button", { name: /contacteaz/i });
+    expect(cta.closest("[aria-disabled='true']")).toBeNull();
+    expect(cta.closest("[disabled]")).toBeNull();
+    expect(cta.closest("[aria-hidden='true']")).toBeNull();
   });
 
   it("lives OUTSIDE the aria-hidden region, or it would be unreachable", async () => {
@@ -203,7 +232,6 @@ describe("turning the gate off", () => {
     expect(screen.queryByTestId("subscription-gate")).toBeNull();
     expect(content().className ?? "").not.toContain("blur-");
     expect(content().getAttribute("aria-hidden")).toBeNull();
-    expect(card().getAttribute("aria-disabled")).toBeNull();
     // Purchase controls work again.
     const buttons = Array.from(content().querySelectorAll("button"));
     expect(buttons.some((b) => !b.hasAttribute("disabled"))).toBe(true);

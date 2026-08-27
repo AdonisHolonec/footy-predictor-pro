@@ -107,7 +107,6 @@ export default function ProfileView(props: ProfileViewProps) {
             <Card
               id="upgrade"
               className="relative scroll-mt-28 overflow-hidden"
-              aria-disabled={SUBSCRIPTIONS_TEMPORARILY_DISABLED || undefined}
               data-testid="subscription-card"
             >
               {/*
@@ -123,6 +122,18 @@ export default function ProfileView(props: ProfileViewProps) {
                 section: blur and opacity are decoration a screen reader cannot
                 see, and a disabled <button> is skipped by Tab. The support CTA
                 lives OUTSIDE this wrapper so it stays reachable.
+
+                NO `aria-disabled` ON THIS CARD. It used to be here, and it was
+                a bug. Card renders a plain <div>, whose implicit role is
+                `generic` — a role that does not support aria-disabled at all,
+                so it bought nothing. What it did do was leak: ARIA-aware
+                consumers treat a disabled ancestor as disabling its
+                descendants, so the support CTA below — the one action
+                deliberately left available — was announced as unavailable, and
+                Playwright refused to click it. The blocking semantics live
+                where they belong: `aria-hidden` on the unavailable content and
+                `disabled` on the three billing controls, neither of which
+                reaches the CTA.
 
                 Nothing here touches Stripe. startCheckout and openBillingPortal
                 are still imported, still wired, still correct — only unreachable.
