@@ -16,6 +16,16 @@ type Props = {
   dismissLabel: string;
   /** Optional inline action (e.g. an "Undo" Button). */
   action?: ReactNode;
+  /**
+   * Extra classes for the toast surface. Empty by default, so every existing
+   * caller renders exactly as before.
+   *
+   * It exists for WIDTH. `left-1/2` makes the shrink-to-fit available width half
+   * the viewport, so on a 390px screen the surface stops at ~194px and the
+   * `max-w` below never binds — fine for "Copiat", cramped for a sentence. A
+   * caller with a long message can pass an explicit `w-…` to opt out.
+   */
+  className?: string;
 };
 
 /**
@@ -33,7 +43,7 @@ type Props = {
  * shares the CONTAINER only — a toast is not modal, so it never joins the
  * overlay stack, never locks scroll and never consumes Escape.
  */
-export default function Toast({ message, onDismiss, durationMs = 5000, dismissLabel, action }: Props) {
+export default function Toast({ message, onDismiss, durationMs = 5000, dismissLabel, action, className = "" }: Props) {
   const timer = useRef<number | null>(null);
   const remaining = useRef<number | null>(null);
   const startedAt = useRef<number>(0);
@@ -72,7 +82,7 @@ export default function Toast({ message, onDismiss, durationMs = 5000, dismissLa
       onMouseLeave={resume}
       onFocus={pause}
       onBlur={resume}
-      className="fixed bottom-24 left-1/2 z-[var(--fp-z-toast)] flex max-w-[min(92vw,24rem)] -translate-x-1/2 items-center gap-2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8"
+      className={`fixed bottom-24 left-1/2 z-[var(--fp-z-toast)] flex max-w-[min(92vw,24rem)] -translate-x-1/2 items-center gap-2 rounded-[var(--fp-radius)] border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] px-4 py-3 text-sm text-[var(--fp-text)] shadow-lg lg:bottom-8 ${className}`}
     >
       <span className="min-w-0 flex-1">{message}</span>
       {action}

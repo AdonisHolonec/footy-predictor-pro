@@ -12,6 +12,7 @@ import SectionHeader from "../../design-system/SectionHeader";
 import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import ReferralCard from "../../components/ux/ReferralCard";
+import DisplayNameCard from "../../components/ux/DisplayNameCard";
 import type { useAuth } from "../../hooks/useAuth";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 import { openBillingPortal, startCheckout } from "../../services/billingService";
@@ -247,6 +248,10 @@ export default function ProfileView(props: ProfileViewProps) {
 
           {/* PR3d2: between billing and preferences — referral is an account concern
               adjacent to plan and bonus time, not a workspace feature. */}
+          {/* Immediately above the referral card: the name is only meaningful
+              because of referrals, and this is where a user goes looking for it. */}
+          <DisplayNameCard userId={user?.id ?? null} />
+
           <ReferralCard userId={user?.id ?? null} />
 
           <Card className="space-y-3" data-testid="account-preferences">

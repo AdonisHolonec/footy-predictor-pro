@@ -2,6 +2,8 @@ import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { getRequester } from "./authAdmin.js";
 import { resolveClaimIpHash } from "./referralIpHash.js";
 import { attemptQualificationForUser } from "./referralRewards.js";
+import { acknowledgeReferralBonuses, listPendingReferralBonuses } from "./referralNotifications.js";
+import { validateDisplayName } from "./contentSafety.js";
 import { CLAIM_REASONS, claimReferral, getOrCreateReferralCode, getReferralStatus } from "./referrals.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 
@@ -159,6 +161,64 @@ async function handleStatus(req, res, ctx) {
   return res.status(200).json({ ok: true, referral: status });
 }
 
+/**
+ * The referral bonuses this caller has not been shown yet.
+ *
+ * The response is already presentation-safe: the module returns a grant id, a
+ * role, a day count and — for inviter grants only — the invitee's chosen public
+ * display name. No email, no user id, no attribution id, no ip_hash reaches the
+ * client, because none of them is in the payload to begin with.
+ */
+async function handleBonus(req, res, ctx) {
+  const bonuses = await listPendingReferralBonuses(ctx.user.id, { supabase: ctx.supabase });
+  return res.status(200).json({ ok: true, bonuses });
+}
+
+/**
+ * Mark bonuses as shown.
+ *
+ * The body carries grant ids and NOTHING else — no user id, no name, no day
+ * count. Anything the client could otherwise forge is derived server-side from
+ * the session, and the ids themselves are re-checked against the caller's own
+ * grants before a row is written.
+ */
+async function handleBonusAck(req, res, ctx) {
+  const grantIds = Array.isArray(readBody(req).grantIds) ? readBody(req).grantIds : [];
+  const result = await acknowledgeReferralBonuses(ctx.user.id, grantIds, { supabase: ctx.supabase });
+  return res.status(200).json({ ok: true, acknowledged: result.acknowledged });
+}
+
+/**
+ * Set (or clear) the caller's public display name.
+ *
+ * THIS ENDPOINT EXISTS BECAUSE THE COLUMN IS NO LONGER CLIENT-WRITABLE. Migration
+ * 065 revokes UPDATE(display_name) from `authenticated`, so PostgREST can no
+ * longer be used to set a name directly. That is deliberate: this is the one
+ * value shown to ANOTHER user, and it must pass the content filter, which lives
+ * in application code rather than in a CHECK constraint.
+ *
+ * The rejection reason is a stable CODE, never prose and never the matched term:
+ * telling someone which word tripped the filter is a map for getting around it.
+ */
+async function handleDisplayName(req, res, ctx) {
+  const check = validateDisplayName(readBody(req).displayName);
+  if (!check.ok) {
+    return res.status(400).json({ ok: false, reason: check.reason });
+  }
+
+  const { error } = await ctx.supabase
+    .from("profiles")
+    .update({ display_name: check.value })
+    .eq("user_id", ctx.user.id);
+  if (error) {
+    // The raw Postgres message is deliberately not forwarded.
+    console.error("[referral] display_name_write_failed");
+    return res.status(500).json({ ok: false, error: "Eroare internă." });
+  }
+  // Echo the STORED value so the field shows exactly what was persisted.
+  return res.status(200).json({ ok: true, displayName: check.value });
+}
+
 export async function handleReferralApi(req, res) {
   const view = String(req.query?.view || "");
   const method = String(req.method || "GET").toUpperCase();
@@ -182,6 +242,21 @@ export async function handleReferralApi(req, res) {
     if (view === "status") {
       if (method !== "GET") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
       return await handleStatus(req, res, ctx);
+    }
+
+    if (view === "bonus") {
+      if (method !== "GET") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+      return await handleBonus(req, res, ctx);
+    }
+
+    if (view === "bonus-ack") {
+      if (method !== "POST") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+      return await handleBonusAck(req, res, ctx);
+    }
+
+    if (view === "display-name") {
+      if (method !== "POST") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+      return await handleDisplayName(req, res, ctx);
     }
 
     return res.status(400).json({ ok: false, error: "Vedere necunoscută." });
