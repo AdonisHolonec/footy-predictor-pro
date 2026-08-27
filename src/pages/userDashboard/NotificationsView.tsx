@@ -11,7 +11,8 @@ import Button from "../../design-system/Button";
 import Card from "../../design-system/Card";
 import type { useUiPrefs } from "../../hooks/useUiPrefs";
 import type { HistoryEntry, PredictionRow } from "../../types";
-import type { deriveNotifications } from "../../utils/deriveNotifications";
+import type { deriveNotifications } from "../../utils/deriveNotifications";
+
 import ReferralBonusHistory from "../../components/ux/ReferralBonusHistory";
 
 type NotificationItems = ReturnType<typeof deriveNotifications>;
