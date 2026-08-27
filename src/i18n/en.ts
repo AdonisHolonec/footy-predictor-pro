@@ -707,6 +707,12 @@ export const en: Dict = {
       unitHour: "h",
       unitMinute: "m"
     },
+    subscriptionUnavailable: {
+      title: "The subscription section is temporarily unavailable.",
+      message: "If you would like a plan with additional statistics, analysis and predictions, contact the administrator using the support form.",
+      cta: "Contact the administrator",
+      badge: "Temporarily unavailable"
+    },
     displayName: {
       hint: "Between {min} and {max} characters.",
       validation: {

@@ -24,7 +24,16 @@ import MyTicketsPanel from "./MyTicketsPanel";
  */
 
 type Props = {
-  variant?: "card" | "inline";
+  variant?: "card" | "inline" | "cta";
+  /**
+   * Button text for the `cta` variant only.
+   *
+   * Passed in rather than read from a key here, because the sentence that makes
+   * sense depends entirely on why the host is asking — "Report a problem" is the
+   * wrong label above a message about subscriptions. The host owns its wording;
+   * this component still owns the dialog.
+   */
+  label?: string;
   /**
    * Called once on a successful submission with the i18n key of the
    * confirmation, so the host can raise its own toast in its own style.
@@ -33,7 +42,7 @@ type Props = {
   className?: string;
 };
 
-export default function SupportEntry({ variant = "card", onSubmitted, className = "" }: Props) {
+export default function SupportEntry({ variant = "card", label, onSubmitted, className = "" }: Props) {
   const { t } = useLocale();
   const [supportOpen, setSupportOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -54,6 +63,23 @@ export default function SupportEntry({ variant = "card", onSubmitted, className 
       />
     </>
   );
+
+  /*
+    One primary button that opens the SAME support dialog. It exists for hosts
+    that have already said why they are asking — a temporary product gate, for
+    instance — where a second "send feedback" button would only dilute the one
+    action the user needs.
+  */
+  if (variant === "cta") {
+    return (
+      <div className={className}>
+        <Button variant="primary" onClick={() => setSupportOpen(true)}>
+          {label ?? t("support.openSupport")}
+        </Button>
+        {dialogs}
+      </div>
+    );
+  }
 
   if (variant === "inline") {
     return (
