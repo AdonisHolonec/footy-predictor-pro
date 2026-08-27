@@ -118,6 +118,50 @@ export function resolveAccessEnd(input: {
   return ends.length ? Math.max(...ends) : null;
 }
 
+/**
+ * The little rotated tag pinned to a card's top-right corner.
+ *
+ * DECORATIVE, AND ARIA-HIDDEN FOR THAT REASON. "Activ" restates what the card's
+ * own detail line already says in words, and "Gratis" restates the offer beside
+ * it; announcing either again would just make a screen reader read the card
+ * twice. Nothing here is the only carrier of its meaning — which is also why a
+ * colour-blind user loses nothing.
+ *
+ * It is absolutely positioned and therefore costs the layout nothing: it cannot
+ * grow the 56px bar, push the card's contents, or move the text it sits beside.
+ * The card is deliberately not overflow-hidden so the tag can overhang the
+ * corner the way the design asks.
+ */
+function CornerBadge({ tone, label }: { tone: "active" | "free"; label: string }) {
+  const skin =
+    tone === "active"
+      ? "bg-emerald-500 shadow-emerald-600/30"
+      : // The offer tag borrows the brand red rather than the danger token: this
+        // says "costs nothing", it is not a warning.
+        "bg-[var(--fp-accent)] shadow-red-900/25";
+  return (
+    <span
+      aria-hidden="true"
+      data-testid={`badge-${tone}`}
+      /*
+        10px, not smaller. The reference art shows a tinier tag, but
+        geometry.guard.test.ts forbids UI text below 10px and a decorative label
+        a sighted user cannot read is worse than a slightly larger one. The
+        compactness comes from padding and leading instead.
+      */
+      /*
+        rotate-6, not 12. Rotation inflates the box a badge actually occupies —
+        a 30x12 pill at 12° needs ~18px of vertical room, which was enough to
+        reach down into the tier text. Six degrees keeps the tilt the design
+        asks for and gives the words underneath their space back.
+      */
+      className={`pointer-events-none absolute -right-2 -top-2.5 rotate-6 rounded-full px-1 py-0 font-mono text-[10px] font-bold uppercase leading-none tracking-tight text-white shadow-sm ${skin}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function PlanHeaderStrip({
   tier,
   requestedTier,
@@ -238,10 +282,12 @@ export default function PlanHeaderStrip({
 
   return (
     <div
-      /* gap-1: the fixed notification needed ~9px it did not have at 390.
-         Two px here and two px of card padding each is where it came from —
-         cheaper than clipping the product's own words. */
-      className="flex min-w-0 shrink items-center gap-1 sm:gap-2"
+      /*
+        The SAME gap the bar uses between its own zones. The strip holds two of
+        the four zones, so if these two values differ the row reads as
+        arbitrarily spaced — brand|plan wide, plan|referral tight.
+      */
+      className="flex min-w-0 shrink items-center gap-2 sm:gap-2.5"
       data-testid="plan-header-strip"
       data-notice={notice ? "true" : undefined}
     >
@@ -252,9 +298,18 @@ export default function PlanHeaderStrip({
           shrink-0: this card's content is short and must never be clipped — with
           min-w-0 the nowrap "+5 zile" spilled straight over the next card. The
           referral card beside it is the one that gives way, by truncating a name.
+
+          `relative` anchors the corner badge; deliberately NOT overflow-hidden,
+          because the badge is meant to sit ON the corner and overhang it.
         */
-        className={`flex shrink-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border px-1.5 py-1 leading-tight sm:px-2 ${TONE[tier]}`}
+        className={`relative flex shrink-0 flex-col items-center justify-center rounded-[var(--fp-radius-sm)] border px-1.5 py-1 text-center leading-tight sm:px-2 ${TONE[tier]}`}
       >
+        {/*
+          Shown only while something is actually running. A free plan with no
+          grant is not "active" in the sense this badge means, and a badge that
+          is always lit says nothing at all.
+        */}
+        {!notice && counting ? <CornerBadge tone="active" label={t("account.header.badgeActive")} /> : null}
         {/* nowrap: "+5 zile" breaking across two lines grew the card past the
             56px bar it has to live inside. */}
         <span className="whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-wider">
@@ -277,13 +332,24 @@ export default function PlanHeaderStrip({
           ) : remaining ? (
             <>
               {/*
-                The REASON is the first thing to go when space runs out, and the
-                only thing: below sm the bar cannot hold tier + reason + time +
-                offer + CTA at once, and of those the reason is the one a user
-                can look up in Account. Tier and time both survive every width.
+                THE REASON EARNS ITS SPACE ONLY ON A BONUS.
+
+                "Abonament activ" beside a green ACTIV badge says the same thing
+                twice and cost this card ~85px, which is what pushed the brand
+                down to "F…". "Premium + bonus" is different: it explains why a
+                Premium subscriber currently reads Ultra, and a bare "Ultra"
+                there hides what happens when the bonus ends.
+
+                Below sm it drops even then — at 390 the bar cannot hold tier +
+                reason + time + offer + CTA, and the reason is the one a user
+                can look up in Account. Tier and time survive every width.
               */}
-              <span className="hidden opacity-80 sm:inline">{detail}</span>
-              <span className="hidden sm:inline">{" · "}</span>
+              {hasActiveBonus ? (
+                <>
+                  <span className="hidden opacity-80 sm:inline">{detail}</span>
+                  <span className="hidden sm:inline">{" · "}</span>
+                </>
+              ) : null}
               {/* Mono + bold: the number is the thing being looked up. */}
               <span className="font-mono font-bold opacity-100" data-testid="plan-time">
                 {remaining}
@@ -308,8 +374,14 @@ export default function PlanHeaderStrip({
           which sells nothing. Its content is short and fixed, so it is sized to
           fit; only a NAME is unbounded, and the notice branch caps that itself.
         */
-        className="flex shrink-0 flex-col justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/10 px-1.5 py-1 text-left leading-tight sm:px-2 text-[var(--fp-accent)] transition-colors hover-fine:bg-fp-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+        className="relative flex shrink-0 flex-col items-center justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/10 px-1.5 py-1 text-center leading-tight sm:px-2 text-[var(--fp-accent)] transition-colors hover-fine:bg-fp-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
       >
+        {/*
+          The offer costs the user nothing, which is the whole pitch — so the
+          tag says so. It is hidden during a notice: the card is announcing a
+          reward then, and a "free" tag on top of that reads as noise.
+        */}
+        {!notice ? <CornerBadge tone="free" label={t("account.header.badgeFree")} /> : null}
         {/* nowrap: "+5 zile" breaking across two lines grew the card past the
             56px bar it has to live inside. */}
         <span className="whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-wider">

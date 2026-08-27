@@ -702,6 +702,10 @@ export const en: Dict = {
       subscriptionActive: "Subscription active",
       bonusActive: "Bonus active",
       premiumPlusBonus: "Premium + bonus",
+      /* Corner badges. Decorative reinforcement only — the card already
+         states its tier and its offer in words. */
+      badgeActive: "Active",
+      badgeFree: "Free",
       invite: "Invite",
       inviteReward: "+5 Ultra days",
       referralHint: "You and your friend both get 5 Ultra days",

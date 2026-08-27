@@ -74,8 +74,13 @@ describe("which grant the countdown reports", () => {
 describe("the plan card shows time, not just a plan", () => {
   it("shows a paying Premium user their subscription time — the case that showed nothing before", () => {
     plan({ tier: "premium", requestedTier: "premium", subscriptionUntil: iso(23 * HOUR + 14 * 60_000) });
-    expect(detail()).toMatch(/premium|abonament/i);
+    // Tier and time, which is the whole contract. The tier is the card's first
+    // line; the second is the clock. "Abonament activ" is gone from it on
+    // purpose — the ACTIV badge beside it already says exactly that, and the
+    // duplicate cost ~85px that the brand needed to stay readable.
+    expect(screen.getByTestId("plan-card").textContent ?? "").toMatch(/premium/i);
     expect(time()).toBe("23h 14m");
+    expect(detail()).not.toMatch(/abonament/i);
   });
 
   it("shows Ultra subscription time", () => {
@@ -136,6 +141,62 @@ describe("each tier keeps its own colour, and never colour alone", () => {
       expect(card.textContent ?? "").toMatch(new RegExp(tier, "i"));
     });
   }
+});
+
+describe("the corner badges", () => {
+  it("marks an actually-running plan ACTIVE, and says nothing when nothing runs", () => {
+    plan({ tier: "ultra", requestedTier: "ultra", subscriptionUntil: iso(DAY) });
+    expect(screen.getByTestId("badge-active").textContent).toMatch(/activ/i);
+    cleanup();
+    // A free plan with no grant is not "active" in the sense the badge means,
+    // and a badge that is always lit says nothing at all.
+    plan({ tier: "free", requestedTier: "free", quota: { used: 1, limit: 3 } });
+    expect(screen.queryByTestId("badge-active")).toBeNull();
+  });
+
+  it("marks the invite FREE, because costing nothing is the pitch", () => {
+    plan();
+    expect(screen.getByTestId("badge-free").textContent).toMatch(/gratis|free/i);
+  });
+
+  it("is absolutely positioned, so it cannot push the card or grow the bar", () => {
+    // The layout guarantee: a corner tag that participates in flow would widen
+    // the card and, in a 56px bar, that is a header-height bug waiting.
+    plan({ tier: "ultra", requestedTier: "ultra", subscriptionUntil: iso(DAY) });
+    for (const id of ["badge-active", "badge-free"]) {
+      expect(screen.getByTestId(id).className).toContain("absolute");
+    }
+    // Its anchor must be the card, or "absolute" would resolve somewhere else.
+    expect(screen.getByTestId("plan-card").className).toContain("relative");
+    expect(screen.getByTestId("referral-cta").className).toContain("relative");
+  });
+
+  it("is decorative, so it is hidden from assistive technology", () => {
+    // "Activ" restates the card's own words and "Gratis" restates the offer —
+    // announcing either again would read the card twice.
+    plan({ tier: "ultra", requestedTier: "ultra", subscriptionUntil: iso(DAY) });
+    expect(screen.getByTestId("badge-active").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByTestId("badge-free").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("steps aside during a notice, which is the card's own announcement", () => {
+    plan({
+      bonus: { grantId: "g1", role: "invitee", days: 5, inviteeName: null, grantedAt: new Date(NOW).toISOString() }
+    });
+    expect(screen.queryByTestId("badge-active")).toBeNull();
+    expect(screen.queryByTestId("badge-free")).toBeNull();
+  });
+});
+
+describe("each card centres its own content", () => {
+  it("centres the plan and referral cards, not top-aligns them", () => {
+    plan({ tier: "ultra", requestedTier: "ultra", subscriptionUntil: iso(DAY) });
+    for (const id of ["plan-card", "referral-cta"]) {
+      const el = screen.getByTestId(id);
+      expect(el.className).toContain("items-center");
+      expect(el.className).toContain("justify-center");
+    }
+  });
 });
 
 describe("the referral offer is never the thing that gets cut", () => {
@@ -283,6 +344,16 @@ describe("the Predict CTA says what it does", () => {
     // Staggered, or the whole word would flash at once.
     const delays = Array.from(letters).map((l) => (l as HTMLElement).style.animationDelay);
     expect(new Set(delays).size).toBeGreaterThan(1);
+  });
+
+  it("stacks its two words, which is what made it compact enough to share the bar", () => {
+    // On one line this ran ~190px and squeezed the brand down to "F…".
+    const { el } = cta();
+    const stack = el.querySelector("[aria-hidden='true']");
+    expect(stack?.className).toContain("flex-col");
+    expect(stack?.className).toContain("items-center");
+    // Two rows, one per word — not one row that happens to wrap.
+    expect(stack?.children.length).toBe(2);
   });
 
   it("carries no Uiverse black — the face is the brand accent", () => {
