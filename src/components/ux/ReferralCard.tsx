@@ -277,18 +277,20 @@ export default function ReferralCard({ userId, now }: Props) {
 
           {inviter ? (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid="referral-metrics">
-              {/* Every number here is the server's; none is derived locally. */}
+              {/*
+                Every number here is the server's; none is derived locally.
+
+                LABELS NAME THE QUANTITY, THE TILE CARRIES THE NUMBER. StatTile renders
+                the label above the value, so a label that interpolates the count prints
+                it twice — "0 zile Ultra câștigate" sitting on top of a large "0". The
+                cap tile was the worse case: at cap its label swapped to "Limita a fost
+                atinsă" while the value stayed `capRemaining`, leaving a bare, unexplained
+                "0" directly under the news that you had earned fifty days. The cap now
+                announces itself in the notice below, where there is room for a sentence.
+              */}
               <StatTile label={t("account.referral.successful")} value={String(inviter.successful)} />
-              <StatTile
-                label={t("account.referral.earned", { n: inviter.earnedDays })}
-                value={String(inviter.earnedDays)}
-              />
-              <StatTile
-                label={
-                  atCap ? t("account.referral.capReached") : t("account.referral.capRemaining", { n: inviter.capRemaining })
-                }
-                value={String(inviter.capRemaining)}
-              />
+              <StatTile label={t("account.referral.earned")} value={String(inviter.earnedDays)} />
+              <StatTile label={t("account.referral.capRemaining")} value={String(inviter.capRemaining)} />
             </div>
           ) : null}
 
@@ -299,8 +301,12 @@ export default function ReferralCard({ userId, now }: Props) {
           ) : null}
 
           {atCap ? (
-            // The cap limits what the INVITER earns, never what their friends get.
-            <p className="text-sm opacity-70">{t("account.referral.capReachedHint", { days: REWARD_DAYS })}</p>
+            // The cap limits what the INVITER earns, never what their friends get —
+            // so the fact and the reassurance are stated together, never the fact alone.
+            <p className="text-sm">
+              <span className="font-semibold">{t("account.referral.capReached")}</span>{" "}
+              <span className="opacity-70">{t("account.referral.capReachedHint", { days: REWARD_DAYS })}</span>
+            </p>
           ) : null}
 
           {invitee ? (

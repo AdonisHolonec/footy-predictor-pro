@@ -146,6 +146,40 @@ describe("inviter metrics", () => {
     expect(metrics.textContent).toContain("7");
   });
 
+  it("prints each metric ONCE — the label names the quantity, the tile carries the number", async () => {
+    // Regression: the labels used to interpolate the same count StatTile renders as
+    // its value, so every tile said its number twice ("15 zile Ultra câștigate" above
+    // a large "15"). Visual QA caught it; this pins it.
+    fetchReferralStatus.mockResolvedValue(
+      status({
+        inviter: { attributed: 0, qualified: 0, rewarded: 3, successful: 3, earnedDays: 15, capRemaining: 7, cap: 10 }
+      })
+    );
+    renderCard();
+    const text = (await screen.findByTestId("referral-metrics")).textContent ?? "";
+    const times = (n: string) => text.split(n).length - 1;
+    expect(times("15")).toBe(1);
+    expect(times("7")).toBe(1);
+    // The labels survive — this is a de-duplication, not a deletion.
+    expect(text).toContain("Zile Ultra câștigate");
+    expect(text).toContain("Invitații până la limită");
+  });
+
+  it("keeps the cap tile counting invitations rather than showing a bare 0", async () => {
+    // At cap the third tile's label used to swap to "Limita a fost atinsă" while its
+    // value stayed `capRemaining` — an unexplained "0" under the news of 50 days won.
+    fetchReferralStatus.mockResolvedValue(
+      status({
+        inviter: { attributed: 0, qualified: 0, rewarded: 10, successful: 10, earnedDays: 50, capRemaining: 0, cap: 10 }
+      })
+    );
+    renderCard();
+    const metrics = await screen.findByTestId("referral-metrics");
+    expect(metrics.textContent).toContain("Invitații până la limită");
+    // The cap belongs in the notice below, where a sentence fits — not in a tile label.
+    expect(metrics.textContent).not.toMatch(/limita de recompense a fost atinsă/i);
+  });
+
   it("announces the cap WITHOUT implying the invitee loses out", async () => {
     fetchReferralStatus.mockResolvedValue(
       status({
