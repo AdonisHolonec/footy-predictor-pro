@@ -91,22 +91,31 @@ export default function PredictCta({ onPredict, busy = false, disabled = false, 
         text below it, and shrinking past an accessibility rule to win layout
         space is the wrong trade.
       */
-      className={`fp-predict touch-target shrink-0 px-2 py-1.5 font-display text-[10px] font-bold uppercase tracking-normal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3.5 sm:text-xs sm:tracking-wide ${className}`}
+      /*
+        TWO LINES, NOT ONE. On one line this ran ~190px and ate the row: the
+        brand collapsed to "F…" and the date to "27". Stacked, the same words
+        occupy roughly half the width and sit inside the 56px bar beside three
+        other zones instead of crowding them out.
+
+        No fixed width — it is sized by its own content, so the allocation stays
+        correct when the copy or the locale changes.
+      */
+      className={`fp-predict touch-target shrink-0 px-2.5 py-1 font-display text-[10px] font-bold uppercase leading-[1.15] tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3 sm:text-[11px] ${className}`}
     >
       {/*
         Decorative: the readable name is on the button itself.
 
-        Each WORD is its own flex box so the letter gap applies inside both of
-        them and the word gap only between them. Flat, the gap fell between
-        word one's letters and word two as a block, which letter-spaced the
-        first word and left the second tight against itself.
+        Each WORD is its own flex row so the letter gap applies inside both and
+        the line break falls only between them. Flat, the gap fell between word
+        one's letters and word two as a block, which letter-spaced the first
+        word and left the second tight against itself.
       */}
-      <span aria-hidden="true" className="inline-flex items-baseline gap-[0.5em]">
-        <span className="inline-flex items-baseline gap-[0.14em]">
+      <span aria-hidden="true" className="flex flex-col items-center justify-center">
+        <span className="flex items-center gap-[0.1em]">
           <AnimatedWord word={first} delayFrom={0} />
         </span>
         {second ? (
-          <span className="inline-flex items-baseline gap-[0.14em]">
+          <span className="flex items-center gap-[0.1em]">
             <AnimatedWord word={second} delayFrom={first.length} />
           </span>
         ) : null}

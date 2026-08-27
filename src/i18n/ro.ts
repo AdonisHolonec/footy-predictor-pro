@@ -702,6 +702,10 @@ export const ro: Dict = {
       subscriptionActive: "Abonament activ",
       bonusActive: "Bonus activ",
       premiumPlusBonus: "Premium + bonus",
+      /* Corner badges. Decorative reinforcement only — the card already
+         states its tier and its offer in words. */
+      badgeActive: "Activ",
+      badgeFree: "Gratis",
       invite: "Invită",
       inviteReward: "+5 zile Ultra",
       referralHint: "Tu și prietenul tău primiți 5 zile Ultra",

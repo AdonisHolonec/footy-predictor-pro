@@ -111,7 +111,8 @@ export default function ConsumerShell({
       <header className="sticky top-0 z-40 border-b border-[var(--fp-border)] bg-fp-bg-card/95 shadow-fp-sm backdrop-blur-md">
         <div
           data-testid="context-bar"
-          className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8"
+          /* gap kept in step with PlanHeaderStrip's: see the note there. */
+          className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-2 px-3 sm:gap-2.5 sm:px-6 lg:px-8"
         >
           {/*
             BRAND OVER DATE, one stacked column.
