@@ -26,6 +26,8 @@ import { PredictionRow } from "../types";
 import Button from "../design-system/Button";
 import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
+import ReferralBonusToast from "../components/ux/ReferralBonusToast";
+import { useReferralBonusToasts } from "../hooks/useReferralBonusToasts";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import Overlay from "../design-system/Overlay";
 import { useLocale } from "../context/LocaleContext";
@@ -117,6 +119,18 @@ export default function UserDashboard() {
   });
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  /*
+    The referral bonus queue rides the workspace's existing five-minute tier-status
+    cadence instead of polling on its own: a reward is not urgent enough to justify
+    a second timer, and the app already pays for that one. Bumping this key is what
+    tells the hook to look again.
+  */
+  const [bonusRefreshKey, setBonusRefreshKey] = useState(0);
+  const bumpReferralBonuses = useCallback(() => setBonusRefreshKey((k) => k + 1), []);
+  const { current: referralBonus, dismiss: dismissReferralBonus } = useReferralBonusToasts(
+    user?.id ?? null,
+    bonusRefreshKey
+  );
   // Support and Feedback are owned by SupportEntry inside SettingsView; only the
   // prediction report stays here, because it is opened from a card in a list.
   const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
@@ -367,10 +381,11 @@ export default function UserDashboard() {
   useEffect(() => {
     if (!session?.access_token) return;
     const tm = setInterval(() => {
+      bumpReferralBonuses();
       void refreshTierStatus();
     }, TIER_STATUS_POLL_MS);
     return () => clearInterval(tm);
-  }, [session?.access_token, refreshTierStatus]);
+  }, [session?.access_token, refreshTierStatus, bumpReferralBonuses]);
 
   /**
    * Readable labels for Global Special Bet snapshots.
@@ -453,6 +468,14 @@ export default function UserDashboard() {
     try {
       await warm();
       await predict();
+      /*
+        An INVITEE's referral reward is granted inside this very request: the
+        server's post-persistence hook runs attemptQualificationForUser before
+        responding. The grant therefore exists by the time predict() resolves, and
+        re-checking here is what makes their notice immediate rather than
+        whenever the five-minute timer next fires.
+      */
+      bumpReferralBonuses();
     } finally {
       setWarmPredictBusy(false);
     }
@@ -781,6 +804,9 @@ export default function UserDashboard() {
         onPredict={() => void warmAndPredict()}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
+      {/* One toast on screen at a time: the shared primitive is a single-message
+          surface, so a reward waits for a transient status message to clear. */}
+      <ReferralBonusToast bonus={toast ? null : referralBonus} onDismiss={dismissReferralBonus} />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}

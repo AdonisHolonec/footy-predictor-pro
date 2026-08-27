@@ -674,7 +674,27 @@ export const ro: Dict = {
       errorExpired: "Invitația a expirat.",
       errorRateLimited: "Prea multe încercări. Reîncearcă mai târziu.",
       errorUnavailable: "Serviciul de invitații nu este disponibil momentan.",
-      retry: "Reîncearcă"
+      retry: "Reîncearcă",
+      notification: {
+        inviterTitle: "Felicitări!",
+        inviterMessage: "{name} s-a alăturat prin recomandarea ta. Ai primit +{days} zile Ultra.",
+        inviterMessageAnonymous: "Cineva s-a alăturat prin recomandarea ta. Ai primit +{days} zile Ultra.",
+        inviteeTitle: "Felicitări!",
+        inviteeMessage: "Ai primit +{days} zile Ultra pentru că ai acceptat o invitație."
+      }
+    },
+    displayName: {
+      title: "Numele afișat",
+      description: "Prietenii pe care îi inviți văd acest nume când recomandarea ta reușește. Lasă-l gol ca să rămâi anonim.",
+      label: "Nume afișat",
+      placeholder: "ex. Andrei P.",
+      save: "Salvează",
+      saved: "Nume salvat",
+      clear: "Șterge numele",
+      errorTooShort: "Numele trebuie să aibă cel puțin 2 caractere.",
+      errorTooLong: "Numele poate avea cel mult 40 de caractere.",
+      errorEmail: "Nu folosi o adresă de email ca nume afișat.",
+      errorGeneric: "Nu am putut salva numele. Încearcă din nou."
     },
     preferencesTitle: "Preferințe",
     modelInternals: "Arată detaliile modelului",

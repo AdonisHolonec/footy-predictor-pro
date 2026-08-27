@@ -2,6 +2,7 @@ import { checkUserRateLimit } from "./anonymousRateLimit.js";
 import { getRequester } from "./authAdmin.js";
 import { resolveClaimIpHash } from "./referralIpHash.js";
 import { attemptQualificationForUser } from "./referralRewards.js";
+import { acknowledgeReferralBonuses, listPendingReferralBonuses } from "./referralNotifications.js";
 import { CLAIM_REASONS, claimReferral, getOrCreateReferralCode, getReferralStatus } from "./referrals.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "./supabaseAdmin.js";
 
@@ -159,6 +160,33 @@ async function handleStatus(req, res, ctx) {
   return res.status(200).json({ ok: true, referral: status });
 }
 
+/**
+ * The referral bonuses this caller has not been shown yet.
+ *
+ * The response is already presentation-safe: the module returns a grant id, a
+ * role, a day count and — for inviter grants only — the invitee's chosen public
+ * display name. No email, no user id, no attribution id, no ip_hash reaches the
+ * client, because none of them is in the payload to begin with.
+ */
+async function handleBonus(req, res, ctx) {
+  const bonuses = await listPendingReferralBonuses(ctx.user.id, { supabase: ctx.supabase });
+  return res.status(200).json({ ok: true, bonuses });
+}
+
+/**
+ * Mark bonuses as shown.
+ *
+ * The body carries grant ids and NOTHING else — no user id, no name, no day
+ * count. Anything the client could otherwise forge is derived server-side from
+ * the session, and the ids themselves are re-checked against the caller's own
+ * grants before a row is written.
+ */
+async function handleBonusAck(req, res, ctx) {
+  const grantIds = Array.isArray(readBody(req).grantIds) ? readBody(req).grantIds : [];
+  const result = await acknowledgeReferralBonuses(ctx.user.id, grantIds, { supabase: ctx.supabase });
+  return res.status(200).json({ ok: true, acknowledged: result.acknowledged });
+}
+
 export async function handleReferralApi(req, res) {
   const view = String(req.query?.view || "");
   const method = String(req.method || "GET").toUpperCase();
@@ -182,6 +210,16 @@ export async function handleReferralApi(req, res) {
     if (view === "status") {
       if (method !== "GET") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
       return await handleStatus(req, res, ctx);
+    }
+
+    if (view === "bonus") {
+      if (method !== "GET") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+      return await handleBonus(req, res, ctx);
+    }
+
+    if (view === "bonus-ack") {
+      if (method !== "POST") return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
+      return await handleBonusAck(req, res, ctx);
     }
 
     return res.status(400).json({ ok: false, error: "Vedere necunoscută." });

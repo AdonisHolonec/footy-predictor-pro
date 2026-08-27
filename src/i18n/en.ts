@@ -674,7 +674,27 @@ export const en: Dict = {
       errorExpired: "The invitation expired.",
       errorRateLimited: "Too many attempts. Try again later.",
       errorUnavailable: "The invitation service is unavailable right now.",
-      retry: "Try again"
+      retry: "Try again",
+      notification: {
+        inviterTitle: "Congratulations!",
+        inviterMessage: "{name} joined through your referral. You received +{days} Ultra days.",
+        inviterMessageAnonymous: "Someone joined through your referral. You received +{days} Ultra days.",
+        inviteeTitle: "Congratulations!",
+        inviteeMessage: "You received +{days} Ultra days for accepting an invitation."
+      }
+    },
+    displayName: {
+      title: "Display name",
+      description: "Friends you invite see this name when your referral succeeds. Leave it empty to stay anonymous.",
+      label: "Display name",
+      placeholder: "e.g. Andrei P.",
+      save: "Save",
+      saved: "Name saved",
+      clear: "Clear name",
+      errorTooShort: "The name must be at least 2 characters.",
+      errorTooLong: "The name can be at most 40 characters.",
+      errorEmail: "Do not use an email address as a display name.",
+      errorGeneric: "Could not save the name. Try again."
     },
     preferencesTitle: "Preferences",
     modelInternals: "Show model internals",
