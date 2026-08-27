@@ -13,7 +13,15 @@
 .fp-predict {
   --fp-predict-radius: var(--fp-radius-sm);
   /* Brand red, never a literal — theming and dark mode both flow through this. */
-  --fp-predict-face: var(--fp-accent);
+  /*
+    accent-text, not accent. White on --fp-accent measures 4.20:1 and this
+    label is 10-11px bold, which WCAG counts as normal text at 4.5:1 — the
+    product's primary action was failing AA in every theme. accent-text is
+    the deeper token the design system already defines for exactly this, and
+    --fp-on-accent flips the ink so the luminous dark-theme greens stay
+    legible instead of carrying white.
+  */
+  --fp-predict-face: var(--fp-accent-text);
   --fp-predict-face-hi: var(--fp-accent-hover);
   --fp-predict-transition: 0.32s;
 
@@ -26,7 +34,7 @@
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: var(--fp-predict-radius);
   background-color: var(--fp-predict-face);
-  color: #fff;
+  color: var(--fp-on-accent);
   cursor: pointer;
   user-select: none;
 
@@ -156,5 +164,43 @@
 
   .fp-predict:active:not(:disabled) {
     transform: none;
+  }
+}
+
+/*
+  BUSY IS NOT BLOCKED.
+
+  Both used to render as the same 50% opacity, so a user who pressed Generate
+  three minutes before kickoff could not tell "it is running" from "you are out
+  of predictions". The face keeps its colour and sweeps the existing highlight
+  across itself — an indeterminate progress cue, not a spinner bolted on.
+*/
+.fp-predict.is-busy {
+  cursor: progress;
+  opacity: 1;
+}
+
+.fp-predict.is-busy::before {
+  opacity: 1;
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.32) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: fp-predict-busy 1.1s linear infinite;
+}
+
+@keyframes fp-predict-busy {
+  from { background-position: 140% 0; }
+  to { background-position: -140% 0; }
+}
+
+/* Reduced motion keeps the state legible without the sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .fp-predict.is-busy::before {
+    animation: none;
+    opacity: 0.55;
   }
 }

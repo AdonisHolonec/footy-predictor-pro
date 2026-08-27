@@ -193,6 +193,35 @@ Buttons and cards feel precise and restrained: small, deliberate feedback (a sub
 - **Style:** Fully pill-shaped (`rounded-full`), hairline border, JetBrains Mono label type (0.6875rem, uppercase, 0.08em tracking).
 - **Tone:** Each semantic tone (neutral / accent / win / loss / value) pairs a ~30%-opacity border with a ~10–20%-opacity background fill of the same ink — never a solid fill, which would compete with the brand accent for visual weight.
 
+#### Exception: the header corner chip (solid fill, approved)
+
+One component departs from the Tone rule above, deliberately and with the product owner's sign-off: the rotated corner chip on the header's plan and referral cards (`CornerBadge` in `PlanHeaderStrip.tsx`), rendering **ACTIV** and **GRATIS**. It uses a **solid fill with inverted ink**, not a tinted fill, because the reference art treats it as a physical sticker sat on the card's corner rather than an inline status pill.
+
+The exception is bounded. A solid chip is allowed **only** when all of these hold:
+
+- It is decorative reinforcement — the card already states the same fact in words — and is therefore `aria-hidden`.
+- It is absolutely positioned and costs the layout nothing: removing it must not change the card's width or the bar's height.
+- Its fill comes from `--fp-chip-active` / `--fp-chip-free` and its text from `--fp-on-accent`, never a raw Tailwind hue. Each pair is defined per theme and clears **4.5:1**, the threshold for small bold labels.
+- It never takes a semantic ink's hue where that would misread. In the dark and high-contrast themes the brand accent *is* green, so `--fp-chip-free` resolves to a **neutral** there — a green "GRATIS" beside prediction content sits in Win Green's hue family, which in this system means *a bet that hit*.
+
+Anything failing one of those conditions is a normal badge and follows the Tone rule.
+
+#### On-fill colour pairs
+
+`--fp-accent-text` exists for coloured **text on paper** and deliberately falls back to `--fp-accent` in the dark themes, so it cannot carry white text on a filled surface. Three tokens cover the filled case, defined in every theme:
+
+| Token | Light | Dark | Purpose |
+|---|---|---|---|
+| `--fp-on-accent` | `#ffffff` | `#0a0d0b` | Ink that sits on any accent/chip fill |
+| `--fp-chip-active` | `#157a4a` | `#22d06e` | The "active" corner chip |
+| `--fp-chip-free` | `#d22b11` | `#ededed` (neutral) | The "free" corner chip |
+
+Light themes pair deep fills with white; dark themes pair luminous fills with near-black, because the dark palette's greens are too bright to carry white text.
+
+#### Tier label inks
+
+`--fp-tier-free` / `--fp-tier-premium` / `--fp-tier-ultra` carry the plan card's tier text. They exist because **`tailwind.config.js` sets no `darkMode`**, so Tailwind's `dark:` variant is *media*-keyed — it follows the operating system, not the theme the app applies through `html.theme-*`. A user choosing Dark in Settings on a light OS kept light-mode ink on a dark card (`sky-700` measured **2.59:1**). Any text colour that must follow the app's own theme belongs in a token, not a `dark:` variant. Borders and fills are non-text and may stay on Tailwind utilities.
+
 ### Cards / Containers
 - **Corner Style:** 16px radius.
 - **Background:** Surface Card (white) on Paper/Paper Elevated page backgrounds — cards are always the brightest neutral in view.

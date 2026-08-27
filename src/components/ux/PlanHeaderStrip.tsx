@@ -56,11 +56,19 @@ type Props = {
   now?: number;
 };
 
-/** Plan colours. Text always states the tier — see the header comment. */
+/**
+ * Plan colours. Text always states the tier — see the header comment.
+ *
+ * TEXT COMES FROM A TOKEN, NOT A `dark:` VARIANT. tailwind.config sets no
+ * darkMode, so `dark:` is media-keyed: it follows the OS, not the theme the
+ * app applies through html.theme-*. A user choosing Dark in Settings on a
+ * light OS kept the light ink on a dark card — sky-700 on the dark surface
+ * measured 2.59:1. The border and fill are non-text and stay on Tailwind.
+ */
 const TONE: Record<UserTier, string> = {
-  free: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  premium: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  ultra: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+  free: "border-amber-500/40 bg-amber-500/10 text-[var(--fp-tier-free)]",
+  premium: "border-emerald-500/40 bg-emerald-500/10 text-[var(--fp-tier-premium)]",
+  ultra: "border-sky-500/40 bg-sky-500/10 text-[var(--fp-tier-ultra)]"
 };
 
 /**
@@ -97,6 +105,21 @@ export function formatBonusRemaining(ms: number, unitDay: string, unitHour: stri
  * Returns null when nothing is counting down, which is the normal state of a
  * free plan — free does not expire, so it has no time to show.
  */
+/**
+ * Which plural key a count needs.
+ *
+ * Romanian has three forms and the third is not optional: 1 predicție,
+ * 5 predicții, 21 DE predicții. A single interpolated string rendered
+ * "1 predicții azi" to a first-class locale. English collapses few/other,
+ * so the same three keys serve both catalogues.
+ */
+function quotaKey(n: number): string {
+  const base = "account.header.quotaLeft";
+  if (n === 1) return `${base}One`;
+  const mod = n % 100;
+  return n === 0 || (mod >= 1 && mod <= 19) ? `${base}Few` : `${base}Other`;
+}
+
 export function resolveAccessEnd(input: {
   hasActiveBonus: boolean;
   bonusUntil?: string | null;
@@ -135,10 +158,10 @@ export function resolveAccessEnd(input: {
 function CornerBadge({ tone, label }: { tone: "active" | "free"; label: string }) {
   const skin =
     tone === "active"
-      ? "bg-emerald-500 shadow-emerald-600/30"
+      ? "bg-[var(--fp-chip-active)] shadow-emerald-900/25"
       : // The offer tag borrows the brand red rather than the danger token: this
         // says "costs nothing", it is not a warning.
-        "bg-[var(--fp-accent)] shadow-red-900/25";
+        "bg-[var(--fp-chip-free)] shadow-red-900/25";
   return (
     <span
       aria-hidden="true"
@@ -155,7 +178,7 @@ function CornerBadge({ tone, label }: { tone: "active" | "free"; label: string }
         reach down into the tier text. Six degrees keeps the tilt the design
         asks for and gives the words underneath their space back.
       */
-      className={`pointer-events-none absolute -right-2 -top-2.5 rotate-6 rounded-full px-1 py-0 font-mono text-[10px] font-bold uppercase leading-none tracking-tight text-white shadow-sm ${skin}`}
+      className={`pointer-events-none absolute -right-2 -top-2.5 ${tone === "active" ? "rotate-6" : "-rotate-6"} rounded-full px-1 py-0 font-mono text-[10px] font-bold uppercase leading-none tracking-tight text-[var(--fp-on-accent)] shadow-sm ${skin}`}
     >
       {label}
     </span>
@@ -215,6 +238,23 @@ export default function PlanHeaderStrip({
           t("account.header.unitMinute")
         )
       : "";
+
+  /*
+    The same figure in words, for assistive technology only. Built from the
+    same accessEnd, so the two can never disagree.
+  */
+  const spokenRemaining = (() => {
+    if (accessEnd === null) return "";
+    const total = Math.max(0, Math.floor((accessEnd - clock) / 60000));
+    const d = Math.floor(total / 1440);
+    const h = Math.floor((total % 1440) / 60);
+    const m = total % 60;
+    const parts: string[] = [];
+    if (d > 0) parts.push(t(d === 1 ? "account.header.spokenDayOne" : "account.header.spokenDayMany", { count: d }));
+    if (h > 0) parts.push(t(h === 1 ? "account.header.spokenHourOne" : "account.header.spokenHourMany", { count: h }));
+    parts.push(t(m === 1 ? "account.header.spokenMinuteOne" : "account.header.spokenMinuteMany", { count: m }));
+    return parts.join(" ");
+  })();
 
   /*
     A free plan has no expiry, so there is no countdown to show — and inventing
@@ -292,6 +332,8 @@ export default function PlanHeaderStrip({
       data-notice={notice ? "true" : undefined}
     >
       <div
+        role="group"
+        aria-label={t("account.header.planAria", { tier: t(`account.header.tier.${tier}`) })}
         data-testid="plan-card"
         data-tier={tier}
         /*
@@ -346,17 +388,30 @@ export default function PlanHeaderStrip({
               */}
               {hasActiveBonus ? (
                 <>
-                  <span className="hidden opacity-80 sm:inline">{detail}</span>
+                  {/* No nested opacity: the parent already carries opacity-80,
+                  and stacking them put 10px type at ~0.64 effective. */}
+              <span className="hidden sm:inline">{detail}</span>
                   <span className="hidden sm:inline">{" · "}</span>
                 </>
               ) : null}
               {/* Mono + bold: the number is the thing being looked up. */}
-              <span className="font-mono font-bold opacity-100" data-testid="plan-time">
+              {/* Sighted users get the compact form; AT gets the words, because
+                  "11z 3h 47m" announces as unparseable single letters. */}
+              <span className="font-mono font-bold opacity-100" data-testid="plan-time" aria-hidden="true">
                 {remaining}
               </span>
+              <span className="sr-only">{spokenRemaining}</span>
             </>
           ) : quotaLeft !== null ? (
-            <span data-testid="plan-time">{t("account.header.quotaLeft", { count: quotaLeft })}</span>
+            /*
+              tabular-nums, not font-mono. The rule asks for "tabular-nums OR
+              JetBrains Mono"; swapping the family widened this line enough to
+              clip the brand at 390, and the brand outranks it. Tabular figures
+              in Archivo satisfy the rule at the original width.
+            */
+            <span className="tabular-nums" data-testid="plan-time">
+              {t(quotaKey(quotaLeft), { count: quotaLeft })}
+            </span>
           ) : (
             detail
           )}
@@ -374,7 +429,7 @@ export default function PlanHeaderStrip({
           which sells nothing. Its content is short and fixed, so it is sized to
           fit; only a NAME is unbounded, and the notice branch caps that itself.
         */
-        className="relative flex shrink-0 flex-col items-center justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/10 px-1.5 py-1 text-center leading-tight sm:px-2 text-[var(--fp-accent)] transition-colors hover-fine:bg-fp-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
+        className="touch-target relative flex shrink-0 flex-col items-center justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/[0.06] px-1.5 py-1 text-center leading-tight sm:px-2 text-[var(--fp-accent-text)] transition-colors hover-fine:bg-fp-accent/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]"
       >
         {/*
           The offer costs the user nothing, which is the whole pitch — so the
@@ -404,7 +459,7 @@ export default function PlanHeaderStrip({
               truncate above them.
             */
             <span className="flex min-w-0 items-baseline gap-1 text-[10px] font-semibold" data-testid="referral-detail">
-              <span className="min-w-0 max-w-[3.2rem] truncate sm:max-w-[8rem]" data-testid="referral-name">
+              <span className="min-w-0 max-w-[2rem] truncate sm:max-w-[8rem]" data-testid="referral-name">
                 {notice.referral.name}
               </span>
               <span className="shrink-0 whitespace-nowrap" data-testid="referral-fixed">
@@ -434,6 +489,9 @@ export default function PlanHeaderStrip({
         countdown minute ticks. The arrival is announced once here, in full, which
         is also the wording Account › Notifications keeps.
       */}
+      {/* title= is mouse-only; the offer terms need a text home for touch and AT. */}
+      <span className="sr-only">{t("account.header.referralHint")}</span>
+
       <p aria-live="polite" role="status" className="sr-only">
         {notice ? `${notice.referral.title} ${notice.referral.detail}. ${notice.plan.title} ${notice.plan.detail}.` : ""}
       </p>

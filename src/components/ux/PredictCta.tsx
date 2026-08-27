@@ -25,6 +25,8 @@ type Props = {
   disabled?: boolean;
   /** Tooltip and accessible description — the caller owns the wording. */
   hint: string;
+  /** Announced while a run is in flight, so busy never reads as blocked. */
+  busyLabel?: string;
   className?: string;
 };
 
@@ -55,15 +57,28 @@ function AnimatedWord({ word, delayFrom }: { word: string; delayFrom: number }) 
   );
 }
 
-export default function PredictCta({ onPredict, busy = false, disabled = false, hint, className = "" }: Props) {
+export default function PredictCta({
+  onPredict,
+  busy = false,
+  disabled = false,
+  hint,
+  busyLabel,
+  className = ""
+}: Props) {
   const { t } = useLocale();
   const label = t("shell.predict");
   /*
     Split on the space so the second word can drop at narrow widths without a
     second i18n key holding a duplicate of the same copy.
   */
-  const [first, ...rest] = label.split(" ");
-  const second = rest.join(" ");
+  /*
+    Split on the LAST space, not the first. "Generate Match Predictions"
+    split on the first put a bare space character into a letter-gapped flex
+    row, rendering a triple-width hole on line two.
+  */
+  const cut = label.lastIndexOf(" ");
+  const first = cut === -1 ? label : label.slice(0, cut);
+  const second = cut === -1 ? "" : label.slice(cut + 1);
 
   return (
     <button
@@ -78,7 +93,12 @@ export default function PredictCta({ onPredict, busy = false, disabled = false, 
         existing name and satisfies Label in Name, because it opens with the
         visible label word for word.
       */
-      aria-label={hint}
+      /*
+        Busy and blocked must not be the same announcement. The visual states
+        already differ (see the .is-busy sweep in predictCta.css); this is the
+        half a screen reader gets, and it used to be identical in both.
+      */
+      aria-label={busy ? busyLabel : hint}
       title={hint}
       data-testid="predict-cta"
       /*
@@ -100,7 +120,7 @@ export default function PredictCta({ onPredict, busy = false, disabled = false, 
         No fixed width — it is sized by its own content, so the allocation stays
         correct when the copy or the locale changes.
       */
-      className={`fp-predict touch-target shrink-0 px-2.5 py-1 font-display text-[10px] font-bold uppercase leading-[1.15] tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3 sm:text-[11px] ${className}`}
+      className={`fp-predict${busy ? " is-busy" : ""} touch-target shrink-0 px-2 py-1 font-display text-[10px] font-bold uppercase leading-[1.15] tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3 sm:text-[11px] ${className}`}
     >
       {/*
         Decorative: the readable name is on the button itself.

@@ -141,6 +141,19 @@ export default function ConsumerShell({
               title={t("shell.selectDate")}
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
+              /*
+                NO touch-target HERE, deliberately. It was added and then removed
+                after probing: the brand column is 54px tall with this input
+                flush to its bottom edge, so a 44px expansion is clipped by the
+                column's overflow-hidden above and by the 56px bar below —
+                elementFromPoint returned the brand span at the top of the
+                intended area and <main> at the bottom. The class would have
+                claimed a target it cannot deliver.
+
+                A real 44px date control needs the brand out of this column or a
+                taller bar; both are design decisions, not a class. The honest
+                number today is 28px, and it is recorded in DESIGN.md.
+              */
               className="h-6 w-full min-w-0 max-w-[6.6rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[10px] font-medium leading-none text-[var(--fp-text)] sm:h-7 sm:max-w-[7.2rem] sm:text-xs"
             />
           </div>
@@ -166,7 +179,12 @@ export default function ConsumerShell({
                     other Buttons in the app. It owns no logic — the handler, the
                     busy flag and the quota rules all still live above it.
                   */}
-                  <PredictCta onPredict={onPredict} busy={predictBusy} hint={t("shell.predictTip")} />
+                  <PredictCta
+                    onPredict={onPredict}
+                    busy={predictBusy}
+                    hint={t("shell.predictTip")}
+                    busyLabel={t("shell.predictBusy")}
+                  />
                 </span>
               </Tooltip>
             ) : null}

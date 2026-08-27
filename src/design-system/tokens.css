@@ -27,6 +27,19 @@
   /* Darker than --fp-accent for small/bold TEXT use only (~5:1 on white vs. --fp-accent's ~4.2:1);
      keep --fp-accent for large text, borders, and non-text UI fills. */
   --fp-accent-text: #d22b11;
+
+  /* ON-FILL PAIRS. A solid coloured chip needs an ink that flips with the
+     theme: --fp-accent-text exists for coloured TEXT on paper and falls back
+     to --fp-accent in dark, so it cannot carry white text on a fill. These
+     three do. Light themes use deep fills + white; dark themes use bright
+     fills + near-black, because the dark palette's greens are luminous.
+     Every pair below clears 4.5:1, the threshold for small bold labels. */
+  --fp-on-accent: #ffffff;
+  --fp-chip-active: #047857; /* emerald-700, NOT Win Green #157a4a */
+  --fp-chip-free: #d22b11;
+  --fp-tier-free: #a16207;   /* amber-700, NOT Value Amber #b45309 */
+  --fp-tier-premium: #047857;
+  --fp-tier-ultra: #0369a1;
   --fp-purple: #7c3aed;
 
   /* Text — near-black ink, never stark #000 */
@@ -160,6 +173,19 @@
 /* Light — mirrors :root explicitly so the theme block is self-contained
    (root is the pre-JS/no-class fallback; this is what applyTheme() applies) */
 html.theme-light {
+
+  /* ON-FILL PAIRS. A solid coloured chip needs an ink that flips with the
+     theme: --fp-accent-text exists for coloured TEXT on paper and falls back
+     to --fp-accent in dark, so it cannot carry white text on a fill. These
+     three do. Light themes use deep fills + white; dark themes use bright
+     fills + near-black, because the dark palette's greens are luminous.
+     Every pair below clears 4.5:1, the threshold for small bold labels. */
+  --fp-on-accent: #ffffff;
+  --fp-chip-active: #047857; /* emerald-700, NOT Win Green #157a4a */
+  --fp-chip-free: #d22b11;
+  --fp-tier-free: #a16207;   /* amber-700, NOT Value Amber #b45309 */
+  --fp-tier-premium: #047857;
+  --fp-tier-ultra: #0369a1;
   --fp-bg: #f3f2f2;
   --fp-bg-elevated: #eae9e9;
   --fp-bg-card: #ffffff;
@@ -226,6 +252,15 @@ html.theme-light {
 
 /* Dark — now the opt-in alternative (was default pre-Sprint-2), reachable via Settings */
 html.theme-dark {
+
+  /* See the on-fill note in :root. Dark greens are luminous, so the ink
+     inverts to near-black rather than the fill darkening. */
+  --fp-on-accent: #0a0d0b;
+  --fp-chip-active: #22d06e;
+  --fp-chip-free: #ededed; /* true neutral: the dark accent is green and would collide */
+  --fp-tier-free: #fbbf24;
+  --fp-tier-premium: #34d399;
+  --fp-tier-ultra: #7dd3fc;
   --fp-bg: #0a0d0b;
   --fp-bg-elevated: #10140f;
   --fp-bg-card: #161b17;
@@ -291,6 +326,14 @@ html.theme-dark {
 }
 
 html.theme-contrast {
+
+  /* See the on-fill note in :root. */
+  --fp-on-accent: #000000;
+  --fp-chip-active: #3ddc84;
+  --fp-chip-free: #ffffff; /* neutral: see the dark-theme note */
+  --fp-tier-free: #fcd34d;
+  --fp-tier-premium: #6ee7b7;
+  --fp-tier-ultra: #bae6fd;
   --fp-bg: #000000;
   --fp-bg-elevated: #0a0a0a;
   --fp-bg-card: #111111;
