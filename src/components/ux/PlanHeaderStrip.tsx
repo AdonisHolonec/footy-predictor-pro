@@ -3,15 +3,20 @@ import { useLocale } from "../../context/LocaleContext";
 import type { UserTier } from "../../types";
 import type { ReferralBonus } from "../../services/referralNotificationService";
 import { isPredictBlocked, type PredictQuota } from "./predictState";
+import { buildReferralNotice } from "./referralNotice";
 
 /**
  * The permanent status strip in the workspace chrome: what you have, and the one
  * way to get more.
  *
- * WHY IT EXISTS. Plan and referral both lived in Account — a screen you have to
- * navigate to. A user could be running on bonus Ultra time and never see it
- * expiring, and the referral that would extend it was two clicks away. Both now
- * sit beside Predict, where the eye already goes.
+ * WHY IT EXISTS. The plan lived in Account — a screen you have to navigate to —
+ * so a user could be running on bonus Ultra time and never see it expiring. It
+ * now sits beside Predict, where the eye already goes.
+ *
+ * The referral campaign made the same journey and then kept going: it is no
+ * longer in this bar at all. Four zones did not fit 56px at 390, and the one
+ * that had to move was the marketing surface, not the chrome. See
+ * ReferralCampaignStrip.
  *
  * IT RENDERS THE EFFECTIVE TIER, NEVER THE PAID ONE. `entitlement.tier` is what
  * the server says the user can do right now, bonus and trials already applied;
@@ -41,16 +46,16 @@ type Props = {
    * only honest answer to "how much have I got left" for it.
    */
   quota?: PredictQuota | null;
-  /** Opens the full referral surface in Account. Never claims anything. */
-  onOpenReferral: () => void;
   /**
-   * A freshly received referral bonus, shown INSIDE the two cards for a few
+   * A freshly received referral bonus, shown in the chrome itself for a few
    * seconds rather than as a separate toast.
    *
-   * Each half of the news lands on the card responsible for it: the reward on the
-   * plan card, who joined on the referral card. The copy is deliberately terse —
-   * these are 100px-wide surfaces, and the full sentence lives in
-   * Account › Notifications.
+   * Each half of the news lands on the surface responsible for it: the reward
+   * here on the plan card, who joined on the campaign strip below the bar. Both
+   * halves come from one builder (referralNotice.ts) because those are now two
+   * components. The copy is deliberately terse — this is a ~100px-wide card —
+   * and the full sentence lives in Account › Notifications, as well as in the
+   * single spoken announcement at the bottom of this file.
    */
   bonus?: ReferralBonus | null;
   /** Injected in tests; production reads the real clock. */
@@ -302,7 +307,28 @@ export function resolveAccess(input: {
  * The card is deliberately not overflow-hidden so the tag can overhang the
  * corner the way the design asks.
  */
-function CornerBadge({ tone, label }: { tone: "active" | "free"; label: string }) {
+export function CornerBadge({
+  tone,
+  label,
+  placement = "corner"
+}: {
+  tone: "active" | "free";
+  label: string;
+  /*
+    WHERE the chip sits on its host — same chip, same tokens, same decorative
+    contract, two hosts with different shapes.
+
+    "corner" is the plan card's: a sticker overhanging the top-right corner of a
+    tall card, which has room above it inside a 56px bar.
+
+    "inline-start" is the campaign pill's. Overhanging a 26px pill's corner put
+    the chip's top edge 4.4px ABOVE the strip and straddling the header's bottom
+    border, which reads as a rendering fault rather than a sticker. Anchored to
+    the leading edge and vertically centred it stays inside its own row, which
+    is also how the reference composition places it.
+  */
+  placement?: "corner" | "inline-start";
+}) {
   const skin =
     tone === "active"
       ? // Neutral shadow, not shadow-emerald-900. The fill is a token that moves
@@ -330,7 +356,11 @@ function CornerBadge({ tone, label }: { tone: "active" | "free"; label: string }
         reach down into the tier text. Six degrees keeps the tilt the design
         asks for and gives the words underneath their space back.
       */
-      className={`pointer-events-none absolute -right-2 -top-2.5 ${tone === "active" ? "rotate-6" : "-rotate-6"} rounded-full px-1 py-0 font-mono text-[10px] font-bold uppercase leading-none tracking-tight text-[var(--fp-on-accent)] shadow-sm ${skin}`}
+      className={`pointer-events-none absolute ${
+        placement === "corner"
+          ? "-right-2 -top-2.5"
+          : "-left-2.5 top-1/2 -translate-y-1/2"
+      } ${tone === "active" ? "rotate-6" : "-rotate-6"} rounded-full px-1 py-0 font-mono text-[10px] font-bold uppercase leading-none tracking-tight text-[var(--fp-on-accent)] shadow-sm ${skin}`}
     >
       {label}
     </span>
@@ -345,7 +375,6 @@ export default function PlanHeaderStrip({
   subscriptionUntil = null,
   trials,
   quota = null,
-  onOpenReferral,
   bonus = null,
   now
 }: Props) {
@@ -473,56 +502,31 @@ export default function PlanHeaderStrip({
   const detail = t(access.reasonKey);
 
   /*
-    The two halves of a reward, each on the card that owns it: the days on the
-    plan card, the person on the referral card. Terse by necessity — a card is
-    roughly 100px wide, and the full sentence lives in Account › Notifications.
+    The two halves of a reward, each on the surface that owns it: the days on
+    this plan card, the person on the referral campaign below the header. The
+    derivation is shared (referralNotice.ts) precisely because those two
+    surfaces are no longer the same component — one message, one wording.
+
+    The spoken announcement at the bottom of this file still carries BOTH
+    halves, unchanged: a screen-reader user hears one sentence, not two
+    fragments split across a layout boundary they cannot perceive.
   */
-  const notice = bonus
-    ? {
-        plan: {
-          title: t("account.header.notice.planTitle", { days: bonus.days }),
-          detail: t("account.header.notice.planSubject")
-        },
-        /*
-          FIXED COPY AND THE NAME TRAVEL SEPARATELY.
-
-          They used to be one interpolated string, so the single clamp that
-          bounds an unknowable name also cut the product's own words — at 390px
-          "Invitație acceptată" lost its last characters despite being fixed
-          text that always fits when nothing else is competing for the space.
-
-          `name` is null whenever the whole message is fixed (invitee, or an
-          inviter with no display name), and the card renders one unclamped
-          span for those. `detail` keeps the assembled sentence for the screen
-          reader, which needs it whole.
-        */
-        referral: {
-          title: t("account.header.notice.referralTitle"),
-          name: bonus.role === "inviter" && bonus.inviteeName ? bonus.inviteeName : null,
-          fixed:
-            bonus.role === "invitee"
-              ? t("account.header.notice.referralAccepted")
-              : bonus.inviteeName
-                ? t("account.header.notice.referralJoinedSuffix")
-                : t("account.header.notice.referralJoinedAnonymous"),
-          detail:
-            bonus.role === "invitee"
-              ? t("account.header.notice.referralAccepted")
-              : bonus.inviteeName
-                ? t("account.header.notice.referralJoined", { name: bonus.inviteeName })
-                : t("account.header.notice.referralJoinedAnonymous")
-        }
-      }
-    : null;
+  const notice = buildReferralNotice(bonus, t);
 
   return (
     <div
       /*
-        The SAME gap the bar uses between its own zones. The strip holds two of
-        the four zones, so if these two values differ the row reads as
-        arbitrarily spaced — brand|plan wide, plan|referral tight.
+        ONE CARD NOW, so no gap.
+
+        This used to carry the bar's own `gap-1.5 sm:gap-2.5` because the strip
+        held two of the row's zones — the plan card and the referral card — and
+        a different value would have read as arbitrary spacing. The referral
+        campaign moved out to its own strip below the bar, so the only visible
+        child left is the plan card and the gap had nothing to space. It is
+        removed rather than left in as an inert class that would tell the next
+        reader this container still lays out a pair.
       */
-      className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2.5"
+      className="flex min-w-0 shrink items-center"
       data-testid="plan-header-strip"
       data-notice={notice ? "true" : undefined}
     >
@@ -688,99 +692,23 @@ export default function PlanHeaderStrip({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onOpenReferral}
-        data-testid="referral-cta"
-        title={t("account.header.referralHint")}
-        /*
-          shrink-0 UNLESS it is holding a name.
+      {/*
+        THE REFERRAL CAMPAIGN IS NOT IN THIS BAR ANY MORE.
 
-          Letting this card absorb the squeeze unconditionally is what clipped
-          the offer: at 390px "+5 zile Ultra" became "+5 zile Ul…", which sells
-          nothing. So at rest it is sized to fit and never yields.
+        It used to sit here, as a third card competing for a 56px row that also
+        has to hold the brand, the browsed date, the plan and Predict. At 390px
+        the sum of every zone's min-content width exceeded the row, and the
+        thing that gave way was always the wrong thing — the brand truncating to
+        "F…", or the offer to "+5 zile Ul…", which sells nothing.
 
-          With a notice carrying a dynamic name it becomes the row's pressure
-          valve, because that name is the one thing the priority order permits
-          to lose characters — everything inside it that is fixed copy stays
-          shrink-0 and whole. Before this the valve was the brand, which the
-          same order ranks first.
-        */
-        className={`touch-target relative flex ${notice?.referral.name ? "min-w-0 shrink" : "shrink-0"} flex-col items-center justify-center rounded-[var(--fp-radius-sm)] border border-fp-accent/35 bg-fp-accent/[0.06] px-1.5 py-1 text-center leading-tight sm:px-2 text-[var(--fp-accent-text)] transition-colors hover-fine:bg-fp-accent/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)]`}
-      >
-        {/*
-          The offer costs the user nothing, which is the whole pitch — so the
-          tag says so. It is hidden during a notice: the card is announcing a
-          reward then, and a "free" tag on top of that reads as noise.
-        */}
-        {!notice ? <CornerBadge tone="free" label={t("account.header.badgeFree")} /> : null}
-        {/* nowrap: "+5 zile" breaking across two lines grew the card past the
-            56px bar it has to live inside. */}
-        <span className="shrink-0 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-wider">
-          {notice ? notice.referral.title : t("account.header.invite")}
-        </span>
-        {/*
-          The fixed offer and a dynamic name need opposite treatment, so they no
-          longer share one className: the offer must never be cut, the name must
-          always be allowed to be.
-        */}
-        {notice ? (
-          notice.referral.name ? (
-            /*
-              Name + fixed words, in two containers rather than one.
+        The campaign is a marketing surface, not a navigation control, so it is
+        the one that moves: it now renders as its own strip immediately below
+        this header (ReferralCampaignStrip), where it stays on the first
+        viewport without bidding against Predict for width.
 
-              The clamp belongs to the name alone: it is the only unknowable
-              part, so it is the only part allowed to lose characters. The
-              words after it are the product's own and stay whole at every
-              width, which is why they carry shrink-0 rather than sharing the
-              truncate above them.
-            */
-            <span
-              /*
-                w-full is load-bearing. The card is a COLUMN flex box with
-                items-center, which sizes every child to its own content — so
-                min-w-0 on the name below had nothing to shrink against, and a
-                long name rendered at its full natural width straight out
-                through the card and under the Predict button. Matching this row
-                to the card's own width is what gives the name a boundary to
-                truncate at, and that width is decided by the priority order
-                rather than by the name.
-              */
-              className="flex w-full min-w-0 items-baseline justify-center gap-1 text-[10px] font-semibold"
-              data-testid="referral-detail"
-            >
-              {/*
-                NO fixed max-width. `max-w-[2rem]` was a 32px cap — about four
-                characters — so "Alexandra" became "Ale…" at 390px whether or
-                not the row was actually short of space, while the brand beside
-                it truncated to make room for a name nobody could read. The cap
-                is gone and the span simply shrinks: flex hands the shortfall to
-                the only item in the row that is allowed to lose characters, and
-                gives it every pixel the fixed copy is not using.
-              */}
-              <span className="min-w-0 shrink truncate" data-testid="referral-name">
-                {notice.referral.name}
-              </span>
-              <span className="shrink-0 whitespace-nowrap" data-testid="referral-fixed">
-                {notice.referral.fixed}
-              </span>
-            </span>
-          ) : (
-            /* Entirely fixed copy — nothing here may ever be cut. */
-            <span
-              className="whitespace-nowrap text-[10px] font-semibold"
-              data-testid="referral-detail"
-              data-fixed="true"
-            >
-              {notice.referral.fixed}
-            </span>
-          )
-        ) : (
-          <span className="whitespace-nowrap text-[10px] font-semibold" data-testid="referral-detail">
-            {t("account.header.inviteReward")}
-          </span>
-        )}
-      </button>
+        What stays here is the reward's PLAN half and the spoken announcement
+        below, which still carries the whole sentence.
+      */}
 
       {/*
         The cards themselves are NOT live regions. They are permanent chrome, and

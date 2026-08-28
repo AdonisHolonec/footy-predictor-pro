@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../context/LocaleContext";
 import { ensureCatalog } from "../../i18n";
 import PlanHeaderStrip, { formatBonusRemaining } from "./PlanHeaderStrip";
+import ReferralCampaignStrip from "./ReferralCampaignStrip";
 import type { UserTier } from "../../types";
 
 /**
@@ -16,6 +17,30 @@ import type { UserTier } from "../../types";
 const NOW = Date.parse("2026-08-27T12:00:00.000Z");
 
 function renderStrip(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {}) {
+  render(
+    <LocaleProvider>
+      <PlanHeaderStrip
+        tier={"free" as UserTier}
+        requestedTier={"free" as UserTier}
+        hasActiveBonus={false}
+        bonusUntil={null}
+        now={NOW}
+        {...over}
+      />
+    </LocaleProvider>
+  );
+}
+
+/*
+  THE WHOLE CHROME, both surfaces at once.
+
+  A reward is announced across two of them — the days on the plan card, the
+  person on the campaign strip — and those are no longer the same component.
+  Rendering both together is how these tests keep proving the pairing survived
+  being split, rather than each half passing in isolation while the message as
+  a whole makes no sense.
+*/
+function renderChrome(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {}) {
   const onOpenReferral = vi.fn();
   render(
     <LocaleProvider>
@@ -24,17 +49,16 @@ function renderStrip(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>>
         requestedTier={"free" as UserTier}
         hasActiveBonus={false}
         bonusUntil={null}
-        onOpenReferral={onOpenReferral}
         now={NOW}
         {...over}
       />
+      <ReferralCampaignStrip onOpenReferral={onOpenReferral} bonus={over.bonus ?? null} />
     </LocaleProvider>
   );
   return { onOpenReferral };
 }
 
-/** The element alone, so a test can re-render it with different props. */
-const noop = () => {};
+/** The chrome alone, so a test can re-render it with different props. */
 function strip(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {}) {
   return (
     <LocaleProvider>
@@ -43,10 +67,12 @@ function strip(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {})
         requestedTier={"free" as UserTier}
         hasActiveBonus={false}
         bonusUntil={null}
-        onOpenReferral={noop}
         now={NOW}
         {...over}
       />
+      {/* Both surfaces: a notice arriving and leaving is a transition across
+          the pair, and testing one half of it would prove nothing. */}
+      <ReferralCampaignStrip onOpenReferral={() => {}} bonus={over.bonus ?? null} />
     </LocaleProvider>
   );
 }
@@ -179,7 +205,7 @@ describe("bonus countdown", () => {
           requestedTier="free"
           hasActiveBonus={false}
           bonusUntil={null}
-          onOpenReferral={() => {}}
+
         />
       </LocaleProvider>
     );
@@ -194,26 +220,23 @@ describe("bonus countdown", () => {
   });
 });
 
-describe("referral CTA", () => {
-  it("states the reward and opens the referral surface without claiming anything", () => {
-    const { onOpenReferral } = renderStrip();
-    const cta = screen.getByTestId("referral-cta");
-    expect(cta.textContent).toMatch(/invit/i);
-    expect(cta.textContent).toContain("+5");
-    expect(cta.textContent).toMatch(/ultra/i);
-    // Never the rejected wording.
-    expect(cta.textContent).not.toMatch(/timp gratuit/i);
-
-    fireEvent.click(cta);
-    expect(onOpenReferral).toHaveBeenCalledTimes(1);
+/*
+  The "referral CTA" suite moved to ReferralCampaignStrip.test.tsx along with
+  the control itself: the campaign is no longer part of this 56px strip. What
+  stays here is the header's own guarantee that it does NOT render it.
+*/
+describe("the campaign is NOT in the 56px header", () => {
+  it("renders no referral control of any kind", () => {
+    renderStrip();
+    expect(screen.queryByTestId("referral-cta")).toBeNull();
+    expect(screen.queryByTestId("referral-detail")).toBeNull();
+    expect(screen.getByTestId("plan-header-strip").textContent ?? "").not.toMatch(/invit/i);
   });
 
-  it("is a real button, reachable and focusable by keyboard", () => {
-    renderStrip();
-    const cta = screen.getByTestId("referral-cta");
-    expect(cta.tagName).toBe("BUTTON");
-    cta.focus();
-    expect(document.activeElement).toBe(cta);
+  it("still renders the plan itself, which is what the bar is for", () => {
+    renderStrip({ tier: "ultra" as UserTier, requestedTier: "ultra" as UserTier });
+    expect(screen.getByTestId("plan-card")).toBeTruthy();
+    expect(screen.getByTestId("plan-detail")).toBeTruthy();
   });
 });
 
@@ -232,7 +255,7 @@ const referralDetail = () => screen.getByTestId("referral-detail").textContent ?
 
 describe("reward notice lives in the cards, not in a toast", () => {
   it("puts the days on the PLAN card and the person on the REFERRAL card", () => {
-    renderStrip({ tier: "ultra", requestedTier: "free", hasActiveBonus: true, bonusUntil: null, bonus: REWARD });
+    renderChrome({ tier: "ultra", requestedTier: "free", hasActiveBonus: true, bonusUntil: null, bonus: REWARD });
     // Each card carries the half it owns.
     expect(card().textContent).toContain("+5");
     expect(detail()).toMatch(/ultra/i);
@@ -241,7 +264,7 @@ describe("reward notice lives in the cards, not in a toast", () => {
   });
 
   it("an invitee reward names nobody at all", () => {
-    renderStrip({ bonus: { ...REWARD, role: "invitee", inviteeName: null } });
+    renderChrome({ bonus: { ...REWARD, role: "invitee", inviteeName: null } });
     expect(referralDetail()).toMatch(/invita/i);
     expect(referralDetail()).not.toContain("Andrei");
     // No identity of any kind reaches an invitee.
@@ -249,13 +272,13 @@ describe("reward notice lives in the cards, not in a toast", () => {
   });
 
   it("falls back to an anonymous wording when the invitee set no name", () => {
-    renderStrip({ bonus: { ...REWARD, inviteeName: null } });
+    renderChrome({ bonus: { ...REWARD, inviteeName: null } });
     expect(referralDetail()).toMatch(/cineva/i);
     expect(referralDetail()).not.toMatch(/undefined|null/i);
   });
 
   it("never renders an email or a uuid, whatever the server sent", () => {
-    renderStrip({ bonus: { ...REWARD, inviteeName: "andrei@example.test" } });
+    renderChrome({ bonus: { ...REWARD, inviteeName: "andrei@example.test" } });
     const text = screen.getByTestId("plan-header-strip").textContent ?? "";
     // The name is rendered as given, but the strip must never build one out of
     // identifiers — nothing here reads a uuid or an address from anywhere else.
@@ -263,7 +286,7 @@ describe("reward notice lives in the cards, not in a toast", () => {
   });
 
   it("a long name truncates instead of stretching the header", () => {
-    renderStrip({ bonus: { ...REWARD, inviteeName: "Alexandru-Constantin Dumitrescu" } });
+    renderChrome({ bonus: { ...REWARD, inviteeName: "Alexandru-Constantin Dumitrescu" } });
     // The clamp moved off the whole message onto the name alone: it used to cut
     // the product's own words along with the name it was there to bound.
     const name = screen.getByTestId("referral-name");
@@ -279,7 +302,7 @@ describe("reward notice lives in the cards, not in a toast", () => {
   });
 
   it("marks the strip as showing a notice, for styling and for tests", () => {
-    renderStrip({ bonus: REWARD });
+    renderChrome({ bonus: REWARD });
     expect(screen.getByTestId("plan-header-strip").dataset.notice).toBe("true");
     cleanup();
     renderStrip();
@@ -289,7 +312,7 @@ describe("reward notice lives in the cards, not in a toast", () => {
 
 describe("a notice changes nothing permanent", () => {
   it("leaves the referral CTA still clickable, with the same meaning", () => {
-    const { onOpenReferral } = renderStrip({ bonus: REWARD });
+    const { onOpenReferral } = renderChrome({ bonus: REWARD });
     const cta = referralCard();
     expect(cta.tagName).toBe("BUTTON");
     fireEvent.click(cta);
@@ -314,11 +337,57 @@ describe("a notice changes nothing permanent", () => {
   });
 });
 
+/*
+  THE SPOKEN ANNOUNCEMENT SURVIVED THE SPLIT.
+
+  The reward is shown across two surfaces that are now two components — the
+  days here, the person on the campaign strip below the bar. A sighted user
+  reads them as one thing because they are eight pixels apart; a screen-reader
+  user cannot perceive that adjacency at all, which is why the announcement is
+  ONE sentence carrying both halves, and why it stays in the header rather than
+  being split in two along the same seam as the layout.
+
+  Nothing tested this before, which made it exactly the kind of thing a later
+  tidy-up would quietly take apart.
+*/
+describe("the reward is announced as one sentence, not two fragments", () => {
+  it("speaks the person AND the days, in one live region", () => {
+    renderChrome({ bonus: REWARD });
+    const live = document.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    expect(live).toBeTruthy();
+    const said = live.textContent ?? "";
+    // The campaign's half...
+    expect(said).toMatch(/felicit/i);
+    expect(said).toContain("Andrei Popescu");
+    // ...and the plan card's half, in the same utterance.
+    expect(said).toContain("+5");
+    expect(said).toMatch(/ultra/i);
+  });
+
+  it("says nothing at all when there is no reward", () => {
+    renderChrome();
+    const live = document.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    expect((live.textContent ?? "").trim()).toBe("");
+  });
+
+  it("lives in the header, so moving the campaign did not move the announcement", () => {
+    renderChrome({ bonus: REWARD });
+    const live = document.querySelector('[role="status"][aria-live="polite"]')!;
+    expect(live.closest('[data-testid="plan-header-strip"]')).toBeTruthy();
+    expect(live.closest('[data-testid="referral-campaign-strip"]')).toBeNull();
+  });
+
+  it("is the ONLY live region in the chrome — the strip must not announce too", () => {
+    renderChrome({ bonus: REWARD });
+    expect(document.querySelectorAll('[aria-live]').length).toBe(1);
+  });
+});
+
 describe("localisation", () => {
   it("renders English wording when the catalogue is English", async () => {
     await ensureCatalog("en");
     window.localStorage.setItem("footy:locale", "en");
-    renderStrip({ tier: "free", requestedTier: "free" });
+    renderChrome({ tier: "free", requestedTier: "free" });
     expect(detail()).toMatch(/free plan/i);
     expect(screen.getByTestId("referral-cta").textContent).toMatch(/invite/i);
     // A missing key would render the dotted path.

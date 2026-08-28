@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../context/LocaleContext";
 import PlanHeaderStrip, { resolveAccess } from "./PlanHeaderStrip";
+import ReferralCampaignStrip from "./ReferralCampaignStrip";
 import PredictCta from "./PredictCta";
 import { buildPredictAction, isPredictBlocked, type PredictState } from "./predictState";
 import type { UserTier } from "../../types";
@@ -21,6 +22,14 @@ const iso = (ms: number) => new Date(NOW + ms).toISOString();
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
+/*
+  The header's plan card AND the campaign strip below it.
+
+  The campaign moved out of the 56px bar into its own row, so a suite that
+  asserts things about both — the reward's two halves, the FREE chip, the
+  offer never clamping — has to render both. Rendering them together is also
+  what keeps proving the pairing survived the split.
+*/
 function plan(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {}) {
   render(
     <LocaleProvider>
@@ -29,10 +38,10 @@ function plan(over: Partial<React.ComponentProps<typeof PlanHeaderStrip>> = {}) 
         requestedTier={"free" as UserTier}
         hasActiveBonus={false}
         bonusUntil={null}
-        onOpenReferral={() => {}}
         now={NOW}
         {...over}
       />
+      <ReferralCampaignStrip onOpenReferral={() => {}} bonus={over.bonus ?? null} />
     </LocaleProvider>
   );
 }

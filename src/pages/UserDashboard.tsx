@@ -27,6 +27,7 @@ import Button from "../design-system/Button";
 import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import PlanHeaderStrip from "../components/ux/PlanHeaderStrip";
+import ReferralCampaignStrip from "../components/ux/ReferralCampaignStrip";
 import { useReferralBonusToasts } from "../hooks/useReferralBonusToasts";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import Overlay from "../design-system/Overlay";
@@ -678,14 +679,22 @@ export default function UserDashboard() {
             button cannot reach different answers about one fact.
           */
           quota={predictQuota}
-          onOpenReferral={() => handleNav("profile")}
           /*
-            The reward is announced in the cards themselves rather than in a
-            separate toast: the days belong to the plan card, the person to the
-            referral card. Account › Notifications keeps the full sentence.
+            The reward is announced in the chrome itself rather than in a
+            separate toast: the DAYS belong to the plan card here, the PERSON to
+            the campaign strip below the bar. Account › Notifications keeps the
+            full sentence, and the spoken announcement in the plan strip still
+            carries both halves as one sentence.
           */
           bonus={referralBonus}
         />
+      }
+      /*
+        The campaign is its own row under the bar — see ReferralCampaignStrip
+        for why it is no longer a third card inside a 56px header.
+      */
+      campaignSlot={
+        <ReferralCampaignStrip onOpenReferral={() => handleNav("profile")} bonus={referralBonus} />
       }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
