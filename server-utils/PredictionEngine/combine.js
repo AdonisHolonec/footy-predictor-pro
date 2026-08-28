@@ -26,8 +26,13 @@ function optionalAdjustment(modules, side, blend) {
  */
 export function combineLambdas(ctx, core, weights) {
   const leagueAvg = leagueAvgFromContext(ctx);
-  const leagueAvgHome = Number(ctx.leagueParams?.leagueAvgHome) || leagueAvg;
-  const leagueAvgAway = Number(ctx.leagueParams?.leagueAvgAway) || leagueAvg;
+  // A venue split counts only when BOTH sides are present; a one-sided value is
+  // ignored so home advantage can never be half-encoded and then multiplied again.
+  const splitHome = Number(ctx.leagueParams?.leagueAvgHome);
+  const splitAway = Number(ctx.leagueParams?.leagueAvgAway);
+  const hasVenueSplit = splitHome > 0 && splitAway > 0;
+  const leagueAvgHome = hasVenueSplit ? splitHome : leagueAvg;
+  const leagueAvgAway = hasVenueSplit ? splitAway : leagueAvg;
   const timeDecay = typeof ctx.timeDecay === "number" ? clamp(ctx.timeDecay, 0.85, 1.05) : 1;
 
   const atkH = Number(core.attack.details?.atkH);
@@ -39,18 +44,30 @@ export function combineLambdas(ctx, core, weights) {
   const homeAdv = Number(core.homeAdvantage.details?.homeAdv) || 1.06;
   const awayAdv = Number(core.homeAdvantage.details?.awayAdv) || 0.96;
 
+  /*
+    Home advantage enters λ exactly once. League profiles already split the goal
+    average by venue (leagueAvgHome = total × homeShare(homeAdvantage), see
+    LeagueProfile.splitGoalAverages), so when that split is present the explicit
+    homeAdv / awayAdv factor counts the same effect twice — measured on 841
+    persisted fixtures: λ_home +13% / λ_away −8% against actual goals, raw P(home)
+    0.525 vs 0.452 observed, 83% home picks. The explicit factor is kept only for
+    callers that supply a single leagueAvg with no venue split.
+  */
+  const homeAdvFactor = hasVenueSplit ? 1 : homeAdv;
+  const awayAdvFactor = hasVenueSplit ? 1 : awayAdv;
+
   const baseLambdaHome =
     leagueAvgHome *
     Math.pow(atkH / leagueAvg, weights.attack) *
     Math.pow(defA / leagueAvg, weights.defense) *
-    Math.pow(homeAdv, weights.homeAdvantage) *
+    Math.pow(homeAdvFactor, weights.homeAdvantage) *
     Math.pow(hf, weights.form);
 
   const baseLambdaAway =
     leagueAvgAway *
     Math.pow(atkA / leagueAvg, weights.attack) *
     Math.pow(defH / leagueAvg, weights.defense) *
-    Math.pow(awayAdv, weights.homeAdvantage) *
+    Math.pow(awayAdvFactor, weights.homeAdvantage) *
     Math.pow(af, weights.form);
 
   const optionalModules = [
@@ -94,6 +111,8 @@ export function combineLambdas(ctx, core, weights) {
     leagueAvgAway,
     homeAdv,
     awayAdv,
+    /** false when the venue split already carried home advantage (explicit factor skipped). */
+    homeAdvApplied: !hasVenueSplit,
     atkH,
     defH,
     atkA,

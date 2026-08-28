@@ -51,6 +51,8 @@ import {
   isMethodEligible,
   DEFAULT_ISOTONIC_MIN_SAMPLES
 } from "../server-utils/calibration/CalibrationSelector.js";
+import { combineLambdas } from "../server-utils/PredictionEngine/combine.js";
+import { DEFAULT_PREDICTION_WEIGHTS } from "../server-utils/PredictionEngine/weights.js";
 import {
   extractStackerFeatures,
   applyStacker,
@@ -1325,6 +1327,108 @@ test("isotonic guard: below minSamples the selector serves the identity curve, n
   assert.equal(sel.method, "none");
   assert.equal(sel.reason, "insufficient_samples");
   assert.deepEqual(sel.xPoints, sel.yPoints);
+});
+
+// -----------------------------------------------------------------------------
+// Home advantage enters λ exactly once (Phase 1B).
+// -----------------------------------------------------------------------------
+
+const VENUE = { leagueAvgGoals: 1.4, leagueAvgHome: 1.55, leagueAvgAway: 1.25 };
+
+function coreFrom({ atkH, atkA, defH, defA, homeAdv = 1.1, awayAdv = 0.92 }) {
+  const neutral = { details: { home: 1, away: 1 } };
+  return {
+    attack: { details: { atkH, atkA } },
+    defense: { details: { defH, defA } },
+    form: { details: { home: 1, away: 1 } },
+    homeAdvantage: { details: { homeAdv, awayAdv } },
+    standings: neutral, h2h: neutral, referee: neutral, restDays: neutral, recentMatches: neutral,
+    awayStrength: neutral, injuries: neutral, lineup: neutral, odds: neutral, motivation: neutral, weather: neutral
+  };
+}
+
+test("home advantage: with a venue split the explicit homeAdv factor is not applied again (strengthRatingsLambdas)", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5 };
+  const withAdv = strengthRatingsLambdas(h, a, 1, 1, { ...VENUE, homeAdv: 1.12, awayAdv: 0.9 });
+  const noAdv = strengthRatingsLambdas(h, a, 1, 1, { ...VENUE, homeAdv: 1.0, awayAdv: 1.0 });
+  assert.ok(Math.abs(withAdv.lambdaHome - noAdv.lambdaHome) < 1e-12);
+  assert.ok(Math.abs(withAdv.lambdaAway - noAdv.lambdaAway) < 1e-12);
+  assert.equal(withAdv.strengthMeta.homeAdvApplied, false);
+  assert.equal(withAdv.strengthMeta.homeAdv, 1.12, "the factor is still reported for observability");
+});
+
+test("home advantage: without a venue split the explicit factor still applies once (backward compatible)", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5 };
+  const withAdv = strengthRatingsLambdas(h, a, 1, 1, { leagueAvgGoals: 1.4, homeAdv: 1.12, awayAdv: 0.9 });
+  const noAdv = strengthRatingsLambdas(h, a, 1, 1, { leagueAvgGoals: 1.4, homeAdv: 1.0, awayAdv: 1.0 });
+  assert.ok(Math.abs(withAdv.lambdaHome / noAdv.lambdaHome - 1.12) < 1e-9);
+  assert.ok(Math.abs(withAdv.lambdaAway / noAdv.lambdaAway - 0.9) < 1e-9);
+  assert.equal(withAdv.strengthMeta.homeAdvApplied, true);
+});
+
+test("home advantage: league-average sides reproduce the venue split (home > away, each within 3%)", () => {
+  const ctx = { leagueParams: { leagueAvg: 1.4, leagueAvgHome: 1.55, leagueAvgAway: 1.25, homeAdv: 1.1, awayAdv: 0.92 }, hStats: { played: 20 }, aStats: { played: 20 } };
+  const core = coreFrom({ atkH: 1.55, defA: 1.25, atkA: 1.25, defH: 1.55 });
+  const { lambdaHome, lambdaAway, strengthMeta } = combineLambdas(ctx, core, DEFAULT_PREDICTION_WEIGHTS);
+  assert.ok(Math.abs(lambdaHome / 1.55 - 1) < 0.03, `λ_home ${lambdaHome} should sit at leagueAvgHome 1.55`);
+  assert.ok(Math.abs(lambdaAway / 1.25 - 1) < 0.03, `λ_away ${lambdaAway} should sit at leagueAvgAway 1.25`);
+  assert.ok(lambdaHome > lambdaAway, "home advantage is preserved exactly once via the split");
+  assert.equal(strengthMeta.homeAdvApplied, false);
+});
+
+test("home advantage: combineLambdas never multiplies homeAdv on top of a venue split, but does without one", () => {
+  const core = coreFrom({ atkH: 1.7, defA: 1.4, atkA: 1.2, defH: 1.3, homeAdv: 1.15, awayAdv: 0.9 });
+  const coreFlat = coreFrom({ atkH: 1.7, defA: 1.4, atkA: 1.2, defH: 1.3, homeAdv: 1.0, awayAdv: 1.0 });
+  const split = { leagueParams: { leagueAvg: 1.4, leagueAvgHome: 1.55, leagueAvgAway: 1.25 }, hStats: {}, aStats: {} };
+  const a = combineLambdas(split, core, DEFAULT_PREDICTION_WEIGHTS);
+  const b = combineLambdas(split, coreFlat, DEFAULT_PREDICTION_WEIGHTS);
+  assert.ok(Math.abs(a.lambdaHome - b.lambdaHome) < 1e-12 && Math.abs(a.lambdaAway - b.lambdaAway) < 1e-12);
+  const flat = { leagueParams: { leagueAvg: 1.4 }, hStats: {}, aStats: {} };
+  const c = combineLambdas(flat, core, DEFAULT_PREDICTION_WEIGHTS);
+  const d = combineLambdas(flat, coreFlat, DEFAULT_PREDICTION_WEIGHTS);
+  assert.ok(Math.abs(c.lambdaHome / d.lambdaHome - 1.15) < 1e-9);
+  assert.ok(Math.abs(c.lambdaAway / d.lambdaAway - 0.9) < 1e-9);
+  assert.equal(a.strengthMeta.homeAdvApplied, false);
+  assert.equal(c.strengthMeta.homeAdvApplied, true);
+});
+
+test("home advantage: with a venue split λ equals the Dixon-Coles form with NO explicit factor, and raw P(home) sits below the double-counted value", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5 };
+  const fixed = strengthRatingsLambdas(h, a, 1, 1, { ...VENUE, homeAdv: 1.12, awayAdv: 0.9 });
+  const { atkH, defA, atkA, defH, leagueAvg } = fixed.strengthMeta;
+  // Independent recomputation from the reported factors — pins the formula, not the code path.
+  const expectedHome = VENUE.leagueAvgHome * (atkH / leagueAvg) * (defA / leagueAvg);
+  const expectedAway = VENUE.leagueAvgAway * (atkA / leagueAvg) * (defH / leagueAvg);
+  assert.ok(Math.abs(fixed.lambdaHome - expectedHome) < 1e-12, `λ_home ${fixed.lambdaHome} vs ${expectedHome}`);
+  assert.ok(Math.abs(fixed.lambdaAway - expectedAway) < 1e-12, `λ_away ${fixed.lambdaAway} vs ${expectedAway}`);
+  const pFixed = computeMatchProbs(fixed.lambdaHome, fixed.lambdaAway, 1, { rho: -0.11 }).probs;
+  const pDoubled = computeMatchProbs(expectedHome * 1.12, expectedAway * 0.9, 1, { rho: -0.11 }).probs;
+  assert.ok(pFixed.p1 < pDoubled.p1, "raw P(home) must sit below the double-counted construction");
+  assert.ok(Math.abs(pFixed.p1 + pFixed.pX + pFixed.p2 - 100) < 1e-6, "1X2 still normalises");
+  for (const k of ["pO25", "pO15", "pU35", "pGG"]) {
+    assert.ok(pFixed[k] >= 0 && pFixed[k] <= 100, `${k} stays a valid percentage`);
+  }
+});
+
+test("home advantage: a one-sided split is ignored — both sides fall back to leagueAvg and the factor applies exactly once", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5 };
+  const oneSided = strengthRatingsLambdas(h, a, 1, 1, { leagueAvgGoals: 1.4, leagueAvgHome: 1.55, homeAdv: 1.12, awayAdv: 0.9 });
+  const flat = strengthRatingsLambdas(h, a, 1, 1, { leagueAvgGoals: 1.4, homeAdv: 1.12, awayAdv: 0.9 });
+  assert.ok(Math.abs(oneSided.lambdaHome - flat.lambdaHome) < 1e-12);
+  assert.ok(Math.abs(oneSided.lambdaAway - flat.lambdaAway) < 1e-12);
+  assert.equal(oneSided.strengthMeta.homeAdvApplied, true);
+  assert.equal(oneSided.strengthMeta.leagueAvgHome, 1.4);
+  const ctxOneSided = { leagueParams: { leagueAvg: 1.4, leagueAvgHome: 1.55 }, hStats: {}, aStats: {} };
+  const ctxFlat = { leagueParams: { leagueAvg: 1.4 }, hStats: {}, aStats: {} };
+  const core = coreFrom({ atkH: 1.7, defA: 1.4, atkA: 1.2, defH: 1.3, homeAdv: 1.15, awayAdv: 0.9 });
+  const c1 = combineLambdas(ctxOneSided, core, DEFAULT_PREDICTION_WEIGHTS);
+  const c2 = combineLambdas(ctxFlat, core, DEFAULT_PREDICTION_WEIGHTS);
+  assert.ok(Math.abs(c1.lambdaHome - c2.lambdaHome) < 1e-12 && Math.abs(c1.lambdaAway - c2.lambdaAway) < 1e-12);
+  assert.equal(c1.strengthMeta.homeAdvApplied, true);
 });
 
 // =============================================================================

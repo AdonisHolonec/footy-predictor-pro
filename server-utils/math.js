@@ -426,8 +426,12 @@ export function applyBayesianShrinkage(observed, played, prior, k = 6) {
  */
 export function strengthRatingsLambdas(hStats, aStats, hFormMulti, aFormMulti, options = {}) {
   const leagueAvg = Number(options.leagueAvgGoals) || 1.35;
-  const leagueAvgHome = Number(options.leagueAvgHome) || leagueAvg;
-  const leagueAvgAway = Number(options.leagueAvgAway) || leagueAvg;
+  // A venue split counts only when BOTH sides are present (see combine.js).
+  const splitHome = Number(options.leagueAvgHome);
+  const splitAway = Number(options.leagueAvgAway);
+  const hasVenueSplit = splitHome > 0 && splitAway > 0;
+  const leagueAvgHome = hasVenueSplit ? splitHome : leagueAvg;
+  const leagueAvgAway = hasVenueSplit ? splitAway : leagueAvg;
   const homeAdv = Number(options.homeAdv) || 1.06;
   const awayAdv = Number(options.awayAdv) || 0.96;
   const timeDecay = typeof options.timeDecay === "number" ? clamp(options.timeDecay, 0.85, 1.05) : 1;
@@ -461,12 +465,17 @@ export function strengthRatingsLambdas(hStats, aStats, hFormMulti, aFormMulti, o
   const hf = clamp(Number(hFormMulti) || 1, 0.9, 1.1) * timeDecay;
   const af = clamp(Number(aFormMulti) || 1, 0.9, 1.1) * timeDecay;
 
-  // Dixon-Coles multiplicativ: λ_home = leagueAvgHome × (atk_home / leagueAvg) × (def_away / leagueAvg) × homeAdv × form
+  // Dixon-Coles multiplicativ: λ_home = leagueAvgHome × (atk_home / leagueAvg) × (def_away / leagueAvg) × form.
+  // Home advantage enters exactly once: a supplied venue split (leagueAvgHome/Away)
+  // already carries it, so homeAdv / awayAdv multiply only when no split is given
+  // (same rule as PredictionEngine/combine.js — the two must stay aligned).
+  const homeAdvFactor = hasVenueSplit ? 1 : homeAdv;
+  const awayAdvFactor = hasVenueSplit ? 1 : awayAdv;
   const lambdaHome = clampLambda(
-    leagueAvgHome * (atkH / leagueAvg) * (defA / leagueAvg) * homeAdv * hf
+    leagueAvgHome * (atkH / leagueAvg) * (defA / leagueAvg) * homeAdvFactor * hf
   );
   const lambdaAway = clampLambda(
-    leagueAvgAway * (atkA / leagueAvg) * (defH / leagueAvg) * awayAdv * af
+    leagueAvgAway * (atkA / leagueAvg) * (defH / leagueAvg) * awayAdvFactor * af
   );
 
   return {
@@ -478,6 +487,7 @@ export function strengthRatingsLambdas(hStats, aStats, hFormMulti, aFormMulti, o
       leagueAvgAway,
       homeAdv,
       awayAdv,
+      homeAdvApplied: !hasVenueSplit,
       atkH,
       defH,
       atkA,
