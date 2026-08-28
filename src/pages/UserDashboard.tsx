@@ -28,6 +28,8 @@ import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import PlanHeaderStrip from "../components/ux/PlanHeaderStrip";
 import ReferralCampaignStrip from "../components/ux/ReferralCampaignStrip";
+import { REFERRAL_CARD_ID } from "../components/ux/ReferralCard";
+import { useNavigateAndReveal } from "../hooks/useNavigateAndReveal";
 import { useReferralBonusToasts } from "../hooks/useReferralBonusToasts";
 import UpgradePrompt, { type UpgradeTier } from "../design-system/UpgradePrompt";
 import Overlay from "../design-system/Overlay";
@@ -604,6 +606,13 @@ export default function UserDashboard() {
   // Navigation changes the destination and nothing else: the Matches segment
   // a user chose is still there when they come back (it used to reset to "all").
   const handleNav = useCallback((view: AppNavView) => setNavView(view), [setNavView]);
+
+  /*
+    NAVIGATE, THEN REVEAL. The scroll needs a later turn of the loop than the
+    navigation that makes its target exist — see useNavigateAndReveal for why
+    doing it in the click handler cannot work.
+  */
+  const { reveal: navigateAndReveal } = useNavigateAndReveal(navView, setNavView);
   const goLive = useCallback(() => {
     setMatchesFilter("live");
     setNavView("matches");
@@ -694,7 +703,14 @@ export default function UserDashboard() {
         for why it is no longer a third card inside a 56px header.
       */
       campaignSlot={
-        <ReferralCampaignStrip onOpenReferral={() => handleNav("profile")} bonus={referralBonus} />
+        <ReferralCampaignStrip
+          /*
+            Still exactly one navigation — this only adds the reveal that was
+            missing once it arrives. See navigateAndReveal.
+          */
+          onOpenReferral={() => navigateAndReveal("profile", REFERRAL_CARD_ID)}
+          bonus={referralBonus}
+        />
       }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (

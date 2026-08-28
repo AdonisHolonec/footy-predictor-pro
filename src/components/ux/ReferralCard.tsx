@@ -56,6 +56,13 @@ function formatDate(value: string | null, locale: string): string {
   });
 }
 
+/**
+ * The scroll anchor other surfaces aim at. Exported so the campaign strip's
+ * navigation and its tests name the same element rather than two string
+ * literals that agree only by luck.
+ */
+export const REFERRAL_CARD_ID = "account-referral";
+
 export default function ReferralCard({ userId, now }: Props) {
   const { t, locale } = useLocale();
   const [status, setStatus] = useState<ReferralStatus | null>(null);
@@ -197,7 +204,21 @@ export default function ReferralCard({ userId, now }: Props) {
   const showInvite = Boolean(pendingCode) && !dismissed && !invitee;
 
   return (
-    <Card className="space-y-4" data-testid="account-referral">
+    /*
+      A NAMED SCROLL ANCHOR, the same way the upgrade card already is.
+
+      The campaign strip under the header navigates here and then has to put
+      this card in front of the user; without a stable id there was nothing for
+      it to aim at, so the navigation landed at the top of Account and the card
+      it was selling stayed below the fold.
+
+      `scroll-mt-28` is the project's existing answer to sticky chrome — the
+      subscription card above uses exactly this — and it is why the scroll uses
+      `block: "start"`: scroll-margin-top only applies to the start edge, so
+      pairing it with `block: "center"` would silently drop the offset and let
+      the sticky header cover the target.
+    */
+    <Card id={REFERRAL_CARD_ID} className="scroll-mt-28 space-y-4" data-testid="account-referral">
       <SectionHeader
         as="h2"
         size="section"
