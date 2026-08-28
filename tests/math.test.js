@@ -20,7 +20,13 @@ import {
   aggregateRollingForTeam,
   deriveMarketLambdas
 } from "../server-utils/teamMarketRolling.js";
-import { shinImpliedProbs, removeBookmakerMargin } from "../server-utils/advancedMath.js";
+import {
+  shinImpliedProbs,
+  removeBookmakerMargin,
+  blendModelWithMarket,
+  MODEL_MARKET_BLEND_MIN_WEIGHT,
+  MODEL_MARKET_BLEND_MAX_WEIGHT
+} from "../server-utils/advancedMath.js";
 import { expectedCalibrationError } from "../server-utils/probabilityMetrics.js";
 import {
   getLeagueParams,
@@ -3550,4 +3556,142 @@ test("blendBttsWithEmpirical: fără date empirice → întoarce valoarea Poisso
     blendBttsWithEmpirical(47.3, { cleanSheetRateHome: 0.2, cleanSheetRateAway: 0.3, failedToScoreRateHome: 0.1 }),
     47.3
   );
+});
+
+// ---------------------------------------------------------------------------
+// Market-weight canary — the explicit MODEL_MARKET_BLEND_WEIGHT override may be
+// market-heavier than the 0.35 profile floor; the blend itself must honour it.
+// Expected numbers below are computed by hand, never by calling the formula.
+// ---------------------------------------------------------------------------
+const CANARY_MODEL = { p1: 0.5, pX: 0.3, p2: 0.2 };
+const CANARY_MARKET = { p1: 0.4, pX: 0.3, p2: 0.3 };
+const BLEND_METHODS = ["modular-engine", "strength-ratings", "advanced-teamstats", "standings", "poisson"];
+
+function withBlendEnv(value, fn) {
+  const prev = process.env.MODEL_MARKET_BLEND_WEIGHT;
+  try {
+    if (value === undefined) delete process.env.MODEL_MARKET_BLEND_WEIGHT;
+    else process.env.MODEL_MARKET_BLEND_WEIGHT = value;
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env.MODEL_MARKET_BLEND_WEIGHT;
+    else process.env.MODEL_MARKET_BLEND_WEIGHT = prev;
+  }
+}
+
+function assertValidTriple(p, label) {
+  for (const k of ["p1", "pX", "p2"]) {
+    assert.ok(Number.isFinite(p[k]) && p[k] >= 0 && p[k] <= 1, `${label}: ${k}=${p[k]} outside [0,1]`);
+  }
+  assert.ok(Math.abs(p.p1 + p.pX + p.p2 - 1) < 1e-12, `${label}: triple sums to ${p.p1 + p.pX + p.p2}`);
+}
+
+test("market-weight canary: current behaviour preserved — no override keeps the profile weight (+method heuristic) and the profile floor", () => {
+  withBlendEnv(undefined, () => {
+    const epl = getLeagueParams(39).blendWeight;
+    assert.equal(epl, 0.65, "Premier League profile blendWeight is the production baseline");
+    assert.ok(Math.abs(getModelMarketBlendWeight("modular-engine", 39) - 0.7) < 1e-12, "EPL modular-engine: 0.65 + 0.05");
+    assert.ok(Math.abs(getModelMarketBlendWeight("modular-engine", 99999) - 0.65) < 1e-12, "default profile: 0.60 + 0.05");
+    assert.ok(Math.abs(getModelMarketBlendWeight("standings", 39) - 0.57) < 1e-12, "EPL standings: 0.65 − 0.08");
+    for (const method of BLEND_METHODS) {
+      assert.ok(getModelMarketBlendWeight(method, 39) >= 0.35, "profile path keeps its 0.35 floor untouched");
+    }
+  });
+  // 0.65·0.5 + 0.35·0.4 = 0.465 ; 0.65·0.3 + 0.35·0.3 = 0.30 ; 0.65·0.2 + 0.35·0.3 = 0.235
+  const out = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: 0.65 });
+  assert.ok(Math.abs(out.p1 - 0.465) < 1e-12);
+  assert.ok(Math.abs(out.pX - 0.3) < 1e-12);
+  assert.ok(Math.abs(out.p2 - 0.235) < 1e-12);
+  assertValidTriple(out, "bw=0.65");
+});
+
+test("market-weight canary: MODEL_MARKET_BLEND_WEIGHT=0.20 is honoured for every method and league (no 0.35 floor on the override)", () => {
+  withBlendEnv("0.20", () => {
+    for (const method of BLEND_METHODS) {
+      assert.equal(getModelMarketBlendWeight(method, 39), 0.2, method);
+    }
+    assert.equal(getModelMarketBlendWeight("modular-engine", 283), 0.2);
+    assert.equal(getModelMarketBlendWeight("modular-engine", 99999), 0.2);
+    assert.equal(getModelMarketBlendWeight("modular-engine", null), 0.2);
+  });
+});
+
+test("market-weight canary: bw=0.20 yields exactly 0.2·model + 0.8·market", () => {
+  // 0.2·0.5 + 0.8·0.4 = 0.42 ; 0.2·0.3 + 0.8·0.3 = 0.30 ; 0.2·0.2 + 0.8·0.3 = 0.28
+  const out = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: 0.2 });
+  assert.ok(Math.abs(out.p1 - 0.42) < 1e-12, `p1=${out.p1}`);
+  assert.ok(Math.abs(out.pX - 0.3) < 1e-12, `pX=${out.pX}`);
+  assert.ok(Math.abs(out.p2 - 0.28) < 1e-12, `p2=${out.p2}`);
+  assertValidTriple(out, "bw=0.20");
+});
+
+test("market-weight canary: model and market shares are complementary; bw=0 is the market itself (not the 0.7 default)", () => {
+  const cases = [
+    [0, 0.4, 0.3, 0.3],
+    [0.1, 0.41, 0.3, 0.29],
+    [0.5, 0.45, 0.3, 0.25],
+    [0.9, 0.49, 0.3, 0.21]
+  ];
+  for (const [w, e1, eX, e2] of cases) {
+    const out = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: w });
+    assert.ok(Math.abs(out.p1 - e1) < 1e-12, `w=${w} p1=${out.p1}`);
+    assert.ok(Math.abs(out.pX - eX) < 1e-12, `w=${w} pX=${out.pX}`);
+    assert.ok(Math.abs(out.p2 - e2) < 1e-12, `w=${w} p2=${out.p2}`);
+    assertValidTriple(out, `w=${w}`);
+  }
+});
+
+test("market-weight canary: out-of-range or non-numeric weights are clamped by the existing convention and never produce an invalid probability", () => {
+  assert.equal(MODEL_MARKET_BLEND_MIN_WEIGHT, 0);
+  assert.equal(MODEL_MARKET_BLEND_MAX_WEIGHT, 0.9);
+  const marketOnly = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: -1 });
+  assert.ok(Math.abs(marketOnly.p1 - 0.4) < 1e-12 && Math.abs(marketOnly.p2 - 0.3) < 1e-12, "w<0 clamps to market-only");
+  const capped = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: 2 });
+  assert.ok(Math.abs(capped.p1 - 0.49) < 1e-12 && Math.abs(capped.p2 - 0.21) < 1e-12, "w>1 clamps to the 0.9 ceiling");
+  for (const bad of [Number.NaN, "abc", undefined, null, "", true]) {
+    const out = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: bad });
+    assertValidTriple(out, `weight=${String(bad)}`);
+    // 0.7·0.5 + 0.3·0.4 = 0.47 — the pre-existing default for anything that is not a number, unchanged
+    assert.ok(Math.abs(out.p1 - 0.47) < 1e-12, `weight=${String(bad)} p1=${out.p1}`);
+  }
+  const inf = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: Infinity });
+  assert.ok(Math.abs(inf.p1 - 0.49) < 1e-12, "Infinity clamps to the 0.9 ceiling");
+  const numericString = blendModelWithMarket({ model: CANARY_MODEL, market: CANARY_MARKET, modelWeight: "0.2" });
+  assert.ok(Math.abs(numericString.p1 - 0.42) < 1e-12, "numeric strings are weights");
+  const profileValue = withBlendEnv(undefined, () => getModelMarketBlendWeight("modular-engine", 39));
+  assert.equal(withBlendEnv("-1", () => getModelMarketBlendWeight("modular-engine", 39)), 0);
+  assert.equal(withBlendEnv("2", () => getModelMarketBlendWeight("modular-engine", 39)), 0.92);
+  assert.equal(withBlendEnv("abc", () => getModelMarketBlendWeight("modular-engine", 39)), profileValue);
+  assert.equal(withBlendEnv("", () => getModelMarketBlendWeight("modular-engine", 39)), profileValue);
+});
+
+test("market-weight canary: normalisation is preserved when the inputs do not sum to one", () => {
+  const model = { p1: 0.6, pX: 0.3, p2: 0.3 }; // sums to 1.2
+  const market = { p1: 0.5, pX: 0.25, p2: 0.25 };
+  // raw: 0.12+0.40=0.52 ; 0.06+0.20=0.26 ; 0.06+0.20=0.26 → /1.04 → 0.5 / 0.25 / 0.25
+  const out = blendModelWithMarket({ model, market, modelWeight: 0.2 });
+  assert.ok(Math.abs(out.p1 - 0.5) < 1e-12);
+  assert.ok(Math.abs(out.pX - 0.25) < 1e-12);
+  assert.ok(Math.abs(out.p2 - 0.25) < 1e-12);
+  assertValidTriple(out, "unnormalised inputs");
+});
+
+test("market-weight canary: Shin market probabilities are normalised before and after a 0.20 blend", () => {
+  const shin = shinImpliedProbs(1.55, 3.8, 5);
+  assert.ok(shin && shin.z > 0);
+  assertValidTriple(shin, "shin");
+  assert.ok(shin.p1 > shin.pX && shin.pX > shin.p2, "odds 1.55 / 3.8 / 5 order home > draw > away");
+  const out = blendModelWithMarket({ model: CANARY_MODEL, market: shin, modelWeight: 0.2 });
+  assertValidTriple(out, "0.20 blend of shin");
+  assert.ok(Math.abs(out.p1 - (0.2 * 0.5 + 0.8 * shin.p1)) < 1e-12);
+});
+
+test("market-weight canary: the blend produces only the 1X2 triple and never mutates or forwards side-market fields", () => {
+  const model = { ...CANARY_MODEL, pO25: 57.2, pGG: 55.1 };
+  const market = { ...CANARY_MARKET, pO25: 60 };
+  const out = blendModelWithMarket({ model, market, modelWeight: 0.2 });
+  assert.deepEqual(Object.keys(out).sort(), ["p1", "p2", "pX"]);
+  assert.equal(model.pO25, 57.2);
+  assert.equal(model.p1, 0.5);
+  assert.equal(market.p1, 0.4);
 });
