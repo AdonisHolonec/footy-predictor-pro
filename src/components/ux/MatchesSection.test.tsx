@@ -115,3 +115,56 @@ describe("MatchesSection top picks filter", () => {
     );
   });
 });
+
+/*
+  MATCHES REFRESH — resolved deliberately, and NOT a Predict surface.
+
+  `restoreOrPredict` serves cached picks when they are good and only falls
+  through to a run when they are not, so it is a DATA action whose fallback
+  happens to reach Predict. That distinction decides its wiring:
+
+   - BLOCKED does not reach it. Refusing Refresh because the daily allowance is
+     spent would refuse a cache reload the quota does not govern; the Predict
+     fallthrough is still covered, by the gate inside warmAndPredict.
+   - BUSY does reach it, because concurrency is a shared concern: a refresh
+     while a run is in flight is meaningless and could enter a second time.
+*/
+describe("Matches Refresh is a data action, not a Predict surface", () => {
+  // Named by its aria-label (shell.refreshPredictions), not its visible word.
+  const refresh = () =>
+    screen.getByRole("button", {
+      name: eitherLocale("shell", "refreshPredictions")
+    }) as HTMLButtonElement;
+
+  it("stays available while Predict is BLOCKED — cached picks are not quota-governed", () => {
+    const onRefresh = vi.fn();
+    renderMatches({
+      onRefresh,
+      refreshBusy: false,
+      predictAction: buildPredictAction({
+        state: "blocked",
+        labels: { label: "Generează Predicții", hint: "hint", busy: "busy", quotaSpent: "spent" },
+        run: vi.fn()
+      })
+    });
+    const btn = refresh();
+    expect(btn.disabled).toBe(false);
+    expect(btn.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(btn);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("is inert while a run is in flight, so it cannot enter a second time", () => {
+    const onRefresh = vi.fn();
+    renderMatches({ onRefresh, refreshBusy: true });
+    const btn = refresh();
+    expect(btn.disabled).toBe(true);
+    fireEvent.click(btn);
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it("carries no Predict state attribute — it is not a Predict surface", () => {
+    renderMatches({ onRefresh: vi.fn(), refreshBusy: false });
+    expect(refresh().getAttribute("data-predict-state")).toBeNull();
+  });
+});

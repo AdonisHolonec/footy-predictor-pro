@@ -37,6 +37,40 @@ const variantClass: Record<Variant, string> = {
   danger: "bg-fp-danger/15 text-[var(--fp-danger)] hover:bg-fp-danger/25 active:bg-fp-danger/35 disabled:opacity-50 disabled:cursor-not-allowed"
 };
 
+/*
+  THE BLOCKED SKIN, for controls that opt out of the native attribute.
+
+  A control carrying `aria-disabled` is still enabled as far as the browser is
+  concerned, so NONE of the `disabled:` utilities above match it. Every Button
+  handed `predictSurfaceProps(action)` therefore rendered a blocked action at
+  full primary fill with a normal cursor and a working press animation, while
+  its onClick did nothing — the Banner retry shipped exactly that. A dead
+  control that looks alive is the defect the Predict contract exists to remove,
+  and it was reintroduced one altitude below the contract, in the primitive.
+
+  The treatment is the same recessed language the Predict CTA uses — declared
+  surface, ink and boundary tokens rather than a blanket fade — because an
+  aria-disabled control stays focusable and can be landed on, so it is not an
+  "inactive component" and does not get WCAG's contrast exemption: its label
+  still owes 4.5:1 and its edge 3:1. `disabled:opacity-50` above is untouched
+  and remains correct for natively disabled buttons, which no one can reach.
+
+  `aria-disabled:hover:` and `aria-disabled:active:` are spelled out rather than
+  left to variant ordering: the hover and active utilities in every variant
+  above have equal specificity, so which one wins would otherwise depend on the
+  order Tailwind happens to emit them in.
+*/
+const ARIA_DISABLED_CLASS =
+  "aria-disabled:cursor-not-allowed aria-disabled:shadow-none " +
+  "aria-disabled:border aria-disabled:border-[var(--fp-disabled-border)] " +
+  "aria-disabled:bg-[var(--fp-disabled-surface)] aria-disabled:text-[var(--fp-disabled-ink)] " +
+  "aria-disabled:hover:border-[var(--fp-disabled-border)] " +
+  "aria-disabled:hover:bg-[var(--fp-disabled-surface)] aria-disabled:hover:text-[var(--fp-disabled-ink)] " +
+  /* No press feedback on a control that will refuse — the base `active:scale`
+     and every variant's `active:` colour shift are both cancelled here. */
+  "aria-disabled:active:scale-100 aria-disabled:active:opacity-100 " +
+  "aria-disabled:active:bg-[var(--fp-disabled-surface)] aria-disabled:active:border-[var(--fp-disabled-border)]";
+
 const sizeClass: Record<Size, string> = {
   sm: "min-h-9 px-3 text-xs",
   md: "min-h-[var(--fp-touch)] px-4 text-sm",
@@ -70,16 +104,37 @@ export default function Button({
   children,
   ...rest
 }: Props) {
+  /*
+    ONE INERTNESS MODEL PER CONTROL.
+
+    `loading` used to set the native attribute unconditionally. For a caller
+    that also passes `aria-disabled` — every Predict surface built on this
+    primitive — that produced both models at once on the same button: the
+    native attribute pulled it out of the tab order, so the busy reason it was
+    carrying in its accessible name became unreachable by the users it was for.
+    It also read inconsistently, because a busy Banner faded to 0.5 while a busy
+    empty state, differing only in passing `loading`, did not.
+
+    So: a caller that has declared `aria-disabled` owns inertness, and `loading`
+    contributes only the spinner and `aria-busy`. A caller that has NOT declared
+    it keeps the old behaviour exactly — `loading` still disables natively,
+    which is what every non-Predict Button in the app relies on.
+  */
+  const callerOwnsInertness = rest["aria-disabled"] !== undefined;
   return (
     <button
       type="button"
-      disabled={disabled || loading}
+      disabled={disabled || (loading && !callerOwnsInertness)}
       /* Loading (PR 4): spinner BESIDE the label, never instead of it. The old
          behaviour swapped children for a literal "…", so the accessible name of
          every in-flight action became "…" and the button visibly changed size.
          Same API — callers keep passing `loading` exactly as before. */
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-[var(--fp-radius-sm)] font-semibold transition duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] active:scale-[0.98] ${variantClass[variant]} ${sizeClass[size]} ${className}`}
+      /*
+        ARIA_DISABLED_CLASS sits AFTER the variant so its colours win: the two
+        have equal specificity and later simply beats earlier.
+      */
+      className={`inline-flex items-center justify-center gap-2 rounded-[var(--fp-radius-sm)] font-semibold transition duration-[var(--fp-ease)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] active:scale-[0.98] ${variantClass[variant]} ${ARIA_DISABLED_CLASS} ${sizeClass[size]} ${className}`}
       {...rest}
     >
       {loading && <Spinner />}

@@ -495,11 +495,22 @@ describe("one composition, not two", () => {
     }
   });
 
-  it("the CTA reads every string off the action and invents none", () => {
+  it("the CTA SPREADS the surface and overrides only the name", () => {
+    /*
+      The earlier version of this test asserted that the CTA set title, onClick
+      and aria-label itself — which passed happily while the component was a
+      second implementation of predictSurfaceProps. Restating the factory's
+      output is the defect, not the proof, so the assertion is inverted: the
+      factory is spread, and the ONLY thing the component may still name for
+      itself is aria-label, because its letters are aria-hidden and it has no
+      visible words to fall back on when idle.
+    */
     const code = stripComments(CTA);
+    expect(code).toContain("{...predictSurfaceProps(action)}");
     expect(code).toContain("aria-label={action.accessibleName}");
-    expect(code).toContain("title={action.hint}");
-    expect(code).toContain("onClick={action.onActivate}");
+    for (const rebuilt of ["title={", "onClick={", "aria-busy={", "aria-disabled={"]) {
+      expect(code, `PredictCta should take ${rebuilt} from the spread`).not.toContain(rebuilt);
+    }
     // No local guard duplicating onActivate's.
     expect(code).not.toMatch(/if\s*\(inert\)\s*return/);
   });

@@ -666,14 +666,18 @@ export default function UserDashboard() {
           trials={trialGrants}
           /* A free plan does not expire; predictions left today is what it has. */
           /*
-            The SAME exemption the CTA honours. Passing the raw counters to an
-            exempt account rendered "0 predicții azi" beside a fully working
-            Generate button — two neighbours in permanent chrome contradicting
-            each other about one fact. `quota: null` is the shape the card
-            already treats as "no limit to report", so this reuses the server's
-            verdict rather than inventing a second rule or a fake number.
+            THE SAME OBJECT the Predict gate reads — literally `predictQuota`,
+            not a reshaping of it.
+
+            This used to hand the card `null` for an exempt account and raw
+            counters otherwise, so exemption was encoded in the SHAPE of the
+            prop and the card had to hardcode `quotaExempt: false` to make sense
+            of it. Two places expressing one rule, held together by a convention
+            no type could check. The card now receives the exemption as a field
+            and asks the shared predicate, so the plan card and the Predict
+            button cannot reach different answers about one fact.
           */
-          quota={tierQuotaExempt ? null : { used: predictCountToday, limit: predictLimitToday }}
+          quota={predictQuota}
           onOpenReferral={() => handleNav("profile")}
           /*
             The reward is announced in the cards themselves rather than in a

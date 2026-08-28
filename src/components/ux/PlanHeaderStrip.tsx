@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import type { UserTier } from "../../types";
 import type { ReferralBonus } from "../../services/referralNotificationService";
-import { isPredictBlocked } from "./predictState";
+import { isPredictBlocked, type PredictQuota } from "./predictState";
 
 /**
  * The permanent status strip in the workspace chrome: what you have, and the one
@@ -40,7 +40,7 @@ type Props = {
    * Free-tier daily predictions. A free plan does not expire, so this is the
    * only honest answer to "how much have I got left" for it.
    */
-  quota?: { used: number; limit: number | null } | null;
+  quota?: PredictQuota | null;
   /** Opens the full referral surface in Account. Never claims anything. */
   onOpenReferral: () => void;
   /**
@@ -424,8 +424,15 @@ export default function PlanHeaderStrip({
     one would be a lie. What a free user actually has left today is predictions,
     which the server already sends, so that is what the second line reports.
   */
+  /*
+    An exempt account has no allowance to report, so it never renders a count —
+    the exemption is read off the quota itself now, not inferred from the caller
+    having passed null.
+  */
   const quotaLeft =
-    !remaining && quota && quota.limit !== null ? Math.max(0, quota.limit - quota.used) : null;
+    !remaining && quota && !quota.quotaExempt && quota.limit !== null
+      ? Math.max(0, quota.limit - quota.used)
+      : null;
 
   /*
     THE QUOTA IS THE URGENT FACT ONCE IT IS SPENT, so it LEADS the detail line
@@ -443,13 +450,20 @@ export default function PlanHeaderStrip({
     product. Access and allowance are different questions and a blocked user has
     both, so the line leads with the allowance and keeps the clock behind it.
 
-    `isPredictBlocked` is the SAME rule the Predict gate uses — quota arrives as
-    null for exempt accounts (UserDashboard nulls it), so exemption is already
-    encoded here and can never produce a false "0 predicții azi".
+    `isPredictBlocked` is the SAME rule the Predict gate uses, and it is now
+    given the SAME inputs.
+
+    It used to be called with a hardcoded `quotaExempt: false`, which was only
+    ever correct because the caller separately encoded exemption by passing
+    `quota={null}` — a convention no type enforced and nothing here could check.
+    A caller that reasonably passed real counters for an exempt account (to show
+    an unlimited user their usage, say) would have made this card announce "0
+    predicții azi" beside a Predict button that worked perfectly: the plan card
+    and the Predict button disagreeing about one fact, which is the exact defect
+    the shared rule exists to prevent, reintroduced by the way the rule was
+    called. The quota now states its own exemption and the predicate reads it.
   */
-  const quotaSpent =
-    quota !== null &&
-    isPredictBlocked({ quotaExempt: false, limit: quota.limit, used: quota.used });
+  const quotaSpent = quota !== null && isPredictBlocked(quota);
 
   /*
     The sub-label comes from the SAME resolution as the clock — see

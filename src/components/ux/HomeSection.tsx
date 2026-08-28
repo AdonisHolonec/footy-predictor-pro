@@ -144,8 +144,13 @@ export default function HomeSection({
           description={predictAction?.reason ?? t("dash.emptyPredsDesc")}
           actionLabel={t("shell.predict")}
           onAction={predictAction?.onActivate}
-          actionDisabled={predictAction?.disabled}
-          /* The description states the reason once; this carries it to AT. */
+          /*
+            The state arrives WHOLE, through the surface. This used to pass
+            `actionDisabled` alongside it, which set the native attribute and
+            took the button out of the tab order — silencing the very reason the
+            surface was carrying. One model: aria-disabled, focusable, and the
+            description above says the same thing in visible words.
+          */
           actionProps={predictAction ? predictSurfaceProps(predictAction) : undefined}
         />
       ) : (

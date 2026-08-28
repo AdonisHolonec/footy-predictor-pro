@@ -202,8 +202,11 @@ export default function MatchesSection({
              only the unfiltered slate offers Predict. */
           actionLabel={matchesFilter === "all" ? t("shell.predict") : t("dash.showAll")}
           onAction={matchesFilter === "all" ? predictAction?.onActivate : () => onSetFilter?.("all")}
-          /* Only the Predict branch carries Predict's state; "show all" is always available. */
-          actionDisabled={matchesFilter === "all" && predictAction?.disabled}
+          /*
+            Only the Predict branch carries Predict's state; "show all" is
+            always available and gets no surface at all. The state arrives whole
+            rather than as a native `disabled` beside it — see EmptyState.
+          */
           actionProps={
             matchesFilter === "all" && predictAction ? predictSurfaceProps(predictAction) : undefined
           }

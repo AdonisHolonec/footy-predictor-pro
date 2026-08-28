@@ -1,5 +1,5 @@
 import { useLocale } from "../../context/LocaleContext";
-import type { PredictAction } from "./predictState";
+import { predictSurfaceProps, type PredictAction } from "./predictState";
 import "./predictCta.css";
 
 /**
@@ -65,7 +65,7 @@ function AnimatedWord({ word, delayFrom }: { word: string; delayFrom: number }) 
 }
 
 export default function PredictCta({ action, className = "" }: Props) {
-  const { state, busy } = action;
+  const { busy } = action;
   const { t } = useLocale();
   const label = t("shell.predict");
   /*
@@ -101,66 +101,28 @@ export default function PredictCta({ action, className = "" }: Props) {
     <button
       type="button"
       /*
-        The contract's own guard, not a second one. `onActivate` is already
-        inert when the action is — including for Enter and Space, which the
-        browser routes through click on a native button. A local `if (inert)
-        return` here would be a duplicate of a rule that lives in one place.
-      */
-      onClick={action.onActivate}
-      aria-disabled={action.disabled || undefined}
-      aria-busy={busy || undefined}
-      /*
-        The accessible name, since the animated letters below are hidden from
-        assistive technology. It stays the fuller hint the button already used —
-        "Generează predicții pentru zilele selectate" — which both preserves the
-        existing name and satisfies Label in Name, because it opens with the
-        visible label word for word.
-      */
-      /*
-        Busy and blocked must not be the same announcement. The visual states
-        already differ (see the .is-busy sweep in predictCta.css); this is the
-        half a screen reader gets, and it used to be identical in both.
-      */
-      /*
-        EVERY state's name still opens with the visible label.
+        THE WHOLE SURFACE, SPREAD — not the same five attributes derived again.
 
-        The letters on the face always read "GENEREAZĂ PREDICȚII", in all three
-        states. Swapping the whole name to "Se generează predicțiile…" satisfied
-        the busy/blocked distinction but broke WCAG 2.5.3 Label in Name: a voice
-        user saying "click Generează Predicții" matched nothing the moment the
-        run started. The state is appended to the label instead of replacing it,
-        so the spoken command keeps working and the state is still announced.
+        `predictSurfaceProps` already computes onClick, aria-disabled, aria-busy,
+        title and data-predict-state. Restating them here made this component a
+        second implementation of the factory: a field added to the factory later
+        (aria-describedby, say) would silently not reach the one control most of
+        this file's comments describe as where these bugs used to live. The
+        activation guard comes with it — `onActivate` is already inert when the
+        action is, including for Enter and Space, which the browser routes
+        through click on a native button.
       */
+      {...predictSurfaceProps(action)}
       /*
-        ALWAYS named, unlike the other Predict surfaces.
-
-        `predictSurfaceProps` deliberately emits no `aria-label` when idle, so a
-        control's own visible words stay its name. This control has no such
-        words to fall back on — the letters below are aria-hidden for the
-        shimmer — so it is the one surface that must name itself in every
-        state, idle included.
+        The ONE override, and the reason this control cannot simply spread and
+        stop: the factory emits no `aria-label` when idle, so a control's own
+        visible words stay its name. The letters below are aria-hidden for the
+        shimmer, so this button has no visible words to fall back on and must
+        name itself in every state. Busy and blocked still open with the visible
+        label (WCAG 2.5.3) because `accessibleName` is built that way.
       */
       aria-label={action.accessibleName}
-      /*
-        The TOOLTIP MUST NOT PROMISE WHAT THE BUTTON REFUSES.
-
-        This was `hint` in every state, so hovering a blocked button read
-        "Generează predicții pentru zilele selectate" — an invitation from a
-        control that will not act. The accessible name already carried the
-        reason; sighted users had no reason at all, and for a subscriber the
-        neighbouring quota line does not exist to rescue it (that line only
-        renders when there is no countdown).
-      */
-      title={action.hint}
       data-testid="predict-cta"
-      /*
-        The same state hook every other Predict surface exposes via
-        `predictSurfaceProps`. This control paints from .is-busy/.is-disabled
-        rather than from the attribute, but one uniform selector across all of
-        them is what makes a state answerable in a browser without knowing
-        which surface you are looking at.
-      */
-      data-predict-state={state}
       /*
         Below sm the label tightens rather than losing a word: 10px, no extra
         tracking and slimmer padding is what buys "Predicții" room in a 390px

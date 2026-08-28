@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../context/LocaleContext";
 import PlanHeaderStrip, { resolveAccess } from "./PlanHeaderStrip";
 import PredictCta from "./PredictCta";
-import { buildPredictAction, type PredictState } from "./predictState";
+import { buildPredictAction, isPredictBlocked, type PredictState } from "./predictState";
 import type { UserTier } from "../../types";
 
 /**
@@ -354,7 +354,7 @@ describe("L + M — an exhausted quota never costs the user their countdown", ()
       tier: "premium",
       requestedTier: "premium",
       subscriptionUntil: new Date(NOW + 30 * DAY_MS).toISOString(),
-      quota: { used: 20, limit: 20 }
+      quota: { used: 20, limit: 20, quotaExempt: false }
     });
     const line = detail();
     expect(line).toContain("0 predicții azi");
@@ -366,14 +366,14 @@ describe("L + M — an exhausted quota never costs the user their countdown", ()
       tier: "ultra",
       requestedTier: "ultra",
       subscriptionUntil: new Date(NOW + 30 * DAY_MS).toISOString(),
-      quota: { used: 50, limit: 50 }
+      quota: { used: 50, limit: 50, quotaExempt: false }
     });
     // the spoken form is not behind the sm breakpoint
     expect(detail()).toMatch(/de zile/);
   });
 
   it("a blocked FREE user shows the allowance and invents no countdown", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 5, limit: 5 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 5, limit: 5, quotaExempt: false } });
     expect(detail()).toContain("0 predicții azi");
     expect(detail()).not.toMatch(/\dz /);
   });
@@ -389,29 +389,84 @@ describe("L + M — an exhausted quota never costs the user their countdown", ()
 describe("the quota line agrees with the Predict button", () => {
   /*
     An exempt account reached its counters and read "0 predicții azi" beside a
-    working Generate button. The card is handed quota=null for exempt accounts,
-    which is the shape it already treats as "no limit to report".
+    working Generate button.
+
+    The card no longer infers exemption from being handed `null`: it receives
+    the SAME PredictQuota the gate reads and asks the SAME predicate. These
+    tests therefore hand it real counters WITH the exemption set, which is the
+    case the old hardcoded `quotaExempt: false` got wrong — and which passing
+    `quota: null` could never have caught.
   */
   it("free account with quota remaining shows what is left", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 2, limit: 5 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 2, limit: 5, quotaExempt: false } });
     expect(time()).toBe("3 predicții azi");
   });
 
   it("free account with one left uses the singular", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 4, limit: 5 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 4, limit: 5, quotaExempt: false } });
     expect(time()).toBe("1 predicție azi");
   });
 
   it("free account exhausted reads zero, not a negative", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 9, limit: 5 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 9, limit: 5, quotaExempt: false } });
     expect(time()).toBe("0 predicții azi");
   });
 
   it("an exempt account shows NO quota line at all", () => {
-    // quota=null is what UserDashboard passes when tierQuotaExempt is true.
     plan({ tier: "ultra", requestedTier: "ultra", quota: null });
     expect(screen.queryByTestId("plan-time")).toBeNull();
     expect(detail()).not.toMatch(/predicți/i);
+  });
+
+  it("R — an exempt account AT its counter limit still announces no exhaustion", () => {
+    /*
+      The drift case. `used >= limit` is true, so the old hardcoded
+      `quotaExempt: false` made this card say "0 predicții azi" — beside a
+      Predict button that, reading the same numbers WITH the exemption, was
+      perfectly enabled. Two neighbours in permanent chrome disagreeing about
+      one fact, which is what the shared predicate exists to make impossible.
+    */
+    plan({
+      tier: "ultra",
+      requestedTier: "ultra",
+      quota: { used: 50, limit: 50, quotaExempt: true }
+    });
+    expect(detail()).not.toMatch(/predicți/i);
+    expect(screen.queryByTestId("plan-time")).toBeNull();
+  });
+
+  it("R — an exempt account keeps its countdown rather than yielding it to a quota", () => {
+    plan({
+      tier: "ultra",
+      requestedTier: "ultra",
+      subscriptionUntil: new Date(NOW + 30 * DAY).toISOString(),
+      quota: { used: 99, limit: 5, quotaExempt: true }
+    });
+    expect(detail()).toContain("30z");
+    expect(detail()).not.toMatch(/predicți/i);
+  });
+
+  it("F — the card and the Predict gate answer from ONE predicate", () => {
+    /*
+      Not a source-text assertion: both sides are computed from the same quota
+      and compared. If the card ever re-derives its own rule, one of these
+      rows disagrees with isPredictBlocked and this fails.
+    */
+    const cases = [
+      { used: 5, limit: 5, quotaExempt: false },
+      { used: 4, limit: 5, quotaExempt: false },
+      { used: 5, limit: 5, quotaExempt: true },
+      { used: 0, limit: null, quotaExempt: false },
+      { used: 9, limit: 5, quotaExempt: true }
+    ];
+    for (const quota of cases) {
+      plan({ tier: "ultra", requestedTier: "ultra", quota });
+      const cardSaysBlocked = /0 predicți/.test(detail());
+      expect(cardSaysBlocked, `card disagreed with the gate for ${JSON.stringify(quota)}`).toBe(
+        isPredictBlocked(quota)
+      );
+      cleanup();
+    }
   });
 
   it("a Premium subscriber shows time, never a quota line", () => {
@@ -465,12 +520,12 @@ describe("the plan card shows time, not just a plan", () => {
   });
 
   it("falls back to predictions left for a free plan, which has no expiry", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 1, limit: 3 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 1, limit: 3, quotaExempt: false } });
     expect(time()).toMatch(/^2\b/);
   });
 
   it("never invents a time when there is none and no quota is known", () => {
-    plan({ tier: "free", requestedTier: "free", quota: { used: 0, limit: null } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 0, limit: null, quotaExempt: false } });
     expect(screen.queryByTestId("plan-time")).toBeNull();
     expect(detail()).toMatch(/gratuit|free/i);
   });
@@ -529,7 +584,7 @@ describe("the corner badges", () => {
     cleanup();
     // A free plan with no grant is not "active" in the sense the badge means,
     // and a badge that is always lit says nothing at all.
-    plan({ tier: "free", requestedTier: "free", quota: { used: 1, limit: 3 } });
+    plan({ tier: "free", requestedTier: "free", quota: { used: 1, limit: 3, quotaExempt: false } });
     expect(screen.queryByTestId("badge-active")).toBeNull();
   });
 
