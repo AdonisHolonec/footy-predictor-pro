@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import HistorySection from "./HistorySection";
@@ -46,7 +46,56 @@ vi.mock("./CalibrationChart", () => ({ default: () => <div data-testid="calibrat
 vi.mock("./HistoryTrustSection", () => ({ default: () => <div data-testid="breakdown" /> }));
 vi.mock("../TrackRecordSection", () => ({ default: () => <div data-testid="track-record">72.0%</div> }));
 
-afterEach(cleanup);
+/*
+  A FIXED test clock, with every fixture date derived from it.
+
+  PerformanceTrend takes no `today` prop: its window comes from
+  `computeLastNDaysAccuracy`, which builds local date keys from `Date.now()`.
+  The fixtures below were absolute strings pinned to 2026-08-21, so this suite
+  passed only while the real calendar happened to sit within 7 days of that
+  date — and on 2026-08-28 it crossed the boundary and went red on main, for
+  every branch at once, having changed nothing.
+
+  Pinning the clock is the fix, using the same mechanism matchListDayContext
+  already uses; `shouldAdvanceTime` keeps `waitFor` in this file working. The
+  dates are then derived from that clock, so "today" and "yesterday" stay true
+  whatever day the suite runs on, and stay identical from run to run.
+*/
+const NOW = new Date(2026, 7, 21, 14, 0, 0); // 2026-08-21 14:00 local
+
+/** A local-day offset from NOW, as the YYYY-MM-DD key the app buckets on. */
+function dayKey(offsetDays: number): string {
+  const d = new Date(NOW);
+  d.setDate(d.getDate() + offsetDays);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/*
+  A kickoff instant on a local day offset from NOW.
+
+  Built from LOCAL hours rather than the literal `Z` strings these fixtures
+  used, because every consumer here buckets by `kickoffLocalDateKey` — a local
+  day. A fixed UTC hour lands on a different local day either side of the
+  world, which is a second latent timezone bomb beside the calendar one.
+*/
+function kickoffAt(offsetDays: number, hour: number): string {
+  const d = new Date(NOW);
+  d.setDate(d.getDate() + offsetDays);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function entry(id: number, home: string, kickoff: string, validation: string): HistoryEntry {
   return {
@@ -62,13 +111,13 @@ function entry(id: number, home: string, kickoff: string, validation: string): H
     savedAt: kickoff
   } as unknown as HistoryEntry;
 }
-const TODAY = "2026-08-21";
+const TODAY = dayKey(0);
 const HISTORY = [
-  entry(1, "Arsenal", "2026-08-21T10:00:00Z", "win"),
-  entry(2, "Leeds", "2026-08-21T12:00:00Z", "loss"),
-  entry(3, "Wolves", "2026-08-21T14:00:00Z", "win"),
-  entry(4, "Rayo", "2026-08-21T18:00:00Z", "pending"),
-  entry(5, "Milan", "2026-08-20T18:00:00Z", "win")
+  entry(1, "Arsenal", kickoffAt(0, 10), "win"),
+  entry(2, "Leeds", kickoffAt(0, 12), "loss"),
+  entry(3, "Wolves", kickoffAt(0, 14), "win"),
+  entry(4, "Rayo", kickoffAt(0, 18), "pending"),
+  entry(5, "Milan", kickoffAt(-1, 18), "win")
 ];
 
 const stats = { wins: 12, losses: 5, winRate: 70.6, settled: 17 } as never;
@@ -214,6 +263,30 @@ describe("UX-E redesign · Performance", () => {
     expect(trend.querySelector("ol")!.getAttribute("aria-label")).toMatch(/7/);
     unmount();
     render(<PerformanceTrend history={[]} />);
+    expect(screen.queryByTestId("performance-trend")).toBeNull();
+  });
+
+  /*
+    THE WINDOW ITSELF, at both edges.
+
+    Nothing here ever asserted the 7-day boundary — the suite only checked that
+    a trend rendered at all, which is why a fixture drifting out of the window
+    read as "the component is broken" rather than "the fixture expired". These
+    two pin the contract the component actually has, and they are only
+    expressible now that the fixture moves with the clock.
+  */
+  it("counts a day at the far edge of the 7-day window (today − 6)", () => {
+    render(<PerformanceTrend history={[entry(90, "Edge", kickoffAt(-6, 12), "win")]} />);
+    const trend = screen.getByTestId("performance-trend");
+    expect(trend.querySelectorAll("li").length).toBe(7);
+    // The oldest slot is the one that filled, and it reads a real rate.
+    expect(trend.querySelectorAll("li")[0].textContent).toMatch(/100%/);
+  });
+
+  it("excludes a day one step outside the window (today − 7), rather than widening it", () => {
+    render(<PerformanceTrend history={[entry(91, "Stale", kickoffAt(-7, 12), "win")]} />);
+    // Nothing settled INSIDE the window, so the strip is absent rather than
+    // showing a fake 0% or silently stretching to 8 days.
     expect(screen.queryByTestId("performance-trend")).toBeNull();
   });
 
