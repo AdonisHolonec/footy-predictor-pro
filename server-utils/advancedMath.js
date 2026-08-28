@@ -198,10 +198,27 @@ export function shinImpliedProbs(homeOdd, drawOdd, awayOdd) {
   };
 }
 
-export const blendModelWithMarket = ({ model, market, modelWeight = 0.7 }) => {
+/**
+ * Bounds for the MODEL share of the 1X2 model/market blend (market share = 1 − w).
+ * Floor 0 = market-only: needed so an explicit MODEL_MARKET_BLEND_WEIGHT override can run a
+ * market-heavy canary (offline walk-forward: every bw below the old 0.35 floor beat current
+ * E on Brier; see PR). Ceiling 0.9 unchanged — the market is never fully ignored. Shared
+ * with getModelMarketBlendWeight (modelConstants.js) so the override and the blend can't
+ * disagree silently: before, an override of 0.20 was clamped to 0.35 at both layers.
+ */
+export const MODEL_MARKET_BLEND_MIN_WEIGHT = 0;
+export const MODEL_MARKET_BLEND_MAX_WEIGHT = 0.9;
+const MODEL_MARKET_BLEND_DEFAULT_WEIGHT = 0.7;
+
+export const blendModelWithMarket = ({ model, market, modelWeight = MODEL_MARKET_BLEND_DEFAULT_WEIGHT }) => {
   if (!model) return null;
   if (!market) return model;
-  const w = Math.max(0.35, Math.min(0.9, Number(modelWeight) || 0.7));
+  // Only a genuine number (or numeric string) is a weight; NaN / null / "" / "abc" keep falling
+  // back to the default exactly as before (a boolean is never passed — `true` now also defaults
+  // instead of reading as 1). 0 is a valid market-only weight, no longer treated as "unset".
+  const requested = typeof modelWeight === "number" ? modelWeight : Number.parseFloat(modelWeight);
+  const effective = Number.isNaN(requested) ? MODEL_MARKET_BLEND_DEFAULT_WEIGHT : requested;
+  const w = Math.max(MODEL_MARKET_BLEND_MIN_WEIGHT, Math.min(MODEL_MARKET_BLEND_MAX_WEIGHT, effective));
   const p1 = (model.p1 * w) + (market.p1 * (1 - w));
   const pX = (model.pX * w) + (market.pX * (1 - w));
   const p2 = (model.p2 * w) + (market.p2 * (1 - w));

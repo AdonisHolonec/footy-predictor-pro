@@ -73,3 +73,33 @@ test("applyStackerBlend ignores an unusable stacker entry (missing weights) and 
   assert.ok(out.stackerEntry, "GLOBAL fallback entry should still be picked");
   assert.ok(Math.abs(out.pFinal.p1 - calTriple.p1) < 1e-9);
 });
+
+test("applyStackerBlend blends the CALIBRATED triple with the market (never raw Poisson) and honours a market-heavy 0.20 weight", () => {
+  const market = { p1: 0.4, pX: 0.3, p2: 0.3 };
+  const calibrated = { p1: 0.5, pX: 0.3, p2: 0.2 };
+  const raw = { p1: 70, pX: 20, p2: 10 };
+  const out = applyStackerBlend({
+    stackerWeightsMap: new Map(),
+    lId: 39,
+    method: "modular-engine",
+    odds: { home: 2.1, draw: 3.3, away: 3.4 },
+    luckStats: null,
+    homeIdStr: "33",
+    awayIdStr: "50",
+    calTriple: calibrated,
+    eloInfo: null,
+    leagueParams,
+    marketProbs: market,
+    blendW: 0.2,
+    pRaw: raw
+  });
+  assert.equal(out.stackerApplied, false);
+  // calibrated: 0.2·0.5 + 0.8·0.4 = 0.42 ; 0.2·0.3 + 0.8·0.3 = 0.30 ; 0.2·0.2 + 0.8·0.3 = 0.28
+  assert.ok(Math.abs(out.pFinal.p1 - 0.42) < 1e-12, `p1=${out.pFinal.p1}`);
+  assert.ok(Math.abs(out.pFinal.pX - 0.3) < 1e-12, `pX=${out.pFinal.pX}`);
+  assert.ok(Math.abs(out.pFinal.p2 - 0.28) < 1e-12, `p2=${out.pFinal.p2}`);
+  // raw Poisson would have given 0.2·0.7 + 0.8·0.4 = 0.46 — calibration must come first
+  assert.ok(Math.abs(out.pFinal.p1 - 0.46) > 1e-6, "raw Poisson leaked into the blend");
+  // a 0.35 floor would have given 0.35·0.5 + 0.65·0.4 = 0.435 — the override must reach the blend
+  assert.ok(Math.abs(out.pFinal.p1 - 0.435) > 1e-6, "0.20 was floored to 0.35 inside the blend");
+});
