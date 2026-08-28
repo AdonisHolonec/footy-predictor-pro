@@ -18,6 +18,40 @@ function resolveCvMode(explicit) {
   return env === "random" ? "random" : "time";
 }
 
+/*
+  Isotonic (PAV) is non-parametric: at the sample sizes this project actually
+  fits (329–910 per outcome over 29 nightly runs, 157 for the one league map) it
+  produces saturated tail bins and loses to every parametric method — it ranked
+  last on 5/7 outcomes at n=910 and on 7/7 at n=157, and on outcome X it was worse
+  than applying no calibration at all. Below this floor it is INELIGIBLE for
+  selection. It is still evaluated and reported in `ranking` (with
+  `eligible: false`) so the evidence stays inspectable; Platt / temperature / beta
+  are never gated. 2000 is ~2.2x the largest sample ever fitted here; revisit with
+  evidence, override via CALIB_ISOTONIC_MIN_SAMPLES.
+*/
+export const DEFAULT_ISOTONIC_MIN_SAMPLES = 2000;
+
+/**
+ * Precedence: explicit option > CALIB_ISOTONIC_MIN_SAMPLES env > default.
+ * A blank value is "unset" (falls through); a present-but-invalid value
+ * (non-numeric, negative, Infinity) falls back to the default — never to 0,
+ * because 0 would silently disable the guard.
+ */
+export function resolveIsotonicMinSamples(explicit) {
+  for (const raw of [explicit, process.env.CALIB_ISOTONIC_MIN_SAMPLES]) {
+    if (raw === undefined || raw === null || String(raw).trim() === "") continue;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : DEFAULT_ISOTONIC_MIN_SAMPLES;
+  }
+  return DEFAULT_ISOTONIC_MIN_SAMPLES;
+}
+
+/** Only isotonic is sample-gated; every other method is always eligible. */
+export function isMethodEligible(method, n, isotonicMinSamples) {
+  if (method !== "isotonic") return true;
+  return n >= resolveIsotonicMinSamples(isotonicMinSamples);
+}
+
 function binLabel(s) {
   return s.y >= 0.5 ? 1 : 0;
 }
@@ -106,11 +140,12 @@ function scorePairs(pairs) {
  * Default cvMode=time (expanding chronological folds). Set CALIB_CV_MODE=random for legacy.
  * @returns {{ ranking: Array, best: string, baseline: object, n: number, cvMode: string }}
  */
-export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42, cvMode } = {}) {
+export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42, cvMode, isotonicMinSamples } = {}) {
   const s = (Array.isArray(samples) ? samples : []).filter(
     (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)
   );
   const n = s.length;
+  const isoMin = resolveIsotonicMinSamples(isotonicMinSamples);
   const results = {};
   let mode = resolveCvMode(cvMode);
   const hasKickoff = s.some((p) => p?.kickoffAt != null || p?.kickoff_at != null || p?.kickoff != null);
@@ -161,11 +196,18 @@ export function evaluateCalibrationMethods(samples, { folds = 4, seed = 42, cvMo
     results[method] = { method, ...scorePairs(valPairs) };
   }
 
+  // Eligibility is reported on every entry (never by omission): an ineligible
+  // isotonic still shows its CV scores so the decision stays inspectable.
+  for (const r of Object.values(results)) {
+    r.eligible = isMethodEligible(r.method, n, isoMin);
+    r.ineligibleReason = r.eligible ? null : `insufficient_samples_for_isotonic:${n}<${isoMin}`;
+  }
+
   const ranking = Object.values(results).sort(
     (a, b) => a.logLoss - b.logLoss || a.ece - b.ece || a.brier - b.brier
   );
-  const best = ranking[0]?.method || "isotonic";
-  return { ranking, best, baseline, n, cvMode: mode };
+  const best = ranking.find((r) => r.eligible)?.method || "platt";
+  return { ranking, best, baseline, n, cvMode: mode, isotonicMinSamples: isoMin };
 }
 
 /**
@@ -184,16 +226,21 @@ function identityCurve() {
  * CV log-loss, else falls back to identity (`none`).
  * @returns {{ method, xPoints, yPoints, ranking, baseline, n, reason? }}
  */
-export function selectBestCalibration(samples, { minSamples = 40, folds = 4, seed = 42, cvMode } = {}) {
+export function selectBestCalibration(
+  samples,
+  { minSamples = 40, folds = 4, seed = 42, cvMode, isotonicMinSamples } = {}
+) {
   const s = (Array.isArray(samples) ? samples : []).filter(
     (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)
   );
   if (s.length < minSamples) {
-    const fitted = fitIsotonicPav(s);
+    // Too few samples to select anything: serve the identity curve (a no-op map)
+    // rather than an isotonic fit — the one method the sample guard exists for.
+    const id = identityCurve();
     return {
-      method: "isotonic",
-      xPoints: fitted.xPoints,
-      yPoints: fitted.yPoints,
+      method: "none",
+      xPoints: id.xPoints,
+      yPoints: id.yPoints,
       ranking: [],
       baseline: null,
       reason: "insufficient_samples",
@@ -201,13 +248,16 @@ export function selectBestCalibration(samples, { minSamples = 40, folds = 4, see
     };
   }
 
-  const evalResult = evaluateCalibrationMethods(s, { folds, seed, cvMode });
+  const evalResult = evaluateCalibrationMethods(s, { folds, seed, cvMode, isotonicMinSamples });
   const baselineLL = evalResult.baseline?.logLoss ?? Infinity;
 
-  // Prefer the best method that beats (or ties) the uncalibrated baseline.
+  // Prefer the best ELIGIBLE method that beats (or ties) the uncalibrated baseline.
+  // An ineligible isotonic is skipped, never re-scored: the next method in the
+  // same ranking wins, or the identity curve if none beats the baseline.
   let chosen =
-    evalResult.ranking.find((r) => Number.isFinite(r.logLoss) && r.logLoss <= baselineLL + 1e-4)
-      ?.method || null;
+    evalResult.ranking.find(
+      (r) => r.eligible && Number.isFinite(r.logLoss) && r.logLoss <= baselineLL + 1e-4
+    )?.method || null;
 
   if (!chosen) {
     const id = identityCurve();
