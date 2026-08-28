@@ -30,6 +30,79 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * Every token that paints a SURFACE or a BOUNDARY behind text must be declared
+ * in all four scopes.
+ *
+ * This guard exists because the same defect was found twice in a row. A token
+ * declared only in `:root` still resolves everywhere — it just resolves to the
+ * LIGHT value, silently, inside a dark theme. `--fp-bg-muted` is undeclared in
+ * html.theme-contrast and would have put near-white ink on a near-white fill at
+ * 1.00:1; that one was caught by reading. `--fp-border-strong` has the identical
+ * defect and was NOT caught — it shipped as the disabled button's border and
+ * measured 1.03:1 against a black card, leaving the control with no visible
+ * edge in the one theme whose users most need one.
+ *
+ * Text colours are deliberately out of scope: an inherited ink is usually still
+ * legible, while an inherited surface or boundary is invisible. The list is the
+ * things a control's shape depends on.
+ */
+const THEMED_SURFACE_TOKENS = [
+  "--fp-bg",
+  "--fp-bg-elevated",
+  "--fp-bg-card",
+  "--fp-bg-muted",
+  "--fp-border",
+  "--fp-border-strong",
+  "--fp-disabled-surface",
+  "--fp-disabled-border",
+  "--fp-disabled-ink",
+  "--fp-on-accent",
+  "--fp-chip-active",
+  "--fp-chip-free",
+  "--fp-accent",
+  "--fp-accent-hover"
+] as const;
+
+const THEME_SCOPES = [":root", "html.theme-light", "html.theme-dark", "html.theme-contrast"] as const;
+
+function blockFor(scope: string): string {
+  const start = TOKENS.indexOf(`${scope} {`);
+  if (start === -1) throw new Error(`theme scope not found in tokens.css: ${scope}`);
+  const open = TOKENS.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < TOKENS.length; i += 1) {
+    if (TOKENS[i] === "{") depth += 1;
+    else if (TOKENS[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return TOKENS.slice(open + 1, i);
+    }
+  }
+  throw new Error(`unterminated block: ${scope}`);
+}
+
+describe("theme completeness", () => {
+  it("every surface and boundary token is declared in all four theme scopes", () => {
+    const missing: string[] = [];
+    for (const scope of THEME_SCOPES) {
+      const block = blockFor(scope);
+      // Exact declaration match: `--fp-bg:` counts, `--fp-bg-card:` must not
+      // satisfy a lookup for `--fp-bg`.
+      const declared = new Set(
+        block
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith("--"))
+          .map((line) => line.slice(0, line.indexOf(":")).trim())
+      );
+      for (const token of THEMED_SURFACE_TOKENS) {
+        if (!declared.has(token)) missing.push(`${scope} is missing ${token}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("colour foundation guards", () => {
   it("no Tailwind class composes an opacity modifier onto a var() colour", () => {
     // These classes compile to NOTHING in Tailwind 3.4 — the whole class is

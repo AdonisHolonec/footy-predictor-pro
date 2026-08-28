@@ -73,17 +73,27 @@ describe("the six plan states", () => {
     expect(card().dataset.tier).toBe("free");
   });
 
-  it("Premium shows Premium / Abonament activ", () => {
+  /*
+    NO subscription instant here — that is the point. These two cards carry a
+    paid tier with no grant the resolver can name, and they used to assert
+    "Abonament activ", which is a claim about a subscription nobody supplied.
+    The honest sentence for "the access is real, its source is unknown" is
+    "Acces activ". A subscriber WITH an instant shows the countdown instead;
+    that case is covered in headerV2.test.tsx.
+  */
+  it("Premium with no grant instant says access is active, not that it is paid for", () => {
     renderStrip({ tier: "premium", requestedTier: "premium" });
     expect(card().textContent).toContain("Premium");
-    expect(detail()).toMatch(/abonament activ/i);
+    expect(detail()).toMatch(/acces activ/i);
+    expect(detail()).not.toMatch(/abonament activ/i);
     expect(card().dataset.tier).toBe("premium");
   });
 
-  it("Ultra shows Ultra / Abonament activ", () => {
+  it("Ultra with no grant instant says access is active, not that it is paid for", () => {
     renderStrip({ tier: "ultra", requestedTier: "ultra" });
     expect(card().textContent).toContain("Ultra");
-    expect(detail()).toMatch(/abonament activ/i);
+    expect(detail()).toMatch(/acces activ/i);
+    expect(detail()).not.toMatch(/abonament activ/i);
     expect(card().dataset.tier).toBe("ultra");
   });
 
@@ -258,7 +268,11 @@ describe("reward notice lives in the cards, not in a toast", () => {
     // the product's own words along with the name it was there to bound.
     const name = screen.getByTestId("referral-name");
     expect(name.className).toContain("truncate");
-    expect(name.className).toMatch(/max-w-/);
+    // Shrinks under flex pressure now instead of carrying a fixed 32px cap that
+    // cut every name to ~4 characters whether or not the row was short of room.
+    expect(name.className).toContain("min-w-0");
+    expect(name.className).toContain("shrink");
+    expect(name.className).not.toMatch(/max-w-/);
     expect(screen.getByTestId("referral-fixed").className).not.toContain("truncate");
     // The reward half stays fully readable regardless of the name's length.
     expect(card().textContent).toContain("+5");

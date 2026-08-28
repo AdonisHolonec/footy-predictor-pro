@@ -1,4 +1,5 @@
 import { useLocale } from "../../context/LocaleContext";
+import { predictSurfaceProps, type PredictAction } from "./predictState";
 import "./predictCta.css";
 
 /**
@@ -20,11 +21,19 @@ import "./predictCta.css";
  */
 
 type Props = {
-  onPredict: () => void;
-  busy?: boolean;
-  disabled?: boolean;
-  /** Tooltip and accessible description — the caller owns the wording. */
-  hint: string;
+  /*
+    THE ACTION, not a handful of strings describing it.
+
+    This used to take `state`, `hint`, `busyLabel`, `disabledLabel` and
+    `accessibleName` as five loose props and compose the spoken name, the
+    tooltip and the live-region text from them itself. That is a SECOND
+    derivation of what predictState.ts already resolved: the two agreed only
+    for as long as someone kept them agreeing, and they had already drifted
+    once — the title read the idle promise on a button that would refuse.
+
+    It composes nothing now. Every string below is read off the contract.
+  */
+  action: PredictAction;
   className?: string;
 };
 
@@ -55,31 +64,64 @@ function AnimatedWord({ word, delayFrom }: { word: string; delayFrom: number }) 
   );
 }
 
-export default function PredictCta({ onPredict, busy = false, disabled = false, hint, className = "" }: Props) {
+export default function PredictCta({ action, className = "" }: Props) {
+  const { busy } = action;
   const { t } = useLocale();
   const label = t("shell.predict");
   /*
     Split on the space so the second word can drop at narrow widths without a
     second i18n key holding a duplicate of the same copy.
   */
-  const [first, ...rest] = label.split(" ");
-  const second = rest.join(" ");
+  /*
+    Split on the LAST space, not the first. "Generate Match Predictions"
+    split on the first put a bare space character into a letter-gapped flex
+    row, rendering a triple-width hole on line two.
+  */
+  const cut = label.lastIndexOf(" ");
+  const first = cut === -1 ? label : label.slice(0, cut);
+  const second = cut === -1 ? "" : label.slice(cut + 1);
+
+  /*
+    NOT the `disabled` attribute.
+
+    A disabled button is removed from the tab order, and the browser blurs it
+    the moment the attribute lands on the focused element — so a keyboard user
+    who pressed Enter here lost focus to <body> in the same tick, and the busy
+    name this component swaps in was announced to nobody. `aria-disabled` keeps
+    the button focusable and in the accessibility tree; the guard below is what
+    actually makes it inert, including for Enter and Space, which fire click.
+
+    It is on the BUTTON, never on a wrapper: PR #202 removed exactly that from
+    a <Card> div, where the attribute is not supported and leaked to
+    descendants.
+  */
 
   return (
+    <>
     <button
       type="button"
-      onClick={onPredict}
-      disabled={disabled || busy}
-      aria-busy={busy || undefined}
       /*
-        The accessible name, since the animated letters below are hidden from
-        assistive technology. It stays the fuller hint the button already used —
-        "Generează predicții pentru zilele selectate" — which both preserves the
-        existing name and satisfies Label in Name, because it opens with the
-        visible label word for word.
+        THE WHOLE SURFACE, SPREAD — not the same five attributes derived again.
+
+        `predictSurfaceProps` already computes onClick, aria-disabled, aria-busy,
+        title and data-predict-state. Restating them here made this component a
+        second implementation of the factory: a field added to the factory later
+        (aria-describedby, say) would silently not reach the one control most of
+        this file's comments describe as where these bugs used to live. The
+        activation guard comes with it — `onActivate` is already inert when the
+        action is, including for Enter and Space, which the browser routes
+        through click on a native button.
       */
-      aria-label={hint}
-      title={hint}
+      {...predictSurfaceProps(action)}
+      /*
+        The ONE override, and the reason this control cannot simply spread and
+        stop: the factory emits no `aria-label` when idle, so a control's own
+        visible words stay its name. The letters below are aria-hidden for the
+        shimmer, so this button has no visible words to fall back on and must
+        name itself in every state. Busy and blocked still open with the visible
+        label (WCAG 2.5.3) because `accessibleName` is built that way.
+      */
+      aria-label={action.accessibleName}
       data-testid="predict-cta"
       /*
         Below sm the label tightens rather than losing a word: 10px, no extra
@@ -100,7 +142,7 @@ export default function PredictCta({ onPredict, busy = false, disabled = false, 
         No fixed width — it is sized by its own content, so the allocation stays
         correct when the copy or the locale changes.
       */
-      className={`fp-predict touch-target shrink-0 px-2.5 py-1 font-display text-[10px] font-bold uppercase leading-[1.15] tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3 sm:text-[11px] ${className}`}
+      className={`fp-predict${busy ? " is-busy" : ""}${action.blocked ? " is-disabled" : ""} touch-target shrink-0 px-2 py-1 font-display text-[10px] font-bold uppercase leading-[1.15] tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:px-3 sm:text-[11px] ${className}`}
     >
       {/*
         Decorative: the readable name is on the button itself.
@@ -121,5 +163,15 @@ export default function PredictCta({ onPredict, busy = false, disabled = false, 
         ) : null}
       </span>
     </button>
+    {/*
+      The busy state needs somewhere to be HEARD. Swapping the button's own
+      accessible name is not an announcement — nothing re-reads a control the
+      user is already on. This region is the only thing that speaks when a run
+      starts, and it is a sibling so it is never part of the button's name.
+    */}
+    <span role="status" aria-live="polite" className="sr-only" data-testid="predict-status">
+      {busy ? (action.reason ?? "") : ""}
+    </span>
+    </>
   );
 }

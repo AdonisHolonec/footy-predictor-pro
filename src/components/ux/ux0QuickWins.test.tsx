@@ -74,7 +74,6 @@ function renderHome(overrides: Record<string, unknown> = {}) {
       onGoHistory={() => {}}
       onGoStatistics={() => {}}
       onGoTickets={() => {}}
-      onPredict={() => {}}
       trackerStats={{ wins: 0, losses: 0, winRate: 0, settled: 0, pending: 0 } as never}
       selectedDate="2026-08-25"
       {...overrides}

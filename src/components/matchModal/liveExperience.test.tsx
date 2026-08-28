@@ -103,7 +103,6 @@ function renderHome(matches: PredictionRow[], liveCount = matches.filter((m) => 
       onGoHistory={noop}
       onGoStatistics={noop}
       onGoTickets={noop}
-      onPredict={noop}
       trackerStats={{ wins: 0, losses: 0, winRate: 0, settled: 0, pending: 0 } as never}
       selectedDate="2026-08-25"
     />
@@ -155,7 +154,6 @@ describe("UX-D · Matches › Live", () => {
         onToggleWatch={noop}
         onOpenMatch={noop}
         onUpgradeRequired={noop}
-        onPredict={noop}
         matchesFilter="all"
         onSetFilter={noop}
         loading={false}
@@ -212,7 +210,6 @@ function Harness() {
           onToggleWatch={noop}
           onOpenMatch={noop}
           onUpgradeRequired={noop}
-          onPredict={noop}
           matchesFilter={filter}
           onSetFilter={setFilter}
           loading={false}

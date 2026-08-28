@@ -27,6 +27,35 @@
   /* Darker than --fp-accent for small/bold TEXT use only (~5:1 on white vs. --fp-accent's ~4.2:1);
      keep --fp-accent for large text, borders, and non-text UI fills. */
   --fp-accent-text: #d22b11;
+
+  /* ON-FILL PAIRS. A solid coloured chip needs an ink that flips with the
+     theme: --fp-accent-text exists for coloured TEXT on paper and falls back
+     to --fp-accent in dark, so it cannot carry white text on a fill. These
+     three do. Light themes use deep fills + white; dark themes use bright
+     fills + near-black, because the dark palette's greens are luminous.
+     Every pair below clears 4.5:1, the threshold for small bold labels. */
+  --fp-on-accent: #ffffff;
+  /*
+     DISABLED SURFACE. A control that is aria-disabled stays focusable, so it
+     must keep a visible boundary: WCAG 1.4.11 asks 3:1 for a UI component's
+     edge. The face alone cannot carry that here — the header bar is itself
+     --fp-bg-card, so any card-coloured fill sits at 1.01:1 against it — which is
+     why the BORDER is the boundary and is declared per theme rather than
+     borrowed from --fp-border-strong (undeclared in high contrast, where it
+     inherits a dark rgba and measures 1.03:1 on black).
+  */
+  --fp-disabled-surface: #d6d3d3;
+  --fp-disabled-border: #5f5f5f;
+  --fp-disabled-ink: #3d3d3d;
+  /* Teal, not emerald/green. In dark --fp-success is #22d06e and in high
+     contrast --fp-accent is #3ddc84 — an ACTIV chip on either value is a
+     solid block of "this bet hit" / brand accent sitting in permanent
+     chrome. Teal still reads active and belongs to no semantic ink. */
+  --fp-chip-active: #0f766e;
+  --fp-chip-free: #d22b11;
+  --fp-tier-free: #854d0e;   /* yellow-800, NOT Value Amber #b45309 */
+  --fp-tier-premium: #047857;
+  --fp-tier-ultra: #0369a1;
   --fp-purple: #7c3aed;
 
   /* Text — near-black ink, never stark #000 */
@@ -160,6 +189,35 @@
 /* Light — mirrors :root explicitly so the theme block is self-contained
    (root is the pre-JS/no-class fallback; this is what applyTheme() applies) */
 html.theme-light {
+
+  /* ON-FILL PAIRS. A solid coloured chip needs an ink that flips with the
+     theme: --fp-accent-text exists for coloured TEXT on paper and falls back
+     to --fp-accent in dark, so it cannot carry white text on a fill. These
+     three do. Light themes use deep fills + white; dark themes use bright
+     fills + near-black, because the dark palette's greens are luminous.
+     Every pair below clears 4.5:1, the threshold for small bold labels. */
+  --fp-on-accent: #ffffff;
+  /*
+     DISABLED SURFACE. A control that is aria-disabled stays focusable, so it
+     must keep a visible boundary: WCAG 1.4.11 asks 3:1 for a UI component's
+     edge. The face alone cannot carry that here — the header bar is itself
+     --fp-bg-card, so any card-coloured fill sits at 1.01:1 against it — which is
+     why the BORDER is the boundary and is declared per theme rather than
+     borrowed from --fp-border-strong (undeclared in high contrast, where it
+     inherits a dark rgba and measures 1.03:1 on black).
+  */
+  --fp-disabled-surface: #d6d3d3;
+  --fp-disabled-border: #5f5f5f;
+  --fp-disabled-ink: #3d3d3d;
+  /* Teal, not emerald/green. In dark --fp-success is #22d06e and in high
+     contrast --fp-accent is #3ddc84 — an ACTIV chip on either value is a
+     solid block of "this bet hit" / brand accent sitting in permanent
+     chrome. Teal still reads active and belongs to no semantic ink. */
+  --fp-chip-active: #0f766e;
+  --fp-chip-free: #d22b11;
+  --fp-tier-free: #854d0e;   /* yellow-800, NOT Value Amber #b45309 */
+  --fp-tier-premium: #047857;
+  --fp-tier-ultra: #0369a1;
   --fp-bg: #f3f2f2;
   --fp-bg-elevated: #eae9e9;
   --fp-bg-card: #ffffff;
@@ -226,6 +284,27 @@ html.theme-light {
 
 /* Dark — now the opt-in alternative (was default pre-Sprint-2), reachable via Settings */
 html.theme-dark {
+
+  /* See the on-fill note in :root. Dark greens are luminous, so the ink
+     inverts to near-black rather than the fill darkening. */
+  --fp-on-accent: #0a0d0b;
+  /*
+     DISABLED SURFACE. A control that is aria-disabled stays focusable, so it
+     must keep a visible boundary: WCAG 1.4.11 asks 3:1 for a UI component's
+     edge. The face alone cannot carry that here — the header bar is itself
+     --fp-bg-card, so any card-coloured fill sits at 1.01:1 against it — which is
+     why the BORDER is the boundary and is declared per theme rather than
+     borrowed from --fp-border-strong (undeclared in high contrast, where it
+     inherits a dark rgba and measures 1.03:1 on black).
+  */
+  --fp-disabled-surface: #2b332c;
+  --fp-disabled-border: #8a9a90;
+  --fp-disabled-ink: #cddad2;
+  --fp-chip-active: #2dd4bf;
+  --fp-chip-free: #ededed; /* true neutral: the dark accent is green and would collide */
+  --fp-tier-free: #fbbf24;
+  --fp-tier-premium: #34d399;
+  --fp-tier-ultra: #7dd3fc;
   --fp-bg: #0a0d0b;
   --fp-bg-elevated: #10140f;
   --fp-bg-card: #161b17;
@@ -291,28 +370,70 @@ html.theme-dark {
 }
 
 html.theme-contrast {
+
+  /* See the on-fill note in :root. */
+  --fp-on-accent: #000000;
+  /*
+     DISABLED SURFACE. A control that is aria-disabled stays focusable, so it
+     must keep a visible boundary: WCAG 1.4.11 asks 3:1 for a UI component's
+     edge. The face alone cannot carry that here — the header bar is itself
+     --fp-bg-card, so any card-coloured fill sits at 1.01:1 against it — which is
+     why the BORDER is the boundary and is declared per theme rather than
+     borrowed from --fp-border-strong (undeclared in high contrast, where it
+     inherits a dark rgba and measures 1.03:1 on black).
+  */
+  --fp-disabled-surface: #262626;
+  --fp-disabled-border: #b5b5b5;
+  --fp-disabled-ink: #ffffff;
+  --fp-chip-active: #5eead4;
+  --fp-chip-free: #ffffff; /* neutral: see the dark-theme note */
+  --fp-tier-free: #fcd34d;
+  --fp-tier-premium: #6ee7b7;
+  --fp-tier-ultra: #bae6fd;
   --fp-bg: #000000;
   --fp-bg-elevated: #0a0a0a;
   --fp-bg-card: #111111;
   --fp-border: rgba(255, 255, 255, 0.4);
+  /* Declared, not inherited: :root's rgba(32,30,29,.24) is a DARK hairline and
+     measured 1.03:1 on this theme's near-black card — an invisible boundary. */
+  --fp-border-strong: rgba(255, 255, 255, 0.62);
+  /* Declared, not inherited. :root's #eae7e7 is a near-WHITE fill, and this
+     theme was using it for every secondary/ghost button hover on a black page. */
+  --fp-bg-muted: #1c1c1c;
   --fp-text: #ffffff;
   --fp-text-muted: #e2e8f0;
   --fp-text-faint: #d4d4d4;
   --fp-accent: #3ddc84;
+  /* DECLARED, not inherited. Without this the block fell through to :root's
+     #dd2b0f, so the Predict CTA — and every primary button in the app — turned
+     red-orange on hover inside the high-contrast theme, at 4.43:1.
+
+     A LIGHTER GREEN, not a teal. The first attempt here used #2dd4bf, which
+     cleared contrast but made hover a HUE change in this one theme — light and
+     dark both shift value within the accent's own hue — and landed in the
+     family reserved for --fp-chip-active. Hover lifts the accent; it does not
+     rename it. */
+  --fp-accent-hover: #5ef09b;
   --fp-accent-muted: rgba(61, 220, 132, 0.25);
   --fp-accent-text: var(--fp-accent);
 
   /* Triplets mirror the values this theme actually RESOLVES to today: tokens
-     the block never overrode (bg-muted, navy, success, danger, warning, purple,
-     accent-hover…) inherit :root's light values, and the triplets say so
-     explicitly rather than silently. Documented inheritance, zero visual change. */
+     the block never overrode (bg-muted, navy, success, danger, warning,
+     purple…) inherit :root's light values, and the triplets say so explicitly
+     rather than silently. Documented inheritance, zero visual change.
+
+     accent-hover and border-strong are NO LONGER in that list — both are
+     declared above. Both had been inherited, and both were wrong here: the
+     hover was the light theme's red on a green accent, and border-strong a dark
+     hairline on a black card. tokens.guard.test.ts now fails if a surface or
+     boundary token goes missing from any scope. */
   --fp-bg-rgb: 0 0 0;
   --fp-bg-elevated-rgb: 10 10 10;
   --fp-bg-card-rgb: 17 17 17;
-  --fp-bg-muted-rgb: 234 231 231;
+  --fp-bg-muted-rgb: 28 28 28;
   --fp-navy-rgb: 32 30 29;
   --fp-accent-rgb: 61 220 132;
-  --fp-accent-hover-rgb: 221 43 15;
+  --fp-accent-hover-rgb: 94 240 155;
   --fp-accent-text-rgb: 61 220 132;
   --fp-purple-rgb: 124 58 237;
   --fp-text-rgb: 255 255 255;

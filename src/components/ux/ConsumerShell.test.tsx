@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { buildPredictAction } from "./predictState";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsumerShell from "./ConsumerShell";
 import { PRIMARY_NAV_ITEMS } from "./appNav";
@@ -15,6 +16,19 @@ type Leaves = Record<string, Record<string, string>>;
 const E = en as unknown as Leaves;
 const R = ro as unknown as Leaves;
 const either = (ns: string, key: string) => new RegExp(`^(${E[ns][key]}|${R[ns][key]})$`);
+
+/*
+  ConsumerShell no longer takes a bare onPredict — it consumes the shared
+  Predict contract, so the header cannot disagree with the other surfaces about
+  whether the action is available.
+*/
+const idlePredict = () =>
+  buildPredictAction({
+    state: "idle",
+    labels: { label: "Generează Predicții", hint: "Generează predicții pentru zilele selectate",
+              busy: "Se generează predicțiile…", quotaSpent: "Ai folosit toate predicțiile de azi" },
+    run: () => {}
+  });
 
 function renderShell(overrides: Record<string, unknown> = {}) {
   const onNavigate = vi.fn();
@@ -86,7 +100,7 @@ describe("ConsumerShell chrome", () => {
   afterEach(cleanup);
 
   it("is a single 56 px context bar: brand, date, Predict — nothing else", () => {
-    renderShell({ onPredict: () => {} });
+    renderShell({ predictAction: idlePredict() });
     const bar = screen.getByTestId("context-bar");
     const tokens = bar.className.split(/\s+/);
     expect(tokens).toContain("h-14"); // a fixed 56 px, not a min-height that can wrap taller
@@ -100,7 +114,7 @@ describe("ConsumerShell chrome", () => {
   });
 
   it("keeps Predict as the critical action with a 44 px pointer target and a dense box", () => {
-    renderShell({ onPredict: () => {} });
+    renderShell({ predictAction: idlePredict() });
     const predict = screen.getAllByRole("button", { name: either("shell", "predictTip") })[0];
     expect(predict.className).toContain("touch-target");
     expect(predict.className).not.toContain("min-h-[var(--fp-touch)]");

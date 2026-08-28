@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
+import { predictSurfaceProps, type PredictAction } from "./predictState";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import SegmentedControl from "../../design-system/SegmentedControl";
 import FilterChip from "../../design-system/FilterChip";
@@ -21,7 +22,8 @@ type Props = {
   onToggleWatch: (fixtureId: number) => void;
   onOpenMatch: (row: PredictionRow) => void;
   onUpgradeRequired: (feature: string, requiredTier: UpgradeTier) => void;
-  onPredict: () => void;
+  /** The shared Predict contract. Never call onPredict directly — use action.onActivate. */
+  predictAction?: PredictAction;
   /** Segment state — session-local, owned by the page, never a route. */
   matchesFilter?: MatchesSubFilter;
   onSetFilter?: (filter: MatchesSubFilter) => void;
@@ -58,7 +60,7 @@ export default function MatchesSection({
   isWatched,
   onToggleWatch,
   onOpenMatch,
-  onPredict,
+  predictAction,
   matchesFilter = "all",
   onSetFilter,
   search = "",
@@ -193,12 +195,21 @@ export default function MatchesSection({
                 ? t("dash.emptyFavoritesDesc")
                 : matchesFilter === "picks"
                   ? t("dash.emptyPicksDesc")
-                  : t("dash.emptyPredsDesc")
+                  : /* Never instruct an action the system will refuse. */
+                    predictAction?.reason ?? t("dash.emptyPredsDesc")
           }
           /* Every narrowed segment — live included — offers the way back out;
              only the unfiltered slate offers Predict. */
           actionLabel={matchesFilter === "all" ? t("shell.predict") : t("dash.showAll")}
-          onAction={matchesFilter === "all" ? onPredict : () => onSetFilter?.("all")}
+          onAction={matchesFilter === "all" ? predictAction?.onActivate : () => onSetFilter?.("all")}
+          /*
+            Only the Predict branch carries Predict's state; "show all" is
+            always available and gets no surface at all. The state arrives whole
+            rather than as a native `disabled` beside it — see EmptyState.
+          */
+          actionProps={
+            matchesFilter === "all" && predictAction ? predictSurfaceProps(predictAction) : undefined
+          }
         />
       ) : (
         <MatchList label={mode === "live" ? t("dash.filterLive") : t("nav.matches")}>
