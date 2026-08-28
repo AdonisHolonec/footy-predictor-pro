@@ -46,7 +46,10 @@ import {
 } from "../server-utils/calibration/methods.js";
 import {
   evaluateCalibrationMethods,
-  selectBestCalibration
+  selectBestCalibration,
+  resolveIsotonicMinSamples,
+  isMethodEligible,
+  DEFAULT_ISOTONIC_MIN_SAMPLES
 } from "../server-utils/calibration/CalibrationSelector.js";
 import {
   extractStackerFeatures,
@@ -1188,6 +1191,140 @@ test("selectBestCalibration returns none when data is already well calibrated", 
   assert.equal(sel.method, "none");
   assert.equal(sel.reason, "no_method_beats_baseline");
   assert.ok(sel.ranking.every((r) => r.logLoss > sel.baseline.logLoss));
+});
+
+// -----------------------------------------------------------------------------
+// Isotonic sample guard. Isotonic is the only sample-gated method.
+// -----------------------------------------------------------------------------
+
+/**
+ * Three-plateau miscalibration (0.05 / 0.5 / 0.95): a staircase no sigmoid family can
+ * follow, so PAV wins the CV ranking outright at n>=800 — the case the guard exists for.
+ */
+function synthStepMiscalibrated(n, seed = 9) {
+  let s = seed;
+  const rnd = () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const x = 0.05 + 0.9 * rnd();
+    const trueP = x < 0.4 ? 0.05 : x < 0.6 ? 0.5 : 0.95;
+    out.push({ x, y: rnd() < trueP ? 1 : 0 });
+  }
+  return out;
+}
+
+test("isotonic guard: precedence is explicit option > CALIB_ISOTONIC_MIN_SAMPLES env > default 2000", () => {
+  const prev = process.env.CALIB_ISOTONIC_MIN_SAMPLES;
+  try {
+    delete process.env.CALIB_ISOTONIC_MIN_SAMPLES;
+    assert.equal(DEFAULT_ISOTONIC_MIN_SAMPLES, 2000);
+    assert.equal(resolveIsotonicMinSamples(), 2000, "default");
+    process.env.CALIB_ISOTONIC_MIN_SAMPLES = "500";
+    assert.equal(resolveIsotonicMinSamples(), 500, "env overrides default");
+    assert.equal(resolveIsotonicMinSamples(300), 300, "explicit overrides env");
+    assert.equal(resolveIsotonicMinSamples(0), 0, "explicit 0 disables the gate");
+    const { isotonicMinSamples } = evaluateCalibrationMethods(synthMiscalibrated(120, "over", 3), { folds: 4 });
+    assert.equal(isotonicMinSamples, 500, "evaluate reads the env floor when no option is given");
+  } finally {
+    if (prev === undefined) delete process.env.CALIB_ISOTONIC_MIN_SAMPLES;
+    else process.env.CALIB_ISOTONIC_MIN_SAMPLES = prev;
+  }
+});
+
+test("isotonic guard: invalid env values fall back to the default (never to 'ungated')", () => {
+  const prev = process.env.CALIB_ISOTONIC_MIN_SAMPLES;
+  try {
+    for (const bad of ["not-a-number", "", "-5", "NaN", "Infinity"]) {
+      process.env.CALIB_ISOTONIC_MIN_SAMPLES = bad;
+      assert.equal(resolveIsotonicMinSamples(), DEFAULT_ISOTONIC_MIN_SAMPLES, `env=${JSON.stringify(bad)}`);
+    }
+    assert.equal(resolveIsotonicMinSamples(-1), DEFAULT_ISOTONIC_MIN_SAMPLES, "negative explicit option");
+    assert.equal(resolveIsotonicMinSamples("abc"), DEFAULT_ISOTONIC_MIN_SAMPLES, "non-numeric explicit option");
+  } finally {
+    if (prev === undefined) delete process.env.CALIB_ISOTONIC_MIN_SAMPLES;
+    else process.env.CALIB_ISOTONIC_MIN_SAMPLES = prev;
+  }
+});
+
+test("isotonic guard: below the floor isotonic is ranked but ineligible; every other method stays eligible", () => {
+  const samples = synthMiscalibrated(400, "over", 11);
+  const { ranking, best, isotonicMinSamples } = evaluateCalibrationMethods(samples, { folds: 4, isotonicMinSamples: 2000 });
+  assert.equal(isotonicMinSamples, 2000);
+  assert.equal(ranking.length, 4, "isotonic must still be evaluated and reported");
+  const iso = ranking.find((r) => r.method === "isotonic");
+  assert.equal(iso.eligible, false);
+  assert.match(iso.ineligibleReason, /insufficient_samples_for_isotonic:400<2000/);
+  assert.ok(Number.isFinite(iso.logLoss), "ineligible isotonic keeps its CV score");
+  for (const m of ["platt", "beta", "temperature"]) {
+    const r = ranking.find((x) => x.method === m);
+    assert.equal(r.eligible, true, `${m} must not be gated`);
+    assert.equal(r.ineligibleReason, null);
+  }
+  assert.notEqual(best, "isotonic");
+});
+
+test("isotonic guard: at the floor isotonic is eligible (n == floor)", () => {
+  const samples = synthMiscalibrated(400, "over", 11);
+  const { ranking } = evaluateCalibrationMethods(samples, { folds: 4, isotonicMinSamples: 400 });
+  assert.equal(ranking.find((r) => r.method === "isotonic").eligible, true);
+});
+
+test("isotonic guard: platt / beta / temperature remain eligible far below any floor", () => {
+  const samples = synthMiscalibrated(120, "under", 5);
+  const { ranking } = evaluateCalibrationMethods(samples, { folds: 4, isotonicMinSamples: 1_000_000 });
+  for (const m of ["platt", "beta", "temperature"]) {
+    assert.equal(ranking.find((x) => x.method === m).eligible, true, m);
+  }
+  assert.equal(isMethodEligible("platt", 1, 1_000_000), true);
+  assert.equal(isMethodEligible("beta", 1, 1_000_000), true);
+  assert.equal(isMethodEligible("temperature", 1, 1_000_000), true);
+  assert.equal(isMethodEligible("none", 1, 1_000_000), true);
+  assert.equal(isMethodEligible("isotonic", 1, 1_000_000), false);
+});
+
+test("isotonic guard: when isotonic wins the CV ranking but is under the floor, the selector falls back to the next eligible method", () => {
+  const samples = synthStepMiscalibrated(1200, 9);
+  const ungated = evaluateCalibrationMethods(samples, { folds: 4, isotonicMinSamples: 0 });
+  assert.equal(ungated.ranking[0].method, "isotonic", "fixture must make isotonic the raw CV winner");
+  const sel = selectBestCalibration(samples, { minSamples: 40, folds: 4, isotonicMinSamples: 2000 });
+  assert.notEqual(sel.method, "isotonic");
+  assert.ok(["platt", "temperature", "beta", "none"].includes(sel.method), `got ${sel.method}`);
+  const iso = sel.ranking.find((r) => r.method === "isotonic");
+  assert.equal(iso.eligible, false, "evidence stays inspectable");
+  assert.equal(iso.logLoss, ungated.ranking[0].logLoss, "ineligible isotonic is not re-scored");
+  // The chosen method is the best-ranked ELIGIBLE method that beats the baseline.
+  const firstEligible = sel.ranking.find((r) => r.eligible && r.logLoss <= sel.baseline.logLoss + 1e-4);
+  assert.equal(sel.method, firstEligible?.method || "none");
+  assert.notEqual(sel.ranking.indexOf(firstEligible), 0, "the skipped isotonic still heads the ranking");
+});
+
+test("isotonic guard: at or above the floor a winning isotonic IS selected and served", () => {
+  const samples = synthStepMiscalibrated(1200, 9);
+  const sel = selectBestCalibration(samples, { minSamples: 40, folds: 4, isotonicMinSamples: 1200 });
+  assert.equal(sel.method, "isotonic");
+  assert.equal(sel.ranking.find((r) => r.method === "isotonic").eligible, true);
+  assert.ok(sel.xPoints.length >= 2 && sel.xPoints.length === sel.yPoints.length);
+  for (let i = 1; i < sel.yPoints.length; i++) assert.ok(sel.yPoints[i] + 1e-9 >= sel.yPoints[i - 1], "PAV curve is monotone");
+});
+
+test("isotonic guard: no behaviour change when every method has sufficient samples", () => {
+  const samples = synthStepMiscalibrated(600, 9);
+  const gatedAtFloor = selectBestCalibration(samples, { minSamples: 40, folds: 4, isotonicMinSamples: 600 });
+  const ungated = selectBestCalibration(samples, { minSamples: 40, folds: 4, isotonicMinSamples: 0 });
+  assert.equal(gatedAtFloor.method, ungated.method);
+  assert.deepEqual(gatedAtFloor.xPoints, ungated.xPoints);
+  assert.deepEqual(gatedAtFloor.yPoints, ungated.yPoints);
+  assert.ok(gatedAtFloor.ranking.every((r) => r.eligible === true));
+});
+
+test("isotonic guard: below minSamples the selector serves the identity curve, never an isotonic fit", () => {
+  const sel = selectBestCalibration(synthMiscalibrated(20, "over", 3), { minSamples: 40, folds: 4 });
+  assert.equal(sel.method, "none");
+  assert.equal(sel.reason, "insufficient_samples");
+  assert.deepEqual(sel.xPoints, sel.yPoints);
 });
 
 // =============================================================================
