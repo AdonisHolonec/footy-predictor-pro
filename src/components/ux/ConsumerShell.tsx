@@ -25,6 +25,17 @@ type Props = {
    * entitlement: the dashboard already holds that state and renders it here.
    */
   statusSlot?: ReactNode;
+  /**
+   * The referral campaign strip, rendered BELOW the 56px bar.
+   *
+   * A separate slot rather than more content inside `statusSlot`, because the
+   * two are different kinds of thing and the distinction is the whole point of
+   * this layout: the bar is functional chrome — brand, date, plan, Predict —
+   * and the campaign is an engagement surface that must not compete with it
+   * for a 390px row. Keeping them apart in the API is what stops the campaign
+   * drifting back into the bar the next time someone edits this file.
+   */
+  campaignSlot?: ReactNode;
   children: ReactNode;
 };
 
@@ -50,6 +61,7 @@ export default function ConsumerShell({
   predictAction,
   liveCount = 0,
   statusSlot,
+  campaignSlot,
   children
 }: Props) {
   const { t } = useLocale();
@@ -238,6 +250,15 @@ export default function ConsumerShell({
         </div>
 
       </header>
+
+      {/*
+        Directly below the bar and above the content — the first thing after the
+        chrome, so it is on the first viewport at 390px without a scroll, a
+        menu, a toast or a modal. It is outside <header> deliberately: it is not
+        part of the navigation control group, and the sticky bar must keep its
+        own 56px height whatever the campaign does.
+      */}
+      {campaignSlot}
 
       <main className="mx-auto max-w-[var(--fp-container)] px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8 lg:pb-5">
         {children}

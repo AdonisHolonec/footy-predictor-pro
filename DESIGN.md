@@ -154,7 +154,7 @@ The palette reads as a warm paper ledger: neutral warm grays for surface and str
 - **Body** (400, 0.9375rem, 1.5 line-height): Default running text and stat descriptions.
 - **Caption** (400, 0.75rem): Secondary metadata, timestamps, helper text.
 - **Label** (600, 0.6875rem, 0.08em tracking, uppercase, JetBrains Mono): Badges, status chips, section eyebrows.
-- **Micro-label** (600–700, 0.625rem / **10px**): The floor, and the only step below Label. Reserved for dense permanent chrome where a whole zone must fit a fixed height — the 56px header strip (tier, countdown, quota, offer, corner chips, the Predict CTA) and the match-card / match-modal chrome. `geometry.guard.test.ts` enforces 10px as a hard minimum for all UI text, so this is the smallest step that will ever exist; nothing may go below it to win layout space. It was already the most-used step in the codebase before it was in this ramp — **516 `text-[10px]` classes across 77 files** — which is precisely why leaving it undeclared was expensive. It is now declared in this file's `typography:` frontmatter as `micro`, which is the only place the detector reads — so 10px is a real step it recognises, not a value suppressed by the project's ignore list. Prose alone would not have done it.
+- **Micro-label** (600–700, 0.625rem / **10px**): The floor, and the only step below Label. Reserved for dense permanent chrome where a whole zone must fit a fixed height — the 56px header strip (tier, countdown, quota, corner chip, the Predict CTA) and the referral campaign strip below it and the match-card / match-modal chrome. `geometry.guard.test.ts` enforces 10px as a hard minimum for all UI text, so this is the smallest step that will ever exist; nothing may go below it to win layout space. It was already the most-used step in the codebase before it was in this ramp — **516 `text-[10px]` classes across 77 files** — which is precisely why leaving it undeclared was expensive. It is now declared in this file's `typography:` frontmatter as `micro`, which is the only place the detector reads — so 10px is a real step it recognises, not a value suppressed by the project's ignore list. Prose alone would not have done it.
 - **Numeric** (600, 1.25rem, tabular-nums): Stat tile values, odds, confidence figures — always JetBrains Mono or `tabular-nums` so columns of numbers align.
 
 ### Named Rules
@@ -206,6 +206,27 @@ Buttons and cards feel precise and restrained: small, deliberate feedback (a sub
   The rail draws from **`--fp-on-accent`**, never a literal — hardcoded white measured 2.73:1 on the dark theme's green face and 1.73:1 on high contrast's, and the rail is a non-text indicator that owes 3:1 under 1.4.11. Themed it reads **5.13 / 6.81 / 11.77** at the travelling peak and **3.16 / 4.24 / 6.41** along the track, in normal motion and reduced alike.
 
 - **Neither inert state may look pressed.** Because these controls use `aria-disabled` rather than the native attribute — which is what keeps them focusable — the global `button:active:not(:disabled)` in `index.css` still matches them. Components that opt out of the native attribute must opt out of the press feedback too, scoped to themselves: `index.css`'s rule is correct for every natively-disabled button in the app and is not the thing to change. `predictState.test.ts` resolves the real cascade (layer, then specificity, then order) and fails if a refactor ever lets the global rule win.
+
+#### The 56px bar is functional chrome; the campaign is not in it
+
+The bar holds exactly three zones: **brand + browsed date · plan + remaining time · Predict**. Nothing else earns a place in a 56px row that has to survive 390px.
+
+The permanent referral campaign used to be a fourth. At 390 the sum of the four zones' min-content widths exceeded the row, so something gave way on every pass — and it was always the wrong thing: the brand truncating to "F…", or the offer to "+5 zile Ul…", which sells nothing. Each fix shaved a functional zone to make room for a marketing one, which is the priority order upside down. The rule that came out of it: **when a 56px row is over budget, the marketing surface moves; the chrome does not shrink.**
+
+The campaign now renders as its own strip immediately below the bar, via ConsumerShell's `campaignSlot` — a separate slot from `statusSlot` precisely so the distinction survives the next edit of that file.
+
+- **Measured height 38.9px**, against a 56px bar. It is secondary by construction: a strip, never a banner, and a test fails if it ever grows past the bar.
+- **Fixed product copy never truncates.** "INVITĂ" and "+5 zile Ultra" always fit; the only truncatable thing on the surface is an invitee's name, which is the one unknowable string.
+- **Touch target 44px**, delivered by `.touch-target`'s pseudo-element rather than by row height — which is how a 39px strip still clears the minimum.
+- **On the first viewport, always.** No menu, no toast, no modal, no scroll to discover it.
+
+**Its ink and boundary were measured, not chosen.** `--fp-accent-text` on the accent tint read **3.99** in light — under the 4.5 that size owes — so the words use `--fp-text` (**12.91 / 15.93 / 18.61**). A tinted border is the badge habit and is wrong for an actionable control, whose edge owes 3:1 under 1.4.11: `accent/40` measured **1.79 / 1.99 / 2.49** and `accent/70` still missed light at **2.75**, so the boundary is the accent at full strength (**3.76 / 6.81 / 11.77**). `--fp-border-strong` was measured too and is a hairline, not a boundary (1.64 / 1.55).
+
+It is **outlined, not solid-filled**, on purpose: Predict is the solid accent button in that viewport and must stay the loudest thing in it.
+
+**The corner chip gained a placement, not a sibling.** Same component, same tokens, same decorative `aria-hidden` contract — but `"corner"` overhangs a tall card, and on a 26px pill that put the chip 4.4px above the strip, straddling the header's bottom border. `"inline-start"` anchors it to the leading edge, vertically centred, inside its own row.
+
+**The reward notice still spans both surfaces**, and is derived once (`referralNotice.ts`): the days on the plan card, the person on the campaign. They are no longer the same component, so one builder feeds both — and the spoken announcement in the plan strip still carries the whole sentence, because a screen-reader user should hear one message, not two fragments split across a layout boundary they cannot perceive. The transient bonus notifications, `ReferralBonusHistory` and the claim flow are untouched by any of this.
 
 #### The Predict state model
 
