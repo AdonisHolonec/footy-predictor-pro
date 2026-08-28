@@ -10,9 +10,27 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
 };
 
+/*
+  THE INK ON AN ACCENT FILL IS A TOKEN, NEVER A LITERAL.
+
+  `text-white` was measured on the primary fill in all three themes and failed
+  4.5:1 in two of them — 2.87 on dark and 1.78 on high contrast, on 14px
+  semibold text. The accent is GREEN in those themes; white was only ever
+  legible against the light theme's red.
+
+  `--fp-on-accent` is the ink that flips with the theme, and switching to it
+  reads 6.81 and 11.77 — the same rule the Predict CTA and its busy rail already
+  follow, which is why they measured clean while the Button beneath them did
+  not. Light stays at 4.20: there the token IS white, and clearing 4.5 needs the
+  light accent itself to darken to roughly its own hover step, which measures
+  4.74. That is a brand-token decision, recorded and not taken here.
+
+  (No colour literals in this comment: primitives.guard.test.ts scans this file
+  for hex and cannot tell a value from a measurement written about one.)
+*/
 const variantClass: Record<Variant, string> = {
   primary:
-    "bg-[var(--fp-accent)] text-white hover:bg-[var(--fp-accent-hover)] active:bg-[var(--fp-accent-hover)] active:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed",
+    "bg-[var(--fp-accent)] text-[var(--fp-on-accent)] hover:bg-[var(--fp-accent-hover)] active:bg-[var(--fp-accent-hover)] active:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed",
   secondary:
     "border border-[var(--fp-border)] bg-[var(--fp-bg-elevated)] text-[var(--fp-text)] hover:border-[var(--fp-border-strong)] hover:bg-[var(--fp-bg-muted)] active:border-[var(--fp-border-strong)] active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed",
   ghost: "text-[var(--fp-text-muted)] hover:bg-[var(--fp-bg-muted)] hover:text-[var(--fp-text)] active:opacity-70 disabled:opacity-50 disabled:cursor-not-allowed",

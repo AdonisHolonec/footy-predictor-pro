@@ -68,12 +68,29 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background-image: linear-gradient(0deg, transparent 55%, rgba(255, 255, 255, 0.28));
+  /*
+    A TOP-EDGE RIM, not a wash over the whole face.
+
+    This used to run `transparent 55%` to `rgba(255,255,255,0.28)` at the top —
+    and the label's upper line sits at the top. White ink over the lightened
+    face measured 4.44:1 at 65% height, 4.11 at 75% and ~3.65 at 88%, so hover
+    AND keyboard focus put the first word under AA in the light theme. Capping
+    the alpha instead was not an option: on the hover face #dd2b0f the ceiling
+    that still clears 4.5:1 is alpha 0.05, which is not a visible hover cue.
+
+    So the highlight keeps its brightness and gives up the text's ground: it now
+    lives entirely above 90% of the height. Measured: the topmost glyph edge sits
+    at 86.2% of the button's height, so the veil starts 3.8 points clear of it —
+    the stop is 90 rather than 88 to keep that margin when Archivo is blocked by
+    the CSP and a fallback face with taller metrics is substituted.
+    That is also the Uiverse idea it came from — a lit top edge, not a veil.
+  */
+  background-image: linear-gradient(0deg, transparent 90%, rgba(255, 255, 255, 0.34));
   opacity: 0;
   transition: opacity var(--fp-predict-transition);
 }
 
-.fp-predict:hover:not(:disabled) {
+.fp-predict:hover:not([aria-disabled="true"]) {
   background-color: var(--fp-predict-face-hi);
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow:
@@ -84,14 +101,20 @@
     0 3px 14px color-mix(in srgb, var(--fp-accent) 45%, transparent);
 }
 
-.fp-predict:hover:not(:disabled)::before,
-.fp-predict:focus-visible::before {
+/*
+  The rim is the "you can press this" cue, so it stays off while inert — the
+  focus guard used to be missing, which re-lit it on precisely the state the
+  recessed skin exists to deny. Focus itself stays visible: the outline ring is
+  on the button and is untouched by this.
+*/
+.fp-predict:hover:not([aria-disabled="true"])::before,
+.fp-predict:focus-visible:not([aria-disabled="true"])::before {
   opacity: 1;
 }
 
 /* Pressed: seated, not shrunken. A 1.5% nudge reads as depression without
    moving the label far enough to be noticed as motion. */
-.fp-predict:active:not(:disabled) {
+.fp-predict:active:not([aria-disabled="true"]) {
   transform: translateY(1px) scale(0.985);
   box-shadow:
     inset 0 2px 6px rgba(0, 0, 0, 0.24),
@@ -99,10 +122,73 @@
     0 1px 6px color-mix(in srgb, var(--fp-accent) 34%, transparent);
 }
 
-.fp-predict:disabled {
+/*
+  BLOCKED. Driven by a class alongside `aria-disabled`, not by `:disabled` — the
+  button stays focusable so a keyboard user can land on it and hear WHY it is
+  unavailable (the quota label), which a natively disabled control tells nobody.
+*/
+/*
+  NO PRESS FEEDBACK WHILE INERT.
+
+  index.css carries a global `button:active:not(:disabled)` that scales and
+  brightens on press. This button deliberately never sets the native `disabled`
+  attribute — that is what keeps it focusable so it can explain itself — so the
+  global rule matched it while busy AND while blocked, and an unavailable
+  control visibly depressed under the finger.
+
+  Scoped here rather than by editing the global rule: `:not(:disabled)` is
+  correct for every natively-disabled button in the app, and the exception
+  belongs to the one component that opted out of the native attribute. This file
+  is unlayered, so it outranks index.css's `@layer base` regardless of order.
+*/
+.fp-predict[aria-disabled="true"]:active {
+  transform: none;
+  filter: none;
+}
+
+.fp-predict.is-disabled {
   cursor: not-allowed;
-  opacity: 0.5;
-  box-shadow: none;
+
+  /*
+    RECESSED, not merely grey.
+
+    Colour cannot carry this state on its own: a disabled control and the app's
+    ENABLED secondary button are both neutral fills, and the first version of
+    this skin landed 1.03:1 away from --fp-bg-elevated — which is exactly what
+    design-system/Button paints a live secondary with. Same size, same position,
+    same label, and a crisper border than the enabled control: it read as
+    pressable.
+
+    So the state is carried by FORM. Every other button in this system is
+    raised — an outer drop shadow and an inner top highlight. This one is a well
+    pressed into the bar: the shadow points inward and there is no highlight. A
+    recessed slot is not a thing you press.
+  */
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.28);
+
+  /*
+    A NEUTRAL SKIN, not opacity.
+
+    `opacity: 0.5` faded the face and its ink together and left the label at
+    1.55:1 in the light theme. WCAG exempts inactive components — but this
+    button is deliberately NOT inactive: `aria-disabled` keeps it focusable and
+    in the tab order precisely so a keyboard user can land on it and read why it
+    is unavailable, and a reason nobody can read is not a reason. Dropping to
+    the card surface with muted ink says "not available" through colour instead
+    of through haze, and measures 7.30 / 9.03 / 15.13 across the three themes.
+
+    AND A DECLARED BOUNDARY. The first version of this used --fp-bg-card for the
+    face and --fp-border-strong for the edge. The face is what the header bar is
+    made of, so it measured 1.01:1 against it, and --fp-border-strong turned out
+    to have the same defect I had just avoided in --fp-bg-muted: it is undeclared
+    in html.theme-contrast, inherits :root's dark rgba, and measured 1.03:1 on
+    black. The button had no visible edge in the theme chosen by the users who
+    most need one. --fp-disabled-* is declared in all four scopes for exactly
+    that reason; WCAG 1.4.11 wants 3:1 on a control's boundary.
+  */
+  background-color: var(--fp-disabled-surface);
+  color: var(--fp-disabled-ink);
+  border-color: var(--fp-disabled-border);
 }
 
 /*
@@ -134,12 +220,12 @@
   animation-duration: 1.4s;
 }
 
-.fp-predict:active:not(:disabled) .fp-predict-letter {
+.fp-predict:active:not([aria-disabled="true"]) .fp-predict-letter {
   animation: none;
   text-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
 }
 
-.fp-predict:disabled .fp-predict-letter {
+.fp-predict.is-disabled .fp-predict-letter {
   animation: none;
   text-shadow: none;
 }
@@ -162,7 +248,7 @@
       border-color var(--fp-predict-transition);
   }
 
-  .fp-predict:active:not(:disabled) {
+  .fp-predict:active:not([aria-disabled="true"]) {
     transform: none;
   }
 }
@@ -175,18 +261,62 @@
   of predictions". The face keeps its colour and sweeps the existing highlight
   across itself — an indeterminate progress cue, not a spinner bolted on.
 */
+/*
+  BUSY IS NOT BLOCKED — and no longer flat either. `:disabled` used to apply
+  while busy as well and stripped every shadow layer through `box-shadow: none`,
+  so the running button lost its depth and its accent glow at exactly the moment
+  it should read as alive. Busy now keeps the resting surface untouched; only
+  the letter shimmer stands down, so it never competes with the sweep.
+*/
 .fp-predict.is-busy {
   cursor: progress;
   opacity: 1;
 }
 
+.fp-predict.is-busy .fp-predict-letter {
+  animation: none;
+  text-shadow: none;
+}
+
 .fp-predict.is-busy::before {
+  /*
+    A RAIL UNDER THE LABEL, not a sweep across it.
+
+    The sweep peaked at rgba(255,255,255,0.32) travelling over the face, which
+    took the white label to 3.18:1 in the light theme — and to 4.04:1 with
+    reduced motion, where it freezes at 0.55 opacity. Both under AA, on the one
+    state that has to stay readable because the user is waiting on it.
+
+    Progress does not need to cross the words. This is a 2px indeterminate rail
+    inset from the bottom edge: it reads as motion, it is outside every glyph
+    box, and it cannot change the label's ground at all.
+  */
+  /* 2px from the bottom edge: the lowest glyph BOX ends 0.2px below a 3px
+     inset, and "outside every glyph box" should be measured, not assumed. */
+  inset: auto 3px 2px 3px;
+  height: 2px;
+  border-radius: 1px;
   opacity: 1;
+  /*
+    --fp-on-accent, not white. The rail is the ONLY visual carrier of busy, so
+    WCAG 1.4.11 asks 3:1 of it — and hardcoded white measured 2.73:1 on the dark
+    theme's green face and 1.73:1 on high contrast's. This is the token that
+    already exists for "ink that sits on an accent fill", so it flips with the
+    theme exactly as the label does: 5.13 / 6.81 / 11.77.
+  */
+  /*
+    70%, not 30%. The rail is a non-text indicator, so 1.4.11 asks 3:1 of ALL of
+    it — and at 30% the track under the travelling highlight measured 1.56 /
+    1.78 / 2.00 against the face, meaning roughly a third of the rail's length
+    was below threshold at any instant. At 70% every part of it clears: 3.16 /
+    4.24 / 6.41, and the sweep still reads because the peak goes to full ink.
+  */
+  background-color: color-mix(in srgb, var(--fp-on-accent) 70%, transparent);
   background-image: linear-gradient(
-    100deg,
-    transparent 20%,
-    rgba(255, 255, 255, 0.32) 50%,
-    transparent 80%
+    90deg,
+    transparent 15%,
+    var(--fp-on-accent) 50%,
+    transparent 85%
   );
   background-size: 220% 100%;
   animation: fp-predict-busy 1.1s linear infinite;
@@ -199,8 +329,14 @@
 
 /* Reduced motion keeps the state legible without the sweep. */
 @media (prefers-reduced-motion: reduce) {
+  /* The rail stays, fully lit and still — state without motion. It never
+     touched the label's ground, so there is nothing to trade away here. */
   .fp-predict.is-busy::before {
     animation: none;
-    opacity: 0.55;
+    opacity: 1;
+    background-image: none;
+    /* Full-strength ink: reduced motion loses the travel, not the contrast. */
+    background-color: var(--fp-on-accent);
   }
 }
+

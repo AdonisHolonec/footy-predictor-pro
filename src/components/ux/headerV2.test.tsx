@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../../context/LocaleContext";
-import PlanHeaderStrip, { resolveAccessEnd } from "./PlanHeaderStrip";
+import PlanHeaderStrip, { resolveAccess } from "./PlanHeaderStrip";
 import PredictCta from "./PredictCta";
+import { buildPredictAction, type PredictState } from "./predictState";
 import type { UserTier } from "../../types";
 
 /**
@@ -45,29 +46,399 @@ afterEach(() => {
 });
 
 describe("which grant the countdown reports", () => {
+  /*
+    The countdown and the tier beside it must always describe the SAME grant.
+    Shown apart they can contradict each other, and the pairing is a factual
+    claim about paid access sitting in permanent chrome.
+  */
+  const access = (over: Parameters<typeof resolveAccess>[0]) => resolveAccess(over);
+  const base = { tier: "free", requestedTier: "free", hasActiveBonus: false, now: NOW } as const;
+
   it("returns null when nothing is running — a free plan has no expiry to show", () => {
-    expect(resolveAccessEnd({ hasActiveBonus: false, now: NOW })).toBeNull();
+    expect(access({ ...base }).expiresAt).toBeNull();
   });
 
   it("ignores an instant that has already passed", () => {
     // subscription_expires_at outlives a lapsed plan; counting it down would
     // promise time the user does not have.
-    expect(resolveAccessEnd({ hasActiveBonus: false, subscriptionUntil: iso(-DAY), now: NOW })).toBeNull();
+    expect(
+      access({ ...base, tier: "premium", requestedTier: "premium", subscriptionUntil: iso(-DAY) }).expiresAt
+    ).toBeNull();
   });
 
   it("ignores a bonus instant when the server says the bonus is not active", () => {
-    expect(resolveAccessEnd({ hasActiveBonus: false, bonusUntil: iso(5 * DAY), now: NOW })).toBeNull();
+    expect(access({ ...base, bonusUntil: iso(5 * DAY) }).expiresAt).toBeNull();
   });
 
-  it("reports the LAST grant to expire, because that is when access really ends", () => {
-    const end = resolveAccessEnd({
+  it("counts the BONUS, not the subscription, when the bonus is why the tier reads Ultra", () => {
+    /*
+      The regression. A Premium subscriber with 30 days left who accepts a
+      5-day Ultra referral used to read "ULTRA · 30z" — the subscription's
+      clock under the bonus's tier. Ultra ends in five days.
+    */
+    const a = access({
+      tier: "ultra",
+      requestedTier: "premium",
+      hasActiveBonus: true,
+      bonusUntil: iso(5 * DAY),
+      subscriptionUntil: iso(30 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBe(NOW + 5 * DAY);
+    expect(a.source).toBe("bonus");
+    expect(a.explainsUpgrade).toBe(true);
+    expect(a.reasonKey).toBe("account.header.premiumPlusBonus");
+    // and never the subscription's instant
+    expect(a.expiresAt).not.toBe(NOW + 30 * DAY);
+  });
+
+  it("counts the bonus for a Free user it lifted to Ultra", () => {
+    const a = access({
+      tier: "ultra",
+      requestedTier: "free",
+      hasActiveBonus: true,
+      bonusUntil: iso(5 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBe(NOW + 5 * DAY);
+    expect(a.source).toBe("bonus");
+    expect(a.reasonKey).toBe("account.header.bonusActive");
+  });
+
+  it("counts the SUBSCRIPTION for an Ultra subscriber whose bonus adds no tier", () => {
+    /*
+      The bonus grants Ultra to somebody who already pays for Ultra, so it
+      raises nothing and the subscription is what sustains the tier on screen.
+    */
+    const a = access({
+      tier: "ultra",
+      requestedTier: "ultra",
+      hasActiveBonus: true,
+      bonusUntil: iso(5 * DAY),
+      subscriptionUntil: iso(30 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBe(NOW + 30 * DAY);
+    expect(a.source).toBe("subscription");
+    expect(a.explainsUpgrade).toBe(false);
+    expect(a.reasonKey).toBe("account.header.subscriptionActive");
+  });
+
+  it("names a TRIAL as a trial, never as a subscription", () => {
+    /*
+      `source` has four members and the reason branch had three keys, so a
+      trial-owned countdown fell through to "Abonament activ": a card reading
+      "ULTRA · Abonament activ · 10z" whose clock was a 24h trial and whose
+      subscription was Premium — or absent entirely. Same false pairing, one
+      grant over.
+    */
+    const a = access({
+      tier: "ultra",
+      requestedTier: "premium",
       hasActiveBonus: true,
       bonusUntil: iso(2 * DAY),
-      trialUntil: iso(HOUR),
+      trials: [{ tier: "ultra" as const, until: iso(10 * DAY) }],
+      subscriptionUntil: iso(30 * DAY),
+      now: NOW
+    });
+    expect(a.source).toBe("trial");
+    expect(a.expiresAt).toBe(NOW + 10 * DAY);
+    expect(a.reasonKey).toBe("account.header.trialActive");
+    expect(a.reasonKey).not.toBe("account.header.subscriptionActive");
+  });
+
+  it("names a trial for a Free user it lifted, with no subscription at all", () => {
+    const a = access({
+      tier: "ultra",
+      requestedTier: "free",
+      hasActiveBonus: false,
+      trials: [{ tier: "ultra" as const, until: iso(20 * 3600_000) }],
+      now: NOW
+    });
+    expect(a.source).toBe("trial");
+    expect(a.reasonKey).toBe("account.header.trialActive");
+  });
+
+  it("counts the subscription when there is no bonus at all — Premium", () => {
+    const a = access({
+      tier: "premium",
+      requestedTier: "premium",
+      hasActiveBonus: false,
       subscriptionUntil: iso(9 * DAY),
       now: NOW
     });
-    expect(end).toBe(NOW + 9 * DAY);
+    expect(a.expiresAt).toBe(NOW + 9 * DAY);
+    expect(a.source).toBe("subscription");
+  });
+
+  it("counts the subscription when there is no bonus at all — Ultra", () => {
+    const a = access({
+      tier: "ultra",
+      requestedTier: "ultra",
+      hasActiveBonus: false,
+      subscriptionUntil: iso(12 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBe(NOW + 12 * DAY);
+    expect(a.source).toBe("subscription");
+  });
+
+  it("falls back to the subscription once the bonus instant has expired", () => {
+    const a = access({
+      tier: "premium",
+      requestedTier: "premium",
+      hasActiveBonus: true,
+      bonusUntil: iso(-HOUR),
+      subscriptionUntil: iso(30 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBe(NOW + 30 * DAY);
+    expect(a.source).toBe("subscription");
+  });
+
+  it("shows nothing rather than the subscription when an upgrade has no known end", () => {
+    /*
+      hasActiveBonus with no usable bonusUntil. The old resolver answered with
+      the subscription's instant, which is the false pairing again; no clock is
+      the honest answer.
+    */
+    const a = access({
+      tier: "ultra",
+      requestedTier: "premium",
+      hasActiveBonus: true,
+      bonusUntil: null,
+      subscriptionUntil: iso(30 * DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBeNull();
+    expect(a.reasonKey).toBe("account.header.premiumPlusBonus");
+  });
+
+  it("reports no time for an expired subscription with nothing else running", () => {
+    const a = access({
+      tier: "free",
+      requestedTier: "free",
+      hasActiveBonus: false,
+      subscriptionUntil: iso(-DAY),
+      now: NOW
+    });
+    expect(a.expiresAt).toBeNull();
+    expect(a.source).toBe("none");
+    expect(a.reasonKey).toBe("account.header.freePlan");
+  });
+});
+
+describe("a trial's tier and its clock are never separated", () => {
+  /*
+    useAuth used to hand the header Math.max(premiumTrial, ultraTrial), which
+    discards WHICH trial is which. Every case below has two trials running with
+    different ends, so a collapsed value would pick the wrong one.
+  */
+  const t = (tier: UserTier, ms: number) => ({ tier, until: iso(ms) });
+  const acc = (over: Parameters<typeof resolveAccess>[0]) => resolveAccess(over);
+
+  it("Premium trial only, on a Premium card", () => {
+    const a = acc({ tier: "premium", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("premium", 20 * HOUR)], now: NOW });
+    expect(a.source).toBe("trial");
+    expect(a.expiresAt).toBe(NOW + 20 * HOUR);
+    expect(a.reasonKey).toBe("account.header.trialActive");
+  });
+
+  it("Ultra trial only, on an Ultra card", () => {
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("ultra", 20 * HOUR)], now: NOW });
+    expect(a.expiresAt).toBe(NOW + 20 * HOUR);
+  });
+
+  it("BOTH trials, Ultra card: counts the ULTRA trial even though Premium's runs longer", () => {
+    // The regression. Collapsed, this rendered 23h under an ULTRA card.
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("premium", 23 * HOUR), t("ultra", 1 * HOUR)], now: NOW });
+    expect(a.source).toBe("trial");
+    expect(a.expiresAt).toBe(NOW + 1 * HOUR);
+    expect(a.expiresAt).not.toBe(NOW + 23 * HOUR);
+  });
+
+  it("BOTH trials, Premium card: a Premium trial DOES sustain Premium, and Ultra's outranks it", () => {
+    const a = acc({ tier: "premium", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("premium", 2 * HOUR), t("ultra", 9 * HOUR)], now: NOW });
+    // Ultra outranks Premium, so it can hold a Premium card up too — later wins.
+    expect(a.expiresAt).toBe(NOW + 9 * HOUR);
+  });
+
+  it("an EXPIRED Premium trial is not counted", () => {
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("premium", -HOUR), t("ultra", 5 * HOUR)], now: NOW });
+    expect(a.expiresAt).toBe(NOW + 5 * HOUR);
+  });
+
+  it("an EXPIRED Ultra trial leaves no candidate for an Ultra card", () => {
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: false,
+      trials: [t("premium", 23 * HOUR), t("ultra", -HOUR)], now: NOW });
+    // The Premium trial cannot sustain Ultra, so there is no clock — not 23h.
+    expect(a.expiresAt).toBeNull();
+    expect(a.source).toBe("none");
+  });
+
+  it("an active subscription beside a trial: the longer sustaining grant wins", () => {
+    const a = acc({ tier: "premium", requestedTier: "premium", hasActiveBonus: false,
+      trials: [t("premium", 10 * HOUR)], subscriptionUntil: iso(30 * DAY), now: NOW });
+    expect(a.source).toBe("subscription");
+    expect(a.expiresAt).toBe(NOW + 30 * DAY);
+  });
+
+  it("an active bonus beside a trial, both able to sustain the tier", () => {
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: true,
+      bonusUntil: iso(5 * DAY), trials: [t("ultra", 2 * HOUR)], now: NOW });
+    expect(a.source).toBe("bonus");
+    expect(a.expiresAt).toBe(NOW + 5 * DAY);
+  });
+});
+
+describe("no branch names a grant the user does not have", () => {
+  /*
+    `source` has four members; the reason branch used to have three keys, so
+    anything unaccounted for fell through to "Abonament activ" — asserting a
+    subscription for users who have none.
+  */
+  const acc = (over: Parameters<typeof resolveAccess>[0]) => resolveAccess(over);
+
+  it("a quota-exempt account is not told it has a subscription", () => {
+    // The server forces effectiveTier to ULTRA for exempt accounts and sends no
+    // grants at all: no bonus, no trial, no subscription instant.
+    const a = acc({ tier: "ultra", requestedTier: "free", hasActiveBonus: false, now: NOW });
+    expect(a.source).toBe("none");
+    expect(a.expiresAt).toBeNull();
+    expect(a.reasonKey).toBe("account.header.tierActive");
+    expect(a.reasonKey).not.toBe("account.header.subscriptionActive");
+  });
+
+  it("an expired Ultra trial beside a live Premium trial is not called a subscription", () => {
+    const a = acc({
+      tier: "ultra",
+      requestedTier: "free",
+      hasActiveBonus: false,
+      trials: [{ tier: "premium" as const, until: iso(23 * HOUR) }, { tier: "ultra" as const, until: iso(-HOUR) }],
+      now: NOW
+    });
+    // The premium trial cannot sustain Ultra, so there is no clock…
+    expect(a.expiresAt).toBeNull();
+    // …and the sentence must not invent one either.
+    expect(a.reasonKey).toBe("account.header.tierActive");
+  });
+
+  it("a real subscriber still reads as a subscriber", () => {
+    const a = acc({ tier: "premium", requestedTier: "premium", hasActiveBonus: false,
+      subscriptionUntil: iso(30 * DAY), now: NOW });
+    expect(a.reasonKey).toBe("account.header.subscriptionActive");
+  });
+
+  it("a free plan still reads as a free plan", () => {
+    const a = acc({ tier: "free", requestedTier: "free", hasActiveBonus: false, now: NOW });
+    expect(a.reasonKey).toBe("account.header.freePlan");
+  });
+});
+
+describe("L + M — an exhausted quota never costs the user their countdown", () => {
+  /*
+    A pass once let the spent allowance REPLACE the clock. A Premium subscriber
+    then lost their expiry for the rest of any day they used the product — the
+    exact failure this card was built to prevent, reintroduced under a new
+    trigger. Both facts now coexist.
+  */
+  const DAY_MS = 86_400_000;
+
+  it("a blocked subscriber sees the allowance AND keeps the subscription clock", () => {
+    plan({
+      tier: "premium",
+      requestedTier: "premium",
+      subscriptionUntil: new Date(NOW + 30 * DAY_MS).toISOString(),
+      quota: { used: 20, limit: 20 }
+    });
+    const line = detail();
+    expect(line).toContain("0 predicții azi");
+    expect(line).toContain("30z");
+  });
+
+  it("the countdown survives for assistive technology at every width", () => {
+    plan({
+      tier: "ultra",
+      requestedTier: "ultra",
+      subscriptionUntil: new Date(NOW + 30 * DAY_MS).toISOString(),
+      quota: { used: 50, limit: 50 }
+    });
+    // the spoken form is not behind the sm breakpoint
+    expect(detail()).toMatch(/de zile/);
+  });
+
+  it("a blocked FREE user shows the allowance and invents no countdown", () => {
+    plan({ tier: "free", requestedTier: "free", quota: { used: 5, limit: 5 } });
+    expect(detail()).toContain("0 predicții azi");
+    expect(detail()).not.toMatch(/\dz /);
+  });
+
+  it("M — an exempt account shows no quota at all, spent or otherwise", () => {
+    plan({ tier: "ultra", requestedTier: "ultra", quota: null,
+           subscriptionUntil: new Date(NOW + 30 * DAY_MS).toISOString() });
+    expect(detail()).not.toMatch(/predicți/i);
+    expect(detail()).toContain("30z");
+  });
+});
+
+describe("the quota line agrees with the Predict button", () => {
+  /*
+    An exempt account reached its counters and read "0 predicții azi" beside a
+    working Generate button. The card is handed quota=null for exempt accounts,
+    which is the shape it already treats as "no limit to report".
+  */
+  it("free account with quota remaining shows what is left", () => {
+    plan({ tier: "free", requestedTier: "free", quota: { used: 2, limit: 5 } });
+    expect(time()).toBe("3 predicții azi");
+  });
+
+  it("free account with one left uses the singular", () => {
+    plan({ tier: "free", requestedTier: "free", quota: { used: 4, limit: 5 } });
+    expect(time()).toBe("1 predicție azi");
+  });
+
+  it("free account exhausted reads zero, not a negative", () => {
+    plan({ tier: "free", requestedTier: "free", quota: { used: 9, limit: 5 } });
+    expect(time()).toBe("0 predicții azi");
+  });
+
+  it("an exempt account shows NO quota line at all", () => {
+    // quota=null is what UserDashboard passes when tierQuotaExempt is true.
+    plan({ tier: "ultra", requestedTier: "ultra", quota: null });
+    expect(screen.queryByTestId("plan-time")).toBeNull();
+    expect(detail()).not.toMatch(/predicți/i);
+  });
+
+  it("a Premium subscriber shows time, never a quota line", () => {
+    plan({ tier: "premium", requestedTier: "premium", subscriptionUntil: iso(30 * DAY), quota: null });
+    expect(time()).toBe("30z 0h 0m");
+    expect(detail()).not.toMatch(/predicți/i);
+  });
+
+  it("an Ultra subscriber shows time, never a quota line", () => {
+    plan({ tier: "ultra", requestedTier: "ultra", subscriptionUntil: iso(12 * DAY), quota: null });
+    expect(time()).toBe("12z 0h 0m");
+    expect(detail()).not.toMatch(/predicți/i);
+  });
+});
+
+describe("the rendered card never pairs one grant's tier with another's clock", () => {
+  it("renders ~5 days, not ~30, for Premium + Ultra bonus", () => {
+    plan({
+      tier: "ultra",
+      requestedTier: "premium",
+      hasActiveBonus: true,
+      bonusUntil: iso(5 * DAY),
+      subscriptionUntil: iso(30 * DAY)
+    });
+    expect(screen.getByTestId("plan-card").getAttribute("data-tier")).toBe("ultra");
+    expect(time()).toContain("5z");
+    expect(time()).not.toContain("30z");
   });
 });
 
@@ -89,7 +460,7 @@ describe("the plan card shows time, not just a plan", () => {
   });
 
   it("shows trial time when the trial is what grants the tier", () => {
-    plan({ tier: "ultra", requestedTier: "free", trialUntil: iso(6 * HOUR) });
+    plan({ tier: "ultra", requestedTier: "free", trials: [{ tier: "ultra", until: iso(6 * HOUR) }] });
     expect(time()).toBe("6h 0m");
   });
 
@@ -121,9 +492,17 @@ describe("bonus states keep both the reason and the clock", () => {
     expect(time()).toBe("11z 3h 49m");
   });
 
-  it("prefers the later of bonus and subscription, so time never shrinks on a bonus", () => {
+  it("counts the BONUS, not the longer subscription, because the bonus is what makes it Ultra", () => {
+    /*
+      This used to assert "30z 0h 0m" under the heading "time never shrinks on
+      a bonus". That premise was the defect: the longer number belonged to the
+      Premium subscription while the card was naming Ultra, so the pair was a
+      false claim about paid access. The bonus's clock is the shorter one and
+      the honest one.
+    */
     plan({ tier: "ultra", requestedTier: "premium", ...bonusProps, subscriptionUntil: iso(30 * DAY) });
-    expect(time()).toBe("30z 0h 0m");
+    expect(time()).toBe("11z 3h 49m");
+    expect(time()).not.toBe("30z 0h 0m");
   });
 });
 
@@ -218,11 +597,20 @@ describe("the referral offer is never the thing that gets cut", () => {
     ...over
   });
 
-  it("clamps the joiner's name, which is unbounded and unknowable", () => {
+  it("lets the joiner's name — and only it — give up width", () => {
+    /*
+      No fixed max-width any more. The old `max-w-[2rem]` cut every name to
+      about four characters at 390px whether or not the row was short of space,
+      while the brand truncated to make room for it. The name now shrinks under
+      real flex pressure instead, so it keeps every pixel the fixed copy is not
+      using and is still the only thing in the row that can lose characters.
+    */
     plan({ bonus: notice() });
     const name = screen.getByTestId("referral-name");
     expect(name.className).toContain("truncate");
-    expect(name.className).toMatch(/max-w-/);
+    expect(name.className).toContain("min-w-0");
+    expect(name.className).toContain("shrink");
+    expect(name.className).not.toMatch(/max-w-/);
   });
 
   it("leaves the fixed words beside a name unclamped, so only the name loses characters", () => {
@@ -278,11 +666,26 @@ describe("the referral offer is never the thing that gets cut", () => {
   });
 });
 
-function cta(over: Partial<React.ComponentProps<typeof PredictCta>> = {}) {
+/*
+  The CTA is driven by the real contract, not by hand-written strings: these
+  tests assert what a user hears, and building the action here is what keeps
+  that tied to the composition the app actually ships.
+*/
+function cta(over: { state?: PredictState } = {}) {
   const onPredict = vi.fn();
+  const action = buildPredictAction({
+    state: over.state ?? "idle",
+    labels: {
+      label: "Generează Predicții",
+      hint: "Generează predicții pentru zilele selectate",
+      busy: "Se generează predicțiile…",
+      quotaSpent: "Ai folosit toate predicțiile de azi"
+    },
+    run: onPredict
+  });
   render(
     <LocaleProvider>
-      <PredictCta onPredict={onPredict} hint="Generează predicții pentru zilele selectate" {...over} />
+      <PredictCta action={action} />
     </LocaleProvider>
   );
   return { onPredict, el: screen.getByTestId("predict-cta") as HTMLButtonElement };
@@ -318,17 +721,68 @@ describe("the Predict CTA says what it does", () => {
     expect(el.className).toMatch(/focus-visible:outline/);
   });
 
-  it("does not fire while busy, and says so", () => {
-    const { el, onPredict } = cta({ busy: true });
-    expect(el.disabled).toBe(true);
+  /*
+    NOT `disabled`. The attribute drops the button out of the tab order and the
+    browser blurs it the instant it lands on the focused element, so the user
+    who just pressed Enter loses focus to <body> and never hears the busy name
+    this component swaps in. aria-disabled keeps it focusable; the handler guard
+    is what makes it inert.
+  */
+  it("stays focusable and keeps focus when a run starts", () => {
+    const { el, onPredict } = cta({ state: "busy" });
+    expect(el.disabled).toBe(false);
+    expect(el.getAttribute("aria-disabled")).toBe("true");
     expect(el.getAttribute("aria-busy")).toBe("true");
+    el.focus();
+    expect(document.activeElement).toBe(el);
     fireEvent.click(el);
+    // still the active element — the press did not blur it
+    expect(document.activeElement).toBe(el);
     expect(onPredict).not.toHaveBeenCalled();
   });
 
-  it("does not fire while disabled", () => {
-    const { el, onPredict } = cta({ disabled: true });
-    expect(el.disabled).toBe(true);
+  it("names the busy state in the visible tooltip as well as the accessible name", () => {
+    const { el } = cta({ state: "busy" });
+    expect(el.getAttribute("title")).toBe("Se generează predicțiile…");
+  });
+
+  it("announces the busy state through a live region, not just its own name", () => {
+    cta({ state: "busy" });
+    const status = screen.getByTestId("predict-status");
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(status.textContent).toBe("Se generează predicțiile…");
+  });
+
+  it("says nothing in the live region while idle", () => {
+    cta();
+    expect(screen.getByTestId("predict-status").textContent).toBe("");
+  });
+
+  it("cannot be double-submitted while a run is in flight", () => {
+    const { el, onPredict } = cta({ state: "busy" });
+    fireEvent.click(el);
+    fireEvent.click(el);
+    fireEvent.keyDown(el, { key: "Enter" });
+    expect(onPredict).not.toHaveBeenCalled();
+  });
+
+  it("does not fire while the daily quota is spent, and names the reason", () => {
+    const { el, onPredict } = cta({ state: "blocked" });
+    expect(el.disabled).toBe(false);
+    expect(el.getAttribute("aria-disabled")).toBe("true");
+    // Label in Name (WCAG 2.5.3): the name still opens with the visible label,
+    // so "click Generează Predicții" keeps working, AND it carries the reason.
+    expect(el.getAttribute("aria-label")).toBe("Generează Predicții — Ai folosit toate predicțiile de azi");
+    expect(el.getAttribute("aria-label")).toContain("Ai folosit toate predicțiile de azi");
+    expect(el.className).toContain("is-disabled");
+    // The visible tooltip must name the state too — it used to keep the idle
+    // hint, inviting an action the button refuses.
+    expect(el.getAttribute("title")).toBe("Ai folosit toate predicțiile de azi");
+    expect(el.getAttribute("title")).not.toBe("Generează predicții pentru zilele selectate");
+    el.focus();
+    // reachable, so the reason can actually be heard
+    expect(document.activeElement).toBe(el);
     fireEvent.click(el);
     expect(onPredict).not.toHaveBeenCalled();
   });

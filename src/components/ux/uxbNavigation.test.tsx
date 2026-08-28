@@ -109,7 +109,6 @@ function Harness() {
           onGoHistory={() => setNavView("history")}
           onGoStatistics={() => setNavView("statistics")}
           onGoTickets={() => setNavView("tickets")}
-          onPredict={noop}
           trackerStats={{ wins: 3, losses: 1, winRate: 75, settled: 4, pending: 0 } as never}
           selectedDate="2026-08-25"
         />
@@ -123,7 +122,6 @@ function Harness() {
           onToggleWatch={noop}
           onOpenMatch={setSelected}
           onUpgradeRequired={noop}
-          onPredict={noop}
           matchesFilter={matchesFilter}
           onSetFilter={setMatchesFilter}
           search=""

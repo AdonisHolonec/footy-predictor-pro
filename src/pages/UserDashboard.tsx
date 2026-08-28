@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import LeaguePanel from "../components/LeaguePanel";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
@@ -69,6 +69,12 @@ import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
 import { useLeagueSelection } from "./userDashboard/useLeagueSelection";
 import { useDerivedPredictions } from "./userDashboard/useDerivedPredictions";
 import { useTrackerAnimations } from "./userDashboard/useTrackerAnimations";
+import {
+  buildPredictAction,
+  isPredictBlocked,
+  predictSurfaceProps,
+  resolvePredictState
+} from "../components/ux/predictState";
 
 /** How often the workspace re-reads server tier/quota state. See the effect below. */
 const TIER_STATUS_POLL_MS = 5 * 60_000;
@@ -85,7 +91,7 @@ export default function UserDashboard() {
     predictCountToday,
     predictLimitToday,
     /** Furthest-out active 24h trial expiry, or null. Already computed by useAuth. */
-    trialExpiresAt,
+    trialGrants,
     session,
     logout,
     activate24hTrial,
@@ -145,6 +151,8 @@ export default function UserDashboard() {
   const [notifyEmailConsent, setNotifyEmailConsent] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [warmPredictBusy, setWarmPredictBusy] = useState(false);
+  /** Synchronous mirror of `warmPredictBusy` — see the guard in warmAndPredict. */
+  const predictRunningRef = useRef(false);
   const [notifSaveBusy, setNotifSaveBusy] = useState(false);
   /** Set when onboarding finished with leagues picked — the effect below fires the first predict once the selection state has propagated. */
   const [onboardingAutoPredict, setOnboardingAutoPredict] = useState(false);
@@ -467,7 +475,71 @@ export default function UserDashboard() {
     }
   }
 
+  /*
+    ONE quota input for every Predict surface. Same three server fields
+    ProfileView reads; the rule itself lives in predictState.ts so no caller has
+    to restate it.
+  */
+  const predictQuota = {
+    quotaExempt: tierQuotaExempt,
+    limit: predictLimitToday,
+    used: predictCountToday
+  };
+  const predictState = resolvePredictState(warmPredictBusy, predictQuota);
+
+  /*
+    ONE action object for every Predict surface. Nothing below decides for
+    itself what state Predict is in, what to say about it, or whether pressing
+    does anything — see predictState.ts.
+  */
+  const predictAction = buildPredictAction({
+    state: predictState,
+    labels: {
+      label: t("shell.predict"),
+      hint: t("shell.predictTip"),
+      busy: t("shell.predictBusy"),
+      quotaSpent: t("shell.predictQuotaSpent")
+    },
+    run: () => void warmAndPredict()
+  });
+
   async function warmAndPredict() {
+    /*
+      THE AUTHORITATIVE GATE.
+
+      It is inside the function, not on a button, because there are seven ways
+      to reach here: the header CTA, the Banner retry, HomeSection,
+      MatchesSection, the command palette, the onboarding effect and
+      restoreOrPredict. Gating a prop gated exactly one of them and left the
+      other six firing runs the server would reject.
+
+      Every caller routes through this, so blocking here blocks all of them —
+      including the ones that render no state and cannot be told about it. The
+      status line is how a user who arrived from one of those learns why
+      nothing happened.
+    */
+    if (isPredictBlocked(predictQuota)) {
+      setStatus(t("shell.predictQuotaSpent"));
+      return;
+    }
+    /*
+      RE-ENTRANCY, guarded by a ref rather than the busy STATE.
+
+      `warmPredictBusy` is React state read through this render's closure, so
+      two activations in the same tick both see `false` — which is exactly what
+      happened: Ctrl+K during a run, arrow to the Predict row, Enter, and a
+      second metered prediction started because the palette's keyboard path had
+      no guard of its own and this function had none either. A ref flips
+      synchronously, so the second caller sees `true` however it arrived.
+
+      This is the execution boundary for every entry point. Surfaces may also
+      refuse earlier for their own reasons; none of them may be the only guard.
+    */
+    if (predictRunningRef.current) {
+      setStatus(t("shell.predictBusy"));
+      return;
+    }
+    predictRunningRef.current = true;
     setWarmPredictBusy(true);
     try {
       await warm();
@@ -481,6 +553,7 @@ export default function UserDashboard() {
       */
       bumpReferralBonuses();
     } finally {
+      predictRunningRef.current = false;
       setWarmPredictBusy(false);
     }
   }
@@ -561,8 +634,7 @@ export default function UserDashboard() {
         setSelectedDates(normalizeSelectedDates([next]));
         void fetchDays([next]);
       }}
-      onPredict={() => void warmAndPredict()}
-      predictBusy={warmPredictBusy}
+      predictAction={predictAction}
       liveCount={homeLiveCount}
       statusSlot={
         /*
@@ -585,9 +657,23 @@ export default function UserDashboard() {
             would count down time that has already run out.
           */
           subscriptionUntil={entitlement?.hasActiveSubscription ? (entitlement?.subscriptionExpiresAt ?? null) : null}
-          trialUntil={trialExpiresAt}
+          /*
+            The GRANTS, not the collapsed instant. useAuth also exposes
+            `trialExpiresAt`, a Math.max across both trial columns — pairing that
+            with the effective tier is what let an Ultra trial ending in 1h
+            render as 23h under an ULTRA card.
+          */
+          trials={trialGrants}
           /* A free plan does not expire; predictions left today is what it has. */
-          quota={{ used: predictCountToday, limit: predictLimitToday }}
+          /*
+            The SAME exemption the CTA honours. Passing the raw counters to an
+            exempt account rendered "0 predicții azi" beside a fully working
+            Generate button — two neighbours in permanent chrome contradicting
+            each other about one fact. `quota: null` is the shape the card
+            already treats as "no limit to report", so this reuses the server's
+            verdict rather than inventing a second rule or a fake number.
+          */
+          quota={tierQuotaExempt ? null : { used: predictCountToday, limit: predictLimitToday }}
           onOpenReferral={() => handleNav("profile")}
           /*
             The reward is announced in the cards themselves rather than in a
@@ -625,12 +711,24 @@ export default function UserDashboard() {
           tone="warning"
           className="mb-3"
           action={
-            <Button size="sm" loading={warmPredictBusy} onClick={() => void warmAndPredict()}>
+            <Button
+              size="sm"
+              loading={predictAction.busy}
+              /*
+                aria-disabled via the shared surface, NOT the native attribute:
+                the control stays focusable so the reason is reachable. The
+                surface also supplies the guard, so a press while inert is a
+                no-op even though the button is still clickable.
+              */
+              {...predictSurfaceProps(predictAction)}
+            >
               {t("shell.predict")}
             </Button>
           }
         >
-          <span className="font-semibold text-[var(--fp-text)]">{t("dash.needPredictForMarkets")}</span>
+          <span className="font-semibold text-[var(--fp-text)]">
+            {predictAction.reason ?? t("dash.needPredictForMarkets")}
+          </span>
         </Banner>
       )}
 
@@ -651,7 +749,7 @@ export default function UserDashboard() {
           onGoHistory={() => handleNav("history")}
           onGoStatistics={() => handleNav("statistics")}
           onGoTickets={() => handleNav("tickets")}
-          onPredict={() => void warmAndPredict()}
+          predictAction={predictAction}
           trackerStats={trackerStats}
           selectedDate={activePredictDates[0] ?? date}
         />
@@ -666,7 +764,7 @@ export default function UserDashboard() {
           onToggleWatch={toggleWatchlist}
           onOpenMatch={openMatch}
           onUpgradeRequired={(feature, requiredTier) => setUpgradePrompt({ feature, requiredTier })}
-          onPredict={() => void warmAndPredict()}
+          predictAction={predictAction}
           matchesFilter={matchesFilter}
           onSetFilter={setMatchesFilter}
           search={matchSearch}
@@ -838,7 +936,7 @@ export default function UserDashboard() {
         historyLabels={historySearchLabels}
         onSelectMatch={openMatch}
         onNavigate={handleNav}
-        onPredict={() => void warmAndPredict()}
+        predictAction={predictAction}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
       <ReportPredictionDialog

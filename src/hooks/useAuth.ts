@@ -941,6 +941,39 @@ function useAuthState() {
   /** Distinguishes "free" from "not asked yet" for consumers that must not act on a placeholder. */
   const entitlementResolved = entitlement !== null;
 
+  /**
+   * Active trials, each still carrying the tier it grants.
+   *
+   * WHY THIS EXISTS ALONGSIDE `trialExpiresAt`. That value is a Math.max across
+   * both trial columns, which throws away WHICH trial is which — and a consumer
+   * that pairs it with the effective tier then makes a false statement: an Ultra
+   * trial ending in 1h beside a Premium trial ending in 23h yields 23h, under a
+   * card reading ULTRA. The header needs the grants intact so it can count only
+   * the ones able to sustain the tier it is naming.
+   *
+   * Both instants are still derived the same way — activated_at + 24h — so this
+   * introduces no new rule, it only declines to collapse the two.
+   */
+  const trialGrants = useMemo(() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const grant = (tier: "premium" | "ultra", activatedAt?: string | null) => {
+      if (!activatedAt) return null;
+      const start = new Date(activatedAt).getTime();
+      if (!Number.isFinite(start)) return null;
+      const end = start + DAY;
+      return end > now ? { tier, until: new Date(end).toISOString() } : null;
+    };
+    return [
+      grant("premium", user?.premium_trial_activated_at),
+      grant("ultra", user?.ultra_trial_activated_at)
+    ].filter((g): g is { tier: "premium" | "ultra"; until: string } => g !== null);
+  }, [user?.premium_trial_activated_at, user?.ultra_trial_activated_at]);
+
+  /**
+   * COLLAPSED. Do not pair this with a tier — see `trialGrants` above. Kept for
+   * consumers that only need "is any trial still running, and until when".
+   */
   const trialExpiresAt = useMemo(() => {
     const premiumStart = user?.premium_trial_activated_at ? new Date(user.premium_trial_activated_at).getTime() : NaN;
     const ultraStart = user?.ultra_trial_activated_at ? new Date(user.ultra_trial_activated_at).getTime() : NaN;
@@ -961,6 +994,7 @@ function useAuthState() {
     isSubscriptionExpired,
     hasActiveSubscription,
     trialRemainingTime,
+    trialGrants,
     trialExpiresAt,
     predictCountToday,
     predictLimitToday,

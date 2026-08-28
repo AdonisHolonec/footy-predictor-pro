@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { buildPredictAction } from "./predictState";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MatchesSection from "./MatchesSection";
 import { en } from "../../i18n/en";
@@ -27,6 +28,17 @@ afterEach(cleanup);
 function renderMatches(overrides: Record<string, unknown> = {}) {
   const onSetFilter = vi.fn();
   const onPredict = vi.fn();
+  /*
+    MatchesSection no longer takes a bare onPredict — it consumes the shared
+    Predict contract, so the surface cannot disagree with the header about
+    whether the action is available. An idle contract is the "Predict is
+    offered" case this suite exercises.
+  */
+  const predictAction = buildPredictAction({
+    state: "idle",
+    labels: { label: "Generează Predicții", hint: "hint", busy: "busy", quotaSpent: "spent" },
+    run: onPredict
+  });
   render(
     <MatchesSection
       matches={[] as unknown as PredictionRow[]}
@@ -36,7 +48,7 @@ function renderMatches(overrides: Record<string, unknown> = {}) {
       onToggleWatch={() => {}}
       onOpenMatch={() => {}}
       onUpgradeRequired={() => {}}
-      onPredict={onPredict}
+      predictAction={predictAction}
       matchesFilter="all"
       onSetFilter={onSetFilter}
       valueOnly={false}

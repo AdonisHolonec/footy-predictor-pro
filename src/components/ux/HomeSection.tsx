@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { CardMarketValidations, HistoryStats, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
+import { predictSurfaceProps, type PredictAction } from "./predictState";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
@@ -42,7 +43,8 @@ type Props = {
   onGoHistory: () => void;
   onGoStatistics: () => void;
   onGoTickets: () => void;
-  onPredict: () => void;
+  /** The shared Predict contract. Never call onPredict directly — use action.onActivate. */
+  predictAction?: PredictAction;
   trackerStats: HistoryStats;
   /** ISO `YYYY-MM-DD` the feed is browsed for — drives the context line. */
   selectedDate: string;
@@ -75,7 +77,7 @@ export default function HomeSection({
   onGoHistory,
   onGoStatistics,
   onGoTickets,
-  onPredict,
+  predictAction,
   trackerStats,
   selectedDate
 }: Props) {
@@ -137,9 +139,14 @@ export default function HomeSection({
       {!matches.length ? (
         <EmptyState
           title={t("dash.emptyPredsTitle")}
-          description={t("dash.emptyPredsDesc")}
+          /* Never instruct an action the system will refuse: when Predict is
+             unavailable the description states why instead. */
+          description={predictAction?.reason ?? t("dash.emptyPredsDesc")}
           actionLabel={t("shell.predict")}
-          onAction={onPredict}
+          onAction={predictAction?.onActivate}
+          actionDisabled={predictAction?.disabled}
+          /* The description states the reason once; this carries it to AT. */
+          actionProps={predictAction ? predictSurfaceProps(predictAction) : undefined}
         />
       ) : (
         <>

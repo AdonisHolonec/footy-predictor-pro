@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import PredictCta from "./PredictCta";
+import type { PredictAction } from "./predictState";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
 import { DESKTOP_SECONDARY_NAV_ITEMS, PRIMARY_NAV_ITEMS, type AppNavView } from "./appNav";
@@ -11,8 +12,11 @@ type Props = {
   date: string;
   onDateChange: (date: string) => void;
   /** Generate new predictions (quota). The one action that stays in the chrome. */
-  onPredict?: () => void;
-  predictBusy?: boolean;
+  /**
+   * The shared Predict contract, built by the page. The shell renders it and
+   * never recomputes it — see predictState.ts.
+   */
+  predictAction?: PredictAction;
   /** In-play fixtures right now — a count badge on Matches, never a destination. */
   liveCount?: number;
   /**
@@ -43,8 +47,7 @@ export default function ConsumerShell({
   onNavigate,
   date,
   onDateChange,
-  onPredict,
-  predictBusy,
+  predictAction,
   liveCount = 0,
   statusSlot,
   children
@@ -112,7 +115,16 @@ export default function ConsumerShell({
         <div
           data-testid="context-bar"
           /* gap kept in step with PlanHeaderStrip's: see the note there. */
-          className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-2 px-3 sm:gap-2.5 sm:px-6 lg:px-8"
+          /*
+            gap-1.5 below sm, not gap-2. At 390 the sum of every zone's
+            min-content width came to ~395px against 366px of usable row, and
+            the referral card paid for it by overflowing its own wrapper into
+            this gap — 3.5px clear of the Predict button, no overlap, but only
+            by accident. Six pixels of gap is the cheapest lever the priority
+            order allows: it costs no fixed copy, no brand characters and no
+            type size, and the spec names padding before typography.
+          */
+          className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-1.5 px-3 sm:gap-2.5 sm:px-6 lg:px-8"
         >
           {/*
             BRAND OVER DATE, one stacked column.
@@ -122,7 +134,17 @@ export default function ConsumerShell({
             occupy the same 56px of height and about half the width, and the whole
             header fits on one line again.
           */}
-          <div className="flex min-w-0 shrink flex-col justify-center gap-0.5 overflow-hidden">
+          {/*
+            min-w-[6.5rem], not min-w-0.
+
+            min-w-0 let this column shrink to nothing, which made the BRAND the
+            first thing the row sacrificed — "F…" — while a dynamic invitee name
+            beside it kept a fixed width. The stated priority is the reverse:
+            brand first, dynamic name last. The floor is the width the wordmark
+            actually needs, so the truncate below is a backstop now rather than
+            the row's normal behaviour, and the referral card yields instead.
+          */}
+          <div className="flex min-w-[6.5rem] shrink flex-col justify-center gap-0.5 overflow-hidden">
             <button
               type="button"
               onClick={() => onNavigate("home")}
@@ -167,11 +189,32 @@ export default function ConsumerShell({
             referral card underneath Predict at 390px. The brand column, which
             is min-w-0 and truncates, absorbs a narrow viewport instead.
           */}
-          {statusSlot ? <div className="ml-auto flex shrink-0 items-center">{statusSlot}</div> : null}
+          {/*
+            min-w-0 so the squeeze can REACH the strip. Everything inside it that
+            must not be cut carries shrink-0 of its own, so the only thing this
+            actually lets compress is the dynamic name.
+          */}
+          {statusSlot ? <div className="ml-auto flex min-w-0 shrink items-center">{statusSlot}</div> : null}
 
           <div className={`${statusSlot ? "" : "ml-auto "}flex shrink-0 items-center gap-1.5 sm:gap-2`}>
-            {onPredict ? (
-              <Tooltip label={t("shell.predictTip")} align="end">
+            {/*
+              The wrapper's own tooltip is state-aware too. PredictCta fixes its
+              `title`, but this Tooltip renders a second, visible bubble from its
+              own label — leaving it as the idle hint meant a blocked button
+              still displayed "Generează predicții pentru zilele selectate" on
+              hover. Both strings now name the same state.
+            */}
+            {predictAction ? (
+              <Tooltip
+                /*
+                  Busy first, matching predictState's own precedence — the
+                  bubble used to test `disabled` first, so on the run that spent
+                  the last prediction it said "you're out" while the button, its
+                  title and its accessible name all said "generating".
+                */
+                label={predictAction.hint}
+                align="end"
+              >
                 <span className="inline-flex">
                   {/*
                     PredictCta, not design-system/Button: this one control carries
@@ -179,12 +222,15 @@ export default function ConsumerShell({
                     other Buttons in the app. It owns no logic — the handler, the
                     busy flag and the quota rules all still live above it.
                   */}
-                  <PredictCta
-                    onPredict={onPredict}
-                    busy={predictBusy}
-                    hint={t("shell.predictTip")}
-                    busyLabel={t("shell.predictBusy")}
-                  />
+                  {/*
+                    The whole action, not five strings describing it. The five
+                    props this used to take were re-composed inside PredictCta
+                    into a name and a tooltip that predictState.ts had already
+                    resolved — and the `??` fallbacks beside them were dead the
+                    moment this block was wrapped in `predictAction ? …`, while
+                    still reading as though the contract might be missing.
+                  */}
+                  <PredictCta action={predictAction} />
                 </span>
               </Tooltip>
             ) : null}
