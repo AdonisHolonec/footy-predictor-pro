@@ -4,7 +4,9 @@ import {
   repriceCandidateLine,
   priceLineFromBlock,
   ladderLinesFromBlock,
-  enumerateLineSelections
+  enumerateLineSelections,
+  isContestableLine,
+  MIN_CONTESTABLE_LINE_MASS
 } from "../../../server-utils/pipeline/decision/repriceCandidateLine.js";
 
 /**
@@ -345,4 +347,213 @@ test("enumerateLineSelections is a pure function of its arguments", () => {
   };
   assert.deepEqual(enumerateLineSelections(args), enumerateLineSelections(args));
   assert.deepEqual(enumerateLineSelections({ oddsData: null, block: null }), []);
+});
+
+/* ------------------------------------------ market scale guard (audit: fixture 1557383) */
+
+const FULL_MATCH = { betType: "total", period: "full_match", scope: "match" };
+
+/** The persisted total-shots block of Liverpool 2–2 Nottingham Forest (fixture 1557383). */
+function liverpoolTotalShotsBlock() {
+  return block({
+    lines: { o18_5: 95.3, o20_5: 89.4, o22_5: 79.8, o24_5: 66.8 },
+    lambdaHome: 14,
+    lambdaAway: 12.89,
+    correlation: 0.05
+  });
+}
+
+/** The same fixture's persisted shots-on-target block. */
+function liverpoolSotBlock() {
+  return block({
+    lines: { o6_5: 86.6, o7_5: 77.5, o8_5: 66.2, o9_5: 53.7, o10_5: 41.3 },
+    lambdaHome: 5.12,
+    lambdaAway: 4.84,
+    correlation: 0.06
+  });
+}
+
+/** Odds payload with one "Total Shots" board per bookmaker: [name, line, over, under]. */
+function totalShotsBoards(boards) {
+  return {
+    response: [
+      {
+        bookmakers: boards.map(([name, ln, over, under]) => ({
+          name,
+          bets: [
+            {
+              id: 211,
+              name: "Total Shots",
+              values: [
+                { value: `Over ${ln}`, odd: String(over) },
+                { value: `Under ${ln}`, odd: String(under) }
+              ]
+            }
+          ]
+        }))
+      }
+    ]
+  };
+}
+
+test("AUDIT 1557383: a single-bookmaker 'Total Shots' board at 10.5 @2.95 can never become a total-shots selection", () => {
+  const sel = repriceCandidateLine({
+    block: liverpoolTotalShotsBlock(),
+    side: "over",
+    requestedLine: 18.5,
+    quote: { line: 10.5, over: 2.95, under: 1.3, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH
+  });
+  assert.equal(sel.tradable, false);
+  assert.equal(sel.reason, "line_off_model_scale");
+  assert.equal(sel.odd, null, "no price may survive on a line off the model's scale");
+  assert.equal(sel.probabilityPct, null, "no 100% may be manufactured at that line");
+  assert.equal(sel.bookLine, 10.5, "the refused line is still reported for diagnostics");
+
+  // The hopeless Under of the same line is refused too — the LINE is wrong, not a side.
+  const under = repriceCandidateLine({
+    block: liverpoolTotalShotsBlock(),
+    side: "under",
+    requestedLine: 18.5,
+    quote: { line: 10.5, over: 2.95, under: 1.3, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH
+  });
+  assert.equal(under.tradable, false);
+  assert.equal(under.reason, "line_off_model_scale");
+
+  // Through discovery — exactly the production path (preferred books, single board).
+  const pool = enumerateLineSelections({
+    oddsData: totalShotsBoards([["Unibet", 10.5, 2.95, 1.3]]),
+    marketNames: ["Total Shots"],
+    kind: "shots_total",
+    block: liverpoolTotalShotsBlock(),
+    preferredLine: 18.5,
+    preferredBookmakers: ["bet365", "unibet", "pinnacle"]
+  });
+  assert.deepEqual(pool, [], "nothing tradable exists at 10.5 on a λ_total ≈ 26.9 block");
+});
+
+test("legitimate total-shots lines stay tradable: 21.5 on the Liverpool block, 27.5 / 28.5 / 29.5 across books", () => {
+  const single = repriceCandidateLine({
+    block: liverpoolTotalShotsBlock(),
+    side: "over",
+    requestedLine: 18.5,
+    quote: { line: 21.5, over: 1.44, under: 2.6, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH
+  });
+  assert.equal(single.tradable, true);
+  assert.equal(single.reason, null);
+  assert.equal(single.repriced, "analytic");
+  assert.equal(single.probabilityLine, 21.5);
+  assert.ok(single.probabilityPct > 70 && single.probabilityPct < 99, `21.5 is a real line here (${single.probabilityPct}%)`);
+
+  const pool = enumerateLineSelections({
+    oddsData: totalShotsBoards([
+      ["Bet365", 27.5, 1.83, 1.83],
+      ["1xBet", 28.5, 1.9, 1.8],
+      ["Superbet", 29.5, 2.0, 1.72]
+    ]),
+    marketNames: ["Total Shots"],
+    kind: "shots_total",
+    block: liverpoolTotalShotsBlock(),
+    preferredLine: 18.5,
+    preferredBookmakers: ["bet365", "unibet", "1xbet", "superbet"]
+  });
+  const lines = [...new Set(pool.map((s) => s.bookLine))].sort((a, b) => a - b);
+  assert.deepEqual(lines, [27.5, 28.5, 29.5], "normal bookmaker dispersion is untouched");
+  assert.ok(pool.every((s) => s.tradable && s.probabilityLine === s.bookLine));
+});
+
+test("a 10.5 outlier board among 27.5 / 28.5 / 29.5 is dropped while the real lines survive", () => {
+  const pool = enumerateLineSelections({
+    oddsData: totalShotsBoards([
+      ["Bet365", 27.5, 1.83, 1.83],
+      ["1xBet", 28.5, 1.9, 1.8],
+      ["Unibet", 10.5, 2.9, 1.3],
+      ["Superbet", 29.5, 2.0, 1.72]
+    ]),
+    marketNames: ["Total Shots"],
+    kind: "shots_total",
+    block: liverpoolTotalShotsBlock(),
+    preferredLine: 18.5,
+    preferredBookmakers: ["bet365", "unibet", "1xbet", "superbet"]
+  });
+  const lines = [...new Set(pool.map((s) => s.bookLine))].sort((a, b) => a - b);
+  assert.deepEqual(lines, [27.5, 28.5, 29.5]);
+  assert.ok(!pool.some((s) => s.bookLine === 10.5));
+  assert.ok(pool.every((s) => s.probabilityPct < 99));
+});
+
+test("legitimate shots-on-target lines (7.5 / 8.5) on the SOT block are unaffected by the guard", () => {
+  const board = bookWith("Total ShotOnGoal", [
+    [7.5, 1.41, 2.57],
+    [8.5, 1.7, 2.1]
+  ], ["bet365"]);
+  const pool = enumerateLineSelections({
+    oddsData: board,
+    marketNames: ["Total ShotOnGoal", "Shots On Target"],
+    kind: "shots_on_target",
+    block: liverpoolSotBlock(),
+    preferredLine: 6.5,
+    preferredBookmakers: ["bet365", "unibet"]
+  });
+  const lines = [...new Set(pool.map((s) => s.bookLine))].sort((a, b) => a - b);
+  assert.deepEqual(lines, [7.5, 8.5]);
+  const over75 = pool.find((s) => s.side === "over" && s.bookLine === 7.5);
+  assert.equal(over75.tradable, true);
+  assert.equal(over75.probabilityPct, 77.5, "ladder value, exactly as before");
+  assert.equal(over75.odd, 1.41);
+});
+
+test("the guard is about the model's certainty, not the price: contestable high-probability lines stay valid", () => {
+  // Corners block from the same fixture (λ 6.58 / 3.0). Over 3.5 is ~98% but still a live
+  // line (2% Under) — kept. Over 1.5 leaves < 1% for Under — refused, on both sides.
+  const corners = block({
+    lines: { o7_5: 73.7, o8_5: 61.6, o9_5: 48.8, o10_5: 36.5, o11_5: 25.8, o12_5: 17.2 },
+    lambdaHome: 6.58,
+    lambdaAway: 3,
+    correlation: 0.08
+  });
+  const live = repriceCandidateLine({
+    block: corners,
+    side: "over",
+    requestedLine: 9.5,
+    quote: { line: 3.5, over: 1.05, under: 9, bookmakersUsed: 3, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH
+  });
+  assert.equal(live.tradable, true, `Over 3.5 corners at ${live.probabilityPct}% is still a contestable line`);
+  assert.ok(isContestableLine(live.asian));
+  for (const side of ["over", "under"]) {
+    const dead = repriceCandidateLine({
+      block: corners,
+      side,
+      requestedLine: 9.5,
+      quote: { line: 1.5, over: 1.01, under: 15, bookmakersUsed: 3, market: FULL_MATCH },
+      expectedMarket: FULL_MATCH
+    });
+    assert.equal(dead.tradable, false, side);
+    assert.equal(dead.reason, "line_off_model_scale", side);
+  }
+  assert.equal(MIN_CONTESTABLE_LINE_MASS, 0.01);
+  assert.equal(isContestableLine({ pWin: 0.99, pLoss: 0.01 }), true, "exactly 1% is still contestable");
+  assert.equal(isContestableLine({ pWin: 0.995, pLoss: 0.005 }), false);
+  assert.equal(isContestableLine(null), false);
+});
+
+test("cards boards on their own scale enumerate exactly as before the guard", () => {
+  const cards = block({ lambdaHome: 4.2, lambdaAway: 0, correlation: 0 });
+  const odds = bookWith("Cards Over/Under", [
+    [3.5, 1.5, 2.5],
+    [4.5, 2.2, 1.65],
+    [5.5, 3.4, 1.32]
+  ]);
+  const out = enumerateLineSelections({
+    oddsData: odds,
+    marketNames: ["Cards Over/Under", "Total Cards"],
+    block: cards,
+    preferredLine: 3.5
+  });
+  const lines = [...new Set(out.map((s) => s.bookLine))].sort((a, b) => a - b);
+  assert.deepEqual(lines, [3.5, 4.5, 5.5]);
+  assert.equal(out.length, 6, "both sides of every offered cards line remain tradable");
 });

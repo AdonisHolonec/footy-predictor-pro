@@ -158,8 +158,26 @@ function inferFamilyFromPickTokens(pick: string): MarketFamilyKey | null {
   if (!p) return null;
   if (/\bcorners?\b|cornere/.test(p)) return "CORNERS";
   if (/\bcards?\b|cartona|booking/.test(p)) return "CARDS";
-  if (/\bshots?\b|suturi|șuturi/.test(p)) return "SHOTS";
+  // "SOT Over 8.5" is the server's own shots-on-target label — explicit, like "Shots".
+  if (/\bshots?\b|\bsot\b|suturi|șuturi/.test(p)) return "SHOTS";
   return null;
+}
+
+/**
+ * Two distinct markets share the SHOTS family key: total shots (server family
+ * "Shots", label prefix "Shots") and shots on target (family "Shots on Target",
+ * label prefix "SOT"). They settle against different statistics, so the label
+ * must say which one it is — the audit of fixture 1557383 found "Shots Over 10.5"
+ * (a total-shots pick) being read against the shots-on-target panel.
+ */
+function isShotsOnTargetPick(pick: string, family: string | null | undefined): boolean {
+  const fam = String(family || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[/_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (fam === "shots on target") return true;
+  return /\bsot\b|on target|la poart/i.test(pick);
 }
 
 /**
@@ -284,6 +302,23 @@ export function formatRecommendedPick(
           : familyKey === "CORNERS"
             ? t("match.featCorners")
             : t("match.cards");
+      const scopedMarket = scope ? `${scope} ${marketWord}` : marketWord;
+      return periodized(`${sideLabel} ${scopedMarket}`);
+    }
+    case "SHOTS": {
+      const ou = parseOuPick(raw);
+      if (!ou) return periodized(raw);
+      const structuralLine = Number(meta?.bookLine ?? meta?.line);
+      const line = Number.isFinite(structuralLine) ? structuralLine : ou.line;
+      const sideLabel = t(ou.side === "over" ? "match.overLine" : "match.underLine", {
+        line: formatLineLabel(line)
+      });
+      const scope = formatMarketScopeShort(meta?.scope, t);
+      // Same wording the Match Detail panels already use for the two shots markets
+      // ("Total shots" / "Shots on target"), so list, card and detail agree.
+      const marketWord = isShotsOnTargetPick(raw, family)
+        ? t("match.shotsSub")
+        : t("match.shotsTotalTitle");
       const scopedMarket = scope ? `${scope} ${marketWord}` : marketWord;
       return periodized(`${sideLabel} ${scopedMarket}`);
     }

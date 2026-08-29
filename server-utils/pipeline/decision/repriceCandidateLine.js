@@ -47,6 +47,41 @@ function roundPct(n) {
 }
 
 /**
+ * MARKET SCALE GUARD — a bookmaker line is only a line for THIS block if the model
+ * leaves both sides of it live.
+ *
+ * Production audit, fixture 1557383 (Liverpool 2–2 Nottingham Forest): one preferred
+ * bookmaker's "Total Shots" board was quoted at 10.5 — a shots-on-target scale —
+ * while the other books sat at 27.5–29.5 and the model's total-shots ladder ran
+ * 18.5–24.5 (λ_total 26.9). The board passed the Market Identity Contract (its
+ * name IS a full-match, match-scope total), was priced analytically at 10.5
+ * (P(over) = 0.9997) and became "Shots Over 10.5 — 100% @2.95": a certain event
+ * at a long price, which then won the probability-first Recommended on 73 rows.
+ *
+ * The invariant is expressed in the model's own distribution, not in bookmaker
+ * names, league constants or a p×odds ceiling: a line the model already resolves
+ * with ≥ 99% certainty on one side is not a market line on this block's scale.
+ * 1% is below every legitimate recommendation ever persisted (the lowest
+ * contestable mass on a real total-shots line was 2.9%, on SOT 2.0%, on corners
+ * 1.0%) and far above every pathological row (max 0.08%). Both sides of such a
+ * line are refused — the "impossible" Over and the hopeless Under alike.
+ */
+export const MIN_CONTESTABLE_LINE_MASS = 0.01;
+
+/**
+ * @param {{ pWin: number, pLoss: number }|null|undefined} asian outcome distribution
+ *   for one side of one line (fractions)
+ * @returns {boolean} true when both outright outcomes carry at least
+ *   MIN_CONTESTABLE_LINE_MASS of probability
+ */
+export function isContestableLine(asian) {
+  const pWin = Number(asian?.pWin);
+  const pLoss = Number(asian?.pLoss);
+  if (!Number.isFinite(pWin) || !Number.isFinite(pLoss)) return false;
+  return Math.min(pWin, pLoss) >= MIN_CONTESTABLE_LINE_MASS;
+}
+
+/**
  * Model probability for one side of one line, taken from the market block —
  * with full Asian semantics (Increment B).
  *
@@ -180,6 +215,20 @@ export function repriceCandidateLine({ block, side, requestedLine, quote, expect
       lineExact,
       bookmakersUsed: Number(quote.bookmakersUsed) || 0,
       reason: "no_model_probability_at_book_line"
+    };
+  }
+
+  if (!isContestableLine(priced.asian)) {
+    // The book's line is off this block's scale (see MIN_CONTESTABLE_LINE_MASS):
+    // whatever the market is called, this is not a price for the event the model
+    // is describing. Non-tradable, never a candidate — same shape as the other
+    // refusals so callers and reporting treat it identically.
+    return {
+      ...base,
+      bookLine,
+      lineExact,
+      bookmakersUsed: Number(quote.bookmakersUsed) || 0,
+      reason: "line_off_model_scale"
     };
   }
 

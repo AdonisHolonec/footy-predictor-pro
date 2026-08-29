@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { selectRecommendation } from "../../../server-utils/pipeline/decision/selectRecommendation.js";
+import { enumerateLineSelections } from "../../../server-utils/pipeline/decision/repriceCandidateLine.js";
+import { SHOTS_TOTAL_MARKET_NAMES, PREFERRED_SHOTS_BOOKMAKERS } from "../../../server-utils/marketOdds.js";
 
 /**
  * Recommended is the highest calibrated probability among candidates that are tradable,
@@ -573,4 +575,56 @@ test("falls back to argmax 1X2 when nothing has usable odds", () => {
   assert.equal(out.diagnostics.fallbackTier, "argmax_1x2");
   assert.equal(out.recommendedQuote.tradable, false);
   assert.equal(out.recommendedQuote.odd, null);
+});
+
+/* ------------------------------------------ market scale guard (audit: fixture 1557383) */
+
+test("AUDIT 1557383: 'Shots Over 10.5 — 100% @2.95' never reaches Recommended; the genuine board still can", () => {
+  // The persisted total-shots block of Liverpool 2–2 Nottingham Forest and two real
+  // bet#211 "Total Shots" boards from that fixture's odds feed: Unibet at 10.5 (a
+  // shots-on-target scale) and Bet365 at 27.5. Discovery is the production function.
+  const liverpool = {
+    total: { o18_5: 95.3, o20_5: 89.4, o22_5: 79.8, o24_5: 66.8 },
+    lambdaHome: 14,
+    lambdaAway: 12.89,
+    correlation: 0.05
+  };
+  const feed = {
+    response: [
+      {
+        bookmakers: [
+          ["Unibet", 10.5, "2.95", "1.30"],
+          ["Bet365", 27.5, "1.83", "1.83"]
+        ].map(([name, line, over, under]) => ({
+          name,
+          bets: [
+            {
+              id: 211,
+              name: "Total Shots",
+              values: [
+                { value: `Over ${line}`, odd: over },
+                { value: `Under ${line}`, odd: under }
+              ]
+            }
+          ]
+        }))
+      }
+    ]
+  };
+  const shotsTotalSelections = enumerateLineSelections({
+    oddsData: feed,
+    marketNames: SHOTS_TOTAL_MARKET_NAMES,
+    kind: "shots_total",
+    block: liverpool,
+    preferredLine: 18.5,
+    preferredBookmakers: PREFERRED_SHOTS_BOOKMAKERS
+  });
+  assert.ok(!shotsTotalSelections.some((s) => s.bookLine === 10.5), "10.5 must be absent from the pool");
+  assert.ok(shotsTotalSelections.some((s) => s.bookLine === 27.5 && s.tradable), "the genuine 27.5 board is still priced");
+
+  const out = selectRecommendation(baseParams({ shotsTotalSelections, debug: true }));
+  assert.notEqual(out.topPick, "Shots Over 10.5");
+  assert.ok(!out.diagnostics.ranked.some((c) => c.type === "Shots Over 10.5"), "never a candidate, not merely outranked");
+  assert.ok(out.diagnostics.ranked.every((c) => c.confidencePct < 99), "no near-certain candidate is manufactured");
+  assert.ok(out.diagnostics.ranked.some((c) => c.type === "Shots Over 27.5" || c.type === "Shots Under 27.5"));
 });
