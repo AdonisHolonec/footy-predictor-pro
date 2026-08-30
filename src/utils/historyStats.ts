@@ -16,19 +16,39 @@ function isKnownOutcome(v: unknown): v is SettlementOutcome {
   return typeof v === "string" && KNOWN_OUTCOMES.has(v as SettlementOutcome);
 }
 
-/** Per-fixture market outcomes for the success-rate counter (card rows). */
+/**
+ * Is this entry's RECOMMENDED slot excluded from performance analytics?
+ *
+ * Mirrors the server's `isRecommendedSlotExcluded` (migration 066). Only an
+ * explicit `false` excludes: `undefined` means the row was never classified and
+ * must keep counting, so nothing moves until the backfill has run.
+ */
+export function isRecommendedSlotExcluded(entry: HistoryEntry): boolean {
+  return entry?.recommendedMarketValid === false;
+}
+
+/**
+ * Per-fixture market outcomes for the success-rate counter (card rows).
+ *
+ * 066: an invalid recommendation drops its RECOMMENDED slot and nothing else —
+ * goals / corners / shots on the same fixture were picked and graded normally
+ * and keep counting. The legacy single-outcome fallback below IS the recommended
+ * pick, so an excluded entry contributes no outcome at all there.
+ */
 export function listCardMarketOutcomes(entry: HistoryEntry): SettlementOutcome[] {
+  const excludeRecommended = isRecommendedSlotExcluded(entry);
   const stored = entry.cardMarketValidations;
   if (stored && typeof stored === "object") {
     const out: SettlementOutcome[] = [];
     for (const key of MARKET_KEYS) {
+      if (key === "recommended" && excludeRecommended) continue;
       const v = stored[key];
       if (isKnownOutcome(v)) out.push(v);
     }
     if (out.length) return out;
   }
   // Legacy: one outcome per fixture from recommended validation.
-  if (isKnownOutcome(entry.validation)) {
+  if (!excludeRecommended && isKnownOutcome(entry.validation)) {
     return [entry.validation];
   }
   return [];
@@ -97,6 +117,10 @@ export function computeSimpleRoi(rows: HistoryEntry[]): number | null {
   let stake = 0;
   let pnl = 0;
   for (const h of rows) {
+    // 066: this ROI is staked on the RECOMMENDED pick only, so an invalid
+    // recommendation is not a position that was ever available — the row
+    // contributes neither stake nor P&L. Its settlement is unchanged.
+    if (isRecommendedSlotExcluded(h)) continue;
     const v = h.validation;
     if (v !== "win" && v !== "loss" && v !== "push" && v !== "half_win" && v !== "half_loss") continue;
     const odd = Number(h.recommended?.odd ?? h.valueBet?.odd);
@@ -172,7 +196,16 @@ export function computeMarketBreakdown(rows: HistoryEntry[]): MarketBreakdownRow
   };
 
   for (const row of rows || []) {
-    const recommendedClass = classifyRecommendedPick(row.recommended?.pick);
+    // 066: the recommended column of this table is the recommended slot, so an
+    // invalid recommendation is excluded here for the same reason it is excluded
+    // from the rate printed beside it. Today no Shots pick reaches this branch
+    // (classifyRecommendedPick returns null for a family-prefixed label), so this
+    // changes nothing yet — it stops the panel from disagreeing with the ROI
+    // above it the day another family becomes scale-guarded. The `goals` slot is
+    // a different market and keeps counting either way.
+    const recommendedClass = isRecommendedSlotExcluded(row)
+      ? null
+      : classifyRecommendedPick(row.recommended?.pick);
     if (recommendedClass) add(recommendedClass, row.cardMarketValidations?.recommended);
     add("overUnder", row.cardMarketValidations?.goals);
   }

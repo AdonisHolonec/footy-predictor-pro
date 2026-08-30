@@ -9,6 +9,7 @@
 
 import { formatLineLabel } from "./marketIdentity.js";
 import { settleOuAsian } from "./asianTotals.js";
+import { isRecommendedSlotExcluded } from "./recommendedMarketValidity.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const MARKET_KEYS = ["recommended", "goals", "corners", "shots"];
@@ -566,12 +567,21 @@ export function resolveCardMarketValidations(rowOrEntry) {
   return settled;
 }
 
-/** Aggregate wins/losses across card markets for a list of history DB rows or entries. */
+/**
+ * Aggregate wins/losses across card markets for a list of history DB rows or entries.
+ *
+ * 066: a recommendation classified as an invalid market (analytics eligibility,
+ * never settlement) loses its RECOMMENDED slot here and nothing else. The
+ * fixture's goals / corners / shots slots are ordinary markets that were picked
+ * and graded normally, so they keep counting — dropping the whole row would
+ * discard three correct outcomes to remove one invalid one.
+ */
 export function aggregateCardMarketStats(rows) {
   let wins = 0;
   let losses = 0;
   for (const row of rows || []) {
-    const vals = resolveCardMarketValidations(row);
+    const resolved = resolveCardMarketValidations(row);
+    const vals = isRecommendedSlotExcluded(row) ? { ...resolved, recommended: null } : resolved;
     const t = tallyCardMarketValidations(vals);
     wins += t.wins;
     losses += t.losses;

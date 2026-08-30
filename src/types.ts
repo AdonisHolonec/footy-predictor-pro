@@ -514,6 +514,15 @@ export type PredictionRow = {
   momentumNarrative?: string | null;
   /** Merged from history when available — drives WIN/LOSS on the card. */
   cardMarketValidations?: CardMarketValidations | null;
+  /**
+   * ANALYTICS ELIGIBILITY of the recommended pick (migration 066) — never its
+   * settlement. `false` means the recommendation was not a real market position
+   * (a bookmaker line off the model's own scale), so its RECOMMENDED slot is
+   * excluded from success rate and ROI; the fixture's other market slots still
+   * count, and `validation` still reports what actually happened.
+   * `undefined` = not classified (every row predating the backfill) = counts.
+   */
+  recommendedMarketValid?: boolean;
   referee?: string;
   /** Venue from API-Football fixture (coords/city for weather). */
   venue?: MatchVenue;

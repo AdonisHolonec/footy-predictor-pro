@@ -79,7 +79,6 @@ export function computeMetrics(rows) {
     const dq = num(row.model_data_quality);
     const dqBucket = dq >= 0.75 ? "high" : dq >= 0.55 ? "mid" : "low";
     const ver = String(row.model_version || "unknown");
-    const buck = bucketConfidence(num(row.recommended_confidence));
 
     const bump = (map, key, delta) => {
       if (!map.has(key)) map.set(key, { brier: 0, logLoss: 0, n: 0 });
@@ -98,9 +97,28 @@ export function computeMetrics(rows) {
     const pick = String(row.pick_1x2 || "").trim();
     if (["1", "X", "2"].includes(pick)) {
       const hit = pick === actual ? 1 : 0;
-      if (!calib.has(buck)) calib.set(buck, { sumConf: 0, sumHit: 0, n: 0 });
-      const c = calib.get(buck);
-      c.sumConf += num(row.recommended_confidence);
+      /*
+        The confidence of a 1X2 calibration point is the model's probability for
+        the 1X2 outcome it actually picked — n1/nX/n2, already normalised above
+        from the same triple Brier and log-loss use.
+
+        It used to be `recommended_confidence`, which is the RECOMMENDED pick's
+        confidence and is frequently a different market entirely: a Total Shots
+        recommendation at 92% bucketed that fixture's 1X2 hit as a 92%
+        prediction. The Aug-2026 audit measured the damage — 66 malformed Shots
+        rows (confidence 88-100) moved the 80+ bucket from n=199 to n=265 and
+        pushed ece1x2 from 28.96 to 30.09, while Brier and log-loss did not move.
+        ECE is a canary metric, so it must be a function of the 1X2 prediction
+        alone.
+
+        Every fixture stays in every metric, including this one: nothing is
+        excluded here, the confidence is simply read from the right prediction.
+      */
+      const pickProbPct = (pick === "1" ? n1 : pick === "X" ? nX : n2) * 100;
+      const bucket1x2 = bucketConfidence(pickProbPct);
+      if (!calib.has(bucket1x2)) calib.set(bucket1x2, { sumConf: 0, sumHit: 0, n: 0 });
+      const c = calib.get(bucket1x2);
+      c.sumConf += pickProbPct;
       c.sumHit += hit;
       c.n += 1;
     }

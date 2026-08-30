@@ -11,6 +11,7 @@ import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 import { stripDeadValueEngineArraysFromRows } from "./valueEngineTransport.js";
 import { projectPredictionListRows } from "./predictionListProjection.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
+import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
@@ -169,6 +170,17 @@ export function mapPredictionToDbRow(prediction) {
   const score = { home: scoreHome, away: scoreAway };
   const recommendedPick = prediction.recommended?.pick || null;
   const recommendedConfidence = asNum(prediction.recommended?.confidence);
+  /*
+    066: analytics eligibility of this recommendation, decided once, here, by the
+    shared predicate. It is metadata ABOUT the recommendation; it does not touch
+    the recommendation, its odds, its probability or its settlement.
+  */
+  const recommendedMarketValidity = classifyRecommendedMarket({
+    family: prediction.recommended?.family ?? null,
+    bookLine: prediction.recommended?.bookLine ?? null,
+    pick: recommendedPick,
+    probs: prediction.probs ?? null
+  });
   const generatedAt = new Date().toISOString();
   const modelVer = prediction.modelVersion || MODEL_VERSION;
   const valueBetPick = resolveValueBetPick(prediction.valueBet?.type);
@@ -231,6 +243,13 @@ export function mapPredictionToDbRow(prediction) {
       }
     }),
     value_bet_validation: valueBetValidation,
+    // ANALYTICS ELIGIBILITY, not settlement (migration 066). Classified from the
+    // SAME object persisted below, by the SAME predicate the candidate guard
+    // uses, so a row can never claim a validity its own payload contradicts.
+    // `validation` above is untouched: a malformed recommendation that won is
+    // still recorded as a win — it simply stops counting in performance stats.
+    recommended_market_valid: recommendedMarketValidity.valid,
+    recommended_market_invalid_reason: recommendedMarketValidity.reason,
     model_version: modelVer,
     reason_codes: Array.isArray(prediction?.auditLog?.reasonCodes) ? prediction.auditLog.reasonCodes : null,
     top_features: Array.isArray(prediction?.featureImportance?.topFeatures)
@@ -479,6 +498,10 @@ export function mapDbRowToHistoryEntry(row) {
     validation: row.validation,
     cardMarkets: payload.cardMarkets || null,
     cardMarketValidations,
+    // 066: analytics eligibility travels with the entry so the client counts the
+    // same rows the server does. `undefined` (column absent) stays undefined and
+    // therefore keeps counting — only an explicit false excludes.
+    recommendedMarketValid: row.recommended_market_valid ?? undefined,
     modelVersion: row.model_version ?? payload.modelVersion
   };
 }
@@ -543,7 +566,11 @@ const AGGREGATE_ROW_COLUMNS = Object.freeze([
   // Cards / Total Shots recommended from these totals (057 promoted them; scan 3 already
   // selects them). Without them a cron-graded Cards pick read back as "pending".
   "shots_total",
-  "cards_total"
+  "cards_total",
+  // 066: the ONE column the aggregate needs to drop an invalid RECOMMENDED slot.
+  // `fixture_id` is deliberately NOT added with it — the exclusion is decided per
+  // row from this flag alone, so the aggregate never needs to identify the row.
+  "recommended_market_valid"
 ]);
 
 export const AGGREGATE_STATS_SELECT = AGGREGATE_ROW_COLUMNS.join(", ");
@@ -600,6 +627,9 @@ export function rehydrateAggregateRow(row) {
     score_home: source.score_home ?? null,
     score_away: source.score_away ?? null,
     recommended_pick: source.recommended_pick ?? null,
+    // 066: carried verbatim (including undefined -> null) so the aggregate sees
+    // the same eligibility from columns as it would from a full row.
+    recommended_market_valid: source.recommended_market_valid ?? null,
     raw_payload: rawPayload
   };
 }
@@ -841,7 +871,9 @@ const HISTORY_LIST_ROW_COLUMNS = Object.freeze([
   "recommended_family",
   "recommended_period",
   "recommended_scope",
-  "recommended_book_line"
+  "recommended_book_line",
+  // 066
+  "recommended_market_valid"
 ]);
 
 /**
@@ -969,6 +1001,8 @@ export function mapDbRowToHistoryListEntry(row) {
     // resolveCardMarketValidations is what applies that. It now reads the
     // adapted column row, not the document.
     cardMarketValidations: resolveCardMarketValidations(source),
+    // 066: same eligibility flag as the full projection (see mapDbRowToHistoryEntry).
+    recommendedMarketValid: source.recommended_market_valid ?? undefined,
     modelVersion: source.model_version,
     logos: logoHome || logoAway ? { home: logoHome, away: logoAway } : null,
     // Replaces the `probs` object. Read by useDashboardHistory's pending count.

@@ -279,7 +279,9 @@ async function handleAnalytics(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
+        // 066: recommended_market_valid must be projected, or the analytics-eligibility
+        // exclusion in TipEvent / resolveBetOutcome silently never fires on real rows.
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, recommended_market_valid, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -347,7 +349,9 @@ async function handleSnapshot(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, raw_payload"
+        // 066: see handleAnalytics — the snapshot cron writes backtest_snapshots, so
+        // without this column the persisted ROI would keep counting invalid markets.
+        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_market_valid, raw_payload"
       )
       .gte("kickoff_at", cutoff)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -600,7 +604,9 @@ async function handlePublicTrack(req, res) {
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, raw_payload"
+        // 066: recommended_market_valid must be projected, or the analytics-eligibility
+        // exclusion in TipEvent / resolveBetOutcome silently never fires on real rows.
+        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, recommended_market_valid, raw_payload"
       )
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
@@ -682,7 +688,8 @@ async function handleClv(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, raw_payload"
+        // 066: the CLV and tip walk-forward tracks ARE the recommended pick.
+        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, recommended_market_valid, raw_payload"
       )
       .gte("kickoff_at", cutoff)
       .in("match_status", ["FT", "AET", "PEN"])
@@ -742,7 +749,8 @@ async function handleWalkForwardTip(req, res) {
     const { data, error } = await supabase
       .from("predictions_history")
       .select(
-        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, raw_payload"
+        // 066: the CLV and tip walk-forward tracks ARE the recommended pick.
+        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, recommended_market_valid, raw_payload"
       )
       .gte("kickoff_at", cutoff)
       .in("match_status", ["FT", "AET", "PEN"])

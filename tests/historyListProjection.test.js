@@ -33,7 +33,12 @@ const REQUIRED_COLUMNS = [
   "recommended_confidence", "saved_at", "model_version",
   "recommended_odd", "logo_home", "logo_away", "card_markets",
   "card_market_validations", "corners_total", "shots_on_target_total",
-  "recommended_family", "recommended_period", "recommended_scope", "recommended_book_line"
+  "recommended_family", "recommended_period", "recommended_scope", "recommended_book_line",
+  // 066: analytics eligibility of the recommended pick. The list projection
+  // carries it so the client counts the same slots the server does; the
+  // exact-length assertion below still holds, so the projection cannot grow
+  // again unnoticed.
+  "recommended_market_valid"
 ];
 
 /** The heavy objects that must only ever come back from ?fixtureId=N. */
