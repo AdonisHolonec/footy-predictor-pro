@@ -263,3 +263,29 @@ describe("compact market labels — approved mapping (STEP 2)", () => {
     expect(meta).toEqual({ period: "full_match", scope: "match", bookLine: null });
   });
 });
+
+describe("shots families are labelled unambiguously (audit: fixture 1557383)", () => {
+  const meta = (bookLine: number) => ({ period: "full_match", scope: "match", bookLine });
+
+  it("renders a total-shots pick as Total shots and a SOT pick as Shots on target (EN)", () => {
+    const total = formatRecommendedPick("Shots Over 10.5", "Shots", t, meta(10.5));
+    const sot = formatRecommendedPick("SOT Over 8.5", "Shots on Target", t, meta(8.5));
+    expect(total.label).toBe("Over 10.5 Total shots · FT");
+    expect(sot.label).toBe("Over 8.5 Shots on target · FT");
+    expect(total.label).not.toBe(sot.label);
+    // Family key is unchanged on purpose — Special Bet diversity still sees one SHOTS slot.
+    expect(total.familyKey).toBe("SHOTS");
+    expect(sot.familyKey).toBe("SHOTS");
+  });
+
+  it("uses the same wording in RO", () => {
+    expect(formatRecommendedPick("Shots Over 21.5", "Shots", tRo, meta(21.5)).label).toBe("Peste 21.5 Total șuturi · FT");
+    expect(formatRecommendedPick("SOT Under 9.5", "Shots on Target", tRo, meta(9.5)).label).toBe("Sub 9.5 Șuturi la poartă · FT");
+  });
+
+  it("legacy rows without a persisted family are still told apart by the server's own label prefix", () => {
+    expect(formatRecommendedPick("SOT Over 7.5", undefined, t).label).toBe("Over 7.5 Shots on target");
+    expect(formatRecommendedPick("Shots Over 21.5", undefined, t).label).toBe("Over 21.5 Total shots");
+    expect(resolveMarketFamilyKey("SOT Over 7.5")).toBe("SHOTS");
+  });
+});
