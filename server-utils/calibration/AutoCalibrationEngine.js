@@ -76,6 +76,17 @@ function probabilityFor(triple, outcome) {
 export function extractSamplesFromHistory(rows = []) {
   const samples = [];
   for (const row of rows) {
+    /*
+      A missing observation is NOT a loss. `actual1x2FromScore` coerces with
+      Number(), and `Number(null)` is 0 with `Number.isFinite(0) === true`, so a
+      row with NULL scores would come back as "X" — an unplayed fixture entering
+      the reliability diagram as a draw the model usually got wrong. In practice
+      loadSettledHistory filters those out first, but the guard belongs with the
+      arithmetic that needs it, not only in one caller: extractSamplesFromHistory
+      is exported and is reachable from anywhere.
+    */
+    if (!Number.isFinite(Number(row.score_home)) || !Number.isFinite(Number(row.score_away))) continue;
+    if (row.score_home === null || row.score_away === null || row.score_home === "" || row.score_away === "") continue;
     const actual = actual1x2FromScore(row.score_home, row.score_away);
     if (!actual) continue;
     const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};

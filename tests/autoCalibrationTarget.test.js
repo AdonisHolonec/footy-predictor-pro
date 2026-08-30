@@ -114,20 +114,29 @@ test("a row without a usable 1X2 triple never enters the sample", () => {
   assert.equal(extractSamplesFromHistory([{ ...row(), raw_payload: { evaluation: {} } }]).length, 0);
 });
 
-test("PRE-EXISTING, documented: a NULL score is read as 0-0 by actual1x2FromScore", () => {
+test("[12][13] a fixture without a real final score never enters — a missing observation is not a loss", () => {
   /*
-    `Number(null)` is 0 and `Number.isFinite(0)` is true, so
-    actual1x2FromScore(null, null) returns "X" rather than null, and such a row
-    would be admitted as a draw. This is NOT introduced here and is NOT reachable
-    through the engine: loadSettledHistory filters `score_home != null &&
-    score_away != null` before extraction (AutoCalibrationEngine.js:405), and
-    every other caller of actual1x2FromScore filters the same way. Pinned so the
-    guard upstream is never removed silently, and so the behaviour is a decision
-    rather than a surprise.
+    `Number(null)` is 0 and `Number.isFinite(0)` is true, so without an explicit
+    guard actual1x2FromScore(null, null) returns "X" and an unplayed fixture
+    would be scored as a draw the model usually got wrong. Every one of these
+    must contribute nothing at all.
   */
-  const admitted = extractSamplesFromHistory([row({ score_home: null, score_away: null })]);
-  assert.equal(admitted.length, 1);
-  assert.equal(admitted[0].actual, "X", "reads as a 0-0 draw — upstream must filter it");
+  for (const score of [
+    { score_home: null, score_away: null },
+    { score_home: null, score_away: 1 },
+    { score_home: 2, score_away: null },
+    { score_home: undefined, score_away: undefined },
+    { score_home: "", score_away: "" },
+    { score_home: "x", score_away: "y" },
+    { score_home: NaN, score_away: NaN }
+  ]) {
+    assert.equal(extractSamplesFromHistory([row(score)]).length, 0, JSON.stringify(score));
+  }
+  // A genuine 0-0 is a real observation and still counts.
+  const draw = extractSamplesFromHistory([row({ score_home: 0, score_away: 0 })]);
+  assert.equal(draw.length, 1);
+  assert.equal(draw[0].actual, "X");
+  assert.equal(draw[0].won, false, "the model picked home; a real draw is a real miss");
 });
 
 /* -- [8] eligibility: invalid recommendations are NOT excluded, deliberately -- */
