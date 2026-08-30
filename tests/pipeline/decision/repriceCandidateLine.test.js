@@ -6,8 +6,10 @@ import {
   ladderLinesFromBlock,
   enumerateLineSelections,
   isContestableLine,
+  isLineOnModelScale,
   isScaleGuardedKind,
   MIN_CONTESTABLE_LINE_MASS,
+  MIN_LINE_TO_LAMBDA_RATIO,
   SCALE_GUARDED_KINDS
 } from "../../../server-utils/pipeline/decision/repriceCandidateLine.js";
 
@@ -697,4 +699,192 @@ test("cards boards on their own scale enumerate exactly as before the guard", ()
   const lines = [...new Set(out.map((s) => s.bookLine))].sort((a, b) => a - b);
   assert.deepEqual(lines, [3.5, 4.5, 5.5]);
   assert.equal(out.length, 6, "both sides of every offered cards line remain tradable");
+});
+
+/* ------------------------------------------ line-scale guard (production: fixture 1570355) */
+
+/** The persisted total-shots block of fixture 1570355 (λ 6.13 / 14 = 20.13). */
+function fixture1570355TotalShotsBlock() {
+  return block({
+    lines: { o18_5: 62.9, o20_5: 45.3, o22_5: 29, o24_5: 16.5 },
+    lambdaHome: 6.13,
+    lambdaAway: 14,
+    correlation: 0.05
+  });
+}
+
+test("PRODUCTION 1570355: a 'Total Shots' board at 10.5 @3.05 on a λ_total 20.13 block is refused although 1.02% is left for the Under", () => {
+  const quote = { line: 10.5, over: 3.05, under: 1.27, bookmakersUsed: 1, market: FULL_MATCH };
+  // The mass guard alone lets this through — that is exactly the hole being closed.
+  const priced = priceLineFromBlock(fixture1570355TotalShotsBlock(), "over", 10.5);
+  assert.ok(isContestableLine(priced.asian), `pLoss=${priced.asian.pLoss} clears the 1% floor on its own`);
+  assert.ok(priced.asian.pLoss > 0.01 && priced.asian.pLoss < 0.011);
+  assert.equal(isLineOnModelScale(fixture1570355TotalShotsBlock(), 10.5), false, "10.5 / 20.13 = 0.52 < 0.60");
+
+  for (const side of ["over", "under"]) {
+    const sel = repriceCandidateLine({
+      block: fixture1570355TotalShotsBlock(),
+      side,
+      requestedLine: 18.5,
+      quote,
+      expectedMarket: FULL_MATCH,
+      kind: "shots_total"
+    });
+    assert.equal(sel.tradable, false, side);
+    assert.equal(sel.reason, "line_off_model_scale", side);
+    assert.equal(sel.odd, null, side);
+    assert.equal(sel.probabilityPct, null, side);
+    assert.equal(sel.bookLine, 10.5, side);
+  }
+
+  // Candidate construction — the production path (kind flows through discovery).
+  const pool = enumerateLineSelections({
+    oddsData: totalShotsBoards([["Unibet", 10.5, 3.05, 1.27]]),
+    marketNames: ["Total Shots"],
+    kind: "shots_total",
+    block: fixture1570355TotalShotsBlock(),
+    preferredLine: 18.5,
+    preferredBookmakers: ["bet365", "unibet", "pinnacle"]
+  });
+  assert.deepEqual(pool, [], "no selection may exist at 10.5 on a λ_total ≈ 20 block");
+
+  // The fixture's real board (24.5 from two books) is still priced, both sides.
+  const real = enumerateLineSelections({
+    oddsData: totalShotsBoards([["Bet365", 24.5, 2.145, 1.63], ["Unibet", 10.5, 3.05, 1.27]]),
+    marketNames: ["Total Shots"],
+    kind: "shots_total",
+    block: fixture1570355TotalShotsBlock(),
+    preferredLine: 18.5,
+    preferredBookmakers: ["bet365", "unibet", "pinnacle"]
+  });
+  assert.deepEqual([...new Set(real.map((s) => s.bookLine))], [24.5]);
+  assert.equal(real.length, 2);
+  const under245 = real.find((s) => s.side === "under");
+  assert.equal(under245.tradable, true, "the legitimate Under is untouched");
+  assert.equal(under245.odd, 1.63);
+});
+
+test("line-scale guard: legitimate Total Shots lines near the boundary stay tradable — 20.5 on λ 26.62 (0.77) and 17.5 on λ 28 (0.625)", () => {
+  // Fixture 1565226 — the lowest-ratio legitimate recommendation ever persisted.
+  const low = block({
+    lines: { o18_5: 95.8, o20_5: 88.5, o22_5: 76.3, o24_5: 60.6 },
+    lambdaHome: 14,
+    lambdaAway: 12.62,
+    correlation: 0.05
+  });
+  const over205 = repriceCandidateLine({
+    block: low,
+    side: "over",
+    requestedLine: 18.5,
+    quote: { line: 20.5, over: 1.4, under: 2.75, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
+  });
+  assert.equal(over205.tradable, true);
+  assert.equal(over205.reason, null);
+  assert.equal(over205.probabilityPct, 88.5, "ladder value, exactly as before");
+  assert.ok(isLineOnModelScale(low, 20.5));
+
+  // A real 17.5 board on a λ 28 block (ratio 0.625): 0.60 must not be an accidentally high bar.
+  const high = block({ lines: { o18_5: 97.2 }, lambdaHome: 14, lambdaAway: 14, correlation: 0.05 });
+  for (const side of ["over", "under"]) {
+    const sel = repriceCandidateLine({
+      block: high,
+      side,
+      requestedLine: 18.5,
+      quote: { line: 17.5, over: 1.04, under: 9.5, bookmakersUsed: 1, market: FULL_MATCH },
+      expectedMarket: FULL_MATCH,
+      kind: "shots_total"
+    });
+    assert.equal(sel.tradable, true, `17.5 ${side}`);
+    assert.equal(sel.reason, null, `17.5 ${side}`);
+  }
+
+  // High lines — Over and Under — are untouched by a lower bound on the ratio.
+  for (const line of [27.5, 28.5, 29.5, 31.5]) {
+    for (const side of ["over", "under"]) {
+      const sel = repriceCandidateLine({
+        block: liverpoolTotalShotsBlock(),
+        side,
+        requestedLine: 18.5,
+        quote: { line, over: 2.0, under: 1.7, bookmakersUsed: 1, market: FULL_MATCH },
+        expectedMarket: FULL_MATCH,
+        kind: "shots_total"
+      });
+      assert.equal(sel.tradable, true, `${side} ${line}`);
+      assert.equal(sel.probabilityLine, line);
+    }
+  }
+});
+
+test("line-scale guard is exact at the boundary and symmetric: ratio 0.60 accepted, just below rejected on both sides", () => {
+  const twenty = block({ lines: {}, lambdaHome: 10, lambdaAway: 10, correlation: 0.05 }); // λ_total = 20
+  assert.equal(MIN_LINE_TO_LAMBDA_RATIO, 0.6);
+  assert.equal(isLineOnModelScale(twenty, 12), true, "12 / 20 = 0.60 exactly is on scale");
+  assert.equal(isLineOnModelScale(twenty, 11.5), false, "11.5 / 20 = 0.575 is off scale");
+  for (const side of ["over", "under"]) {
+    const exact = repriceCandidateLine({
+      block: twenty,
+      side,
+      requestedLine: 18.5,
+      quote: { line: 12, over: 1.02, under: 12, bookmakersUsed: 1, market: FULL_MATCH },
+      expectedMarket: FULL_MATCH,
+      kind: "shots_total"
+    });
+    assert.equal(exact.reason === "line_off_model_scale", false, `exactly 0.60 (${side}) is never refused by the ratio`);
+    const below = repriceCandidateLine({
+      block: twenty,
+      side,
+      requestedLine: 18.5,
+      quote: { line: 11.5, over: 1.02, under: 12, bookmakersUsed: 1, market: FULL_MATCH },
+      expectedMarket: FULL_MATCH,
+      kind: "shots_total"
+    });
+    assert.equal(below.tradable, false, side);
+    assert.equal(below.reason, "line_off_model_scale", side);
+  }
+});
+
+test("line-scale guard is skipped on a ladder-only block (no lambdas): the mass guard stays authoritative", () => {
+  const ladderOnly = block({ lines: { o10_5: 97 } }); // lambdaHome = lambdaAway = 0 -> unusable
+  assert.equal(isLineOnModelScale(ladderOnly, 10.5), true, "no lambdas -> no ratio -> not refused");
+  assert.equal(isLineOnModelScale({ total: { o10_5: 97 } }, 10.5), true, "missing lambdas entirely");
+  const sel = repriceCandidateLine({
+    block: ladderOnly,
+    side: "over",
+    requestedLine: 10.5,
+    quote: { line: 10.5, over: 1.05, under: 9, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
+  });
+  assert.equal(sel.tradable, true, "97% / 3% is contestable and the ratio cannot be formed");
+  assert.equal(sel.probabilityPct, 97);
+
+  // ...while the mass guard still refuses a ladder-only line that is not contestable.
+  const dead = repriceCandidateLine({
+    block: block({ lines: { o10_5: 99.6 } }),
+    side: "over",
+    requestedLine: 10.5,
+    quote: { line: 10.5, over: 1.01, under: 15, bookmakersUsed: 1, market: FULL_MATCH },
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
+  });
+  assert.equal(dead.reason, "line_off_model_scale");
+});
+
+test("line-scale guard never reaches other kinds: the 1570355 board is priced as before under SOT / corners / cards / null", () => {
+  const quote = { line: 10.5, over: 3.05, under: 1.27, bookmakersUsed: 1, market: FULL_MATCH };
+  for (const kind of ["shots_on_target", "corners", "generic", null]) {
+    assert.equal(isScaleGuardedKind(kind), false, String(kind));
+    const open = repriceCandidateLine({
+      block: fixture1570355TotalShotsBlock(),
+      side: "over",
+      requestedLine: 18.5,
+      quote,
+      expectedMarket: FULL_MATCH,
+      kind
+    });
+    assert.equal(open.tradable, true, `kind=${kind}`);
+    assert.equal(open.reason, null, `kind=${kind}`);
+  }
 });

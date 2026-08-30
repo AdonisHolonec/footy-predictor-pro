@@ -102,6 +102,42 @@ export function isContestableLine(asian) {
 }
 
 /**
+ * LINE-SCALE GUARD (Total Shots only, second invariant) — the contestability check
+ * alone is not enough on lower-λ blocks. Production, fixture 1570355 (2026-08-30,
+ * generated after the 1% guard shipped): a single bookmaker's "Total Shots" board at
+ * 10.5 on a λ_total 20.13 block left 1.02% for the Under — over the 1% floor — and
+ * "Shots Over 10.5 — 97% @3.05" was recommended while the real board sat at 24.5.
+ *
+ * The scale of a Total Shots line is its ratio to the model's own expected total.
+ * Across every persisted Total Shots recommendation (141 rows): malformed boards
+ * (≤ 12.5, SOT-scale) run 0.232–0.522 × λ_total, legitimate lines 0.770–1.415 ×
+ * λ_total. 0.60 catches all observed malformed rows with zero legitimate removals;
+ * 0.65 would already refuse real 17.5 boards on λ 28 (0.625). A line below
+ * MIN_LINE_TO_LAMBDA_RATIO × λ_total is refused on BOTH sides, like the mass guard.
+ *
+ * λ_total = lambdaHome + lambdaAway — the same lambdas asianTotals prices with.
+ * When a block carries no usable lambdas (ladder-only), the ratio cannot be
+ * formed and this guard is skipped; the contestability guard stays authoritative.
+ */
+export const MIN_LINE_TO_LAMBDA_RATIO = 0.6;
+
+/**
+ * @param {{ lambdaHome?: number, lambdaAway?: number }|null|undefined} block
+ * @param {number} bookLine the bookmaker's line
+ * @returns {boolean} false only when the block's lambdas are usable AND the line
+ *   sits below MIN_LINE_TO_LAMBDA_RATIO of their sum; true otherwise (incl. skip)
+ */
+export function isLineOnModelScale(block, bookLine) {
+  const lambdaHome = Number(block?.lambdaHome);
+  const lambdaAway = Number(block?.lambdaAway);
+  if (!Number.isFinite(lambdaHome) || !Number.isFinite(lambdaAway)) return true;
+  if (lambdaHome <= 0 || lambdaAway <= 0) return true;
+  const line = Number(bookLine);
+  if (!Number.isFinite(line)) return true;
+  return line / (lambdaHome + lambdaAway) >= MIN_LINE_TO_LAMBDA_RATIO;
+}
+
+/**
  * Model probability for one side of one line, taken from the market block —
  * with full Asian semantics (Increment B).
  *
@@ -247,8 +283,12 @@ export function repriceCandidateLine({
     };
   }
 
-  if (isScaleGuardedKind(kind) && !isContestableLine(priced.asian)) {
-    // A Total Shots board off this block's scale (see MIN_CONTESTABLE_LINE_MASS):
+  if (
+    isScaleGuardedKind(kind) &&
+    (!isContestableLine(priced.asian) || !isLineOnModelScale(block, bookLine))
+  ) {
+    // A Total Shots board off this block's scale — by probability mass
+    // (MIN_CONTESTABLE_LINE_MASS) or by line-to-λ ratio (MIN_LINE_TO_LAMBDA_RATIO):
     // whatever the market is called, this is not a price for the event the model
     // is describing. Non-tradable, never a candidate — same shape as the other
     // refusals so callers and reporting treat it identically.
