@@ -447,7 +447,16 @@ test("[E][I] auto-calibration: the payload `recommended` fallback still works wh
   const b = extractSamplesFromHistory([projRow]);
   assert.equal(a.length, 1);
   assert.deepEqual(b, a);
-  assert.equal(b[0].pick, "X", "the pick must still come from payload.recommended");
+  // The field carrying this fallback is now `recommendedPick`: the calibration
+  // target moved to the 1X2 triple, and the recommendation was renamed to make
+  // clear it is a diagnostic and never a target. The fallback itself — payload
+  // when the column is null — is unchanged and still asserted here.
+  assert.equal(b[0].recommendedPick, "X", "the pick must still come from payload.recommended");
+  // The target, by contrast, is the triple's own argmax — not the payload's
+  // recommendation, and not its 44% confidence.
+  const t = b[0].triple;
+  assert.equal(b[0].pickProb, Math.max(t.p1, t.pX, t.p2));
+  assert.notEqual(b[0].pickProb, 0.44);
 });
 
 /* ------------------------------------------------------------------ */
