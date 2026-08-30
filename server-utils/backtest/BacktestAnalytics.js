@@ -11,6 +11,7 @@
 
 import { evaluateTopPick } from "../predictionsHistory.js";
 import { resolvePublishedTip } from "./TipEvent.js";
+import { isRecommendedSlotExcluded } from "../recommendedMarketValidity.js";
 import { selectionClosingOdd } from "./closingOddsResolve.js";
 
 function round(n, digits = 4) {
@@ -119,9 +120,17 @@ function resolveBetOutcome(row, payload, type) {
   }
 
   // Fallback: recommended-pick validation only when markets align or no VB type.
+  //
+  // 066: when the markets align, this fallback grades the VALUE bet from the
+  // RECOMMENDED pick's settlement — so a recommendation classified as an invalid
+  // market would import its outcome into the value track. Measured on production:
+  // 3 rows did exactly that (all "Shots Over 10.5", all wins, priced at away
+  // odds), injecting ~+0.39u on ~10.3u of turnover. The alignment fallback is
+  // therefore refused for those rows; a value bet carrying its own
+  // `value_bet_validation` is unaffected, because that is resolved above.
   const rec = String(row.recommended_pick || "").trim().toUpperCase();
   const t = String(type || "").trim().toUpperCase();
-  const aligned = !t || !rec || t === rec;
+  const aligned = (!t || !rec || t === rec) && !isRecommendedSlotExcluded(row);
   if (aligned) {
     if (row.validation === "win") return { won: true, lost: false };
     if (row.validation === "loss") return { won: false, lost: true };

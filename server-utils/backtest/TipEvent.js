@@ -6,6 +6,7 @@ import { evaluateTopPick } from "../predictionsHistory.js";
 import { selectionClosingOdd } from "./closingOddsResolve.js";
 import { computeClvPct } from "./ClvReport.js";
 import { logLossBinary, brierBinary } from "../probabilityMetrics.js";
+import { isRecommendedSlotExcluded } from "../recommendedMarketValidity.js";
 
 function clamp01(x) {
   const n = Number(x);
@@ -49,6 +50,14 @@ export function tipProbabilityFromProbs(pick, probs = {}) {
  */
 export function resolvePublishedTip(row) {
   if (!row) return null;
+  /*
+    066: the tip track IS the recommended pick — one row, one outcome — so a
+    recommendation classified as an invalid market is not a tip at all and the
+    whole event is dropped. This is the one place where excluding the entire row
+    is correct; slot-level aggregates must instead drop only their recommended
+    slot. Settlement is untouched: `validation` still records what happened.
+  */
+  if (isRecommendedSlotExcluded(row)) return null;
   const payload = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
   const pick = String(row.recommended_pick || payload.recommended?.pick || "").trim();
   if (!pick) return null;
