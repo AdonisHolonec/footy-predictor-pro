@@ -47,8 +47,8 @@ function roundPct(n) {
 }
 
 /**
- * MARKET SCALE GUARD — a bookmaker line is only a line for THIS block if the model
- * leaves both sides of it live.
+ * MARKET SCALE GUARD (Total Shots only) — a bookmaker "Total Shots" line is only a
+ * line for the total-shots block if the model leaves both sides of it live.
  *
  * Production audit, fixture 1557383 (Liverpool 2–2 Nottingham Forest): one preferred
  * bookmaker's "Total Shots" board was quoted at 10.5 — a shots-on-target scale —
@@ -59,14 +59,34 @@ function roundPct(n) {
  * at a long price, which then won the probability-first Recommended on 73 rows.
  *
  * The invariant is expressed in the model's own distribution, not in bookmaker
- * names, league constants or a p×odds ceiling: a line the model already resolves
- * with ≥ 99% certainty on one side is not a market line on this block's scale.
- * 1% is below every legitimate recommendation ever persisted (the lowest
- * contestable mass on a real total-shots line was 2.9%, on SOT 2.0%, on corners
- * 1.0%) and far above every pathological row (max 0.08%). Both sides of such a
- * line are refused — the "impossible" Over and the hopeless Under alike.
+ * names, league constants or a p×odds ceiling: a total-shots line the model already
+ * resolves with ≥ 99% certainty on one side is not a line on this block's scale.
+ * 1% is below every legitimate total-shots recommendation ever persisted (the lowest
+ * contestable mass on a real total-shots line was 2.9%) and far above every
+ * pathological row (max 0.08%). Both sides of such a line are refused — the
+ * "impossible" Over and the hopeless Under alike.
+ *
+ * SCOPE — `kind === "shots_total"` only. The same threshold was measured against the
+ * other Poisson families in the final safety gate and it removed legitimate
+ * candidates there: corners lines the books really quote at 2.5–5.5 and 13–18.5
+ * (88 of 1946 selections on one day's boards; 4 persisted Recommended rows such as
+ * Over 7.5 @1.41 from five books with the model at 99.1%) and a real SOT tile
+ * (Over 6.5 @1.10, model 99.4%). Those are on-scale lines with a confident model,
+ * not scale errors, so the guard must not touch them. The defect is a Total Shots
+ * board quoted at shots-on-target scale; only that path is corrected.
  */
 export const MIN_CONTESTABLE_LINE_MASS = 0.01;
+
+/** Discovery kinds whose bookmaker lines are checked against the model's scale. */
+export const SCALE_GUARDED_KINDS = Object.freeze(["shots_total"]);
+
+/**
+ * @param {string|null|undefined} kind discovery kind (see expectedIdentityForKind)
+ * @returns {boolean} true when repriceCandidateLine must refuse off-scale lines for it
+ */
+export function isScaleGuardedKind(kind) {
+  return SCALE_GUARDED_KINDS.includes(String(kind || ""));
+}
 
 /**
  * @param {{ pWin: number, pLoss: number }|null|undefined} asian outcome distribution
@@ -142,14 +162,23 @@ export function priceLineFromBlock(block, side, line) {
  *   quote: { line?: number, over?: number|null, under?: number|null,
  *     bookmakersUsed?: number, market?: { betType?: string, period?: string,
  *     scope?: string } }|null|undefined,
- *   expectedMarket?: { betType?: string, period?: string, scope?: string }|null }} params
+ *   expectedMarket?: { betType?: string, period?: string, scope?: string }|null,
+ *   kind?: string|null }} params `kind` is the discovery kind this selection is FOR;
+ *   the market scale guard applies only to kinds listed in SCALE_GUARDED_KINDS.
  * @returns {{ side: "over"|"under", requestedLine: number|null, bookLine: number|null,
  *   lineExact: boolean, probabilityLine: number|null, probabilityPct: number|null,
  *   odd: number|null, bookmakersUsed: number, tradable: boolean,
  *   repriced: "ladder"|"analytic"|false, reason: string|null,
  *   betType: string|null, period: string|null, scope: string|null }}
  */
-export function repriceCandidateLine({ block, side, requestedLine, quote, expectedMarket = null } = {}) {
+export function repriceCandidateLine({
+  block,
+  side,
+  requestedLine,
+  quote,
+  expectedMarket = null,
+  kind = null
+} = {}) {
   const wantUnder = String(side).toLowerCase() === "under";
   const normalizedSide = wantUnder ? "under" : "over";
   const requested = Number(requestedLine);
@@ -218,8 +247,8 @@ export function repriceCandidateLine({ block, side, requestedLine, quote, expect
     };
   }
 
-  if (!isContestableLine(priced.asian)) {
-    // The book's line is off this block's scale (see MIN_CONTESTABLE_LINE_MASS):
+  if (isScaleGuardedKind(kind) && !isContestableLine(priced.asian)) {
+    // A Total Shots board off this block's scale (see MIN_CONTESTABLE_LINE_MASS):
     // whatever the market is called, this is not a price for the event the model
     // is describing. Non-tradable, never a candidate — same shape as the other
     // refusals so callers and reporting treat it identically.
@@ -311,7 +340,8 @@ export function enumerateLineSelections({
         side,
         requestedLine: requested ?? bookLine,
         quote,
-        expectedMarket
+        expectedMarket,
+        kind
       });
       if (sel.tradable) selections.push(sel);
     }

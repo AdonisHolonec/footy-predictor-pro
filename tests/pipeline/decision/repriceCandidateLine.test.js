@@ -6,7 +6,9 @@ import {
   ladderLinesFromBlock,
   enumerateLineSelections,
   isContestableLine,
-  MIN_CONTESTABLE_LINE_MASS
+  isScaleGuardedKind,
+  MIN_CONTESTABLE_LINE_MASS,
+  SCALE_GUARDED_KINDS
 } from "../../../server-utils/pipeline/decision/repriceCandidateLine.js";
 
 /**
@@ -402,7 +404,8 @@ test("AUDIT 1557383: a single-bookmaker 'Total Shots' board at 10.5 @2.95 can ne
     side: "over",
     requestedLine: 18.5,
     quote: { line: 10.5, over: 2.95, under: 1.3, bookmakersUsed: 1, market: FULL_MATCH },
-    expectedMarket: FULL_MATCH
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
   });
   assert.equal(sel.tradable, false);
   assert.equal(sel.reason, "line_off_model_scale");
@@ -416,7 +419,8 @@ test("AUDIT 1557383: a single-bookmaker 'Total Shots' board at 10.5 @2.95 can ne
     side: "under",
     requestedLine: 18.5,
     quote: { line: 10.5, over: 2.95, under: 1.3, bookmakersUsed: 1, market: FULL_MATCH },
-    expectedMarket: FULL_MATCH
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
   });
   assert.equal(under.tradable, false);
   assert.equal(under.reason, "line_off_model_scale");
@@ -439,13 +443,33 @@ test("legitimate total-shots lines stay tradable: 21.5 on the Liverpool block, 2
     side: "over",
     requestedLine: 18.5,
     quote: { line: 21.5, over: 1.44, under: 2.6, bookmakersUsed: 1, market: FULL_MATCH },
-    expectedMarket: FULL_MATCH
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
   });
   assert.equal(single.tradable, true);
   assert.equal(single.reason, null);
   assert.equal(single.repriced, "analytic");
   assert.equal(single.probabilityLine, 21.5);
   assert.ok(single.probabilityPct > 70 && single.probabilityPct < 99, `21.5 is a real line here (${single.probabilityPct}%)`);
+
+  // Every model-scale line on the block — ladder (22.5 / 24.5) and analytic (23.5) alike —
+  // is guarded under kind "shots_total" and stays tradable on BOTH sides.
+  for (const [line, over, under] of [[22.5, 1.5, 2.5], [23.5, 1.57, 2.35], [24.5, 1.65, 2.2]]) {
+    for (const side of ["over", "under"]) {
+      const sel = repriceCandidateLine({
+        block: liverpoolTotalShotsBlock(),
+        side,
+        requestedLine: 18.5,
+        quote: { line, over, under, bookmakersUsed: 1, market: FULL_MATCH },
+        expectedMarket: FULL_MATCH,
+        kind: "shots_total"
+      });
+      assert.equal(sel.tradable, true, `Total Shots ${side} ${line}`);
+      assert.equal(sel.reason, null, `Total Shots ${side} ${line}`);
+      assert.equal(sel.probabilityLine, line);
+      assert.equal(sel.odd, side === "over" ? over : under);
+    }
+  }
 
   const pool = enumerateLineSelections({
     oddsData: totalShotsBoards([
@@ -505,39 +529,156 @@ test("legitimate shots-on-target lines (7.5 / 8.5) on the SOT block are unaffect
   assert.equal(over75.odd, 1.41);
 });
 
-test("the guard is about the model's certainty, not the price: contestable high-probability lines stay valid", () => {
-  // Corners block from the same fixture (λ 6.58 / 3.0). Over 3.5 is ~98% but still a live
-  // line (2% Under) — kept. Over 1.5 leaves < 1% for Under — refused, on both sides.
-  const corners = block({
-    lines: { o7_5: 73.7, o8_5: 61.6, o9_5: 48.8, o10_5: 36.5, o11_5: 25.8, o12_5: 17.2 },
-    lambdaHome: 6.58,
-    lambdaAway: 3,
-    correlation: 0.08
-  });
-  const live = repriceCandidateLine({
-    block: corners,
-    side: "over",
-    requestedLine: 9.5,
-    quote: { line: 3.5, over: 1.05, under: 9, bookmakersUsed: 3, market: FULL_MATCH },
-    expectedMarket: FULL_MATCH
-  });
-  assert.equal(live.tradable, true, `Over 3.5 corners at ${live.probabilityPct}% is still a contestable line`);
-  assert.ok(isContestableLine(live.asian));
-  for (const side of ["over", "under"]) {
-    const dead = repriceCandidateLine({
-      block: corners,
-      side,
-      requestedLine: 9.5,
-      quote: { line: 1.5, over: 1.01, under: 15, bookmakersUsed: 3, market: FULL_MATCH },
-      expectedMarket: FULL_MATCH
-    });
-    assert.equal(dead.tradable, false, side);
-    assert.equal(dead.reason, "line_off_model_scale", side);
+/**
+ * SCOPE — the guard is a Total Shots correction, nothing else. The blocks below are the
+ * persisted production blocks of fixtures a global 1% variant would have touched: each
+ * is a line the books really quote, priced by a confident model on the right scale.
+ * They must keep enumerating exactly as they did before the guard existed.
+ */
+test("SCOPE: only kind 'shots_total' is scale-guarded", () => {
+  assert.deepEqual([...SCALE_GUARDED_KINDS], ["shots_total"]);
+  assert.equal(isScaleGuardedKind("shots_total"), true);
+  for (const kind of ["shots_on_target", "corners", "generic", "goals", null, undefined, ""]) {
+    assert.equal(isScaleGuardedKind(kind), false, String(kind));
   }
   assert.equal(MIN_CONTESTABLE_LINE_MASS, 0.01);
   assert.equal(isContestableLine({ pWin: 0.99, pLoss: 0.01 }), true, "exactly 1% is still contestable");
   assert.equal(isContestableLine({ pWin: 0.995, pLoss: 0.005 }), false);
   assert.equal(isContestableLine(null), false);
+
+  // The identical 10.5 quote on the identical block: refused for Total Shots, priced as
+  // before for every other kind — the guard never leaks past its family.
+  const quote = { line: 10.5, over: 2.95, under: 1.3, bookmakersUsed: 1, market: FULL_MATCH };
+  const guarded = repriceCandidateLine({
+    block: liverpoolTotalShotsBlock(),
+    side: "over",
+    requestedLine: 18.5,
+    quote,
+    expectedMarket: FULL_MATCH,
+    kind: "shots_total"
+  });
+  assert.equal(guarded.tradable, false);
+  assert.equal(guarded.reason, "line_off_model_scale");
+  for (const kind of ["corners", "shots_on_target", "generic", null]) {
+    const open = repriceCandidateLine({
+      block: liverpoolTotalShotsBlock(),
+      side: "over",
+      requestedLine: 18.5,
+      quote,
+      expectedMarket: FULL_MATCH,
+      kind
+    });
+    assert.equal(open.tradable, true, `kind=${kind} is not scale-guarded`);
+    assert.equal(open.reason, null, `kind=${kind}`);
+  }
+});
+
+test("SOT stays independent: real SOT lines 6.5–9.5 with < 1% Under mass remain tradable (fixture 1552148)", () => {
+  // Persisted SOT block, λ 6.39 / 8.95, ladder o6_5 = 99.4. Over 6.5 @1.10 is a genuine
+  // shots-on-target line at a genuine short price — a global guard variant refused it.
+  const sot = block({
+    lines: { o6_5: 99.4, o7_5: 98.5, o8_5: 96.8, o9_5: 94, o10_5: 89.6 },
+    lambdaHome: 6.39,
+    lambdaAway: 8.95,
+    correlation: 0.06
+  });
+  const pool = enumerateLineSelections({
+    oddsData: bookWith("Total ShotOnGoal", [
+      [6.5, 1.1, 6.3],
+      [7.5, 1.2, 4.5],
+      [8.5, 1.36, 3.1],
+      [9.5, 1.6, 2.3]
+    ], ["bet365"]),
+    marketNames: ["Total ShotOnGoal", "Shots On Target"],
+    kind: "shots_on_target",
+    block: sot,
+    preferredLine: 6.5,
+    preferredBookmakers: ["bet365", "unibet"]
+  });
+  const lines = [...new Set(pool.map((s) => s.bookLine))].sort((a, b) => a - b);
+  assert.deepEqual(lines, [6.5, 7.5, 8.5, 9.5], "every offered SOT line is still enumerated");
+  assert.equal(pool.length, 8, "both sides of every SOT line remain tradable");
+  const over65 = pool.find((s) => s.side === "over" && s.bookLine === 6.5);
+  assert.equal(over65.tradable, true);
+  assert.equal(over65.probabilityPct, 99.4);
+  assert.equal(over65.odd, 1.1);
+  assert.ok(
+    Math.min(over65.asian.pWin, over65.asian.pLoss) < MIN_CONTESTABLE_LINE_MASS,
+    "precisely a line a global guard would have removed — SOT must not be guarded"
+  );
+});
+
+test("corners stay independent: real corners lines with < 1% opposite mass remain tradable (fixtures 1607603 / 1497653)", () => {
+  // 1607603 — λ 7.09 / 9.06, five books at Over 7.5 @1.41 (model 99.1%): a persisted Recommended.
+  const highCorners = block({
+    lines: { o7_5: 99.1, o8_5: 97.9, o9_5: 95.9, o10_5: 92.6, o11_5: 87.9, o12_5: 81.5 },
+    lambdaHome: 7.09,
+    lambdaAway: 9.06,
+    correlation: 0.08
+  });
+  const high = enumerateLineSelections({
+    oddsData: bookWith("Corners Over/Under", [
+      [7.5, 1.41, 2.6],
+      [8.5, 1.55, 2.3],
+      [9.5, 1.75, 2.0]
+    ], ["bet365", "unibet", "pinnacle", "william hill", "bwin"]),
+    marketNames: ["Corners Over/Under", "Total Corners"],
+    kind: "corners",
+    block: highCorners,
+    preferredLine: 9.5
+  });
+  assert.equal(high.length, 6, "both sides of all three corners lines stay tradable");
+  const over75 = high.find((s) => s.side === "over" && s.bookLine === 7.5);
+  assert.equal(over75.probabilityPct, 99.1);
+  assert.equal(over75.odd, 1.41);
+  assert.equal(over75.bookmakersUsed, 5);
+  assert.ok(Math.min(over75.asian.pWin, over75.asian.pLoss) < MIN_CONTESTABLE_LINE_MASS);
+
+  // 1497653 — λ 3.1 / 1.93, four books at Under 12.5 @1.33 (model 99.7%).
+  const lowCorners = block({
+    lines: { o7_5: 14, o8_5: 7.3, o9_5: 3.5, o10_5: 1.6, o11_5: 0.7, o12_5: 0.3 },
+    lambdaHome: 3.1,
+    lambdaAway: 1.93,
+    correlation: 0.08
+  });
+  const low = enumerateLineSelections({
+    oddsData: bookWith("Corners Over/Under", [
+      [10.5, 2.1, 1.7],
+      [12.5, 2.785, 1.33]
+    ], ["bet365", "unibet", "pinnacle", "bwin"]),
+    marketNames: ["Corners Over/Under", "Total Corners"],
+    kind: "corners",
+    block: lowCorners,
+    preferredLine: 9.5
+  });
+  assert.equal(low.length, 4);
+  const under125 = low.find((s) => s.side === "under" && s.bookLine === 12.5);
+  assert.equal(under125.tradable, true);
+  assert.equal(under125.odd, 1.33);
+  assert.ok(Math.min(under125.asian.pWin, under125.asian.pLoss) < MIN_CONTESTABLE_LINE_MASS);
+
+  // Extreme-but-quoted corners lines (books post 2.5 / 3.5 and 16.5+ on skewed fixtures)
+  // are lines on the corners scale: the corners block prices them and nothing refuses them.
+  const wide = block({
+    lines: { o7_5: 73.7, o8_5: 61.6, o9_5: 48.8, o10_5: 36.5, o11_5: 25.8, o12_5: 17.2 },
+    lambdaHome: 6.58,
+    lambdaAway: 3,
+    correlation: 0.08
+  });
+  for (const line of [1.5, 2.5, 3.5, 16.5, 18.5]) {
+    for (const side of ["over", "under"]) {
+      const sel = repriceCandidateLine({
+        block: wide,
+        side,
+        requestedLine: 9.5,
+        quote: { line, over: 1.02, under: 12, bookmakersUsed: 3, market: FULL_MATCH },
+        expectedMarket: FULL_MATCH,
+        kind: "corners"
+      });
+      assert.equal(sel.tradable, true, `corners ${side} ${line}`);
+      assert.equal(sel.reason, null, `corners ${side} ${line}`);
+    }
+  }
 });
 
 test("cards boards on their own scale enumerate exactly as before the guard", () => {
