@@ -14,6 +14,35 @@ export function leagueAvgFromContext(ctx) {
   return Number(ctx?.leagueParams?.leagueAvg ?? ctx?.leagueParams?.leagueAvgGoals) || 1.35;
 }
 
+/**
+ * The single owner of venue semantics.
+ *
+ * `LeagueProfile.splitGoalAverages` defines them precisely:
+ *   leagueAvgHome = goalFrequency x homeShare   -> goals scored by the HOME team
+ *   leagueAvgAway = goalFrequency - leagueAvgHome -> goals scored by the AWAY team
+ *   leagueAvg     = goalFrequency / 2             -> the venue-NEUTRAL per-team mean
+ *
+ * So `leagueAvg` is not the average a home team scores; it is the average a team
+ * scores irrespective of venue. Normalising a venue-specific rate (gfHome, gaAway)
+ * by it therefore leaves the venue effect in the ratio, on top of the venue-split
+ * baseline lambda already starts from.
+ *
+ * A split counts only when BOTH sides are present; a one-sided value is ignored so
+ * venue can never be half-encoded. That rule lives here and nowhere else.
+ */
+export function venueAverages(ctx) {
+  const leagueAvg = leagueAvgFromContext(ctx);
+  const splitHome = Number(ctx?.leagueParams?.leagueAvgHome);
+  const splitAway = Number(ctx?.leagueParams?.leagueAvgAway);
+  const hasVenueSplit = splitHome > 0 && splitAway > 0;
+  return {
+    leagueAvg,
+    leagueAvgHome: hasVenueSplit ? splitHome : leagueAvg,
+    leagueAvgAway: hasVenueSplit ? splitAway : leagueAvg,
+    hasVenueSplit
+  };
+}
+
 /** Standard module result. */
 export function result(score, confidence, details = {}) {
   const s = Number(score);
