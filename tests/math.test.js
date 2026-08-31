@@ -1374,12 +1374,16 @@ test("home advantage: without a venue split the explicit factor still applies on
   assert.equal(withAdv.strengthMeta.homeAdvApplied, true);
 });
 
-test("home advantage: league-average sides reproduce the venue split (home > away, each within 3%)", () => {
+test("home advantage: league-average sides reproduce the venue split EXACTLY", () => {
   const ctx = { leagueParams: { leagueAvg: 1.4, leagueAvgHome: 1.55, leagueAvgAway: 1.25, homeAdv: 1.1, awayAdv: 0.92 }, hStats: { played: 20 }, aStats: { played: 20 } };
-  const core = coreFrom({ atkH: 1.55, defA: 1.25, atkA: 1.25, defH: 1.55 });
+  // A league-average away side concedes what HOME teams score (leagueAvgHome), and a
+  // league-average home side concedes what AWAY teams score (leagueAvgAway). The old
+  // fixture had those two swapped, and the two resulting errors happened to cancel to
+  // within 3%; with venue-consistent normalisation the identity is exact.
+  const core = coreFrom({ atkH: 1.55, defA: 1.55, atkA: 1.25, defH: 1.25 });
   const { lambdaHome, lambdaAway, strengthMeta } = combineLambdas(ctx, core, DEFAULT_PREDICTION_WEIGHTS);
-  assert.ok(Math.abs(lambdaHome / 1.55 - 1) < 0.03, `λ_home ${lambdaHome} should sit at leagueAvgHome 1.55`);
-  assert.ok(Math.abs(lambdaAway / 1.25 - 1) < 0.03, `λ_away ${lambdaAway} should sit at leagueAvgAway 1.25`);
+  assert.ok(Math.abs(lambdaHome - 1.55) < 1e-12, `λ_home ${lambdaHome} must equal leagueAvgHome 1.55`);
+  assert.ok(Math.abs(lambdaAway - 1.25) < 1e-12, `λ_away ${lambdaAway} must equal leagueAvgAway 1.25`);
   assert.ok(lambdaHome > lambdaAway, "home advantage is preserved exactly once via the split");
   assert.equal(strengthMeta.homeAdvApplied, false);
 });

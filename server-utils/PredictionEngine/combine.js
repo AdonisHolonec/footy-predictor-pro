@@ -3,7 +3,7 @@
  * No module logic lives here; only weighted aggregation.
  */
 
-import { clamp, clampFactor, leagueAvgFromContext } from "./helpers.js";
+import { clamp, clampFactor, venueAverages } from "./helpers.js";
 import { clampLambda } from "../math.js";
 
 function sideFactor(details, side) {
@@ -25,14 +25,10 @@ function optionalAdjustment(modules, side, blend) {
  * @param {object} weights
  */
 export function combineLambdas(ctx, core, weights) {
-  const leagueAvg = leagueAvgFromContext(ctx);
   // A venue split counts only when BOTH sides are present; a one-sided value is
   // ignored so home advantage can never be half-encoded and then multiplied again.
-  const splitHome = Number(ctx.leagueParams?.leagueAvgHome);
-  const splitAway = Number(ctx.leagueParams?.leagueAvgAway);
-  const hasVenueSplit = splitHome > 0 && splitAway > 0;
-  const leagueAvgHome = hasVenueSplit ? splitHome : leagueAvg;
-  const leagueAvgAway = hasVenueSplit ? splitAway : leagueAvg;
+  // That rule lives in venueAverages() and is shared with the strength modules.
+  const { leagueAvg, leagueAvgHome, leagueAvgAway, hasVenueSplit } = venueAverages(ctx);
   const timeDecay = typeof ctx.timeDecay === "number" ? clamp(ctx.timeDecay, 0.85, 1.05) : 1;
 
   const atkH = Number(core.attack.details?.atkH);
@@ -56,17 +52,34 @@ export function combineLambdas(ctx, core, weights) {
   const homeAdvFactor = hasVenueSplit ? 1 : homeAdv;
   const awayAdvFactor = hasVenueSplit ? 1 : awayAdv;
 
+  /*
+    Each lambda side is normalised by ITS OWN venue baseline, the same quantity it is
+    multiplied by. `leagueAvg` is the venue-NEUTRAL per-team mean (goalFrequency / 2),
+    so dividing a home-venue rate by it left leagueAvgHome/leagueAvg (~1.12 in
+    production) inside BOTH the attack and the defence ratio, on top of the
+    leagueAvgHome baseline: venue entered lambda three times per side instead of once.
+    For a team that is exactly league-average, every ratio is now 1 and
+    lambda_home = leagueAvgHome / lambda_away = leagueAvgAway, exactly.
+
+    `defA` is the away side's conceded-away rate, whose baseline is leagueAvgHome
+    (what home teams score) - so the home lambda uses leagueAvgHome for both ratios,
+    and the away lambda uses leagueAvgAway for both. With no venue split all three
+    averages are leagueAvg and this reduces to the previous expression exactly.
+  */
+  const denomHome = leagueAvgHome;
+  const denomAway = leagueAvgAway;
+
   const baseLambdaHome =
     leagueAvgHome *
-    Math.pow(atkH / leagueAvg, weights.attack) *
-    Math.pow(defA / leagueAvg, weights.defense) *
+    Math.pow(atkH / denomHome, weights.attack) *
+    Math.pow(defA / denomHome, weights.defense) *
     Math.pow(homeAdvFactor, weights.homeAdvantage) *
     Math.pow(hf, weights.form);
 
   const baseLambdaAway =
     leagueAvgAway *
-    Math.pow(atkA / leagueAvg, weights.attack) *
-    Math.pow(defH / leagueAvg, weights.defense) *
+    Math.pow(atkA / denomAway, weights.attack) *
+    Math.pow(defH / denomAway, weights.defense) *
     Math.pow(awayAdvFactor, weights.homeAdvantage) *
     Math.pow(af, weights.form);
 

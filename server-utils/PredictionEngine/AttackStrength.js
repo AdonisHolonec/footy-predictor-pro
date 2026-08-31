@@ -1,10 +1,8 @@
 import { applyBayesianShrinkage } from "../math.js";
-import { clampFactor, leagueAvgFromContext, result } from "./helpers.js";
+import { clampFactor, venueAverages, result } from "./helpers.js";
 
 export function calculate(ctx) {
-  const leagueAvg = leagueAvgFromContext(ctx);
-  const leagueAvgHome = Number(ctx.leagueParams?.leagueAvgHome) || leagueAvg;
-  const leagueAvgAway = Number(ctx.leagueParams?.leagueAvgAway) || leagueAvg;
+  const { leagueAvg, leagueAvgHome, leagueAvgAway } = venueAverages(ctx);
   const shrinkageK = Math.max(1, Number(ctx.shrinkageK) || 6);
   const eps = 0.28;
 
@@ -23,8 +21,15 @@ export function calculate(ctx) {
     shrinkAway ? applyBayesianShrinkage(rawAtkA, awayPlayed, leagueAvgAway, shrinkageK) : rawAtkA
   );
 
-  const homeFactor = atkH / leagueAvg;
-  const awayFactor = atkA / leagueAvg;
+  /*
+    Each side is measured against the average for ITS OWN venue, which is also the
+    prior it was shrunk toward. `gfHome` is a home-venue rate, so dividing it by the
+    venue-neutral `leagueAvg` would leave leagueAvgHome/leagueAvg (~1.12 in production)
+    in the ratio on top of the venue-split baseline combineLambdas already starts from.
+    With no venue split all three averages collapse to `leagueAvg` and this is a no-op.
+  */
+  const homeFactor = atkH / leagueAvgHome;
+  const awayFactor = atkA / leagueAvgAway;
   const dataOk = Number.isFinite(rawAtkH) && Number.isFinite(rawAtkA);
 
   return result((homeFactor + awayFactor) / 2, dataOk ? 0.85 : 0.35, {
