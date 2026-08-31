@@ -23,7 +23,15 @@ export default defineConfig({
   // Smoke specs share one logged-in journey where noted; workers=1 keeps the
   // free-tier test account from racing its own rate limits.
   workers: 1,
-  reporter: [["list"], ["html", { open: "never" }]],
+  /*
+    Redaction runs FIRST, on purpose. Playwright's error-context attachment is
+    an ARIA snapshot that serialises input values, password fields included, and
+    the html reporter copies attachments into playwright-report/ which CI
+    uploads publicly. Scrubbing in onTestEnd rewrites the file before html
+    copies it, so the artifact keeps the diagnostics and loses the secret.
+    See e2e/secretRedaction.ts.
+  */
+  reporter: [["./e2e/secretRedaction.ts"], ["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.E2E_BASE_URL || "https://footy-predictor-pro.vercel.app",
     trace: "on-first-retry",
