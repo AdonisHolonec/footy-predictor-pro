@@ -53,6 +53,78 @@ export function upstreamSamplesSince(cursor) {
   return upstreamSamples.filter((s) => s.seq > from);
 }
 
+/*
+  Provider error telemetry.
+
+  API-Football answers some failures with HTTP 200 and a populated `errors`
+  object rather than an error status — a plan restriction, a per-minute limit
+  and a bad parameter all arrive as 200. `getWithCache` already treats that as a
+  failure (see hasErrors below), but the log line carried only endpoint/status/
+  duration, so a 200-with-errors was indistinguishable from any other failure
+  and the actual reason was unrecoverable after the fact.
+
+  These helpers put the reason in the log and nothing else: bounded, string-only,
+  with token-shaped material removed. The provider response body, the request
+  URL and the credential headers are never touched.
+*/
+const PROVIDER_ERROR_MAX_ENTRIES = 5;
+const PROVIDER_ERROR_MAX_LENGTH = 200;
+
+/** Token-shaped material that must never reach a log line. */
+const SECRET_PATTERNS = [
+  // JWTs.
+  { re: /eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}/g, to: "[REDACTED]" },
+  // Long opaque runs: provider keys are 32+ chars of hex or base64url.
+  { re: /[A-Za-z0-9_-]{32,}/g, to: "[REDACTED]" },
+  // key/token/secret followed by its value, in any common separator style.
+  { re: /((?:api[-_ ]?key|apikey|token|secret|password|authorization)\s*[:=]\s*)(\S+)/gi, to: "$1[REDACTED]" }
+];
+
+function redactSecrets(text) {
+  let out = text;
+  for (const { re, to } of SECRET_PATTERNS) out = out.replace(re, to);
+  return out;
+}
+
+function clipText(value) {
+  const text = redactSecrets(String(value == null ? "" : value)).trim();
+  return text.length > PROVIDER_ERROR_MAX_LENGTH ? `${text.slice(0, PROVIDER_ERROR_MAX_LENGTH)}...` : text;
+}
+
+/**
+ * A provider `errors` payload reduced to safe, bounded log fields.
+ *
+ * Never serialises the object itself: a non-string entry contributes only its
+ * own `message`/`reason`/`error` string, or the placeholder "[object]".
+ *
+ * @param {unknown} errors provider `errors` (array, object map, or string)
+ * @returns {{providerErrorCount:number, errorKeys:string[], errorMessages:string[], errorsTruncated:boolean}}
+ */
+export function sanitizeProviderErrors(errors) {
+  let entries = [];
+  if (Array.isArray(errors)) entries = errors.map((v) => ["", v]);
+  else if (errors && typeof errors === "object") entries = Object.entries(errors);
+  else if (typeof errors === "string" && errors.trim()) entries = [["", errors]];
+
+  const kept = entries.slice(0, PROVIDER_ERROR_MAX_ENTRIES);
+  const errorKeys = [];
+  const errorMessages = [];
+  for (const [key, value] of kept) {
+    if (key) errorKeys.push(clipText(key));
+    const text =
+      typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : String(value?.message ?? value?.reason ?? value?.error ?? "[object]");
+    errorMessages.push(clipText(text));
+  }
+  return {
+    providerErrorCount: entries.length,
+    errorKeys,
+    errorMessages,
+    errorsTruncated: entries.length > kept.length
+  };
+}
+
 function recordUpstreamTiming(endpoint, ms, ok) {
   const duration = Number(ms);
   if (!Number.isFinite(duration) || duration < 0) return;
@@ -358,11 +430,16 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
       if (!attempt.res.ok || hasErrors) {
         void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
         recordUpstreamTiming(endpoint, apiMs, false);
+        const providerErrors = sanitizeProviderErrors(json.errors);
         logError("api.upstream_failed", {
           endpoint,
           status: attempt.res.status,
           provider: attempt.upstreamCfg.provider,
-          durationMs: apiMs
+          durationMs: apiMs,
+          // A 200 here means the provider signalled the failure in the body.
+          httpOk: attempt.res.ok,
+          providerMessage: typeof json.message === "string" && json.message ? clipText(json.message) : undefined,
+          ...providerErrors
         });
         return {
           ok: false,
