@@ -1,3 +1,5 @@
+import { venueAverages } from "./PredictionEngine/helpers.js";
+
 export function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -425,13 +427,16 @@ export function applyBayesianShrinkage(observed, played, prior, k = 6) {
  * @param {number} [options.awayPlayed]
  */
 export function strengthRatingsLambdas(hStats, aStats, hFormMulti, aFormMulti, options = {}) {
-  const leagueAvg = Number(options.leagueAvgGoals) || 1.35;
-  // A venue split counts only when BOTH sides are present (see combine.js).
-  const splitHome = Number(options.leagueAvgHome);
-  const splitAway = Number(options.leagueAvgAway);
-  const hasVenueSplit = splitHome > 0 && splitAway > 0;
-  const leagueAvgHome = hasVenueSplit ? splitHome : leagueAvg;
-  const leagueAvgAway = hasVenueSplit ? splitAway : leagueAvg;
+  // Venue semantics have exactly one owner: PredictionEngine/helpers.venueAverages.
+  // This fallback takes a flat `options` bag, so adapt it to the helper's ctx shape
+  // rather than restating the both-sides split rule a second time.
+  const { leagueAvg, leagueAvgHome, leagueAvgAway, hasVenueSplit } = venueAverages({
+    leagueParams: {
+      leagueAvg: options.leagueAvgGoals,
+      leagueAvgHome: options.leagueAvgHome,
+      leagueAvgAway: options.leagueAvgAway
+    }
+  });
   const homeAdv = Number(options.homeAdv) || 1.06;
   const awayAdv = Number(options.awayAdv) || 0.96;
   const timeDecay = typeof options.timeDecay === "number" ? clamp(options.timeDecay, 0.85, 1.05) : 1;
@@ -451,31 +456,38 @@ export function strengthRatingsLambdas(hStats, aStats, hFormMulti, aFormMulti, o
   const atkH = clampFactor(
     shrinkHome ? applyBayesianShrinkage(rawAtkH, homePlayed, leagueAvgHome, shrinkageK) : rawAtkH
   );
+  // gaHome is what a HOME team concedes at home, i.e. what AWAY teams score there:
+  // its prior is leagueAvgAway. Symmetrically gaAway shrinks toward leagueAvgHome.
+  // Same mapping as PredictionEngine/DefenseStrength.js.
   const defH = clampFactor(
-    shrinkHome ? applyBayesianShrinkage(rawDefH, homePlayed, leagueAvgHome, shrinkageK) : rawDefH
+    shrinkHome ? applyBayesianShrinkage(rawDefH, homePlayed, leagueAvgAway, shrinkageK) : rawDefH
   );
   const atkA = clampFactor(
     shrinkAway ? applyBayesianShrinkage(rawAtkA, awayPlayed, leagueAvgAway, shrinkageK) : rawAtkA
   );
   const defA = clampFactor(
-    shrinkAway ? applyBayesianShrinkage(rawDefA, awayPlayed, leagueAvgAway, shrinkageK) : rawDefA
+    shrinkAway ? applyBayesianShrinkage(rawDefA, awayPlayed, leagueAvgHome, shrinkageK) : rawDefA
   );
 
   // Banda pentru formă îngustată: ±10% (vs. ±20% anterior) pentru a nu amplifica zgomotul WDL.
   const hf = clamp(Number(hFormMulti) || 1, 0.9, 1.1) * timeDecay;
   const af = clamp(Number(aFormMulti) || 1, 0.9, 1.1) * timeDecay;
 
-  // Dixon-Coles multiplicativ: λ_home = leagueAvgHome × (atk_home / leagueAvg) × (def_away / leagueAvg) × form.
+  // Dixon-Coles multiplicativ: λ_home = leagueAvgHome × (atk_home / leagueAvgHome) × (def_away / leagueAvgHome) × form.
+  // Each side is normalised by ITS OWN venue baseline — the same quantity λ is
+  // multiplied by — so an exactly league-average matchup reproduces the venue split
+  // instead of re-applying it. Dividing by the venue-NEUTRAL leagueAvg left
+  // leagueAvgHome/leagueAvg inside both the attack and the defence ratio.
   // Home advantage enters exactly once: a supplied venue split (leagueAvgHome/Away)
   // already carries it, so homeAdv / awayAdv multiply only when no split is given
   // (same rule as PredictionEngine/combine.js — the two must stay aligned).
   const homeAdvFactor = hasVenueSplit ? 1 : homeAdv;
   const awayAdvFactor = hasVenueSplit ? 1 : awayAdv;
   const lambdaHome = clampLambda(
-    leagueAvgHome * (atkH / leagueAvg) * (defA / leagueAvg) * homeAdvFactor * hf
+    leagueAvgHome * (atkH / leagueAvgHome) * (defA / leagueAvgHome) * homeAdvFactor * hf
   );
   const lambdaAway = clampLambda(
-    leagueAvgAway * (atkA / leagueAvg) * (defH / leagueAvg) * awayAdvFactor * af
+    leagueAvgAway * (atkA / leagueAvgAway) * (defH / leagueAvgAway) * awayAdvFactor * af
   );
 
   return {

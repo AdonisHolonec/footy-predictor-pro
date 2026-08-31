@@ -284,11 +284,14 @@ function syntheticLeagueAvgStats(leagueParams = {}) {
   const avg = Math.max(0.6, Number(leagueParams.leagueAvg) || 1.35);
   const home = Math.max(0.6, Number(leagueParams.leagueAvgHome) || avg);
   const away = Math.max(0.6, Number(leagueParams.leagueAvgAway) || avg);
+  // A league-average side concedes what the OPPOSITE venue scores: a home team
+  // concedes leagueAvgAway, an away team concedes leagueAvgHome. Mirrors the
+  // defence priors in math.js strengthRatingsLambdas, which consumes this shape.
   return {
     gfHome: home,
-    gaHome: home,
+    gaHome: away,
     gfAway: away,
-    gaAway: away,
+    gaAway: home,
     played: 0,
     playedHome: 0,
     playedAway: 0

@@ -5,7 +5,8 @@ import { venueAverages } from "../server-utils/PredictionEngine/helpers.js";
 import { calculate as attackCalculate } from "../server-utils/PredictionEngine/AttackStrength.js";
 import { calculate as defenseCalculate } from "../server-utils/PredictionEngine/DefenseStrength.js";
 import { DEFAULT_PREDICTION_WEIGHTS } from "../server-utils/PredictionEngine/weights.js";
-import { computeMatchProbs } from "../server-utils/math.js";
+import { computeMatchProbs, strengthRatingsLambdas } from "../server-utils/math.js";
+import { syntheticLeagueAvgStats } from "../server-utils/pipeline/predictHelpers.js";
 
 /**
  * Venue normalisation.
@@ -214,5 +215,188 @@ test("venueAverages is the single owner of the split decision", () => {
     assert.equal(v.hasVenueSplit, false, JSON.stringify(params));
     assert.equal(v.leagueAvgHome, 1.4);
     assert.equal(v.leagueAvgAway, 1.4);
+  }
+});
+
+/* =============================================================================
+ * strengthRatingsLambdas — the Stage03 fallback engine.
+ *
+ * Stage03 tries PredictionEngine.build first and falls back to
+ * strengthRatingsLambdas when it throws or returns a non-finite λ. That fallback
+ * carried the identical specification defect this file's [1]-[14] fixed for the
+ * modular engine: venue-specific priors normalised by the venue-NEUTRAL leagueAvg,
+ * with the two defence priors inverted. The tests below pin the same contract for
+ * the fallback, so the two λ paths cannot drift apart again.
+ * ========================================================================== */
+
+/** options bag for strengthRatingsLambdas, built from the same league() helper. */
+const optsOf = (L, extra = {}) => ({
+  leagueAvgGoals: L.leagueAvg,
+  leagueAvgHome: L.leagueAvgHome,
+  leagueAvgAway: L.leagueAvgAway,
+  homeAdv: 1.1,
+  awayAdv: 0.92,
+  shrinkageK: 6,
+  homePlayed: 20,
+  awayPlayed: 20,
+  ...extra
+});
+/** Both sides exactly league-average for their venue: a home team scores
+ *  leagueAvgHome and concedes leagueAvgAway; an away team is the mirror. */
+const averageStats = (L) => ({
+  h: { gfHome: L.leagueAvgHome, gaHome: L.leagueAvgAway, gfAway: L.leagueAvgAway, gaAway: L.leagueAvgHome, played: 20 },
+  a: { gfHome: L.leagueAvgHome, gaHome: L.leagueAvgAway, gfAway: L.leagueAvgAway, gaAway: L.leagueAvgHome, played: 20 }
+});
+
+test("[15] fallback: an exactly average matchup reproduces the venue split exactly", () => {
+  const { h, a } = averageStats(LEAGUE);
+  const { lambdaHome, lambdaAway } = strengthRatingsLambdas(h, a, 1, 1, optsOf(LEAGUE));
+  assert.ok(Math.abs(lambdaHome - LEAGUE.leagueAvgHome) < 1e-12, `λ_home ${lambdaHome} must equal leagueAvgHome ${LEAGUE.leagueAvgHome}`);
+  assert.ok(Math.abs(lambdaAway - LEAGUE.leagueAvgAway) < 1e-12, `λ_away ${lambdaAway} must equal leagueAvgAway ${LEAGUE.leagueAvgAway}`);
+  assert.ok(lambdaHome > lambdaAway, "home advantage survives exactly once, through the split");
+});
+
+test("[16] fallback: exactly-average attacks produce a factor of 1.0 on both sides", () => {
+  const { h, a } = averageStats(LEAGUE);
+  const { strengthMeta } = strengthRatingsLambdas(h, a, 1, 1, optsOf(LEAGUE));
+  assert.ok(Math.abs(strengthMeta.atkH / LEAGUE.leagueAvgHome - 1) < 1e-12, "home attack factor is 1.0 on the exact home prior");
+  assert.ok(Math.abs(strengthMeta.atkA / LEAGUE.leagueAvgAway - 1) < 1e-12, "away attack factor is 1.0 on the exact away prior");
+});
+
+test("[17] fallback: defence priors are the OPPOSITE venue's scoring rate", () => {
+  const { h, a } = averageStats(LEAGUE);
+  const { strengthMeta } = strengthRatingsLambdas(h, a, 1, 1, optsOf(LEAGUE));
+  // gaHome is conceded by the HOME side, i.e. scored by AWAY teams -> leagueAvgAway.
+  assert.ok(Math.abs(strengthMeta.defH / LEAGUE.leagueAvgAway - 1) < 1e-12, "home defence factor is 1.0 against leagueAvgAway");
+  assert.ok(Math.abs(strengthMeta.defA / LEAGUE.leagueAvgHome - 1) < 1e-12, "away defence factor is 1.0 against leagueAvgHome");
+  // Read the shrinkage prior back directly: with a single observation at the raw
+  // floor the shrunk value is (1*eps + k*prior) / (1+k), which names the prior.
+  const none = { gfHome: 0, gaHome: 0, gfAway: 0, gaAway: 0, played: 1 };
+  const pri = strengthRatingsLambdas(none, none, 1, 1, optsOf(LEAGUE, { homePlayed: 1, awayPlayed: 1 })).strengthMeta;
+  const eps = 0.28;
+  assert.ok(Math.abs(pri.defH - (eps + 6 * LEAGUE.leagueAvgAway) / 7) < 1e-12, `defH must shrink toward leagueAvgAway, got ${pri.defH}`);
+  assert.ok(Math.abs(pri.defA - (eps + 6 * LEAGUE.leagueAvgHome) / 7) < 1e-12, `defA must shrink toward leagueAvgHome, got ${pri.defA}`);
+});
+
+test("[18] fallback: the leagueAvg denominator violated the invariant by ~+28% / -25%", () => {
+  const L = LEAGUE;
+  const { h, a } = averageStats(L);
+  const { lambdaHome, lambdaAway, strengthMeta } = strengthRatingsLambdas(h, a, 1, 1, optsOf(L));
+  // Reconstruct the OLD expression from the reported factors: a venue-NEUTRAL
+  // denominator on top of the venue-specific baseline. Pinned by arithmetic, so it
+  // fails if defH/leagueAvgHome or defA/leagueAvgAway is ever reintroduced.
+  const oldHome = L.leagueAvgHome * (strengthMeta.atkH / L.leagueAvg) * (strengthMeta.defA / L.leagueAvg);
+  const oldAway = L.leagueAvgAway * (strengthMeta.atkA / L.leagueAvg) * (strengthMeta.defH / L.leagueAvg);
+  assert.ok(oldHome / L.leagueAvgHome > 1.2, `old λ_home inflated ${((oldHome / L.leagueAvgHome - 1) * 100).toFixed(1)}%`);
+  assert.ok(oldAway / L.leagueAvgAway < 0.8, `old λ_away deflated ${((1 - oldAway / L.leagueAvgAway) * 100).toFixed(1)}%`);
+  assert.ok(Math.abs(lambdaHome - L.leagueAvgHome) < 1e-12 && Math.abs(lambdaAway - L.leagueAvgAway) < 1e-12,
+    "the current expression is unbiased where the old one was not");
+});
+
+test("[19] fallback: a one-sided split is ignored and behaves exactly like no split", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4, played: 20 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5, played: 20 };
+  const flat = { leagueAvgGoals: 1.4, homeAdv: 1.12, awayAdv: 0.9, shrinkageK: 6, homePlayed: 20, awayPlayed: 20 };
+  const base = strengthRatingsLambdas(h, a, 1, 1, flat);
+  for (const oneSided of [{ leagueAvgHome: 1.55 }, { leagueAvgAway: 1.25 }, { leagueAvgHome: 0, leagueAvgAway: 1.25 }]) {
+    const r = strengthRatingsLambdas(h, a, 1, 1, { ...flat, ...oneSided });
+    assert.ok(Math.abs(r.lambdaHome - base.lambdaHome) < 1e-12, `λ_home differs for ${JSON.stringify(oneSided)}`);
+    assert.ok(Math.abs(r.lambdaAway - base.lambdaAway) < 1e-12, `λ_away differs for ${JSON.stringify(oneSided)}`);
+    assert.equal(r.strengthMeta.homeAdvApplied, true);
+    assert.equal(r.strengthMeta.leagueAvgHome, 1.4);
+    assert.equal(r.strengthMeta.leagueAvgAway, 1.4);
+  }
+});
+
+test("[20] fallback: with no venue split λ is byte-compatible with the previous expression", () => {
+  const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4, played: 20 };
+  const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5, played: 20 };
+  const opts = { leagueAvgGoals: 1.4, homeAdv: 1.12, awayAdv: 0.9, shrinkageK: 6, homePlayed: 20, awayPlayed: 20 };
+  const r = strengthRatingsLambdas(h, a, 1, 1, opts);
+  const { atkH, atkA, defH, defA, leagueAvg } = r.strengthMeta;
+  // Without a split every baseline collapses to leagueAvg, so the corrected form
+  // reduces to the previous one term for term — independent recomputation.
+  const prevHome = leagueAvg * (atkH / leagueAvg) * (defA / leagueAvg) * 1.12 * 1;
+  const prevAway = leagueAvg * (atkA / leagueAvg) * (defH / leagueAvg) * 0.9 * 1;
+  assert.ok(Math.abs(r.lambdaHome - prevHome) < 1e-12, `λ_home ${r.lambdaHome} vs previous ${prevHome}`);
+  assert.ok(Math.abs(r.lambdaAway - prevAway) < 1e-12, `λ_away ${r.lambdaAway} vs previous ${prevAway}`);
+  assert.equal(leagueAvg, 1.4);
+});
+
+test("[21] fallback: home advantage is an identity under a split and applies once without one", () => {
+  const { h, a } = averageStats(LEAGUE);
+  const withAdv = strengthRatingsLambdas(h, a, 1, 1, optsOf(LEAGUE, { homeAdv: 1.12, awayAdv: 0.9 }));
+  const noAdv = strengthRatingsLambdas(h, a, 1, 1, optsOf(LEAGUE, { homeAdv: 1.0, awayAdv: 1.0 }));
+  assert.ok(Math.abs(withAdv.lambdaHome - noAdv.lambdaHome) < 1e-12, "split: homeAdv must not scale λ again");
+  assert.ok(Math.abs(withAdv.lambdaAway - noAdv.lambdaAway) < 1e-12);
+  assert.equal(withAdv.strengthMeta.homeAdvApplied, false);
+  const flat = { leagueAvgGoals: 1.4, shrinkageK: 6, homePlayed: 20, awayPlayed: 20 };
+  const f1 = strengthRatingsLambdas(h, a, 1, 1, { ...flat, homeAdv: 1.12, awayAdv: 0.9 });
+  const f0 = strengthRatingsLambdas(h, a, 1, 1, { ...flat, homeAdv: 1.0, awayAdv: 1.0 });
+  assert.ok(Math.abs(f1.lambdaHome / f0.lambdaHome - 1.12) < 1e-9, "no split: the factor still applies exactly once");
+  assert.ok(Math.abs(f1.lambdaAway / f0.lambdaAway - 0.9) < 1e-9);
+  assert.equal(f1.strengthMeta.homeAdvApplied, true);
+});
+
+test("[22] fallback and modular combineLambdas agree on the core strength term", () => {
+  // Identical venue data and identical strength factors must produce identical λ.
+  // The fallback deliberately has no weight exponents, no optional modules and no
+  // xG blend, so parity is asserted on the core term only, at default weights.
+  for (const share of [0.5, 0.52, 0.559, 0.62]) {
+    const L = league(2.87, share);
+    const { h, a } = averageStats(L);
+    const sr = strengthRatingsLambdas(h, a, 1, 1, optsOf(L));
+    const { atkH, atkA, defH, defA } = sr.strengthMeta;
+    const cl = combineLambdas(ctxOf(L), coreFrom({ atkH, atkA, defH, defA }), DEFAULT_PREDICTION_WEIGHTS);
+    assert.ok(Math.abs(sr.lambdaHome - cl.lambdaHome) < 1e-12, `λ_home fallback ${sr.lambdaHome} vs modular ${cl.lambdaHome} (share ${share})`);
+    assert.ok(Math.abs(sr.lambdaAway - cl.lambdaAway) < 1e-12, `λ_away fallback ${sr.lambdaAway} vs modular ${cl.lambdaAway} (share ${share})`);
+    assert.equal(sr.strengthMeta.homeAdvApplied, cl.strengthMeta.homeAdvApplied);
+  }
+});
+
+test("[23] fallback: the invariant holds exactly across the homeShare clamp range", () => {
+  for (const share of [0.48, 0.5, 0.52, 0.559, 0.58, 0.62]) {
+    for (const total of [1.9, 2.6, 2.87, 3.6]) {
+      const L = league(total, share);
+      const { h, a } = averageStats(L);
+      for (const played of [6, 20, 1e6]) {
+        const { lambdaHome, lambdaAway } = strengthRatingsLambdas(h, a, 1, 1, optsOf(L, { homePlayed: played, awayPlayed: played }));
+        assert.ok(Math.abs(lambdaHome - L.leagueAvgHome) < 1e-12, `λ_home ${lambdaHome} vs ${L.leagueAvgHome} (total ${total}, share ${share}, n ${played})`);
+        assert.ok(Math.abs(lambdaAway - L.leagueAvgAway) < 1e-12, `λ_away ${lambdaAway} vs ${L.leagueAvgAway} (total ${total}, share ${share}, n ${played})`);
+      }
+    }
+  }
+});
+
+test("[24] syntheticLeagueAvgStats concedes at the opposite venue's scoring rate", () => {
+  const L = league(2.87, 0.559);
+  const s = syntheticLeagueAvgStats({ leagueAvg: L.leagueAvg, leagueAvgHome: L.leagueAvgHome, leagueAvgAway: L.leagueAvgAway });
+  assert.ok(Math.abs(s.gfHome - L.leagueAvgHome) < 1e-12, "a home side scores leagueAvgHome");
+  assert.ok(Math.abs(s.gaHome - L.leagueAvgAway) < 1e-12, "a home side concedes what AWAY teams score");
+  assert.ok(Math.abs(s.gfAway - L.leagueAvgAway) < 1e-12, "an away side scores leagueAvgAway");
+  assert.ok(Math.abs(s.gaAway - L.leagueAvgHome) < 1e-12, "an away side concedes what HOME teams score");
+  // Fed through the fallback it must be exactly league-average, i.e. reproduce the split.
+  const r = strengthRatingsLambdas(s, s, 1, 1, optsOf(L));
+  assert.ok(Math.abs(r.lambdaHome - L.leagueAvgHome) < 1e-12, `synthetic λ_home ${r.lambdaHome} vs ${L.leagueAvgHome}`);
+  assert.ok(Math.abs(r.lambdaAway - L.leagueAvgAway) < 1e-12, `synthetic λ_away ${r.lambdaAway} vs ${L.leagueAvgAway}`);
+  // Unrelated synthetic fields are untouched.
+  assert.equal(s.played, 0);
+  assert.equal(s.playedHome, 0);
+  assert.equal(s.playedAway, 0);
+});
+
+test("[25] fallback: 1X2 normalises and the over/under and BTTS markets stay valid", () => {
+  for (const share of [0.5, 0.559, 0.62]) {
+    const L = league(2.87, share);
+    const { h, a } = averageStats(L);
+    const { lambdaHome, lambdaAway } = strengthRatingsLambdas(h, a, 1, 1, optsOf(L));
+    const p = computeMatchProbs(lambdaHome, lambdaAway, 1, { rho: -0.11 }).probs;
+    assert.ok(Math.abs(p.p1 + p.pX + p.p2 - 100) < 1e-6, `1X2 must normalise (share ${share})`);
+    for (const k of ["pO05", "pO15", "pO25", "pU35"]) {
+      assert.ok(p[k] >= 0 && p[k] <= 100, `over/under ${k} stays a valid percentage`);
+    }
+    // Over-lines are nested events, so their probabilities must decrease monotonically.
+    assert.ok(p.pO05 >= p.pO15 - 1e-9 && p.pO15 >= p.pO25 - 1e-9, `over-lines must be monotone: ${p.pO05} >= ${p.pO15} >= ${p.pO25}`);
+    assert.ok(p.pGG >= 0 && p.pGG <= 100, "BTTS stays a valid percentage");
   }
 });

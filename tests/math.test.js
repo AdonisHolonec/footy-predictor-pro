@@ -1408,10 +1408,12 @@ test("home advantage: with a venue split λ equals the Dixon-Coles form with NO 
   const h = { gfHome: 1.7, gaHome: 1.2, gfAway: 1.3, gaAway: 1.4 };
   const a = { gfHome: 1.4, gaHome: 1.3, gfAway: 1.2, gaAway: 1.5 };
   const fixed = strengthRatingsLambdas(h, a, 1, 1, { ...VENUE, homeAdv: 1.12, awayAdv: 0.9 });
-  const { atkH, defA, atkA, defH, leagueAvg } = fixed.strengthMeta;
+  const { atkH, defA, atkA, defH, leagueAvgHome, leagueAvgAway } = fixed.strengthMeta;
   // Independent recomputation from the reported factors — pins the formula, not the code path.
-  const expectedHome = VENUE.leagueAvgHome * (atkH / leagueAvg) * (defA / leagueAvg);
-  const expectedAway = VENUE.leagueAvgAway * (atkA / leagueAvg) * (defH / leagueAvg);
+  // Each side normalises by the baseline its own λ starts from; dividing by the
+  // venue-NEUTRAL leagueAvg here would leave the venue effect in the ratio twice.
+  const expectedHome = leagueAvgHome * (atkH / leagueAvgHome) * (defA / leagueAvgHome);
+  const expectedAway = leagueAvgAway * (atkA / leagueAvgAway) * (defH / leagueAvgAway);
   assert.ok(Math.abs(fixed.lambdaHome - expectedHome) < 1e-12, `λ_home ${fixed.lambdaHome} vs ${expectedHome}`);
   assert.ok(Math.abs(fixed.lambdaAway - expectedAway) < 1e-12, `λ_away ${fixed.lambdaAway} vs ${expectedAway}`);
   const pFixed = computeMatchProbs(fixed.lambdaHome, fixed.lambdaAway, 1, { rho: -0.11 }).probs;
