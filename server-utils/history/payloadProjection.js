@@ -105,4 +105,103 @@ export function rehydratePayloadBlocks(row, blocks) {
   return { ...scalars, raw_payload: payload };
 }
 
-export default { payloadBlockSelect, selectWithPayloadBlocks, rehydratePayloadBlocks };
+/**
+ * Nested-path variant of the block projection, for consumers whose top-level
+ * block is too large to transport whole.
+ *
+ * The block functions above stop at `raw_payload->block`, which is exactly
+ * wrong for `valueEngine`: measured above at 267.7 KB — 87.96% of the row —
+ * while the readers this variant serves dereference five of its scalar fields
+ * plus `bestMarket`. A path spec selects those five, not the 267 KB.
+ *
+ * A spec maps an alias to a path inside raw_payload:
+ *
+ *   { veBestMarket: ["valueEngine", "bestMarket"] }
+ *   -> select fragment  veBestMarket:raw_payload->valueEngine->bestMarket
+ *   -> rehydrated as    raw_payload.valueEngine.bestMarket
+ *
+ * `->` (never `->>`) keeps JSON types: objects stay objects, numbers stay
+ * numbers. Same egress caveat as the block variant: the server still de-TOASTs
+ * the whole document to evaluate a path — this narrows the WIRE, which is the
+ * cost that is billed as egress. It can never be slower than selecting the
+ * full column, because the de-TOAST is identical and the serialization is
+ * strictly smaller.
+ *
+ * THE RULE FOR ADDING A PATH is the block rule verbatim: a consumer that
+ * starts reading a new `payload.<a>.<b>` MUST add that path to its spec, or it
+ * will silently read `undefined`. Specs are exported by their owners so tests
+ * can pin them against the consumers.
+ */
+
+/**
+ * PostgREST projection for a spec of `raw_payload` paths.
+ *
+ * @param {Readonly<Record<string, readonly string[]>>} spec alias -> path segments
+ * @returns {string} comma-separated select fragment ("" for an empty spec)
+ */
+export function payloadPathSelect(spec) {
+  return Object.entries(spec || {})
+    .map(([alias, path]) => `${alias}:raw_payload->${path.join("->")}`)
+    .join(", ");
+}
+
+/**
+ * Build a `select` string from scalar columns plus projected payload paths.
+ *
+ * @param {string} columns scalar column list, already comma-separated
+ * @param {Readonly<Record<string, readonly string[]>>} spec alias -> path segments
+ */
+export function selectWithPayloadPaths(columns, spec) {
+  const projection = payloadPathSelect(spec);
+  return projection ? `${columns}, ${projection}` : columns;
+}
+
+/**
+ * Fold projected paths back under `raw_payload`, returning a NEW row.
+ *
+ * Same null contract as `rehydratePayloadBlocks`: a path that came back null or
+ * undefined is omitted, so the rebuilt object is a strict subset of the stored
+ * document. Every consumer reads these through `?.` / `|| {}` chains, for which
+ * an absent key and a null key behave identically — and PostgREST's `->`
+ * cannot distinguish a missing key from a stored null in the first place.
+ *
+ * @param {object} row row as returned by PostgREST, one alias per path
+ * @param {Readonly<Record<string, readonly string[]>>} spec the spec passed to payloadPathSelect
+ */
+export function rehydratePayloadPaths(row, spec) {
+  const safeSpec = spec || {};
+  const scalars = {};
+  for (const [key, value] of Object.entries(row || {})) {
+    if (!(key in safeSpec)) scalars[key] = value;
+  }
+  const payload = {};
+  for (const [alias, path] of Object.entries(safeSpec)) {
+    const value = row?.[alias];
+    if (value === null || value === undefined) continue;
+    let target = payload;
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const segment = path[i];
+      if (!target[segment] || typeof target[segment] !== "object" || Array.isArray(target[segment])) {
+        target[segment] = {};
+      }
+      target = target[segment];
+    }
+    target[path[path.length - 1]] = value;
+  }
+  return { ...scalars, raw_payload: payload };
+}
+
+/** Row-array convenience over rehydratePayloadPaths. Non-arrays rehydrate to []. */
+export function rehydratePayloadPathRows(rows, spec) {
+  return (Array.isArray(rows) ? rows : []).map((row) => rehydratePayloadPaths(row, spec));
+}
+
+export default {
+  payloadBlockSelect,
+  selectWithPayloadBlocks,
+  rehydratePayloadBlocks,
+  payloadPathSelect,
+  selectWithPayloadPaths,
+  rehydratePayloadPaths,
+  rehydratePayloadPathRows
+};

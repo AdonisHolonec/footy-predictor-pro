@@ -41,7 +41,10 @@ const ALLOWED_REPO_IMPORTS = new Set([
   "BacktestAnalytics.js",
   "benchmarkMetrics.js",
   "benchmarkEvents.js",
-  "isotonicCalibration.js"
+  "isotonicCalibration.js",
+  // Egress PR: pure select/rehydrate helper (no prediction-stack imports) so the
+  // ETL transports raw_payload subpaths instead of the full document.
+  "payloadProjection.js"
 ]);
 
 function walk(dir) {

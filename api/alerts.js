@@ -3,13 +3,35 @@ import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAu
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { handleReferralApi } from "../server-utils/referralApi.js";
 import { handleSupportApi } from "../server-utils/supportApi.js";
+import {
+  selectWithPayloadPaths,
+  rehydratePayloadPathRows
+} from "../server-utils/history/payloadProjection.js";
 
 function asNum(n) {
   const x = Number(n);
   return Number.isFinite(x) ? x : 0;
 }
 
-function reasonCodesFromRow(row) {
+/**
+ * Egress: the alerts sample read the full raw_payload column (~320 KB/row,
+ * 350 rows) to reach three reason-code arrays and two modelMeta scalars. These
+ * are the ONLY payload fields this handler dereferences — reasonCodesFromRow()
+ * plus the drift/data-quality reads below — so the select carries exactly them
+ * and rehydratePayloadPathRows() rebuilds row.raw_payload unchanged for the
+ * loop. Rule from history/payloadProjection.js: a new `payload.<key>` read MUST
+ * add its path here. Exported so tests can pin both halves.
+ */
+export const ALERTS_PAYLOAD_PATHS = Object.freeze({
+  mmDriftPenalty: Object.freeze(["modelMeta", "driftPenalty"]),
+  mmDataQuality: Object.freeze(["modelMeta", "dataQuality"]),
+  mmReasonCodes: Object.freeze(["modelMeta", "reasonCodes"]),
+  alReasonCodes: Object.freeze(["auditLog", "reasonCodes"]),
+  vbReasons: Object.freeze(["valueBet", "reasons"])
+});
+export const ALERTS_HISTORY_SELECT = selectWithPayloadPaths("kickoff_at", ALERTS_PAYLOAD_PATHS);
+
+export function reasonCodesFromRow(row) {
   const payload = row?.raw_payload || {};
   const fromAudit = Array.isArray(payload?.auditLog?.reasonCodes) ? payload.auditLog.reasonCodes : [];
   const fromValue = Array.isArray(payload?.valueBet?.reasons) ? payload.valueBet.reasons : [];
@@ -76,14 +98,14 @@ export default async function handler(req, res) {
 
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
-      .select("kickoff_at, raw_payload")
+      .select(ALERTS_HISTORY_SELECT)
       .gte("kickoff_at", cutoff)
       .order("kickoff_at", { ascending: false })
       .limit(350);
     if (histError) throw histError;
 
     const latestKpi = kpiRows?.[0] || null;
-    const rows = histRows || [];
+    const rows = rehydratePayloadPathRows(histRows, ALERTS_PAYLOAD_PATHS);
     const sampleSize = rows.length;
 
     let driftHits = 0;

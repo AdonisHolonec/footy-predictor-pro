@@ -13,6 +13,11 @@ import { extractBetEvent } from "../server-utils/backtest/BacktestAnalytics.js";
 import { computeMetrics } from "../server-utils/backtest/metricsReducer.js";
 import { mapPredictionToDbRow } from "../server-utils/predictionsHistory.js";
 import { runBackfill, inspectRow } from "../server-utils/backfill/recommendedMarketValidity.js";
+import {
+  ANALYTICS_HISTORY_SELECT as analyticsHistorySelect,
+  SNAPSHOT_HISTORY_SELECT as snapshotHistorySelect,
+  TIP_HISTORY_SELECT as tipHistorySelect
+} from "../api/backtest.js";
 
 /**
  * Migration 066 — analytics eligibility of the recommended pick.
@@ -525,8 +530,32 @@ test("WIRING: every backtest query that grades the recommended pick projects the
     against the handler source itself.
   */
   const source = readFileSync(new URL("../api/backtest.js", import.meta.url), "utf8");
+  /*
+    Egress PR: the five graded-row projections moved from inline literals into
+    the exported ANALYTICS/SNAPSHOT/TIP_HISTORY_SELECT constants (raw_payload is
+    now subpath-projected). The pin follows the definition site and gets
+    stronger: the constants must carry the flag AND the handlers must actually
+    use those constants — plus the original guard, so an inline graded-row
+    literal cannot sneak back in without the flag.
+  */
+  const pinned = {
+    ANALYTICS_HISTORY_SELECT: analyticsHistorySelect,
+    SNAPSHOT_HISTORY_SELECT: snapshotHistorySelect,
+    TIP_HISTORY_SELECT: tipHistorySelect
+  };
+  for (const [name, select] of Object.entries(pinned)) {
+    assert.ok(select.includes("validation"), `${name} no longer projects validation`);
+    assert.ok(
+      select.includes("recommended_market_valid"),
+      `${name} omits recommended_market_valid — the exclusion would silently never fire`
+    );
+  }
+  const constantUses = source.match(/\.select\((?:ANALYTICS|SNAPSHOT|TIP)_HISTORY_SELECT\)/g) || [];
+  assert.ok(
+    constantUses.length >= 5,
+    `expected the graded handlers to select via the pinned constants, found ${constantUses.length}`
+  );
   const selects = source.match(/"[^"]*\bvalidation\b[^"]*raw_payload"/g) || [];
-  assert.ok(selects.length >= 5, `expected the graded-row projections, found ${selects.length}`);
   for (const select of selects) {
     assert.ok(
       select.includes("recommended_market_valid"),

@@ -37,6 +37,37 @@ import {
   modelSelectionSelect,
   rehydrateModelSelectionRows
 } from "../server-utils/modelLab/modelSelectionRows.js";
+import {
+  selectWithPayloadPaths,
+  rehydratePayloadPathRows
+} from "../server-utils/history/payloadProjection.js";
+import { ANALYTICS_PAYLOAD_PATHS, TIP_PAYLOAD_PATHS } from "../server-utils/backtest/payloadPaths.js";
+
+/**
+ * Egress: these reads used to select the full raw_payload column (~320 KB/row)
+ * while their consumers dereference a few hundred bytes of it. Each select now
+ * carries the same promoted columns plus only the payload paths its consumer
+ * chain reads (see server-utils/backtest/payloadPaths.js for the enumeration);
+ * rehydratePayloadPathRows() rebuilds row.raw_payload so not one consumer
+ * changes. Exported so tests can pin the wire shape.
+ */
+export const ANALYTICS_HISTORY_SELECT = selectWithPayloadPaths(
+  // 066: recommended_market_valid must be projected, or the analytics-eligibility
+  // exclusion in TipEvent / resolveBetOutcome silently never fires on real rows.
+  "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, recommended_market_valid",
+  ANALYTICS_PAYLOAD_PATHS
+);
+export const SNAPSHOT_HISTORY_SELECT = selectWithPayloadPaths(
+  // 066: see ANALYTICS_HISTORY_SELECT — the snapshot cron writes backtest_snapshots,
+  // so without this column the persisted ROI would keep counting invalid markets.
+  "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_market_valid",
+  ANALYTICS_PAYLOAD_PATHS
+);
+export const TIP_HISTORY_SELECT = selectWithPayloadPaths(
+  // 066: the CLV and tip walk-forward tracks ARE the recommended pick.
+  "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, recommended_market_valid",
+  TIP_PAYLOAD_PATHS
+);
 
 /**
  * Auto Model Selection — every model competes over 30/90/365-day windows.
@@ -278,11 +309,7 @@ async function handleAnalytics(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select(
-        // 066: recommended_market_valid must be projected, or the analytics-eligibility
-        // exclusion in TipEvent / resolveBetOutcome silently never fires on real rows.
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, recommended_market_valid, raw_payload"
-      )
+      .select(ANALYTICS_HISTORY_SELECT)
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
@@ -290,7 +317,8 @@ async function handleAnalytics(req, res) {
 
     if (error) throw error;
 
-    const report = buildBacktestReport(data || [], req.query || {});
+    const rows = rehydratePayloadPathRows(data, ANALYTICS_PAYLOAD_PATHS);
+    const report = buildBacktestReport(rows, req.query || {});
     const payload = {
       ok: true,
       track: filters.track || "value",
@@ -348,18 +376,14 @@ async function handleSnapshot(req, res) {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("predictions_history")
-      .select(
-        // 066: see handleAnalytics — the snapshot cron writes backtest_snapshots, so
-        // without this column the persisted ROI would keep counting invalid markets.
-        "kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_market_valid, raw_payload"
-      )
+      .select(SNAPSHOT_HISTORY_SELECT)
       .gte("kickoff_at", cutoff)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
       .limit(5000);
 
     if (error) throw error;
-    const events = (data || []).map(extractBetEvent).filter(Boolean);
+    const events = rehydratePayloadPathRows(data, ANALYTICS_PAYLOAD_PATHS).map(extractBetEvent).filter(Boolean);
     const metrics = computeBacktestMetrics(events);
     const snapshotDate = new Date().toISOString().slice(0, 10);
 
@@ -603,11 +627,7 @@ async function handlePublicTrack(req, res) {
     const cutoffIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data: histRows, error: histError } = await supabase
       .from("predictions_history")
-      .select(
-        // 066: recommended_market_valid must be projected, or the analytics-eligibility
-        // exclusion in TipEvent / resolveBetOutcome silently never fires on real rows.
-        "fixture_id, league_id, league_name, home_team, away_team, kickoff_at, validation, value_bet_validation, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, score_home, score_away, recommended_pick, recommended_confidence, recommended_market_valid, raw_payload"
-      )
+      .select(ANALYTICS_HISTORY_SELECT)
       .gte("kickoff_at", cutoffIso)
       .or("validation.in.(win,loss),value_bet_validation.in.(win,loss)")
       .order("kickoff_at", { ascending: true })
@@ -615,7 +635,10 @@ async function handlePublicTrack(req, res) {
 
     if (histError) throw histError;
 
-    const report = buildBacktestReport(histRows || [], { days, includeBets: "0" });
+    const report = buildBacktestReport(rehydratePayloadPathRows(histRows, ANALYTICS_PAYLOAD_PATHS), {
+      days,
+      includeBets: "0"
+    });
     const m = report.metrics || {};
     const equity = Array.isArray(m.equityCurve) ? m.equityCurve : [];
     const trend = equity
@@ -687,17 +710,14 @@ async function handleClv(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select(
-        // 066: the CLV and tip walk-forward tracks ARE the recommended pick.
-        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, recommended_market_valid, raw_payload"
-      )
+      .select(TIP_HISTORY_SELECT)
       .gte("kickoff_at", cutoff)
       .in("match_status", ["FT", "AET", "PEN"])
       .order("kickoff_at", { ascending: false })
       .limit(5000);
     if (error) throw error;
 
-    const events = (data || []).map((row) => {
+    const events = rehydratePayloadPathRows(data, TIP_PAYLOAD_PATHS).map((row) => {
       const tip = resolvePublishedTip(row);
       if (!tip) {
         return {
@@ -748,17 +768,14 @@ async function handleWalkForwardTip(req, res) {
   try {
     const { data, error } = await supabase
       .from("predictions_history")
-      .select(
-        // 066: the CLV and tip walk-forward tracks ARE the recommended pick.
-        "fixture_id, league_id, kickoff_at, model_version, recommended_pick, recommended_odd, recommended_confidence, closing_odds_home, closing_odds_draw, closing_odds_away, validation, match_status, score_home, score_away, recommended_market_valid, raw_payload"
-      )
+      .select(TIP_HISTORY_SELECT)
       .gte("kickoff_at", cutoff)
       .in("match_status", ["FT", "AET", "PEN"])
       .order("kickoff_at", { ascending: true })
       .limit(8000);
     if (error) throw error;
 
-    const result = evaluateTipClvReport(data || [], {
+    const result = evaluateTipClvReport(rehydratePayloadPathRows(data, TIP_PAYLOAD_PATHS), {
       minTrain: Math.max(20, Number(req.query.minTrain) || 40),
       testSize: Math.max(10, Number(req.query.testSize) || 20),
       step: Math.max(5, Number(req.query.step) || 20)
