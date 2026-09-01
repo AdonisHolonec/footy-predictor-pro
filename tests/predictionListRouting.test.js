@@ -68,7 +68,7 @@ test("view=prediction-list reaches the prediction-board reader", async () => {
   assert.equal(res.payload.items[0].tag, "prediction-list");
 });
 
-test("no view stays FULL - historyService.loadHistory depends on it", async () => {
+test("no view stays FULL - the server default is unchanged by the client cutover", async () => {
   const { called } = await route({ days: "30", limit: "2000", mine: "1" });
   assert.deepEqual(called, ["full"]);
 });

@@ -891,9 +891,11 @@ const HISTORY_LIST_ROW_COLUMNS = Object.freeze([
  * projection removes that cost, which is why 055/056 and the Phase 4H
  * materialisation had to land first.
  *
- * The DEFAULT list is deliberately untouched. /api/history is also a prediction
- * source — usePredictionsCache.rehydratePredictionsFromHistory() pipes the
- * response straight into setPreds — so only `?view=list` opts in.
+ * The SERVER default is deliberately untouched, because /api/history is also a
+ * prediction source: usePredictionsCache.rehydratePredictionsFromHistory()
+ * pipes its response straight into setPreds. Narrowing is therefore opt-in per
+ * caller. historyService.loadHistory (the observatory read) now opts in here;
+ * the hydration caller opts into `view=prediction-list` instead.
  */
 export const HISTORY_LIST_SELECT = HISTORY_LIST_ROW_COLUMNS.join(", ");
 
