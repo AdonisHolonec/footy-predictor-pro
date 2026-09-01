@@ -18,6 +18,7 @@ import { MODEL_VERSION } from "../modelConstants.js";
 import { CONTEXT_VERSION, ETL, PROVIDER_KEYS } from "./metaLearningConfig.js";
 import { projectMetaRows } from "./MetaSelectionProjector.js";
 import { computeDataHealth } from "./MetaDataHealth.js";
+import { selectWithPayloadPaths, rehydratePayloadPathRows } from "../history/payloadProjection.js";
 
 const HISTORY_TABLE = "predictions_history";
 const BENCHMARK_TABLE = "prediction_benchmarks";
@@ -26,27 +27,49 @@ const SELECTIONS_TABLE = "meta_provider_selections";
 const PROVIDERS_TABLE = "meta_providers";
 const RUNS_TABLE = "meta_learning_runs";
 
-const HISTORY_COLUMNS = [
-  "fixture_id",
-  "league_id",
-  "league_name",
-  "kickoff_at",
-  "recommended_pick",
-  "recommended_confidence",
-  "odds_home",
-  "odds_draw",
-  "odds_away",
-  "closing_odds_home",
-  "closing_odds_draw",
-  "closing_odds_away",
-  "match_status",
-  "score_home",
-  "score_away",
-  "validation",
-  "model_version",
-  "updated_at",
-  "raw_payload"
-].join(", ");
+/**
+ * Egress: the ETL read the full raw_payload column for up to ETL.rowLimit rows
+ * over a 365-day window — the single largest recurring PostgREST response in
+ * the codebase — while the whole meta layer dereferences exactly five payload
+ * fields: MetaContextBuilder reads recommended.odd, MetaSelectionProjector and
+ * predictorV3Provider read recommended.family, valueEngine.bestMarket,
+ * valueBet.type and valueBet.odds. The select now carries those five paths and
+ * rehydratePayloadPathRows() rebuilds row.raw_payload, so the projectors are
+ * untouched — input projection only, no algorithm/sample/target change. Rule
+ * from history/payloadProjection.js: a new `payload.<key>` read MUST add its
+ * path here. Exported so tests can pin spec against consumers.
+ */
+export const META_HISTORY_PAYLOAD_PATHS = Object.freeze({
+  recOdd: Object.freeze(["recommended", "odd"]),
+  recFamily: Object.freeze(["recommended", "family"]),
+  veBestMarket: Object.freeze(["valueEngine", "bestMarket"]),
+  vbType: Object.freeze(["valueBet", "type"]),
+  vbOdds: Object.freeze(["valueBet", "odds"])
+});
+
+const HISTORY_COLUMNS = selectWithPayloadPaths(
+  [
+    "fixture_id",
+    "league_id",
+    "league_name",
+    "kickoff_at",
+    "recommended_pick",
+    "recommended_confidence",
+    "odds_home",
+    "odds_draw",
+    "odds_away",
+    "closing_odds_home",
+    "closing_odds_draw",
+    "closing_odds_away",
+    "match_status",
+    "score_home",
+    "score_away",
+    "validation",
+    "model_version",
+    "updated_at"
+  ].join(", "),
+  META_HISTORY_PAYLOAD_PATHS
+);
 
 const BENCHMARK_COLUMNS = [
   "fixture_id",
@@ -141,7 +164,7 @@ export async function runMetaLearningRefresh(options = {}) {
       .limit(ETL.rowLimit);
     if (benchmarkReq.error) throw new Error(`${BENCHMARK_TABLE} read failed: ${benchmarkReq.error.message}`);
 
-    const historyRows = historyReq.data || [];
+    const historyRows = rehydratePayloadPathRows(historyReq.data, META_HISTORY_PAYLOAD_PATHS);
     const benchmarkRows = benchmarkReq.data || [];
 
     const { contexts, selections, diagnostics } = projectMetaRows({
