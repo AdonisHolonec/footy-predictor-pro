@@ -10,6 +10,7 @@ import {
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 import { stripDeadValueEngineArraysFromRows } from "./valueEngineTransport.js";
 import { projectPredictionListRows } from "./predictionListProjection.js";
+import { deriveHydrationPayloadColumn } from "./hydrationPayloadColumn.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
@@ -262,7 +263,17 @@ export function mapPredictionToDbRow(prediction) {
     raw_payload: payloadWithMeta,
     // Derived from the SAME object persisted above, so the columns can never
     // describe a payload that was not written.
-    ...deriveHistoryListColumns(payloadWithMeta)
+    ...deriveHistoryListColumns(payloadWithMeta),
+    /*
+      067 dual-write. Same rule and the same source object as the line above:
+      the hydration cache rides THIS row into the existing bulk INSERT/UPSERT,
+      so there is no second request and no second persistence path.
+
+      Nothing READS this column yet — the cutover is a separate change — so a
+      wrong value here cannot reach a user. It is immutable by construction
+      (see 067), which is why no settlement writer mentions it.
+    */
+    ...deriveHydrationPayloadColumn(payloadWithMeta)
   };
 }
 
