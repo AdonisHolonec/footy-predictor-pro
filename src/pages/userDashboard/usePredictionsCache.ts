@@ -159,9 +159,10 @@ export function usePredictionsCache({
         35 were usable. The window is what reduces how many documents Postgres
         detoasts; the projection below reduces what crosses the wire.
 
-        view=prediction-list is opt-in for a reason — historyService.loadHistory
-        reads the FULL `mine=1` shape for the guest and admin surfaces, so the
-        default must stay full and only this caller may ask for the narrow one.
+        view=prediction-list is opt-in for a reason — the server default stays
+        FULL for the by-fixture detail route, so each caller asks for the shape
+        it reads. historyService.loadHistory asks for `view=list`; the prediction
+        board needs the document, so it asks for this one.
       */
       const response = await fetch("/api/history?days=3&limit=300&mine=1&view=prediction-list", {
         headers: { Authorization: `Bearer ${accessToken}` }

@@ -8,10 +8,11 @@
  * badge.
  *
  * OPT-IN, exactly like the Phase 4I `view=list` token, and for the same reason:
- * that endpoint has a SECOND full-shape consumer. `historyService.loadHistory`
- * sends `mine=1` with no `view` for the guest/admin observatory surface, so the
- * default must stay full and only the caller that wants the narrow shape may ask
- * for it.
+ * narrowing is decided per caller, never globally. `historyService.loadHistory`
+ * (the guest/admin observatory surface) now sends `view=list`; the remaining
+ * full-shape consumer is the by-fixture detail route, which must keep the whole
+ * document. So the server default stays full and each caller asks for the shape
+ * it actually reads.
  *
  * MIRRORS src/utils/predictionListProjection.ts. The client never imports
  * server-utils — every cross-boundary rule in this repository is a mirrored
