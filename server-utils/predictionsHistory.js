@@ -10,7 +10,11 @@ import {
 import { filterByMinDisplayOdds } from "./predictionDisplayGate.js";
 import { stripDeadValueEngineArraysFromRows } from "./valueEngineTransport.js";
 import { projectPredictionListRows } from "./predictionListProjection.js";
-import { deriveHydrationPayloadColumn } from "./hydrationPayloadColumn.js";
+import {
+  deriveHydrationPayloadColumn,
+  HYDRATION_SELECT,
+  rehydrateHydrationRow
+} from "./hydrationPayloadColumn.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
@@ -1081,10 +1085,11 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
   /*
     Transport trim, applied HERE and not in mapDbRowToHistoryEntry, because that
     mapper is shared with the by-fixture detail route (api/history.js:326) and
-    detail must keep the whole document. This function has exactly one caller —
-    the `mine=1`, no-`view` hydration branch — so the trim reaches the prediction
-    hydration response and nothing else. `markets` is untouched; only the two
-    arrays no consumer reads are dropped, and only from the response body.
+    detail must keep the whole document. Its remaining caller is the `mine=1`,
+    no-`view` branch in api/history.js — prediction hydration moved off this
+    function in the read cutover and now issues its own projected query.
+    `markets` is untouched; only the two arrays no consumer reads are dropped,
+    and only from the response body.
   */
   const items = stripDeadValueEngineArraysFromRows(filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry)));
   return { items, stats: aggregateCardMarketStats(rows) };
@@ -1107,6 +1112,41 @@ export async function readPredictionsHistoryForUser(userId, days = 30, limit = 5
  * nested objects are shared references.
  */
 export async function readPredictionsForHydration(userId, days = 3, limit = 300) {
-  const { items, stats } = await readPredictionsHistoryForUser(userId, days, limit);
-  return { items: projectPredictionListRows(items), stats };
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  const safeDays = Math.max(1, Math.min(Number(days) || 30, 120));
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
+
+  /*
+    STANDALONE, and deliberately not delegating to readPredictionsHistoryForUser:
+    that function has a SECOND consumer (api/history.js readFull, the `mine=1`
+    no-view branch), so narrowing it would silently change a path this cutover is
+    not allowed to touch. Same RPC, same arguments — only the projection differs.
+
+    PostgREST applies `?select=` to a SETOF function exactly as it does to a
+    table, which readPredictionsHistoryListForUser has relied on in production
+    since the view=list cutover.
+  */
+  const { data, error } = await supabase
+    .rpc("predictions_history_for_user", {
+      p_user_id: userId,
+      p_days: safeDays,
+      p_limit: safeLimit
+    })
+    .select(HYDRATION_SELECT);
+  if (error) throw error;
+
+  /*
+    A row whose hydration_payload is NULL is SKIPPED, never partially rebuilt and
+    never backfilled from raw_payload. A partial row would be missing `probs`,
+    which is exactly what hasLegacyPredictionShape() reads — so serving one would
+    make the restored board look stale and re-arm the very rehydrate that
+    produced it. A3 plus the logos refresh made this branch unreachable in
+    production (0 NULL of 1,094), which is precisely why it is explicit.
+  */
+  const rows = (data || []).map(rehydrateHydrationRow).filter(Boolean);
+
+  // Same three stages, same order, same helpers as the full-document path.
+  const items = stripDeadValueEngineArraysFromRows(filterByMinDisplayOdds(rows.map(mapDbRowToHistoryEntry)));
+  return { items: projectPredictionListRows(items), stats: aggregateCardMarketStats(rows) };
 }

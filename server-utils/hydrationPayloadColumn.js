@@ -126,8 +126,122 @@ export function deriveHydrationPayloadColumn(payload) {
   return { hydration_payload: buildHydrationPayload(payload) };
 }
 
+/**
+ * Every column the hydration read projects. NO `raw_payload`, in any form.
+ *
+ * The whole point of A1-A3 was to make this list sufficient: the document is
+ * ~245 KB and Postgres must detoast all of it to answer a board that renders a
+ * scoreline, a crest and a value badge. Measured on 184 real rows, the stored
+ * projection is 244,969 -> 12,955 B/row.
+ *
+ * A `raw_payload->key` subpath would NOT do: it narrows the wire but still
+ * detoasts the document (055 measured 10,941 buffers / 1,822 ms with it against
+ * 411 / 0.917 ms without). Hence a hard structural test that this string never
+ * mentions raw_payload at all.
+ */
+export const HYDRATION_ROW_COLUMNS = Object.freeze([
+  "fixture_id",
+  "league_id",
+  "league_name",
+  "home_team",
+  "away_team",
+  "logo_home",
+  "logo_away",
+  "kickoff_at",
+  "match_status",
+  "score_home",
+  "score_away",
+  "validation",
+  "value_bet_validation",
+  "saved_at",
+  "model_version",
+  "referee_name",
+  "card_markets",
+  "card_market_validations",
+  // All SIX totals canonicalMarketTotals reads. Projecting only corners and
+  // shots-on-target would re-grade a PENDING Cards or Total Shots recommended
+  // against nulls, because resolveCardMarketValidations re-settles from this bag
+  // and those two families grade against cards_total / shots_total.
+  "corners_total",
+  "shots_on_target_total",
+  "shots_total",
+  "cards_total",
+  "cards_points",
+  "first_half_goals",
+  "recommended_market_valid",
+  "hydration_payload"
+]);
+
+export const HYDRATION_SELECT = HYDRATION_ROW_COLUMNS.join(", ");
+
+/**
+ * Present a hydration row under the key path the existing mapper and the
+ * settlement helpers already expect, WITHOUT touching either of them.
+ *
+ * `mapDbRowToHistoryEntry` reads `row.raw_payload` and spreads it, then overlays
+ * scalar columns. Setting `raw_payload := hydration_payload` therefore recovers
+ * everything the payload carries — including the complete `logos` object, which
+ * is why no logo injection happens here: logo_home/logo_away cover only two of
+ * three crests and the payload now carries all three.
+ *
+ * Four values still have to be presented, traced field by field rather than
+ * guessed, because the mapper reads them from the PAYLOAD and they live in
+ * columns:
+ *
+ *   referee                 board contract; the mapper never overlays it
+ *   cardMarkets             mapper: `payload.cardMarkets || null`
+ *   cardMarketValidations   resolveCardMarketValidations reads payload.cardMarketValidations
+ *   marketResults           canonicalMarketTotals(payload.marketResults) inside the same helper
+ *
+ * marketResults is synthesised from the SIX promoted totals canonicalMarketTotals
+ * reads, and stays ABSENT when every one of them is NULL — an absent total must
+ * never read as a real zero. All six are carried because that helper re-settles
+ * markets still pending: cardsTotal grades a Cards recommended and shotsTotal a
+ * Total Shots one, so dropping them would silently change settlement state.
+ * `referee` is likewise injected only when the column holds a value, so an
+ * absent crest/name is not coerced into an explicit null.
+ *
+ * @returns {object|null} the shimmed row, or null when there is no payload to
+ *   reconstruct from. NULL is never papered over with raw_payload.
+ */
+export function rehydrateHydrationRow(row) {
+  const stored = row?.hydration_payload;
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
+
+  /*
+    Key-for-key with canonicalMarketTotals' own shape — same names, same order,
+    same null semantics — so the helper reads exactly what the document gave it.
+    That function is settlement code and is NOT modified here.
+  */
+  const marketResults = {
+    cornersTotal: row.corners_total ?? null,
+    shotsOnTargetTotal: row.shots_on_target_total ?? null,
+    shotsTotal: row.shots_total ?? null,
+    cardsTotal: row.cards_total ?? null,
+    cardsPoints: row.cards_points ?? null,
+    firstHalfGoals: row.first_half_goals ?? null
+  };
+  // Absent, not a bag of nulls: a projected-but-empty total must not read as a
+  // real zero, and an all-null object would be a value where there was none.
+  const hasAnyTotal = Object.values(marketResults).some((v) => v !== null);
+
+  return {
+    ...row,
+    raw_payload: {
+      ...stored,
+      ...(row.referee_name != null ? { referee: row.referee_name } : {}),
+      cardMarkets: row.card_markets ?? null,
+      cardMarketValidations: row.card_market_validations ?? null,
+      ...(hasAnyTotal ? { marketResults } : {})
+    }
+  };
+}
+
 export default {
   HYDRATION_PAYLOAD_FIELDS,
+  HYDRATION_ROW_COLUMNS,
+  HYDRATION_SELECT,
   buildHydrationPayload,
-  deriveHydrationPayloadColumn
+  deriveHydrationPayloadColumn,
+  rehydrateHydrationRow
 };
