@@ -8,7 +8,9 @@ import {
   BACKFILL_SELECT,
   DEFAULT_BATCH,
   MAX_BATCH_MS,
-  MAX_ERROR_RATE
+  MAX_ERROR_RATE,
+  MODES,
+  REFRESH_MISSING_PATH
 } from "../server-utils/backfill/hydrationPayload.js";
 import { buildHydrationPayload } from "../server-utils/hydrationPayloadColumn.js";
 
@@ -33,6 +35,7 @@ function payload(extra = {}) {
   return {
     id: 101,
     teams: { home: "Home FC", away: "Away FC" },
+    logos: { home: "h.png", away: "a.png", league: "l.png" },
     kickoff: "2026-09-02T18:00:00.000Z",
     status: "NS",
     momentum: { series: [1, 2, 3] },
@@ -332,6 +335,143 @@ test("14 & 15. no forbidden column is ever written", async () => {
     }
     assert.deepEqual(Object.keys(call.values), ["hydration_payload"]);
   }
+});
+
+
+/* -- REFRESH MODE -----------------------------------------------------------
+   Re-derives rows whose STORED payload predates a contract change, rather than
+   rows that never had the column. The predicate must select exactly the stale
+   set and empty itself, or the run rewrites rows forever - each pass bumping
+   updated_at through the table's BEFORE UPDATE trigger.
+   ------------------------------------------------------------------------- */
+
+/** A row whose stored payload predates the logos contract. */
+function staleRow(fixtureId) {
+  return {
+    fixture_id: fixtureId,
+    hydration_payload: { probs: { p1: 51 }, recommended: { pick: "1" } },
+    raw_payload: payload({ id: fixtureId })
+  };
+}
+
+const MISSING = `is:${REFRESH_MISSING_PATH}`;
+
+test("R1. refresh eligibility filters on the missing logos path", async () => {
+  const sb = fakeSupabase([[staleRow(1)]]);
+  await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: false, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.selects[0].filters[MISSING], null);
+  assert.equal(REFRESH_MISSING_PATH, "hydration_payload->logos");
+  assert.equal(sb.calls.selects[0].filters["is:hydration_payload"], undefined);
+});
+
+test("R2. a row that already carries logos is skipped, not rewritten", async () => {
+  const withLogos = {
+    fixture_id: 9,
+    hydration_payload: { logos: { home: "h", away: "a", league: "l" } },
+    raw_payload: payload({ id: 9 })
+  };
+  const sb = fakeSupabase([[withLogos]]);
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.updates.length, 0, "no UPDATE means no updated_at bump");
+  assert.equal(stats.skippedNonNull, 1);
+  assert.equal(stats.updated, 0);
+});
+
+test("R3. refresh writes the new contract, logos included", async () => {
+  const sb = fakeSupabase([[staleRow(1)]]);
+  await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  const written = sb.calls.updates[0].values.hydration_payload;
+  assert.deepEqual(written.logos, { home: "h.png", away: "a.png", league: "l.png" });
+  assert.deepEqual(Object.keys(sb.calls.updates[0].values), ["hydration_payload"]);
+});
+
+test("R4. idempotent - a second pass over refreshed rows writes nothing", async () => {
+  const refreshed = {
+    fixture_id: 1,
+    hydration_payload: buildHydrationPayload(payload({ id: 1 })),
+    raw_payload: payload({ id: 1 })
+  };
+  const sb = fakeSupabase([[refreshed]]);
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.updates.length, 0);
+  assert.equal(stats.skippedNonNull, 1);
+});
+
+test("R5. a concurrent A2 write wins - the guard rides on the UPDATE", async () => {
+  const sb = fakeSupabase([[staleRow(1)]], { updateResult: [] });
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.updates[0].filters[MISSING], null, "eligibility is part of the write");
+  assert.equal(stats.updated, 0);
+  assert.equal(stats.skippedNonNull, 1, "0 affected rows is a race skip, not a success");
+  assert.equal(stats.failed, 0);
+});
+
+test("R6. skippedNoLogos prevents a permanent rewrite loop", async () => {
+  const src = payload({ id: 2 });
+  delete src.logos;
+  const sb = fakeSupabase([[{ fixture_id: 2, hydration_payload: { probs: {} }, raw_payload: src }]]);
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.updates.length, 0, "writing it would leave the row eligible forever");
+  assert.equal(stats.skippedNoLogos, 1);
+  assert.deepEqual(stats.skippedNoLogosIds, [2]);
+});
+
+test("R7. dry run performs no writes in refresh mode", async () => {
+  const sb = fakeSupabase([[staleRow(1), staleRow(2)]]);
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: false, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.updates.length, 0);
+  assert.equal(stats.updated, 2);
+});
+
+test("R8. refresh keeps keyset pagination and --after resume", async () => {
+  const sb = fakeSupabase([[staleRow(10), staleRow(20)], [staleRow(30)]]);
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: false, batchSize: 2, after: 5, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.selects[0].filters["gt:fixture_id"], 5);
+  assert.equal(sb.calls.selects[1].filters["gt:fixture_id"], 20);
+  assert.equal(stats.lastFixtureId, 30);
+});
+
+test("R9. refresh never writes a forbidden column (updated_at included)", async () => {
+  const sb = fakeSupabase([[staleRow(1), staleRow(2)]]);
+  await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 50, now: clock(), countRemaining: false });
+  assert.ok(sb.calls.updates.length > 0);
+  for (const call of sb.calls.updates) {
+    assert.deepEqual(Object.keys(call.values), ["hydration_payload"]);
+    for (const k of ["updated_at", "raw_payload", "validation", "match_status", "score_home", "saved_at"]) {
+      assert.ok(!(k in call.values), `${k} must never be written`);
+    }
+  }
+});
+
+test("R10. refresh keeps per-row error isolation and abort thresholds", async () => {
+  const rows = Array.from({ length: 25 }, (_, i) => staleRow(i + 1));
+  const sb = fakeSupabase([rows], { failUpdateForIds: [7] });
+  const stats = await runBackfill({ supabase: sb, mode: MODES.REFRESH, apply: true, batchSize: 25, now: clock(), countRemaining: false });
+  assert.equal(stats.scanned, 25);
+  assert.equal(stats.failed, 1);
+  assert.equal(stats.updated, 24);
+
+  const boom = new Error("connection reset");
+  const sb2 = fakeSupabase([boom, boom]);
+  await assert.rejects(
+    () => runBackfill({ supabase: sb2, mode: MODES.REFRESH, apply: false, batchSize: 50, now: clock(), countRemaining: false }),
+    (err) => err instanceof BackfillAbort && err.reason === "consecutive_batch_failures"
+  );
+});
+
+test("R11. fill mode is unchanged and remains the default", async () => {
+  const sb = fakeSupabase([[row(1)]]);
+  await runBackfill({ supabase: sb, apply: false, batchSize: 50, now: clock(), countRemaining: false });
+  assert.equal(sb.calls.selects[0].filters["is:hydration_payload"], null);
+  assert.equal(sb.calls.selects[0].filters[MISSING], undefined);
+});
+
+test("R12. an unknown mode is rejected rather than silently treated as fill", async () => {
+  const sb = fakeSupabase([[row(1)]]);
+  await assert.rejects(
+    () => runBackfill({ supabase: sb, mode: "wipe", apply: true, now: clock(), countRemaining: false }),
+    /unknown mode/
+  );
 });
 
 test("the select reads the document, and only the three columns it needs", () => {
