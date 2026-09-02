@@ -570,7 +570,39 @@ export async function handleHistoryRead(req, res, deps = {}) {
   }
 }
 
+/**
+ * Telemetry for one settlement run, recorded to KV by `recordSyncRun`.
+ *
+ * Built here rather than inline so the field set is a contract a test can hold: every
+ * number is one the handler already computes, and the object is the only durable record
+ * of a run once Vercel's ~1h log retention expires.
+ *
+ * `statsFetchCalls` and `durationMs` were added for the HISTORY_SYNC_CARD_STATS_MAX
+ * experiment. Without the first, consumption of the general stats budget could only be
+ * inferred from `syncSkippedBudget`; without the second, no source recorded how long a
+ * run takes, and `/api/history` has no maxDuration entry in vercel.json — so there was
+ * no measured base against which to judge adding provider calls.
+ */
+export function buildSettlementTelemetry({ statsFetchCap = 0, recommendedStatsCap = 0 } = {}) {
+  return {
+    finishedScanned: 0,
+    recommendedPendingBefore: 0,
+    recommendedSettledNow: 0,
+    recommendedStillPending: 0,
+    missingTotals: 0,
+    syncSkippedBudget: 0,
+    recommendedStatsCalls: 0,
+    recommendedStatsCap,
+    statsFetchCalls: 0,
+    statsFetchCap,
+    durationMs: 0
+  };
+}
+
 async function handleHistorySync(req, res) {
+  // First statement in the handler: durationMs is compared against the platform
+  // execution limit, so it must cover the whole invocation.
+  const syncStartedAt = Date.now();
   setNoStoreHeaders(res);
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -848,17 +880,7 @@ async function handleHistorySync(req, res) {
     let statsFetchCalls = 0;
     let recommendedStatsCalls = 0;
     const cardUpdates = [];
-    const settlement = {
-      finishedScanned: 0,
-      recommendedPendingBefore: 0,
-      recommendedSettledNow: 0,
-      recommendedStillPending: 0,
-      missingTotals: 0,
-      syncSkippedBudget: 0,
-      recommendedStatsCalls: 0,
-      recommendedStatsCap,
-      statsFetchCap
-    };
+    const settlement = buildSettlementTelemetry({ statsFetchCap, recommendedStatsCap });
 
     // Collect the finished window before grading so recommended-pending fixtures can be
     // processed ahead of everything else — priority is meaningless while paging inline.
@@ -1069,6 +1091,10 @@ async function handleHistorySync(req, res) {
     settlement.recommendedStillPending =
       settlement.recommendedPendingBefore - settlement.recommendedSettledNow;
     settlement.recommendedStatsCalls = recommendedStatsCalls;
+    settlement.statsFetchCalls = statsFetchCalls;
+    // Captured immediately before the write, so the recorded figure is a lower bound on
+    // the invocation: it excludes only the trailing status persist and JSON response.
+    settlement.durationMs = Date.now() - syncStartedAt;
 
     // Persist the run so `recommendedStillPending` becomes a trend instead of a number
     // that only ever existed in one HTTP response. Never blocks the sync.
@@ -1088,7 +1114,6 @@ async function handleHistorySync(req, res) {
         updated: updates.length,
         resettled,
         cardResettled,
-        statsFetchCalls,
         cappedScan,
         // Settlement observability: a non-zero recommendedStillPending after a run means
         // finished matches whose recommended pick no surface can render as win/loss.
