@@ -39,13 +39,21 @@ const LIVE_RESULT_FIELDS = [
   "elapsed"
 ];
 
-/** Board-contract fields that already have their own promoted column. */
+/**
+ * Board-contract fields that already have their own promoted column.
+ *
+ * `logos` was on this list and has been REMOVED deliberately — it was wrong.
+ * 055 promoted logo_home and logo_away but NOT the league crest, and
+ * `logos.league` is read by MatchCard.tsx:222 and PredictionFocusCard.tsx:368,
+ * both fed by `preds` — which is exactly what hydration restores. Two of three
+ * crests have columns; the third has none, so the object is stored whole.
+ * Loosening this list is the point of the change, not an oversight.
+ */
 const ALREADY_PROMOTED = [
   "id",
   "leagueId",
   "league",
   "teams",
-  "logos",
   "kickoff",
   "status",
   "score",
@@ -147,6 +155,38 @@ test("valueEngine is narrowed exactly as the response projection narrows it", ()
   // markets collapses to the FIRST cards-looking entry, never the whole set.
   assert.equal(built.valueEngine.markets.length, 1);
   assert.equal(built.valueEngine.markets[0].family, "cards");
+});
+
+test("logos is part of the hydration contract", () => {
+  assert.ok(HYDRATION_PAYLOAD_FIELDS.includes("logos"));
+});
+
+test("logos is carried whole — home, away AND the league crest", () => {
+  const built = buildHydrationPayload(payload());
+  assert.equal(built.logos.home, "h.png");
+  assert.equal(built.logos.away, "a.png");
+  // The one that has no column and no other source.
+  assert.equal(built.logos.league, "l.png");
+});
+
+test("nested logo values are preserved verbatim, not rebuilt", () => {
+  const src = payload({ logos: { home: "H", away: "A", league: "L", extra: "X" } });
+  // Whole-object storage: a future key rides along instead of being dropped by
+  // a column-by-column reconstruction.
+  assert.deepEqual(buildHydrationPayload(src).logos, { home: "H", away: "A", league: "L", extra: "X" });
+});
+
+test("an absent logos.league stays absent rather than becoming null", () => {
+  const built = buildHydrationPayload(payload({ logos: { home: "h.png", away: "a.png" } }));
+  assert.ok(!("league" in built.logos), "an omitted crest must not be coerced to null");
+  assert.equal(built.logos.home, "h.png");
+});
+
+test("a payload with no logos at all omits the key entirely", () => {
+  const src = payload();
+  delete src.logos;
+  const built = buildHydrationPayload(src);
+  assert.ok(!("logos" in built));
 });
 
 test("the stored value is dramatically smaller than the document it came from", () => {

@@ -15,11 +15,20 @@
  * PREDICTION_LIST_FIELDS is what the restored board reads. This column stores
  * only the part of it that is BOTH immutable and not already a promoted column:
  *
- *   dropped, already a column   id/fixture_id, leagueId, league, teams, logos,
+ *   dropped, already a column   id/fixture_id, leagueId, league, teams,
  *                               kickoff, status, score, validation, savedAt,
  *                               modelVersion, cardMarkets,
  *                               cardMarketValidations, marketResults, referee
  *   dropped, MUTABLE            momentum
+ *
+ * `logos` is the ONE apparent exception, and it is not one: 055 promoted
+ * logo_home and logo_away but NOT the league crest, and `logos.league` is read
+ * by MatchCard.tsx:222 and PredictionFocusCard.tsx:368 — both fed by `preds`,
+ * which is exactly what hydration restores. Reconstructing `logos` from the two
+ * columns would therefore silently drop the league crest on every restored row.
+ * Verified on production: raw_payload.logos.{home,away,league} are present on
+ * 1,094/1,094 rows, so the whole object is stored rather than a league-only key
+ * that would be a second projection rule to keep in step.
  *
  * `predictionsHistory.js` LIVE_RESULT_FIELDS is the authority on what may move
  * after creation: status, score, marketResults, cardMarketValidations, momentum,
@@ -70,6 +79,9 @@ import { projectPredictionListRow } from "./predictionListProjection.js";
 export const HYDRATION_PAYLOAD_FIELDS = Object.freeze([
   "insufficientData",
   "insufficientReason",
+  // Stored WHOLE, league crest included — see the header. logo_home/logo_away
+  // cover two of the three; the third has no column and no other source.
+  "logos",
   "recommended",
   "probs",
   "predictions",

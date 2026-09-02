@@ -61,6 +61,41 @@ import { buildHydrationPayload } from "../hydrationPayloadColumn.js";
  */
 export const BACKFILL_SELECT = "fixture_id, hydration_payload, raw_payload";
 
+/**
+ * Two eligibility predicates, one code path.
+ *
+ *   fill     the original seed: `hydration_payload IS NULL`. Rows that never
+ *            had the column.
+ *   refresh  rows whose STORED payload predates a contract change:
+ *            `hydration_payload->logos IS NULL`. Added when `logos` joined the
+ *            contract, because logo_home/logo_away cover only two of the three
+ *            crests and `logos.league` has no column at all.
+ *
+ * A refresh predicate must name a key the NEW contract always produces and the
+ * OLD one never did, so it selects exactly the stale set and empties itself.
+ * `default` stays `fill` — the safer behaviour, and the one that cannot rewrite
+ * a row that already has data.
+ *
+ * NOTE ON updated_at: predictions_history carries a BEFORE UPDATE trigger
+ * (`trg_predictions_history_updated_at`, migration 001:43-47) that sets
+ * updated_at = now() on ANY update. This module never writes that column, but
+ * every row it updates WILL receive a new timestamp. That is expected and must
+ * not be described as "updated_at unchanged". The eligibility predicate is what
+ * keeps the blast radius honest: rows already satisfying the contract are never
+ * touched, so a re-run bumps nothing.
+ */
+export const MODES = Object.freeze({ FILL: "fill", REFRESH: "refresh" });
+
+/** The column path a refresh requires the stored payload to be missing. */
+export const REFRESH_MISSING_PATH = "hydration_payload->logos";
+
+/** Applies the mode's eligibility to a PostgREST builder. Shared by scan and write. */
+function applyEligibility(builder, mode) {
+  return mode === MODES.REFRESH
+    ? builder.is(REFRESH_MISSING_PATH, null)
+    : builder.is("hydration_payload", null);
+}
+
 /** Full documents, so pages stay far below the 250-row read that timed out. */
 export const DEFAULT_BATCH = 50;
 export const MAX_BATCH = 200;
@@ -97,11 +132,18 @@ function isStatementTimeout(error) {
  *
  * @returns {{action: "update"|"skipNonNull"|"skipEmpty", value: object|null}}
  */
-export function planRowUpdate(row) {
-  // A2 (or an earlier run) already populated it. Never overwrite: the live
-  // writer derived its value from the payload it actually persisted, which is a
-  // stronger guarantee than re-deriving from a row read back later.
-  if (row?.hydration_payload !== null && row?.hydration_payload !== undefined) {
+export function planRowUpdate(row, mode = MODES.FILL) {
+  const stored = row?.hydration_payload;
+  const hasStored = stored !== null && stored !== undefined;
+
+  // FILL: A2 (or an earlier run) already populated it. Never overwrite — the
+  // live writer derived its value from the payload it actually persisted, which
+  // is a stronger guarantee than re-deriving from a row read back later.
+  if (mode === MODES.FILL && hasStored) return { action: "skipNonNull", value: null };
+
+  // REFRESH: the row already satisfies the new contract. Skipping it is what
+  // stops the run bumping updated_at on rows that need nothing.
+  if (mode === MODES.REFRESH && hasStored && stored.logos) {
     return { action: "skipNonNull", value: null };
   }
 
@@ -111,6 +153,15 @@ export function planRowUpdate(row) {
   // indistinguishable from "not yet backfilled" and would stop the audit ever
   // converging, so the row is skipped and reported by id instead.
   if (value === null) return { action: "skipEmpty", value: null };
+
+  /*
+    REFRESH only: the whole point is to add `logos`, so a freshly derived
+    payload that STILL lacks it cannot satisfy the eligibility predicate. Writing
+    it would leave the row eligible forever and re-update it on every run — a
+    permanent rewrite loop, each pass bumping updated_at. Skip and report the id
+    instead; the source document is what needs fixing, not this row.
+  */
+  if (mode === MODES.REFRESH && !value.logos) return { action: "skipNoLogos", value: null };
 
   return { action: "update", value };
 }
@@ -122,14 +173,18 @@ function emptyStats() {
     updated: 0,
     skippedEmpty: 0,
     skippedNonNull: 0,
+    skippedNoLogos: 0,
     failed: 0,
     batches: 0,
     lastFixtureId: null,
     /** fixture_id only — never payload content. */
     skippedEmptyIds: [],
+    skippedNoLogosIds: [],
     failedIds: [],
     batchDurationMs: [],
     rowsPerSec: 0,
+    /** Rows still matching the mode's eligibility predicate after the run. */
+    remainingEligible: null,
     remainingNull: null,
     elapsedMs: 0
   };
@@ -148,11 +203,15 @@ export async function runBackfill({
   after = 0,
   maxBatches = Infinity,
   table = "predictions_history",
+  mode = MODES.FILL,
   now = () => Date.now(),
   onBatch = null,
   countRemaining = true
 } = {}) {
   if (!supabase) throw new Error("supabase client is required");
+  if (mode !== MODES.FILL && mode !== MODES.REFRESH) {
+    throw new Error(`unknown mode: ${mode}`);
+  }
   const started = now();
   const stats = emptyStats();
   let cursor = Number(after) || 0;
@@ -164,12 +223,9 @@ export async function runBackfill({
 
     let data;
     try {
-      const res = await supabase
-        .from(table)
-        .select(BACKFILL_SELECT)
-        // Eligibility, applied server-side so a re-run does not re-read rows it
-        // has already done. The per-row guard below still covers the race.
-        .is("hydration_payload", null)
+      // Eligibility, applied server-side so a re-run does not re-read rows it
+      // has already done. The per-row guard below still covers the race.
+      const res = await applyEligibility(supabase.from(table).select(BACKFILL_SELECT), mode)
         .not("raw_payload", "is", null)
         .gt("fixture_id", cursor)
         .order("fixture_id", { ascending: true })
@@ -201,7 +257,7 @@ export async function runBackfill({
 
     for (const row of rows) {
       stats.scanned += 1;
-      const { action, value } = planRowUpdate(row);
+      const { action, value } = planRowUpdate(row, mode);
 
       if (action === "skipNonNull") {
         stats.skippedNonNull += 1;
@@ -210,6 +266,11 @@ export async function runBackfill({
       if (action === "skipEmpty") {
         stats.skippedEmpty += 1;
         stats.skippedEmptyIds.push(row.fixture_id);
+        continue;
+      }
+      if (action === "skipNoLogos") {
+        stats.skippedNoLogos += 1;
+        stats.skippedNoLogosIds.push(row.fixture_id);
         continue;
       }
 
@@ -223,12 +284,10 @@ export async function runBackfill({
         // ONE column. The `is(hydration_payload, null)` predicate is what makes
         // a concurrent A2 write win rather than be clobbered; `select` lets an
         // empty result be counted as that race instead of a silent success.
-        const { data: written, error: upErr } = await supabase
-          .from(table)
-          .update({ hydration_payload: value })
-          .eq("fixture_id", row.fixture_id)
-          .is("hydration_payload", null)
-          .select("fixture_id");
+        const { data: written, error: upErr } = await applyEligibility(
+          supabase.from(table).update({ hydration_payload: value }).eq("fixture_id", row.fixture_id),
+          mode
+        ).select("fixture_id");
         if (upErr) throw upErr;
         if (Array.isArray(written) && written.length === 0) {
           stats.skippedNonNull += 1;
@@ -287,13 +346,16 @@ export async function runBackfill({
 
   if (countRemaining) {
     try {
-      const { count } = await supabase
-        .from(table)
-        .select("fixture_id", { count: "exact", head: true })
-        .is("hydration_payload", null);
-      stats.remainingNull = typeof count === "number" ? count : null;
+      const { count } = await applyEligibility(
+        supabase.from(table).select("fixture_id", { count: "exact", head: true }),
+        mode
+      );
+      stats.remainingEligible = typeof count === "number" ? count : null;
+      // Kept for the fill-mode callers that already print it.
+      stats.remainingNull = stats.remainingEligible;
     } catch {
       // Telemetry only — a failed count must not fail a completed backfill.
+      stats.remainingEligible = null;
       stats.remainingNull = null;
     }
   }

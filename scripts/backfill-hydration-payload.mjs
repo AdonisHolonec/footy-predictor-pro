@@ -13,6 +13,19 @@
  *   npm run backfill:hydration-payload -- --apply
  *   npm run backfill:hydration-payload -- --after=<lastFixtureId> --apply
  *
+ * REFRESH mode re-derives rows whose STORED payload predates a contract change
+ * (`hydration_payload->logos IS NULL`) rather than rows that never had the
+ * column. Default stays `fill`.
+ *
+ *   npm run backfill:hydration-payload -- --mode=refresh --max-batches=1
+ *   npm run backfill:hydration-payload -- --mode=refresh
+ *   npm run backfill:hydration-payload -- --mode=refresh --apply
+ *
+ * updated_at: predictions_history has a BEFORE UPDATE trigger that sets it on
+ * ANY update. This script never writes that column, but every row it updates
+ * will receive a new timestamp. The eligibility predicate is what bounds that —
+ * rows already satisfying the contract are skipped, not rewritten.
+ *
  * Safe to stop halfway. Rows already written stay valid; rows still NULL stay
  * eligible, so a restart (with or without --after) simply continues. Every
  * UPDATE carries `hydration_payload IS NULL`, so a row the live writer populated
@@ -27,14 +40,21 @@ import {
   runBackfill,
   BackfillAbort,
   DEFAULT_BATCH,
-  MAX_BATCH
+  MAX_BATCH,
+  MODES
 } from "../server-utils/backfill/hydrationPayload.js";
 
 function parseArgs(argv) {
-  const args = { apply: false, batch: DEFAULT_BATCH, after: 0, maxBatches: Infinity };
+  const args = { apply: false, batch: DEFAULT_BATCH, after: 0, maxBatches: Infinity, mode: MODES.FILL };
   for (const raw of argv.slice(2)) {
     const [key, value] = raw.replace(/^--/, "").split("=");
     if (key === "apply") args.apply = true;
+    else if (key === "mode") {
+      if (value !== MODES.FILL && value !== MODES.REFRESH) {
+        throw new Error(`--mode must be "${MODES.FILL}" or "${MODES.REFRESH}" (got "${value}")`);
+      }
+      args.mode = value;
+    }
     else if (key === "batch") args.batch = Math.max(1, Math.min(Number(value) || DEFAULT_BATCH, MAX_BATCH));
     else if (key === "after") args.after = Math.max(0, Number(value) || 0);
     else if (key === "max-batches") args.maxBatches = Math.max(1, Number(value) || 1);
@@ -61,6 +81,7 @@ function summarise(stats, apply) {
   console.log(pad(apply ? "rows updated" : "rows that WOULD update", stats.updated));
   console.log(pad("skipped (empty payload)", stats.skippedEmpty));
   console.log(pad("skipped (already populated)", stats.skippedNonNull));
+  console.log(pad("skipped (no logos derived)", stats.skippedNoLogos));
   console.log(pad("failed", stats.failed));
   console.log(pad("last fixture_id", stats.lastFixtureId ?? "(none)"));
   console.log(pad("elapsed", `${stats.elapsedMs} ms`));
@@ -69,13 +90,21 @@ function summarise(stats, apply) {
     const slowest = Math.max(...stats.batchDurationMs);
     console.log(pad("slowest batch", `${slowest} ms`));
   }
-  console.log(pad("remaining NULL", stats.remainingNull ?? "(not counted)"));
+  console.log(pad("remaining eligible", stats.remainingEligible ?? "(not counted)"));
   if (stats.skippedEmpty > 0) {
     console.log("");
     console.log(`skippedEmpty fixture_ids: ${idList(stats.skippedEmptyIds)}`);
     console.log(
       "These rows have no derivable hydration fields. They are left NULL rather than " +
         "written as NULL, so the read cutover must still handle a NULL column."
+    );
+  }
+  if (stats.skippedNoLogos > 0) {
+    console.log("");
+    console.log(`skippedNoLogos fixture_ids: ${idList(stats.skippedNoLogosIds)}`);
+    console.log(
+      "Their raw_payload produced no `logos`, so refreshing them could never satisfy " +
+        "the eligibility predicate. Left untouched rather than rewritten on every run."
     );
   }
   if (stats.failed > 0) {
@@ -94,6 +123,7 @@ async function main() {
   }
 
   console.log(pad("mode", args.apply ? "APPLY (writes)" : "DRY RUN (no writes)"));
+  console.log(pad("eligibility", args.mode === MODES.REFRESH ? "refresh (logos missing)" : "fill (hydration_payload NULL)"));
   console.log(pad("batch size", args.batch));
   console.log(pad("resume after fixture_id", args.after || "(start)"));
   console.log(pad("batch limit", args.maxBatches === Infinity ? "(all)" : args.maxBatches));
@@ -107,6 +137,7 @@ async function main() {
       apply: args.apply,
       after: args.after,
       maxBatches: args.maxBatches,
+      mode: args.mode,
       onBatch: (s) => {
         console.log(
           `  batch ${String(s.batches).padStart(4)}  scanned=${String(s.scanned).padStart(6)}` +
