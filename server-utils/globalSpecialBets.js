@@ -132,7 +132,7 @@ export function unavailableResponse(variant, availableCandidates) {
  * protects the query if that assumption ever breaks. Ordered by kickoff, so if
  * it is ever hit the nearest fixtures win.
  */
-const CANDIDATE_POOL_LIMIT = 500;
+export const CANDIDATE_POOL_LIMIT = 500;
 
 /**
  * Canonical prediction payloads for the user's MULTI-DAY upcoming pool.
