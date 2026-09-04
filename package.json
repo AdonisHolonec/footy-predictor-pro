@@ -46,6 +46,7 @@
     "test:integration:referral-admin": "node scripts/run-gsb-integration.mjs tests/integration/referralAdmin.db.test.js",
     "test:integration:referral-bonus-notifications": "node scripts/run-gsb-integration.mjs tests/integration/referralBonusNotifications.db.test.js",
     "test:integration:global-special-bets": "node scripts/run-gsb-integration.mjs tests/integration/globalSpecialBets.db.test.js tests/integration/globalSpecialBetSettlement.db.test.js tests/integration/gsbSystemFoundation.db.test.js tests/integration/securityDefinerPrivileges.db.test.js",
+    "test:integration:global-tickets": "node scripts/run-gsb-integration.mjs tests/integration/globalTicketsSchema.db.test.js",
     "test:unit": "vitest run src",
     "test:e2e-unit": "vitest run tests/e2e",
     "test:golden": "vitest run tests/pipeline/goldenFixture.test.js",
