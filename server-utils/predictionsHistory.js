@@ -15,6 +15,7 @@ import {
   HYDRATION_SELECT,
   rehydrateHydrationRow
 } from "./hydrationPayloadColumn.js";
+import { deriveTicketCandidatesColumn } from "./ticketCandidateColumn.js";
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
@@ -277,7 +278,23 @@ export function mapPredictionToDbRow(prediction) {
       wrong value here cannot reach a user. It is immutable by construction
       (see 067), which is why no settlement writer mentions it.
     */
-    ...deriveHydrationPayloadColumn(payloadWithMeta)
+    ...deriveHydrationPayloadColumn(payloadWithMeta),
+    /*
+      069 dual-write, on the same terms as the two lines above and from the SAME
+      `payloadWithMeta`. Three columns and the document are therefore one
+      snapshot written by one statement: there is no window in which the ticket
+      projection can describe a payload that was not persisted, and no second
+      provider call, query or write path to keep in step.
+
+      Only the `recommendable === true` gate is materialised here. Every other
+      eligibility rule stays at read time, over the complete market objects this
+      stores — which is what lets MIN_SELECTION_ODD or the settleable families
+      change without a backfill.
+
+      Nothing READS this column yet: the loader and the GLOBAL RPC are the next
+      increment. A wrong value here cannot reach a user today.
+    */
+    ...deriveTicketCandidatesColumn(payloadWithMeta)
   };
 }
 
