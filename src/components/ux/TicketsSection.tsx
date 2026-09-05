@@ -43,9 +43,24 @@ export default function TicketsSection({
   const openBuilder = () => setBuilderOpen(true);
 
   return (
-    <section className="space-y-4" data-surface="tickets">
+    <section className="space-y-4" data-surface="tickets" data-testid="my-bets">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <SectionHeader as="h1" size="page" eyebrow={t("nav.tickets")} title={t("nav.tickets")} description={t("tickets.sub")} />
+        {/*
+          Betting -> Tickets -> My Bets. "Tickets" is the grouping the eyebrow
+          carries; "My Bets" is the screen. They were the same word before, which
+          left the user's own betting surface without a name of its own.
+
+          NOT "My Tickets" — that belongs to Support and means something else
+          entirely (a support conversation). The two must stay distinguishable in
+          copy as well as in code.
+        */}
+        <SectionHeader
+          as="h1"
+          size="page"
+          eyebrow={t("nav.tickets")}
+          title={t("tickets.myBetsTitle")}
+          description={t("tickets.myBetsSub")}
+        />
         <Button
           onClick={openBuilder}
           aria-expanded={builderOpen}

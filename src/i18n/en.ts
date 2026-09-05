@@ -638,6 +638,10 @@ export const en: Dict = {
     buildSub: "A multi-leg ticket from your favourite leagues.",
     historyTitle: "Ticket history",
     historySub: "How your tickets landed.",
+    // The screen's own name. "My Bets" is the BETTING product; Support keeps its
+    // separate "My Tickets", and the two must never be conflated in copy.
+    myBetsTitle: "My Bets",
+    myBetsSub: "Your own multi-leg bets, built from your favourite leagues.",
     sub: "Multi-leg tickets built from your favourite leagues, and how they landed."
   },
   account: {
