@@ -638,6 +638,8 @@ export const ro: Dict = {
     buildSub: "Un bilet cu mai multe selecții din ligile tale favorite.",
     historyTitle: "Istoric bilete",
     historySub: "Cum s-au încheiat biletele tale.",
+    myBetsTitle: "Biletele mele",
+    myBetsSub: "Biletele tale cu mai multe selecții, din ligile tale favorite.",
     sub: "Bilete cu mai multe selecții din ligile tale favorite și cum s-au încheiat."
   },
   account: {
