@@ -23,6 +23,7 @@ import {
 import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
 import { rehydrateSettlementRow } from "./predictionsHistory.js";
 import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
+import { loadUsedFixtureIds } from "./ticketFixtureUsage.js";
 
 const HISTORY_TABLE = "predictions_history";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -292,7 +293,17 @@ export async function createGlobalSpecialBet({
   // every upcoming fixture the user has predictions for, regardless of day.
   const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
 
-  const built = buildGlobalSpecialBets({ rows, leagueIds: canonicalLeagues, now }, [Number(variant)]);
+  /*
+    Fixtures this user's OTHER tickets for the same day already used. Scoped to
+    them alone: another user's ticket can never narrow this pool, and a GLOBAL
+    ticket can never narrow it either.
+  */
+  const excludeFixtureIds = await loadUsedFixtureIds(supabase, { betDate, userId });
+
+  const built = buildGlobalSpecialBets(
+    { rows, leagueIds: canonicalLeagues, now, excludeFixtureIds },
+    [Number(variant)]
+  );
   const bet = built.bets[Number(variant)];
   // Additive: which selected leagues fed the pool and which ran out of day.
   const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);

@@ -157,6 +157,9 @@ test("11. createGlobalSpecialBet: the response is additive — created ticket un
   let phase = "pool";
   const chain = {
     select: () => chain,
+    eq: () => chain,
+    is: () => chain,
+    not: () => chain,
     in: () => chain,
     gt: () => chain,
     order: () => chain,
@@ -166,8 +169,26 @@ test("11. createGlobalSpecialBet: the response is additive — created ticket un
     then: (resolve) => resolve({ data: phase === "day" ? dayRows : historyRows, error: null })
   };
   const rpc = [];
+  /*
+    TABLE-AWARE. Creation now also reads special_bets / special_bet_selections
+    for the fixtures this user's other tickets of the day already used
+    (cross-ticket diversification). This case stores no tickets, so those tables
+    answer empty and the exclusion set is empty — which is why the assertions
+    below are unchanged. A table-blind stub would return the history rows for
+    those queries too, and every fixture would look already-used.
+  */
+  const empty = {
+    select: () => empty,
+    eq: () => empty,
+    is: () => empty,
+    not: () => empty,
+    in: () => empty,
+    order: () => empty,
+    limit: () => empty,
+    then: (resolve) => resolve({ data: [], error: null })
+  };
   const supabase = {
-    from: () => chain,
+    from: (table) => (table === "special_bets" || table === "special_bet_selections" ? empty : chain),
     rpc: async (name, params) => (rpc.push({ name, params }), { data: { ok: true, created: true, bet: { id: "b1", total_odds: 4.1 }, selections: [] }, error: null })
   };
   const result = await createGlobalSpecialBet({ userId: "u", betDate: BET_DATE, variant: 3, leagueIds: [135, 39], now: NOW, supabase });

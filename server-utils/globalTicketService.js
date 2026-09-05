@@ -49,6 +49,7 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
 import { assertAdmin } from "./authAdmin.js";
 import { TICKET_CANDIDATE_SELECT, rehydrateTicketCandidateRow } from "./ticketCandidateColumn.js";
+import { loadUsedFixtureIds } from "./ticketFixtureUsage.js";
 import { buildGlobalSpecialBets, GLOBAL_SPECIAL_BET_VARIANTS } from "./globalSpecialBetEngine.js";
 import {
   CANDIDATE_POOL_LIMIT,
@@ -238,7 +239,14 @@ export async function generateGlobalTicket({
     });
   }
 
-  const built = buildGlobalSpecialBets({ rows, leagueIds, now }, [Number(variant)]);
+  /*
+    Fixtures the GLOBAL tickets already published for this day used. No userId:
+    the product's ticket is narrowed by the product's other tickets and by
+    nothing personal.
+  */
+  const excludeFixtureIds = await loadUsedFixtureIds(supabase, { betDate });
+
+  const built = buildGlobalSpecialBets({ rows, leagueIds, now, excludeFixtureIds }, [Number(variant)]);
   const bet = built.bets[Number(variant)];
 
   if (!bet) {
