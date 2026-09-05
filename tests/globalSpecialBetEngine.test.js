@@ -450,13 +450,39 @@ test("a single league still produces a full bet", () => {
 
 // ── variants come from one safe pool ───────────────────────────────────────
 
-test("3 / 5 / 8 are prefixes of the same ordering (scenario N)", () => {
+test("3 / 5 / 8 draw from one pool but no longer repeat its matches (scenario N)", () => {
+  /*
+    SUPERSEDED RULE. This case used to assert the opposite — that each variant
+    was a PREFIX of the same ordering, so the 5 opened with the 3's three legs
+    and the 8 opened with the 5's five. That was the duplication the
+    cross-ticket diversification change exists to remove; the assertion is
+    rewritten here rather than deleted so the change of rule stays on the record.
+    The pool, the ranking and every gate are untouched — only WHICH qualified
+    legs each variant takes has changed.
+  */
   const built = buildGlobalSpecialBets({ rows: poolOf(10), leagueIds: [39, 40, 41], now: NOW });
-
   assert.deepEqual(built.unavailable, []);
+
+  const ids = (variant) => built.bets[variant].selections.map((s) => s.fixtureId);
+  const three = ids(3);
+  const five = ids(5);
+
+  // The 3 still takes the top of the ranked pool.
   assert.deepEqual(built.bets[3].selections, built.pool.slice(0, 3));
-  assert.deepEqual(built.bets[5].selections.slice(0, 3), built.bets[3].selections);
-  assert.deepEqual(built.bets[8].selections.slice(0, 5), built.bets[5].selections);
+  // The 5 now shares nothing with it: ten fixtures leave seven unused.
+  assert.deepEqual(five.filter((id) => three.includes(id)), []);
+  assert.equal(new Set([...three, ...five]).size, 8);
+
+  /*
+    The 8 cannot be disjoint — ten fixtures cannot furnish 3 + 5 + 8 distinct
+    legs — so it takes the two that remain and reuses the minimum: six. That is
+    the controlled fallback, not a regression to prefix behaviour.
+  */
+  const eight = ids(8);
+  assert.equal(eight.length, 8);
+  assert.equal(new Set(eight).size, 8, "within-ticket dedup still holds");
+  assert.equal(eight.filter((id) => !three.includes(id) && !five.includes(id)).length, 2);
+  assert.equal(built.reusedByVariant[8].length, 6);
 });
 
 test("totals are the product of odds, the mean confidence, and Π p (scenario M)", () => {

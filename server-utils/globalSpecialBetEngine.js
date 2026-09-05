@@ -451,22 +451,112 @@ function toBet(variant, selections) {
  * @param {{ rows: object[], leagueIds: number[], now: number }} options
  * @param {number[]} [variants]
  */
+/**
+ * Choose `variant` legs from a ranked pool, preferring fixtures not already used.
+ *
+ * THE SECOND DEDUP INVARIANT. `diversifyGlobalCandidates` already guarantees one
+ * leg per fixture WITHIN a ticket. This adds the across-tickets rule: a fixture
+ * that a previous variant already used should not return on the next one while
+ * other equally qualified fixtures remain.
+ *
+ * QUALITY IS NEVER TRADED FOR VARIETY. Both `fresh` and `reused` are drawn from
+ * the SAME pool, which has already passed every gate — the odds floor, the
+ * probability floor, settleable families, identity, tradable, the divergence
+ * ceiling. Nothing is promoted, no threshold moves, and a candidate that failed
+ * a gate cannot enter here just because it would have been novel. The ordering
+ * of priorities is: valid, then qualified, then diverse, then minimal reuse.
+ *
+ * MINIMAL REUSE. When the unused remainder cannot fill the ticket, exactly
+ * `variant - fresh.length` previously-used legs are taken — the fewest that make
+ * a valid ticket — and they are taken in the pool's existing rank order rather
+ * than by any new preference. With A B C used and D E F free, a 5 is D E F plus
+ * two reused, never the three used ones plus two new.
+ *
+ * DETERMINISTIC. `fresh` and `reused` are stable partitions of an already
+ * deterministic ranking, so the same input yields the same ticket. Nothing here
+ * is random and nothing consults a clock.
+ *
+ * @param {GlobalCandidate[]} pool ranked, already one-leg-per-fixture
+ * @param {number} variant how many legs the ticket needs
+ * @param {Set<number>} excluded fixture ids used by previously built tickets
+ * @returns {{selections: GlobalCandidate[], reusedFixtureIds: number[]}|null}
+ */
+export function selectVariantLegs(pool, variant, excluded) {
+  const used = excluded instanceof Set ? excluded : new Set(excluded || []);
+
+  const fresh = [];
+  const reused = [];
+  for (const candidate of pool) (used.has(candidate.fixtureId) ? reused : fresh).push(candidate);
+
+  // Not buildable even with every leg available: the caller reports the existing
+  // thin-pool answer rather than padding or downgrading.
+  if (fresh.length + reused.length < variant) return null;
+
+  const take = fresh.slice(0, variant);
+  const reusedTaken = take.length < variant ? reused.slice(0, variant - take.length) : [];
+  const chosen = [...take, ...reusedTaken];
+
+  /*
+    Emitted in the pool's own rank order. Position is cosmetic — totalOdds and
+    the ticket probability are products and averageConfidence is a mean, so none
+    of them can move — but keeping stored selections rank-ordered means this
+    change is invisible to every existing reader.
+  */
+  const rank = new Map(pool.map((candidate, index) => [candidate, index]));
+  chosen.sort((a, b) => rank.get(a) - rank.get(b));
+
+  return { selections: chosen, reusedFixtureIds: reusedTaken.map((c) => c.fixtureId) };
+}
+
+/**
+ * Build the 3 / 5 / 8 variants from one safe pool.
+ *
+ * A variant with fewer SAFE selections than it needs is NOT built and NOT
+ * padded — an 8-fold assembled from six good selections and two sub-floor
+ * fillers is a worse product than no 8-fold. "Varianta 8 indisponibilă" is the
+ * honest answer, and the rejection counters say exactly why the pool is thin.
+ *
+ * `excludeFixtureIds` carries the fixtures earlier tickets already used, so a
+ * later variant prefers new matches. It is passed IN rather than discovered
+ * here because this function is pure: the caller owns the scope the exclusion
+ * belongs to (one user's day, or the product's day) and this owns the rule.
+ *
+ * @param {{ rows: object[], leagueIds: number[], now: number,
+ *           excludeFixtureIds?: Set<number>|number[] }} options
+ * @param {number[]} [variants]
+ */
 export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VARIANTS) {
   const collected = collectGlobalCandidates(options);
   const pool = diversifyGlobalCandidates(rankGlobalCandidates(collected.candidates));
 
+  /*
+    Accumulates ACROSS the variants of this call as well, so a caller that asks
+    for [3, 5, 8] in one go gets three disjoint tickets — the same rule the
+    persisted-exclusion callers get across separate requests. One implementation
+    covers both, which is what stops the two drifting.
+  */
+  const used = new Set(
+    options?.excludeFixtureIds instanceof Set
+      ? options.excludeFixtureIds
+      : options?.excludeFixtureIds || []
+  );
+
   const bets = {};
   const unavailable = [];
+  const reusedByVariant = {};
 
   for (const variant of variants) {
-    if (pool.length >= variant) {
-      bets[variant] = toBet(variant, pool.slice(0, variant));
-    } else {
+    const chosen = selectVariantLegs(pool, variant, used);
+    if (!chosen) {
       unavailable.push({ variant, available: pool.length, required: variant });
+      continue;
     }
+    bets[variant] = toBet(variant, chosen.selections);
+    reusedByVariant[variant] = chosen.reusedFixtureIds;
+    for (const candidate of chosen.selections) used.add(candidate.fixtureId);
   }
 
-  return { ...collected, pool, bets, unavailable };
+  return { ...collected, pool, bets, unavailable, reusedByVariant };
 }
 
 // ── System tickets ─────────────────────────────────────────────────────────
@@ -853,6 +943,7 @@ export default {
   rankGlobalCandidates,
   diversifyGlobalCandidates,
   buildGlobalSpecialBets,
+  selectVariantLegs,
   selectionExpectedValue,
   rankSystemCandidates,
   systemTicketProbability,

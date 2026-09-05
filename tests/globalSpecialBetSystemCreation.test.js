@@ -48,24 +48,42 @@ function payload(id, leagueId, overrides = {}) {
   };
 }
 
-function fakeSupabase({ historyRows = [], rpcResult = null } = {}) {
+/**
+ * TABLE-AWARE. The creation path now also reads `special_bets` /
+ * `special_bet_selections` to learn which fixtures this user's other tickets of
+ * the same day already used (cross-ticket diversification). These cases have no
+ * stored tickets, so those tables answer empty and the exclusion set is empty —
+ * which is what makes the RPC payloads below the same as they always were.
+ *
+ * A table-blind stub would hand the history rows back for every query and the
+ * reader would then treat every fixture as already used.
+ */
+function fakeSupabase({ historyRows = [], rpcResult = null, storedBets = [], storedSelections = [] } = {}) {
   const calls = { rpc: [] };
-  const historyQuery = () => {
+  const query = (table) => {
+    const rowsFor = () => {
+      if (table === "special_bets") return storedBets;
+      if (table === "special_bet_selections") return storedSelections;
+      return historyRows;
+    };
     const chain = {
       select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      not: () => chain,
       in: () => chain,
       gt: () => chain,
       gte: () => chain,
       lte: () => chain,
       order: () => chain,
       limit: () => chain,
-      then: (resolve) => resolve({ data: historyRows, error: null })
+      then: (resolve) => resolve({ data: rowsFor(), error: null })
     };
     return chain;
   };
   return {
     calls,
-    from: () => historyQuery(),
+    from: (table) => query(table),
     async rpc(name, params) {
       calls.rpc.push({ name, params });
       return { data: typeof rpcResult === "function" ? rpcResult(params) : rpcResult, error: null };
