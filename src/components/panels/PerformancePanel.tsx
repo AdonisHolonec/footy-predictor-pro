@@ -5,6 +5,7 @@ import AdminUsersPanel from "./AdminUsersPanel";
 import SuccessRateTracker from "../SuccessRateTracker";
 import StatisticsPanel, { type StatisticsPanelProps } from "./StatisticsPanel";
 import AdminShell, { type AdminSection } from "../ux/AdminShell";
+const AdminGlobalBetsPanel = lazy(() => import("./AdminGlobalBetsPanel"));
 import CollapsiblePanel from "../../design-system/CollapsiblePanel";
 import type { HistoryStats } from "../../types";
 import type { UsageSnapshot } from "../../types/index";
@@ -129,6 +130,11 @@ export default function PerformancePanel({
               </CollapsiblePanel>
             )}
           </div>
+        )}
+        {section === "global-bets" && (
+          <Suspense fallback={<LabFallback label="Global Bets" />}>
+            <AdminGlobalBetsPanel />
+          </Suspense>
         )}
         {section === "model-lab" && (
           <Suspense fallback={<LabFallback label="Model Laboratory" />}>

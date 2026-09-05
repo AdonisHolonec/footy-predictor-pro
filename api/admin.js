@@ -1,4 +1,5 @@
 import { assertAdmin } from "../server-utils/authAdmin.js";
+import { handleGlobalTicketAdmin } from "../server-utils/globalTicketAdminApi.js";
 import { handleAdminInbox } from "../server-utils/adminInboxApi.js";
 import { handleReferralAdmin } from "../server-utils/referralAdminApi.js";
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
@@ -47,6 +48,11 @@ export default async function handler(req, res) {
   */
   if (view === "referrals" || view === "reverse-referral" || view === "retry-referral-reward") {
     return handleReferralAdmin(req, res);
+  }
+  // Global Tickets — the first production caller of the GLOBAL ticket backend.
+  // Same twelve-function reason as the two views above.
+  if (view === "global-tickets" || view === "publish-global-ticket") {
+    return handleGlobalTicketAdmin(req, res);
   }
   return handleProfiles(req, res);
 }
