@@ -359,8 +359,69 @@ export async function listGlobalTickets(supabase, { includeDrafts = false, limit
   return bets.map((bet) => ({ ...bet, selections: byBetId.get(bet.id) || [] }));
 }
 
+/**
+ * Publish one GLOBAL ticket — the explicit release step.
+ *
+ * SEPARATE FROM CREATION ON PURPOSE. `create_global_ticket` writes
+ * `published_at = NULL` and has no parameter that could set it, so nothing that
+ * builds a ticket can also release it to users. This is the only path that
+ * flips that bit, and it is service-role only.
+ *
+ * NO RLS CHANGE. 068 gives authenticated users a SELECT policy for published
+ * GLOBAL rows and grants no INSERT or UPDATE policy at all, so a browser cannot
+ * reach this column whatever it sends. The guard below is not the security
+ * boundary — the absence of a write policy is; this is the correctness boundary.
+ *
+ * THREE THINGS ARE VERIFIED IN THE PREDICATE, NOT IN JAVASCRIPT:
+ *   bet_type = 'GLOBAL'      a USER ticket has no publish step and must not
+ *                            gain one through this path
+ *   published_at IS NULL     re-publishing would move the timestamp and rewrite
+ *                            when users were first shown the ticket
+ *   id = the requested one
+ *
+ * A row failing any of them yields zero updated rows rather than an error, which
+ * is why the result distinguishes them: the caller needs to tell "already
+ * published" from "not a GLOBAL ticket" from "no such ticket", and an exception
+ * would collapse all three.
+ *
+ * @param {object} supabase a service-role client
+ * @param {string} betId
+ * @param {{ now?: number }} [options]
+ * @returns {Promise<{ok: boolean, reason?: string, bet?: object}>}
+ */
+export async function publishGlobalTicket(supabase, betId, { now = Date.now() } = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+  if (!betId || typeof betId !== "string") return { ok: false, reason: "invalid_id" };
+
+  const { data, error } = await supabase
+    .from(BETS_TABLE)
+    .update({ published_at: new Date(now).toISOString() })
+    .eq("id", betId)
+    .eq("bet_type", "GLOBAL")
+    .is("published_at", null)
+    .select("*");
+  if (error) throw error;
+
+  if (Array.isArray(data) && data.length > 0) return { ok: true, bet: data[0] };
+
+  // Nothing matched. Read back to say WHY, so the UI can distinguish a
+  // double-click from an attempt to publish something that is not a draft.
+  const { data: existing, error: readError } = await supabase
+    .from(BETS_TABLE)
+    .select("id, bet_type, published_at")
+    .eq("id", betId)
+    .maybeSingle();
+  if (readError) throw readError;
+
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (existing.bet_type !== "GLOBAL") return { ok: false, reason: "not_global" };
+  if (existing.published_at) return { ok: false, reason: "already_published" };
+  return { ok: false, reason: "not_updated" };
+}
+
 export default {
   loadGlobalCandidatePayloads,
+  publishGlobalTicket,
   generateGlobalTicket,
   generateGlobalTicketAsAdmin,
   listGlobalTickets,
