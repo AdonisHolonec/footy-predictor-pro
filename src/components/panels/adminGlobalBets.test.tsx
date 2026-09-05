@@ -79,15 +79,40 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("admin navigation", () => {
-  it("offers Global Bets under a Betting group", () => {
+  it("nests Global Bets under Tickets under Betting", () => {
     render(
       <AdminShell section="dashboard" onSection={() => {}}>
         <div />
       </AdminShell>
     );
     const nav = screen.getByLabelText("Admin");
-    expect(within(nav).getByText("Betting")).toBeTruthy();
-    expect(within(nav).getByRole("button", { name: "Global Bets" })).toBeTruthy();
+
+    // Three levels, asserted by CONTAINMENT rather than by reading three labels
+    // off a flat list — the latter would still pass if the nesting were faked.
+    const betting = within(nav).getByRole("group", { name: "Betting" });
+    const tickets = within(betting).getByRole("group", { name: "Tickets" });
+    expect(within(tickets).getByRole("button", { name: "Global Bets" })).toBeTruthy();
+
+    expect(within(betting).getByText("Betting")).toBeTruthy();
+    expect(within(tickets).getByText("Tickets")).toBeTruthy();
+  });
+
+  it("treats Betting and Tickets as captions, never as controls", () => {
+    render(
+      <AdminShell section="dashboard" onSection={() => {}}>
+        <div />
+      </AdminShell>
+    );
+    const nav = screen.getByLabelText("Admin");
+
+    // Neither level is selectable. "Tickets" has no id, no panel and no state —
+    // a grouping caption, not a page that exists to be passed through.
+    expect(within(nav).queryByRole("button", { name: "Betting" })).toBeNull();
+    expect(within(nav).queryByRole("button", { name: "Tickets" })).toBeNull();
+
+    // Global Bets remains the one functional screen under that branch.
+    const tickets = within(nav).getByRole("group", { name: "Tickets" });
+    expect(within(tickets).getAllByRole("button")).toHaveLength(1);
   });
 
   it("selects the section and marks it current", () => {
@@ -106,6 +131,38 @@ describe("admin navigation", () => {
       </AdminShell>
     );
     expect(screen.getByRole("button", { name: "Global Bets" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("opens the existing Global Bets panel when the nested entry is chosen", () => {
+    const onSection = vi.fn();
+    render(
+      <AdminShell section="dashboard" onSection={onSection}>
+        <div />
+      </AdminShell>
+    );
+    const tickets = within(screen.getByLabelText("Admin")).getByRole("group", { name: "Tickets" });
+    fireEvent.click(within(tickets).getByRole("button", { name: "Global Bets" }));
+    // The same flat section id as before: nesting is a rendering concern, and
+    // AdminSection stays a flat union so every existing caller is untouched.
+    expect(onSection).toHaveBeenCalledWith("global-bets");
+  });
+
+  it("leaves Support -> My Tickets alone: it is not an admin nav entry", () => {
+    render(
+      <AdminShell section="dashboard" onSection={() => {}}>
+        <div />
+      </AdminShell>
+    );
+    const nav = screen.getByLabelText("Admin");
+
+    // "Tickets" here groups GLOBAL bets. Support's own My Tickets is a separate
+    // user-side surface (SupportEntry -> MyTicketsPanel) and must NOT be pulled
+    // into this hierarchy or renamed by it.
+    expect(within(nav).queryByText(/My Tickets/i)).toBeNull();
+    expect(within(nav).queryByText(/Support/i)).toBeNull();
+
+    const tickets = within(nav).getByRole("group", { name: "Tickets" });
+    expect(within(tickets).getAllByRole("button").map((b) => b.textContent)).toEqual(["Global Bets"]);
   });
 
   it("keeps every pre-existing section reachable", () => {
