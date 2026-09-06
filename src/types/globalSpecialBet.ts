@@ -161,6 +161,13 @@ export type GlobalSpecialBetRow = {
 /** A bet together with its legs — the shape GET returns and POST is normalised into. */
 export type GlobalSpecialBet = GlobalSpecialBetRow & {
   selections: GlobalSpecialBetSelection[];
+  /**
+   * Set on a GLOBAL ticket, null on a USER one. Optional because the USER read
+   * path predates the column and does not project it — a consumer rendering a
+   * published GLOBAL ticket must not have to assume the USER shape.
+   */
+  published_at?: string | null;
+  bet_type?: string;
 };
 
 /**

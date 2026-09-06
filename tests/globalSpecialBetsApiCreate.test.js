@@ -230,13 +230,23 @@ test("[P13] a refused request never reaches the RPC", async () => {
 // ── Structural guards ────────────────────────────────────────────────────────
 
 test("[P14] authentication and league access still gate both kinds", () => {
-  // Not exercised end-to-end here: getRequester and getSupabaseAdmin are module
-  // imports with no injection seam, and adding one is outside this increment.
-  // What IS verifiable is that both products enter through the same door, so a
-  // System request cannot bypass a check a Combo request faces.
+  // Still a source-text guard rather than an end-to-end exercise: what is being
+  // asserted is that both products enter through the SAME door, so a System
+  // request cannot bypass a check a Combo request faces.
+  //
+  // The call is now `(deps.getRequester || getRequester)(req)` — an injection
+  // seam was added with the consumer Global Bets read so its authorization
+  // could be tested, which the original form of this assertion predates. The
+  // INTENT is unchanged and still enforced: exactly one auth call, before any
+  // handler, with the real getRequester as the default.
   const api = fs.readFileSync("server-utils/globalSpecialBetsApi.js", "utf8");
 
-  assert.equal((api.match(/await getRequester\(req\)/g) || []).length, 1, "one auth call, before any handler");
+  assert.equal(
+    (api.match(/await \(deps\.getRequester \|\| getRequester\)\(req\)/g) || []).length,
+    1,
+    "one auth call, before any handler"
+  );
+  assert.equal((api.match(/getRequester\)\(req\)|getRequester\(req\)/g) || []).length, 1, "and only one");
   assert.match(api, /requester\.status \|\| 401/, "an unverified session is 401 for every request");
   assert.equal((api.match(/await assertLeagueAccess\(/g) || []).length, 1);
   const accessAt = api.indexOf("await assertLeagueAccess(");

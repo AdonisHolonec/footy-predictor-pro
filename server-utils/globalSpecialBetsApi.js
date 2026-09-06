@@ -21,6 +21,7 @@ import {
   createGlobalSpecialBet,
   createGlobalSystemBets,
   isValidBetDate,
+  listPublishedGlobalBets,
   isValidBetKind,
   isValidVariant,
   listGlobalSpecialBets
@@ -166,8 +167,25 @@ async function handlePost(req, res, userId) {
   return res.status(result.created ? 201 : 200).json(result);
 }
 
-async function handleGet(req, res, userId) {
-  const { variant, kind, bet_date: betDate, limit, offset } = req.query || {};
+async function handleGet(req, res, userId, deps = {}) {
+  const { variant, kind, bet_date: betDate, limit, offset, scope } = req.query || {};
+
+  /*
+    CONSUMER GLOBAL BETS. `scope=global` lists the product's own published
+    tickets instead of the caller's. It rides on this handler because the gate
+    it needs is the one already applied above — AUTHENTICATED, not admin — and
+    because api/ is at the twelve-function ceiling.
+
+    `userId` is deliberately NOT forwarded. A published GLOBAL ticket belongs to
+    nobody, so scoping by the caller would return nothing; more importantly, the
+    caller cannot influence which rows come back at all. bet_type and
+    published_at are fixed inside the service, so "give me drafts" and "give me
+    someone else's ticket" are not requests this endpoint can express.
+  */
+  if (String(scope || "") === "global") {
+    const { bets: globalBets } = await listPublishedGlobalBets({ limit, offset, ...(deps.supabase ? { supabase: deps.supabase } : {}) });
+    return res.status(200).json({ ok: true, bets: globalBets });
+  }
 
   if (variant !== undefined && variant !== "" && !isValidVariant(variant)) {
     return res.status(400).json({ ok: false, error: "variant invalid (permise: 3, 5, 8)." });
@@ -183,7 +201,15 @@ async function handleGet(req, res, userId) {
     return res.status(400).json({ ok: false, error: "bet_date invalid (aşteptat YYYY-MM-DD)." });
   }
 
-  const { bets } = await listGlobalSpecialBets({ userId, variant, betKind: kind, betDate, limit, offset });
+  const { bets } = await listGlobalSpecialBets({
+    userId,
+    variant,
+    betKind: kind,
+    betDate,
+    limit,
+    offset,
+    ...(deps.supabase ? { supabase: deps.supabase } : {})
+  });
   return res.status(200).json({ ok: true, bets });
 }
 
@@ -191,18 +217,32 @@ async function handleGet(req, res, userId) {
  * Entry point for `/api/special-bets`, reached through the rewrite in
  * vercel.json. Behaves exactly as a standalone handler would.
  */
-export async function handleGlobalSpecialBets(req, res) {
+/**
+ * @param {object} req
+ * @param {object} res
+ * @param {{ getRequester?: Function, supabase?: object }} [deps]
+ *        Injectable so the authorization and scoping rules can be asserted
+ *        without a database. Production callers pass nothing and the defaults
+ *        below are exactly what they were.
+ */
+export async function handleGlobalSpecialBets(req, res, deps = {}) {
   if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă" });
   }
 
-  const requester = await getRequester(req);
+  const requester = await (deps.getRequester || getRequester)(req);
   if (!requester.ok) {
     return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat" });
   }
 
-  const cfg = assertSupabaseConfigured();
-  if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
+  // Skipped only when a client was injected: a caller that supplied one plainly
+  // has a configuration, and the check exists to catch a missing environment,
+  // not to second-guess an explicit dependency. Production passes no deps and
+  // reaches this exactly as before.
+  if (!deps.supabase) {
+    const cfg = assertSupabaseConfigured();
+    if (!cfg.ok) return res.status(500).json({ ok: false, error: cfg.error });
+  }
 
   // Never from the body: the session decides whose bet this is.
   const userId = requester.user.id;
@@ -210,7 +250,7 @@ export async function handleGlobalSpecialBets(req, res) {
   try {
     return req.method === "POST"
       ? await handlePost(req, res, userId)
-      : await handleGet(req, res, userId);
+      : await handleGet(req, res, userId, deps);
   } catch (error) {
     console.error("[special-bets]", error?.message || error);
     return res.status(500).json({ ok: false, error: "Nu am putut procesa cererea Special Bet." });
