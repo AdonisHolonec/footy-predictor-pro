@@ -534,7 +534,30 @@ export async function createGlobalSystemBets({
 
   const { leagueIds: canonicalLeagues } = canonicalizeLeagueScope(leagueIds);
   const { rows, payloadsByFixtureId } = await loadCandidatePayloads(supabase, canonicalLeagues, now);
-  const built = buildGlobalSystemBets({ rows, leagueIds: canonicalLeagues, now, systemK });
+
+  /*
+    THE SAME EXCLUSION THE COMBO PATH USES — same function, same scope, and no
+    `bet_kind` filter. That absence is the point: one user's day is one budget
+    of fixtures, so a System avoids what their combos took and their combos
+    avoid what the System took. Whichever product the user builds first no
+    longer owns the pool.
+
+    The scope is (userId, betDate, USER) and deliberately NOT the ticket's
+    uniqueness key: `league_scope` belongs to that key, so two Systems on one
+    day under different league selections are two rows — and they must still
+    exclude each other, which they only do while the scope ignores the league.
+
+    GLOBAL tickets, other users and other dates cannot enter: the query filters
+    user_id, bet_type and bet_date, and a GLOBAL row carries user_id = NULL.
+  */
+  const excludeFixtureIds = await loadUsedFixtureIds(supabase, { betDate, userId });
+  const built = buildGlobalSystemBets({
+    rows,
+    leagueIds: canonicalLeagues,
+    now,
+    systemK,
+    excludeFixtureIds
+  });
   const leagueSummary = await buildLeagueSummary(supabase, canonicalLeagues, betDate, built.pool, now);
 
   // Nothing to write: either the requested k is not a shape the product sells,

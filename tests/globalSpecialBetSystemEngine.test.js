@@ -458,3 +458,239 @@ test("[20] the server builds and validates a System, and the k never comes from 
     "the k is never read from the request body"
   );
 });
+
+// ── System cross-ticket diversification ────────────────────────────────────
+
+/*
+  A System ticket now consumes the SAME exclusion set the combo path uses, so a
+  fixture the user's earlier tickets already took is not taken again while
+  equally qualified fresh ones remain.
+
+  These assert the ENGINE rule. That the USER service actually reaches it with
+  the right scope — and that combos and systems exclude each other — is proved
+  in tests/userTicketDiversification.test.js, which drives the real service
+  against a table-aware double.
+*/
+
+const buildSystem = (rows, excludeFixtureIds, leagueIds = [39, 40, 41]) =>
+  buildGlobalSystemBets({ rows, leagueIds, now: NOW, systemK: 3, excludeFixtureIds });
+
+const legIds = (built) => built.selections.map((s) => s.fixtureId).sort((a, b) => a - b);
+
+test("[S1] a second System takes five DIFFERENT fixtures when the pool allows", () => {
+  const rows = evenPool(20);
+
+  const first = buildSystem(rows, new Set());
+  const second = buildSystem(rows, new Set(legIds(first)));
+
+  assert.equal(first.selections.length, SYSTEM_SELECTION_COUNT);
+  assert.equal(second.selections.length, SYSTEM_SELECTION_COUNT);
+  assert.deepEqual(
+    legIds(first).filter((id) => legIds(second).includes(id)),
+    [],
+    "the second System must not repeat the first's matches"
+  );
+  assert.deepEqual(second.reusedFixtureIds, [], "nothing was reused: the pool was wide enough");
+});
+
+test("[S2] three sequential Systems consume fifteen distinct fixtures", () => {
+  const rows = evenPool(20);
+  const used = new Set();
+  const all = [];
+
+  for (let i = 0; i < 3; i += 1) {
+    const built = buildSystem(rows, new Set(used));
+    assert.equal(built.selections.length, SYSTEM_SELECTION_COUNT, `ticket ${i + 1} is five legs`);
+    assert.deepEqual(built.reusedFixtureIds, [], `ticket ${i + 1} needed no reuse`);
+    for (const id of legIds(built)) {
+      used.add(id);
+      all.push(id);
+    }
+  }
+
+  assert.equal(all.length, 15);
+  assert.equal(new Set(all).size, 15, "three tickets' worth of legs, fifteen distinct matches");
+});
+
+test("[S3] FALLBACK: with too few fresh, exactly 5 - fresh.length are reused", () => {
+  // Seven qualified fixtures; the first System takes five, leaving two fresh.
+  const rows = evenPool(7);
+
+  const first = buildSystem(rows, new Set());
+  const firstIds = legIds(first);
+  assert.equal(firstIds.length, 5);
+
+  const second = buildSystem(rows, new Set(firstIds));
+  const secondIds = legIds(second);
+
+  assert.equal(secondIds.length, SYSTEM_SELECTION_COUNT, "still a five-leg ticket");
+  assert.equal(new Set(secondIds).size, 5, "and still five DISTINCT fixtures");
+
+  const fresh = secondIds.filter((id) => !firstIds.includes(id));
+  assert.equal(fresh.length, 2, "both remaining fresh fixtures are taken first");
+  assert.equal(second.reusedFixtureIds.length, 3, "5 - 2 = 3 reused, the fewest that make a ticket");
+  // The reuse is reported, not silent: a caller can say how novel the ticket is.
+  assert.equal(
+    second.reusedFixtureIds.every((id) => firstIds.includes(id)),
+    true,
+    "every reused leg comes from the excluded set"
+  );
+});
+
+test("[S4] a pool below five still refuses, with the existing reason", () => {
+  const built = buildSystem(evenPool(4), new Set([1, 2]));
+
+  assert.equal(built.bet, null);
+  assert.deepEqual(built.selections, []);
+  assert.equal(built.unavailable[0].reason, "insufficient_system_candidates");
+  assert.equal(built.unavailable[0].required, SYSTEM_SELECTION_COUNT);
+  assert.equal(built.unavailable[0].available, 4);
+  // The exclusion never converts a thin pool into a different answer.
+  assert.deepEqual(built.reusedFixtureIds, []);
+});
+
+test("[S5] QUALITY IS NOT TRADED FOR VARIETY: a sub-floor fresh leg is not promoted", () => {
+  /*
+    Five qualified fixtures (1–5), all already used, plus three FRESH ones whose
+    probability sits under PROB_FLOOR. The novel legs are the unqualified ones,
+    so a rule that chased variety would take them.
+  */
+  const qualified = Array.from({ length: 5 }, (_, i) =>
+    fixture(i + 1, 39 + (i % 3), [goodMarket({ probability: 0.9 - i * 0.01, odds: 1.5 })])
+  );
+  const freshButUnqualified = [6, 7, 8].map((id) =>
+    fixture(id, 39 + (id % 3), [goodMarket({ probability: PROB_FLOOR - 0.05, odds: 1.5 })])
+  );
+
+  const built = buildSystem([...qualified, ...freshButUnqualified], new Set([1, 2, 3, 4, 5]));
+
+  assert.equal(built.selections.length, SYSTEM_SELECTION_COUNT);
+  assert.deepEqual(legIds(built), [1, 2, 3, 4, 5], "the ticket is the five QUALIFIED legs, all reused");
+  assert.equal(built.reusedFixtureIds.length, 5, "every leg is a reuse, and that is the correct answer");
+  assert.equal(built.rejected.probabilityBelowFloor, 3, "the fresh three never entered the pool at all");
+});
+
+test("[S6] every System ticket carries five DISTINCT fixture ids", () => {
+  for (const exclusion of [new Set(), new Set([1]), new Set([1, 2, 3]), new Set([1, 2, 3, 4, 5, 6])]) {
+    const built = buildSystem(evenPool(9), exclusion);
+    const list = built.selections.map((s) => s.fixtureId);
+    assert.equal(list.length, SYSTEM_SELECTION_COUNT);
+    assert.equal(new Set(list).size, SYSTEM_SELECTION_COUNT, `distinct under exclusion ${[...exclusion]}`);
+  }
+});
+
+test("[S7] two markets on one fixture stay ONE fixture under exclusion", () => {
+  // Fixture 1 offers two qualifying markets; it must still occupy one slot.
+  const rows = [
+    fixture(1, 39, [
+      goodMarket({ probability: 0.9, odds: 1.5 }),
+      goodMarket({ type: "Under 3.5", line: 3.5, probability: 0.88, odds: 1.5 })
+    ]),
+    ...Array.from({ length: 6 }, (_, i) =>
+      fixture(i + 2, 39 + (i % 3), [goodMarket({ probability: 0.85 - i * 0.01, odds: 1.5 })])
+    )
+  ];
+
+  const built = buildSystem(rows, new Set());
+  const list = built.selections.map((s) => s.fixtureId);
+  assert.equal(new Set(list).size, SYSTEM_SELECTION_COUNT);
+  assert.equal(list.filter((id) => id === 1).length <= 1, true, "fixture 1 cannot occupy two slots");
+});
+
+test("[S8] the same pool and the same exclusion give the same ticket every time", () => {
+  const rows = evenPool(12);
+  const exclusion = [3, 7];
+
+  const runs = Array.from({ length: 3 }, () => legIds(buildSystem(rows, new Set(exclusion))));
+  assert.deepEqual(runs[1], runs[0]);
+  assert.deepEqual(runs[2], runs[0]);
+  // A plain array is accepted exactly like a Set — the primitive normalises it.
+  assert.deepEqual(legIds(buildSystem(rows, exclusion)), runs[0]);
+});
+
+test("[S9] EV ordering stays PRIMARY: the ticket is the EV-best legs still available", () => {
+  const rows = evenPool(12);
+  const exclusion = new Set([1, 2]);
+
+  // What the ranking says, computed independently of the builder.
+  const ranked = rankSystemCandidates(collect(rows));
+  const expected = [];
+  const seen = new Set();
+  for (const candidate of ranked) {
+    if (seen.has(candidate.fixtureId) || exclusion.has(candidate.fixtureId)) continue;
+    seen.add(candidate.fixtureId);
+    expected.push(candidate.fixtureId);
+    if (expected.length === SYSTEM_SELECTION_COUNT) break;
+  }
+
+  const built = buildSystem(rows, exclusion);
+  assert.deepEqual(
+    built.selections.map((s) => s.fixtureId).sort((a, b) => a - b),
+    expected.sort((a, b) => a - b),
+    "diversity removes candidates from consideration; it never reorders the survivors"
+  );
+});
+
+test("[S10] k, n and variant are untouched by diversification", () => {
+  const built = buildSystem(evenPool(12), new Set([1, 2, 3]));
+
+  assert.equal(built.systemK, 3);
+  assert.equal(built.bet.systemK, 3);
+  assert.equal(built.bet.variant, SYSTEM_SELECTION_COUNT);
+  assert.equal(SYSTEM_SELECTION_COUNT, 5);
+  assert.equal(built.bet.betKind, "system");
+  assert.equal(built.bet.selections.length, 5);
+  assert.deepEqual(SYSTEM_K_VALUES, [3, 4, 5], "the supported shapes are unchanged");
+});
+
+test("[S11] probability and odds are computed from the SELECTED five, whatever was excluded", () => {
+  const built = buildSystem(evenPool(12), new Set([1, 2, 3]));
+  const chosen = built.selections;
+
+  // P(X >= 3) over exactly the five legs the ticket holds — not the pool, not
+  // the excluded ones.
+  const expectedP = systemTicketProbability(
+    chosen.map((s) => s.probability),
+    3
+  );
+  assert.equal(built.bet.estimatedTicketProbability, Number(expectedP.toFixed(4)));
+
+  // total_odds stays the PRODUCT of the five selected odds.
+  const expectedOdds = chosen.reduce((acc, s) => acc * s.odds, 1);
+  assert.equal(built.bet.productOdds, Number(expectedOdds.toFixed(3)));
+  assert.equal(built.bet.combinationCount, 10, "C(5,3) is unchanged");
+});
+
+test("[S12] the twelve gates produce the same populations with and without exclusion", () => {
+  const rows = evenPool(12);
+
+  const plain = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
+  const excluded = buildSystem(rows, new Set([1, 2, 3]));
+
+  // Gating happens BEFORE selection, so the accepted and rejected populations
+  // cannot move — only which of the accepted end up in the ticket.
+  assert.deepEqual(excluded.rejected, plain.rejected);
+  assert.equal(excluded.examined, plain.examined);
+  assert.deepEqual(
+    excluded.pool.map((c) => c.fixtureId),
+    plain.pool.map((c) => c.fixtureId),
+    "the same pool, in the same order"
+  );
+  assert.notDeepEqual(
+    excluded.selections.map((c) => c.fixtureId),
+    plain.selections.map((c) => c.fixtureId),
+    "only the chosen legs differ"
+  );
+});
+
+test("[S13] an absent exclusion behaves exactly as before this change", () => {
+  const rows = evenPool(9);
+  const before = buildGlobalSystemBets({ rows, leagueIds: [39, 40, 41], now: NOW, systemK: 3 });
+
+  // The pre-change behaviour was the pool's first five, in rank order.
+  assert.deepEqual(
+    before.selections.map((c) => c.fixtureId),
+    before.pool.slice(0, SYSTEM_SELECTION_COUNT).map((c) => c.fixtureId)
+  );
+  assert.deepEqual(before.reusedFixtureIds, []);
+});

@@ -119,19 +119,36 @@ test("[P10] the existing field validation is unchanged for both kinds", () => {
 
 function fakeSupabase({ historyRows = [] } = {}) {
   const calls = { rpc: [] };
-  const chain = {
-    select: () => chain,
-    in: () => chain,
-    gt: () => chain,
-    gte: () => chain,
-    lte: () => chain,
-    order: () => chain,
-    limit: () => chain,
-    then: (resolve) => resolve({ data: historyRows, error: null })
+  /*
+    TABLE-AWARE, because the System path now reads stored fixture usage before
+    it builds. Answering `historyRows` to every table would have fed prediction
+    rows to the exclusion reader; answering an empty list to the ticket tables
+    says what this fixture means — a user with no prior tickets — and leaves
+    every assertion below about the RPC exactly as it was.
+  */
+  const chainFor = (table) => {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      in: () => chain,
+      not: () => chain,
+      is: () => chain,
+      gt: () => chain,
+      gte: () => chain,
+      lte: () => chain,
+      order: () => chain,
+      limit: () => chain,
+      then: (resolve) =>
+        resolve({
+          data: table === "predictions_history" ? historyRows : [],
+          error: null
+        })
+    };
+    return chain;
   };
   return {
     calls,
-    from: () => chain,
+    from: (table) => chainFor(table),
     async rpc(name, params) {
       calls.rpc.push({ name, params });
       return {
