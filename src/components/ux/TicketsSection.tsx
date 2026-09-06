@@ -4,6 +4,8 @@ import SectionHeader from "../../design-system/SectionHeader";
 import Button from "../../design-system/Button";
 import GlobalSpecialBetSection from "./GlobalSpecialBetSection";
 import GlobalSpecialBetHistory from "./GlobalSpecialBetHistory";
+import ConsumerGlobalBetsList from "./ConsumerGlobalBetsList";
+import SegmentedControl from "../../design-system/SegmentedControl";
 import type { FixtureLabel } from "../../utils/globalSpecialBetView";
 
 type Props = {
@@ -31,6 +33,9 @@ type Props = {
  * hook and the history in its own, so the two columns never share state.
  * Composition only: entitlement, pricing and settlement are untouched.
  */
+/** The two products under Tickets. Not a filter — a panel switcher. */
+type TicketsTab = "my-bets" | "global-bets";
+
 export default function TicketsSection({
   betDate,
   favoriteLeagueIds,
@@ -41,6 +46,14 @@ export default function TicketsSection({
   const { t } = useLocale();
   const [builderOpen, setBuilderOpen] = useState(false);
   const openBuilder = () => setBuilderOpen(true);
+  /*
+    My Bets stays the default so the surface opens on what an existing user
+    already had. Global Bets is one tap away on EVERY viewport — the switcher is
+    plain markup with no breakpoint, so mobile reaches it through the same CTA
+    entry that already leads here.
+  */
+  const [tab, setTab] = useState<TicketsTab>("my-bets");
+  const showingGlobal = tab === "global-bets";
 
   return (
     <section className="space-y-4" data-surface="tickets" data-testid="my-bets">
@@ -58,19 +71,48 @@ export default function TicketsSection({
           as="h1"
           size="page"
           eyebrow={t("nav.tickets")}
-          title={t("tickets.myBetsTitle")}
-          description={t("tickets.myBetsSub")}
+          title={showingGlobal ? t("tickets.globalBetsTitle") : t("tickets.myBetsTitle")}
+          description={showingGlobal ? t("tickets.globalBetsSub") : t("tickets.myBetsSub")}
         />
-        <Button
-          onClick={openBuilder}
-          aria-expanded={builderOpen}
-          aria-controls="tickets-build"
-          data-testid="tickets-build-cta"
-        >
-          {t("tickets.buildCta")}
-        </Button>
+        {/* Build belongs to My Bets alone. On Global Bets there is no control
+            at all rather than a disabled one, because a consumer can never
+            generate a Global ticket and an inert button would imply otherwise. */}
+        {!showingGlobal && (
+          <Button
+            onClick={openBuilder}
+            aria-expanded={builderOpen}
+            aria-controls="tickets-build"
+            data-testid="tickets-build-cta"
+          >
+            {t("tickets.buildCta")}
+          </Button>
+        )}
       </header>
 
+      {/* Panel switcher, not a filter — the options swap what is shown. Plain
+          markup with NO breakpoint, so Global Bets is reachable on every
+          viewport through the same Tickets entry mobile already uses. */}
+      <SegmentedControl
+        options={[
+          { value: "my-bets", label: t("tickets.myBetsTab") },
+          { value: "global-bets", label: t("tickets.globalBetsTab") }
+        ] as { value: TicketsTab; label: string }[]}
+        value={tab}
+        // Narrowed at the boundary: the control's generic widens to `string`
+        // under this project's non-strict compiler, so the cast lives here
+        // rather than being spread through the options literal.
+        onChange={(value) => setTab(value as TicketsTab)}
+        // "tabs", not "toggle": these options SWAP the panel rather than filter
+        // a list, so the control must announce tablist/tab semantics.
+        mode="tabs"
+        aria-label={t("nav.tickets")}
+      />
+
+      {showingGlobal ? (
+        <section aria-labelledby="tickets-global" data-testid="tickets-global" className="space-y-3">
+          <ConsumerGlobalBetsList fixtureIndex={fixtureIndex} />
+        </section>
+      ) : (
       <div className={builderOpen ? "grid gap-4 xl:grid-cols-2 xl:items-start" : "grid gap-4"}>
         {builderOpen && (
           <section aria-labelledby="tickets-build" data-testid="tickets-build" className="space-y-3">
@@ -101,6 +143,7 @@ export default function TicketsSection({
           )}
         </section>
       </div>
+      )}
     </section>
   );
 }

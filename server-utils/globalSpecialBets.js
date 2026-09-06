@@ -190,6 +190,77 @@ export async function loadCandidatePayloads(supabase, leagueIds, now = Date.now(
 }
 
 /**
+ * The consumer page size for published Global Bets. Bounded server-side: the
+ * client may ask for fewer, never for more, and never for "all".
+ */
+export const PUBLISHED_GLOBAL_PAGE_SIZE = 20;
+const PUBLISHED_GLOBAL_MAX_PAGE = 50;
+
+/**
+ * Published GLOBAL tickets, for any authenticated consumer.
+ *
+ * ── WHY THIS IS NOT listGlobalSpecialBets ────────────────────────────────────
+ * That function is the USER path and filters `.eq("user_id", userId)`. A GLOBAL
+ * row carries `user_id = NULL`, so it can never match — the existing read is
+ * structurally incapable of returning one, whatever else is passed to it.
+ * Widening it would have meant making ownership optional on the one query whose
+ * whole job is enforcing ownership, so this is a separate function and the USER
+ * read is untouched.
+ *
+ * ── THE TWO PREDICATES ARE NOT PARAMETERS ────────────────────────────────────
+ * `bet_type = 'GLOBAL'` and `published_at IS NOT NULL` are written here, not
+ * accepted from a caller. A consumer cannot ask for a draft, cannot ask for a
+ * USER row, and cannot ask on somebody's behalf, because none of those is
+ * expressible. RLS (migration 068) is the second lock and would refuse a draft
+ * even if this query asked for one; this is the first.
+ *
+ * The snapshot is authoritative: selections come from `special_bet_selections`
+ * as stored, never re-derived from predictions_history, and nothing here reads
+ * raw_payload, hydration_payload or ticket_candidates.
+ *
+ * Two queries, never N+1: one page of tickets, then their legs in one `.in()`.
+ */
+export async function listPublishedGlobalBets({
+  limit = PUBLISHED_GLOBAL_PAGE_SIZE,
+  offset = 0,
+  supabase = getSupabaseAdmin()
+} = {}) {
+  if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
+
+  const safeLimit = Math.max(1, Math.min(Number(limit) || PUBLISHED_GLOBAL_PAGE_SIZE, PUBLISHED_GLOBAL_MAX_PAGE));
+  const safeOffset = Math.max(0, Number(offset) || 0);
+
+  const { data: bets, error } = await supabase
+    .from(BETS_TABLE)
+    .select("*")
+    .eq("bet_type", "GLOBAL")
+    .not("published_at", "is", null)
+    .order("bet_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(safeOffset, safeOffset + safeLimit - 1);
+  if (error) throw error;
+  if (!bets?.length) return { bets: [] };
+
+  const { data: selections, error: selError } = await supabase
+    .from(SELECTIONS_TABLE)
+    .select("*")
+    .in(
+      "special_bet_id",
+      bets.map((b) => b.id)
+    )
+    .order("kickoff_at", { ascending: true });
+  if (selError) throw selError;
+
+  const byBetId = new Map();
+  for (const selection of selections || []) {
+    if (!byBetId.has(selection.special_bet_id)) byBetId.set(selection.special_bet_id, []);
+    byBetId.get(selection.special_bet_id).push(selection);
+  }
+
+  return { bets: bets.map((b) => ({ ...b, selections: byBetId.get(b.id) || [] })) };
+}
+
+/**
  * The UTC instants that safely bracket one Europe/Bucharest calendar day.
  *
  * Deliberately a SUPERSET, not the exact boundary: Bucharest runs UTC+2 in

@@ -638,6 +638,13 @@ export const ro: Dict = {
     buildSub: "Un bilet cu mai multe selecții din ligile tale favorite.",
     historyTitle: "Istoric bilete",
     historySub: "Cum s-au încheiat biletele tale.",
+    globalBetsTab: "Bilete Globale",
+    myBetsTab: "Biletele mele",
+    globalBetsTitle: "Bilete Globale",
+    globalBetsSub: "Bilete publicate de Footy Predictor, din toate ligile acoperite.",
+    globalBetsEmpty: "Niciun bilet Global publicat",
+    globalBetsEmptyDesc: "Când publicăm un bilet Global, va apărea aici.",
+    globalBetsError: "Nu am putut încărca Biletele Globale. Încearcă din nou.",
     myBetsTitle: "Biletele mele",
     myBetsSub: "Biletele tale cu mai multe selecții, din ligile tale favorite.",
     sub: "Bilete cu mai multe selecții din ligile tale favorite și cum s-au încheiat."

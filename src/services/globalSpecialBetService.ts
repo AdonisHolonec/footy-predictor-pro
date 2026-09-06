@@ -176,3 +176,30 @@ export async function listGlobalSpecialBets(params?: {
     selections: asSelections(bet?.selections)
   }));
 }
+
+/**
+ * Published Global Bets — the product's own tickets, read-only for consumers.
+ *
+ * There is deliberately NO parameter for owner, bet type or publication state.
+ * The server fixes `bet_type = GLOBAL` and `published_at IS NOT NULL`, so a
+ * draft and another user's ticket are not things this call can ask for. The
+ * only input is the page size, and the server caps that too.
+ *
+ * Distinct from `fetchGlobalSpecialBets` above, which is the USER path despite
+ * the historical "GlobalSpecialBet" name — that one lists the caller's OWN
+ * tickets. The two must not be confused: `bet_type` is the real distinction.
+ */
+export async function fetchPublishedGlobalBets(limit?: number): Promise<GlobalSpecialBet[]> {
+  const qs = new URLSearchParams({ scope: "global" });
+  if (limit != null) qs.set("limit", String(limit));
+
+  const res = await fetchWithAuth(`/api/special-bets?${qs.toString()}`);
+  const json = await readEnvelope(res);
+  assertOk(res, json);
+
+  if (!Array.isArray(json.bets)) return [];
+  return (json.bets as GlobalSpecialBet[]).map((bet) => ({
+    ...bet,
+    selections: asSelections(bet?.selections)
+  }));
+}
