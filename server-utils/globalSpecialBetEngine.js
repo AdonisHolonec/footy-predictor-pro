@@ -568,9 +568,11 @@ export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VA
 // purpose: a combo is the safest COMBINATION, a system is the best VALUE among
 // legs that already passed every safety gate.
 //
-// Nothing below is reachable from production. The engine can build a system
-// ticket; create_global_special_bet refuses to store one (migration 052,
-// `system_not_enabled`), because settlement cannot grade k-of-n yet.
+// This IS reachable from production, for USER tickets. Migration 052 shipped
+// the schema and refused to store a system (`system_not_enabled`); 053 removed
+// that gate once settlement could grade k-of-n, and POST /api/special-bets now
+// accepts `bet_kind: "system"`. There is still no GLOBAL system: both
+// generateGlobalTicket and the admin route refuse any kind but combo.
 
 /** Five selections, always. The k varies; the ticket size does not. */
 export const SYSTEM_SELECTION_COUNT = 5;
@@ -844,7 +846,7 @@ export function validateSystemShape({ selections, systemK } = {}) {
  * ORDER OF OPERATIONS — the same shape buildGlobalSpecialBets uses, with only
  * the ranking swapped:
  *
- *   collect (12 gates) -> rank by EV -> diversify -> slice 5
+ *   collect (12 gates) -> rank by EV -> diversify -> select 5 (minus used)
  *
  * Diversification runs AFTER ranking here because that is where it runs for
  * combos today, and this increment reuses `diversifyGlobalCandidates` unchanged
@@ -874,7 +876,14 @@ export function validateSystemShape({ selections, systemK } = {}) {
  * unsupported k refuses the same way rather than throwing: "3.5 is not a shape
  * we sell" is an ordinary answer to an ordinary question.
  *
- * @param {{ rows: object[], leagueIds: number[], now: number, systemK: number }} options
+ * `excludeFixtureIds` carries the fixtures the user's earlier tickets already
+ * used — combos and systems alike, because the exclusion set is scoped to the
+ * person and the day rather than to a product. It is passed IN rather than
+ * discovered here for the same reason buildGlobalSpecialBets takes it: this
+ * function is pure, and the caller owns the scope the exclusion belongs to.
+ *
+ * @param {{ rows: object[], leagueIds: number[], now: number, systemK: number,
+ *           excludeFixtureIds?: Set<number>|number[] }} options
  */
 export function buildGlobalSystemBets(options) {
   const systemK = options?.systemK;
@@ -895,6 +904,7 @@ export function buildGlobalSystemBets(options) {
       selections: [],
       systemK: null,
       bet: null,
+      reusedFixtureIds: [],
       unavailable: [
         {
           betKind: "system",
@@ -916,6 +926,7 @@ export function buildGlobalSystemBets(options) {
       selections: [],
       systemK,
       bet: null,
+      reusedFixtureIds: [],
       unavailable: [
         {
           betKind: "system",
@@ -927,8 +938,39 @@ export function buildGlobalSystemBets(options) {
     };
   }
 
-  const selections = pool.slice(0, SYSTEM_SELECTION_COUNT);
-  return { ...collected, pool, selections, systemK, bet: toSystemBet(systemK, selections), unavailable: [] };
+  /*
+    ACROSS-TICKETS DEDUP, through the combo primitive rather than a second rule.
+
+    `diversifyGlobalCandidates` above already guarantees one leg per fixture
+    WITHIN this ticket. This adds the other invariant: a fixture the user's
+    earlier tickets already used — combo OR system, the exclusion set does not
+    distinguish — is not taken again while equally qualified fresh ones remain.
+
+    selectVariantLegs is reused verbatim because a System needs nothing a combo
+    does not. `validateSystemShape` asks only for five legs and a supported k,
+    and `systemTicketProbability` is symmetric in its inputs, so no fixture is
+    structurally required and the `variant - fresh.length` fallback is right
+    here for the same reason it is right there.
+
+    QUALITY IS NOT TRADED FOR VARIETY. `fresh` and `reused` are partitions of
+    THIS pool, which has already passed all twelve gates and been ranked by EV.
+    Nothing is promoted, no threshold moves, and a candidate that failed a gate
+    cannot enter merely because it would have been novel.
+
+    It cannot return null: the guard above already refused a pool below five,
+    and selectVariantLegs only fails when the pool cannot fill the ticket.
+  */
+  const chosen = selectVariantLegs(pool, SYSTEM_SELECTION_COUNT, options?.excludeFixtureIds);
+  const selections = chosen.selections;
+  return {
+    ...collected,
+    pool,
+    selections,
+    systemK,
+    bet: toSystemBet(systemK, selections),
+    reusedFixtureIds: chosen.reusedFixtureIds,
+    unavailable: []
+  };
 }
 
 export default {
