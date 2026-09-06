@@ -20,7 +20,7 @@ import {
   // values any more. The engine validates the single requested k.
   validateSystemShape
 } from "./globalSpecialBetEngine.js";
-import { settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
+import { BET_STATUS, settleGlobalSpecialBet, settleSelection } from "./globalSpecialBetSettlement.js";
 import { rehydrateSettlementRow } from "./predictionsHistory.js";
 import { calendarDateKeyEuropeBucharest } from "./fixtureCalendarDateKey.js";
 import { loadUsedFixtureIds } from "./ticketFixtureUsage.js";
@@ -197,6 +197,38 @@ export const PUBLISHED_GLOBAL_PAGE_SIZE = 20;
 const PUBLISHED_GLOBAL_MAX_PAGE = 50;
 
 /**
+ * How many calendar days the consumer's "recent" window spans, INCLUSIVE of
+ * the current business day. Seven means today plus the previous six.
+ */
+export const CONSUMER_HISTORY_WINDOW_DAYS = 7;
+
+/**
+ * The oldest `bet_date` still inside the consumer's recent window, as
+ * YYYY-MM-DD.
+ *
+ * ── CALENDAR DAYS, NOT 168 HOURS ─────────────────────────────────────────────
+ * `bet_date` is a Postgres `date` (migration 043), so this is date-to-date
+ * arithmetic and a rolling timestamp window would be the wrong shape entirely:
+ * a ticket does not become older at 14:00 than it was at 09:00 on the same day.
+ * The business day comes from `calendarDateKeyEuropeBucharest`, the same helper
+ * that decides `bet_date` everywhere else, so the boundary a consumer sees is
+ * the boundary generation used.
+ *
+ * The subtraction runs on UTC midnight of that already-resolved date string,
+ * in exact 24h multiples. That is deliberate and is NOT a timezone bug: both
+ * ends are plain calendar dates by this point, so stepping back six UTC days
+ * from "2026-09-06" yields "2026-08-31" whatever Bucharest's offset is doing.
+ * Doing the arithmetic in local time is what would break across a DST change.
+ */
+export function consumerHistoryWindowStart(now = Date.now()) {
+  const today = calendarDateKeyEuropeBucharest(new Date(now).toISOString());
+  if (!today) return null;
+  const base = Date.parse(`${today}T00:00:00.000Z`);
+  if (!Number.isFinite(base)) return null;
+  return new Date(base - (CONSUMER_HISTORY_WINDOW_DAYS - 1) * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
  * Published GLOBAL tickets, for any authenticated consumer.
  *
  * ── WHY THIS IS NOT listGlobalSpecialBets ────────────────────────────────────
@@ -218,23 +250,54 @@ const PUBLISHED_GLOBAL_MAX_PAGE = 50;
  * as stored, never re-derived from predictions_history, and nothing here reads
  * raw_payload, hydration_payload or ticket_candidates.
  *
+ * ── THE HISTORY WINDOW ───────────────────────────────────────────────────────
+ * Recent tickets show at every status; older ones show only if they WON. The
+ * cut is `consumerHistoryWindowStart`, and the rule is enforced in Postgres,
+ * before the page is cut — see the `.or()` below for why that matters.
+ *
  * Two queries, never N+1: one page of tickets, then their legs in one `.in()`.
  */
 export async function listPublishedGlobalBets({
   limit = PUBLISHED_GLOBAL_PAGE_SIZE,
   offset = 0,
+  now = Date.now(),
   supabase = getSupabaseAdmin()
 } = {}) {
   if (!supabase) throw new Error("Clientul Supabase nu este disponibil.");
 
   const safeLimit = Math.max(1, Math.min(Number(limit) || PUBLISHED_GLOBAL_PAGE_SIZE, PUBLISHED_GLOBAL_MAX_PAGE));
   const safeOffset = Math.max(0, Number(offset) || 0);
+  const windowStart = consumerHistoryWindowStart(now);
 
-  const { data: bets, error } = await supabase
+  let query = supabase
     .from(BETS_TABLE)
     .select("*")
     .eq("bet_type", "GLOBAL")
-    .not("published_at", "is", null)
+    .not("published_at", "is", null);
+
+  /*
+    "recent, OR old but won" — as ONE predicate, and that is not a shortcut.
+
+    Written out, the product rule is `R ∨ (¬R ∧ W)` where R is "inside the
+    window" and W is "won". Absorption collapses that to `R ∨ W`: an old loser
+    fails both sides, an old winner passes on W, and anything recent passes on R
+    whatever its status. The two forms accept exactly the same rows, so the
+    shorter one is used and the longer one is what the tests assert in terms of.
+
+    It runs in the DATABASE, before .range(). Filtering after the page is cut is
+    the failure this avoids: fetch twenty old tickets, drop nineteen losers in
+    JS, hand back one — while qualifying winners sit unread on the next page.
+    Here the page is twenty QUALIFYING rows or it is the end of the list.
+
+    `windowStart` is null only if the clock is unreadable. The filter is then
+    dropped rather than guessed at: showing a recent ticket that should have
+    been hidden is a display quirk, hiding a winner is losing the record.
+  */
+  if (windowStart) {
+    query = query.or(`bet_date.gte.${windowStart},status.eq.${BET_STATUS.WON}`);
+  }
+
+  const { data: bets, error } = await query
     .order("bet_date", { ascending: false })
     .order("created_at", { ascending: false })
     .range(safeOffset, safeOffset + safeLimit - 1);

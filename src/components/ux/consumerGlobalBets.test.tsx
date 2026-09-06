@@ -223,3 +223,91 @@ describe("My Bets is unaffected", () => {
     expect(screen.queryByTestId("tickets-global")).toBeNull();
   });
 });
+
+/**
+ * The history window — recent tickets at any status, older ones only if WON.
+ *
+ * ── WHERE THE RULE LIVES, AND WHY NOT HERE ───────────────────────────────────
+ * The rule is enforced in the DATABASE (`listPublishedGlobalBets`), so what the
+ * component receives is already the eligible set. These tests therefore assert
+ * the two things that are actually the client's job:
+ *
+ *   1. it renders every ticket the server judged eligible, whatever its status
+ *      — a client-side status filter would hide recent losers the product has
+ *      decided to show;
+ *
+ *   2. it cannot ask for a different rule — the request carries no status and
+ *      no date, so the window is not a client-controllable parameter.
+ *
+ * Re-implementing the cut here would duplicate the rule in a second place with
+ * its own clock and its own idea of "old", and the two would drift. Which rows
+ * are eligible is proven in tests/publishedGlobalBetsRead.test.js, against the
+ * query — the only place that can prove it.
+ */
+describe("Global Bets history window", () => {
+  const recent = (status: string, id: string) =>
+    globalBet({ id, status, bet_date: "2026-09-05", published_at: "2026-09-05T17:00:00.000Z" });
+
+  it("renders recent tickets whatever their status — won, lost and pending alike", async () => {
+    fetchPublishedGlobalBets.mockResolvedValue([
+      recent("won", "g-won"),
+      recent("lost", "g-lost"),
+      recent("pending", "g-pending"),
+      globalBet({ id: "g-void", status: "void", bet_date: "2026-09-04" })
+    ]);
+    renderTickets();
+    openGlobal();
+
+    const list = await screen.findByTestId("global-bets-list");
+    // Four eligible tickets, four rendered: the client hides none of them.
+    for (const id of ["g-won", "g-lost", "g-pending", "g-void"]) {
+      expect(within(list).getByTestId(`global-bet-toggle-${id}`)).toBeTruthy();
+    }
+  });
+
+  it("renders an older WINNING ticket exactly like a recent one", async () => {
+    // Server-eligible because it won; nothing about its age changes the row.
+    fetchPublishedGlobalBets.mockResolvedValue([
+      globalBet({ id: "g-old-won", status: "won", bet_date: "2026-07-01", published_at: "2026-07-01T10:00:00.000Z" })
+    ]);
+    renderTickets();
+    openGlobal();
+
+    const list = await screen.findByTestId("global-bets-list");
+    expect(within(list).getByText("2026-07-01")).toBeTruthy();
+  });
+
+  it("adds no filtering of its own: the eligible set is the rendered set", async () => {
+    /*
+      The guard against duplicating the rule client-side. If someone later adds
+      a second window here, this row disappears and the test says so — and the
+      two clocks would then disagree about the boundary in exactly the way that
+      is hardest to debug.
+    */
+    const eligible = [
+      recent("lost", "g-recent-lost"),
+      globalBet({ id: "g-old-won", status: "won", bet_date: "2026-07-01" })
+    ];
+    fetchPublishedGlobalBets.mockResolvedValue(eligible);
+    renderTickets();
+    openGlobal();
+
+    const list = await screen.findByTestId("global-bets-list");
+    expect(within(list).getAllByTestId(/^global-bet-toggle-/)).toHaveLength(eligible.length);
+  });
+
+  it("cannot ask for a different window: no status or date leaves the client", async () => {
+    fetchPublishedGlobalBets.mockResolvedValue([globalBet()]);
+    renderTickets();
+    openGlobal();
+
+    await screen.findByTestId("global-bets-list");
+    // A page size at most — never a status, a bet_date or a window length.
+    for (const call of fetchPublishedGlobalBets.mock.calls) {
+      const passed = JSON.stringify(call);
+      for (const forbidden of ["status", "bet_date", "won", "window", "since"]) {
+        expect(passed.includes(forbidden)).toBe(false);
+      }
+    }
+  });
+});
