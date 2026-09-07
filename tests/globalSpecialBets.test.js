@@ -12,6 +12,7 @@ import {
   toSelectionRows,
   unavailableResponse
 } from "../server-utils/globalSpecialBets.js";
+import { buildTicketCandidates } from "../server-utils/ticketCandidateColumn.js";
 
 /**
  * Global Special Bet — persistence layer.
@@ -62,7 +63,32 @@ function payload(id, leagueId, overrides = {}) {
 }
 
 /** Minimal Supabase stand-in: records every call so tests can assert on them. */
+/*
+  Production dual-writes BOTH columns on every predictions_history row, so a
+  fixture carrying only `raw_payload` is not a shape the database can hold. The
+  projection is derived with the production builder rather than hand-written, so
+  the two cannot drift apart inside a fixture — which is the point of deriving
+  it. A fixture that sets `ticket_candidates` explicitly keeps what it set.
+*/
+export const withProjection = (row) => {
+  if (!row || row.ticket_candidates !== undefined) return row;
+  return {
+    ...row,
+    ticket_candidates: buildTicketCandidates(row.raw_payload),
+    /*
+      `model_version` is a COLUMN, written from the same value the payload
+      carries. The projection path reads the column (the payload is no longer
+      transported), so a fixture that set only `raw_payload.modelVersion`
+      described a row the writer cannot produce. Verified in production: 0
+      mismatches between column and payload across every upcoming row.
+    */
+    model_version: row.model_version ?? row.raw_payload?.modelVersion ?? null
+  };
+};
+
 function fakeSupabase({ historyRows = [], dayRows = [], rpcResult = null, bets = [], selections = [] } = {}) {
+  historyRows = historyRows.map(withProjection);
+  dayRows = dayRows.map(withProjection);
   const calls = { rpc: [], from: [], filters: [] };
 
   // Two reads hit predictions_history: the candidate pool (`.gt kickoff_at`)
@@ -72,6 +98,9 @@ function fakeSupabase({ historyRows = [], dayRows = [], rpcResult = null, bets =
     let source = historyRows;
     const chain = {
       select: () => chain,
+      // The candidate read carries `.not("ticket_candidates","is",null)`; the
+      // fixtures all have the projection, so recording it is enough.
+      not: () => chain,
       in: (col, val) => {
         calls.filters.push({ op: "in", col, val });
         return chain;

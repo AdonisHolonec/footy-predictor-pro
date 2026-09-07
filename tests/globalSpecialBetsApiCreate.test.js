@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withProjection } from "./globalSpecialBets.test.js";
 import fs from "node:fs";
 import { test } from "node:test";
 import { parseCreateRequest } from "../server-utils/globalSpecialBetsApi.js";
@@ -118,6 +119,7 @@ test("[P10] the existing field validation is unchanged for both kinds", () => {
 // ── One request, one row ─────────────────────────────────────────────────────
 
 function fakeSupabase({ historyRows = [] } = {}) {
+  historyRows = historyRows.map(withProjection);
   const calls = { rpc: [] };
   /*
     TABLE-AWARE, because the System path now reads stored fixture usage before
