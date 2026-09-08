@@ -49,6 +49,33 @@ export const HISTORY_ROUTE = "/api/history";
   cached client object and opens no socket, so this measures construction, not
   connection establishment.
 */
+/*
+  SYNC STAGES. `mode=sync` had no stage of its own, so every millisecond it spent
+  landed in `unattributedMs` — a production sync reported durationMs 100,014 and
+  unattributedMs 100,011, which reads like a mystery and is actually just the
+  absence of instrumentation. These name the phases handleHistorySync already
+  runs, in the order it runs them, so the gap becomes an attribution.
+
+  They are TOP-LEVEL and disjoint: the three scans, the provider fan-out, the CPU
+  between them, the three upserts and the two tail steps never overlap, because
+  the handler awaits each in turn.
+*/
+const SYNC_STAGES = [
+  "scan1Ms",
+  "providerFixtureMs",
+  "cpuPrepareMs",
+  "upsert1Ms",
+  "scan2Ms",
+  "resettleCpuMs",
+  "upsert2Ms",
+  "scan3Ms",
+  "statsMs",
+  "upsert3Ms",
+  "closingOddsMs",
+  "globalSettlementMs",
+  "syncStatusPersistMs"
+];
+
 const STAGES = [
   "authMs",
   "rateLimitMs",
@@ -57,9 +84,39 @@ const STAGES = [
   "supabaseRequestMs",
   "aggregateMs",
   "mappingMs",
-  "responseMs"
+  "responseMs",
+  ...SYNC_STAGES
 ];
 const STAGE_SET = new Set(STAGES);
+
+/**
+ * Counters a sync may report. A strict whitelist of NUMBERS: this accumulator's
+ * safety property is that only primitives reach a log line, and a sync handles
+ * fixture ids and raw payloads that must never travel with its telemetry.
+ */
+const SYNC_COUNTERS = new Set([
+  "scanned",
+  "updated",
+  "resettled",
+  "cardResettled",
+  "finishedScanned",
+  "statsFetchCalls",
+  "statsSkippedBudget",
+  "recommendedStatsCalls",
+  "providerFixtureCalls",
+  "upsertBatches"
+]);
+
+/**
+ * Elapsed time must not be measured with a wall clock: these stages run for
+ * seconds to minutes, and `Date.now()` can step backwards under NTP correction,
+ * producing a negative or wildly wrong duration for exactly the slow sync this
+ * instrumentation exists to explain. `performance.now()` is monotonic;
+ * transportTiming.js already uses it for the same reason.
+ */
+function elapsedNow() {
+  return typeof globalThis.performance?.now === "function" ? globalThis.performance.now() : Date.now();
+}
 
 function flagOf(query, name) {
   const raw = String(query?.[name] ?? "").toLowerCase();
@@ -111,7 +168,12 @@ export function createHistoryTiming(query = {}, method = "GET") {
     transport: null,
     rows: null,
     finalBytes: null,
-    errorKind: null
+    errorKind: null,
+    // Sync-only. Absent for every other mode, so no read event grows a field.
+    counters: null,
+    failedStage: null,
+    failedOperation: null,
+    errorCode: null
   };
 }
 
@@ -133,12 +195,71 @@ export function markStage(timing, stage, ms) {
 
 /** Times `fn`, attributes it to `stage`, and returns whatever `fn` returned. */
 export async function timeStage(timing, stage, fn) {
-  const startedAt = Date.now();
+  const startedAt = elapsedNow();
   try {
     return await fn();
   } finally {
-    markStage(timing, stage, Date.now() - startedAt);
+    markStage(timing, stage, elapsedNow() - startedAt);
   }
+}
+
+/**
+ * Record sync counters. Merged, not replaced, so a phase can report what it
+ * finished before a later phase throws — the whole point is that a FAILED sync
+ * still says how much work it had done.
+ *
+ * Unknown keys and non-numbers are dropped rather than logged.
+ */
+export function recordSyncCounters(timing, counters) {
+  if (!usable(timing) || !counters || typeof counters !== "object") return;
+  for (const [key, value] of Object.entries(counters)) {
+    if (!SYNC_COUNTERS.has(key)) continue;
+    const n = safeInt(value);
+    if (n === null || n < 0) continue;
+    if (!timing.counters) timing.counters = Object.create(null);
+    timing.counters[key] = n;
+  }
+}
+
+/**
+ * Time one sync phase and, if it throws, record WHICH phase and WHICH operation
+ * before rethrowing the original error untouched.
+ *
+ * This lives here rather than in the route so there is one implementation of the
+ * "measure, attribute, rethrow" contract, and so that contract is testable
+ * without standing up a Supabase double.
+ *
+ * The error is rethrown, never wrapped: the caller's catch must see exactly what
+ * it saw before this instrumentation existed.
+ */
+export async function timeSyncPhase(timing, stage, operation, fn) {
+  try {
+    return await timeStage(timing, stage, fn);
+  } catch (error) {
+    recordFailure(timing, { stage, operation, error });
+    throw error;
+  }
+}
+
+/**
+ * Which phase failed, and on what.
+ *
+ * `operation` is a fixed label chosen at the call site (e.g. "scan_finished"),
+ * never anything derived from data. The error MESSAGE is deliberately not
+ * recorded: this module's stated safety property is that a connection string,
+ * a row or an identifier cannot reach a log line, and Postgres/PostgREST
+ * messages routinely carry all three. `errorKind` and `errorCode` carry the
+ * diagnosis instead — a code like "57014" says statement timeout precisely,
+ * without quoting the statement.
+ */
+export function recordFailure(timing, { stage = null, operation = null, error = null } = {}) {
+  if (!usable(timing)) return;
+  if (timing.failedStage) return; // first failure wins; it is the cause
+  if (stage && STAGE_SET.has(stage)) timing.failedStage = stage;
+  if (operation) timing.failedOperation = String(operation).slice(0, 64);
+  const code = error?.code;
+  if (code !== undefined && code !== null && String(code).length <= 16) timing.errorCode = String(code);
+  timing.errorKind = classifyHistoryError(error, stage);
 }
 
 /** Attach the invocation's transport collector. Absent is fine — see D4. */
@@ -222,6 +343,15 @@ export function summarizeHistoryTiming(timing, { status, durationMs } = {}) {
   if (timing.rows !== null) out.rows = timing.rows;
   if (timing.finalBytes !== null) out.finalBytes = timing.finalBytes;
   if (timing.errorKind) out.errorKind = timing.errorKind;
+  /*
+    Counters survive failure by design. `rows` comes from the response body, so
+    a sync that threw reports rows=0 and says nothing about the work it had
+    already done — which is exactly what made the 15:19Z 500 unreadable.
+  */
+  if (timing.counters) out.sync = { ...timing.counters };
+  if (timing.failedStage) out.failedStage = timing.failedStage;
+  if (timing.failedOperation) out.failedOperation = timing.failedOperation;
+  if (timing.errorCode) out.errorCode = timing.errorCode;
 
   // What the measured stages did not explain — work happening between them
   // rather than inside one. If this dominates, the split is in the wrong place.
@@ -230,7 +360,17 @@ export function summarizeHistoryTiming(timing, { status, durationMs } = {}) {
     INSIDE dbReadMs, so counting them here would subtract the same milliseconds
     twice and report a false negative gap.
   */
-  const TOP_LEVEL = ["authMs", "rateLimitMs", "dbReadMs", "aggregateMs", "mappingMs", "responseMs"];
+  const TOP_LEVEL = [
+    "authMs",
+    "rateLimitMs",
+    "dbReadMs",
+    "aggregateMs",
+    "mappingMs",
+    "responseMs",
+    // Disjoint and sequential, so they subtract exactly once. Before these were
+    // listed, a sync's unattributedMs was its whole duration by construction.
+    ...SYNC_STAGES
+  ];
   const staged = TOP_LEVEL.reduce((sum, s) => sum + (timing.stages[s] || 0), 0);
   out.unattributedMs = Math.max(0, out.durationMs - staged);
   return out;
@@ -261,8 +401,11 @@ export default {
   createHistoryTiming,
   markStage,
   timeStage,
+  timeSyncPhase,
   recordRows,
   recordFinalBytes,
+  recordSyncCounters,
+  recordFailure,
   classifyHistoryError,
   recordError,
   summarizeHistoryTiming,
