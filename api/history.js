@@ -30,9 +30,12 @@ import {
   emitHistoryTiming,
   markStage,
   recordError,
+  recordFailure,
   recordFinalBytes,
   recordRows,
-  timeStage
+  recordSyncCounters,
+  timeStage,
+  timeSyncPhase
 } from "../server-utils/observability/historyTiming.js";
 import {
   SETTLEMENT_SELECT,
@@ -599,10 +602,37 @@ export function buildSettlementTelemetry({ statsFetchCap = 0, recommendedStatsCa
   };
 }
 
-async function handleHistorySync(req, res) {
+async function handleHistorySync(req, res, timing = null) {
   // First statement in the handler: durationMs is compared against the platform
   // execution limit, so it must cover the whole invocation.
   const syncStartedAt = Date.now();
+
+  /*
+    OBSERVABILITY ONLY. `phase` wraps an await that already existed, times it
+    against a named stage, and on failure records WHICH stage and WHICH operation
+    before rethrowing untouched. The error object, the control flow and the
+    response are all exactly what they were — the only difference is that a
+    failed sync can now say where it died.
+
+    `counters` accumulates as phases complete, and is flushed into the timing
+    accumulator on both the success and the failure path. That is the point: the
+    15:19Z 500 reported rows=0 and nothing else, because `rows` is read from the
+    response body and a thrown sync has no body.
+  */
+  const counters = {
+    scanned: 0,
+    updated: 0,
+    resettled: 0,
+    cardResettled: 0,
+    finishedScanned: 0,
+    statsFetchCalls: 0,
+    statsSkippedBudget: 0,
+    recommendedStatsCalls: 0,
+    providerFixtureCalls: 0,
+    upsertBatches: 0
+  };
+  const phase = (stage, operation, fn) => timeSyncPhase(timing, stage, operation, fn);
+
   setNoStoreHeaders(res);
   if (req.method && req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Metodă nepermisă." });
@@ -639,20 +669,24 @@ async function handleHistorySync(req, res) {
 
   try {
     const candidates = [];
-    for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
-      const { data: page, error: readError } = await supabase
-        .from(HISTORY_TABLE)
-        .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload")
-        .gte("kickoff_at", cutoff)
-        .or("validation.eq.pending,match_status.not.in.(FT,AET,PEN)")
-        .order("kickoff_at", { ascending: false })
-        .order("fixture_id", { ascending: false })
-        .range(offset, offset + scanChunkSize - 1);
-      if (readError) throw readError;
-      if (!page?.length) break;
-      candidates.push(...page);
-      if (page.length < scanChunkSize) break;
-    }
+    await phase("scan1Ms", "scan_pending", async () => {
+      for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
+        const { data: page, error: readError } = await supabase
+          .from(HISTORY_TABLE)
+          .select("fixture_id, league_id, kickoff_at, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload")
+          .gte("kickoff_at", cutoff)
+          .or("validation.eq.pending,match_status.not.in.(FT,AET,PEN)")
+          .order("kickoff_at", { ascending: false })
+          .order("fixture_id", { ascending: false })
+          .range(offset, offset + scanChunkSize - 1);
+        if (readError) throw readError;
+        if (!page?.length) break;
+        candidates.push(...page);
+        if (page.length < scanChunkSize) break;
+      }
+    });
+    counters.scanned = candidates.length;
+    recordSyncCounters(timing, counters);
 
     if (!candidates || candidates.length === 0) {
       console.info(
@@ -695,6 +729,9 @@ async function handleHistorySync(req, res) {
     let groupedFetchCalls = 0;
     let idsFetchCalls = 0;
 
+    // Provider (API-Football) time, which the Supabase transport collector does
+    // not see at all — the single largest blind spot in the old event.
+    await phase("providerFixtureMs", "provider_fixtures", async () => {
     if (preferIdsFirst) {
       for (let i = 0; i < allPendingIds.length; i += IDS_CHUNK) {
         const chunk = allPendingIds.slice(i, i + IDS_CHUNK);
@@ -730,9 +767,14 @@ async function handleHistorySync(req, res) {
       }
     }
 
+    });
+
     const estimatedCalls = groupedFetchCalls + idsFetchCalls;
+    counters.providerFixtureCalls = estimatedCalls;
+    recordSyncCounters(timing, counters);
 
     const updates = [];
+    await phase("cpuPrepareMs", "prepare_updates", async () => {
     for (const row of candidates) {
       const fixtureId = Number(row.fixture_id);
       const fx = fixtureById.get(fixtureId);
@@ -793,9 +835,16 @@ async function handleHistorySync(req, res) {
         updated_at: new Date().toISOString()
       });
     }
+    });
+    counters.updated = updates.length;
+    recordSyncCounters(timing, counters);
 
     if (updates.length > 0) {
-      await upsertHistoryChunked(supabase, updates, UPSERT_CHUNK_PAYLOAD);
+      await phase("upsert1Ms", "upsert_updates", () =>
+        upsertHistoryChunked(supabase, updates, UPSERT_CHUNK_PAYLOAD)
+      );
+      counters.upsertBatches += 1;
+      recordSyncCounters(timing, counters);
     }
 
     // DB-only pass: grade multi-market value bets on already-finished rows
@@ -803,19 +852,24 @@ async function handleHistorySync(req, res) {
     let resettled = 0;
     const resettleUpdates = [];
     for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
-      const { data: page, error: resettleErr } = await supabase
-        .from(HISTORY_TABLE)
-        .select(
-          "fixture_id, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload"
-        )
-        .gte("kickoff_at", cutoff)
-        .in("match_status", ["FT", "AET", "PEN"])
-        .or("value_bet_validation.is.null,value_bet_validation.eq.pending")
-        .order("kickoff_at", { ascending: false })
-        .order("fixture_id", { ascending: false })
-        .range(offset, offset + scanChunkSize - 1);
+      // Read and CPU are timed separately: this loop interleaves them, and the
+      // whole question is which of the two the sync is actually spending on.
+      const { data: page, error: resettleErr } = await phase("scan2Ms", "scan_resettle", () =>
+        supabase
+          .from(HISTORY_TABLE)
+          .select(
+            "fixture_id, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload"
+          )
+          .gte("kickoff_at", cutoff)
+          .in("match_status", ["FT", "AET", "PEN"])
+          .or("value_bet_validation.is.null,value_bet_validation.eq.pending")
+          .order("kickoff_at", { ascending: false })
+          .order("fixture_id", { ascending: false })
+          .range(offset, offset + scanChunkSize - 1)
+      );
       if (resettleErr) throw resettleErr;
       if (!page?.length) break;
+      await timeStage(timing, "resettleCpuMs", async () => {
       for (const row of page) {
         const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
         const vbPick = resolveValueBetPick(
@@ -851,12 +905,18 @@ async function handleHistorySync(req, res) {
           updated_at: new Date().toISOString()
         });
       }
+      });
       if (page.length < scanChunkSize) break;
     }
     if (resettleUpdates.length > 0) {
       // Scalar columns only — no raw_payload, so these batch far wider.
-      resettled = await upsertHistoryChunked(supabase, resettleUpdates, UPSERT_CHUNK_SCALAR);
+      resettled = await phase("upsert2Ms", "upsert_resettle", () =>
+        upsertHistoryChunked(supabase, resettleUpdates, UPSERT_CHUNK_SCALAR)
+      );
+      counters.upsertBatches += 1;
     }
+    counters.resettled = resettled;
+    recordSyncCounters(timing, counters);
 
     // Resettle card markets (goals / corners / shots) on finished rows.
     // Corners & shots need /fixtures/statistics — capped per sync.
@@ -895,14 +955,16 @@ async function handleHistorySync(req, res) {
         the only pass that can settle Corners / Shots / SOT / Cards never ran and
         those families stayed pending while score-derived ones went through scan 1.
       */
-      const { data: page, error: cardErr } = await supabase
-        .from(HISTORY_TABLE)
-        .select(SETTLEMENT_SELECT)
-        .gte("kickoff_at", cutoff)
-        .in("match_status", ["FT", "AET", "PEN"])
-        .order("kickoff_at", { ascending: false })
-        .order("fixture_id", { ascending: false })
-        .range(offset, offset + scanChunkSize - 1);
+      const { data: page, error: cardErr } = await phase("scan3Ms", "scan_finished", () =>
+        supabase
+          .from(HISTORY_TABLE)
+          .select(SETTLEMENT_SELECT)
+          .gte("kickoff_at", cutoff)
+          .in("match_status", ["FT", "AET", "PEN"])
+          .order("kickoff_at", { ascending: false })
+          .order("fixture_id", { ascending: false })
+          .range(offset, offset + scanChunkSize - 1)
+      );
       if (cardErr) throw cardErr;
       if (!page?.length) break;
       // Columns → the shape the settlement helpers already expect, so they cannot
@@ -919,8 +981,12 @@ async function handleHistorySync(req, res) {
     settlement.recommendedPendingBefore = finishedRows.filter(recommendedUnsettled).length;
     // Stable priority sort: recommended gaps first, kickoff/fixture order preserved within groups.
     finishedRows.sort((a, b) => Number(recommendedUnsettled(b)) - Number(recommendedUnsettled(a)));
+    counters.finishedScanned = finishedRows.length;
+    recordSyncCounters(timing, counters);
 
-    {
+    // The per-fixture settlement pass. Its provider calls are the other half of
+    // the API-Football cost, and the 141 s sync spent itself here at cap 80/80.
+    await phase("statsMs", "stats_loop", async () => {
       for (const row of finishedRows) {
         const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
         const score = { home: row.score_home, away: row.score_away };
@@ -1078,7 +1144,11 @@ async function handleHistorySync(req, res) {
           updated_at: new Date().toISOString()
         });
       }
-    }
+    });
+    counters.statsFetchCalls = statsFetchCalls;
+    counters.recommendedStatsCalls = recommendedStatsCalls;
+    counters.statsSkippedBudget = settlement.syncSkippedBudget;
+    recordSyncCounters(timing, counters);
 
     const settledNow = new Set(
       cardUpdates
@@ -1101,8 +1171,13 @@ async function handleHistorySync(req, res) {
     void recordSyncRun(SYNC_KINDS.SETTLEMENT, settlement);
 
     if (cardUpdates.length > 0) {
-      cardResettled = await upsertHistoryChunked(supabase, cardUpdates, UPSERT_CHUNK_PAYLOAD);
+      cardResettled = await phase("upsert3Ms", "upsert_card_markets", () =>
+        upsertHistoryChunked(supabase, cardUpdates, UPSERT_CHUNK_PAYLOAD)
+      );
+      counters.upsertBatches += 1;
     }
+    counters.cardResettled = cardResettled;
+    recordSyncCounters(timing, counters);
 
     const updatedTotal = updates.length + resettled + cardResettled;
     const estimatedCallsTotal = estimatedCalls + statsFetchCalls;
@@ -1120,22 +1195,26 @@ async function handleHistorySync(req, res) {
         ...settlement
       })
     );
-    await persistHistorySyncStatus(supabase, req, {
-      ok: true,
-      scanned: candidates.length,
-      updated: updatedTotal,
-      estimatedCalls: estimatedCallsTotal
-    });
+    await phase("syncStatusPersistMs", "persist_sync_status", () =>
+      persistHistorySyncStatus(supabase, req, {
+        ok: true,
+        scanned: candidates.length,
+        updated: updatedTotal,
+        estimatedCalls: estimatedCallsTotal
+      })
+    );
 
     const closingOn =
       String(req.query.closing || "") === "1" || String(req.query.closing || "").toLowerCase() === "true";
     let closing = null;
     if (closingOn) {
-      closing = await captureClosingOdds({
-        hours: req.query.hours,
-        limit: req.query.limit || 30,
-        backfillDays: req.query.backfillDays ?? 7
-      }).catch((err) => ({ ok: false, error: err?.message || "closing capture failed" }));
+      closing = await timeStage(timing, "closingOddsMs", () =>
+        captureClosingOdds({
+          hours: req.query.hours,
+          limit: req.query.limit || 30,
+          backfillDays: req.query.backfillDays ?? 7
+        }).catch((err) => ({ ok: false, error: err?.message || "closing capture failed" }))
+      );
     }
 
     // Global Special Bet settlement runs last, on results this sync has just
@@ -1144,12 +1223,14 @@ async function handleHistorySync(req, res) {
     // fixtures and the 48-hour missing-statistics rule need no separate pass:
     // those bets are pending, so they are already in scope. Failures are
     // reported, never swallowed — a settlement that moved no rows is a failure.
-    const globalSpecialBets = await settlePendingGlobalSpecialBets().catch((err) => ({
-      scanned: 0,
-      settled: 0,
-      unchanged: 0,
-      failures: [{ error: err?.message || "global special bet settlement failed" }]
-    }));
+    const globalSpecialBets = await timeStage(timing, "globalSettlementMs", () =>
+      settlePendingGlobalSpecialBets().catch((err) => ({
+        scanned: 0,
+        settled: 0,
+        unchanged: 0,
+        failures: [{ error: err?.message || "global special bet settlement failed" }]
+      }))
+    );
 
     return res.status(200).json({
       ok: true,
@@ -1169,6 +1250,14 @@ async function handleHistorySync(req, res) {
       ...(closing ? { closing } : {})
     });
   } catch (error) {
+    /*
+      Counters are flushed here as well as on the success path. `rows` comes from
+      the response body, so a thrown sync used to report rows=0 and nothing else
+      — the 15:19Z 500 could not say whether it had settled 800 rows or none.
+      `phase` has already recorded which stage and operation failed.
+    */
+    recordSyncCounters(timing, counters);
+    if (!timing?.failedStage) recordFailure(timing, { operation: "sync_unstaged", error });
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";
     await persistHistorySyncStatus(supabase, req, { ok: false, error: msg, scanned: 0, updated: 0, estimatedCalls: 0 });
     return res.status(500).json({ ok: false, error: msg });
@@ -1235,7 +1324,7 @@ async function handlerImpl(req, res, timing) {
     String(req.query.closing || "") === "1" || String(req.query.closing || "").toLowerCase() === "true";
 
   if (syncOn) {
-    return handleHistorySync(req, res);
+    return handleHistorySync(req, res, timing);
   }
   if (closingOn) {
     return handleClosingOdds(req, res);

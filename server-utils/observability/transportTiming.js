@@ -270,6 +270,48 @@ export function summarizeTransport(collector) {
   const slowest = records.reduce((worst, r) => (r.fetchTotalMs > worst.fetchTotalMs ? r : worst), records[0]);
   const out = { ...slowest };
   if (records.length > 1) out.supabaseRequests = records.length;
+
+  /*
+    THE AGGREGATE, ADDED BECAUSE THE SPREAD ABOVE WAS READ AS A SUM.
+
+    `fetchTotalMs` here belongs to the SLOWEST record — it always has. During the
+    15:19Z incident it appeared as 15,033 beside durationMs 100,014, and the
+    natural reading ("15 s of database, 85 s unexplained") is wrong: ten requests
+    ran and their total was never published. These keys carry that total under
+    names that cannot be mistaken for one request's cost.
+
+    Additive only. Every pre-existing key keeps its exact meaning, so a dashboard
+    or saved search built on the old shape still resolves.
+  */
+  let totalMs = 0;
+  let maxMs = 0;
+  let maxTtfbMs = 0;
+  let errors = 0;
+  let slow = 0;
+  let reused = 0;
+  let fresh = 0;
+  for (const record of records) {
+    const fetchMs = Number(record?.fetchTotalMs);
+    if (Number.isFinite(fetchMs)) {
+      totalMs += fetchMs;
+      if (fetchMs > maxMs) maxMs = fetchMs;
+      if (fetchMs >= SLOW_SUPABASE_REQUEST_MS) slow += 1;
+    }
+    const ttfb = Number(record?.ttfbMs);
+    if (Number.isFinite(ttfb) && ttfb > maxTtfbMs) maxTtfbMs = ttfb;
+    const status = Number(record?.httpStatus);
+    if (record?.transportError === true || (Number.isFinite(status) && status >= 400)) errors += 1;
+    if (record?.connection === "reused") reused += 1;
+    else if (record?.connection === "new") fresh += 1;
+  }
+  out.supabaseCount = records.length;
+  out.supabaseTotalMs = Math.round(totalMs);
+  out.supabaseMaxMs = Math.round(maxMs);
+  out.supabaseMaxTtfbMs = Math.round(maxTtfbMs);
+  out.supabaseErrors = errors;
+  out.supabaseSlow = slow;
+  out.supabaseReused = reused;
+  out.supabaseNew = fresh;
   return out;
 }
 
