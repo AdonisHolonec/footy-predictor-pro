@@ -382,6 +382,152 @@ export function rankGlobalCandidates(candidates) {
 }
 
 /**
+ * CORNERS MARGIN CANARY (design D1) — selection layer only, default OFF.
+ *
+ * WHY. Corners is enumerated at ~39 tradable lines per fixture against 1X2's
+ * three, so for corners the pipeline picks the maximum of far more draws than
+ * for anyone else. The inflation of such a maximum grows as sqrt(2 ln N), and
+ * the measured calibration gap across families tracks that curve at R2=0.938:
+ * corners claims 82.9% and settles at 49.7%. That does not make corners a bad
+ * market — it makes the SELECTION of corners optimistic. So the correction sits
+ * here, at selection, and nowhere near the probability that was selected.
+ *
+ * WHAT THIS IS NOT. No probability, EV, edge, odds, confidence, valueScore or
+ * payload field is altered, and none is invented. This is a stable reorder: the
+ * same candidate objects come out, in a different order.
+ *
+ * SCOPE. buildGlobalSpecialBets is the only caller, and it serves USER and
+ * GLOBAL combos alike. System is deliberately excluded: rankSystemCandidates
+ * orders by EV bucket first, so a margin expressed in probability would reorder
+ * an EV ranking and change System's EV semantics silently.
+ */
+export const CORNERS_FAMILY = "corners";
+
+/**
+ * Float guard, same reason and magnitude as diversifyGlobalCandidates'.
+ * Probabilities are round2 payload values and 0.95 - 0.80 evaluates to
+ * 0.1499999999999999 in IEEE754. Without this, three of every ten exactly-at-
+ * margin pairs would yield where the rule says they stay, and WHICH three would
+ * depend on the decimal values rather than on the rule.
+ */
+const MARGIN_EPSILON = 1e-9;
+
+/**
+ * Read the canary margin from the environment. Never throws and never fails
+ * generation: a config typo must not be able to stop tickets being built.
+ *
+ * A value above 1 is almost certainly "15" meaning 15 percentage points. It is
+ * refused rather than honoured, because honouring it would set a margin no
+ * corner could ever clear and so disable corners entirely — a far larger change
+ * than the one being canaried, arrived at by accident.
+ *
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {number} margin in probability units; 0 means OFF
+ */
+export function cornerMarginFromEnv(env = process.env) {
+  const raw = env?.CORNER_MARGIN_PP;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return 0;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    console.warn(`[corner-margin] invalid CORNER_MARGIN_PP=${String(raw)} ignored; canary OFF`);
+    return 0;
+  }
+  return value;
+}
+
+/**
+ * Demote a fixture's corners candidate below the best non-corners candidate for
+ * that same fixture unless it leads by at least `margin`.
+ *
+ * Only the FIRST candidate per fixture can ever reach a ticket, because
+ * diversifyGlobalCandidates takes one per fixture — so this decides one question
+ * per fixture, not one per market, and leaves every other position in the
+ * ranking exactly where ranking put it.
+ *
+ * Boundary: a gap of exactly `margin` KEEPS corners (>=, not >).
+ *
+ * @param {GlobalCandidate[]} ranked output of rankGlobalCandidates
+ * @param {number} margin probability units; <= 0 disables and returns `ranked` itself
+ * @returns {{ ranked: GlobalCandidate[], margin: number, considered: number, yielded: number }}
+ */
+export function applyCornerMargin(ranked, margin) {
+  // Number, not truthy-and-greater-than-zero: `"0.15" > 0` is true in JS, and a
+  // margin that arrived as a string is a caller bug, not a canary instruction.
+  if (!Number.isFinite(margin) || margin <= 0 || !Array.isArray(ranked) || ranked.length === 0) {
+    return { ranked, margin: 0, considered: 0, yielded: 0 };
+  }
+
+  /** fixtureId -> the candidate ranking put first for that fixture. */
+  const heads = new Map();
+  /** fixtureId -> the best-ranked non-corners candidate for that fixture. */
+  const bestOther = new Map();
+  for (const candidate of ranked) {
+    const fixtureId = candidate.fixtureId;
+    if (!heads.has(fixtureId)) heads.set(fixtureId, candidate);
+    if (candidate.market !== CORNERS_FAMILY && !bestOther.has(fixtureId)) {
+      bestOther.set(fixtureId, candidate);
+    }
+  }
+
+  /** fixtureId -> the candidate that should lead instead. */
+  const promoted = new Map();
+  let considered = 0;
+  for (const [fixtureId, head] of heads) {
+    if (head.market !== CORNERS_FAMILY) continue;
+    considered += 1;
+    const other = bestOther.get(fixtureId);
+    // Corners-or-nothing fixture: yielding would drop the fixture entirely,
+    // costing coverage without moving the family mix toward anything.
+    if (!other) continue;
+    if (head.probability - other.probability >= margin - MARGIN_EPSILON) continue;
+    promoted.set(fixtureId, other);
+  }
+
+  if (promoted.size === 0) return { ranked, margin, considered, yielded: 0 };
+
+  /*
+    A yielding fixture's corners candidates are DROPPED rather than the rival
+    being moved up. Moving the rival would splice a lower probability into the
+    slot a higher one held, and everything downstream assumes this list stays
+    globally probability-descending: diversifyGlobalCandidates reads
+    `remaining[0]` as the best and measures its league band against it, and
+    selectVariantLegs takes a positional prefix. Breaking that order silently
+    builds a worse ticket than the same pool could have produced.
+
+    Dropping keeps the result a SUBSEQUENCE of an already-sorted list, so the
+    ordering invariant holds by construction rather than by care. Nothing is
+    lost: only one candidate per fixture can ever be selected, and for these
+    fixtures that candidate is now the rival.
+  */
+  const promoSeen = new Set();
+  const out = [];
+  for (const candidate of ranked) {
+    const promo = promoted.get(candidate.fixtureId);
+    if (!promo) {
+      out.push(candidate);
+      continue;
+    }
+    if (candidate === promo) {
+      promoSeen.add(candidate.fixtureId);
+      out.push(candidate);
+      continue;
+    }
+    // Corners ranked ahead of the rival would still lead the fixture; drop those.
+    if (candidate.market === CORNERS_FAMILY && !promoSeen.has(candidate.fixtureId)) continue;
+    out.push(candidate);
+  }
+
+  return { ranked: out, margin, considered, yielded: promoted.size };
+}
+
+/** Family histogram of a pool. Canary telemetry only. */
+function poolFamilyMix(pool) {
+  const mix = {};
+  for (const candidate of pool) mix[candidate.market] = (mix[candidate.market] || 0) + 1;
+  return mix;
+}
+
+/**
  * One selection per fixture (hard), spread across leagues (bounded).
  *
  * The fixture rule is absolute: two selections from the same match are one
@@ -527,7 +673,17 @@ export function selectVariantLegs(pool, variant, excluded) {
  */
 export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VARIANTS) {
   const collected = collectGlobalCandidates(options);
-  const pool = diversifyGlobalCandidates(rankGlobalCandidates(collected.candidates));
+  /*
+    The canary margin is read here rather than at the two call sites so USER and
+    GLOBAL combos cannot drift apart — the same reason `used` accumulates here.
+    `options.cornerMarginPp` exists so tests inject a margin without touching
+    process.env; production leaves it undefined and the env decides.
+  */
+  const cornerMarginPp = Number.isFinite(options?.cornerMarginPp)
+    ? options.cornerMarginPp
+    : cornerMarginFromEnv();
+  const margined = applyCornerMargin(rankGlobalCandidates(collected.candidates), cornerMarginPp);
+  const pool = diversifyGlobalCandidates(margined.ranked);
 
   /*
     Accumulates ACROSS the variants of this call as well, so a caller that asks
@@ -556,7 +712,27 @@ export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VA
     for (const candidate of chosen.selections) used.add(candidate.fixtureId);
   }
 
-  return { ...collected, pool, bets, unavailable, reusedByVariant };
+  /*
+    Telemetry is attached ONLY while the canary is on, so with it off this
+    function returns exactly the object it returned before — the toggle-off
+    guarantee is a property of the code, not of a test's leniency.
+  */
+  return margined.margin > 0
+    ? {
+        ...collected,
+        pool,
+        bets,
+        unavailable,
+        reusedByVariant,
+        cornerMargin: {
+          margin: margined.margin,
+          cornersConsidered: margined.considered,
+          cornersYielded: margined.yielded,
+          fixturesAffected: margined.yielded,
+          poolFamilyMix: poolFamilyMix(pool)
+        }
+      }
+    : { ...collected, pool, bets, unavailable, reusedByVariant };
 }
 
 // ── System tickets ─────────────────────────────────────────────────────────
@@ -981,8 +1157,11 @@ export default {
   GLOBAL_SPECIAL_BET_VARIANTS,
   SYSTEM_SELECTION_COUNT,
   SYSTEM_K_VALUES,
+  CORNERS_FAMILY,
   collectGlobalCandidates,
   rankGlobalCandidates,
+  cornerMarginFromEnv,
+  applyCornerMargin,
   diversifyGlobalCandidates,
   buildGlobalSpecialBets,
   selectVariantLegs,
