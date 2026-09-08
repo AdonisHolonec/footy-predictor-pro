@@ -7,7 +7,8 @@ import {
   collectGlobalCandidates,
   cornerMarginFromEnv,
   diversifyGlobalCandidates,
-  rankGlobalCandidates
+  rankGlobalCandidates,
+  selectVariantLegs
 } from "../server-utils/globalSpecialBetEngine.js";
 
 /**
@@ -216,9 +217,58 @@ test("[O2] other fixtures are left exactly where ranking put them", () => {
   assert.equal(headOf(out, 1).market, "shots", "fixture 1 yields (0.05 gap)");
   assert.equal(headOf(out, 2).market, "shots", "fixture 2 has no corners");
   assert.equal(headOf(out, 3).market, "corners", "fixture 3 leads by 0.35");
-  // Nothing is lost or duplicated by the reorder.
-  assert.equal(out.length, ranked.length);
-  assert.deepEqual(new Set(out), new Set(ranked));
+  // Every fixture still participates; only the demoted corners leave.
+  assert.deepEqual(new Set(out.map((c) => c.fixtureId)), new Set([1, 2, 3]));
+  assert.ok(
+    out.every((c) => ranked.includes(c)),
+    "output is a subsequence — nothing invented"
+  );
+});
+
+test("[O5] the output stays globally probability-descending", () => {
+  /*
+    REGRESSION. The first implementation spliced the promoted rival into the
+    demoted corners candidate's own index, which put a lower probability above a
+    higher one. diversifyGlobalCandidates reads `remaining[0]` as the best and
+    measures its league band against it, and selectVariantLegs takes a
+    positional prefix — both silently build a worse ticket if this order is not
+    descending.
+  */
+  const ranked = rankGlobalCandidates([
+    cand(1, "corners", 0.88),
+    cand(2, "ou", 0.85),
+    cand(3, "ou", 0.84),
+    cand(4, "ou", 0.83),
+    cand(1, "ou", 0.8)
+  ]);
+  const { ranked: out } = applyCornerMargin(ranked, 0.15);
+  for (let i = 1; i < out.length; i += 1) {
+    assert.ok(
+      out[i - 1].probability >= out[i].probability,
+      `position ${i}: ${out[i - 1].probability} before ${out[i].probability}`
+    );
+  }
+});
+
+test("[O6] the demoted fixture cannot displace stronger fixtures from the ticket", () => {
+  // Same population as [O5]. Fixture 1 yields to its own 0.80 rival, which must
+  // then rank BELOW fixtures 2, 3 and 4 rather than inheriting corners' slot.
+  const ranked = rankGlobalCandidates([
+    cand(1, "corners", 0.88),
+    cand(2, "ou", 0.85),
+    cand(3, "ou", 0.84),
+    cand(4, "ou", 0.83),
+    cand(1, "ou", 0.8)
+  ]);
+  const pool = diversifyGlobalCandidates(applyCornerMargin(ranked, 0.15).ranked);
+  const legs = selectVariantLegs(pool, 3, new Set()).selections;
+  assert.deepEqual(
+    legs.map((l) => l.fixtureId),
+    [2, 3, 4],
+    "the three strongest fixtures must be chosen, not fixture 1 at 0.80"
+  );
+  const product = legs.reduce((p, l) => p * l.probability, 1);
+  assert.ok(product > 0.59, `expected the 0.5926 combination, got ${product.toFixed(4)}`);
 });
 
 test("[O3] candidate objects are neither mutated nor replaced", () => {
@@ -227,7 +277,13 @@ test("[O3] candidate objects are neither mutated nor replaced", () => {
   const before = JSON.stringify([corners, shots]);
   const { ranked: out } = applyCornerMargin(rankGlobalCandidates([corners, shots]), 0.15);
   assert.equal(JSON.stringify([corners, shots]), before, "inputs unchanged");
-  assert.ok(out.includes(corners) && out.includes(shots), "same object identities returned");
+  // The demoted corners is dropped (see [O5]), but nothing is copied or rebuilt:
+  // every survivor is one of the original objects, by identity.
+  assert.ok(
+    out.every((c) => c === corners || c === shots),
+    "no clones — original object identities only"
+  );
+  assert.ok(out.includes(shots), "the promoted rival survives");
 });
 
 test("[O4] the surviving order still feeds diversification one leg per fixture", () => {

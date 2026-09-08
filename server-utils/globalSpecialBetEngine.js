@@ -485,23 +485,35 @@ export function applyCornerMargin(ranked, margin) {
 
   if (promoted.size === 0) return { ranked, margin, considered, yielded: 0 };
 
-  const emitted = new Set();
+  /*
+    A yielding fixture's corners candidates are DROPPED rather than the rival
+    being moved up. Moving the rival would splice a lower probability into the
+    slot a higher one held, and everything downstream assumes this list stays
+    globally probability-descending: diversifyGlobalCandidates reads
+    `remaining[0]` as the best and measures its league band against it, and
+    selectVariantLegs takes a positional prefix. Breaking that order silently
+    builds a worse ticket than the same pool could have produced.
+
+    Dropping keeps the result a SUBSEQUENCE of an already-sorted list, so the
+    ordering invariant holds by construction rather than by care. Nothing is
+    lost: only one candidate per fixture can ever be selected, and for these
+    fixtures that candidate is now the rival.
+  */
+  const promoSeen = new Set();
   const out = [];
   for (const candidate of ranked) {
-    const fixtureId = candidate.fixtureId;
-    const promo = promoted.get(fixtureId);
+    const promo = promoted.get(candidate.fixtureId);
     if (!promo) {
       out.push(candidate);
       continue;
     }
-    if (!emitted.has(fixtureId)) {
-      // `candidate` is this fixture's ranked head; put the winner in front of it.
-      emitted.add(fixtureId);
-      out.push(promo);
-      if (candidate !== promo) out.push(candidate);
+    if (candidate === promo) {
+      promoSeen.add(candidate.fixtureId);
+      out.push(candidate);
       continue;
     }
-    if (candidate === promo) continue; // already emitted at the head position
+    // Corners ranked ahead of the rival would still lead the fixture; drop those.
+    if (candidate.market === CORNERS_FAMILY && !promoSeen.has(candidate.fixtureId)) continue;
     out.push(candidate);
   }
 
