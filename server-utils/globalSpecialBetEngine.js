@@ -27,6 +27,7 @@
  * cannot fill is UNAVAILABLE — never padded with legs below the safety floor.
  */
 
+import { logInfo } from "./observability/logger.js";
 import { resolveMarketFamily } from "./metaLearning/marketFamily.js";
 import { parseOuPickAnywhere } from "./cardMarketSettlement.js";
 import { formatLineLabel } from "./marketIdentity.js";
@@ -711,6 +712,35 @@ export function buildGlobalSpecialBets(options, variants = GLOBAL_SPECIAL_BET_VA
     reusedByVariant[variant] = chosen.reusedFixtureIds;
     for (const candidate of chosen.selections) used.add(candidate.fixtureId);
   }
+
+  /*
+    THE CANARY'S ONLY OBSERVABLE SURFACE. Exactly one event per build — never
+    per market, never per fixture. The `cornerMargin` key below is returned but
+    consumed by nothing: both callers cherry-pick named fields out of this
+    object, so without this line an operator cannot tell whether the canary ran,
+    how many fixtures it touched, or what the resulting mix was.
+
+    Emitted while OFF too, carrying enabled:false. Silence cannot distinguish
+    "canary disabled" from "no ticket was generated", and telling those two
+    apart is the entire reason this event exists.
+
+    Observational only: every value here is read from `pool` and from the
+    counters applyCornerMargin already returned. Nothing is mutated, and the
+    object returned below is unaffected by whether this line runs.
+  */
+  logInfo("ticket.corner_margin", {
+    enabled: margined.margin > 0,
+    margin: margined.margin,
+    cornersConsidered: margined.considered,
+    // `fixturesAffected` equals `cornersYielded` by construction — a yield is
+    // keyed by fixtureId, so one yield is exactly one fixture. Both are emitted
+    // because a reader should not have to know that to interpret the event.
+    cornersYielded: margined.yielded,
+    fixturesAffected: margined.yielded,
+    candidates: collected.candidates.length,
+    poolSize: pool.length,
+    poolFamilyMix: poolFamilyMix(pool)
+  });
 
   /*
     Telemetry is attached ONLY while the canary is on, so with it off this
