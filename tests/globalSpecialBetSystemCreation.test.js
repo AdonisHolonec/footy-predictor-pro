@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withProjection } from "./globalSpecialBets.test.js";
 import { test } from "node:test";
 import { createGlobalSpecialBet, createGlobalSystemBets } from "../server-utils/globalSpecialBets.js";
 import { SYSTEM_K_VALUES, systemTicketProbability } from "../server-utils/globalSpecialBetEngine.js";
@@ -59,6 +60,7 @@ function payload(id, leagueId, overrides = {}) {
  * reader would then treat every fixture as already used.
  */
 function fakeSupabase({ historyRows = [], rpcResult = null, storedBets = [], storedSelections = [] } = {}) {
+  historyRows = historyRows.map(withProjection);
   const calls = { rpc: [] };
   const query = (table) => {
     const rowsFor = () => {

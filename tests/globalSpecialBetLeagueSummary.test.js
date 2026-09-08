@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withProjection } from "./globalSpecialBets.test.js";
 import { test } from "node:test";
 import {
   betDateScanWindow,
@@ -118,6 +119,7 @@ test("10. the day scan brackets the Europe/Bucharest day with a UTC superset and
   const filters = [];
   const chain = {
     select: () => chain,
+    not: () => chain,
     in: (c, v) => (filters.push(["in", c, v]), chain),
     gte: (c, v) => (filters.push(["gte", c, v]), chain),
     lte: (c, v) => (filters.push(["lte", c, v]), chain),
@@ -152,7 +154,9 @@ test("11. createGlobalSpecialBet: the response is additive — created ticket un
       markets: [{ type: "Over 2.5", family: "Goals", line: 2.5, odds: 1.8, probability: 0.7, valueScore: 70 - id, recommendable: true, tradable: true, betType: "over_under", period: "full_match", scope: "match" }]
     }
   });
-  const historyRows = [1, 2, 3].map((id) => ({ fixture_id: id, league_id: 39, league_name: "Premier League", kickoff_at: "2026-08-23T18:00:00.000Z", raw_payload: payload(id) }));
+  const historyRows = [1, 2, 3].map((id) =>
+    withProjection({ fixture_id: id, league_id: 39, league_name: "Premier League", kickoff_at: "2026-08-23T18:00:00.000Z", raw_payload: payload(id) })
+  );
   const dayRows = [fx(135, "2026-08-22T16:30:00Z", "Serie A", 9)];
   let phase = "pool";
   const chain = {

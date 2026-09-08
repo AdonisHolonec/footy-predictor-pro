@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withProjection } from "./globalSpecialBets.test.js";
 import { test } from "node:test";
 
 import { createGlobalSpecialBet, createGlobalSystemBets } from "../server-utils/globalSpecialBets.js";
@@ -59,7 +60,7 @@ const payload = (id, leagueId, markets) => ({
 
 /** `n` history rows in the user's leagues, ranked by descending probability. */
 const historyRows = (n, leagueId = 39) =>
-  Array.from({ length: n }, (_, i) => ({
+  Array.from({ length: n }, (_, i) => withProjection({
     fixture_id: i + 1,
     league_id: leagueId,
     league_name: "Premier League",
