@@ -6,14 +6,11 @@ import Card from "../../design-system/Card";
 import SectionHeader from "../../design-system/SectionHeader";
 import Skeleton from "../../design-system/Skeleton";
 import StatTile from "../../design-system/StatTile";
-import {
-  ReferralError,
-  claimReferral,
-  fetchOrCreateReferralCode,
-  fetchReferralStatus,
-  type ReferralStatus
-} from "../../services/referralService";
-import { buildReferralLink, clearPendingReferral, readPendingReferral } from "../../utils/referralLink";
+import { fetchOrCreateReferralCode, fetchReferralStatus, type ReferralStatus } from "../../services/referralService";
+import { buildReferralLink } from "../../utils/referralLink";
+import { REFERRAL_REWARD_DAYS as REWARD_DAYS, describeReferralError } from "../../utils/referralCopy";
+import ReferralInvitePrompt from "./ReferralInvitePrompt";
+import { useReferralClaim } from "./useReferralClaim";
 
 /**
  * The user-facing referral surface, in the account page.
@@ -34,9 +31,6 @@ import { buildReferralLink, clearPendingReferral, readPendingReferral } from "..
  * never start asking for it: knowing you were referred is the user's business,
  * knowing by whom — before that person chose to be known — is not.
  */
-
-/** Mirrors STANDARD_BONUS_DAYS. Display only; the server decides what is granted. */
-const REWARD_DAYS = 5;
 
 type Props = {
   /** Null while signed out — the card renders nothing rather than a teaser. */
@@ -69,9 +63,6 @@ export default function ReferralCard({ userId, now }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [claiming, setClaiming] = useState(false);
-  const [pendingCode, setPendingCode] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(false);
 
   /**
    * One status request per mount.
@@ -83,30 +74,8 @@ export default function ReferralCard({ userId, now }: Props) {
    */
   const requested = useRef(false);
 
-  const describeError = useCallback(
-    (err: unknown): string => {
-      if (err instanceof ReferralError) {
-        switch (err.status) {
-          case 401:
-            return t("account.referral.errorUnauthenticated");
-          case 404:
-            return t("account.referral.errorInvalidCode");
-          case 409:
-            return t("account.referral.errorAlreadyAttributed");
-          case 410:
-            return t("account.referral.errorExpired");
-          case 429:
-            return t("account.referral.errorRateLimited");
-          case 503:
-            return t("account.referral.errorUnavailable");
-          default:
-            return t("account.referral.errorGeneric");
-        }
-      }
-      return t("account.referral.errorGeneric");
-    },
-    [t]
-  );
+  /* One mapping for every referral failure — shared with the post-login invite. */
+  const describeError = useCallback((err: unknown): string => describeReferralError(err, t), [t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,9 +105,16 @@ export default function ReferralCard({ userId, now }: Props) {
   useEffect(() => {
     if (!userId || requested.current) return;
     requested.current = true;
-    setPendingCode(readPendingReferral(now)?.code ?? null);
     void load();
-  }, [userId, load, now]);
+  }, [userId, load]);
+
+  /*
+    THE CLAIM, shared with the post-login invitation dialog: one reader of the
+    pending code, one call to the claim endpoint, one rule for when the stored
+    code is dropped. The card only decides where the prompt sits and refreshes
+    its own status once a claim succeeds.
+  */
+  const claim = useReferralClaim({ enabled: Boolean(userId), now, onClaimed: load });
 
   const link = status?.code ? buildReferralLink(status.code) : "";
 
@@ -172,36 +148,14 @@ export default function ReferralCard({ userId, now }: Props) {
     await handleCopy();
   }, [handleCopy, link, t]);
 
-  const handleClaim = useCallback(async () => {
-    if (!pendingCode) return;
-    setClaiming(true);
-    setError(null);
-    try {
-      await claimReferral(pendingCode);
-      // Only cleared on SUCCESS: a network failure must leave the invitation
-      // available to retry rather than silently consuming it.
-      clearPendingReferral();
-      setPendingCode(null);
-      await load();
-    } catch (err) {
-      setError(describeError(err));
-      if (err instanceof ReferralError && [404, 409, 410].includes(err.status)) {
-        // Terminal for this code — keeping it would re-offer an invitation the
-        // server has already refused for good.
-        clearPendingReferral();
-        setPendingCode(null);
-      }
-    } finally {
-      setClaiming(false);
-    }
-  }, [describeError, load, pendingCode]);
-
   if (!userId) return null;
 
   const inviter = status?.inviter;
   const invitee = status?.invitee;
   const atCap = Boolean(inviter && inviter.cap > 0 && inviter.capRemaining === 0);
-  const showInvite = Boolean(pendingCode) && !dismissed && !invitee;
+  const showInvite = Boolean(claim.pendingCode) && !claim.dismissed && !invitee;
+  /* Status-load failures and claim failures share the one alert slot below. */
+  const alertText = claim.error ?? error;
 
   return (
     /*
@@ -232,20 +186,13 @@ export default function ReferralCard({ userId, now }: Props) {
       </p>
 
       {showInvite ? (
-        <div className="space-y-2 rounded-lg border border-white/10 p-3" data-testid="referral-invite-prompt">
-          <p className="text-sm font-semibold">{t("account.referral.inviteTitle")}</p>
-          <p className="text-sm opacity-80">{t("account.referral.inviteBody", { days: REWARD_DAYS })}</p>
-          {/* Stated plainly, not as an alarm: accepting cannot be undone. */}
-          <p className="text-xs opacity-70">{t("account.referral.inviteOnce")}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" loading={claiming} disabled={claiming} onClick={() => void handleClaim()}>
-              {claiming ? t("account.referral.claiming") : t("account.referral.accept")}
-            </Button>
-            <Button variant="secondary" disabled={claiming} onClick={() => setDismissed(true)}>
-              {t("account.referral.decline")}
-            </Button>
-          </div>
-        </div>
+        <ReferralInvitePrompt
+          variant="inline"
+          claiming={claim.claiming}
+          canAccept
+          onAccept={() => void claim.accept()}
+          onDecline={claim.dismiss}
+        />
       ) : null}
 
       {loading ? (
@@ -264,9 +211,9 @@ export default function ReferralCard({ userId, now }: Props) {
         </div>
       ) : (
         <>
-          {error ? (
+          {alertText ? (
             <p role="alert" className="text-sm text-red-400">
-              {error}
+              {alertText}
             </p>
           ) : null}
 

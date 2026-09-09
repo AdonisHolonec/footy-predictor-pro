@@ -676,6 +676,7 @@ export const ro: Dict = {
       accept: "Acceptă invitația",
       decline: "Nu acum",
       claiming: "Se acceptă…",
+      inviteAccepted: "Invitația a fost acceptată. Confirmă-ți emailul și fă prima predicție ca să primiți amândoi {days} zile Ultra.",
       stateAttributed: "Invitat de un prieten",
       stateExpiresOn: "Expiră {date}",
       stateQualified: "Recompensă câștigată",
