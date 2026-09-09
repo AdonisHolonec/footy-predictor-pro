@@ -135,6 +135,8 @@ export const en: Dict = {
     featuredKicker: "Featured pick",
     featuredWhyConfident: "Why confident?",
     featuredOpenAnalysis: "Open full analysis",
+    recommendationTitle: "Your recommendation",
+    recommendationDesc: "The strongest pick from the predictions just generated.",
     advancedTitle: "Advanced analysis",
     advancedSub: "Monte Carlo, key factors, confidence, explanation",
     advancedEmpty: "Run Refresh to load a match for analysis.",

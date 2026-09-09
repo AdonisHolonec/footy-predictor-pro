@@ -22,6 +22,14 @@ type Props = {
    */
   busy?: boolean;
   className?: string;
+  /**
+   * Layout only — accessibility, stacking, focus and Escape are identical.
+   * "center" is the titled modal every form uses. "sheet" rises from the bottom
+   * edge on phones, with safe-area padding, and centres from `sm` up: the
+   * shape for content that ARRIVES as the outcome of an action (the post-Predict
+   * recommendation) rather than a form the user opened.
+   */
+  presentation?: "center" | "sheet";
 };
 
 /**
@@ -49,7 +57,8 @@ export default function Dialog({
   size = "md",
   closeOnBackdrop = true,
   busy = false,
-  className = ""
+  className = "",
+  presentation = "center"
 }: Props) {
   const generatedId = useId();
   const titleId = `fp-dialog-${generatedId}-title`;
@@ -59,7 +68,7 @@ export default function Dialog({
     <Overlay
       open={open}
       onClose={onClose}
-      presentation="center"
+      presentation={presentation}
       closeOnBackdrop={closeOnBackdrop}
       busy={busy}
       aria-labelledby={titleId}

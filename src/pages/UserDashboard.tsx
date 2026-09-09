@@ -66,6 +66,7 @@ import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
+import RecommendationDialog, { shouldOpenRecommendationAfterPredict } from "../components/ux/RecommendationDialog";
 import MatchModalErrorBoundary, { MatchDetailUnavailable } from "../components/matchModal/MatchModalErrorBoundary";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
@@ -147,6 +148,16 @@ export default function UserDashboard() {
   // Support and Feedback are owned by SupportEntry inside SettingsView; only the
   // prediction report stays here, because it is opened from a card in a list.
   const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
+  /*
+    The post-Predict recommendation. Opened by the COMPLETION of a run, never
+    by the click: `onPredictCompleted` below is the only writer of `true`, and
+    usePredictFlow reaches it only after every /api/predict page answered ok.
+    A 429, a non-ok status, a thrown fetch or a run that produced no rows never
+    get there, so the dialog can only ever present a run that actually
+    happened. Its content is `analysisMatch` — the same strongest-pick
+    derivation Home used to render as the Featured card.
+  */
+  const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -344,6 +355,7 @@ export default function UserDashboard() {
     },
     onPredictCompleted: async (deduped, token) => {
       setPreds(deduped);
+      setRecommendationOpen(shouldOpenRecommendationAfterPredict(deduped));
       if (user?.id) {
         setPredictionsByUser((prev) => ({
           ...prev,
@@ -765,7 +777,6 @@ export default function UserDashboard() {
         <HomeSection
           matches={homePreds}
           counts={homeCounts}
-          analysisMatch={analysisMatch}
           liveCount={homeLiveCount}
           accessTier={userTier}
           marketValidationsByFixtureId={marketValidationsByFixtureId}
@@ -968,6 +979,12 @@ export default function UserDashboard() {
         predictAction={predictAction}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
+      <RecommendationDialog
+        open={recommendationOpen}
+        onClose={() => setRecommendationOpen(false)}
+        match={analysisMatch}
+        onOpenAnalysis={openMatch}
+      />
       <ReportPredictionDialog
         open={Boolean(reportRow)}
         row={reportRow}
