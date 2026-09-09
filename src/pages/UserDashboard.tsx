@@ -66,6 +66,9 @@ import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
 import PredictPromoDialog from "../components/ux/PredictPromoDialog";
+import ReferralInviteDialog from "../components/ux/ReferralInviteDialog";
+import { usePostLoginReferralInvite } from "./userDashboard/usePostLoginReferralInvite";
+import { REFERRAL_REWARD_DAYS } from "../utils/referralCopy";
 import MatchModalErrorBoundary, { MatchDetailUnavailable } from "../components/matchModal/MatchModalErrorBoundary";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
@@ -155,6 +158,20 @@ export default function UserDashboard() {
     prediction data and waits for nothing; the request starts in the same tick.
   */
   const [predictPromoOpen, setPredictPromoOpen] = useState(false);
+  /*
+    THE POST-LOGIN INVITATION. `?ref=` is captured at boot into the pending
+    referral (referralLink.ts); until now the only thing that ever read it was
+    the Account › Referral card, which a referred user has no reason to open.
+    This asks the same question the card asks — pending code, not already
+    attributed — once per signed-in user, and shows the same prompt through
+    the shared claim hook. Accepting is explicit; dismissing keeps the code
+    for its remaining 30 days. Not coupled to Predict in any way.
+  */
+  const referralInvite = usePostLoginReferralInvite({
+    userId: user?.id ?? null,
+    accessToken: session?.access_token ?? null,
+    onAccepted: () => setToast(t("account.referral.inviteAccepted", { days: REFERRAL_REWARD_DAYS }))
+  });
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -975,6 +992,14 @@ export default function UserDashboard() {
         predictAction={predictAction}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
+      <ReferralInviteDialog
+        open={referralInvite.open}
+        claiming={referralInvite.claiming}
+        error={referralInvite.error}
+        canAccept={referralInvite.pendingCode !== null}
+        onAccept={() => void referralInvite.accept()}
+        onDecline={referralInvite.dismiss}
+      />
       <PredictPromoDialog
         open={predictPromoOpen}
         onClose={() => setPredictPromoOpen(false)}

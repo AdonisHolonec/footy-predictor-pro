@@ -680,6 +680,7 @@ export const en: Dict = {
       accept: "Accept invitation",
       decline: "Not now",
       claiming: "Accepting…",
+      inviteAccepted: "Invitation accepted. Confirm your email and make your first prediction so you both get {days} Ultra days.",
       stateAttributed: "Invited by a friend",
       stateExpiresOn: "Expires {date}",
       stateQualified: "Reward earned",
