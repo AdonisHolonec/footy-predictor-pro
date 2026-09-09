@@ -90,7 +90,6 @@ function renderHome(matches: PredictionRow[], liveCount = matches.filter((m) => 
     <HomeSection
       matches={matches}
       counts={{ total: matches.length, value: 0, highConfidence: matches.length }}
-      analysisMatch={matches.find((m) => m.status === "NS") ?? null}
       liveCount={liveCount}
       accessTier="ultra"
       marketValidationsByFixtureId={new Map()}

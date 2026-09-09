@@ -93,7 +93,6 @@ function Harness() {
         <HomeSection
           matches={ROWS}
           counts={{ total: ROWS.length, value: 0, highConfidence: 3 }}
-          analysisMatch={ROWS[0]}
           liveCount={live.length}
           accessTier="ultra"
           marketValidationsByFixtureId={new Map()}
@@ -326,7 +325,7 @@ describe("UX-B · Back navigation and detail overlay", () => {
     fireEvent.click(screen.getByRole("button", { name: "close" }));
     expect(screen.queryByTestId("detail")).toBeNull();
     expect(path()).toBe("/workspace");
-    expect(screen.getByTestId("featured")).toBeTruthy();
+    expect(screen.getByTestId("today-context")).toBeTruthy();
   });
 
   it("[13] Matches → detail → close keeps the segment and the URL", () => {
@@ -341,13 +340,16 @@ describe("UX-B · Back navigation and detail overlay", () => {
 });
 
 describe("UX-B · Today, Results, Performance composition", () => {
-  it("[14] Today: context line, Featured once, live ticker, picks, entry cards — no H1 greeting, no chips", () => {
+  it("[14] Today: context line, NO Featured card (it is the post-Predict dialog), live ticker, picks, entry cards — no H1 greeting, no chips", () => {
     mount();
     expect(screen.getByTestId("today-context").textContent).toMatch(/25/);
     expect(document.querySelector("main h1")).toBeNull();
-    expect(screen.getByTestId("featured").textContent).toBe("Arsenal");
+    // The strongest recommendation is no longer a card on Today: it opens as a
+    // dialog when a Predict run completes. With nothing to exclude, the
+    // top-confidence row now heads Top picks instead of being dropped from it.
+    expect(screen.queryByTestId("featured")).toBeNull();
     const rows = [...document.querySelectorAll("li[data-match-row]")].map((r) => r.textContent || "");
-    expect(rows.some((t) => /Arsenal/.test(t))).toBe(false);
+    expect(rows.some((t) => /Arsenal/.test(t))).toBe(true);
     expect(screen.getByTestId("today-live")).toBeTruthy();
     expect(screen.getByTestId("today-entries").querySelectorAll("button")).toHaveLength(4);
     expect(screen.queryByTestId("gsb")).toBeNull();

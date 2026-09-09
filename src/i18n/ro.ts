@@ -135,6 +135,8 @@ export const ro: Dict = {
     featuredKicker: "Predicție recomandată",
     featuredWhyConfident: "De ce încrezător?",
     featuredOpenAnalysis: "Deschide analiza completă",
+    recommendationTitle: "Recomandarea ta",
+    recommendationDesc: "Cea mai puternică selecție din predicțiile generate acum.",
     advancedTitle: "Analiză avansată",
     advancedSub: "Monte Carlo, factori cheie, încredere, explicație",
     advancedEmpty: "Apasă Reîmprospătează pentru a încărca un meci de analizat.",
