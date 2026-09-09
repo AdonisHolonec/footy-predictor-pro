@@ -10,6 +10,11 @@ import { settlePendingGlobalSpecialBets } from "../server-utils/globalSpecialBet
 import { handleGlobalSpecialBets } from "../server-utils/globalSpecialBetsApi.js";
 import { captureClosingOdds } from "../server-utils/closingOddsCapture.js";
 import {
+  rehydratePayloadPathRows,
+  selectWithPayloadPaths
+} from "../server-utils/history/payloadProjection.js";
+import { SCAN2_PAYLOAD_PATHS, SCAN2_SCALAR_COLUMNS } from "../server-utils/history/scan2PayloadPaths.js";
+import {
   attachCardMarketsToPayload,
   deriveCardMarketPicks,
   needsMarketTotalsForSettlement,
@@ -123,6 +128,59 @@ async function fetchFixtureMarketTotals(fixtureId) {
 }
 
 const HISTORY_TABLE = "predictions_history";
+
+/**
+ * Scan 2 wire shape: the seven `raw_payload` leaf paths the resettle loop reads,
+ * never the document. See server-utils/history/scan2PayloadPaths.js for the
+ * measurement and the reason promoted columns are NOT a substitute.
+ */
+export const SCAN2_SELECT = selectWithPayloadPaths(SCAN2_SCALAR_COLUMNS, SCAN2_PAYLOAD_PATHS);
+
+/**
+ * The scan-2 per-row decision, moved out of the loop VERBATIM so the projection
+ * can be proven equivalent on the real code: tests run this on a full-document
+ * row and on a projected+rehydrated row and require deep-equal output.
+ *
+ * Returns the update to upsert, or null when the row is left alone. Every
+ * `continue` of the original loop is a `return null` here; nothing else moved.
+ *
+ * @param {object} row a predictions_history row with `raw_payload` (full or rehydrated)
+ */
+export function resolveResettleUpdate(row) {
+  const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
+  const vbPick = resolveValueBetPick(
+    raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type
+  );
+  if (!vbPick) return null;
+  const score = { home: row.score_home, away: row.score_away };
+  if (score.home == null || score.away == null) return null;
+  const valueBetValidation = validationFromMatch(row.match_status, vbPick, score);
+  if (valueBetValidation !== "win" && valueBetValidation !== "loss") return null;
+  const validation =
+    row.validation === "win" || row.validation === "loss"
+      ? row.validation
+      : resolveRecommendedValidation({
+          pick: row.recommended_pick,
+          family: raw.recommended?.family || null,
+          status: row.match_status,
+          score,
+          marketTotals: {
+            cornersTotal: raw.marketResults?.cornersTotal ?? null,
+            shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
+            shotsTotal: raw.marketResults?.shotsTotal ?? null
+          }
+        });
+  if (String(valueBetValidation) === String(row.value_bet_validation || "") &&
+      String(validation) === String(row.validation || "")) {
+    return null;
+  }
+  return {
+    fixture_id: Number(row.fixture_id),
+    validation,
+    value_bet_validation: valueBetValidation,
+    updated_at: new Date().toISOString()
+  };
+}
 
 /**
  * predictions_history rows carry a raw_payload measuring ~134KB at the median, so a
@@ -854,12 +912,18 @@ async function handleHistorySync(req, res, timing = null) {
     for (let offset = 0; offset < scanMaxRows; offset += scanChunkSize) {
       // Read and CPU are timed separately: this loop interleaves them, and the
       // whole question is which of the two the sync is actually spending on.
+      /*
+        PATHS ONLY — never the document. This page was the 15:20Z 57014: at
+        ~353 KB/row a 100-row page is ~35 MB on the wire and PostgREST's 8 s
+        statement_timeout covers the send. The same seven leaves the loop reads
+        come back as aliases and are folded under `raw_payload` again, so the
+        decision runs on the shape it always ran on. Promoted columns are
+        deliberately NOT used here — see scan2PayloadPaths.js.
+      */
       const { data: page, error: resettleErr } = await phase("scan2Ms", "scan_resettle", () =>
         supabase
           .from(HISTORY_TABLE)
-          .select(
-            "fixture_id, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation, raw_payload"
-          )
+          .select(SCAN2_SELECT)
           .gte("kickoff_at", cutoff)
           .in("match_status", ["FT", "AET", "PEN"])
           .or("value_bet_validation.is.null,value_bet_validation.eq.pending")
@@ -870,40 +934,9 @@ async function handleHistorySync(req, res, timing = null) {
       if (resettleErr) throw resettleErr;
       if (!page?.length) break;
       await timeStage(timing, "resettleCpuMs", async () => {
-      for (const row of page) {
-        const raw = row.raw_payload && typeof row.raw_payload === "object" ? row.raw_payload : {};
-        const vbPick = resolveValueBetPick(
-          raw.valueBet?.type || raw.valueEngine?.bestMarket?.type || raw.valueEngine?.type
-        );
-        if (!vbPick) continue;
-        const score = { home: row.score_home, away: row.score_away };
-        if (score.home == null || score.away == null) continue;
-        const valueBetValidation = validationFromMatch(row.match_status, vbPick, score);
-        if (valueBetValidation !== "win" && valueBetValidation !== "loss") continue;
-        const validation =
-          row.validation === "win" || row.validation === "loss"
-            ? row.validation
-            : resolveRecommendedValidation({
-                pick: row.recommended_pick,
-                family: raw.recommended?.family || null,
-                status: row.match_status,
-                score,
-                marketTotals: {
-                  cornersTotal: raw.marketResults?.cornersTotal ?? null,
-                  shotsOnTargetTotal: raw.marketResults?.shotsOnTargetTotal ?? null,
-                  shotsTotal: raw.marketResults?.shotsTotal ?? null
-                }
-              });
-        if (String(valueBetValidation) === String(row.value_bet_validation || "") &&
-            String(validation) === String(row.validation || "")) {
-          continue;
-        }
-        resettleUpdates.push({
-          fixture_id: Number(row.fixture_id),
-          validation,
-          value_bet_validation: valueBetValidation,
-          updated_at: new Date().toISOString()
-        });
+      for (const row of rehydratePayloadPathRows(page, SCAN2_PAYLOAD_PATHS)) {
+        const update = resolveResettleUpdate(row);
+        if (update) resettleUpdates.push(update);
       }
       });
       if (page.length < scanChunkSize) break;
