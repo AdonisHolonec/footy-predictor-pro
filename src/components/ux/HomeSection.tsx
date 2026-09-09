@@ -5,6 +5,7 @@ import { predictSurfaceProps, type PredictAction } from "./predictState";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
+import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import MatchList from "./MatchList";
 import MatchListRow from "./MatchListRow";
 import { NavIcon } from "./navIcons";
@@ -28,6 +29,7 @@ export type HomeCounts = {
 type Props = {
   matches: PredictionRow[];
   counts: HomeCounts;
+  analysisMatch: PredictionRow | null;
   liveCount: number;
   accessTier: AccessTier;
   marketValidationsByFixtureId: Map<number, CardMarketValidations>;
@@ -52,8 +54,7 @@ type Props = {
  * Today (UX-B) answers one question: "what should I look at first today?"
  *
  *   1. context line — the browsed date and how many fixtures were analysed
- *   2. (gone from here) the strongest recommendation is the post-Predict
- *      dialog — see RecommendationDialog — so it is shown once, when it exists
+ *   2. Featured — the strongest recommendation
  *   3. Live now — a compact ticker of in-play rows, only when something is live
  *   4. Top picks — the remaining list, never repeating the featured fixture
  *   5. entry cards — Matches · Results · Performance · Tickets, small and last
@@ -65,6 +66,7 @@ type Props = {
 export default function HomeSection({
   matches,
   counts,
+  analysisMatch,
   liveCount,
   marketValidationsByFixtureId,
   isWatched,
@@ -83,18 +85,18 @@ export default function HomeSection({
 
   const liveMatches = useMemo(() => matches.filter((m) => isFixtureInPlay(m.status)), [matches]);
   const topPicks = useMemo(() => {
-    // The strongest recommendation is no longer a card on this surface — it is
-    // the dialog that opens when a Predict run completes — so there is no
-    // featured fixture to exclude any more: the top-confidence upcoming row
-    // simply sorts first here, once. In-play rows belong to the ticker above.
-    // No placeholders when fewer rows exist.
-    const upcoming = matches.filter((m) => !isFixtureInPlay(m.status));
+    // The Featured card already shows `analysisMatch` — the top-confidence
+    // upcoming row, i.e. exactly the row that would sort first here. Drop it so
+    // one fixture never renders twice on the same screen; in-play rows belong to
+    // the ticker above. No placeholders when fewer rows exist.
+    const featuredId = analysisMatch?.id ?? null;
+    const upcoming = matches.filter((m) => !isFixtureInPlay(m.status) && m.id !== featuredId);
     const eligible = upcoming.filter((m) => isHighConfidenceRow(m) || isValueRow(m));
     const pool = eligible.length ? eligible : upcoming;
     return [...pool]
       .sort((a, b) => confidenceOf(b) - confidenceOf(a) || expectedValueOf(b) - expectedValueOf(a))
       .slice(0, HOME_LIST_ROWS);
-  }, [matches]);
+  }, [matches, analysisMatch]);
 
   // The browsed date, not the wall clock: the list below follows `selectedDate`,
   // so the line above it must too. Parsed at local midnight so a "YYYY-MM-DD"
@@ -153,8 +155,10 @@ export default function HomeSection({
         />
       ) : (
         <>
-          {/* 2 · the strongest recommendation used to sit here; it is now the
-              post-Predict dialog (RecommendationDialog), owned by UserDashboard. */}
+          {/* 2 · the strongest recommendation */}
+          {analysisMatch && (
+            <FeaturedPredictionCard match={analysisMatch} onOpenAnalysis={() => onOpenMatch(analysisMatch)} />
+          )}
 
           {/* 3 · live ticker — compact rows, only while something is in play */}
           {liveMatches.length > 0 && (
