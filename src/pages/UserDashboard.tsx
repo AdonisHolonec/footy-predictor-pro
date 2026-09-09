@@ -27,7 +27,6 @@ import Button from "../design-system/Button";
 import Banner from "../design-system/Banner";
 import Toast from "../design-system/Toast";
 import PlanHeaderStrip from "../components/ux/PlanHeaderStrip";
-import ReferralCampaignStrip from "../components/ux/ReferralCampaignStrip";
 import { REFERRAL_CARD_ID } from "../components/ux/ReferralCard";
 import { useNavigateAndReveal } from "../hooks/useNavigateAndReveal";
 import { useReferralBonusToasts } from "../hooks/useReferralBonusToasts";
@@ -66,7 +65,7 @@ import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
 import DateRangeChips from "./userDashboard/DateRangeChips";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
-import RecommendationDialog, { shouldOpenRecommendationAfterPredict } from "../components/ux/RecommendationDialog";
+import PredictPromoDialog from "../components/ux/PredictPromoDialog";
 import MatchModalErrorBoundary, { MatchDetailUnavailable } from "../components/matchModal/MatchModalErrorBoundary";
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
@@ -149,15 +148,13 @@ export default function UserDashboard() {
   // prediction report stays here, because it is opened from a card in a list.
   const [reportRow, setReportRow] = useState<PredictionRow | null>(null);
   /*
-    The post-Predict recommendation. Opened by the COMPLETION of a run, never
-    by the click: `onPredictCompleted` below is the only writer of `true`, and
-    usePredictFlow reaches it only after every /api/predict page answered ok.
-    A 429, a non-ok status, a thrown fetch or a run that produced no rows never
-    get there, so the dialog can only ever present a run that actually
-    happened. Its content is `analysisMatch` — the same strongest-pick
-    derivation Home used to render as the Featured card.
+    The referral promo shown while a Predict run loads. Opened by the EXPLICIT
+    press — the `run` of the shared Predict action, which every Predict surface
+    activates through — and by nothing else: the onboarding auto-run and the
+    Refresh path call warmAndPredict directly and never see it. It reads no
+    prediction data and waits for nothing; the request starts in the same tick.
   */
-  const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [predictPromoOpen, setPredictPromoOpen] = useState(false);
   const [notifySafe, setNotifySafe] = useState<boolean>(user?.notificationPrefs?.safe ?? true);
   const [notifyValue, setNotifyValue] = useState<boolean>(user?.notificationPrefs?.value ?? true);
   const [notifyEmail, setNotifyEmail] = useState<boolean>(user?.notificationPrefs?.email ?? false);
@@ -355,7 +352,6 @@ export default function UserDashboard() {
     },
     onPredictCompleted: async (deduped, token) => {
       setPreds(deduped);
-      setRecommendationOpen(shouldOpenRecommendationAfterPredict(deduped));
       if (user?.id) {
         setPredictionsByUser((prev) => ({
           ...prev,
@@ -515,7 +511,15 @@ export default function UserDashboard() {
       busy: t("shell.predictBusy"),
       quotaSpent: t("shell.predictQuotaSpent")
     },
-    run: () => void warmAndPredict()
+    run: () => {
+      /*
+        Promo first, request second, same tick. The dialog is a side effect of
+        the press, not of the result: a run that fails or returns nothing still
+        had its promo, and dismissing the promo cancels nothing.
+      */
+      setPredictPromoOpen(true);
+      void warmAndPredict();
+    }
   });
 
   async function warmAndPredict() {
@@ -711,19 +715,10 @@ export default function UserDashboard() {
         />
       }
       /*
-        The campaign is its own row under the bar — see ReferralCampaignStrip
-        for why it is no longer a third card inside a 56px header.
+        No campaign strip under the bar any more: the referral promo is the
+        dialog that opens on an explicit Predict press (PredictPromoDialog), so
+        the offer is made once, at the moment the user is waiting anyway.
       */
-      campaignSlot={
-        <ReferralCampaignStrip
-          /*
-            Still exactly one navigation — this only adds the reveal that was
-            missing once it arrives. See navigateAndReveal.
-          */
-          onOpenReferral={() => navigateAndReveal("profile", REFERRAL_CARD_ID)}
-          bonus={referralBonus}
-        />
-      }
     >
       {(warmPredictBusy || trialBusy !== null || billingBusy !== null || exportBusy || notifSaveBusy) && (
         <span className="mb-3 inline-flex items-center gap-1 rounded-full border border-fp-accent/30 bg-[var(--fp-accent-muted)] px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[var(--fp-accent)]">
@@ -777,6 +772,7 @@ export default function UserDashboard() {
         <HomeSection
           matches={homePreds}
           counts={homeCounts}
+          analysisMatch={analysisMatch}
           liveCount={homeLiveCount}
           accessTier={userTier}
           marketValidationsByFixtureId={marketValidationsByFixtureId}
@@ -979,11 +975,18 @@ export default function UserDashboard() {
         predictAction={predictAction}
       />
       <Toast message={toast} onDismiss={() => setToast(null)} dismissLabel={t("common.close")} />
-      <RecommendationDialog
-        open={recommendationOpen}
-        onClose={() => setRecommendationOpen(false)}
-        match={analysisMatch}
-        onOpenAnalysis={openMatch}
+      <PredictPromoDialog
+        open={predictPromoOpen}
+        onClose={() => setPredictPromoOpen(false)}
+        /*
+          THE EXISTING REFERRAL ACTION, unchanged: navigate to Account and reveal
+          the referral card — the same call the campaign strip made. Copy, share
+          and the link itself stay inside ReferralCard.
+        */
+        onRecommend={() => {
+          setPredictPromoOpen(false);
+          navigateAndReveal("profile", REFERRAL_CARD_ID);
+        }}
       />
       <ReportPredictionDialog
         open={Boolean(reportRow)}

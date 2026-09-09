@@ -285,6 +285,7 @@ function renderHome(overrides: Record<string, unknown> = {}) {
     <HomeSection
       matches={matches}
       counts={{ total: 4, value: 0, highConfidence: 3 }}
+      analysisMatch={matches[0]}
       liveCount={1}
       accessTier="ultra"
       marketValidationsByFixtureId={new Map()}
@@ -305,15 +306,13 @@ function renderHome(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Home · list-first composition", () => {
-  it("[20] renders rows in lists, each fixture once, with no featured slot", () => {
-    // The strongest recommendation is the post-Predict dialog now, so Home has
-    // no featured card and nothing to exclude: Arsenal heads Top picks.
+  it("[20] renders rows in lists and never repeats the featured match", () => {
     renderHome();
     expect(screen.getAllByRole("list").length).toBeGreaterThanOrEqual(2);
     const rows = document.querySelectorAll("li[data-match-row]");
-    expect(rows).toHaveLength(4); // 1 live + 3 upcoming
-    expect([...rows].filter((r) => /Arsenal/.test(r.textContent || ""))).toHaveLength(1);
-    expect(screen.queryByTestId("featured")).toBeNull();
+    expect(rows).toHaveLength(3); // 1 live + 2 upcoming (Arsenal is featured)
+    expect([...rows].some((r) => /Arsenal/.test(r.textContent || ""))).toBe(false);
+    expect(screen.getByTestId("featured").textContent).toBe("Arsenal");
   });
 
   it("live and upcoming rows share the component and grammar", () => {

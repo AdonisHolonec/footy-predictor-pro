@@ -32,6 +32,9 @@ vi.mock("../../hooks/useKickoffWeather", () => ({
 /** Home pulls two self-contained sub-products that fetch; neither is under test here. */
 vi.mock("./GlobalSpecialBetSection", () => ({ default: () => null }));
 vi.mock("./RecentPerformanceCard", () => ({ default: () => null }));
+vi.mock("./FeaturedPredictionCard", () => ({
+  default: ({ match }: { match: PredictionRow }) => <div data-testid="featured">{match.teams.home}</div>
+}));
 
 afterEach(() => {
   cleanup();
@@ -58,6 +61,7 @@ function renderHome(overrides: Record<string, unknown> = {}) {
     <HomeSection
       matches={matches}
       counts={{ total: matches.length, value: 0, highConfidence: 4 }}
+      analysisMatch={matches[0]}
       liveCount={0}
       accessTier="ultra"
       marketValidationsByFixtureId={new Map()}
@@ -78,30 +82,32 @@ function renderHome(overrides: Record<string, unknown> = {}) {
   return matches;
 }
 
-/**
- * The strongest recommendation is no longer a card on Home — it is the dialog
- * that opens when a Predict run completes (RecommendationDialog, owned by
- * UserDashboard). Home therefore has no featured slot and nothing to exclude:
- * the top-confidence row heads Top picks, and every row renders exactly once.
- */
-describe("UX-0 · Home: no featured slot; the strongest pick heads Top picks once", () => {
-  it("renders every pick once, the strongest first, with no featured card", () => {
+/** Text nodes mentioning a team outside the (mocked) featured slot. */
+function outsideFeatured(pattern: RegExp): HTMLElement[] {
+  return screen.queryAllByText(pattern).filter((el) => el.closest("[data-testid='featured']") == null);
+}
+
+describe("UX-0 · Home: featured pick is not repeated in Top picks", () => {
+  it("drops the featured fixture from Top picks and still fills three slots from the rest", () => {
     renderHome();
-    expect(screen.queryByTestId("featured")).toBeNull();
-    expect(document.querySelector("[data-testid='today-picks']")).not.toBeNull();
-    const rows = [...document.querySelectorAll("li[data-match-row]")].map((r) => r.textContent || "");
-    expect(rows.filter((t) => /Arsenal/.test(t))).toHaveLength(1);
-    expect(rows.findIndex((t) => /Arsenal/.test(t))).toBe(0);
+    expect(screen.getByTestId("featured").textContent).toBe("Arsenal");
+    expect(outsideFeatured(/^Arsenal$/)).toHaveLength(0);
     for (const team of ["Chelsea", "Leeds", "Wolves"]) {
-      expect(rows.filter((t) => new RegExp(team).test(t))).toHaveLength(1);
+      expect(outsideFeatured(new RegExp(`^${team}$`)).length).toBeGreaterThan(0);
     }
   });
 
-  it("does not fabricate placeholders when fewer picks exist", () => {
+  it("does not fabricate placeholders when fewer than three other picks exist", () => {
     const matches = [row(1, "Arsenal", 88), row(2, "Chelsea", 81)];
-    renderHome({ matches, counts: { total: 2, value: 0, highConfidence: 2 } });
-    const rows = [...document.querySelectorAll("li[data-match-row]")];
-    expect(rows).toHaveLength(2);
+    renderHome({ matches, analysisMatch: matches[0], counts: { total: 2, value: 0, highConfidence: 2 } });
+    expect(outsideFeatured(/^Chelsea$/).length).toBeGreaterThan(0);
+    expect(outsideFeatured(/^Arsenal$/)).toHaveLength(0);
+  });
+
+  it("applies no exclusion when there is no featured match", () => {
+    renderHome({ analysisMatch: null });
+    expect(screen.queryByTestId("featured")).toBeNull();
+    expect(outsideFeatured(/^Arsenal$/).length).toBeGreaterThan(0);
   });
 });
 
