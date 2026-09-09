@@ -8,6 +8,12 @@ import { useAuth } from "../hooks/useAuth";
 import { readCapturedAuthHash } from "../utils/supabaseAuthHash";
 import { authErrorMessageKey, isEmailNotConfirmedError, isResendCooldownError } from "../utils/authError";
 import { isAuthTimeoutError } from "../utils/authTimeout";
+import {
+  capturePendingReferral,
+  clearPendingReferral,
+  normalizeReferralCode,
+  readPendingReferral
+} from "../utils/referralLink";
 import { HistoryStats } from "../types";
 
 export default function Login() {
@@ -32,6 +38,20 @@ export default function Login() {
   const [localError, setLocalError] = useState("");
   const [globalStats, setGlobalStats] = useState<HistoryStats>({ wins: 0, losses: 0, settled: 0, winRate: 0, pushes: 0, halfWins: 0, halfLosses: 0 });
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  /*
+    THE OPTIONAL REFERRAL CODE, for a friend who sent the code rather than the
+    link. It goes into the SAME pending referral the link goes into
+    (referralLink.ts) and is claimed by the SAME post-login invitation — this
+    form never talks to the referral endpoint, because attribution needs a
+    signed-in user and this one does not exist yet.
+
+    A code already captured from a link is shown here rather than hidden, so
+    the user sees what is pending; typing a different one over it is an
+    explicit replacement, never a silent one, and the helper text says so.
+  */
+  const [existingPending] = useState<string | null>(() => readPendingReferral()?.code ?? null);
+  const [referralCode, setReferralCode] = useState<string>(existingPending ?? "");
+  const [referralError, setReferralError] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
@@ -133,6 +153,35 @@ export default function Login() {
     };
   }, []);
 
+  /**
+   * Store the typed code as the pending referral, or refuse the submit.
+   *
+   * Empty is fine: signup proceeds exactly as before. A valid code is stored
+   * through the link's own capture path, which normalises it and never
+   * overwrites an existing pending code — so an explicit replacement clears the
+   * old one first. Storage failures are swallowed by those helpers; a referral
+   * is never worth breaking account creation over. Nothing is claimed here.
+   */
+  function rememberReferralCode(): boolean {
+    const raw = referralCode.trim();
+    if (!raw) return true;
+    const code = normalizeReferralCode(raw);
+    if (!code) {
+      setReferralError(t("auth.referralCodeInvalidMsg"));
+      return false;
+    }
+    if (existingPending && existingPending !== code) clearPendingReferral();
+    capturePendingReferral(`?ref=${encodeURIComponent(code)}`);
+    return true;
+  }
+
+  const typedReferral = normalizeReferralCode(referralCode);
+  const referralHintKey = !existingPending
+    ? "auth.referralCodeHint"
+    : typedReferral && typedReferral !== existingPending
+      ? "auth.referralCodeReplaces"
+      : "auth.referralCodeFromLink";
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLocalError("");
@@ -147,6 +196,7 @@ export default function Login() {
       setLocalError(t("auth.privacyRequiredMsg"));
       return;
     }
+    if (mode === "signup" && !rememberReferralCode()) return;
     try {
       setSubmitting(true);
       if (mode === "login") {
@@ -359,6 +409,48 @@ export default function Login() {
                     </label>
                   )}
 
+                  {mode === "signup" && (
+                    <div>
+                      <label
+                        htmlFor="login-referral-code"
+                        className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]"
+                      >
+                        {t("auth.referralCodeLabel")}
+                      </label>
+                      <input
+                        id="login-referral-code"
+                        type="text"
+                        value={referralCode}
+                        onChange={(event) => {
+                          setReferralCode(event.target.value);
+                          if (referralError) setReferralError(null);
+                        }}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        maxLength={12}
+                        placeholder={t("auth.referralCodePlaceholder")}
+                        aria-invalid={referralError ? true : undefined}
+                        aria-describedby={referralError ? "login-referral-error" : "login-referral-hint"}
+                        data-slot="login-referral-code"
+                        className="glass-input mt-1.5 w-full rounded-xl px-3 py-2.5 font-mono text-sm uppercase tracking-wider outline-none transition focus:ring-2 focus:ring-fp-accent/35"
+                      />
+                      {referralError ? (
+                        <p
+                          id="login-referral-error"
+                          role="alert"
+                          data-slot="login-referral-error"
+                          className="mt-1.5 text-xs font-semibold text-[var(--fp-danger)]"
+                        >
+                          {referralError}
+                        </p>
+                      ) : (
+                        <p id="login-referral-hint" data-slot="login-referral-hint" className="mt-1.5 text-xs text-[var(--fp-text-muted)]">
+                          {t(referralHintKey)}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {mode === "signup" && (
                     <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-[var(--fp-text-muted)]">
                       <input
