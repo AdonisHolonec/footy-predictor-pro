@@ -42,6 +42,8 @@ import {
   reasonCodesFromRow
 } from "../api/alerts.js";
 import { META_HISTORY_PAYLOAD_PATHS } from "../server-utils/metaLearning/runMetaLearningRefresh.js";
+import { SCAN2_SELECT } from "../api/history.js";
+import { SCAN2_PAYLOAD_PATHS } from "../server-utils/history/scan2PayloadPaths.js";
 
 /**
  * Simulate what PostgREST returns for `alias:raw_payload->a->b`: walk with
@@ -123,6 +125,15 @@ test("every optimized select transports raw_payload only via -> subpaths", () =>
     selectWithPayloadPaths("fixture_id", META_HISTORY_PAYLOAD_PATHS),
     "META_HISTORY_PAYLOAD_PATHS"
   );
+  // History sync scan 2 (scan_resettle): the 2026-09-08 15:20Z 57014 was this select.
+  assertNoFullPayload(SCAN2_SELECT, "SCAN2_SELECT");
+  assert.equal(
+    SCAN2_SELECT,
+    selectWithPayloadPaths(
+      "fixture_id, recommended_pick, match_status, score_home, score_away, validation, value_bet_validation",
+      SCAN2_PAYLOAD_PATHS
+    )
+  );
 });
 
 test("optimized selects keep their load-bearing promoted columns", () => {
@@ -139,7 +150,8 @@ test("valueEngine is never selected as a whole block (267.7 KB/row)", () => {
     ANALYTICS_HISTORY_SELECT,
     SNAPSHOT_HISTORY_SELECT,
     TIP_HISTORY_SELECT,
-    ALERTS_HISTORY_SELECT
+    ALERTS_HISTORY_SELECT,
+    SCAN2_SELECT
   ]) {
     assert.ok(!/raw_payload->valueEngine(?!->)/.test(select), select);
   }
