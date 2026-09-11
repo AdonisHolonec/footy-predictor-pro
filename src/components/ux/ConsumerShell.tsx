@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import PredictCta from "./PredictCta";
+import DaySelector from "./DaySelector";
 import type { PredictAction } from "./predictState";
 import Tooltip from "../../design-system/Tooltip";
 import { useLocale } from "../../context/LocaleContext";
@@ -139,12 +140,9 @@ export default function ConsumerShell({
           className="mx-auto flex h-14 max-w-[var(--fp-container)] items-center gap-1.5 px-3 sm:gap-2.5 sm:px-6 lg:px-8"
         >
           {/*
-            BRAND OVER DATE, one stacked column.
-
-            Side by side these two ate roughly a third of the bar, which is why the
-            plan and referral cards had to spill onto a second row. Stacked, they
-            occupy the same 56px of height and about half the width, and the whole
-            header fits on one line again.
+            The brand column. The date used to stack under the wordmark here, as a
+            28px input; it is now the day strip directly below the bar (see
+            DaySelector below and DESIGN.md), where a real day control fits.
           */}
           {/*
             min-w-[6.5rem], not min-w-0.
@@ -166,30 +164,6 @@ export default function ConsumerShell({
             >
               Footy<span className="text-[var(--fp-accent)]">Predictor</span>
             </button>
-            <label className="sr-only" htmlFor="consumer-date">
-              {t("shell.date")}
-            </label>
-            <input
-              id="consumer-date"
-              type="date"
-              title={t("shell.selectDate")}
-              value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              /*
-                NO touch-target HERE, deliberately. It was added and then removed
-                after probing: the brand column is 54px tall with this input
-                flush to its bottom edge, so a 44px expansion is clipped by the
-                column's overflow-hidden above and by the 56px bar below —
-                elementFromPoint returned the brand span at the top of the
-                intended area and <main> at the bottom. The class would have
-                claimed a target it cannot deliver.
-
-                A real 44px date control needs the brand out of this column or a
-                taller bar; both are design decisions, not a class. The honest
-                number today is 28px, and it is recorded in DESIGN.md.
-              */
-              className="h-6 w-full min-w-0 max-w-[6.6rem] rounded-[var(--fp-radius-sm)] border border-[var(--fp-border)] bg-[var(--fp-bg)] px-1 text-[10px] font-medium leading-none text-[var(--fp-text)] sm:h-7 sm:max-w-[7.2rem] sm:text-xs"
-            />
           </div>
 
           {desktopNav}
@@ -250,6 +224,14 @@ export default function ConsumerShell({
         </div>
 
       </header>
+
+      {/*
+        The day strip lives directly below the bar, outside <header>: the date
+        used to be a 28px input squeezed under the wordmark (see DESIGN.md),
+        and a real day control cannot fit inside the 56px contract. Same value,
+        same onDateChange — only the representation moved.
+      */}
+      <DaySelector value={date} onChange={onDateChange} />
 
       {/*
         Directly below the bar and above the content — the first thing after the
