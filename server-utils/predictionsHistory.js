@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin.js";
+import { logWarn } from "./observability/logger.js";
 import { markStage } from "./observability/historyTiming.js";
 import { MODEL_VERSION } from "./modelConstants.js";
 import {
@@ -22,6 +23,60 @@ import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
 const SNAPSHOTS_TABLE = "prediction_snapshots";
+
+/*
+  RELIABILITY-006: Predict writes history in bounded statements.
+
+  2026-09-11 13:24Z: one Predict sent 46 existing rows (~190KB of JSON each,
+  ~8-9MB in total) as ONE upsert; Postgres cancelled it with statement timeout
+  (57014) ~18.8s in, while the same shape at 42 rows had taken 5.96s. History sync
+  already splits its writes (api/history.js); the Predict path never did. 10 rows
+  is ~1.9MB per statement: ~1.4s at the observed normal rate and ~4s at the failed
+  run's rate — about half the ~8s effective per-statement limit.
+
+  Not atomic: batches written before a failure stay written. That is safe to replay
+  (history is keyed on fixture_id), and the first failure stops the remaining
+  batches and is rethrown unchanged, so Stage10's semantics are unchanged.
+*/
+export const PREDICT_HISTORY_WRITE_BATCH = 10;
+
+function countHistoryBatches(rowCount) {
+  return Math.ceil(rowCount / PREDICT_HISTORY_WRITE_BATCH);
+}
+
+/**
+ * Insert ("insert") or upsert-on-fixture_id ("update") `rows` in sequential batches.
+ * Slices share the row objects, so no payload is copied. On the first error, logs
+ * one bounded line (never a payload) and rethrows the original error.
+ */
+async function writeHistoryInBatches(supabase, phase, rows, plan, progress) {
+  for (let start = 0; start < rows.length; start += PREDICT_HISTORY_WRITE_BATCH) {
+    const batch = rows.slice(start, start + PREDICT_HISTORY_WRITE_BATCH);
+    const table = supabase.from(HISTORY_TABLE);
+    const { error } =
+      phase === "insert" ? await table.insert(batch) : await table.upsert(batch, { onConflict: "fixture_id" });
+    if (error) {
+      logWarn("predict.history_persist_failed", {
+        phase,
+        batchSize: PREDICT_HISTORY_WRITE_BATCH,
+        batches: plan.batches,
+        batchesCompleted: progress.batchesCompleted,
+        failedBatchIndex: progress.batchesCompleted,
+        failedBatchRows: batch.length,
+        failedFixtureIds: batch.map((row) => Number(row.fixture_id)),
+        rowsAttempted: plan.rowsAttempted,
+        rowsPersisted: progress.rowsPersisted,
+        partial: progress.rowsPersisted > 0,
+        durationMs: Date.now() - plan.startedAt,
+        errorCode: error.code || null,
+        error: String(error.message || "").slice(0, 200)
+      });
+      throw error;
+    }
+    progress.batchesCompleted += 1;
+    progress.rowsPersisted += batch.length;
+  }
+}
 
 function asNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 function normalizePick(pick) { return String(pick || "").trim().toLowerCase(); }
@@ -478,15 +533,16 @@ export async function upsertPredictionsHistory(predictions) {
     toUpsert.push(row);
   }
 
-  if (toInsert.length > 0) {
-    const { error: insertErr } = await supabase.from(HISTORY_TABLE).insert(toInsert);
-    if (insertErr) throw insertErr;
-  }
-
-  if (toUpsert.length > 0) {
-    const { error: upsertErr } = await supabase.from(HISTORY_TABLE).upsert(toUpsert, { onConflict: "fixture_id" });
-    if (upsertErr) throw upsertErr;
-  }
+  // New fixtures first, then existing ones — the same order as the single-statement
+  // version. Each goes out in bounded batches; the first failure stops everything.
+  const plan = {
+    startedAt: Date.now(),
+    rowsAttempted: toInsert.length + toUpsert.length,
+    batches: countHistoryBatches(toInsert.length) + countHistoryBatches(toUpsert.length)
+  };
+  const progress = { batchesCompleted: 0, rowsPersisted: 0 };
+  await writeHistoryInBatches(supabase, "insert", toInsert, plan, progress);
+  await writeHistoryInBatches(supabase, "update", toUpsert, plan, progress);
 
   const inserted = toInsert.length;
   const updated = toUpsert.length;
@@ -498,7 +554,10 @@ export async function upsertPredictionsHistory(predictions) {
       updated,
       skippedFinal,
       skippedStale,
-      skippedPreKickoff: skipped
+      skippedPreKickoff: skipped,
+      batchSize: PREDICT_HISTORY_WRITE_BATCH,
+      batches: plan.batches,
+      durationMs: Date.now() - plan.startedAt
     })
   );
 
