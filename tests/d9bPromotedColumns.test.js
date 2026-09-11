@@ -274,7 +274,7 @@ async function persistWith(predictions) {
   return ops;
 }
 
-test("[12] persisting many predictions still issues exactly ONE write, carrying the new columns", async () => {
+test("[12] persisting many predictions issues bounded bulk writes — never one per fixture — carrying the new columns", async () => {
   const kickoff = new Date(Date.now() + 6 * 3600_000).toISOString();
   const predictions = Array.from({ length: 20 }, (_, i) => ({
     id: 1000 + i,
@@ -286,16 +286,25 @@ test("[12] persisting many predictions still issues exactly ONE write, carrying 
   }));
 
   const ops = await persistWith(predictions);
+  const { PREDICT_HISTORY_WRITE_BATCH } = await import(`../server-utils/predictionsHistory.js?d9bBatch=${Math.random()}`);
   const historyWrites = ops.filter(
     (o) => o.table === "predictions_history" && (o.op === "insert" || o.op === "upsert")
   );
 
-  // One bulk statement for twenty fixtures — not twenty, and not one extra.
-  assert.equal(historyWrites.length, 1, `expected 1 bulk write, saw ${historyWrites.length}`);
-  assert.equal(historyWrites[0].rows.length, 20);
+  /*
+    D9b's requirement: the promoted columns ride the EXISTING bulk statement(s) and add
+    no write per fixture. RELIABILITY-006 split that bulk write into bounded batches
+    (a single ~8-9MB statement hit Postgres' statement timeout in production), so the
+    count is now ceil(n / batch) — still bulk, still never one per fixture.
+  */
+  assert.equal(historyWrites.length, Math.ceil(20 / PREDICT_HISTORY_WRITE_BATCH));
+  assert.ok(historyWrites.every((w) => w.rows.length <= PREDICT_HISTORY_WRITE_BATCH));
+  const rows = historyWrites.flatMap((w) => w.rows);
+  assert.equal(rows.length, 20);
+  assert.deepEqual(rows.map((r) => r.fixture_id).sort((a, b) => a - b), predictions.map((p) => p.id));
 
-  // Every row in that single statement carries the promoted values.
-  for (const row of historyWrites[0].rows) {
+  // Every row, in every batch, carries the promoted values.
+  for (const row of rows) {
     assert.equal(row.prob_1, TRIPLE.p1);
     assert.equal(row.model_method, "modular-engine");
     assert.equal(row.pick_1x2, "1");
