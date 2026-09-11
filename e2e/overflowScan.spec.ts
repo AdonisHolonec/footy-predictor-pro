@@ -99,3 +99,70 @@ test.describe("horizontal overflow scan", () => {
     expect(scan.documentScrollWidth).toBeGreaterThan(scan.documentClientWidth);
   });
 });
+
+/**
+ * A 300px strip holding a 1200px row — the shape of a horizontally scrolling
+ * control (the dashboard day strip was the first one on a scanned page, and
+ * the post-merge smoke on 095b510d flagged its scrolled row). The strip is
+ * scrolled where it can be, so the row crosses BOTH viewport edges.
+ */
+async function scanStrip(page: Page, stripStyle: string) {
+  await page.setContent(`
+    <style>
+      body { margin: 0; }
+      .strip { margin-left: 40px; width: 300px; ${stripStyle} }
+      .row { display: flex; width: 1200px; height: 40px; }
+      .cell { flex: 0 0 100px; }
+    </style>
+    <div class="strip"><div class="row">${Array.from({ length: 12 }, (_, i) => `<button class="cell">${i}</button>`).join("")}</div></div>
+  `);
+  await page.evaluate(() => {
+    const strip = globalThis.document.querySelector(".strip");
+    if (strip) strip.scrollLeft = 200;
+  });
+  return page.evaluate(scanHorizontalOverflow);
+}
+
+test.describe("horizontal overflow scan · clipping ancestors", () => {
+  for (const overflowX of ["auto", "hidden", "clip"] as const) {
+    test(`stays quiet for content clipped by an overflow-x: ${overflowX} ancestor that fits`, async ({ page }) => {
+      const scan = await scanStrip(page, `overflow-x: ${overflowX};`);
+
+      // The premise: the row's own box really does cross the viewport edge.
+      const row = await page.locator(".row").boundingBox();
+      expect(row!.x + row!.width, "the row must extend past the right edge").toBeGreaterThan(390);
+
+      // ...but only inside the strip, which clips it. Nothing is visible past
+      // the viewport and the document does not widen, so there is no offender.
+      expect(scan.offenders).toEqual([]);
+      expect(scan.documentScrollWidth).toBe(scan.documentClientWidth);
+    });
+  }
+
+  test("still reports a scroller that itself overhangs the viewport", async ({ page }) => {
+    const scan = await scanStrip(page, "overflow-x: auto; width: 900px;");
+
+    // Clipping protects what is inside the strip, never the strip's own box.
+    expect(scan.offenders.some((o) => o.startsWith("div") && o.endsWith(".strip"))).toBe(true);
+    expect(scan.documentScrollWidth).toBeGreaterThan(scan.documentClientWidth);
+  });
+
+  test("still reports an absolutely positioned element that escapes a non-positioned clipping ancestor", async ({ page }) => {
+    // overflow clips only descendants whose containing block lies inside the
+    // clipping box. This one's containing block is .anchor, OUTSIDE .clipper,
+    // so it paints past the viewport — exactly how an overhanging tooltip does.
+    await page.setContent(`
+      <style>
+        body { margin: 0; }
+        .anchor { position: relative; }
+        .clipper { width: 200px; overflow-x: hidden; }
+        .escapee { position: absolute; left: 0; top: 0; width: 900px; height: 20px; }
+      </style>
+      <div class="anchor"><div class="clipper"><div class="escapee">tooltip</div></div></div>
+    `);
+    const scan = await page.evaluate(scanHorizontalOverflow);
+
+    expect(scan.offenders.some((o) => o.includes(".escapee"))).toBe(true);
+    expect(scan.documentScrollWidth).toBeGreaterThan(scan.documentClientWidth);
+  });
+});

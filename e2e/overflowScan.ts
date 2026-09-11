@@ -106,7 +106,52 @@ export function scanHorizontalOverflow(): OverflowScan {
     return `rect=[${Math.round(r.left)}→${Math.round(r.right)}] ${Math.round(r.width)}x${Math.round(r.height)}`;
   };
 
-  // --- 1. Box overflow: unchanged from the original scan. -------------------
+  // --- 1. Box overflow: the part of each box that is VISIBLE past the edge. --
+  //
+  // A box that crosses the viewport only inside an ancestor that clips it — a
+  // horizontal scroller (overflow-x: auto/scroll) or a clipping box
+  // (hidden/clip) — paints nothing past the edge and cannot widen the document.
+  // The dashboard day strip was the first such scroller on a scanned page: its
+  // scrolled row failed the post-merge smoke on 095b510d while the page fit.
+  // The clipping ancestor itself is still scanned on its own turn, so a
+  // scroller that overhangs the viewport is still reported.
+  //
+  // An ancestor clips only descendants whose containing-block chain passes
+  // through it: `absolute` skips non-positioned ancestors (an overhanging
+  // tooltip anchored outside a clipping box still counts), and `fixed` escapes
+  // all of them unless a transform/filter/perspective/contain ancestor contains
+  // it. <body> and <html> are never treated as clips — their overflow applies
+  // to the viewport, which is exactly what this scan measures.
+  const createsFixedContainingBlock = (cs: ReturnType<typeof globalThis.getComputedStyle>): boolean =>
+    cs.transform !== "none" ||
+    cs.filter !== "none" ||
+    cs.perspective !== "none" ||
+    /\b(layout|paint|strict|content)\b/.test(cs.contain);
+
+  /** `el`'s horizontal extent left visible by the ancestors that clip it; null when none is. */
+  const visibleSpan = (el: DomElement, left: number, right: number): [number, number] | null => {
+    let position = globalThis.getComputedStyle(el).position;
+    for (let a: DomElement | null = el.parentElement; a && a !== doc.body && a !== de; a = a.parentElement) {
+      const acs = globalThis.getComputedStyle(a);
+      const onChain =
+        position === "absolute"
+          ? acs.position !== "static" || createsFixedContainingBlock(acs)
+          : position === "fixed"
+            ? createsFixedContainingBlock(acs)
+            : true;
+      if (!onChain) continue;
+      // Inline and display:contents boxes clip nothing, whatever overflow says.
+      if (acs.overflowX !== "visible" && acs.display !== "inline" && acs.display !== "contents") {
+        const clipLeft = a.getBoundingClientRect().left + a.clientLeft;
+        left = Math.max(left, clipLeft);
+        right = Math.min(right, clipLeft + a.clientWidth);
+        if (right <= left) return null;
+      }
+      position = acs.position;
+    }
+    return [left, right];
+  };
+
   const offenders: string[] = [];
   // Whole document, not just #root: overlays render in #overlay-root, which is
   // a sibling. A scan rooted at #root can report "no offenders" while the page
@@ -120,7 +165,9 @@ export function scanHorizontalOverflow(): OverflowScan {
     // Fixed chrome is positioned against the viewport and does not expand the
     // document's scrollable area.
     if (globalThis.getComputedStyle(el).position === "fixed") continue;
-    if (r.right > vw + 1 || r.left < -1) {
+    if (r.right <= vw + 1 && r.left >= -1) continue;
+    const span = visibleSpan(el, r.left, r.right);
+    if (span && (span[1] > vw + 1 || span[0] < -1)) {
       offenders.push(
         `${el.tagName.toLowerCase()} [${Math.round(r.left)}→${Math.round(r.right)}] ` +
           `${Math.round(r.width)}x${Math.round(r.height)} ` +
