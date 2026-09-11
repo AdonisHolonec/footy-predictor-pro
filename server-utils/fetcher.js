@@ -2,6 +2,7 @@ import { createClient } from "@vercel/kv";
 import { logError, logWarn } from "./observability/logger.js";
 import { bumpCacheStat, bumpCounter, cacheStatsKey, recordObservation } from "./observability/metricsStore.js";
 import { parseRateLimitHeaders, rateLimitTelemetryFields } from "./observability/rateLimitHeaders.js";
+import { createUpstreamGate, isProviderRateLimited, readGateConfig } from "./upstreamGate.js";
 export { recordObservation };
 
 const kv = createClient({
@@ -13,6 +14,70 @@ export { kv };
 
 /** In-process dedupe: concurrent identical upstream requests share one fetch. */
 const inflight = new Map();
+
+/*
+  RELIABILITY-005 gate telemetry. Only rare events are logged, and each event name
+  at most once per GATE_LOG_INTERVAL_MS (the next line carries how many were
+  suppressed), so a stressed gate cannot turn into a log flood. No counters are
+  written to KV: /api/predict runs outside an observation scope, where bumpCounter
+  is a KV read-modify-write per call.
+*/
+const GATE_DELAY_LOG_MS = 2_000;
+const GATE_LOG_INTERVAL_MS = 10_000;
+const gateLogLast = new Map();
+const rateLimitCounters = { retries: 0, retrySuccesses: 0 };
+
+/** The single admission point for every provider request (see upstreamGate.js). */
+const upstreamGate = createUpstreamGate(readGateConfig(), {
+  onLeaseExpired: ({ leaseMs }) => logGateEventThrottled("api.limiter_lease_expired", { leaseMs })
+});
+
+function gateLogFields() {
+  const s = upstreamGate.snapshot();
+  return {
+    inFlight: s.inFlight,
+    queueDepth: s.queueDepth,
+    admitted: s.admitted,
+    delayed: s.delayed,
+    maxWaitMs: s.maxWaitMs,
+    refused: s.refused
+  };
+}
+
+function logGateEventThrottled(event, fields) {
+  const t = Date.now();
+  const last = gateLogLast.get(event) || { at: 0, suppressed: 0 };
+  if (t - last.at < GATE_LOG_INTERVAL_MS) {
+    gateLogLast.set(event, { at: last.at, suppressed: last.suppressed + 1 });
+    return;
+  }
+  gateLogLast.set(event, { at: t, suppressed: 0 });
+  logWarn(event, { ...fields, suppressedSinceLast: last.suppressed, ...gateLogFields() });
+}
+
+/** No provider call was made: the gate could not admit it within its wait budget. */
+function refuseLocally(endpoint, waitedMs, apiStarted) {
+  const apiMs = Date.now() - apiStarted;
+  void recordObservation("api", { durationMs: apiMs, ok: false, failureKind: "api" });
+  logGateEventThrottled("api.limiter_refused", { endpoint, waitedMs });
+  return {
+    ok: false,
+    error: "Limitare locală a cererilor către API-Football; cererea nu a fost trimisă.",
+    reason: "api_local_rate_limit",
+    fromCache: false,
+    apiMs
+  };
+}
+
+/** Process-local gate state, for diagnostics and tests. */
+export function getUpstreamGateStats() {
+  return {
+    ...upstreamGate.snapshot(),
+    rateLimitRetries: rateLimitCounters.retries,
+    rateLimitRetrySuccesses: rateLimitCounters.retrySuccesses,
+    config: upstreamGate.config
+  };
+}
 
 /** Process-local counters (reset on cold start — still useful for request diagnostics). */
 const localCacheStats = { hits: 0, misses: 0, inflightJoins: 0, upstream: 0 };
@@ -423,7 +488,60 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
         return { res, json, upstreamCfg };
       };
 
-      let attempt = await fetchWith(primary);
+      /*
+        RELIABILITY-005: every provider request is admitted by the process-wide
+        gate (pacing, concurrency cap, provider rate-limit pause). A request the
+        gate cannot admit within its wait budget is refused locally and degrades
+        exactly like any other failed read: callers already treat ok:false as "no
+        data", and nothing is cached.
+      */
+      const gatedFetch = async (upstreamCfg) => {
+        const slot = await upstreamGate.acquire();
+        if (!slot.ok) return { refused: true, waitedMs: slot.waitedMs };
+        if (slot.waitedMs >= GATE_DELAY_LOG_MS) {
+          logGateEventThrottled("api.limiter_delayed", { endpoint, waitedMs: slot.waitedMs });
+        }
+        try {
+          return await fetchWith(upstreamCfg);
+        } finally {
+          slot.release();
+        }
+      };
+
+      let attempt = await gatedFetch(primary);
+      if (attempt.refused) return refuseLocally(endpoint, attempt.waitedMs, apiStarted);
+
+      // The provider's per-minute rejection (HTTP 200 + errors.rateLimit): pause every
+      // admission, then retry THIS request once. One retry, through the same gate, so
+      // it can neither loop nor land in the window that just rejected it.
+      let retriedAfterRateLimit = false;
+      if (isProviderRateLimited(attempt.json)) {
+        const { startedCooldown, cooldownMs } = upstreamGate.noteRateLimited();
+        if (startedCooldown) {
+          const headers = parseRateLimitHeaders(attempt.res.headers);
+          logWarn("api.rate_limit_cooldown", {
+            endpoint,
+            provider: attempt.upstreamCfg.provider,
+            cooldownMs,
+            // What the REJECTED response itself reported. Parsed numbers only, never
+            // raw headers; null means the header was absent.
+            headerMinuteLimit: headers.minute.limit,
+            headerMinuteRemaining: headers.minute.remaining,
+            headerDailyRemaining: headers.daily.remaining,
+            ...gateLogFields()
+          });
+        }
+        const retry = await gatedFetch(attempt.upstreamCfg);
+        if (retry.refused) {
+          logGateEventThrottled("api.limiter_refused", { endpoint, waitedMs: retry.waitedMs, duringRetry: true });
+        } else {
+          rateLimitCounters.retries += 1;
+          retriedAfterRateLimit = true;
+          attempt = retry;
+          if (isProviderRateLimited(attempt.json)) upstreamGate.noteRateLimited();
+          else rateLimitCounters.retrySuccesses += 1;
+        }
+      }
 
       const messageRaw = String(attempt.json?.message || "").toLowerCase();
       const errorsRaw = String(
@@ -436,7 +554,8 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
           // S2: the one retry path this client has. Counting it makes "retry count"
           // observable; the retry behaviour itself is unchanged.
           void bumpCounter("api_upstream_fallback");
-          attempt = await fetchWith(fallback);
+          const fallbackAttempt = await gatedFetch(fallback);
+          if (!fallbackAttempt.refused) attempt = fallbackAttempt;
         }
       }
 
@@ -466,6 +585,8 @@ export async function getWithCache(endpoint, paramsObj, ttlSeconds, options = {}
           // A 200 here means the provider signalled the failure in the body.
           httpOk: attempt.res.ok,
           providerMessage: typeof json.message === "string" && json.message ? clipText(json.message) : undefined,
+          // Present only when the gate already retried a provider rate limit once.
+          retriedAfterRateLimit: retriedAfterRateLimit || undefined,
           ...providerErrors
         });
         return {
