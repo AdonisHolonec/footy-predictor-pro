@@ -83,10 +83,17 @@ export function isProviderRateLimited(json) {
   );
 }
 
-function defaultSchedule(fn, ms) {
+/*
+  Timers are REF'd by default: the pacing/pause timer and the queue-wait timer
+  stand for a caller that is still awaiting admission, so they must keep the
+  process alive — an unref'd pacing timer let a bare Node process (a script, the
+  CI test runner) exit with the request still pending. Only the lease timer opts
+  into unref: it is a safety net, and an in-flight request already holds the
+  event loop open through its own socket.
+*/
+function defaultSchedule(fn, ms, options = {}) {
   const timer = setTimeout(fn, ms);
-  // Never keep a function instance (or a test runner) alive just for the gate.
-  if (typeof timer?.unref === "function") timer.unref();
+  if (options.unref && typeof timer?.unref === "function") timer.unref();
   return timer;
 }
 
@@ -140,12 +147,16 @@ export function createUpstreamGate(config = readGateConfig(), deps = {}) {
       inFlight -= 1;
       pump();
     };
-    lease = schedule(() => {
-      if (released) return;
-      stats.leaseExpired += 1;
-      if (onLeaseExpired) onLeaseExpired({ leaseMs: cfg.leaseMs });
-      release();
-    }, cfg.leaseMs);
+    lease = schedule(
+      () => {
+        if (released) return;
+        stats.leaseExpired += 1;
+        if (onLeaseExpired) onLeaseExpired({ leaseMs: cfg.leaseMs });
+        release();
+      },
+      cfg.leaseMs,
+      { unref: true }
+    );
     waiter.resolve({ ok: true, waitedMs, release });
   }
 
@@ -180,6 +191,9 @@ export function createUpstreamGate(config = readGateConfig(), deps = {}) {
         waiters.splice(index, 1);
         stats.refused += 1;
         resolve({ ok: false, waitedMs: Math.max(0, now() - waiter.enqueuedAt), reason: "queue_timeout" });
+        // Re-evaluate: a pacing/pause timer scheduled for this waiter must not stay
+        // armed (it is ref'd) once nobody is left waiting for it.
+        pump();
       }, cfg.maxWaitMs);
       waiters.push(waiter);
       stats.maxQueueDepth = Math.max(stats.maxQueueDepth, waiters.length);

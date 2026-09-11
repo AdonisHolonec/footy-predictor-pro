@@ -207,3 +207,59 @@ test("rate-limit detection matches only the observed per-minute signal", () => {
   assert.equal(isProviderRateLimited({ response: [] }), false);
   assert.equal(isProviderRateLimited(null), false);
 });
+
+// ---------------------------------------------------------------------------
+// Event-loop liveness, checked in a BARE Node process (no test runner keeping it
+// alive). PR #249 CI caught the gate unref'ing its pacing timer: a request waiting
+// for its slot left the loop empty, and Node exited with the request still pending
+// (exit code 13, "unsettled top-level await").
+// ---------------------------------------------------------------------------
+const { spawnSync } = await import("node:child_process");
+const GATE_URL = new URL("../server-utils/upstreamGate.js", import.meta.url).href;
+
+function runBareNode(body) {
+  const source =
+    "const { createUpstreamGate } = await import(" + JSON.stringify(GATE_URL) + ");\n" + body;
+  return spawnSync(process.execPath, ["--input-type=module", "-e", source], { encoding: "utf8", timeout: 20_000 });
+}
+
+test("a waiting request keeps a bare Node process alive through pacing and a pause", () => {
+  const out = runBareNode(`
+    const gate = createUpstreamGate({ minIntervalMs: 200, maxConcurrency: 3, maxWaitMs: 30000, leaseMs: 20000, cooldownMs: 300, disabled: false });
+    (await gate.acquire()).release();
+    const paced = await gate.acquire();
+    paced.release();
+    gate.noteRateLimited();
+    const afterPause = await gate.acquire();
+    afterPause.release();
+    console.log("paced=" + (paced.waitedMs >= 150) + " afterPause=" + (afterPause.waitedMs >= 250));
+  `);
+  assert.equal(out.status, 0, `bare process exited ${out.status} before admission: ${out.stderr}`);
+  assert.match(out.stdout, /paced=true afterPause=true/);
+});
+
+test("a refused waiter leaves no armed timer behind: the process exits without sitting out the pause", () => {
+  const started = Date.now();
+  const out = runBareNode(`
+    const gate = createUpstreamGate({ minIntervalMs: 0, maxConcurrency: 3, maxWaitMs: 1000, leaseMs: 20000, cooldownMs: 8000, disabled: false });
+    gate.noteRateLimited();
+    const refused = await gate.acquire();
+    console.log("refused=" + (refused.ok === false && refused.reason === "queue_timeout"));
+  `);
+  const elapsed = Date.now() - started;
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /refused=true/);
+  assert.ok(elapsed < 6_000, `the process sat ${elapsed}ms; it must not wait out the 8 s pause`);
+});
+
+test("a held slot's lease timer alone does not keep a bare Node process alive", () => {
+  const started = Date.now();
+  const out = runBareNode(`
+    const gate = createUpstreamGate({ minIntervalMs: 0, maxConcurrency: 1, maxWaitMs: 30000, leaseMs: 60000, cooldownMs: 0, disabled: false });
+    await gate.acquire();
+    console.log("held");
+  `);
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /held/);
+  assert.ok(Date.now() - started < 15_000, "the process exited without waiting for the 60 s lease");
+});

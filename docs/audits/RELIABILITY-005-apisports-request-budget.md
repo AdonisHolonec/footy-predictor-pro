@@ -107,9 +107,9 @@ We add a **minimal** diagnostic: the cooldown log includes `headerMinuteLimit`, 
 | `eslint . --max-warnings 0` | PASS | **PASS** |
 | Typecheck (`tsconfig.ci.json` + default) | PASS | **PASS** |
 | `validate:pkg` | PASS | **PASS** |
-| Node tests | 2634 / 0 | **2653 / 0** (+19) |
+| Node tests | 2634 / 0 | **2656 / 0** (+22, including 3 bare-process liveness tests added after the CI finding in §9a) |
 | Vitest | 1882 / 1883 | **1882 / 1883**. The same pre-existing `primitives.guard.test.ts`, a Windows path false positive that passes on CI. |
-| `test:fetcher` / `test:provider-telemetry` | — | **47/47 · 12/12** (the existing 429 and daily-quota tests are unchanged) |
+| `test:fetcher` / `test:provider-telemetry` | — | **50/50 · 12/12** (the existing 429 and daily-quota tests are unchanged) |
 
 ## 8. Diff and isolation
 
@@ -130,6 +130,29 @@ An ECC adversarial review found **no correctness, security or state-corruption d
 
 1. **Latency.** A cold Predict with 150–300 upstream calls now carries a pacing floor of about 37.5–75 s, within the 300 s default. This is the deliberate price of not bursting. Cache hits aren't paced, so warm runs are barely affected.
 2. **Shared queue.** Two concurrent Predicts on one warm instance share a queue. A request waiting behind more than about 120 others (30 s ÷ 250 ms) is refused locally, which degrades like a provider failure.
+
+## 9a. CI finding on PR #249 and the fix
+
+**What CI caught.** On PR #249 (commit `b3206bbb`), the required `test` check failed on both the push run and the PR run (Node 22). Every `fetcherUpstreamGate` case and 12 existing `fetcherUsageTelemetry` cases were cancelled with "Promise resolution is still pending but the event loop has already resolved".
+
+**Root cause, reproduced locally in a bare Node process:** `defaultSchedule` unref'd **every** timer, including the pacing/pause timer that a waiting `acquire()` depends on.
+- When a request had to wait for its slot and nothing else held the event loop open, Node exited with the request still pending (exit code 13, "unsettled top-level await").
+- HTTP handlers keep the loop alive, so production functions were likely unaffected **[INF]**.
+- Any script or test runner making consecutive calls was affected.
+- Both earlier reviews missed this; one called the unref a strength.
+
+**Fix, in two parts:**
+1. Timers are now ref'd by default. The pacing/pause timer and the queue-wait timer stand for a caller that is still waiting. Only the lease timer passes `{ unref: true }`: it is a safety net, and an in-flight request already holds the loop open through its socket.
+2. A focused review of fix 1 found a second, bounded defect **[HIGH, reproduced by the reviewer]**. When a waiter was refused at `maxWaitMs`, the pacing/pause timer scheduled for it stayed armed, now ref'd, and held the process open for up to `cooldownMs` or `minIntervalMs`. The refusal callback now calls `pump()`, which cancels that timer or reschedules it for any remaining waiter.
+
+**Tests that pin both parts,** each running a bare Node subprocess with no test runner holding the loop:
+- a waiting request survives pacing and a pause (it failed with exit 13 before the fix);
+- a refused waiter leaves no armed timer (the process exits well before an 8 s pause);
+- a held slot's lease timer alone doesn't keep the process alive.
+
+A re-review of the final state: **FIX CORRECT: YES.** No other path leaves a ref'd timer running after all work is done (last admission, `release()` with nobody waiting, the disabled gate, `noteRateLimited()` with nobody waiting).
+
+**Test-run note.** One local full run on this branch hit three 5 s timeouts in file-scanning design-system guards. That run overlapped with lint and the review, and every solo re-run was clean.
 
 ## 10. Risks and follow-ups
 
