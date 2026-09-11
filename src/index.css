@@ -346,6 +346,19 @@
     width: max(100%, var(--fp-touch));
     height: max(100%, var(--fp-touch));
   }
+
+  /*
+   * A horizontal strip that is swiped, not dragged by a bar (the day strip).
+   * It stays scrollable by touch, trackpad and keyboard focus — only the bar
+   * itself is hidden.
+   */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes fadeIn {

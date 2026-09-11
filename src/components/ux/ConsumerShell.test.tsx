@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { buildPredictAction } from "./predictState";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsumerShell from "./ConsumerShell";
@@ -99,18 +99,39 @@ describe("ConsumerShell navigation", () => {
 describe("ConsumerShell chrome", () => {
   afterEach(cleanup);
 
-  it("is a single 56 px context bar: brand, date, Predict — nothing else", () => {
+  it("is a single 56 px context bar: brand, Predict — nothing else", () => {
     renderShell({ predictAction: idlePredict() });
     const bar = screen.getByTestId("context-bar");
     const tokens = bar.className.split(/\s+/);
     expect(tokens).toContain("h-14"); // a fixed 56 px, not a min-height that can wrap taller
     expect(tokens).not.toContain("flex-wrap");
     expect(tokens.some((c) => /^min-h-/.test(c))).toBe(false);
-    expect(bar.querySelector('input[type="date"]')).toBeTruthy();
+    // The date moved to the day strip directly below the bar (next test).
+    expect(bar.querySelector('input[type="date"]')).toBeNull();
     expect(bar.querySelector('input[type="search"]')).toBeNull();
     expect(screen.queryByRole("group", { name: /limb|lang/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /ligi|leagues/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Reincarca|Reload|Reîncarcă/i })).toBeNull();
+  });
+
+  it("puts the day strip directly below the bar, carrying the browsed date", () => {
+    const onDateChange = vi.fn();
+    renderShell({ onDateChange });
+    const strip = screen.getByTestId("day-selector");
+    expect(document.querySelector("header")?.nextElementSibling).toBe(strip);
+    const input = strip.querySelector('input[type="date"]') as HTMLInputElement;
+    expect(input.value).toBe("2026-08-21");
+    // The browsed date is always inside the window (it re-anchors on a far date).
+    expect(strip.querySelector('[data-day="2026-08-21"]')?.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(strip.querySelector('[data-day="2026-08-22"]') as HTMLButtonElement);
+    expect(onDateChange).toHaveBeenCalledTimes(1);
+    expect(onDateChange).toHaveBeenCalledWith("2026-08-22");
+  });
+
+  it("renders exactly one date control — none left behind in the bar", () => {
+    renderShell();
+    expect(document.querySelectorAll('input[type="date"]')).toHaveLength(1);
+    expect(screen.getAllByTestId("day-selector")).toHaveLength(1);
   });
 
   it("keeps Predict as the critical action with a 44 px pointer target and a dense box", () => {
