@@ -315,3 +315,91 @@ test("provider response without rate-limit headers → no usage record, still ok
   // without rate-limit headers there is nothing to WRITE.
   assert.equal(kvState.calls.some(([cmd, key]) => cmd === "set" && key.startsWith("footy_api_usage:")), false);
 });
+
+// ---------------------------------------------------------------------------
+// RELIABILITY-003: per-minute rate-limit telemetry — observation only
+// ---------------------------------------------------------------------------
+const MINUTE_HEADERS = { "x-ratelimit-limit": "300", "x-ratelimit-remaining": "120" };
+
+function usageRow() {
+  const key = [...kvState.store.keys()].find((k) => k.startsWith("footy_api_usage:"));
+  return key ? kvState.store.get(key) : undefined;
+}
+
+test("both quota pairs → daily usage fields unchanged, minute fields added to the same row", async () => {
+  const fixture = fixtureSeq;
+  const payload = providerJson(fixture);
+  const fetchCalls = scriptFetch(() => fakeResponse({ json: payload, headers: { ...USAGE_HEADERS, ...MINUTE_HEADERS } }));
+
+  const result = await getWithCache("/fixtures/statistics", { fixture }, 900);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data, payload);
+  assert.equal(fetchCalls.length, 1, "no extra provider call");
+  const row = usageRow();
+  // Daily figures still come from the daily headers, exactly as before.
+  assert.equal(row.limit, 7500);
+  assert.equal(row.currentRemaining, 7273);
+  // Minute figures are captured separately and never conflated with the daily ones.
+  assert.equal(row.minuteLimit, 300);
+  assert.equal(row.minuteRemaining, 120);
+  assert.equal(row.dailyLimit, 7500);
+  assert.equal(row.dailyRemaining, 7273);
+  assert.equal(typeof row.rateLimitObservedAt, "string");
+  assert.equal(warnLines.some((l) => l.includes("api.rate_limit_minute_exhausted")), false);
+});
+
+test("daily headers only → the usage row gains no invented minute fields", async () => {
+  const fixture = fixtureSeq;
+  scriptFetch(() => fakeResponse({ json: providerJson(fixture), headers: USAGE_HEADERS }));
+
+  await getWithCache("/fixtures/statistics", { fixture }, 900);
+
+  const row = usageRow();
+  assert.equal(row.limit, 7500);
+  assert.equal("minuteLimit" in row, false);
+  assert.equal("minuteRemaining" in row, false);
+  assert.equal("retryAfter" in row, false);
+});
+
+test("minute window exhausted → one structured warning; provider response untouched, no retry", async () => {
+  const fixture = fixtureSeq;
+  const payload = providerJson(fixture);
+  const fetchCalls = scriptFetch(() =>
+    fakeResponse({
+      json: payload,
+      headers: { ...USAGE_HEADERS, "x-ratelimit-limit": "300", "x-ratelimit-remaining": "0", "retry-after": "37" }
+    })
+  );
+
+  const result = await getWithCache("/fixtures/statistics", { fixture }, 900);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data, payload);
+  assert.equal(fetchCalls.length, 1, "telemetry never retries, sleeps or re-requests");
+  const lines = warnLines.filter((l) => l.includes("api.rate_limit_minute_exhausted"));
+  assert.equal(lines.length, 1);
+  const parsed = JSON.parse(lines[0]);
+  assert.equal(parsed.provider, "apisports");
+  assert.equal(parsed.minuteLimit, 300);
+  assert.equal(parsed.retryAfter, 37);
+  const row = usageRow();
+  assert.equal(row.minuteRemaining, 0, "0 is recorded, not dropped as falsy");
+  assert.equal(row.retryAfter, 37);
+});
+
+test("minute window exhausted with KV throwing → the warning still fires and the response is still ok", async () => {
+  const fixture = fixtureSeq;
+  const payload = providerJson(fixture);
+  scriptFetch(() =>
+    fakeResponse({ json: payload, headers: { ...USAGE_HEADERS, "x-ratelimit-limit": "300", "x-ratelimit-remaining": "0" } })
+  );
+  kvState.failure = new Error(KV_LIMIT_ERROR);
+
+  const result = await getWithCache("/fixtures/statistics", { fixture }, 900);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data, payload);
+  assert.equal(warnLines.filter((l) => l.includes("api.rate_limit_minute_exhausted")).length, 1);
+  assert.equal(warnLines.filter((l) => l.includes("api.usage_telemetry_failed")).length, 1);
+});

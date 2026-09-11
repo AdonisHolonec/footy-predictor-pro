@@ -31,7 +31,7 @@
     "test:referral-notifications": "node --test --experimental-test-module-mocks tests/referralNotifications.test.js",
     "test:content-safety": "node --test tests/contentSafety.test.js",
     "test:d9b": "node --test --experimental-test-module-mocks tests/d9bPromotedColumns.test.js",
-    "test:fetcher": "node --test --experimental-test-module-mocks tests/fetcherUsageTelemetry.test.js",
+    "test:fetcher": "node --test --experimental-test-module-mocks tests/fetcherUsageTelemetry.test.js tests/rateLimitHeaders.test.js",
     "test:provider-telemetry": "node --test --experimental-test-module-mocks tests/providerErrorTelemetry.test.js",
     "test:pipeline": "node --test tests/pipeline/modelFusion/*.test.js",
     "test:decision": "node --test tests/pipeline/decision/*.test.js",

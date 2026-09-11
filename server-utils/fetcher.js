@@ -1,6 +1,7 @@
 import { createClient } from "@vercel/kv";
 import { logError, logWarn } from "./observability/logger.js";
 import { bumpCacheStat, bumpCounter, cacheStatsKey, recordObservation } from "./observability/metricsStore.js";
+import { parseRateLimitHeaders, rateLimitTelemetryFields } from "./observability/rateLimitHeaders.js";
 export { recordObservation };
 
 const kv = createClient({
@@ -238,6 +239,29 @@ function buildFetchUrl(baseUrl, endpoint, paramsObj = {}) {
 }
 
 async function recordUsageFromHeaders(res, provider) {
+  /*
+    The two quotas, read separately, BEFORE the daily guard below.
+
+    `x-ratelimit-requests-*` is the DAILY quota; `x-ratelimit-*` is the PER-MINUTE
+    quota. The `||` on the next two lines prefers the daily pair and therefore never
+    observes the per-minute one — which is the quota the 2026-09-11 incident actually
+    exhausted. The daily arithmetic that follows is deliberately left exactly as it
+    was, including its fallback: this change only ADDS observation.
+  */
+  const rateLimit = parseRateLimitHeaders(res.headers);
+  const rateLimitFields = rateLimitTelemetryFields(rateLimit);
+  if (rateLimit.hasMinute && rateLimit.minute.remaining === 0) {
+    // Rare and high-signal: the moment the minute window is spent. Logging every
+    // response instead would add ~300 lines per Predict for no extra information.
+    // Emitted before the KV write below, so it survives a KV failure.
+    logWarn("api.rate_limit_minute_exhausted", {
+      provider,
+      minuteLimit: rateLimit.minute.limit,
+      reset: rateLimit.reset,
+      retryAfter: rateLimit.retryAfter
+    });
+  }
+
   const hLimit = res.headers.get("x-ratelimit-requests-limit") || res.headers.get("x-ratelimit-limit");
   const hRemain = res.headers.get("x-ratelimit-requests-remaining") || res.headers.get("x-ratelimit-remaining");
   if (!(hLimit && hRemain)) return;
@@ -257,7 +281,10 @@ async function recordUsageFromHeaders(res, provider) {
     baselineRemaining: resolvedBaseline,
     currentRemaining: remainingNow,
     updatedAt: new Date().toISOString(),
-    provider
+    provider,
+    // Additive only: `rateLimitTelemetryFields` omits absent values, so it can never
+    // overwrite a known daily figure above with a null.
+    ...rateLimitFields
   };
   // Single durable key per day (date is already in the key) — no midnight TTL,
   // no separate history copy needed.
