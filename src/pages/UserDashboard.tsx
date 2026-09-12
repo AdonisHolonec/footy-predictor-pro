@@ -55,8 +55,8 @@ import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
 import {
-  addIsoDay,
   buildTierDates,
+  firstUnforecastableDay,
   canShowSpecialBet as canShowSpecialBetFor,
   clampTierDates,
   hasLegacyPredictionShape,
@@ -318,7 +318,11 @@ export default function UserDashboard() {
   */
   const requestDayUpgrade = useCallback(
     (iso: string) => {
-      const requiredTier: UpgradeTier = iso > addIsoDay(todayKey, 1) ? "ultra" : "premium";
+      // Derived from the same rule, not a second copy of "premium ends at +1":
+      // whatever premium's window is, a day beyond its last day needs ultra.
+      const premiumWindow = buildTierDates(todayKey, "premium");
+      const premiumLastDay = premiumWindow[premiumWindow.length - 1];
+      const requiredTier: UpgradeTier = iso > premiumLastDay ? "ultra" : "premium";
       setUpgradePrompt({ feature: t("shell.dayLockedFeature"), requiredTier });
     },
     [todayKey, t]
@@ -594,6 +598,25 @@ export default function UserDashboard() {
     // A day that is over is never predicted, whichever surface asked (see pastDaySelected).
     if (pastDaySelected) {
       setStatus(t("shell.predictPastDay"));
+      return;
+    }
+    /*
+      THE ENTITLEMENT HALF OF THE SAME GATE.
+
+      Locking the day strip stops a user CHOOSING an unauthorised day; it does
+      not stop them already being on one. `date`/`selectedDates` are persisted
+      in localStorage, so a premium account browsing tomorrow that lapses to
+      free comes back still pointed at tomorrow — the strip then draws it
+      locked, but nothing moved the selection, and this function would have
+      spent real quota on it. Cross-tab sync through useDateRollover's storage
+      listener reaches the same state.
+
+      clampTierDates cannot catch it: its window is anchored on the very day it
+      is being asked about. This asks the question from TODAY.
+    */
+    const unauthorizedDay = firstUnforecastableDay(activePredictDates, todayKey, userTier);
+    if (unauthorizedDay) {
+      requestDayUpgrade(unauthorizedDay);
       return;
     }
     if (isPredictBlocked(predictQuota)) {
