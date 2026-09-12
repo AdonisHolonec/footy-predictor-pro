@@ -176,3 +176,30 @@ describe("Matches Refresh is a data action, not a Predict surface", () => {
     expect(refresh().getAttribute("data-predict-state")).toBeNull();
   });
 });
+
+/**
+ * The +1/+2 day chips are gone. They were the second day control on this page
+ * and the only place the plan window was enforced in the UI, which is why a
+ * free account could still walk the day strip into tomorrow. The strip now owns
+ * day navigation and the entitlement with it (DaySelector.test.tsx).
+ *
+ * Asserted as ABSENCE OF A SHAPE, not of a translation: the strings those chips
+ * used were deleted with them, so there is no key left to look up.
+ */
+describe("Matches · no second day control", () => {
+  it("renders no +1/+2 day chips", () => {
+    renderMatches();
+    const plusChips = Array.from(document.querySelectorAll("button")).filter((b) =>
+      /^\+\s*\d/.test((b.textContent || "").trim())
+    );
+    expect(plusChips.map((b) => b.textContent?.trim())).toEqual([]);
+  });
+
+  it("offers no aria-pressed day toggles", () => {
+    renderMatches();
+    const dayToggles = Array.from(document.querySelectorAll("button[aria-pressed]")).filter((b) =>
+      /(\bzi\b|\bzile\b|\bday\b)/i.test((b.getAttribute("title") || "") + (b.textContent || ""))
+    );
+    expect(dayToggles).toEqual([]);
+  });
+});

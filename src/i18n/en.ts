@@ -46,12 +46,7 @@ export const en: Dict = {
     predictBusy: "Generating predictions…",
     predictQuotaSpent: "You have used all of today's predictions",
     predictPastDay: "Predictions can't be generated for a day that is over",
-    plus1Day: "+1 day",
-    plus2Days: "+2 days",
-    includeTomorrow: "Include tomorrow’s fixtures",
-    includeNext2: "Include next 2 days",
-    dayRangeOn: "Selected",
-    dayRangeOff: "Not selected",
+    dayLockedFeature: "Extra prediction days",
     langRo: "RO",
     langEn: "EN",
     switchLang: "Switch language"
@@ -93,7 +88,6 @@ export const en: Dict = {
     showAll: "Show all",
     restoreRefresh: "Predict",
     needPredictForMarkets: "Saved picks are incomplete for your plan — tap Predict for corners & shots.",
-    needPredictForDates: "New days selected — tap Predict to generate picks for them.",
     kpiToday: "Today’s predictions",
     kpiAccuracy: "Accuracy",
     kpiRoi: "ROI",
@@ -629,6 +623,7 @@ export const en: Dict = {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
     fullTimeShort: "FT",
     dayToday: "Today",
+    dayLocked: "Locked by your plan",
     dayTomorrow: "Tomorrow",
     dayAfterTomorrow: "Day after tomorrow"
   },

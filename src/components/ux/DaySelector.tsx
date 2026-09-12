@@ -10,6 +10,23 @@ type Props = {
   onChange: (iso: string) => void;
   /** Test seam; defaults to the device's local calendar day. */
   today?: string;
+  /**
+   * The FUTURE days this account may forecast, anchored on today — exactly what
+   * `buildTierDates(today, tier)` returns. Passed in rather than derived here:
+   * the plan rule lives in helpers.ts (`tierPredictWindowDays`) and must keep
+   * one home, so this component decides nothing about plans, only which of the
+   * days it draws are reachable.
+   *
+   * Omitted means "no restriction", which is what the standalone tests and any
+   * caller without a plan context rely on.
+   */
+  forecastableDates?: readonly string[];
+  /**
+   * A locked future day was activated. Selection does NOT move, so nothing is
+   * predicted for a day the plan does not cover; the caller raises whatever
+   * upgrade affordance it already owns.
+   */
+  onLockedDay?: (iso: string) => void;
 };
 
 /** Days shown either side of the anchor: a week in one row. */
@@ -51,7 +68,13 @@ function CalendarIcon() {
  * One tab stop (the selected day) with arrow keys between days, like a
  * toolbar; the calendar control after it keeps every other date reachable.
  */
-export default function DaySelector({ value, onChange, today = isoToday() }: Props) {
+export default function DaySelector({
+  value,
+  onChange,
+  today = isoToday(),
+  forecastableDates,
+  onLockedDay
+}: Props) {
   const { t, locale } = useLocale();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([]);
@@ -69,6 +92,16 @@ export default function DaySelector({ value, onChange, today = isoToday() }: Pro
       return { iso, weekday: weekday.format(date), dayOfMonth: date.getDate(), fullLabel: full.format(date) };
     });
   }, [anchor, locale]);
+
+  /*
+    A day is locked only when it is in the FUTURE and outside the plan's window.
+    Today and every past day stay reachable: browsing history is a different
+    concept from forecasting, and past-day Predict already has its own guard
+    inside warmAndPredict. ISO `YYYY-MM-DD` sorts lexicographically, so `>` here
+    is a date comparison.
+  */
+  const forecastable = useMemo(() => (forecastableDates ? new Set(forecastableDates) : null), [forecastableDates]);
+  const isLockedDay = (iso: string) => Boolean(forecastable) && iso > today && !forecastable.has(iso);
 
   const selectedIndex = days.findIndex((d) => d.iso === value);
   const tabbableIndex = selectedIndex >= 0 ? selectedIndex : days.findIndex((d) => d.iso === today);
@@ -141,6 +174,7 @@ export default function DaySelector({ value, onChange, today = isoToday() }: Pro
             {days.map((day, i) => {
               const selected = i === selectedIndex;
               const isToday = day.iso === today;
+              const locked = isLockedDay(day.iso);
               return (
                 <button
                   key={day.iso}
@@ -151,18 +185,52 @@ export default function DaySelector({ value, onChange, today = isoToday() }: Pro
                   data-day={day.iso}
                   aria-pressed={selected}
                   aria-current={isToday ? "date" : undefined}
-                  aria-label={isToday ? `${day.fullLabel} · ${t("list.dayToday")}` : day.fullLabel}
+                  aria-label={
+                    locked
+                      ? `${day.fullLabel} · ${t("list.dayLocked")}`
+                      : isToday
+                        ? `${day.fullLabel} · ${t("list.dayToday")}`
+                        : day.fullLabel
+                  }
+                  /*
+                    aria-disabled, not `disabled`: the day stays focusable so the
+                    arrow keys still reach it and a screen reader still announces
+                    why it cannot be chosen. A `disabled` button is skipped in
+                    silence, which is how a plan-locked feature becomes invisible
+                    instead of explained.
+                  */
+                  aria-disabled={locked || undefined}
+                  data-day-locked={locked || undefined}
                   tabIndex={i === tabbableIndex ? 0 : -1}
                   onKeyDown={(event) => onDayKeyDown(event, i)}
                   onClick={() => {
+                    // Selection does not move for a locked day: nothing is
+                    // predicted for it, and today's valid selection survives.
+                    if (locked) {
+                      onLockedDay?.(day.iso);
+                      return;
+                    }
                     if (day.iso !== value) onChange(day.iso);
                   }}
-                  className={`flex h-[3.25rem] w-12 shrink-0 snap-center flex-col items-center justify-center gap-1 rounded-[var(--fp-radius)] transition-colors duration-[var(--fp-ease)] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:w-14 ${
+                  className={`relative flex h-[3.25rem] w-12 shrink-0 snap-center flex-col items-center justify-center gap-1 rounded-[var(--fp-radius)] transition-colors duration-[var(--fp-ease)] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] sm:w-14 ${
                     selected
                       ? "bg-[var(--fp-accent)] text-white shadow-fp-sm"
-                      : "text-[var(--fp-text-muted)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)]"
+                      : locked
+                        ? "text-[var(--fp-text-faint)]"
+                        : "text-[var(--fp-text-muted)] hover-fine:bg-[var(--fp-bg-muted)] hover-fine:text-[var(--fp-text)]"
                   }`}
                 >
+                  {/*
+                    The padlock the rest of the app already uses for plan-locked
+                    content (MatchCard, MarketPicksGrid, OverviewHero). Absolutely
+                    positioned so a locked day keeps exactly the footprint of an
+                    unlocked one: the strip must not reflow by plan.
+                  */}
+                  {locked ? (
+                    <span aria-hidden className="absolute right-0.5 top-0.5 text-[10px] leading-none">
+                      🔒
+                    </span>
+                  ) : null}
                   <span aria-hidden className="text-[11px] font-medium capitalize leading-none">
                     {day.weekday}
                   </span>

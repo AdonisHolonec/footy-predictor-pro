@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DaySelector from "./DaySelector";
+import { addIsoDay, buildTierDates } from "../../pages/userDashboard/helpers";
 import { en } from "../../i18n/en";
 import { ro } from "../../i18n/ro";
 
@@ -215,5 +216,94 @@ describe("DaySelector · accessibility and structure", () => {
   it("respects reduced motion on the selected-state transition", () => {
     renderStrip();
     for (const b of days()) expect(b.className).toMatch(/motion-reduce:transition-none/);
+  });
+});
+
+/**
+ * Plan entitlements. The window itself comes from `buildTierDates`, the rule the
+ * app already owns (tierPredictWindowDays: free 1, premium 2, ultra 3), so these
+ * tests move with the product instead of restating a copy of it.
+ *
+ * Three ideas stay separate here: BROWSING a past day, SELECTING a future day,
+ * and GENERATING predictions. Only the middle one is what a plan gates.
+ */
+describe("DaySelector · plan-gated future days", () => {
+  const TOMORROW = addIsoDay(TODAY, 1);
+  const DAY_AFTER = addIsoDay(TODAY, 2);
+  const YESTERDAY = addIsoDay(TODAY, -1);
+
+  function renderForTier(tier: string | undefined) {
+    const onChange = vi.fn();
+    const onLockedDay = vi.fn();
+    render(
+      <DaySelector
+        value={TODAY}
+        today={TODAY}
+        onChange={onChange}
+        forecastableDates={buildTierDates(TODAY, tier)}
+        onLockedDay={onLockedDay}
+      />
+    );
+    const day = (iso: string) => document.querySelector<HTMLButtonElement>(`[data-day="${iso}"]`)!;
+    return { onChange, onLockedDay, day };
+  }
+
+  /** A locked day must refuse the selection AND say why — never silently. */
+  function expectLocked(iso: string, tier: string | undefined) {
+    const { onChange, onLockedDay, day } = renderForTier(tier);
+    const target = day(iso);
+    expect(target.dataset.dayLocked, `${iso} should be locked for ${tier}`).toBe("true");
+    expect(target.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(target);
+    expect(onChange, "a locked day must not move the selection").not.toHaveBeenCalled();
+    expect(onLockedDay).toHaveBeenCalledWith(iso);
+  }
+
+  function expectSelectable(iso: string, tier: string | undefined) {
+    const { onChange, onLockedDay, day } = renderForTier(tier);
+    const target = day(iso);
+    expect(target.dataset.dayLocked, `${iso} should be selectable for ${tier}`).toBeUndefined();
+    fireEvent.click(target);
+    expect(onChange).toHaveBeenCalledWith(iso);
+    expect(onLockedDay).not.toHaveBeenCalled();
+  }
+
+  it("free: tomorrow and the day after are both locked", () => {
+    expectLocked(TOMORROW, "free");
+    cleanup();
+    expectLocked(DAY_AFTER, "free");
+  });
+
+  it("premium: tomorrow opens, the day after stays locked", () => {
+    expectSelectable(TOMORROW, "premium");
+    cleanup();
+    expectLocked(DAY_AFTER, "premium");
+  });
+
+  it("ultra: both future days open", () => {
+    expectSelectable(TOMORROW, "ultra");
+    cleanup();
+    expectSelectable(DAY_AFTER, "ultra");
+  });
+
+  /*
+    Historical browsing is NOT a plan feature. A free account keeps every past
+    day it could reach before, and today is never locked for anyone — past-day
+    Predict is refused separately, inside warmAndPredict.
+  */
+  it.each(["free", "premium", "ultra"])("%s: today and past days stay reachable", (tier) => {
+    expectSelectable(YESTERDAY, tier);
+    cleanup();
+    const { day } = renderForTier(tier);
+    expect(day(TODAY).dataset.dayLocked).toBeUndefined();
+  });
+
+  it("locks nothing when no plan window is supplied", () => {
+    const onChange = vi.fn();
+    render(<DaySelector value={TODAY} today={TODAY} onChange={onChange} />);
+    const target = document.querySelector<HTMLButtonElement>(`[data-day="${DAY_AFTER}"]`)!;
+    expect(target.dataset.dayLocked).toBeUndefined();
+    fireEvent.click(target);
+    expect(onChange).toHaveBeenCalledWith(DAY_AFTER);
   });
 });

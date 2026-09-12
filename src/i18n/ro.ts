@@ -46,12 +46,7 @@ export const ro: Dict = {
     predictBusy: "Se generează predicțiile…",
     predictQuotaSpent: "Ai folosit toate predicțiile de azi",
     predictPastDay: "Nu se pot genera predicții pentru o zi încheiată",
-    plus1Day: "+1 zi",
-    plus2Days: "+2 zile",
-    includeTomorrow: "Include meciurile de mâine",
-    includeNext2: "Include următoarele 2 zile",
-    dayRangeOn: "Selectat",
-    dayRangeOff: "Neselectat",
+    dayLockedFeature: "Zile suplimentare de predicție",
     langRo: "RO",
     langEn: "EN",
     switchLang: "Schimbă limba"
@@ -93,7 +88,6 @@ export const ro: Dict = {
     showAll: "Arată toate",
     restoreRefresh: "Predict",
     needPredictForMarkets: "Picks-urile salvate sunt incomplete pentru planul tău — apasă Predict pentru cornere & șuturi.",
-    needPredictForDates: "Zile noi selectate — apasă Predict ca să generezi picks pentru ele.",
     kpiToday: "Predicții azi",
     kpiAccuracy: "Acuratețe",
     kpiRoi: "ROI",
@@ -629,6 +623,7 @@ export const ro: Dict = {
     /** Time-slot label once a fixture is final — the same slot shows kickoff or the live minute. */
     fullTimeShort: "FT",
     dayToday: "Astăzi",
+    dayLocked: "Blocat de plan",
     dayTomorrow: "Mâine",
     dayAfterTomorrow: "Poimâine"
   },
