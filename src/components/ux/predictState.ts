@@ -47,9 +47,22 @@ export function isPredictBlocked({ quotaExempt, limit, used }: PredictQuota): bo
  * to agree on which state they describe. Spending the last prediction makes
  * both inputs true at once, and this is the one place that is resolved.
  */
-export function resolvePredictState(busy: boolean, quota: PredictQuota): PredictState {
+export function resolvePredictState(busy: boolean, quota: PredictQuota, pastDay = false): PredictState {
   if (busy) return "busy";
-  return isPredictBlocked(quota) ? "blocked" : "idle";
+  return isPredictBlocked(quota) || pastDay ? "blocked" : "idle";
+}
+
+/**
+ * Does the selection include a day that is already over?
+ *
+ * Predict is forward-looking. A run for a past day would spend quota and
+ * persist predictions for matches whose results are already known, which
+ * settlement would then count in the track record. BROWSING a past day is
+ * fine — only generating for it is refused, by the same gate as the quota.
+ * ISO `YYYY-MM-DD` keys compare correctly as text.
+ */
+export function isPastDaySelection(dates: readonly string[], today: string): boolean {
+  return dates.some((d) => d < today);
 }
 
 /**
@@ -78,6 +91,8 @@ export type PredictActionLabels = {
   busy: string;
   /** Announced and shown when the daily allowance is spent. */
   quotaSpent: string;
+  /** Announced and shown when the selection includes a day that is already over. */
+  pastDay?: string;
 };
 
 export type PredictAction = {
@@ -107,11 +122,14 @@ export function buildPredictAction(input: {
   state: PredictState;
   labels: PredictActionLabels;
   run: () => void;
+  /** Why a "blocked" state is blocked; defaults to the quota. */
+  blockedBy?: "quota" | "pastDay";
 }): PredictAction {
-  const { state, labels, run } = input;
+  const { state, labels, run, blockedBy = "quota" } = input;
   const busy = state === "busy";
   const blocked = state === "blocked";
-  const reason = busy ? labels.busy : blocked ? labels.quotaSpent : null;
+  const blockedReason = blockedBy === "pastDay" && labels.pastDay ? labels.pastDay : labels.quotaSpent;
+  const reason = busy ? labels.busy : blocked ? blockedReason : null;
   return {
     state,
     label: labels.label,
