@@ -141,7 +141,7 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
     dayLabel ? `${dayLabel}, ${whenLabel}` : whenLabel,
     `${t("card.topPick")} ${pick.ariaLabel}`,
     `${t("match.confidence")} ${confidenceLabel}`,
-    `${t("match.odds")} ${oddLabel}`,
+    `${t("match.odd")} ${oddLabel}`,
     stateLabel
   ]
     .filter(Boolean)
