@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { accountReady, gotoWorkspace, hasCreds, openAccount, openResults } from "./helpers";
+import { gotoWorkspace, hasCreds } from "./helpers";
 import { scanHorizontalOverflow } from "./overflowScan";
 
 /**
@@ -86,6 +86,23 @@ async function measureAnchor(page: Page, view: string, width: number): Promise<A
   };
 }
 
+/**
+ * Every route the mobile shell can reach, by slug (see appNav.ts). Reached by
+ * URL rather than by clicking the nav: a label change must not silently reduce
+ * this to the two views the earlier scan happened to cover, which is how the
+ * reported overflow stayed unmeasured.
+ */
+const ROUTES = [
+  "today",
+  "matches",
+  "results",
+  "performance",
+  "account",
+  "tickets",
+  "notifications",
+  "settings"
+] as const;
+
 test.describe("mobile shell cannot be dragged sideways", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 
@@ -93,23 +110,38 @@ test.describe("mobile shell cannot be dragged sideways", () => {
     await gotoWorkspace(page);
 
     const results: Anchor[] = [];
-    for (const width of PHONE_WIDTHS) {
-      await page.setViewportSize({ width, height: 844 });
-      results.push(await measureAnchor(page, "home", width));
+    for (const slug of ROUTES) {
+      await page.goto(`/workspace/${slug}`);
+      // The shell's own chrome, not a route heading: this walks eight routes and
+      // must not encode eight separate ready selectors.
+      await page.locator("nav.fixed, header").first().waitFor({ state: "visible", timeout: 20_000 });
+      await page.waitForLoadState("networkidle").catch(() => {});
+      for (const width of PHONE_WIDTHS) {
+        await page.setViewportSize({ width, height: 844 });
+        results.push(await measureAnchor(page, slug, width));
+      }
     }
 
-    await openAccount(page);
-    await accountReady(page);
-    for (const width of PHONE_WIDTHS) {
-      await page.setViewportSize({ width, height: 844 });
-      results.push(await measureAnchor(page, "account", width));
-    }
-
+    /*
+      The match detail modal, on the route that lists matches. It is the widest
+      thing the shell renders (charts and stat tables) and it paints through the
+      #overlay-root portal, so it is not covered by any route measurement above.
+      Best-effort: an account with no listed match must not fail the suite, and
+      the scan over the eight routes is the part that has to hold.
+    */
     await page.setViewportSize({ width: 390, height: 844 });
-    await openResults(page);
-    for (const width of PHONE_WIDTHS) {
-      await page.setViewportSize({ width, height: 844 });
-      results.push(await measureAnchor(page, "results", width));
+    await page.goto("/workspace/matches");
+    await page.waitForLoadState("networkidle").catch(() => {});
+    const dialogOpener = page.locator("[data-fixture-id], [data-testid^='match']").first();
+    if (await dialogOpener.count()) {
+      await dialogOpener.click({ timeout: 10_000 }).catch(() => {});
+      const dialog = page.locator("[role=dialog]").first();
+      if (await dialog.count()) {
+        for (const width of PHONE_WIDTHS) {
+          await page.setViewportSize({ width, height: 844 });
+          results.push(await measureAnchor(page, "matches+modal", width));
+        }
+      }
     }
 
     // Printed unconditionally: when this fails, the numbers for every width are
