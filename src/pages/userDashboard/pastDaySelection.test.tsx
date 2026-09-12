@@ -259,6 +259,51 @@ describe("future day within the plan window", () => {
     expect(lastPreds, "a future day must not be filled from history").toEqual([]);
   });
 
+  /*
+    Per-day generation state, and the promise that costs money: moving between
+    days never generates anything. Asserted against the PREDICT ENDPOINTS
+    themselves (/api/warm, /api/predict) rather than against a spy on an
+    internal function — those two requests are what spends a user's quota, so
+    their absence is the property worth pinning.
+
+    Tier does not appear here on purpose: the cache is tier-agnostic, and which
+    days a plan may reach is DaySelector's gate, tested in DaySelector.test.tsx.
+  */
+  it("switching between a generated and an ungenerated future day never calls Predict", async () => {
+    const DAY_AFTER = addIsoDayLocal(TODAY, 2);
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    // Only +1 has been generated so far; +2 has not.
+    localStorage.setItem(
+      "footy.user.predictionsByUser",
+      JSON.stringify({ "user-1": [{ ...entry(9, TOMORROW), status: "NS", score: undefined, validation: "pending" }] })
+    );
+
+    const { rerender } = renderCache({ day: TOMORROW });
+    await waitFor(() => expect(lastPreds.map((r) => r.id)).toEqual([9]));
+
+    // +2 is independently ungenerated — it must read empty, not inherit +1.
+    rerender(
+      <LocaleProvider>
+        <CacheProbe day={DAY_AFTER} />
+      </LocaleProvider>
+    );
+    await waitFor(() => expect(lastPreds).toEqual([]));
+
+    // Back to +1: still READY, served from the cache.
+    rerender(
+      <LocaleProvider>
+        <CacheProbe day={TOMORROW} />
+      </LocaleProvider>
+    );
+    await waitFor(() => expect(lastPreds.map((r) => r.id)).toEqual([9]));
+
+    const predictCalls = fetchMock.mock.calls
+      .map((c) => String((c as unknown[])[0]))
+      .filter((u) => u.includes("/api/predict") || u.includes("/api/warm"));
+    expect(predictCalls, "navigating between days must never spend Predict quota").toEqual([]);
+  });
+
   it("after Predict has cached rows for it, revisiting shows them with no further Predict", async () => {
     localStorage.setItem(
       "footy.user.predictionsByUser",
