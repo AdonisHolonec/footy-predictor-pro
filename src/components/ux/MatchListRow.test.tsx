@@ -118,8 +118,10 @@ describe("MatchListRow · pre-match", () => {
     expect(name).toMatch(new RegExp(`${either("match", "odd").source} 1[.]85`));
     expect(name).toMatch(new RegExp(`${either("match", "confidence").source} 78%`));
     // Any `namespace.key` token means t() fell through to the key it was given.
+    // `history` is in the list because the settled rows add t("history.win"|"loss"|
+    // "outcomePush") to this same name (MatchListRow.tsx:127-131).
     expect(name, `unresolved i18n key in the row's accessible name: "${name}"`).not.toMatch(
-      /(?:match|card|common|dash|list|shell)\.[a-zA-Z]/
+      /(?:match|card|common|dash|list|shell|history)\.[a-zA-Z]/
     );
   });
 

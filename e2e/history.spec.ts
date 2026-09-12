@@ -25,13 +25,19 @@ test.describe("history", () => {
       key the dictionaries do not define. The test was green only while this
       account had no predictions for today, and went red the moment it had some.
 
-      `results-summary` is the day's record block; it renders in BOTH content
-      states, so it proves the section itself resolved rather than the route
-      merely navigating. Then exactly one of the two terminal states must be on
-      screen: a row in the list, or the empty state's own heading.
+      `results-controls` is the outcome filter, the one block this section
+      renders unconditionally (HistorySection.tsx:190), so it proves the section
+      itself resolved rather than the route merely navigating. Then exactly one
+      of the two terminal states must be on screen: a row in the list, or the
+      empty state's own heading.
+
+      NOT `results-summary`: that strip is gated on
+      `summary.settled + pendingCount > 0` (HistorySection.tsx:166), so it is
+      absent on a genuinely empty day — asserting it would fail on exactly the
+      correct-but-empty product state this test exists to accept, which is the
+      failure class that brought us here in the first place.
     */
-    await expect(page.getByTestId("results-summary")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("results-controls")).toBeVisible();
+    await expect(page.getByTestId("results-controls")).toBeVisible({ timeout: 20_000 });
 
     /*
       KNOWN GAP: a permanent LOAD is indistinguishable from a legitimately empty
