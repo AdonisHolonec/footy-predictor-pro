@@ -151,8 +151,16 @@ test.describe("mobile shell cannot be dragged sideways", () => {
       await page.goto(`/workspace/${slug}`);
       // The shell's own chrome, not a route heading: this walks eight routes and
       // must not encode eight separate ready selectors.
+      /*
+        The shell's own chrome, and nothing more. NOT `networkidle`: a route with
+        an in-play fixture polls on an interval for as long as it is open
+        (useLiveFixtureScorePoll), so the network never goes idle and the wait
+        burns its timeout on every such route — eight of those would exhaust the
+        test budget and fail on the clock rather than on an assertion. Painted
+        chrome is the real precondition here: the scan measures layout, and
+        layout is settled once the shell has rendered.
+      */
       await page.locator("nav.fixed, header").first().waitFor({ state: "visible", timeout: 20_000 });
-      await page.waitForLoadState("networkidle").catch(() => {});
       for (const width of PHONE_WIDTHS) {
         await page.setViewportSize({ width, height: 844 });
         results.push(await measureAnchor(page, slug, width));
@@ -160,26 +168,21 @@ test.describe("mobile shell cannot be dragged sideways", () => {
     }
 
     /*
-      The match detail modal, on the route that lists matches. It is the widest
-      thing the shell renders (charts and stat tables) and it paints through the
-      #overlay-root portal, so it is not covered by any route measurement above.
-      Best-effort: an account with no listed match must not fail the suite, and
-      the scan over the eight routes is the part that has to hold.
+      NOT COVERED: the match detail modal.
+
+      It is the widest thing the shell renders (charts, stat tables) and the only
+      surface painted through the #overlay-root portal, so none of the route
+      measurements above reach it. It is left out rather than half-covered: a
+      match row is a <button> whose accessible name is assembled from the team
+      names (MatchListRow.tsx:139), so opening one needs either a selector that
+      depends on which fixtures exist today or a test id the component does not
+      carry. An earlier revision of this file guessed at `[data-fixture-id]` and
+      `[data-testid^=match]` — neither exists anywhere in src/, so that branch
+      silently measured nothing while reading as though the modal were checked.
+
+      Give MatchListRow's button a stable test id and this becomes three more
+      measurements. Until then the gap is explicit rather than implied.
     */
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/workspace/matches");
-    await page.waitForLoadState("networkidle").catch(() => {});
-    const dialogOpener = page.locator("[data-fixture-id], [data-testid^='match']").first();
-    if (await dialogOpener.count()) {
-      await dialogOpener.click({ timeout: 10_000 }).catch(() => {});
-      const dialog = page.locator("[role=dialog]").first();
-      if (await dialog.count()) {
-        for (const width of PHONE_WIDTHS) {
-          await page.setViewportSize({ width, height: 844 });
-          results.push(await measureAnchor(page, "matches+modal", width));
-        }
-      }
-    }
 
     // Printed unconditionally: when this fails, the numbers for every width are
     // what say WHICH viewport and view are broken, and a failed expect below
