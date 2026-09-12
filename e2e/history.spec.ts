@@ -13,11 +13,48 @@ test.describe("history", () => {
     // could not get here at all.
     await openResults(page);
 
-    // Entries or a real empty state are both correct products of a working
-    // flow; an error banner is not.
-    await expect(page.getByText(/win|loss|pending|cotă|nicio|istoric/i).first()).toBeVisible({
-      timeout: 20_000
-    });
+    /*
+      Entries or a real empty state are both correct products of a working flow;
+      an error banner is not.
+
+      Asserted through STRUCTURE, not wording. The previous version waited for
+      /win|loss|pending|cotă|nicio|istoric/ and passed for three weeks by
+      accident: the English words never appear in a Romanian UI, "istoric" was
+      the route's old name, "nicio" only exists in the empty state, and the one
+      remaining anchor — "cotă" — was absent because MatchListRow asked for a
+      key the dictionaries do not define. The test was green only while this
+      account had no predictions for today, and went red the moment it had some.
+
+      `results-controls` is the outcome filter, the one block this section
+      renders unconditionally (HistorySection.tsx:190), so it proves the section
+      itself resolved rather than the route merely navigating. Then exactly one
+      of the two terminal states must be on screen: a row in the list, or the
+      empty state's own heading.
+
+      NOT `results-summary`: that strip is gated on
+      `summary.settled + pendingCount > 0` (HistorySection.tsx:166), so it is
+      absent on a genuinely empty day — asserting it would fail on exactly the
+      correct-but-empty product state this test exists to accept, which is the
+      failure class that brought us here in the first place.
+    */
+    await expect(page.getByTestId("results-controls")).toBeVisible({ timeout: 20_000 });
+
+    /*
+      KNOWN GAP: a permanent LOAD is indistinguishable from a legitimately empty
+      day here, because HistorySection receives no loading flag
+      (UserDashboard.tsx renders `<HistorySection history={history} .../>`), so
+      an unresolved history and "no predictions this day" render the same empty
+      state. Closing that needs a production change and is deliberately out of
+      scope; the old assertion had the same blind spot, and worse, since "nicio"
+      matched the loading state too.
+    */
+    const anyEntry = page.getByRole("listitem").first();
+    const emptyStateTitle = page.getByRole("heading", { level: 3 }).first();
+    await expect(
+      anyEntry.or(emptyStateTitle),
+      "Results rendered neither a row nor an empty state"
+    ).toBeVisible({ timeout: 20_000 });
+
     await expect(page.getByText(/eroare|a eșuat/i)).toHaveCount(0);
   });
 });

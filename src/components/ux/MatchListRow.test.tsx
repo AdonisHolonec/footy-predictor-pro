@@ -96,6 +96,35 @@ describe("MatchListRow · pre-match", () => {
     expect(slot("odds")?.textContent).toBe("1.85");
   });
 
+  /*
+    The row's accessible name is assembled from i18n keys, and a key that does
+    not exist is not a crash — `t()` returns the KEY, so the label silently
+    reads "match.odds 1.85" to a screen reader. That shipped for three weeks
+    (t("match.odds") against a dictionary defining match.odd) and was found only
+    when an E2E test lost the word it was matching on.
+
+    So this asserts the resolved word, and then asserts that NO dotted key
+    survives anywhere in the name — the second half is what would have caught
+    the original defect, and catches the next one in any of the five keys this
+    label is built from.
+  */
+  it("speaks the odds label, and leaks no unresolved i18n key into the accessible name", () => {
+    const { li } = renderRow(row());
+    const name = li.querySelector("button[aria-label]")!.getAttribute("aria-label")!;
+
+    // The label must sit against its VALUE. Matching the bare word is not
+    // enough: "odd" is a substring of the broken "match.odds", so a looser
+    // assertion passed while the defect was still there.
+    expect(name).toMatch(new RegExp(`${either("match", "odd").source} 1[.]85`));
+    expect(name).toMatch(new RegExp(`${either("match", "confidence").source} 78%`));
+    // Any `namespace.key` token means t() fell through to the key it was given.
+    // `history` is in the list because the settled rows add t("history.win"|"loss"|
+    // "outcomePush") to this same name (MatchListRow.tsx:127-131).
+    expect(name, `unresolved i18n key in the row's accessible name: "${name}"`).not.toMatch(
+      /(?:match|card|common|dash|list|shell|history)\.[a-zA-Z]/
+    );
+  });
+
   it("[9] uses a compact chevron as the details affordance, not a sentence", () => {
     const { slot } = renderRow(row());
     expect(slot("details")?.textContent?.trim()).toBe("›");
