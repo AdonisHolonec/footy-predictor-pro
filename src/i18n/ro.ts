@@ -46,6 +46,7 @@ export const ro: Dict = {
     predictBusy: "Se generează predicțiile…",
     predictQuotaSpent: "Ai folosit toate predicțiile de azi",
     predictPastDay: "Nu se pot genera predicții pentru o zi încheiată",
+    predictDayLocked: "Ziua nu este inclusă în planul tău",
     dayLockedFeature: "Zile suplimentare de predicție",
     langRo: "RO",
     langEn: "EN",

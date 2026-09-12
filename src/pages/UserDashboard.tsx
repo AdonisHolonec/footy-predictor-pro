@@ -552,7 +552,14 @@ export default function UserDashboard() {
     same state and the same gate as the quota carry it to every surface.
   */
   const pastDaySelected = isPastDaySelection(activePredictDates, todayKey);
-  const predictState = resolvePredictState(warmPredictBusy, predictQuota, pastDaySelected);
+  /*
+    The same question the gate in warmAndPredict asks, asked once here so every
+    Predict surface renders the refusal instead of discovering it on activation:
+    an "available" button opens the promo dialog and promises predictions that
+    the gate then refuses to generate.
+  */
+  const lockedDay = firstUnforecastableDay(activePredictDates, todayKey, userTier);
+  const predictState = resolvePredictState(warmPredictBusy, predictQuota, pastDaySelected, Boolean(lockedDay));
 
   /*
     ONE action object for every Predict surface. Nothing below decides for
@@ -561,13 +568,14 @@ export default function UserDashboard() {
   */
   const predictAction = buildPredictAction({
     state: predictState,
-    blockedBy: pastDaySelected ? "pastDay" : "quota",
+    blockedBy: pastDaySelected ? "pastDay" : lockedDay ? "dayLocked" : "quota",
     labels: {
       label: t("shell.predict"),
       hint: t("shell.predictTip"),
       busy: t("shell.predictBusy"),
       quotaSpent: t("shell.predictQuotaSpent"),
-      pastDay: t("shell.predictPastDay")
+      pastDay: t("shell.predictPastDay"),
+      dayLocked: t("shell.predictDayLocked")
     },
     run: () => {
       /*

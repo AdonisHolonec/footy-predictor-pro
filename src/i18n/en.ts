@@ -46,6 +46,7 @@ export const en: Dict = {
     predictBusy: "Generating predictions…",
     predictQuotaSpent: "You have used all of today's predictions",
     predictPastDay: "Predictions can't be generated for a day that is over",
+    predictDayLocked: "That day is not included in your plan",
     dayLockedFeature: "Extra prediction days",
     langRo: "RO",
     langEn: "EN",
