@@ -92,6 +92,27 @@ export function buildTierDates(baseDate: string, tier?: string) {
   return normalizeSelectedDates(out);
 }
 
+/**
+ * The first selected day this plan may NOT forecast, or null when all are fine.
+ *
+ * `clampTierDates` cannot answer this: `buildTierDates` starts its span at the
+ * base date (`i = 0`), so the seed is always inside its own allowed set, and the
+ * fallback even puts it back. Anchored on TODAY, which is the only anchor that
+ * makes the question meaningful — walked forward a day at a time, a browsed-date
+ * anchor keeps saying yes.
+ *
+ * Past days are never unforecastable here: they are refused by the separate
+ * past-day guard, and browsing them is not a plan feature.
+ */
+export function firstUnforecastableDay(
+  dates: string[],
+  today: string,
+  tier: string | undefined
+): string | null {
+  const allowed = new Set(buildTierDates(today, tier));
+  return (dates || []).find((d) => d > today && !allowed.has(d)) ?? null;
+}
+
 export function clampTierDates(baseDate: string, tier: string | undefined, dates: string[]) {
   const allowed = new Set(buildTierDates(baseDate, tier));
   const filtered = normalizeSelectedDates((dates || []).filter((d) => allowed.has(d)));

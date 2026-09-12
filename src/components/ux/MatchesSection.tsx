@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { predictSurfaceProps, type PredictAction } from "./predictState";
@@ -33,7 +32,6 @@ type Props = {
   onOpenLeagues?: () => void;
   onRefresh?: () => void;
   refreshBusy?: boolean;
-  extraDates?: ReactNode;
   /** True while a fetch is in flight and no cached rows exist yet — shows skeleton rows instead of the empty state. */
   loading?: boolean;
 };
@@ -62,7 +60,6 @@ export default function MatchesSection({
   onOpenLeagues,
   onRefresh,
   refreshBusy = false,
-  extraDates,
   loading = false
 }: Props) {
   const { t } = useLocale();
@@ -99,7 +96,7 @@ export default function MatchesSection({
         />
       </div>
 
-      {(onSearchChange || onOpenLeagues || extraDates || onRefresh) && (
+      {(onSearchChange || onOpenLeagues || onRefresh) && (
         <div className="flex flex-wrap items-center gap-2" data-testid="matches-scope">
           {onSearchChange && (
             <>
@@ -117,7 +114,6 @@ export default function MatchesSection({
               />
             </>
           )}
-          {extraDates}
           {onOpenLeagues && (
             <Button size="sm" variant="secondary" onClick={onOpenLeagues} className="touch-target" aria-label={t("shell.filterLeagues")}>
               {t("shell.leagues")}

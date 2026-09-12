@@ -55,6 +55,8 @@ import { loadBillingConfig } from "../services/billingService";
 // Pure helpers extracted verbatim in Sprint 6 — the component keeps the
 // wiring, ./userDashboard/helpers keeps the arithmetic.
 import {
+  buildTierDates,
+  firstUnforecastableDay,
   canShowSpecialBet as canShowSpecialBetFor,
   clampTierDates,
   hasLegacyPredictionShape,
@@ -63,7 +65,6 @@ import {
 import ProfileView from "./userDashboard/ProfileView";
 import NotificationsView from "./userDashboard/NotificationsView";
 import SettingsView from "./userDashboard/SettingsView";
-import DateRangeChips from "./userDashboard/DateRangeChips";
 import ReportPredictionDialog from "../components/support/ReportPredictionDialog";
 import PredictPromoDialog from "../components/ux/PredictPromoDialog";
 import ReferralInviteDialog from "../components/ux/ReferralInviteDialog";
@@ -298,6 +299,35 @@ export default function UserDashboard() {
     const seedDate = normalizeSelectedDates(selectedDates.length ? selectedDates : [date])[0] || date;
     return clampTierDates(seedDate, userTier, selectedDates.length ? selectedDates : [seedDate]);
   }, [selectedDates, date, userTier]);
+  /*
+    The days this plan may FORECAST, anchored on TODAY rather than on the browsed
+    day. `clampTierDates` above anchors on the seed date, which is right for
+    trimming a multi-day range but cannot answer "may this account go to
+    tomorrow at all" — walked forward a day at a time it would keep saying yes.
+    `buildTierDates` is the same rule (tierPredictWindowDays: free 1, premium 2,
+    ultra 3) read from today, which is the question the day strip asks.
+  */
+  const forecastableDates = useMemo(() => buildTierDates(todayKey, userTier), [todayKey, userTier]);
+
+  /*
+    A locked day raises the upgrade prompt this app already uses for plan-locked
+    controls, and changes nothing else: the date does not move, so no prediction
+    is generated for a day the plan does not cover. Which plan is required comes
+    from the window itself — the first day outside a premium window is +2, which
+    only ultra reaches.
+  */
+  const requestDayUpgrade = useCallback(
+    (iso: string) => {
+      // Derived from the same rule, not a second copy of "premium ends at +1":
+      // whatever premium's window is, a day beyond its last day needs ultra.
+      const premiumWindow = buildTierDates(todayKey, "premium");
+      const premiumLastDay = premiumWindow[premiumWindow.length - 1];
+      const requiredTier: UpgradeTier = iso > premiumLastDay ? "ultra" : "premium";
+      setUpgradePrompt({ feature: t("shell.dayLockedFeature"), requiredTier });
+    },
+    [todayKey, t]
+  );
+
   const rollToDate = useCallback(
     (nextDate: string) => {
       setDate(nextDate);
@@ -522,7 +552,14 @@ export default function UserDashboard() {
     same state and the same gate as the quota carry it to every surface.
   */
   const pastDaySelected = isPastDaySelection(activePredictDates, todayKey);
-  const predictState = resolvePredictState(warmPredictBusy, predictQuota, pastDaySelected);
+  /*
+    The same question the gate in warmAndPredict asks, asked once here so every
+    Predict surface renders the refusal instead of discovering it on activation:
+    an "available" button opens the promo dialog and promises predictions that
+    the gate then refuses to generate.
+  */
+  const lockedDay = firstUnforecastableDay(activePredictDates, todayKey, userTier);
+  const predictState = resolvePredictState(warmPredictBusy, predictQuota, pastDaySelected, Boolean(lockedDay));
 
   /*
     ONE action object for every Predict surface. Nothing below decides for
@@ -531,13 +568,14 @@ export default function UserDashboard() {
   */
   const predictAction = buildPredictAction({
     state: predictState,
-    blockedBy: pastDaySelected ? "pastDay" : "quota",
+    blockedBy: pastDaySelected ? "pastDay" : lockedDay ? "dayLocked" : "quota",
     labels: {
       label: t("shell.predict"),
       hint: t("shell.predictTip"),
       busy: t("shell.predictBusy"),
       quotaSpent: t("shell.predictQuotaSpent"),
-      pastDay: t("shell.predictPastDay")
+      pastDay: t("shell.predictPastDay"),
+      dayLocked: t("shell.predictDayLocked")
     },
     run: () => {
       /*
@@ -568,6 +606,25 @@ export default function UserDashboard() {
     // A day that is over is never predicted, whichever surface asked (see pastDaySelected).
     if (pastDaySelected) {
       setStatus(t("shell.predictPastDay"));
+      return;
+    }
+    /*
+      THE ENTITLEMENT HALF OF THE SAME GATE.
+
+      Locking the day strip stops a user CHOOSING an unauthorised day; it does
+      not stop them already being on one. `date`/`selectedDates` are persisted
+      in localStorage, so a premium account browsing tomorrow that lapses to
+      free comes back still pointed at tomorrow — the strip then draws it
+      locked, but nothing moved the selection, and this function would have
+      spent real quota on it. Cross-tab sync through useDateRollover's storage
+      listener reaches the same state.
+
+      clampTierDates cannot catch it: its window is anchored on the very day it
+      is being asked about. This asks the question from TODAY.
+    */
+    const unauthorizedDay = firstUnforecastableDay(activePredictDates, todayKey, userTier);
+    if (unauthorizedDay) {
+      requestDayUpgrade(unauthorizedDay);
       return;
     }
     if (isPredictBlocked(predictQuota)) {
@@ -693,6 +750,8 @@ export default function UserDashboard() {
         setSelectedDates(normalizeSelectedDates([next]));
         void fetchDays([next]);
       }}
+      forecastableDates={forecastableDates}
+      onLockedDay={requestDayUpgrade}
       predictAction={predictAction}
       liveCount={homeLiveCount}
       statusSlot={
@@ -842,15 +901,6 @@ export default function UserDashboard() {
           onOpenLeagues={() => setIsLeaguesOpen(true)}
           onRefresh={() => void restoreOrPredict()}
           refreshBusy={warmPredictBusy}
-          extraDates={
-            <DateRangeChips
-              date={date}
-              userTier={userTier}
-              activePredictDates={activePredictDates}
-              setSelectedDates={setSelectedDates}
-              setStatus={setStatus}
-            />
-          }
           loading={warmPredictBusy && !visiblePreds.length}
         />
       )}

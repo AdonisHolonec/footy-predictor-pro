@@ -13,7 +13,8 @@ const labels = {
   hint: "Generate predictions",
   busy: "Generating…",
   quotaSpent: "Quota spent",
-  pastDay: "Day is over"
+  pastDay: "Day is over",
+  dayLocked: "Day not in plan"
 };
 
 describe("Predict on a past day", () => {
@@ -39,6 +40,29 @@ describe("Predict on a past day", () => {
     expect(action.disabled).toBe(true);
     action.onActivate();
     expect(run).not.toHaveBeenCalled();
+  });
+
+  /*
+    A future day outside the plan is the THIRD block reason, and it has to reach
+    the shared contract rather than only the gate that refuses the run: a surface
+    that thinks the action is available shows the ordinary hint and, on the
+    dashboard, opens the promo dialog promising predictions that are never
+    generated.
+  */
+  it("blocks a plan-locked future day, names it, and refuses to run", () => {
+    const run = vi.fn();
+    expect(resolvePredictState(false, quota, false, true)).toBe("blocked");
+    const action = buildPredictAction({ state: "blocked", blockedBy: "dayLocked", labels, run });
+    expect(action.reason).toBe("Day not in plan");
+    expect(action.hint).toBe("Day not in plan");
+    expect(action.disabled).toBe(true);
+    action.onActivate();
+    expect(run, "an unauthorised day must not start a run").not.toHaveBeenCalled();
+  });
+
+  it("prefers the past-day reason when a day is both past and outside the plan", () => {
+    const action = buildPredictAction({ state: "blocked", blockedBy: "pastDay", labels, run: vi.fn() });
+    expect(action.reason).toBe("Day is over");
   });
 
   it("keeps the quota reason when the block is the quota", () => {

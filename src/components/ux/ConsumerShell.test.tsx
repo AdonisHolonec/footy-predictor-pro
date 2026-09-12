@@ -151,3 +151,25 @@ describe("ConsumerShell chrome", () => {
     }
   });
 });
+
+/**
+ * The day strip is not global chrome. It belongs to the two views that are ABOUT
+ * a day; everywhere else it offered a control that changed nothing on the page.
+ */
+describe("ConsumerShell · the day strip is scoped to day-scoped views", () => {
+  // This file registers cleanup per describe, not file-wide.
+  afterEach(cleanup);
+
+  const DAY_SCOPED = ["home", "matches"] as const;
+  const NOT_DAY_SCOPED = ["history", "statistics", "profile", "tickets", "notifications", "settings"] as const;
+
+  it.each(DAY_SCOPED)("renders the day strip on %s", (activeNav) => {
+    renderShell({ activeNav });
+    expect(screen.getByTestId("day-selector")).toBeTruthy();
+  });
+
+  it.each(NOT_DAY_SCOPED)("omits the day strip on %s", (activeNav) => {
+    renderShell({ activeNav });
+    expect(screen.queryByTestId("day-selector")).toBeNull();
+  });
+});

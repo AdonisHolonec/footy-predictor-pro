@@ -47,9 +47,14 @@ export function isPredictBlocked({ quotaExempt, limit, used }: PredictQuota): bo
  * to agree on which state they describe. Spending the last prediction makes
  * both inputs true at once, and this is the one place that is resolved.
  */
-export function resolvePredictState(busy: boolean, quota: PredictQuota, pastDay = false): PredictState {
+export function resolvePredictState(
+  busy: boolean,
+  quota: PredictQuota,
+  pastDay = false,
+  dayLocked = false
+): PredictState {
   if (busy) return "busy";
-  return isPredictBlocked(quota) || pastDay ? "blocked" : "idle";
+  return isPredictBlocked(quota) || pastDay || dayLocked ? "blocked" : "idle";
 }
 
 /**
@@ -93,6 +98,14 @@ export type PredictActionLabels = {
   quotaSpent: string;
   /** Announced and shown when the selection includes a day that is already over. */
   pastDay?: string;
+  /**
+   * Announced and shown when the selection includes a future day the plan does
+   * not cover. This has to live in the shared contract, not only in the gate
+   * that refuses the run: a surface that believes the action is available shows
+   * the ordinary hint, opens the promo dialog on activation and promises
+   * predictions that are never coming.
+   */
+  dayLocked?: string;
 };
 
 export type PredictAction = {
@@ -123,12 +136,17 @@ export function buildPredictAction(input: {
   labels: PredictActionLabels;
   run: () => void;
   /** Why a "blocked" state is blocked; defaults to the quota. */
-  blockedBy?: "quota" | "pastDay";
+  blockedBy?: "quota" | "pastDay" | "dayLocked";
 }): PredictAction {
   const { state, labels, run, blockedBy = "quota" } = input;
   const busy = state === "busy";
   const blocked = state === "blocked";
-  const blockedReason = blockedBy === "pastDay" && labels.pastDay ? labels.pastDay : labels.quotaSpent;
+  const blockedReason =
+    blockedBy === "pastDay" && labels.pastDay
+      ? labels.pastDay
+      : blockedBy === "dayLocked" && labels.dayLocked
+        ? labels.dayLocked
+        : labels.quotaSpent;
   const reason = busy ? labels.busy : blocked ? blockedReason : null;
   return {
     state,

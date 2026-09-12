@@ -9,6 +9,10 @@ import { NavIcon } from "./navIcons";
 
 type Props = {
   activeNav: AppNavView;
+  /** Forwarded to DaySelector — see its `forecastableDates`. */
+  forecastableDates?: readonly string[];
+  /** Forwarded to DaySelector — a plan-locked future day was activated. */
+  onLockedDay?: (iso: string) => void;
   onNavigate: (view: AppNavView) => void;
   date: string;
   onDateChange: (date: string) => void;
@@ -54,8 +58,13 @@ type Props = {
  * the same on both bars. Live is a segment of Matches, shown here only as a
  * count. The command palette is a shortcut, never the way in.
  */
+/** The only views the day strip belongs to: both are scoped to a single day. */
+const DAY_SCOPED_VIEWS = new Set<AppNavView>(["home", "matches"]);
+
 export default function ConsumerShell({
   activeNav,
+  forecastableDates,
+  onLockedDay,
   onNavigate,
   date,
   onDateChange,
@@ -231,7 +240,23 @@ export default function ConsumerShell({
         and a real day control cannot fit inside the 56px contract. Same value,
         same onDateChange — only the representation moved.
       */}
-      <DaySelector value={date} onChange={onDateChange} />
+      {/*
+        The day strip belongs to the two surfaces that are ABOUT a day: Today and
+        Matches. Results carries its own day navigation, and Performance, Cont,
+        Bilete, Notificări and Setări are not day-scoped at all — a strip there
+        offered a control that changed nothing visible on the page.
+
+        Gated on `activeNav`, the shell's existing page identity, so there is no
+        second route parser and DaySelector itself stays reusable.
+      */}
+      {DAY_SCOPED_VIEWS.has(activeNav) ? (
+        <DaySelector
+          value={date}
+          onChange={onDateChange}
+          forecastableDates={forecastableDates}
+          onLockedDay={onLockedDay}
+        />
+      ) : null}
 
       {/*
         Directly below the bar and above the content — the first thing after the
