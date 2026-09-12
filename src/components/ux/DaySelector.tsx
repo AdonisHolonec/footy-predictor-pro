@@ -102,6 +102,14 @@ export default function DaySelector({
   */
   const forecastable = useMemo(() => (forecastableDates ? new Set(forecastableDates) : null), [forecastableDates]);
   const isLockedDay = (iso: string) => Boolean(forecastable) && iso > today && !forecastable.has(iso);
+  /** The furthest day the plan reaches, for the native picker's own bound. */
+  const lastForecastable = useMemo(() => {
+    if (!forecastableDates?.length) return undefined;
+    // Index access, not `.at(-1)`: tsconfig targets a lib below ES2022 and this
+    // change is not the place to move it.
+    const sorted = [...forecastableDates].sort();
+    return sorted[sorted.length - 1];
+  }, [forecastableDates]);
 
   const selectedIndex = days.findIndex((d) => d.iso === value);
   const tabbableIndex = selectedIndex >= 0 ? selectedIndex : days.findIndex((d) => d.iso === today);
@@ -261,9 +269,25 @@ export default function DaySelector({
             aria-label={t("shell.otherDate")}
             title={t("shell.selectDate")}
             value={valid ? value : ""}
+            /*
+              The SAME gate as the day buttons. This input is a second way into
+              the same state, and guarding only the strip left the plan lock
+              one tap away from being bypassed: the calendar sits beside the
+              locked days, and a typed or picked date went straight through.
+              `max` additionally lets the platform picker grey out the days the
+              plan does not cover, which is the native affordance for this; the
+              handler still re-checks, because `max` is advisory and a typed
+              value can exceed it.
+            */
+            max={lastForecastable}
             onChange={(event) => {
               const next = event.target.value;
-              if (next && next !== value) onChange(next);
+              if (!next || next === value) return;
+              if (isLockedDay(next)) {
+                onLockedDay?.(next);
+                return;
+              }
+              onChange(next);
             }}
             onClick={openPicker}
             onKeyDown={(event) => {

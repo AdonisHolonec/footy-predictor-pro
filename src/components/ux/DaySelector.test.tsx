@@ -298,6 +298,69 @@ describe("DaySelector · plan-gated future days", () => {
     expect(day(TODAY).dataset.dayLocked).toBeUndefined();
   });
 
+  /*
+    The calendar input is a SECOND way into the same state. Guarding only the
+    day buttons left the lock one tap from being bypassed: the picker sits
+    beside the locked days, and a typed or picked date went straight through to
+    onChange — no upgrade prompt, no refusal, the browsed day simply moved.
+  */
+  it("free: the calendar input refuses a locked future date", () => {
+    const onChange = vi.fn();
+    const onLockedDay = vi.fn();
+    render(
+      <DaySelector
+        value={TODAY}
+        today={TODAY}
+        onChange={onChange}
+        forecastableDates={buildTierDates(TODAY, "free")}
+        onLockedDay={onLockedDay}
+      />
+    );
+    const input = screen.getByLabelText(either("shell", "otherDate")) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: addIsoDay(TODAY, 40) } });
+    expect(onChange, "a locked date typed into the picker must not move the selection").not.toHaveBeenCalled();
+    expect(onLockedDay).toHaveBeenCalledWith(addIsoDay(TODAY, 40));
+    // The native bound is advertised too, so the picker can grey those days out.
+    expect(input.max).toBe(TODAY);
+  });
+
+  it("free: the calendar input still reaches a past date", () => {
+    const onChange = vi.fn();
+    const onLockedDay = vi.fn();
+    render(
+      <DaySelector
+        value={TODAY}
+        today={TODAY}
+        onChange={onChange}
+        forecastableDates={buildTierDates(TODAY, "free")}
+        onLockedDay={onLockedDay}
+      />
+    );
+    const input = screen.getByLabelText(either("shell", "otherDate")) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: addIsoDay(TODAY, -30) } });
+    expect(onChange).toHaveBeenCalledWith(addIsoDay(TODAY, -30));
+    expect(onLockedDay).not.toHaveBeenCalled();
+  });
+
+  it("premium: the calendar input reaches tomorrow but not the day after", () => {
+    const onChange = vi.fn();
+    const onLockedDay = vi.fn();
+    render(
+      <DaySelector
+        value={TODAY}
+        today={TODAY}
+        onChange={onChange}
+        forecastableDates={buildTierDates(TODAY, "premium")}
+        onLockedDay={onLockedDay}
+      />
+    );
+    const input = screen.getByLabelText(either("shell", "otherDate")) as HTMLInputElement;
+    expect(input.max).toBe(TOMORROW);
+    fireEvent.change(input, { target: { value: DAY_AFTER } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onLockedDay).toHaveBeenCalledWith(DAY_AFTER);
+  });
+
   it("locks nothing when no plan window is supplied", () => {
     const onChange = vi.fn();
     render(<DaySelector value={TODAY} today={TODAY} onChange={onChange} />);
