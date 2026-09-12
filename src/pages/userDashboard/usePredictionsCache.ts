@@ -5,6 +5,7 @@ import type { HistoryEntry, PredictionRow } from "../../types";
 import {
   isoToday,
   kickoffLocalDateKey,
+  localCalendarDateKey,
   mergePredictionRows,
   mergePredsWithHistory,
   normalizeSelectedDates,
@@ -29,6 +30,7 @@ export function usePredictionsCache({
   date,
   selectedDates,
   setSelectedDates,
+  setDate,
   selectedLeagueIds,
   history,
   setStatus,
@@ -41,6 +43,12 @@ export function usePredictionsCache({
   date: string;
   selectedDates: string[];
   setSelectedDates: Dispatch<SetStateAction<string[]>>;
+  /**
+   * The browsed date's setter, reset together with the selection on an account
+   * switch. REQUIRED: the two must move together, and an omitted setter would
+   * reset only the selection — the desync this hook exists to avoid.
+   */
+  setDate: Dispatch<SetStateAction<string>>;
   selectedLeagueIds: number[];
   history: HistoryEntry[];
   setStatus: (message: string) => void;
@@ -95,28 +103,48 @@ export function usePredictionsCache({
       delete next[user.id];
       return next;
     });
-    setSelectedDates([isoToday()]);
+    // The browsed date and the selection move together: resetting only one of
+    // them left the day strip showing one day while the list loaded another.
+    const today = isoToday();
+    setDate(today);
+    setSelectedDates([today]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard
   }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
     const localPredictions = predictionsByUser[user.id] || [];
-    if (!localPredictions.length) {
-      setPreds([]);
-      return;
-    }
-
     const effectiveDates = normalizeSelectedDates(selectedDates.length ? selectedDates : [date]);
     const selectedDateSet = new Set(effectiveDates);
     const selectedLeagueSet = new Set(selectedLeagueIds.map((id) => Number(id)));
-    const filtered = localPredictions.filter((row) => {
+    const inScope = (row: PredictionRow) => {
       const kickoffDate = kickoffLocalDateKey(row.kickoff);
       if (!selectedDateSet.has(kickoffDate)) return false;
       /* Until favorite leagues hydrate, keep date-matched rows visible. */
       if (!selectedLeagueSet.size) return true;
       return selectedLeagueSet.has(Number(row.leagueId));
-    });
+    };
+    /*
+      A PAST day is also filled from the user's own history — the same rows,
+      from the same 30-day read, that Results renders for that day. The local
+      cache only holds what this device predicted and hydration only reaches
+      back ~3 days, so without this an older day would read as empty even
+      though Results has its matches. Cached rows win (they are the fuller
+      document); history only adds fixtures the cache does not have. Today and
+      future days are untouched.
+    */
+    const today = localCalendarDateKey();
+    const pastDates = effectiveDates.filter((d) => d < today);
+    const cachedInScope = localPredictions.filter(inScope);
+    const cachedIds = new Set(cachedInScope.map((row) => String(row.id)));
+    const fromHistory: PredictionRow[] = pastDates.length
+      ? history.filter((row) => inScope(row) && !cachedIds.has(String(row.id)))
+      : [];
+    if (!localPredictions.length && !fromHistory.length) {
+      setPreds([]);
+      return;
+    }
+    const filtered = fromHistory.length ? [...cachedInScope, ...fromHistory] : cachedInScope;
     // predictionsByUser never receives live poll data (score/momentum/liveEvents/
     // liveAdjustment) — it lives only in-memory on `preds`. Re-filtering from the
     // cache on every predictionsByUser change (history sync, xg hydrate, tier
@@ -126,11 +154,29 @@ export function usePredictionsCache({
     // Same freshness boundary for the locally cached rows: a status cached as 1H in
     // an earlier session is a historical observation by now.
     setPreds((prevPreds) => applyLiveStateCarryForward(prevPreds, filtered.map((row) => demoteStaleLiveStatus(row))));
-    if (hasLegacyPredictionShape(localPredictions, userTier) && filtered.length) {
+    if (hasLegacyPredictionShape(localPredictions, userTier) && cachedInScope.length) {
       setRehydratedNotice(t("dash.legacyNotice"));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard
-  }, [user?.id, userTier, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date]);
+    /*
+      `history.length`, NOT the `history` array itself. This effect always ends in
+      a setPreds that builds a new array, so React never bails out of the render
+      it schedules. Keying on the array's IDENTITY therefore loops forever for any
+      caller whose history is a fresh array each render (an inline `history: []`
+      is enough): effect -> setPreds -> render -> new identity -> effect. The
+      length is what actually matters here — a past day fills once history has
+      loaded — and it is stable across renders, like the `join("|")` keys above
+      and the `history.length` guard on the rehydration effect below.
+
+      The residual gap this accepts: history replaced by a SAME-LENGTH array with
+      different row contents (a settlement correction rewriting score/status on a
+      row already counted) does not re-run this effect, so that past day keeps the
+      earlier snapshot until another dependency changes. Past days are normally
+      settled before they are fetched, so this is rare; detecting it would need a
+      content fingerprint, and the identity that would catch it for free is
+      exactly what loops.
+    */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- verbatim din UserDashboard (+ history.length: a past day fills from it)
+  }, [user?.id, userTier, predictionsByUser, selectedLeagueIds.join("|"), selectedDates.join("|"), date, history.length]);
 
   useEffect(() => {
     if (!user?.id || !history.length) return;

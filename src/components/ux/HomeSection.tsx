@@ -9,7 +9,7 @@ import FeaturedPredictionCard from "./FeaturedPredictionCard";
 import MatchList from "./MatchList";
 import MatchListRow from "./MatchListRow";
 import { NavIcon } from "./navIcons";
-import { isFixtureInPlay } from "../../utils/appUtils";
+import { isFixtureInPlay, localCalendarDateKey } from "../../utils/appUtils";
 import { confidenceOf, expectedValueOf, isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
 
 type AccessTier = UpgradeTier | "free" | string;
@@ -133,7 +133,10 @@ export default function HomeSection({
       <p className="text-xs text-[var(--fp-text-muted)] sm:text-sm" data-testid="today-context">
         <span className="font-semibold text-[var(--fp-text)]">{dateLabel}</span>
         <span aria-hidden> · </span>
-        {t("dash.matchesAnalyzedToday", { n: counts.total })}
+        {/* The browsed day, not the wall clock — a past day is never described as "today". */}
+        {t(selectedDate === localCalendarDateKey() ? "dash.matchesAnalyzedToday" : "dash.matchesAnalyzed", {
+          n: counts.total
+        })}
       </p>
 
       {!matches.length ? (

@@ -3,7 +3,7 @@ import type { MatchesSubFilterPref, UiPrefsV3 } from "../../hooks/useUiPrefs";
 import type { HistoryEntry, PredictionRow } from "../../types";
 import { deriveNotifications } from "../../utils/deriveNotifications";
 import { isFixtureInPlay } from "../../utils/appUtils";
-import { confidenceOf, isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
+import { isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
 import { hasDerivateMarkets, isFinalStatus, matchesPreferredMarkets } from "./helpers";
 
 type MatchesSubFilter = MatchesSubFilterPref;
@@ -66,22 +66,17 @@ export function useDerivedPredictions({
         return hay.includes(q);
       });
     }
-    if (prefs.minConfidence > 0) {
-      rows = rows.filter((row) => {
-        const c = Number(row.recommended?.confidence);
-        return Number.isFinite(c) && c >= prefs.minConfidence;
-      });
-    }
+    /*
+      The Value / High-confidence chips are gone, and they were the only way to
+      set `prefs.valueOnly` / `prefs.minConfidence`. Those two saved filters are
+      therefore no longer applied: a user who left one on must not keep a filter
+      they can no longer see. The pref fields and Settings' display/Reset stay.
+    */
     if (prefs.minEv > 0) {
       rows = rows.filter((row) => {
         const e = Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue);
         return Number.isFinite(e) && e >= prefs.minEv;
       });
-    }
-    if (prefs.valueOnly) {
-      rows = rows.filter(
-        (row) => Boolean(row.valueBet?.detected) || Number(row.valueBet?.ev ?? row.valueEngine?.expectedValue) > 0
-      );
     }
     if (prefs.preferredMarkets.length) {
       rows = rows.filter((row) => matchesPreferredMarkets(row, prefs.preferredMarkets));
@@ -92,18 +87,11 @@ export function useDerivedPredictions({
     showSettledMarketsOnly,
     matchesFilter,
     prefs.watchlistFixtureIds,
-    prefs.minConfidence,
     prefs.minEv,
-    prefs.valueOnly,
     prefs.preferredMarkets,
     matchSearch
   ]);
-  /**
-   * Everything Home shows before the chip filters (value / high confidence) run.
-   * The chips display counts, so those counts have to come from the set the
-   * chips filter — counting inside `homePreds` would count the result of the
-   * filter and collapse to the list length as soon as one is active.
-   */
+  /** Everything Home shows; `homeCounts` below is computed over the same set. */
   const homeBasePreds = useMemo(() => {
     let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
     if (showSettledMarketsOnly) {
@@ -121,16 +109,8 @@ export function useDerivedPredictions({
     }
     return rows;
   }, [preds, showSettledMarketsOnly, prefs.preferredMarkets, matchSearch]);
-  const homePreds = useMemo(() => {
-    let rows = homeBasePreds;
-    if (prefs.minConfidence > 0) {
-      rows = rows.filter((row) => confidenceOf(row) >= prefs.minConfidence);
-    }
-    if (prefs.valueOnly) {
-      rows = rows.filter(isValueRow);
-    }
-    return rows;
-  }, [homeBasePreds, prefs.minConfidence, prefs.valueOnly]);
+  // No chip filters any more (see visiblePreds): Home shows its base set.
+  const homePreds = homeBasePreds;
   const homeCounts = useMemo(
     () => ({
       total: homeBasePreds.length,

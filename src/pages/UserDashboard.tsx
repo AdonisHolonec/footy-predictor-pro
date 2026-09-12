@@ -12,7 +12,7 @@ import MatchesSection from "../components/ux/MatchesSection";
 import OnboardingCarousel from "../components/ux/OnboardingCarousel";
 import HistorySection from "../components/ux/HistorySection";
 import StatisticsSection from "../components/ux/StatisticsSection";
-import { ELITE_LEAGUES, ELITE_LEAGUE_META, HIGH_CONFIDENCE_THRESHOLD } from "../constants/appConstants";
+import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../constants/appConstants";
 import { USER_PREDICT_FLOW_MESSAGES } from "../constants/predictFlowMessages";
 import { useAuth } from "../hooks/useAuth";
 import { useDateRollover } from "../hooks/useDateRollover";
@@ -77,6 +77,7 @@ import { useDerivedPredictions } from "./userDashboard/useDerivedPredictions";
 import { useTrackerAnimations } from "./userDashboard/useTrackerAnimations";
 import {
   buildPredictAction,
+  isPastDaySelection,
   isPredictBlocked,
   predictSurfaceProps,
   resolvePredictState
@@ -258,6 +259,7 @@ export default function UserDashboard() {
     date,
     selectedDates,
     setSelectedDates,
+    setDate,
     selectedLeagueIds,
     history,
     setStatus
@@ -513,7 +515,14 @@ export default function UserDashboard() {
     limit: predictLimitToday,
     used: predictCountToday
   };
-  const predictState = resolvePredictState(warmPredictBusy, predictQuota);
+  /*
+    A day that is over can be BROWSED — it reads like Results — but not
+    predicted: a run would spend quota and persist predictions for matches
+    whose results are already known, which settlement would then count. The
+    same state and the same gate as the quota carry it to every surface.
+  */
+  const pastDaySelected = isPastDaySelection(activePredictDates, todayKey);
+  const predictState = resolvePredictState(warmPredictBusy, predictQuota, pastDaySelected);
 
   /*
     ONE action object for every Predict surface. Nothing below decides for
@@ -522,11 +531,13 @@ export default function UserDashboard() {
   */
   const predictAction = buildPredictAction({
     state: predictState,
+    blockedBy: pastDaySelected ? "pastDay" : "quota",
     labels: {
       label: t("shell.predict"),
       hint: t("shell.predictTip"),
       busy: t("shell.predictBusy"),
-      quotaSpent: t("shell.predictQuotaSpent")
+      quotaSpent: t("shell.predictQuotaSpent"),
+      pastDay: t("shell.predictPastDay")
     },
     run: () => {
       /*
@@ -554,6 +565,11 @@ export default function UserDashboard() {
       status line is how a user who arrived from one of those learns why
       nothing happened.
     */
+    // A day that is over is never predicted, whichever surface asked (see pastDaySelected).
+    if (pastDaySelected) {
+      setStatus(t("shell.predictPastDay"));
+      return;
+    }
     if (isPredictBlocked(predictQuota)) {
       setStatus(t("shell.predictQuotaSpent"));
       return;
@@ -759,7 +775,8 @@ export default function UserDashboard() {
           <span className="text-[var(--fp-text-muted)]">{rehydratedNotice}</span>
         </Banner>
       )}
-      {userTier !== "free" && preds.length > 0 && hasLegacyPredictionShape(preds, userTier) && (
+      {/* Not on a past day: its rows may come from the list-shaped history, and it cannot be predicted anyway. */}
+      {!pastDaySelected && userTier !== "free" && preds.length > 0 && hasLegacyPredictionShape(preds, userTier) && (
         <Banner
           tone="warning"
           className="mb-3"
@@ -822,12 +839,6 @@ export default function UserDashboard() {
           onSetFilter={setMatchesFilter}
           search={matchSearch}
           onSearchChange={setMatchSearch}
-          valueOnly={prefs.valueOnly}
-          onToggleValueOnly={(checked) => updateFilters({ valueOnly: checked })}
-          highConfActive={prefs.minConfidence > 0}
-          onToggleHighConf={() =>
-            updateFilters({ minConfidence: prefs.minConfidence > 0 ? 0 : HIGH_CONFIDENCE_THRESHOLD })
-          }
           onOpenLeagues={() => setIsLeaguesOpen(true)}
           onRefresh={() => void restoreOrPredict()}
           refreshBusy={warmPredictBusy}

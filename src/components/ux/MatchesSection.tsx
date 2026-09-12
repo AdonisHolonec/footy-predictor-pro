@@ -4,7 +4,6 @@ import { useLocale } from "../../context/LocaleContext";
 import { predictSurfaceProps, type PredictAction } from "./predictState";
 import type { UpgradeTier } from "../../design-system/UpgradePrompt";
 import SegmentedControl from "../../design-system/SegmentedControl";
-import FilterChip from "../../design-system/FilterChip";
 import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
@@ -30,11 +29,6 @@ type Props = {
   /** Free-text filter — session-local, owned by the page. */
   search?: string;
   onSearchChange?: (q: string) => void;
-  /** Persistent "saved filters" (Settings can reset them). */
-  valueOnly?: boolean;
-  onToggleValueOnly?: (checked: boolean) => void;
-  highConfActive?: boolean;
-  onToggleHighConf?: () => void;
   /** Scope controls that used to live in the global header. */
   onOpenLeagues?: () => void;
   onRefresh?: () => void;
@@ -51,8 +45,8 @@ type Props = {
  * a filter here, not a destination: choosing it narrows the rows and leaving it
  * restores exactly the segment the user had before — nothing resets on the way
  * in or out. "Top picks" (confidence-ranked) is the fourth, optional segment
- * value; Value / High confidence are the persistent saved filters; search,
- * leagues, the date range and Refresh act on this list, so they live here.
+ * value; search, leagues, the date range and Refresh act on this list, so
+ * they live here.
  */
 export default function MatchesSection({
   matches,
@@ -65,10 +59,6 @@ export default function MatchesSection({
   onSetFilter,
   search = "",
   onSearchChange,
-  valueOnly = false,
-  onToggleValueOnly,
-  highConfActive = false,
-  onToggleHighConf,
   onOpenLeagues,
   onRefresh,
   refreshBusy = false,
@@ -107,16 +97,6 @@ export default function MatchesSection({
           value={matchesFilter}
           onChange={(id) => onSetFilter?.(id)}
         />
-        {onToggleValueOnly && (
-          <FilterChip selected={valueOnly} onClick={() => onToggleValueOnly(!valueOnly)} title={t("dash.filterTitle", { label: t("dash.filterValue") })}>
-            {t("dash.filterValue")}
-          </FilterChip>
-        )}
-        {onToggleHighConf && (
-          <FilterChip selected={highConfActive} onClick={onToggleHighConf} title={t("dash.filterTitle", { label: t("dash.filterHighConf") })}>
-            {t("dash.filterHighConf")}
-          </FilterChip>
-        )}
       </div>
 
       {(onSearchChange || onOpenLeagues || extraDates || onRefresh) && (

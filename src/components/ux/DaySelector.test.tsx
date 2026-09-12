@@ -158,6 +158,22 @@ describe("DaySelector · today indicator and window anchoring", () => {
   });
 });
 
+describe("DaySelector · explicit Today", () => {
+  it("offers Today when the week has re-anchored away from it, and it emits today's ISO date", () => {
+    const { onChange } = renderStrip("2026-10-01");
+    const today = document.querySelector<HTMLButtonElement>("[data-day-today]");
+    expect(today).toBeTruthy();
+    expect(today!.textContent).toMatch(either("list", "dayToday"));
+    fireEvent.click(today!);
+    expect(onChange).toHaveBeenCalledWith(TODAY);
+  });
+
+  it("adds no extra Today control while today is in the visible week", () => {
+    renderStrip("2026-09-12");
+    expect(document.querySelector("[data-day-today]")).toBeNull();
+  });
+});
+
 describe("DaySelector · accessibility and structure", () => {
   it("is a labelled group of real buttons", () => {
     renderStrip();

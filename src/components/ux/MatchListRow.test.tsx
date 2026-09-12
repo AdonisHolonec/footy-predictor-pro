@@ -336,8 +336,6 @@ describe("Matches · list composition", () => {
         onUpgradeRequired={() => {}}
         matchesFilter="all"
         onSetFilter={() => {}}
-        valueOnly={false}
-        onToggleValueOnly={() => {}}
         loading={false}
       />
     );

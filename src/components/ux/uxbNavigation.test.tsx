@@ -126,8 +126,6 @@ function Harness() {
           onSetFilter={setMatchesFilter}
           search=""
           onSearchChange={noop}
-          valueOnly={false}
-          onToggleValueOnly={noop}
           loading={false}
         />
       )}
@@ -351,7 +349,8 @@ describe("UX-B · Today, Results, Performance composition", () => {
     expect(screen.getByTestId("today-live")).toBeTruthy();
     expect(screen.getByTestId("today-entries").querySelectorAll("button")).toHaveLength(4);
     expect(screen.queryByTestId("gsb")).toBeNull();
-    expect(screen.queryByRole("button", { name: either("dash", "filterHighConf") })).toBeNull();
+    // The Value / High-confidence chips were removed; their labels are named literally.
+    expect(screen.queryByRole("button", { name: /^(Value|High conf\.|Încredere mare)$/ })).toBeNull();
   });
 
   it("Results: no tracker on top, a day with navigation, an outcome filter, a Tickets link", () => {

@@ -117,6 +117,20 @@ export default function DaySelector({ value, onChange, today = isoToday() }: Pro
   return (
     <div className="mx-auto max-w-[var(--fp-container)] px-4 pt-3 sm:px-6 lg:px-8" data-testid="day-selector">
       <div className="flex items-center gap-1 rounded-[var(--fp-radius-lg)] border border-[var(--fp-border)] bg-[var(--fp-bg-card)] p-0.5 shadow-fp-sm">
+        {/* "Today" stays an explicit choice when the week has re-anchored away from it. */}
+        {!days.some((d) => d.iso === today) ? (
+          <>
+            <button
+              type="button"
+              data-day-today
+              onClick={() => onChange(today)}
+              className="ml-0.5 flex h-[3.25rem] shrink-0 items-center rounded-[var(--fp-radius)] px-3 text-xs font-semibold text-[var(--fp-accent)] transition-colors duration-[var(--fp-ease)] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fp-accent)] hover-fine:bg-[var(--fp-accent-muted)]"
+            >
+              {t("list.dayToday")}
+            </button>
+            <span aria-hidden className="h-8 w-px shrink-0 bg-[var(--fp-border)]" />
+          </>
+        ) : null}
         <div
           ref={scrollerRef}
           role="group"

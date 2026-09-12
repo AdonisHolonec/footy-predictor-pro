@@ -51,8 +51,6 @@ function renderMatches(overrides: Record<string, unknown> = {}) {
       predictAction={predictAction}
       matchesFilter="all"
       onSetFilter={onSetFilter}
-      valueOnly={false}
-      onToggleValueOnly={() => {}}
       loading={false}
       {...overrides}
     />
@@ -63,6 +61,16 @@ function renderMatches(overrides: Record<string, unknown> = {}) {
 function picksControl(): HTMLElement {
   return screen.getAllByRole("button", { name: eitherLocale("dash", "filterPicks") })[0];
 }
+
+describe("MatchesSection · removed saved-filter chips", () => {
+  it("renders neither Value nor High conf. / Încredere mare — only the list segments", () => {
+    renderMatches();
+    expect(screen.queryByRole("button", { name: /^(Value|High conf\.|Încredere mare)$/ })).toBeNull();
+    const controls = screen.getByTestId("matches-controls");
+    expect(controls.textContent || "").not.toMatch(/Value|High conf\.|Încredere mare/);
+    expect(controls.querySelectorAll("button")).toHaveLength(4);
+  });
+});
 
 describe("MatchesSection top picks filter", () => {
   it("offers picks as a filter beside all and favorites", () => {
