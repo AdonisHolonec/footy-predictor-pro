@@ -37,6 +37,15 @@ const eitherText = (ns: string, key: string) =>
   new RegExp(`(${esc(literal(E[ns][key]))}|${esc(literal(R[ns][key]))})`);
 
 const TODAY = localCalendarDateKey();
+
+/** Local ISO day arithmetic; `addIsoDay` lives in helpers and is UTC-anchored. */
+function addIsoDayLocal(iso: string, plus: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + plus);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
 const shift = (iso: string, days: number) => {
   const [y, m, d] = iso.split("-").map(Number);
   return localCalendarDateKey(new Date(y, m - 1, d + days));
@@ -228,5 +237,34 @@ describe("past day · rendering (Results semantics)", () => {
     const line = screen.getByTestId("today-context").textContent || "";
     expect(line).not.toMatch(eitherText("dash", "matchesAnalyzedToday"));
     expect(line).toMatch(eitherText("dash", "matchesAnalyzed"));
+  });
+});
+
+/**
+ * FUTURE days inside the plan window, which behave the mirror image of past
+ * ones: nothing is filled in from history, because a day that has not happened
+ * has no history to fill from. The first visit is therefore empty and Predict
+ * is what populates it; afterwards the day reads from the cache like any other.
+ *
+ * The rule this pins: selecting a future day must never generate anything by
+ * itself. Predict costs quota, so it stays a thing the user asks for, and a
+ * second visit must not ask again.
+ */
+describe("future day within the plan window", () => {
+  const TOMORROW = addIsoDayLocal(TODAY, 1);
+
+  it("first visit is empty — nothing is generated merely by selecting the day", async () => {
+    renderCache({ day: TOMORROW });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(lastPreds, "a future day must not be filled from history").toEqual([]);
+  });
+
+  it("after Predict has cached rows for it, revisiting shows them with no further Predict", async () => {
+    localStorage.setItem(
+      "footy.user.predictionsByUser",
+      JSON.stringify({ "user-1": [{ ...entry(9, TOMORROW), status: "NS", score: undefined, validation: "pending" }] })
+    );
+    renderCache({ day: TOMORROW });
+    await waitFor(() => expect(lastPreds.map((r) => r.id)).toEqual([9]));
   });
 });
