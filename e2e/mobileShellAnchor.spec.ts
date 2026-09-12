@@ -103,6 +103,43 @@ const ROUTES = [
   "settings"
 ] as const;
 
+/**
+ * The zoom bound, asserted on the served document — no account needed, because
+ * the tag is in index.html and is identical on every route.
+ *
+ * This is a CONFIGURATION assertion, and deliberately so: a browser's pinch
+ * scale is not reachable from Playwright (setViewportSize changes the layout
+ * viewport, which is a different thing), so the behaviour it buys — a page that
+ * cannot be shrunk below its own width and panned — cannot be driven here. The
+ * companion measurement, that nothing overflows AT scale 1, is the credentialed
+ * test below.
+ */
+test.describe("the served document cannot be zoomed below fit width", () => {
+  test("viewport meta clamps zoom-out without restricting zoom-in", async ({ page }) => {
+    await page.goto("/");
+    const content = await page.locator('meta[name="viewport"]').getAttribute("content");
+    expect(content, "no viewport meta on the served document").toBeTruthy();
+
+    const directives = new Map(
+      (content || "").split(",").map((part) => {
+        const [key, value = ""] = part.split("=");
+        return [key.trim().toLowerCase(), value.trim().toLowerCase()];
+      })
+    );
+
+    expect(directives.get("width"), "the layout viewport must follow the device").toBe("device-width");
+    expect(
+      Number(directives.get("minimum-scale")),
+      `minimum-scale must clamp at 1 or the page can be shrunk below its own width and panned — got "${content}"`
+    ).toBe(1);
+
+    // Accessibility: clamping zoom-OUT is the fix; clamping zoom-IN is a WCAG
+    // 1.4.4 failure. Anyone reaching for these to "fix" zoom has gone too far.
+    expect(directives.has("maximum-scale"), "maximum-scale would cap zoom-in (WCAG 1.4.4)").toBe(false);
+    expect(directives.get("user-scalable"), "user-scalable=no would forbid zoom entirely (WCAG 1.4.4)").not.toBe("no");
+  });
+});
+
 test.describe("mobile shell cannot be dragged sideways", () => {
   test.skip(!hasCreds, "E2E_EMAIL / E2E_PASSWORD not configured");
 

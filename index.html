@@ -3,7 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <title>Footy Predictor</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      minimum-scale=1 is load-bearing, not boilerplate.
+
+      Without it the default minimum scale is 0.1, so a phone can pinch-zoom OUT
+      to a fraction of fit width. A `width=device-width` page is then narrower
+      than the screen, and browsers anchor that scaled page to the LEFT: the
+      content sits against the left edge with dead canvas to its right, and the
+      whole page becomes pannable sideways — which drags the sticky top bar with
+      it while the fixed bottom nav appears to hold. Both are reported as layout
+      bugs; neither is one. At scale 1 the document measures exactly the viewport
+      on every route (e2e/mobileShellAnchor.spec.ts), so there is no overflow to
+      remove — only a zoom bound to set.
+
+      Zoom IN is deliberately left alone. `maximum-scale` and `user-scalable=no`
+      are what break WCAG 1.4.4, and neither appears here: this clamps only the
+      direction that shrinks the page below its own width.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f3f2f2" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
