@@ -136,9 +136,25 @@ async function request(url: string, init?: RequestInit): Promise<Record<string, 
   return body;
 }
 
+/**
+ * How many tickets one list request asks for.
+ *
+ * The server's own ceiling (MAX_LIST_LIMIT in globalTicketAdminApi.js), asked
+ * for explicitly rather than taking the default 50. The panel's "won this month"
+ * counter can only be exact over tickets it actually holds, and at three combo
+ * variants a day a calendar month is roughly ninety rows — over the default and
+ * under this. It is still ONE bounded request: no pagination loop, no second
+ * call per card, and the list is the same payload the cards already need.
+ *
+ * The counter never assumes this was enough. `summarizeWonGlobalTickets` proves
+ * coverage from the oldest bet_date it actually received and says so when the
+ * page stops inside the window.
+ */
+export const GLOBAL_TICKET_PAGE_SIZE = 100;
+
 /** The bounded admin list — drafts and published together, newest day first. */
 export async function fetchGlobalTickets(): Promise<GlobalTicket[]> {
-  const body = await request("/api/admin?view=global-tickets");
+  const body = await request(`/api/admin?view=global-tickets&limit=${GLOBAL_TICKET_PAGE_SIZE}`);
   return (body.tickets as GlobalTicket[]) || [];
 }
 

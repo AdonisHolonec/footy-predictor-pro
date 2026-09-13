@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Banner, Button, Card, EmptyState, ErrorState, SectionHeader, Skeleton } from "../../design-system";
 import {
   GLOBAL_VARIANTS,
@@ -11,6 +11,13 @@ import {
   type PoolState,
   type GlobalVariant
 } from "../../services/globalTicketAdminService";
+import {
+  describeLifecycle,
+  describeSettlement,
+  oddsBucketLabel,
+  summarizeWonGlobalTickets,
+  type GlobalBetsKpi
+} from "../../utils/adminGlobalBetsView";
 
 /**
  * Admin → Betting → Global Bets.
@@ -45,6 +52,16 @@ import {
 
 type Status = "idle" | "loading" | "generating" | "publishing";
 
+/**
+ * How many legs the generator builds. A SIZE, not a price.
+ *
+ * Still "Combo N" and deliberately so: this labels the control that chooses
+ * `variant`, a smallint the database constrains to (3,5,8) and checks against
+ * the selection count. The card's category headline is the ODDS bucket, read
+ * from `total_odds`; the two are never swapped, because an eight-leg ticket at
+ * short prices and a three-leg ticket at long ones are the same size and
+ * completely different bets.
+ */
 const VARIANT_LABEL: Record<number, string> = { 3: "Combo 3", 5: "Combo 5", 8: "Combo 8" };
 
 /** Server error code -> what an operator should read. No server prose reaches the screen. */
@@ -69,11 +86,109 @@ function errorCopy(err: unknown): string {
 const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ro-RO") : "—");
 const formatOdds = (odds: number | null) => (odds == null ? "—" : odds.toFixed(2));
 
-/** Draft / published / settled — the three states the schema can actually attest. */
+/**
+ * What the ticket RETURNED, from `special_bets.status` and nothing else.
+ *
+ * This badge used to not exist, and its absence was the defect: the card showed
+ * only the lifecycle badge below, so a won ticket and a lost one both read
+ * "Închis" and an operator could not tell them apart without opening Details and
+ * grading eight legs by eye. Migration 068 is explicit that the two are separate
+ * ("VISIBILITY IS NOT STATUS… `status` means settlement and a draft is not a
+ * settlement state"), so the card now states both, separately.
+ *
+ * Renders nothing when the row carries a status this app does not model — an
+ * unknown value is not evidence of a result, and the lifecycle badge still shows.
+ */
+function TicketSettlementBadge({ status }: { status: string }) {
+  const settlement = describeSettlement(status);
+  if (!settlement) return null;
+  // Wrapped rather than adding a test hook to Badge: the design-system component
+  // takes children, tone and className only, and widening its props for a test
+  // anchor would change a shared primitive to suit one panel.
+  return (
+    <span data-testid="ticket-settlement">
+      <Badge tone={settlement.tone}>{settlement.label}</Badge>
+    </span>
+  );
+}
+
+/** Draft / published / settled — where the ticket sits in its RELEASE lifecycle. */
 function TicketStateBadge({ ticket }: { ticket: GlobalTicket }) {
-  if (ticket.settledAt) return <Badge tone="neutral">Închis</Badge>;
-  if (ticket.publishedAt) return <Badge tone="success">Publicat</Badge>;
-  return <Badge tone="warning">Draft</Badge>;
+  const lifecycle = describeLifecycle(ticket);
+  return (
+    <span data-testid="ticket-lifecycle">
+      <Badge tone={lifecycle.tone}>{lifecycle.label}</Badge>
+    </span>
+  );
+}
+
+/** One leg's settlement, or an explicit "unknown" — never a fabricated result. */
+function SelectionSettlementCell({ status }: { status: string | null }) {
+  const settlement = describeSettlement(status);
+  if (!settlement) return <span className="text-[var(--fp-text-muted)]">—</span>;
+  return <Badge tone={settlement.tone}>{settlement.label}</Badge>;
+}
+
+/**
+ * Won tickets this week and this month, plus the cumulative price breakdown.
+ *
+ * READS THE LIST ALREADY ON SCREEN. No second endpoint, no per-card request and
+ * no history download: the cards below need these rows anyway, so the counters
+ * are a fold over them rather than new traffic.
+ *
+ * The honesty rule is `complete`. The list is a bounded page, so a window can
+ * extend past its oldest row; when that happens the number is a floor and the
+ * card says "cel puțin" instead of printing a quietly undercounted total as if
+ * it were the truth.
+ */
+function WonTicketsKpi({ kpi }: { kpi: GlobalBetsKpi }) {
+  const windows: { key: string; label: string; window: GlobalBetsKpi["week"] }[] = [
+    { key: "week", label: "Săptămâna aceasta", window: kpi.week },
+    { key: "month", label: "Luna aceasta", window: kpi.month }
+  ];
+
+  return (
+    <Card className="p-4" data-testid="global-bets-kpi">
+      <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
+        Bilete câștigate
+      </h3>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {windows.map(({ key, label, window }) => (
+          <div key={key} data-testid={`kpi-${key}`}>
+            <div className="font-display text-2xl font-semibold text-[var(--fp-text)]">
+              {window.complete ? window.count : `≥ ${window.count}`}
+            </div>
+            <div className="text-xs text-[var(--fp-text-muted)]">{label}</div>
+            {!window.complete && (
+              <div className="mt-1 text-[11px] text-[var(--fp-text-muted)]">
+                Lista afișată nu acoperă intervalul complet (din {window.since}).
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
+        <div className="text-[11px] text-[var(--fp-text-muted)]">
+          {/* Stated, not implied: these thresholds nest, so a Cota 8+ winner is
+              counted in all three rows. Without this line the three numbers look
+              like a partition and an operator would add them up. */}
+          Praguri cumulative — un bilet Cota 8+ este numărat și la 4+ și la 2+. Luna aceasta.
+        </div>
+        {/* Bounded width: at 1440 an unconstrained justify-between row throws the
+            label and its number to opposite edges of the card, and the pair stops
+            reading as one fact. */}
+        <dl className="mt-2 max-w-sm space-y-1">
+          {kpi.monthByOddsThreshold.map((bucket) => (
+            <div key={bucket.id} className="flex items-center justify-between text-xs" data-testid={`kpi-${bucket.id}`}>
+              <dt className="text-[var(--fp-text-muted)]">{bucket.label}</dt>
+              <dd className="font-mono font-semibold text-[var(--fp-text)]">{bucket.count} câștigate</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </Card>
+  );
 }
 
 function TicketCard({
@@ -94,15 +209,26 @@ function TicketCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-display text-sm font-semibold text-[var(--fp-text)]">
-              {VARIANT_LABEL[ticket.variant] || `Combo ${ticket.variant}`}
+            {/* The category headline is the PRICE band — one label only, the
+                highest threshold this ticket clears, so a 16.08 ticket reads
+                "Cota 8+" rather than carrying three overlapping badges. A ticket
+                priced under 2.00 gets no bucket and falls back to its size. */}
+            <span className="font-display text-sm font-semibold text-[var(--fp-text)]" data-testid="ticket-category">
+              {oddsBucketLabel(ticket.totalOdds) || VARIANT_LABEL[ticket.variant] || `Combo ${ticket.variant}`}
             </span>
+            <TicketSettlementBadge status={ticket.status} />
             <TicketStateBadge ticket={ticket} />
             <Badge tone="neutral">{ticket.betDate}</Badge>
           </div>
           <div className="mt-1 text-xs text-[var(--fp-text-muted)]">
-            Cotă totală {formatOdds(ticket.totalOdds)} · {ticket.selections.length} selecții · creat{" "}
-            {formatDate(ticket.createdAt)}
+            {/* Size stays stated, and stays separate from the price above:
+                `selections.length` is what the ticket holds, `variant` is what
+                the database promised it would hold, and the schema makes them
+                equal. Naming both is how the card keeps "how many legs" and
+                "what it pays" from collapsing into one word again. */}
+            Cotă totală {formatOdds(ticket.totalOdds)} · {ticket.selections.length}{" "}
+            {ticket.selections.length === 1 ? "selecție" : "selecții"} (
+            {VARIANT_LABEL[ticket.variant] || `Combo ${ticket.variant}`}) · creat {formatDate(ticket.createdAt)}
           </div>
         </div>
 
@@ -133,7 +259,8 @@ function TicketCard({
                   <th className="pb-2 pr-3 font-semibold">Ligă</th>
                   <th className="pb-2 pr-3 font-semibold">Selecție</th>
                   <th className="pb-2 pr-3 font-semibold">Cotă</th>
-                  <th className="pb-2 font-semibold">Probabilitate</th>
+                  <th className="pb-2 pr-3 font-semibold">Probabilitate</th>
+                  <th className="pb-2 font-semibold">Rezultat</th>
                 </tr>
               </thead>
               <tbody className="text-[var(--fp-text)]">
@@ -145,7 +272,17 @@ function TicketCard({
                     <td className="py-2 pr-3">{s.leagueName || s.leagueId}</td>
                     <td className="py-2 pr-3">{s.selection}</td>
                     <td className="py-2 pr-3">{formatOdds(s.odds)}</td>
-                    <td className="py-2">{s.probability == null ? "—" : `${(s.probability * 100).toFixed(1)}%`}</td>
+                    <td className="py-2 pr-3">
+                      {s.probability == null ? "—" : `${(s.probability * 100).toFixed(1)}%`}
+                    </td>
+                    {/* The LEG's own settlement, never inferred from the ticket's
+                        and never from the fixture having finished. A finished
+                        match says nothing about whether this pick came in, and a
+                        lost ticket still contains won legs. When the row carries
+                        no status we model, it says so instead of guessing. */}
+                    <td className="py-2">
+                      <SelectionSettlementCell status={s.status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -245,6 +382,14 @@ export default function AdminGlobalBetsPanel() {
 
   const busy = status === "generating" || status === "publishing";
 
+  /*
+    Recomputed only when the list changes. `Date.now()` is read here rather than
+    inside the helper so the pure function stays deterministic under test; the
+    week boundary moving while an admin stares at the panel is not worth a timer,
+    and the next load picks it up.
+  */
+  const kpi = useMemo(() => summarizeWonGlobalTickets(tickets, Date.now()), [tickets]);
+
   return (
     <div className="space-y-4">
       <SectionHeader
@@ -252,6 +397,10 @@ export default function AdminGlobalBetsPanel() {
         title="Global Bets"
         description="Bilete generate de sistem din întregul fond de predicții eligibile — independent de ligile sau filtrele contului tău."
       />
+
+      {/* Hidden while the first list is still loading: a KPI that reads 0 and
+          then jumps to 12 is worse than one that arrives a moment later. */}
+      {status !== "loading" && <WonTicketsKpi kpi={kpi} />}
 
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
