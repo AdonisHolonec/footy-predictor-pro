@@ -34,8 +34,25 @@ const EXPECTED_FIELDS = [
   "recommendedStatsCap",
   "statsFetchCalls",
   "statsFetchCap",
+  // Tier 3 — universal, future-only cards capture. Recorded on every run,
+  // including while the tier is inert, so a run can prove it did nothing.
+  "universalEnabled",
+  "universalStatsCap",
+  "universalEligible",
+  "universalStatsCalls",
+  "universalSkippedBudget",
+  "universalEmptyResponses",
+  "universalCacheHits",
   "durationMs"
 ];
+
+/** Not zero-initialised counters: the caps, and the Tier-3 on/off flag. */
+const NON_COUNTER_FIELDS = new Set([
+  "statsFetchCap",
+  "recommendedStatsCap",
+  "universalStatsCap",
+  "universalEnabled"
+]);
 
 test("statsFetchCalls is part of the recorded shape, not just its cap", () => {
   const t = buildSettlementTelemetry(CAPS);
@@ -62,8 +79,18 @@ test("both caps are carried through so a run is self-describing", () => {
 
 test("every counter starts at zero", () => {
   const t = buildSettlementTelemetry(CAPS);
-  const counters = EXPECTED_FIELDS.filter((f) => !f.endsWith("Cap"));
+  const counters = EXPECTED_FIELDS.filter((f) => !NON_COUNTER_FIELDS.has(f));
   for (const field of counters) assert.equal(t[field], 0, `${field} must start at 0`);
+});
+
+test("Tier 3 is inert by default — the shipped state is provable from a run", () => {
+  // No activation boundary in the environment, so the tier reports itself off and
+  // every one of its counters stays 0. This is the assertion that would fail if a
+  // later edit accidentally armed the tier by default.
+  const t = buildSettlementTelemetry(CAPS);
+  assert.equal(t.universalEnabled, false);
+  assert.equal(t.universalStatsCalls, 0);
+  assert.equal(t.universalEligible, 0);
 });
 
 test("no value is undefined — KV would persist a hole the readers cannot aggregate", () => {

@@ -2,6 +2,11 @@ import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../server-utils/fetcher.js";
+import { isProviderRateLimited } from "../server-utils/upstreamGate.js";
+import {
+  isUniversalStatsEligible,
+  readUniversalStatsConfig
+} from "../server-utils/settlement/universalStatsTier.js";
 import { computeCardTotals } from "../server-utils/fixtureCardTotals.js";
 import { resolveFixtureFirstHalfGoals } from "../server-utils/fixtureHalftimeGoals.js";
 import { mapUserIdsToEmails } from "../server-utils/adminUserEmails.js";
@@ -76,6 +81,17 @@ function parseNumericStat(statistics, candidates) {
 
 async function fetchFixtureMarketTotals(fixtureId) {
   const statsReq = await getWithCache("/fixtures/statistics", { fixture: fixtureId }, 900);
+  /*
+    ADDITIVE ONLY. `fromCache` and `rateLimited` are surfaced for Tier 3, whose
+    approved accounting does not spend budget on a cache hit and yields the run
+    on a rate limit. Tiers 1 and 2 ignore both fields, so their semantics —
+    including the existing "increment before checking ok" behaviour — are
+    deliberately untouched by this work.
+  */
+  const meta = {
+    fromCache: statsReq.fromCache === true,
+    rateLimited: isProviderRateLimited(statsReq.data)
+  };
   if (!statsReq.ok || !statsReq.data?.response || statsReq.data.response.length < 2) {
     return {
       cornersTotal: null,
@@ -84,7 +100,8 @@ async function fetchFixtureMarketTotals(fixtureId) {
       cardsTotal: null,
       cardsPoints: null,
       firstHalfGoals: null,
-      ok: false
+      ok: false,
+      ...meta
     };
   }
   const homeStats = statsReq.data.response[0].statistics;
@@ -123,7 +140,8 @@ async function fetchFixtureMarketTotals(fixtureId) {
       shotsTotalHome != null && shotsTotalAway != null ? shotsTotalHome + shotsTotalAway : null,
     cardsTotal,
     cardsPoints,
-    firstHalfGoals
+    firstHalfGoals,
+    ...meta
   };
 }
 
@@ -644,7 +662,12 @@ export async function handleHistoryRead(req, res, deps = {}) {
  * run takes, and `/api/history` has no maxDuration entry in vercel.json — so there was
  * no measured base against which to judge adding provider calls.
  */
-export function buildSettlementTelemetry({ statsFetchCap = 0, recommendedStatsCap = 0 } = {}) {
+export function buildSettlementTelemetry({
+  statsFetchCap = 0,
+  recommendedStatsCap = 0,
+  universalStatsCap = 0,
+  universalEnabled = false
+} = {}) {
   return {
     finishedScanned: 0,
     recommendedPendingBefore: 0,
@@ -656,6 +679,20 @@ export function buildSettlementTelemetry({ statsFetchCap = 0, recommendedStatsCa
     recommendedStatsCap,
     statsFetchCalls: 0,
     statsFetchCap,
+    /*
+      TIER 3 (universal, future-only cards capture). Reported unconditionally so a
+      run can PROVE the tier is inert: shipped with no activation boundary set,
+      `universalEnabled` is false and every counter below stays 0. Without these
+      fields the only evidence of inertness would be the absence of a number,
+      which is not evidence.
+    */
+    universalEnabled,
+    universalStatsCap,
+    universalEligible: 0,
+    universalStatsCalls: 0,
+    universalSkippedBudget: 0,
+    universalEmptyResponses: 0,
+    universalCacheHits: 0,
     durationMs: 0
   };
 }
@@ -969,11 +1006,31 @@ async function handleHistorySync(req, res, timing = null) {
       0,
       Math.min(Number(process.env.HISTORY_SYNC_RECOMMENDED_STATS_MAX || 250), 500)
     );
+    /*
+     * TIER 3 — universal, future-only cards capture. Default OFF: with no
+     * HISTORY_SYNC_UNIVERSAL_STATS_FROM set, `enabled` is false and the tier
+     * selects nothing, so this block is inert in production today.
+     *
+     * Its counter is deliberately SEPARATE from the two above. Sharing one would
+     * reproduce the coupling that already exists between them — `statsFetchCalls`
+     * increments on every fetch including recommended ones — and a shared counter
+     * would let research work consume capacity reserved for a pending
+     * recommendation. That is the P0 this tier must never cause.
+     */
+    const universalCfg = readUniversalStatsConfig();
+    let universalStatsCalls = 0;
+    let universalStopped = false;
+
     let cardResettled = 0;
     let statsFetchCalls = 0;
     let recommendedStatsCalls = 0;
     const cardUpdates = [];
-    const settlement = buildSettlementTelemetry({ statsFetchCap, recommendedStatsCap });
+    const settlement = buildSettlementTelemetry({
+      statsFetchCap,
+      recommendedStatsCap,
+      universalStatsCap: universalCfg.cap,
+      universalEnabled: universalCfg.enabled
+    });
 
     // Collect the finished window before grading so recommended-pending fixtures can be
     // processed ahead of everything else — priority is meaningless while paging inline.
@@ -1094,10 +1151,54 @@ async function handleHistorySync(req, res, timing = null) {
 
         if (needsStats && !withinBudget) settlement.syncSkippedBudget += 1;
 
-        if (needsStats && withinBudget) {
+        /*
+          TIER 3 — the residual. Only a row NO higher tier wants can reach this:
+          `needsHigherTierStats: needsStats` and `isRecommendedGap` are passed in,
+          and the predicate refuses on either. So Tier 3 can never claim a row
+          Tier 1 or Tier 2 would have taken, and the tiers cannot contend.
+
+          `universalStopped` latches after a rate limit: Tier 3 yields the rest of
+          the run rather than competing for a throttled provider. Tiers 1 and 2
+          are unaffected by that latch.
+        */
+        const universalEligible =
+          !needsStats &&
+          !universalStopped &&
+          isUniversalStatsEligible(
+            {
+              matchStatus: row.match_status,
+              cardsTotal: marketTotals.cardsTotal,
+              kickoffAt: row.kickoff_at,
+              isRecommendedGap,
+              needsHigherTierStats: needsStats
+            },
+            universalCfg,
+            Date.now()
+          );
+
+        if (universalEligible) settlement.universalEligible += 1;
+
+        const universalTurn = universalEligible && universalStatsCalls < universalCfg.cap;
+        if (universalEligible && !universalTurn) settlement.universalSkippedBudget += 1;
+
+        if ((needsStats && withinBudget) || universalTurn) {
           const totals = await fetchFixtureMarketTotals(Number(row.fixture_id));
-          statsFetchCalls += 1;
-          if (isRecommendedGap) recommendedStatsCalls += 1;
+          if (universalTurn) {
+            /*
+              Tier 3 accounting, per the approved design — and deliberately NOT a
+              copy of the lines below. A cache hit costs no quota, so it costs no
+              budget (the convention predictHelpers.js:571 already uses). Every
+              real call costs one, whatever it returns, so failures cannot loop.
+            */
+            if (totals.fromCache) settlement.universalCacheHits += 1;
+            else universalStatsCalls += 1;
+            if (!totals.ok) settlement.universalEmptyResponses += 1;
+            if (totals.rateLimited) universalStopped = true;
+            settlement.universalStatsCalls = universalStatsCalls;
+          } else {
+            statsFetchCalls += 1;
+            if (isRecommendedGap) recommendedStatsCalls += 1;
+          }
           if (totals.ok) {
             marketTotals = {
               cornersTotal: totals.cornersTotal ?? marketTotals.cornersTotal,
