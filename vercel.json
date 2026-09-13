@@ -39,23 +39,23 @@
   "crons": [
     {
       "path": "/api/history?sync=1&closing=1&days=45",
-      "schedule": "30 11 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/history?sync=1&closing=1&days=45",
-      "schedule": "30 14 * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/history?sync=1&closing=1&days=45",
-      "schedule": "30 17 * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/history?sync=1&closing=1&days=45",
-      "schedule": "0 20 * * *"
+      "schedule": "0 18 * * *"
     },
     {
       "path": "/api/history?sync=1&closing=1&days=45",
-      "schedule": "30 22 * * *"
+      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/backtest?view=snapshot&days=45",
