@@ -400,3 +400,269 @@ describe("error states", () => {
     expect(await screen.findByText("Combo 3")).toBeTruthy();
   });
 });
+
+/**
+ * Status, category and counters.
+ *
+ * The defect these cover is a specific one: the card used to show only where a
+ * ticket sat in its RELEASE lifecycle ("Închis" once settled_at was written), in
+ * the slot where an operator reads a RESULT — so a won ticket and a lost one
+ * were the same word. Every assertion below keeps those two vocabularies apart,
+ * and keeps a missing value from becoming a win.
+ */
+describe("ticket settlement status", () => {
+  const settled = (status: string) =>
+    ticket({ status, publishedAt: "2026-09-05T01:00:00.000Z", settledAt: "2026-09-05T22:00:00.000Z" });
+
+  it("names a won ticket as won", async () => {
+    fetchGlobalTickets.mockResolvedValue([settled("won")]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-settlement")).textContent).toContain("Câștigat");
+  });
+
+  it("names a lost ticket as lost", async () => {
+    fetchGlobalTickets.mockResolvedValue([settled("lost")]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-settlement")).textContent).toContain("Pierdut");
+  });
+
+  it("names a void ticket as void", async () => {
+    fetchGlobalTickets.mockResolvedValue([settled("void")]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-settlement")).textContent).toContain("Anulat");
+  });
+
+  it("shows a pending ticket as awaiting a result", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ status: "pending" })]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-settlement")).textContent).toContain("În așteptare");
+  });
+
+  it("shows settlement and lifecycle as two separate facts", async () => {
+    fetchGlobalTickets.mockResolvedValue([settled("lost")]);
+    render(<AdminGlobalBetsPanel />);
+
+    expect((await screen.findByTestId("ticket-settlement")).textContent).toContain("Pierdut");
+    expect(screen.getByTestId("ticket-lifecycle").textContent).toContain("Închis");
+  });
+
+  it("NEVER labels a closed-but-ungraded ticket as won", async () => {
+    // settled_at is written, status is still pending. This is the exact shape
+    // that used to read as a finished, successful ticket.
+    fetchGlobalTickets.mockResolvedValue([settled("pending")]);
+    render(<AdminGlobalBetsPanel />);
+
+    expect((await screen.findByTestId("ticket-lifecycle")).textContent).toContain("Închis");
+    expect(screen.getByTestId("ticket-settlement").textContent).toContain("În așteptare");
+    expect(screen.queryByText("Câștigat")).toBeNull();
+  });
+
+  it("renders no result at all for a status it does not model", async () => {
+    fetchGlobalTickets.mockResolvedValue([settled("finalised")]);
+    render(<AdminGlobalBetsPanel />);
+
+    await screen.findByTestId("ticket-lifecycle");
+    expect(screen.queryByTestId("ticket-settlement")).toBeNull();
+    expect(screen.queryByText("Câștigat")).toBeNull();
+  });
+});
+
+describe("selection status", () => {
+  const open = async () => fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+
+  it("grades each leg on its own stored status, not on the ticket's", async () => {
+    // A LOST ticket containing a WON leg: inferring the legs from the ticket
+    // would mislabel the winner, and inferring the ticket from the legs would
+    // mislabel the ticket.
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({
+        status: "lost",
+        selections: [
+          selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Arsenal – Chelsea", status: "won" }),
+          selection({ id: "s-2", fixtureId: 902, fixtureLabel: "Leeds – Everton", status: "lost" })
+        ]
+      })
+    ]);
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const won = (await screen.findByText("Arsenal – Chelsea")).closest("tr") as HTMLElement;
+    const lost = screen.getByText("Leeds – Everton").closest("tr") as HTMLElement;
+    expect(within(won).getByText("Câștigat")).toBeTruthy();
+    expect(within(lost).getByText("Pierdut")).toBeTruthy();
+  });
+
+  it("leaves an ungraded leg pending even when others have settled", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({
+        status: "pending",
+        selections: [
+          selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Arsenal – Chelsea", status: "won" }),
+          selection({ id: "s-2", fixtureId: 902, fixtureLabel: "Leeds – Everton", status: "pending" })
+        ]
+      })
+    ]);
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const pending = (await screen.findByText("Leeds – Everton")).closest("tr") as HTMLElement;
+    expect(within(pending).getByText("În așteptare")).toBeTruthy();
+  });
+
+  it("says nothing rather than inventing a result for a leg with no status", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({ selections: [selection({ id: "s-1", fixtureLabel: "Arsenal – Chelsea", status: null })] })
+    ]);
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Arsenal – Chelsea")).closest("tr") as HTMLElement;
+    expect(within(row).getByText("—")).toBeTruthy();
+    expect(within(row).queryByText("Câștigat")).toBeNull();
+  });
+
+  it("keeps the stored snapshot visible alongside the new result column", async () => {
+    // Regression: Details must still show everything it always showed.
+    fetchGlobalTickets.mockResolvedValue([ticket()]);
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    expect(await screen.findByText("Arsenal – Chelsea")).toBeTruthy();
+    expect(screen.getAllByText("Premier League").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Over 2.5").length).toBeGreaterThan(0);
+    expect(screen.getByText("Rezultat")).toBeTruthy();
+  });
+});
+
+describe("category is a price, not a leg count", () => {
+  it("labels a ticket by its total odds", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ variant: 3, totalOdds: 16.08 })]);
+    render(<AdminGlobalBetsPanel />);
+    // Three legs, but a 16.08 price: the headline follows the price.
+    expect((await screen.findByTestId("ticket-category")).textContent).toContain("Cota 8+");
+  });
+
+  it("does not read the leg count as a price", async () => {
+    // Eight legs at a short total. A category derived from `variant` would say
+    // "8"; the correct answer is the 2+ band.
+    fetchGlobalTickets.mockResolvedValue([ticket({ variant: 8, totalOdds: 2.4 })]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-category")).textContent).toContain("Cota 2+");
+  });
+
+  it("gives one exclusive category, never three overlapping ones", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ totalOdds: 16.08 })]);
+    render(<AdminGlobalBetsPanel />);
+
+    const category = await screen.findByTestId("ticket-category");
+    expect(category.textContent).toContain("Cota 8+");
+    expect(category.textContent).not.toContain("Cota 4+");
+    expect(category.textContent).not.toContain("Cota 2+");
+  });
+
+  it("still states the leg count, separately from the price", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ variant: 3, totalOdds: 16.08 })]);
+    render(<AdminGlobalBetsPanel />);
+    expect(await screen.findByText(/2 selecții \(Combo 3\)/)).toBeTruthy();
+  });
+
+  it("falls back to the leg count when the price cannot place the ticket", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ variant: 3, totalOdds: null })]);
+    render(<AdminGlobalBetsPanel />);
+    expect((await screen.findByTestId("ticket-category")).textContent).toContain("Combo 3");
+  });
+});
+
+describe("won-ticket counters", () => {
+  /*
+    The clock is frozen, not merely read.
+
+    The component calls Date.now() itself during render, so a test that computed
+    its fixture dates from a second, independent `new Date()` could straddle a
+    Bucharest midnight or a Monday boundary between the two reads and move a row
+    out of the window under test. Pinning the system time makes both reads the
+    same instant. Wed 16 Sep 2026, 12:00 in Bucharest — a mid-week, mid-month
+    date, so neither window sits on an edge.
+  */
+  const FROZEN = Date.parse("2026-09-16T09:00:00Z");
+  const today = () => "2026-09-16";
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(FROZEN);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts only tickets the settlement engine calls won", async () => {
+    const day = today();
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({ id: "w", betDate: day, status: "won", totalOdds: 9.5 }),
+      ticket({ id: "l", betDate: day, status: "lost", totalOdds: 9.5 }),
+      ticket({ id: "p", betDate: day, status: "pending", totalOdds: 9.5 }),
+      // Old enough to prove the page covers both windows.
+      ticket({ id: "old", betDate: "2020-01-01", status: "lost", totalOdds: 9.5 })
+    ]);
+    render(<AdminGlobalBetsPanel />);
+
+    expect((await screen.findByTestId("kpi-week")).textContent).toContain("1");
+    expect(screen.getByTestId("kpi-month").textContent).toContain("1");
+  });
+
+  it("breaks winners down by cumulative odds threshold", async () => {
+    const day = today();
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({ id: "a", betDate: day, status: "won", totalOdds: 16.08 }),
+      ticket({ id: "b", betDate: day, status: "won", totalOdds: 2.4 }),
+      ticket({ id: "old", betDate: "2020-01-01", status: "lost", totalOdds: 3 })
+    ]);
+    render(<AdminGlobalBetsPanel />);
+
+    // The 16.08 winner is counted in all three; the 2.40 winner only in 2+.
+    expect((await screen.findByTestId("kpi-cota2")).textContent).toContain("2");
+    expect(screen.getByTestId("kpi-cota4").textContent).toContain("1");
+    expect(screen.getByTestId("kpi-cota8").textContent).toContain("1");
+  });
+
+  it("marks a count as a floor when the list does not cover the window", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticket({ id: "w", betDate: today(), status: "won" })]);
+    render(<AdminGlobalBetsPanel />);
+
+    // No row older than the month start, so the month count cannot be proven
+    // complete and must not be printed as if it were.
+    expect((await screen.findByTestId("kpi-month")).textContent).toContain("≥");
+  });
+
+  it("is absent while the first list is still loading", () => {
+    let resolve: (v: unknown) => void = () => {};
+    fetchGlobalTickets.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<AdminGlobalBetsPanel />);
+
+    expect(screen.queryByTestId("global-bets-kpi")).toBeNull();
+    resolve([]);
+  });
+
+  it("stays on screen while a later refresh is in flight", async () => {
+    // `load()` sets "loading" on EVERY call, including the refetch after a
+    // publish. Gating the card on that would make it vanish and return on each
+    // action — the flash the gate exists to prevent.
+    const day = today();
+    let resolveSecond: (v: unknown) => void = () => {};
+    fetchGlobalTickets
+      .mockResolvedValueOnce([ticket({ id: "w", betDate: day, status: "won" })])
+      .mockReturnValueOnce(new Promise((r) => (resolveSecond = r)));
+    publishGlobalTicket.mockResolvedValue(ticket());
+
+    render(<AdminGlobalBetsPanel />);
+    await screen.findByTestId("global-bets-kpi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Publică" }));
+    await waitFor(() => expect(publishGlobalTicket).toHaveBeenCalled());
+
+    // The second fetch has not resolved: the card must still be mounted.
+    expect(screen.queryByTestId("global-bets-kpi")).not.toBeNull();
+    resolveSecond([]);
+  });
+});
