@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Banner, Button, Card, EmptyState, ErrorState, SectionHeader, Skeleton } from "../../design-system";
 import {
   GLOBAL_VARIANTS,
@@ -18,6 +18,8 @@ import {
   summarizeWonGlobalTickets,
   type GlobalBetsKpi
 } from "../../utils/adminGlobalBetsView";
+import { fetchFixtureStates, normalizeFixtureIds, type FixtureState } from "../../services/fixtureStateService";
+import { describeFixture } from "../../utils/fixtureStateView";
 
 /**
  * Admin → Betting → Global Bets.
@@ -122,10 +124,51 @@ function TicketStateBadge({ ticket }: { ticket: GlobalTicket }) {
   );
 }
 
+/**
+ * The real match state for one leg — status, live minute and score.
+ *
+ * SEPARATE FROM THE SETTLEMENT CELL BELOW, and that separation is the whole
+ * point of this column. `FT 2 – 1` describes the pitch; `CÂȘTIGAT` describes the
+ * bet. Two legs can share a status and a score shape and settle opposite ways:
+ *
+ *   FT  Liverpool 2 – 1 Fulham   pick Home  → CÂȘTIGAT
+ *   FT  Liverpool 1 – 1 Fulham   pick Home  → PIERDUT
+ *
+ * So nothing here reads `selection.status`, and the settlement cell never reads
+ * this. When the fixture is unknown the cell says so rather than defaulting to
+ * a status or a 0 – 0.
+ */
+function FixtureStateCell({ state, loading }: { state: FixtureState | undefined; loading: boolean }) {
+  const display = describeFixture(state);
+  if (!display) {
+    return (
+      <span className="text-[var(--fp-text-muted)]" data-testid="fixture-state-unknown">
+        {loading ? "Se încarcă…" : "—"}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2" data-testid="fixture-state">
+      <Badge tone={display.tone}>{display.statusLabel}</Badge>
+      {display.scoreLabel && (
+        <span className="font-mono font-semibold text-[var(--fp-text)]" data-testid="fixture-score">
+          {display.scoreLabel}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** One leg's settlement, or an explicit "unknown" — never a fabricated result. */
 function SelectionSettlementCell({ status }: { status: string | null }) {
   const settlement = describeSettlement(status);
-  if (!settlement) return <span className="text-[var(--fp-text-muted)]">—</span>;
+  if (!settlement) {
+    return (
+      <span className="text-[var(--fp-text-muted)]" data-testid="selection-settlement-unknown">
+        —
+      </span>
+    );
+  }
   return <Badge tone={settlement.tone}>{settlement.label}</Badge>;
 }
 
@@ -199,13 +242,19 @@ function TicketCard({
   expanded,
   onToggle,
   onPublish,
-  publishing
+  publishing,
+  fixtureStates,
+  fixturesLoading,
+  fixturesUnavailable
 }: {
   ticket: GlobalTicket;
   expanded: boolean;
   onToggle: () => void;
   onPublish: () => void;
   publishing: boolean;
+  fixtureStates: Map<number, FixtureState>;
+  fixturesLoading: boolean;
+  fixturesUnavailable: boolean;
 }) {
   return (
     <Card className="p-4">
@@ -255,10 +304,15 @@ function TicketCard({
           {ticket.selections.length === 0 ? (
             <p className="text-xs text-[var(--fp-text-muted)]">Nicio selecție stocată.</p>
           ) : (
-            <table className="w-full min-w-[520px] text-left text-xs">
+            // min-w widened with the new column so the existing overflow-x
+            // wrapper scrolls the table instead of squeezing team names.
+            <table className="w-full min-w-[660px] text-left text-xs">
               <thead className="text-[var(--fp-text-muted)]">
                 <tr>
                   <th className="pb-2 pr-3 font-semibold">Meci</th>
+                  {/* The real fixture, kept adjacent to the match and far from
+                      "Rezultat": one is the scoreboard, the other is the bet. */}
+                  <th className="pb-2 pr-3 font-semibold">Stare meci</th>
                   <th className="pb-2 pr-3 font-semibold">Ligă</th>
                   <th className="pb-2 pr-3 font-semibold">Selecție</th>
                   <th className="pb-2 pr-3 font-semibold">Cotă</th>
@@ -272,6 +326,9 @@ function TicketCard({
                     {/* The stored snapshot, never a fresh join: the names a bet
                         was built from are part of what was bet. */}
                     <td className="py-2 pr-3">{s.fixtureLabel || `#${s.fixtureId}`}</td>
+                    <td className="py-2 pr-3">
+                      <FixtureStateCell state={fixtureStates.get(Number(s.fixtureId))} loading={fixturesLoading} />
+                    </td>
                     <td className="py-2 pr-3">{s.leagueName || s.leagueId}</td>
                     <td className="py-2 pr-3">{s.selection}</td>
                     <td className="py-2 pr-3">{formatOdds(s.odds)}</td>
@@ -291,6 +348,14 @@ function TicketCard({
               </tbody>
             </table>
           )}
+          {/* Stated once per ticket, not per row: the request was made and came
+              back with nothing. Saying so is the honest alternative to leaving
+              eight dashes that look like a rendering bug. */}
+          {fixturesUnavailable && (
+            <p className="mt-2 text-[11px] text-[var(--fp-text-muted)]" data-testid="fixtures-unavailable">
+              Starea meciurilor este indisponibilă momentan. Rezultatele selecțiilor rămân cele înregistrate.
+            </p>
+          )}
           <div className="mt-3 text-[11px] text-[var(--fp-text-muted)]">
             Model {ticket.modelVersion || "—"} · sursă {ticket.betSource}
             {ticket.publishedAt ? ` · publicat ${formatDate(ticket.publishedAt)}` : ""}
@@ -309,6 +374,63 @@ export default function AdminGlobalBetsPanel() {
   const [variant, setVariant] = useState<GlobalVariant>(3);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+
+  /*
+    Real fixture state, hydrated on demand.
+
+    Held in a ref ALONGSIDE the state, not derived from it: the toggle handler
+    needs to know which ids are already cached at the moment it runs, and reading
+    that from `fixtureStates` would close over whichever value existed when the
+    callback was created — the classic stale-closure miss that re-fetches ids it
+    already holds. The ref is the source of truth for "do I need this?", the
+    state exists to trigger the re-render.
+
+    Never persisted: this is a display-time snapshot of somebody else's data.
+  */
+  const fixtureStatesRef = useRef<Map<number, FixtureState>>(new Map());
+  const [fixtureStates, setFixtureStates] = useState<Map<number, FixtureState>>(new Map());
+  const [fixturesLoading, setFixturesLoading] = useState(false);
+  const [fixturesUnavailable, setFixturesUnavailable] = useState(false);
+
+  /**
+   * Expand or collapse one ticket, hydrating its fixtures exactly once.
+   *
+   * Collapsing fetches nothing. Expanding asks only for ids not already held, so
+   * reopening a ticket — or opening a second ticket that shares a fixture — costs
+   * no request at all. Ids are deduplicated before the call, so eight legs on one
+   * fixture are one id, and the whole ticket is ONE batched request, never one
+   * per selection.
+   */
+  const onToggleDetails = useCallback(async (ticket: GlobalTicket) => {
+    const opening = expandedId !== ticket.id;
+    setExpandedId(opening ? ticket.id : null);
+    if (!opening) return;
+
+    const missing = normalizeFixtureIds(ticket.selections.map((s) => s.fixtureId)).filter(
+      (id) => !fixtureStatesRef.current.has(id)
+    );
+    if (!missing.length) return;
+
+    setFixturesLoading(true);
+    setFixturesUnavailable(false);
+    try {
+      const fetched = await fetchFixtureStates(missing);
+      if (fetched.size) {
+        const merged = new Map(fixtureStatesRef.current);
+        fetched.forEach((value, key) => merged.set(key, value));
+        fixtureStatesRef.current = merged;
+        setFixtureStates(merged);
+      }
+      // Asked and got nothing back: say so, rather than leaving a row of dashes
+      // that reads like a bug. A PARTIAL answer is not flagged — those rows show
+      // their own neutral cell.
+      setFixturesUnavailable(fetched.size === 0);
+    } catch {
+      setFixturesUnavailable(true);
+    } finally {
+      setFixturesLoading(false);
+    }
+  }, [expandedId]);
 
   /**
    * Whether a list has ever come back.
@@ -471,9 +593,12 @@ export default function AdminGlobalBetsPanel() {
               key={ticket.id}
               ticket={ticket}
               expanded={expandedId === ticket.id}
-              onToggle={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}
+              onToggle={() => void onToggleDetails(ticket)}
               onPublish={() => void onPublish(ticket.id)}
               publishing={publishingId === ticket.id}
+              fixtureStates={fixtureStates}
+              fixturesLoading={fixturesLoading && expandedId === ticket.id}
+              fixturesUnavailable={fixturesUnavailable && expandedId === ticket.id}
             />
           ))}
         </div>

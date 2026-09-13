@@ -31,6 +31,29 @@ vi.mock("../../services/globalTicketAdminService", async (importOriginal) => {
   };
 });
 
+/*
+  Real fixture state is stubbed at the SERVICE boundary, not at fetch.
+
+  `normalizeFixtureIds` stays real so the deduplication the panel relies on is
+  genuinely exercised; only the network call is replaced.
+*/
+const fetchFixtureStates = vi.fn();
+
+vi.mock("../../services/fixtureStateService", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../services/fixtureStateService")>();
+  return { ...actual, fetchFixtureStates: (...a: unknown[]) => fetchFixtureStates(...a) };
+});
+
+/** One upstream fixture row, in the shape the service returns. */
+const fixture = (o: Record<string, unknown> = {}) => ({
+  id: 901,
+  status: "FT",
+  elapsed: null,
+  inPlay: false,
+  score: { home: 2, away: 1 },
+  ...o
+});
+
 const selection = (o: Record<string, unknown> = {}) => ({
   id: "s-1",
   fixtureId: 901,
@@ -73,7 +96,11 @@ beforeEach(() => {
   fetchGlobalTickets.mockReset();
   generateGlobalTicket.mockReset();
   publishGlobalTicket.mockReset();
+  fetchFixtureStates.mockReset();
   fetchGlobalTickets.mockResolvedValue([]);
+  // Default: the fixture source knows nothing. Every test that wants real match
+  // state opts in explicitly, so no test inherits a score it did not ask for.
+  fetchFixtureStates.mockResolvedValue(new Map());
 });
 
 afterEach(cleanup);
@@ -517,7 +544,10 @@ describe("selection status", () => {
     await open();
 
     const row = (await screen.findByText("Arsenal – Chelsea")).closest("tr") as HTMLElement;
-    expect(within(row).getByText("—")).toBeTruthy();
+    // Anchored to the SETTLEMENT cell specifically: the fixture-state cell in the
+    // same row also renders "—" when the match is unknown, and the two absences
+    // mean different things.
+    expect(within(row).getByTestId("selection-settlement-unknown")).toBeTruthy();
     expect(within(row).queryByText("Câștigat")).toBeNull();
   });
 
@@ -665,4 +695,173 @@ describe("won-ticket counters", () => {
     expect(screen.queryByTestId("global-bets-kpi")).not.toBeNull();
     resolveSecond([]);
   });
+});
+
+
+/**
+ * Real fixture state — the scoreboard, alongside but never fused with the bet.
+ *
+ * The decisive pair is the two FT cases: identical fixture status, opposite
+ * settlements. If the UI ever derived one from the other, exactly one of them
+ * would break.
+ */
+describe("fixture status and score", () => {
+  const open = async () => fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+
+  const ticketWith = (...selections: ReturnType<typeof selection>[]) =>
+    ticket({ selections, status: "pending" });
+
+  it("shows FT with the real score, and the settlement that actually applies", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham", status: "won" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(new Map([[901, fixture({ score: { home: 2, away: 1 } })]]));
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Liverpool – Fulham")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-score").textContent).toContain("2 – 1"));
+    expect(within(row).getByTestId("fixture-state").textContent).toContain("FT");
+    expect(within(row).getByText("Câștigat")).toBeTruthy();
+  });
+
+  it("shows the SAME FT status with a LOST settlement — proof neither is derived", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham", status: "lost" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(new Map([[901, fixture({ score: { home: 1, away: 1 } })]]));
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Liverpool – Fulham")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-score").textContent).toContain("1 – 1"));
+    expect(within(row).getByTestId("fixture-state").textContent).toContain("FT");
+    expect(within(row).getByText("Pierdut")).toBeTruthy();
+  });
+
+  it("shows a live minute and running score while the leg is still pending", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 902, fixtureLabel: "Leeds – Everton", status: "pending" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(
+      new Map([[902, fixture({ id: 902, status: "2H", elapsed: 67, inPlay: true, score: { home: 0, away: 0 } })]])
+    );
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Leeds – Everton")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-state").textContent).toContain("2H 67'"));
+    expect(within(row).getByTestId("fixture-score").textContent).toContain("0 – 0");
+    expect(within(row).getByText("În așteptare")).toBeTruthy();
+  });
+
+  it("shows a scheduled fixture with no score at all", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 903, fixtureLabel: "Roma – Lazio", status: "pending" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(
+      new Map([[903, fixture({ id: 903, status: "NS", score: { home: null, away: null } })]])
+    );
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Roma – Lazio")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-state").textContent).toContain("NS"));
+    expect(within(row).queryByTestId("fixture-score")).toBeNull();
+    expect(row.textContent).not.toContain("0 – 0");
+  });
+
+  it("fabricates nothing when the fixture source returns an empty answer", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 904, fixtureLabel: "Ajax – PSV", status: "won" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(new Map());
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Ajax – PSV")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-state-unknown")).toBeTruthy());
+    expect(within(row).queryByTestId("fixture-score")).toBeNull();
+    expect(row.textContent).not.toContain("FT");
+    // The settlement the database recorded is untouched by the fixture failure.
+    expect(within(row).getByText("Câștigat")).toBeTruthy();
+    expect(await screen.findByTestId("fixtures-unavailable")).toBeTruthy();
+  });
+
+  it("fabricates nothing when the fixture request throws", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 905, fixtureLabel: "Porto – Benfica", status: "lost" }))
+    ]);
+    fetchFixtureStates.mockRejectedValue(new Error("network down"));
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const row = (await screen.findByText("Porto – Benfica")).closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(row).getByTestId("fixture-state-unknown")).toBeTruthy());
+    expect(within(row).getByText("Pierdut")).toBeTruthy();
+    expect(await screen.findByTestId("fixtures-unavailable")).toBeTruthy();
+  });
+
+  it("maps each fixture to its own row", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(
+        selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham", status: "won" }),
+        selection({ id: "s-2", fixtureId: 902, fixtureLabel: "Leeds – Everton", status: "lost" })
+      )
+    ]);
+    fetchFixtureStates.mockResolvedValue(
+      new Map([
+        [901, fixture({ id: 901, status: "FT", score: { home: 3, away: 0 } })],
+        [902, fixture({ id: 902, status: "FT", score: { home: 1, away: 4 } })]
+      ])
+    );
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    const a = (await screen.findByText("Liverpool – Fulham")).closest("tr") as HTMLElement;
+    const b = screen.getByText("Leeds – Everton").closest("tr") as HTMLElement;
+    await waitFor(() => expect(within(a).getByTestId("fixture-score").textContent).toContain("3 – 0"));
+    expect(within(b).getByTestId("fixture-score").textContent).toContain("1 – 4");
+  });
+
+  it("asks for each fixture once per ticket, deduplicating repeats", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(
+        selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham" }),
+        selection({ id: "s-2", fixtureId: 901, fixtureLabel: "Liverpool – Fulham (2)" }),
+        selection({ id: "s-3", fixtureId: 902, fixtureLabel: "Leeds – Everton" })
+      )
+    ]);
+    render(<AdminGlobalBetsPanel />);
+    await open();
+
+    await waitFor(() => expect(fetchFixtureStates).toHaveBeenCalledTimes(1));
+    expect(fetchFixtureStates).toHaveBeenCalledWith([901, 902]);
+  });
+
+  it("does not fetch fixtures until Details is opened", async () => {
+    fetchGlobalTickets.mockResolvedValue([ticketWith(selection({ id: "s-1", fixtureId: 901 }))]);
+    render(<AdminGlobalBetsPanel />);
+    await screen.findByTestId("ticket-category");
+
+    expect(fetchFixtureStates).not.toHaveBeenCalled();
+  });
+
+  it("does not re-fetch a fixture it already holds", async () => {
+    fetchGlobalTickets.mockResolvedValue([
+      ticketWith(selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham" }))
+    ]);
+    fetchFixtureStates.mockResolvedValue(new Map([[901, fixture()]]));
+    render(<AdminGlobalBetsPanel />);
+
+    await open();
+    await waitFor(() => expect(fetchFixtureStates).toHaveBeenCalledTimes(1));
+
+    // Collapse, then reopen: the cached id must not be requested again.
+    fireEvent.click(screen.getByRole("button", { name: "Ascunde" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Detalii" }));
+    await screen.findByText("Liverpool – Fulham");
+    expect(fetchFixtureStates).toHaveBeenCalledTimes(1);
+  });
+
 });
