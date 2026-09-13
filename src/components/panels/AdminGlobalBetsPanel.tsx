@@ -388,6 +388,8 @@ export default function AdminGlobalBetsPanel() {
     Never persisted: this is a display-time snapshot of somebody else's data.
   */
   const fixtureStatesRef = useRef<Map<number, FixtureState>>(new Map());
+  /** Ticket id of the newest hydration request — see onToggleDetails. */
+  const fixtureRequestRef = useRef<string | null>(null);
   const [fixtureStates, setFixtureStates] = useState<Map<number, FixtureState>>(new Map());
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [fixturesUnavailable, setFixturesUnavailable] = useState(false);
@@ -411,10 +413,21 @@ export default function AdminGlobalBetsPanel() {
     );
     if (!missing.length) return;
 
+    // Which request the shared flags belong to. `fixturesLoading` and
+    // `fixturesUnavailable` describe the OPEN ticket, but a request outlives the
+    // expansion that started it: open A, open B before A answers, and A's late
+    // failure would otherwise paint "indisponibil" underneath B. The banner
+    // would be reporting a ticket the operator can no longer see.
+    fixtureRequestRef.current = ticket.id;
     setFixturesLoading(true);
     setFixturesUnavailable(false);
+
+    const isCurrent = () => fixtureRequestRef.current === ticket.id;
     try {
       const fetched = await fetchFixtureStates(missing);
+      // The cache merge is NOT gated: fixture state is additive and keyed by id,
+      // so a superseded request's data is still correct and worth keeping — it
+      // just must not move the flags.
       if (fetched.size) {
         const merged = new Map(fixtureStatesRef.current);
         fetched.forEach((value, key) => merged.set(key, value));
@@ -424,11 +437,11 @@ export default function AdminGlobalBetsPanel() {
       // Asked and got nothing back: say so, rather than leaving a row of dashes
       // that reads like a bug. A PARTIAL answer is not flagged — those rows show
       // their own neutral cell.
-      setFixturesUnavailable(fetched.size === 0);
+      if (isCurrent()) setFixturesUnavailable(fetched.size === 0);
     } catch {
-      setFixturesUnavailable(true);
+      if (isCurrent()) setFixturesUnavailable(true);
     } finally {
-      setFixturesLoading(false);
+      if (isCurrent()) setFixturesLoading(false);
     }
   }, [expandedId]);
 

@@ -847,6 +847,31 @@ describe("fixture status and score", () => {
     expect(fetchFixtureStates).not.toHaveBeenCalled();
   });
 
+  it("never attributes one ticket's failure to another", async () => {
+    // Open A (slow, will fail), open B (fast, succeeds), then let A reject. The
+    // shared banner describes the OPEN ticket, so A's late failure must not
+    // appear underneath B.
+    let failA: (e: unknown) => void = () => {};
+    fetchGlobalTickets.mockResolvedValue([
+      ticket({ id: "a", selections: [selection({ id: "s-a", fixtureId: 901, fixtureLabel: "Alpha – Beta" })] }),
+      ticket({ id: "b", selections: [selection({ id: "s-b", fixtureId: 902, fixtureLabel: "Gamma – Delta" })] })
+    ]);
+    fetchFixtureStates
+      .mockReturnValueOnce(new Promise((_, reject) => (failA = reject)))
+      .mockResolvedValueOnce(new Map([[902, fixture({ id: 902, status: "FT", score: { home: 3, away: 0 } })]]));
+
+    render(<AdminGlobalBetsPanel />);
+    const [detailsA, detailsB] = await screen.findAllByRole("button", { name: "Detalii" });
+
+    fireEvent.click(detailsA);
+    fireEvent.click(detailsB);
+    await waitFor(() => expect(screen.getByText("Gamma – Delta")).toBeTruthy());
+
+    failA(new Error("A failed late"));
+    await waitFor(() => expect(screen.getByTestId("fixture-score").textContent).toContain("3 – 0"));
+    expect(screen.queryByTestId("fixtures-unavailable")).toBeNull();
+  });
+
   it("does not re-fetch a fixture it already holds", async () => {
     fetchGlobalTickets.mockResolvedValue([
       ticketWith(selection({ id: "s-1", fixtureId: 901, fixtureLabel: "Liverpool – Fulham" }))
