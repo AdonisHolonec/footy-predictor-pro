@@ -574,15 +574,27 @@ describe("category is a price, not a leg count", () => {
 });
 
 describe("won-ticket counters", () => {
-  // "Today" in the same zone the counter uses, so these never straddle midnight
-  // in a way that moves a row out of the week under test.
-  const today = () =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Bucharest",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(new Date());
+  /*
+    The clock is frozen, not merely read.
+
+    The component calls Date.now() itself during render, so a test that computed
+    its fixture dates from a second, independent `new Date()` could straddle a
+    Bucharest midnight or a Monday boundary between the two reads and move a row
+    out of the window under test. Pinning the system time makes both reads the
+    same instant. Wed 16 Sep 2026, 12:00 in Bucharest — a mid-week, mid-month
+    date, so neither window sits on an edge.
+  */
+  const FROZEN = Date.parse("2026-09-16T09:00:00Z");
+  const today = () => "2026-09-16";
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(FROZEN);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("counts only tickets the settlement engine calls won", async () => {
     const day = today();
@@ -630,5 +642,27 @@ describe("won-ticket counters", () => {
 
     expect(screen.queryByTestId("global-bets-kpi")).toBeNull();
     resolve([]);
+  });
+
+  it("stays on screen while a later refresh is in flight", async () => {
+    // `load()` sets "loading" on EVERY call, including the refetch after a
+    // publish. Gating the card on that would make it vanish and return on each
+    // action — the flash the gate exists to prevent.
+    const day = today();
+    let resolveSecond: (v: unknown) => void = () => {};
+    fetchGlobalTickets
+      .mockResolvedValueOnce([ticket({ id: "w", betDate: day, status: "won" })])
+      .mockReturnValueOnce(new Promise((r) => (resolveSecond = r)));
+    publishGlobalTicket.mockResolvedValue(ticket());
+
+    render(<AdminGlobalBetsPanel />);
+    await screen.findByTestId("global-bets-kpi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Publică" }));
+    await waitFor(() => expect(publishGlobalTicket).toHaveBeenCalled());
+
+    // The second fetch has not resolved: the card must still be mounted.
+    expect(screen.queryByTestId("global-bets-kpi")).not.toBeNull();
+    resolveSecond([]);
   });
 });

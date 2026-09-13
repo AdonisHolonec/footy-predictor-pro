@@ -152,21 +152,24 @@ function WonTicketsKpi({ kpi }: { kpi: GlobalBetsKpi }) {
       <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--fp-text-muted)]">
         Bilete câștigate
       </h3>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* A definition list, matching the threshold breakdown below: these are the
+          same kind of label/number pair, and pairing them only in one of the two
+          places leaves the more prominent stat the less navigable one. */}
+      <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {windows.map(({ key, label, window }) => (
           <div key={key} data-testid={`kpi-${key}`}>
-            <div className="font-display text-2xl font-semibold text-[var(--fp-text)]">
+            <dd className="font-display text-2xl font-semibold text-[var(--fp-text)]">
               {window.complete ? window.count : `≥ ${window.count}`}
-            </div>
-            <div className="text-xs text-[var(--fp-text-muted)]">{label}</div>
+            </dd>
+            <dt className="text-xs text-[var(--fp-text-muted)]">{label}</dt>
             {!window.complete && (
-              <div className="mt-1 text-[11px] text-[var(--fp-text-muted)]">
+              <dd className="mt-1 text-[11px] text-[var(--fp-text-muted)]">
                 Lista afișată nu acoperă intervalul complet (din {window.since}).
-              </div>
+              </dd>
             )}
           </div>
         ))}
-      </div>
+      </dl>
 
       <div className="mt-4 border-t border-[var(--fp-border)] pt-3">
         <div className="text-[11px] text-[var(--fp-text-muted)]">
@@ -307,6 +310,17 @@ export default function AdminGlobalBetsPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
 
+  /**
+   * Whether a list has ever come back.
+   *
+   * Separate from `status` because `load()` sets "loading" on EVERY call, and it
+   * is re-called after a successful generate and after a publish. Gating the KPI
+   * card on `status` alone would unmount and remount it on each of those — the
+   * flash the gate exists to prevent, just repeated. Once the card is on screen
+   * it stays, and its numbers update in place.
+   */
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
   const load = useCallback(async () => {
     setStatus("loading");
     setError(null);
@@ -316,6 +330,7 @@ export default function AdminGlobalBetsPanel() {
       setError(errorCopy(err));
     } finally {
       setStatus("idle");
+      setHasLoadedOnce(true);
     }
   }, []);
 
@@ -398,9 +413,10 @@ export default function AdminGlobalBetsPanel() {
         description="Bilete generate de sistem din întregul fond de predicții eligibile — independent de ligile sau filtrele contului tău."
       />
 
-      {/* Hidden while the first list is still loading: a KPI that reads 0 and
-          then jumps to 12 is worse than one that arrives a moment later. */}
-      {status !== "loading" && <WonTicketsKpi kpi={kpi} />}
+      {/* Hidden until the first list arrives: a KPI that reads 0 and then jumps
+          to 12 is worse than one that appears a moment later. Every refresh after
+          that updates the numbers in place rather than removing the card. */}
+      {hasLoadedOnce && <WonTicketsKpi kpi={kpi} />}
 
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
