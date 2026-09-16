@@ -3,6 +3,7 @@ import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAu
 import { assertSupabaseConfigured, getSupabaseAdmin } from "../server-utils/supabaseAdmin.js";
 import { handleReferralApi } from "../server-utils/referralApi.js";
 import { handleSupportApi } from "../server-utils/supportApi.js";
+import { handlePresenceApi } from "../server-utils/presenceApi.js";
 import {
   selectWithPayloadPaths,
   rehydratePayloadPathRows
@@ -51,6 +52,18 @@ export default async function handler(req, res) {
   const view = String(req.query.view || "");
   if (view === "support" || view === "feedback" || view === "prediction-report") {
     return handleSupportApi(req, res);
+  }
+
+  /*
+    Presence rides here for the same reason support does — the function budget.
+    Returned from immediately and BEFORE the admin/cron gate below, because the
+    aggregate (`onlineCount` / `accessesToday`) is for every authenticated user,
+    not just admins; `presenceApi` runs its own auth, and escalates to
+    `assertAdmin` only for `scope=admin`, which is the only shape carrying
+    identities.
+  */
+  if (view === "presence") {
+    return handlePresenceApi(req, res);
   }
 
   /*

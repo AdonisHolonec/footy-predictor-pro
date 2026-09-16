@@ -31,6 +31,15 @@ type Props = {
    */
   statusSlot?: ReactNode;
   /**
+   * Compact activity badge, pinned beside the brand.
+   *
+   * Its own slot rather than more content inside `statusSlot`: that slot is the
+   * plan card and referral CTA, it is `ml-auto` (so it lives at the RIGHT end of
+   * the bar), and it is the zone documented as already overflowing at 390px.
+   * The badge belongs next to the wordmark and must not compete with either.
+   */
+  activitySlot?: ReactNode;
+  /**
    * The referral campaign strip, rendered BELOW the 56px bar.
    *
    * A separate slot rather than more content inside `statusSlot`, because the
@@ -71,6 +80,7 @@ export default function ConsumerShell({
   predictAction,
   liveCount = 0,
   statusSlot,
+  activitySlot,
   campaignSlot,
   children
 }: Props) {
@@ -174,6 +184,14 @@ export default function ConsumerShell({
               Footy<span className="text-[var(--fp-accent)]">Predictor</span>
             </button>
           </div>
+
+          {/*
+            Beside the wordmark, before the nav — the placement the spec asks for
+            ("[ LOGO ] 25 online ... [ menu ]"). shrink-0 so the badge keeps its
+            reserved width and the brand column, which truncates, absorbs a
+            narrow viewport instead.
+          */}
+          {activitySlot ? <div className="flex shrink-0 items-center">{activitySlot}</div> : null}
 
           {desktopNav}
 

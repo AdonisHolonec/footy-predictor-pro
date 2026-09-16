@@ -7,6 +7,7 @@ import { useWorkspaceRoute } from "./userDashboard/useWorkspaceRoute";
 import TicketsSection from "../components/ux/TicketsSection";
 import CommandPalette from "../components/ux/CommandPalette";
 import ConsumerShell from "../components/ux/ConsumerShell";
+import ActivityIndicator from "../components/presence/ActivityIndicator";
 import HomeSection from "../components/ux/HomeSection";
 import MatchesSection from "../components/ux/MatchesSection";
 import OnboardingCarousel from "../components/ux/OnboardingCarousel";
@@ -754,6 +755,12 @@ export default function UserDashboard() {
       onLockedDay={requestDayUpgrade}
       predictAction={predictAction}
       liveCount={homeLiveCount}
+      /*
+        Mobile only. The desktop copy lives in the toolbar above the match list
+        (below), where the spec puts it and where there is room for the word; two
+        badges on one screen would just be the same number twice.
+      */
+      activitySlot={<ActivityIndicator userId={user?.id ?? null} variant="compact" className="lg:hidden" />}
       statusSlot={
         /*
           The EFFECTIVE tier, straight from the server's entitlement. `user.tier`
@@ -859,6 +866,21 @@ export default function UserDashboard() {
             {predictAction.reason ?? t("dash.needPredictForMarkets")}
           </span>
         </Banner>
+      )}
+
+      {/*
+        Desktop toolbar row: the activity badge sits above the match list, on the
+        same line the league/day controls occupy, right-aligned so it reads as
+        ambient status rather than a control. lg:flex only — below that the badge
+        is already in the app bar beside the brand.
+
+        Rendered for the two day-scoped views, the same pair DaySelector uses, so
+        the two never disagree about which surfaces are "about a day".
+      */}
+      {(navView === "home" || navView === "matches") && (
+        <div className="mb-2 hidden justify-end lg:flex">
+          <ActivityIndicator userId={user?.id ?? null} variant="toolbar" />
+        </div>
       )}
 
       {navView === "home" && (
