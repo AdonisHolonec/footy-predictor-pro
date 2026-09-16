@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { UserTier } from "../../types";
 import { localCalendarDateKey } from "../../utils/appUtils";
 import AdminUsageSnapshot from "./AdminUsageSnapshot";
+import AdminOnlineUsers from "../presence/AdminOnlineUsers";
 import AdminPerformanceTables from "./AdminPerformanceTables";
 import AdminUsersTable from "./AdminUsersTable";
 import type { PerfAdminSnapshot, UsageSnapshot } from "../../types/index";
@@ -87,6 +88,14 @@ export default function AdminUsersPanel({
           Reîmprospătează
         </button>
       </div>
+      {/*
+        Activity first: "online now" and "accesses today" describe the people the
+        rest of this panel is about, so they read before the API quota and the
+        performance tables. `enabled` only gates rendering — the identities in
+        the list are authorised by assertAdmin server-side, and user_presence has
+        RLS on with no policies, so this prop grants nothing on its own.
+      */}
+      <AdminOnlineUsers enabled />
       <AdminUsageSnapshot usageSnapshot={usageSnapshot} usageLoading={usageLoading} onLoad={onLoadUsage} />
       <AdminPerformanceTables
         perfAdminSnapshot={perfAdminSnapshot}
