@@ -31,12 +31,14 @@ type Props = {
    */
   statusSlot?: ReactNode;
   /**
-   * Compact activity badge, pinned beside the brand.
+   * Compact activity badge, rendered in its own mobile row BELOW the bar.
    *
    * Its own slot rather than more content inside `statusSlot`: that slot is the
    * plan card and referral CTA, it is `ml-auto` (so it lives at the RIGHT end of
    * the bar), and it is the zone documented as already overflowing at 390px.
-   * The badge belongs next to the wordmark and must not compete with either.
+   * Keeping them apart in the API is what stops the badge drifting back into the
+   * 56px row the next time someone edits this file — which is exactly where it
+   * started, and exactly why it did not fit.
    */
   activitySlot?: ReactNode;
   /**
@@ -185,14 +187,6 @@ export default function ConsumerShell({
             </button>
           </div>
 
-          {/*
-            Beside the wordmark, before the nav — the placement the spec asks for
-            ("[ LOGO ] 25 online ... [ menu ]"). shrink-0 so the badge keeps its
-            reserved width and the brand column, which truncates, absorbs a
-            narrow viewport instead.
-          */}
-          {activitySlot ? <div className="flex shrink-0 items-center">{activitySlot}</div> : null}
-
           {desktopNav}
 
           {/* The cards sit on the same line now — the stacked brand/date made room. */}
@@ -251,6 +245,29 @@ export default function ConsumerShell({
         </div>
 
       </header>
+
+      {/*
+        ACTIVITY ROW — mobile only, below the bar and above the day strip.
+
+        It used to sit beside the wordmark inside the 56px bar. That row's zones
+        already summed to ~395px of min-content against 366px usable at 390px
+        (the reason its gap is 1.5 rather than 2), so a badge there competed with
+        the brand and the Predict button for space none of them had. Moving it
+        one line down costs nothing: this strip is full-width, so the badge fits
+        at any supported viewport without the bar having to give anything up.
+
+        `lg:hidden` and not a second component: desktop renders the SAME slot
+        content in the dashboard toolbar next to the league/day controls, so the
+        two placements never drift and there is only ever one indicator on screen.
+
+        Ordered before the day strip deliberately — it is ambient status about the
+        page, and the day control is the thing the user came to touch.
+      */}
+      {activitySlot ? (
+        <div className="mx-auto flex max-w-[var(--fp-container)] items-center px-3 pt-2 sm:px-6 lg:hidden">
+          {activitySlot}
+        </div>
+      ) : null}
 
       {/*
         The day strip lives directly below the bar, outside <header>: the date
