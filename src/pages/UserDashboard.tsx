@@ -756,11 +756,13 @@ export default function UserDashboard() {
       predictAction={predictAction}
       liveCount={homeLiveCount}
       /*
-        Mobile only. The desktop copy lives in the toolbar above the match list
-        (below), where the spec puts it and where there is room for the word; two
-        badges on one screen would just be the same number twice.
+        Mobile only, and the SHELL decides that: it renders this slot in an
+        `lg:hidden` row below the bar, so the breakpoint lives with the layout
+        rather than being repeated here. The desktop copy is the toolbar one
+        below, next to the league/day controls — two badges on one screen would
+        just be the same number twice.
       */
-      activitySlot={<ActivityIndicator userId={user?.id ?? null} variant="compact" className="lg:hidden" />}
+      activitySlot={<ActivityIndicator userId={user?.id ?? null} variant="compact" />}
       statusSlot={
         /*
           The EFFECTIVE tier, straight from the server's entitlement. `user.tier`

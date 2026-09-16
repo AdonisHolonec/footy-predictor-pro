@@ -26,6 +26,7 @@ vi.mock("../../services/presenceService", () => ({
 
 const { default: ActivityIndicator } = await import("./ActivityIndicator");
 const { default: AdminOnlineUsers } = await import("./AdminOnlineUsers");
+const { default: ConsumerShell } = await import("../ux/ConsumerShell");
 
 beforeEach(() => {
   sendHeartbeat.mockReset();
@@ -125,6 +126,69 @@ describe("ActivityIndicator", () => {
     // what would move the logo and the menu around it.
     const geometry = (cls: string) => cls.replace(/text-\[var\(--fp-[a-z-]+\)\]/g, "").trim();
     expect(geometry(live)).toBe(geometry(idle));
+  });
+});
+
+describe("mobile placement", () => {
+  const noop = () => {};
+  const mountShell = () =>
+    render(
+      <ConsumerShell
+        activeNav="home"
+        onNavigate={noop}
+        date="2026-08-25"
+        onDateChange={noop}
+        activitySlot={<span data-testid="slot-probe">probe</span>}
+      >
+        <div />
+      </ConsumerShell>
+    );
+
+  it("the badge is NOT inside the 56px top bar", () => {
+    // It started there and did not fit: that row's zones already sum to ~395px
+    // of min-content against 366px usable at 390px.
+    mountShell();
+    const bar = screen.getByTestId("context-bar");
+    const probe = screen.getByTestId("slot-probe");
+    expect(bar.contains(probe)).toBe(false);
+  });
+
+  it("it sits below the header and above the day strip", () => {
+    mountShell();
+    const probe = screen.getByTestId("slot-probe");
+    const header = document.querySelector("header");
+    const day = screen.getByTestId("day-selector");
+
+    // `compareDocumentPosition` returns a bitmask; `no-bitwise` is not enabled
+    // in this repo, so no disable directive belongs here.
+    expect(header!.compareDocumentPosition(probe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(probe.compareDocumentPosition(day) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("the row is mobile-only, so desktop keeps its toolbar placement", () => {
+    mountShell();
+    const row = screen.getByTestId("slot-probe").parentElement;
+    expect(row?.className).toContain("lg:hidden");
+    // One indicator on screen at a time — the desktop copy is a separate,
+    // lg-only element rendered by the dashboard, not a second one here.
+    expect(screen.getAllByTestId("slot-probe")).toHaveLength(1);
+  });
+
+  it("the logo and the nav controls are untouched by the move", () => {
+    mountShell();
+    const bar = screen.getByTestId("context-bar");
+    // The brand button and the Predict/menu cluster still own the bar.
+    expect(bar.textContent).toContain("Footy");
+    expect(bar.querySelector("[aria-label]")).toBeTruthy();
+  });
+
+  it("renders nothing extra when no slot is supplied", () => {
+    render(
+      <ConsumerShell activeNav="home" onNavigate={noop} date="2026-08-25" onDateChange={noop}>
+        <div />
+      </ConsumerShell>
+    );
+    expect(screen.queryByTestId("slot-probe")).toBeNull();
   });
 });
 
