@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin.js";
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
@@ -27,7 +28,12 @@ import {
   resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
-import { recordSyncRun, SYNC_KINDS } from "../server-utils/observability/syncTelemetry.js";
+import {
+  classifyTerminalStatus,
+  recordSyncRun,
+  RUN_STATUS,
+  SYNC_KINDS
+} from "../server-utils/observability/syncTelemetry.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
 import {
   createTransportCollector,
@@ -697,7 +703,12 @@ export function buildSettlementTelemetry({
   };
 }
 
-async function handleHistorySync(req, res, timing = null) {
+/*
+  Exported for tests only, like `handleHistoryRead`. The run journal's guarantee is
+  an ORDERING one — the KV terminal event must be written before the Postgres
+  terminal write — and ordering can only be proven by driving the handler.
+*/
+export async function handleHistorySync(req, res, timing = null) {
   // First statement in the handler: durationMs is compared against the platform
   // execution limit, so it must cover the whole invocation.
   const syncStartedAt = Date.now();
@@ -746,6 +757,65 @@ async function handleHistorySync(req, res, timing = null) {
     return res.status(500).json({ ok: false, error: supabaseConfig.error });
   }
 
+  /*
+    RUN JOURNAL — the Postgres-independent half of this run's evidence.
+
+    `history_sync_status` and `history_sync_log` are written last and BOTH live on
+    the database the sync itself depends on, with the status upsert throwing before
+    the log insert is attempted and the whole thing swallowed. On 2026-09-15 the
+    18:00 run scanned, upserted and settled for 52 s, then PostgREST returned 521
+    to the status write — and the run vanished from relational history entirely,
+    indistinguishable from a cron that never fired.
+
+    So the journal is written to KV instead: STARTED here, exactly one terminal
+    event at the end, both carrying `runId`. Neither can be erased by a database
+    outage, because neither touches the database.
+
+    PLACEMENT. This sits after the auth and config guards rather than beside
+    `syncStartedAt`. A STARTED written before the 403 would let any unauthenticated
+    caller append to the journal and evict real entries against RUNS_PER_DAY_CAP,
+    and a STARTED written before the config guard would strand an orphan on a path
+    that returns without ever reaching a terminal write. Both guards return early
+    and do no sync work, so nothing observable happens before this point.
+  */
+  const runId = randomUUID();
+  const startedAtIso = new Date(syncStartedAt).toISOString();
+  const journalSource = resolveHistorySyncSource(req);
+  // Public git SHA, or null off-platform. No new abstraction, no hard dependency.
+  const deploymentSha = String(process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 40) || null;
+  /** Identity every event in this run shares. Operational metadata only. */
+  const journalIdentity = {
+    runId,
+    startedAt: startedAtIso,
+    source: journalSource,
+    ...(deploymentSha ? { deploymentSha } : {})
+  };
+  /** Work done so far, from counters the handler already maintains. */
+  const journalProgress = () => ({
+    scanned: counters.scanned,
+    updated: counters.updated + counters.resettled + counters.cardResettled,
+    estimatedCalls: counters.providerFixtureCalls + counters.statsFetchCalls,
+    upsertBatches: counters.upsertBatches,
+    durationMs: Date.now() - syncStartedAt
+  });
+  /*
+    Fire-and-forget: nothing awaits this, so an unreachable KV cannot delay or fail
+    scan 1. `recordSyncRun` already swallows its own errors; the `.catch` is belt
+    and braces, because a rejected floating promise is an unhandled rejection and
+    the one thing this feature must never do is take the sync down with it.
+  */
+  const journal = (event) =>
+    void recordSyncRun(SYNC_KINDS.SETTLEMENT, event).catch(() => {});
+
+  journal({ ...journalIdentity, status: RUN_STATUS.STARTED });
+
+  /*
+    Declared out here, assigned inside the try, so the catch can report the Tier
+    1/2/3 counters the run had accumulated. A failure before the stats phase leaves
+    it null and the terminal event simply carries no counters — absent, not zero.
+  */
+  let settlement = null;
+
   const supabase = getSupabaseAdmin();
   const days = Math.max(1, Math.min(Number(req.query.days || 30), 120));
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
@@ -787,6 +857,12 @@ async function handleHistorySync(req, res, timing = null) {
       console.info(
         JSON.stringify({ historySync: true, scanned: 0, updated: 0, note: "no_pending_or_nonfinal_rows" })
       );
+      /*
+        This branch returns without reaching the main terminal write, so it closes
+        its own run. Without it every empty scan would leave a STARTED with no
+        partner and reconciliation would report a crash that never happened.
+      */
+      journal({ ...journalIdentity, status: RUN_STATUS.COMPLETED, ...journalProgress() });
       await persistHistorySyncStatus(supabase, req, { ok: true, scanned: 0, updated: 0 });
       return res.status(200).json({ ok: true, scanned: 0, updated: 0, message: "Nu există înregistrări în așteptare." });
     }
@@ -1025,7 +1101,7 @@ async function handleHistorySync(req, res, timing = null) {
     let statsFetchCalls = 0;
     let recommendedStatsCalls = 0;
     const cardUpdates = [];
-    const settlement = buildSettlementTelemetry({
+    settlement = buildSettlementTelemetry({
       statsFetchCap,
       recommendedStatsCap,
       universalStatsCap: universalCfg.cap,
@@ -1296,13 +1372,6 @@ async function handleHistorySync(req, res, timing = null) {
       settlement.recommendedPendingBefore - settlement.recommendedSettledNow;
     settlement.recommendedStatsCalls = recommendedStatsCalls;
     settlement.statsFetchCalls = statsFetchCalls;
-    // Captured immediately before the write, so the recorded figure is a lower bound on
-    // the invocation: it excludes only the trailing status persist and JSON response.
-    settlement.durationMs = Date.now() - syncStartedAt;
-
-    // Persist the run so `recommendedStillPending` becomes a trend instead of a number
-    // that only ever existed in one HTTP response. Never blocks the sync.
-    void recordSyncRun(SYNC_KINDS.SETTLEMENT, settlement);
 
     if (cardUpdates.length > 0) {
       cardResettled = await phase("upsert3Ms", "upsert_card_markets", () =>
@@ -1312,6 +1381,33 @@ async function handleHistorySync(req, res, timing = null) {
     }
     counters.cardResettled = cardResettled;
     recordSyncCounters(timing, counters);
+
+    /*
+      TERMINAL JOURNAL EVENT — COMPLETED.
+
+      Moved to AFTER upsert3 so it can carry the run's final `updated` and
+      `upsertBatches`. That used to be unsafe: this was the only durable record, so
+      writing it later risked losing a run that died in upsert3 — which is exactly
+      what happened on 2026-09-15. It is safe now because the catch path below
+      writes its own terminal event before touching Postgres, so upsert3 throwing
+      produces DB_UNAVAILABLE here instead of silence.
+
+      Still before `persistHistorySyncStatus`, and still fire-and-forget.
+
+      `durationMs` is captured at the write and so now includes upsert3. It remains
+      a lower bound on the invocation, excluding only the status persist and the
+      JSON response.
+    */
+    const completedProgress = journalProgress();
+    settlement.durationMs = completedProgress.durationMs;
+    // `settlement` is spread BEFORE the progress fields: it carries a `durationMs`
+    // of its own, and the journal's measurement is the one that must win.
+    journal({
+      ...journalIdentity,
+      status: RUN_STATUS.COMPLETED,
+      ...settlement,
+      ...completedProgress
+    });
 
     const updatedTotal = updates.length + resettled + cardResettled;
     const estimatedCallsTotal = estimatedCalls + statsFetchCalls;
@@ -1392,6 +1488,41 @@ async function handleHistorySync(req, res, timing = null) {
     */
     recordSyncCounters(timing, counters);
     if (!timing?.failedStage) recordFailure(timing, { operation: "sync_unstaged", error });
+
+    /*
+      TERMINAL JOURNAL EVENT — FAILED / DB_UNAVAILABLE. This is the fix.
+
+      It runs BEFORE `persistHistorySyncStatus`, so the operational record of a
+      failed run no longer depends on the database being reachable. On 2026-09-15
+      the order was the other way round: the status upsert 521'd, threw, was
+      swallowed, and the log insert was never attempted — so a run that had
+      genuinely settled rows left no trace at all.
+
+      Only bounded, non-sensitive failure metadata is recorded. `error.message` is
+      deliberately NOT stored: Postgres and PostgREST messages routinely carry
+      connection strings, row content and identifiers. `failureStage` and
+      `failureOperation` are fixed labels chosen at call sites, `errorKind` is a
+      closed enum, and `errorCode` is a SQLSTATE-like token capped at 16 chars by
+      `recordFailure`.
+    */
+    const failure = {
+      failedStage: timing?.failedStage ?? null,
+      errorKind: timing?.errorKind ?? null,
+      errorCode: timing?.errorCode ?? null
+    };
+    // Same ordering rule as the COMPLETED write: `settlement.durationMs` is still 0
+    // on this path, so the journal's own progress fields must be spread after it.
+    journal({
+      ...journalIdentity,
+      status: classifyTerminalStatus(failure),
+      ...(settlement || {}),
+      ...journalProgress(),
+      failureStage: failure.failedStage,
+      failureOperation: timing?.failedOperation ?? null,
+      errorKind: failure.errorKind,
+      errorCode: failure.errorCode
+    });
+
     const msg = error?.message || "Sincronizarea istoricului a eșuat.";
     await persistHistorySyncStatus(supabase, req, { ok: false, error: msg, scanned: 0, updated: 0, estimatedCalls: 0 });
     return res.status(500).json({ ok: false, error: msg });

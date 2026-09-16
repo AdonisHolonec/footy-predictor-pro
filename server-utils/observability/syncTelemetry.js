@@ -34,9 +34,101 @@ export const SYNC_KINDS = Object.freeze({
 });
 
 const VALID_KINDS = new Set(Object.values(SYNC_KINDS));
+/*
+  Two events per run (STARTED + terminal) instead of one, so the cap now holds ~24
+  runs/day rather than 48. Cron schedules five settlement runs a day and the
+  observed maximum including a manual trigger is six, so 48 keeps >3x headroom and
+  is deliberately left alone.
+*/
 const RUNS_PER_DAY_CAP = 48;
-const TTL_SECONDS = 14 * 24 * 60 * 60;
-const MAX_DAYS = 14;
+/*
+  30 days, raised from 14. The 14-day window covered the 7-day Tier 3 observation
+  but could not answer a 30-day reliability question — the RELIABILITY-007 cron
+  audit had to reconstruct slots from Supabase edge logs (24h retention) because
+  the journal itself did not reach back far enough.
+*/
+const TTL_SECONDS = 30 * 24 * 60 * 60;
+const MAX_DAYS = 30;
+
+/**
+ * Status vocabulary for the run journal.
+ *
+ * STARTED is written at handler entry; exactly one of COMPLETED / FAILED /
+ * DB_UNAVAILABLE is written at the end. UNKNOWN is deliberately NOT a stored
+ * value — a run that dies without reaching any terminal write cannot write
+ * anything by definition, so "unknown" is a read-side inference over a STARTED
+ * with no partner (see `reconcileRunJournal`).
+ */
+export const RUN_STATUS = Object.freeze({
+  STARTED: "STARTED",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  DB_UNAVAILABLE: "DB_UNAVAILABLE"
+});
+
+/**
+ * The `historyTiming` sync stages whose awaited work is a Supabase/PostgREST call.
+ *
+ * `providerFixtureMs` and `statsMs` are API-Football; `cpuPrepareMs` and
+ * `resettleCpuMs` are in-process. `closingOddsMs` and `globalSettlementMs` mix
+ * provider and database work, so they are deliberately EXCLUDED: a stage that can
+ * fail for either reason is not evidence of a database outage.
+ */
+const DB_SYNC_STAGES = new Set([
+  "scan1Ms",
+  "upsert1Ms",
+  "scan2Ms",
+  "upsert2Ms",
+  "scan3Ms",
+  "upsert3Ms",
+  "syncStatusPersistMs"
+]);
+
+/** `classifyHistoryError` kinds that mean the database refused to serve. */
+const DB_UNAVAILABLE_KINDS = new Set(["db_timeout"]);
+
+/**
+ * FAILED vs DB_UNAVAILABLE, from signals `historyTiming.recordFailure` already
+ * produced. No new error taxonomy: `failedStage`, `errorKind` and `errorCode` are
+ * read exactly as that module wrote them, and the error MESSAGE is never consulted
+ * for storage nor stored.
+ *
+ * The rule, and why the absent-code branch is the interesting one:
+ *
+ *   - `db_timeout` (SQLSTATE 57014 / "canceling statement") => DB_UNAVAILABLE.
+ *     The database was reached but would not complete the work.
+ *   - a DB stage WITH a code => FAILED. PostgREST answered with a structured
+ *     error, so the database was alive and rejected the statement on its merits.
+ *   - a DB stage WITHOUT a code => DB_UNAVAILABLE. This is the 2026-09-15 18:44
+ *     signature: postgrest-js parses a non-2xx body as JSON and, when that throws
+ *     (Cloudflare 521/522 and gateway 504 return HTML), falls back to
+ *     `error = { message: body }` with NO `code` field. `upsertHistoryChunked`
+ *     destructures only `error`, so the HTTP status never reaches the throw site.
+ *     Absence of a code inside a database stage is therefore the only surviving
+ *     evidence that the transport, not the query, failed.
+ *   - anything else => FAILED (provider timeouts, application and validation errors).
+ *
+ * KNOWN LIMIT: a genuine transport fault and a PostgREST error that happens to
+ * carry no code are indistinguishable here. Narrowing that would mean capturing
+ * the HTTP status at the Supabase call sites, which changes sync error
+ * propagation and is out of scope for observability hardening.
+ *
+ * @param {{failedStage?:string|null, errorKind?:string|null, errorCode?:string|null}} [failure]
+ * @returns {"FAILED"|"DB_UNAVAILABLE"}
+ */
+export function classifyTerminalStatus({ failedStage = null, errorKind = null, errorCode = null } = {}) {
+  if (errorKind && DB_UNAVAILABLE_KINDS.has(String(errorKind))) return RUN_STATUS.DB_UNAVAILABLE;
+  if (!DB_SYNC_STAGES.has(String(failedStage || ""))) return RUN_STATUS.FAILED;
+  const code = errorCode === null || errorCode === undefined ? "" : String(errorCode).trim();
+  return code ? RUN_STATUS.FAILED : RUN_STATUS.DB_UNAVAILABLE;
+}
+
+/**
+ * How long a STARTED may sit without a terminal partner before a reader may call
+ * it UNKNOWN. Observed settlement durations are 37-77 s, so 10 minutes is ~8x the
+ * slowest real run — long enough that a slow run is never libelled as a crash.
+ */
+export const RUN_JOURNAL_UNKNOWN_AFTER_MS = 10 * 60 * 1000;
 
 function dayKey(kind, dateISO) {
   return `footy_ops_sync:${kind}:${dateISO}`;
@@ -92,6 +184,120 @@ export async function readSyncRuns(kind, days = 7) {
     logWarn("ops.sync_telemetry.read_failed", { kind, error: err?.message || "kv_read" });
     return [];
   }
+}
+
+/** Terminal statuses, i.e. everything that closes a run. */
+const TERMINAL_STATUSES = new Set([RUN_STATUS.COMPLETED, RUN_STATUS.FAILED, RUN_STATUS.DB_UNAVAILABLE]);
+
+function msOf(iso) {
+  const t = new Date(iso || 0).getTime();
+  return Number.isFinite(t) && t > 0 ? t : null;
+}
+
+/**
+ * Pair the KV run journal against `history_sync_log` rows.
+ *
+ * PURE. Takes both sides as plain data so it can be exercised without KV or
+ * Postgres — which is the point: the KV-only verdict has to be reachable when
+ * Postgres is the thing that is down.
+ *
+ * A record with no `status` is a pre-journal entry (the single terminal write
+ * this stream carried before STARTED/terminal events existed) and is treated as
+ * a terminal event, so historical days reconcile rather than reading as noise.
+ *
+ * Verdicts:
+ *   HEALTHY      terminal event + a Postgres row near it
+ *   KV_ONLY      terminal event, no Postgres row      -> Postgres lost the run
+ *   PG_ONLY      Postgres row, no terminal event      -> KV lost the run
+ *   STARTED_ONLY STARTED, no terminal, past the bound -> the run disappeared
+ *   RUNNING      STARTED, no terminal, inside bound   -> not yet classifiable
+ *
+ * @param {{runs?:object[], postgresRunsAt?:Array<string|number>, nowMs?:number,
+ *          unknownAfterMs?:number, pairToleranceMs?:number}} [input]
+ */
+export function reconcileRunJournal({
+  runs = [],
+  postgresRunsAt = [],
+  nowMs = Date.now(),
+  unknownAfterMs = RUN_JOURNAL_UNKNOWN_AFTER_MS,
+  pairToleranceMs = 5 * 60 * 1000
+} = {}) {
+  const pgRows = postgresRunsAt
+    .map((value) => (typeof value === "number" ? value : msOf(value)))
+    .filter((t) => t !== null)
+    .map((at) => ({ at, taken: false }));
+
+  // Group by runId; legacy entries get a key of their own so they never merge.
+  const groups = new Map();
+  (Array.isArray(runs) ? runs : []).forEach((run, index) => {
+    if (!run || typeof run !== "object") return;
+    const key = run.runId ? `id:${String(run.runId)}` : `legacy:${index}:${String(run.at || "")}`;
+    if (!groups.has(key)) groups.set(key, { runId: run.runId || null, started: null, terminal: null });
+    const group = groups.get(key);
+    if (run.status === RUN_STATUS.STARTED) group.started = run;
+    else if (!run.status || TERMINAL_STATUSES.has(String(run.status))) group.terminal = run;
+  });
+
+  const claimNearest = (targetMs) => {
+    if (targetMs === null) return null;
+    let best = null;
+    for (const row of pgRows) {
+      if (row.taken) continue;
+      const delta = Math.abs(row.at - targetMs);
+      if (delta > pairToleranceMs) continue;
+      if (!best || delta < best.delta) best = { row, delta };
+    }
+    if (!best) return null;
+    best.row.taken = true;
+    return best.row.at;
+  };
+
+  const out = [];
+  for (const group of groups.values()) {
+    const terminal = group.terminal;
+    const started = group.started;
+    if (terminal) {
+      const terminalMs = msOf(terminal.at);
+      const postgresAt = claimNearest(terminalMs);
+      out.push({
+        runId: group.runId,
+        status: terminal.status || null,
+        startedAt: started?.startedAt || terminal.startedAt || null,
+        terminalAt: terminal.at || null,
+        postgresAt: postgresAt === null ? null : new Date(postgresAt).toISOString(),
+        verdict: postgresAt === null ? "KV_ONLY" : "HEALTHY"
+      });
+      continue;
+    }
+    const startedMs = msOf(started?.startedAt) ?? msOf(started?.at);
+    const overdue = startedMs !== null && nowMs - startedMs > unknownAfterMs;
+    out.push({
+      runId: group.runId,
+      status: RUN_STATUS.STARTED,
+      startedAt: started?.startedAt || started?.at || null,
+      terminalAt: null,
+      postgresAt: null,
+      verdict: overdue ? "STARTED_ONLY" : "RUNNING"
+    });
+  }
+
+  for (const row of pgRows) {
+    if (row.taken) continue;
+    out.push({
+      runId: null,
+      status: null,
+      startedAt: null,
+      terminalAt: null,
+      postgresAt: new Date(row.at).toISOString(),
+      verdict: "PG_ONLY"
+    });
+  }
+
+  return out.sort((a, b) =>
+    String(b.terminalAt || b.startedAt || b.postgresAt || "").localeCompare(
+      String(a.terminalAt || a.startedAt || a.postgresAt || "")
+    )
+  );
 }
 
 function minutesSince(iso) {
@@ -160,8 +366,12 @@ export async function getBenchmarkHealth(days = 7) {
 
 export default {
   SYNC_KINDS,
+  RUN_STATUS,
+  RUN_JOURNAL_UNKNOWN_AFTER_MS,
   recordSyncRun,
   readSyncRuns,
+  classifyTerminalStatus,
+  reconcileRunJournal,
   getSettlementHealth,
   getBenchmarkHealth
 };
