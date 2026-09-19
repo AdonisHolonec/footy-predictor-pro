@@ -324,13 +324,16 @@ test("[12] the set of tables written is exactly the pre-existing one — D9b add
   ]);
 
   /*
-    Two tables, and both predate D9b: the history upsert and the model-version
-    snapshot insert that `upsertPredictionsHistory` has always issued. Pinned as
-    a SET rather than a count so a third table — the shape a "just add one more
-    write" regression takes — fails here.
+    ONE table. It was two until the `prediction_snapshots` writer was removed:
+    that insert appended the whole prediction document on every Predict with no
+    conflict key, and had grown to 274 MB of a 500 MB database ceiling while
+    nothing in the system read it. The table still exists and still holds its
+    history — only the writer is gone.
+
+    Still pinned as a SET rather than a count, for the reason it always was: a
+    second table here is the shape a "just add one more write" regression takes,
+    and this assertion is what catches it. Narrowing the expectation does not
+    narrow the guard — anything that starts writing again fails this test.
   */
-  assert.deepEqual([...new Set(ops.map((o) => o.table))].sort(), [
-    "predictions_history",
-    "prediction_snapshots"
-  ].sort());
+  assert.deepEqual([...new Set(ops.map((o) => o.table))].sort(), ["predictions_history"].sort());
 });

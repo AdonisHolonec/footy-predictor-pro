@@ -22,7 +22,6 @@ import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
 const FINAL_STATUSES = new Set(["FT", "AET", "PEN"]);
 const HISTORY_TABLE = "predictions_history";
-const SNAPSHOTS_TABLE = "prediction_snapshots";
 
 /*
   RELIABILITY-006: Predict writes history in bounded statements.
@@ -353,28 +352,29 @@ export function mapPredictionToDbRow(prediction) {
   };
 }
 
-export async function insertPredictionSnapshots(predictions) {
-  if (!Array.isArray(predictions) || predictions.length === 0) return { count: 0 };
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return { count: 0 };
-  const now = new Date().toISOString();
-  const rows = predictions.map((p) => ({
-    fixture_id: Number(p.id),
-    model_version: p.modelVersion || MODEL_VERSION,
-    generated_at: now,
-    league_id: asNum(p.leagueId),
-    kickoff_at: p.kickoff || null,
-    raw_payload: {
-      ...p,
-      snapshotAt: now
-    }
-  }));
-  const { error } = await supabase.from(SNAPSHOTS_TABLE).insert(rows);
-  if (error) {
-    console.error("[prediction_snapshots]", error.message);
-  }
-  return { count: rows.length };
-}
+/*
+  `insertPredictionSnapshots` USED TO LIVE HERE, and it is gone on purpose.
+
+  It appended the WHOLE unmasked prediction object to `prediction_snapshots` on
+  every Predict — no onConflict key, so one new row per fixture per run. That
+  table reached 274 MB of a 389 MB database against a hard 500 MB free-plan
+  ceiling, 99.3% of it TOASTed `raw_payload`, and it was contributing ~4.4 MB/day
+  — the majority of all database growth. Crossing 500 MB puts the project into
+  read-only mode, where inserts fail outright.
+
+  NOTHING EVER READ IT. Two independent sweeps over the repository found 26
+  occurrences of the table name and zero SELECTs; `pg_stat_statements` shows zero
+  reads against a control table's 2,613; and the live catalog has no view,
+  matview, trigger, foreign key or publication on it. The only referencing
+  database object is `cleanup_operational_logs`, which itself has no callers.
+
+  THE TABLE IS NOT DROPPED, AND MUST NOT BE. It is the only point-in-time archive
+  in the system: 1,234 of 1,467 fixtures carry more than one snapshot, ~83% of
+  sampled fixtures show genuine 1X2 market movement, 157 rows are the last
+  surviving artifacts of model v2, and 18 fixtures exist here that are absent
+  from predictions_history entirely. Removing that data needs an off-instance
+  export first, and that is a separate change. This one only stops the growth.
+*/
 
 /**
  * Integritate predicţii: ignorăm fixture-urile al căror kickoff a trecut deja sau sunt
@@ -561,7 +561,6 @@ export async function upsertPredictionsHistory(predictions) {
     })
   );
 
-  await insertPredictionSnapshots(eligible);
   return {
     count: rows.length,
     skipped,
