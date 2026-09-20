@@ -25,6 +25,7 @@ import {
   deriveCardMarketPicks,
   needsMarketTotalsForSettlement,
   canonicalMarketTotals,
+  canonicalCardMarketValidations,
   resolveRecommendedValidation
 } from "../server-utils/cardMarketSettlement.js";
 import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
@@ -980,9 +981,14 @@ export async function handleHistorySync(req, res, timing = null) {
         },
         { status: matchStatus, score }
       );
+      // C2, second instance: compare the canonical verdicts, not the document shape.
+      // `raw` comes from jsonb, which orders keys by length then bytewise, while
+      // settleCardMarkets emits them in MARKET_KEYS order — so a byte comparison here
+      // never matched and rewrote the whole raw_payload for every candidate row on
+      // every run. Same fix, same reason, as the marketResults clause in scan 3.
       const cardChanged =
-        JSON.stringify(raw.cardMarketValidations || null) !==
-        JSON.stringify(enrichedPayload.cardMarketValidations || null);
+        JSON.stringify(canonicalCardMarketValidations(raw.cardMarketValidations)) !==
+        JSON.stringify(canonicalCardMarketValidations(enrichedPayload.cardMarketValidations));
 
       const statusChanged = String(matchStatus || "") !== String(row.match_status || "");
       const scoreChanged = scoreHome !== row.score_home || scoreAway !== row.score_away;

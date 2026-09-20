@@ -434,6 +434,34 @@ export function canonicalMarketTotals(source, override) {
   };
 }
 
+/**
+ * The canonical VALIDATIONS bag — the other half of the same C2 lesson.
+ *
+ * canonicalMarketTotals above exists because a byte comparison of two differently
+ * shaped totals bags "re-wrote every still-pending row on every run". The verdicts
+ * bag had exactly the same defect and was left behind, with a worse bill: a stored
+ * bag comes back from jsonb, which orders keys by length then bytewise — so
+ * `{goals, shots, corners, recommended}` — while settleCardMarkets emits them in
+ * MARKET_KEYS order. The two JSON.stringify results could therefore NEVER be equal,
+ * so scan 1's `cardChanged` was permanently true and rewrote the whole document for
+ * every candidate row on every run.
+ *
+ * Comparing THIS shape compares the four verdicts and nothing else: the same key
+ * order every time, whatever the source.
+ *
+ * MISSING IS NULL, deliberately. An absent bag and an all-null bag both mean
+ * "nothing graded yet", so they must not read as a change. A real verdict is never
+ * substituted — `??` only fills null/undefined.
+ *
+ * Keyed off MARKET_KEYS so it cannot drift from what settleCardMarkets produces.
+ */
+export function canonicalCardMarketValidations(source) {
+  const src = source && typeof source === "object" ? source : {};
+  const out = {};
+  for (const key of MARKET_KEYS) out[key] = src[key] ?? null;
+  return out;
+}
+
 /** Attach picks + validations onto a prediction payload (mutates copy). */
 export function attachCardMarketsToPayload(prediction, { status, score, marketTotals } = {}) {
   const base = prediction && typeof prediction === "object" ? { ...prediction } : {};

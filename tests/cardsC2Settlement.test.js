@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 
 import {
   canonicalMarketTotals,
+  canonicalCardMarketValidations,
   attachCardMarketsToPayload,
   resolveCardMarketValidations,
   resolveRecommendedValidation,
@@ -264,4 +265,116 @@ test("14. legacy rows: stored verdicts are kept; a payload-only legacy row still
   // Pre-C2 aggregate rows keep their exact rehydrated shape.
   const pre = rehydrateAggregateRow({ corners_total: 11, shots_on_target_total: null });
   assert.deepEqual(pre.raw_payload.marketResults, { cornersTotal: 11, shotsOnTargetTotal: null });
+});
+
+// ------------------------------------------- 15. scan 1's cardChanged, the second C2 instance
+
+/**
+ * PostgreSQL's jsonb key order, DERIVED rather than hand-picked: length first, then
+ * bytewise. This matters — a fixture that types one order by hand proves nothing,
+ * because it can accidentally match what JS emitted and hide the very defect under
+ * test. Everything that comes back out of raw_payload has been through this.
+ */
+function jsonbOrder(value) {
+  if (Array.isArray(value)) return value.map(jsonbOrder);
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  const keys = Object.keys(value).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
+  for (const k of keys) out[k] = jsonbOrder(value[k]);
+  return out;
+}
+
+/** The verdicts bag exactly as scan 1 builds it, before any round trip. */
+const freshValidations = (over = {}) =>
+  attachCardMarketsToPayload(
+    {
+      status: "FT",
+      score: { home: 0, away: 2 },
+      recommended: { pick: "Cards Over 4.5", family: "Cards" },
+      marketResults: { cardsTotal: 5, cornersTotal: 9, shotsOnTargetTotal: 7 },
+      ...over
+    },
+    { status: "FT", score: { home: 0, away: 2 } }
+  ).cardMarketValidations;
+
+/** scan 1's predicate, verbatim. 15e pins that production still spells it this way. */
+const cardChanged = (storedBag, enrichedBag) =>
+  JSON.stringify(canonicalCardMarketValidations(storedBag)) !==
+  JSON.stringify(canonicalCardMarketValidations(enrichedBag));
+
+test("15a. same verdicts, jsonb key order — NOT a change", () => {
+  const fresh = freshValidations();
+  const stored = jsonbOrder(fresh); // what the NEXT sync run reads back out of raw_payload
+
+  // The orders genuinely differ, and the stored one is the order Postgres produces.
+  assert.deepEqual(Object.keys(fresh), ["recommended", "goals", "corners", "shots"], "MARKET_KEYS order");
+  assert.deepEqual(Object.keys(stored), ["goals", "shots", "corners", "recommended"], "jsonb order");
+  assert.deepEqual(stored, fresh, "same content — only the key order moved");
+
+  // THE DEFECT: the byte comparison scan 1 used sees a change that does not exist.
+  assert.notEqual(
+    JSON.stringify(stored),
+    JSON.stringify(fresh),
+    "byte comparison reports a phantom change — this is what rewrote every row, 5x/day"
+  );
+
+  assert.equal(cardChanged(stored, fresh), false, "cardChanged === false");
+});
+
+test("15b. a real verdict change IS a change", () => {
+  const fresh = freshValidations();
+  const stored = jsonbOrder(fresh);
+
+  assert.equal(cardChanged(stored, { ...fresh, recommended: "loss" }), true, "win -> loss");
+  assert.equal(cardChanged(stored, { ...fresh, goals: "win" }), true, "null -> win (newly graded)");
+  assert.equal(cardChanged({ ...fresh, corners: "win" }, fresh), true, "win -> null (ungraded)");
+  // Order must not rescue a real change either: reorder the changed bag too.
+  assert.equal(cardChanged(stored, jsonbOrder({ ...fresh, recommended: "loss" })), true, "change survives reordering");
+});
+
+test("15c. one side missing, other all-null — NOT a change", () => {
+  const allNull = { shots: null, goals: null, corners: null, recommended: null };
+  assert.equal(cardChanged(undefined, allNull), false, "absent === all-null");
+  assert.equal(cardChanged(null, allNull), false, "null bag === all-null");
+  assert.equal(cardChanged({}, allNull), false, "empty object === all-null");
+  assert.equal(cardChanged(undefined, {}), false, "both empty");
+  // But a partially graded bag is still distinct from an empty one.
+  assert.equal(cardChanged(undefined, { ...allNull, recommended: "win" }), true, "one verdict is enough to write");
+});
+
+test("15d. null-normalization never collapses a REAL verdict", () => {
+  const allNull = { shots: null, goals: null, corners: null, recommended: null };
+  // Every verdict the graders emit, plus falsy-but-real values. `??` fills only
+  // null/undefined; `||` would swallow "", 0 and false and silently lose a write.
+  // The pre-fix code used `|| null`, so this is exactly the trap to stay out of.
+  for (const verdict of ["win", "loss", "pending", "void", "won", "lost", "", 0, false]) {
+    assert.equal(
+      cardChanged(allNull, { ...allNull, recommended: verdict }),
+      true,
+      `null -> ${JSON.stringify(verdict)} must be a change`
+    );
+    assert.equal(
+      canonicalCardMarketValidations({ ...allNull, recommended: verdict }).recommended,
+      verdict,
+      `${JSON.stringify(verdict)} must survive canonicalization unchanged`
+    );
+  }
+  // And two DIFFERENT real verdicts stay distinct from each other.
+  assert.equal(cardChanged({ ...allNull, goals: "win" }, { ...allNull, goals: "loss" }), true);
+  assert.equal(cardChanged({ ...allNull, goals: "win" }, { ...allNull, goals: "win" }), false);
+});
+
+test("15e. scan 1 uses the canonical comparison, not a byte comparison", () => {
+  // Pinned against the source because the predicate lives inline in the route handler:
+  // a re-implementation here could drift from production and still pass — which is how
+  // the marketResults instance of this same bug survived its own test.
+  const src = read("api/history.js");
+  const scan1 = src.slice(src.indexOf("const enrichedPayload ="), src.indexOf("const statusChanged ="));
+  assert.match(scan1, /canonicalCardMarketValidations\(raw\.cardMarketValidations\)/);
+  assert.match(scan1, /canonicalCardMarketValidations\(enrichedPayload\.cardMarketValidations\)/);
+  assert.doesNotMatch(
+    scan1,
+    /JSON\.stringify\(\s*raw\.cardMarketValidations\s*\|\|\s*null\s*\)/,
+    "the raw byte comparison must not come back"
+  );
 });
