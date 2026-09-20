@@ -5,7 +5,7 @@ import { relativeDayLabel } from "../../utils/relativeDay";
 import StatusBadge from "../../design-system/StatusBadge";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { formatBookOdd, recommendedOdd } from "../../utils/marketPicks";
-import { formatRecommendedPick } from "../../utils/formatRecommendation";
+import { formatRecommendedPick, type MarketFamilyKey } from "../../utils/formatRecommendation";
 import { isSettledOutcome, resolveCardMarketOutcome, type MarketOutcome } from "../../utils/cardMarketOutcome";
 import { formatLiveMinute, isFinalStatus } from "../matchCard/derivations";
 import MarketFamilyIcon from "../icons/MarketFamilyIcon";
@@ -43,6 +43,27 @@ type Props = {
   /** Absent = no favourite control (the row never grows a dead slot). */
   onToggleWatch?: () => void;
   onOpen: () => void;
+  /**
+   * Set while the list is ranked by one market's probability. The grammar does
+   * not change — same three decision slots, same type scale — only their DATA:
+   * the market instead of the recommendation, its probability instead of the
+   * recommendation's confidence, and the price of that same side. Swapped as a
+   * set, because "GG" beside the recommendation's confidence, or beside the
+   * recommendation's odd, would describe a bet nobody is looking at.
+   */
+  marketFocus?: MarketFocus | null;
+};
+
+export type MarketFocus = {
+  /** Compact label for the prediction slot, e.g. "GG" or "+1.5 FT". */
+  label: string;
+  /** Full market name, for the title and the accessible name. */
+  name: string;
+  familyKey: MarketFamilyKey;
+  /** The market's own probability, in percent (0-100). */
+  probability: number;
+  /** Bookmaker price for the same side, when one exists. */
+  odd: number | null;
 };
 
 /** Crest sizes: 22 px mobile, 24 px desktop — the same for every state. */
@@ -83,7 +104,14 @@ function settlementTone(outcome: MarketOutcome): "success" | "danger" | "neutral
   return "neutral";
 }
 
-export default function MatchListRow({ row, marketValidations = null, watched = false, onToggleWatch, onOpen }: Props) {
+export default function MatchListRow({
+  row,
+  marketValidations = null,
+  watched = false,
+  onToggleWatch,
+  onOpen,
+  marketFocus = null
+}: Props) {
   const { t } = useLocale();
 
   const live = isFixtureInPlay(row.status);
@@ -136,14 +164,29 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
   // The day is spoken once, here: the visible spans below sit inside a button
   // whose aria-label replaces its content, so nothing is read twice.
   const whenLabel = live ? `${timeLabel} ${scoreLabel}` : finished ? `${t("list.fullTimeShort")} ${scoreLabel}` : kickoffLabel;
-  const accessibleName = [
-    `${row.teams.home} ${t("common.vs")} ${row.teams.away}`,
-    dayLabel ? `${dayLabel}, ${whenLabel}` : whenLabel,
-    `${t("card.topPick")} ${pick.ariaLabel}`,
-    `${t("match.confidence")} ${confidenceLabel}`,
-    `${t("match.odd")} ${oddLabel}`,
-    stateLabel
-  ]
+  // Same rounding the confidence slot has always used: one slot, one format.
+  const focusProbabilityLabel = marketFocus ? `${Math.round(marketFocus.probability)}%` : "";
+  const focusOddLabel = marketFocus ? formatBookOdd(marketFocus.odd, t("card.noBookOdd")) : "";
+  const accessibleName = (
+    marketFocus
+      ? [
+          `${row.teams.home} ${t("common.vs")} ${row.teams.away}`,
+          dayLabel ? `${dayLabel}, ${whenLabel}` : whenLabel,
+          `${marketFocus.name} ${t("dash.marketProbability")} ${focusProbabilityLabel}`,
+          `${t("match.odd")} ${focusOddLabel}`,
+          // Only "live" carries over: a won/lost verdict belongs to the
+          // recommendation, and would read as this market's result.
+          live ? t("card.live") : ""
+        ]
+      : [
+          `${row.teams.home} ${t("common.vs")} ${row.teams.away}`,
+          dayLabel ? `${dayLabel}, ${whenLabel}` : whenLabel,
+          `${t("card.topPick")} ${pick.ariaLabel}`,
+          `${t("match.confidence")} ${confidenceLabel}`,
+          `${t("match.odd")} ${oddLabel}`,
+          stateLabel
+        ]
+  )
     .filter(Boolean)
     .join(" · ");
 
@@ -220,25 +263,31 @@ export default function MatchListRow({ row, marketValidations = null, watched = 
           <span
             data-slot="prediction"
             className={`flex min-w-0 items-center gap-1 truncate text-[13px] font-bold sm:text-sm ${
-              settled ? "text-[var(--fp-text)]" : "text-[var(--fp-accent)]"
+              settled && !marketFocus ? "text-[var(--fp-text)]" : "text-[var(--fp-accent)]"
             }`}
-            title={pick.ariaLabel}
+            title={marketFocus ? marketFocus.name : pick.ariaLabel}
           >
-            <MarketFamilyIcon familyKey={pick.familyKey} className="shrink-0 opacity-80" />
-            <span className="truncate">{pick.label}</span>
+            <MarketFamilyIcon
+              familyKey={marketFocus ? marketFocus.familyKey : pick.familyKey}
+              className="shrink-0 opacity-80"
+            />
+            <span className="truncate">{marketFocus ? marketFocus.label : pick.label}</span>
           </span>
           <span
-            data-slot="confidence"
+            /* A different fact gets a different name, so nothing can read a
+               market probability while believing it is a confidence. */
+            data-slot={marketFocus ? "market-probability" : "confidence"}
             className="shrink-0 font-mono text-xs font-semibold tabular-nums text-[var(--fp-text)] sm:text-right sm:text-[13px]"
           >
-            {confidenceLabel}
+            {marketFocus ? focusProbabilityLabel : confidenceLabel}
           </span>
           <span
             data-slot="odds"
             className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-[var(--fp-text-muted)] sm:justify-end sm:text-[13px]"
           >
-            {oddLabel}
-            {settled && outcomeLabel ? (
+            {marketFocus ? focusOddLabel : oddLabel}
+            {/* The verdict is the RECOMMENDATION's; beside another market it would lie. */}
+            {!marketFocus && settled && outcomeLabel ? (
               <StatusBadge status={outcome ?? undefined} tone={settlementTone(outcome)} label={outcomeLabel} />
             ) : null}
           </span>

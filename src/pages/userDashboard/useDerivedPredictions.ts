@@ -4,6 +4,7 @@ import type { HistoryEntry, PredictionRow } from "../../types";
 import { deriveNotifications } from "../../utils/deriveNotifications";
 import { isFixtureInPlay } from "../../utils/appUtils";
 import { isHighConfidenceRow, isValueRow } from "../../utils/predictionSignals";
+import { rankByMarketProbability, type MarketFilter } from "../../utils/marketProbabilityFilter";
 import { hasDerivateMarkets, isFinalStatus, matchesPreferredMarkets } from "./helpers";
 
 type MatchesSubFilter = MatchesSubFilterPref;
@@ -18,7 +19,8 @@ export function useDerivedPredictions({
   prefs,
   matchesFilter,
   matchSearch,
-  showSettledMarketsOnly
+  showSettledMarketsOnly,
+  marketFilter = "all"
 }: {
   preds: PredictionRow[];
   history: HistoryEntry[];
@@ -26,13 +28,15 @@ export function useDerivedPredictions({
   matchesFilter: MatchesSubFilterPref;
   matchSearch: string;
   showSettledMarketsOnly: boolean;
+  /** Rank the Matches list by one market's probability. Session-local, like the segment. */
+  marketFilter?: MarketFilter;
 }) {
   const predIdSet = useMemo(() => new Set(preds.map((p) => p.id)), [preds]);
   const pendingAmongDisplayedPreds = useMemo(
     () => history.filter((h) => h.validation === "pending" && predIdSet.has(h.id)).length,
     [history, predIdSet]
   );
-  const visiblePreds = useMemo(() => {
+  const filteredPreds = useMemo(() => {
     let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
     /*
       "picks" reached this list through `navView === "predictions"`, a
@@ -91,6 +95,18 @@ export function useDerivedPredictions({
     prefs.preferredMarkets,
     matchSearch
   ]);
+  /*
+    The market ranking is its own memo on top of the filters above rather than
+    one more branch inside them: it is orthogonal to the segment (Live + GG is a
+    sensible thing to ask for), it must run LAST so it outranks the "picks"
+    confidence sort, and it re-sorts only when the filtered set or the market
+    actually changes. "all" hands back `filteredPreds` itself — same array, same
+    order — so the unfiltered list is untouched by this feature.
+  */
+  const visiblePreds = useMemo(
+    () => rankByMarketProbability(filteredPreds, marketFilter),
+    [filteredPreds, marketFilter]
+  );
   /** Everything Home shows; `homeCounts` below is computed over the same set. */
   const homeBasePreds = useMemo(() => {
     let rows = [...preds].sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
@@ -148,6 +164,8 @@ export function useDerivedPredictions({
     predIdSet,
     pendingAmongDisplayedPreds,
     visiblePreds,
+    /** Rows the market filter started from — tells "no such market here" apart from "no rows at all". */
+    marketBaseCount: filteredPreds.length,
     homePreds,
     homeCounts,
     homeLiveCount,
