@@ -51,6 +51,10 @@ async function route(query, { authorized = true } = {}) {
     assertSupabaseConfigured: () => ({ ok: true }),
     getRequester: async () =>
       authorized ? { ok: true, user: { id: "user-1" } } : { ok: false, status: 401, error: "Neautorizat." },
+    // view=prediction-list is tier-masked, so it resolves the caller's tier. This
+    // file is about ROUTING; the mask is covered in predictionListTierMask.test.js.
+    loadEntitlement: async () => ({ profile: { role: "user" }, tierInfo: { effectiveTier: "ultra" } }),
+    isWarmPredictQuotaExempt: async () => false,
     readPredictionsHistoryListForUser: reader("list"),
     readPredictionsForHydration: reader("prediction-list"),
     readPredictionsHistoryForUser: reader("full")
