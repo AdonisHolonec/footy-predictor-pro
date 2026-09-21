@@ -17,6 +17,7 @@ import {
   canonicalMarketTotals,
   canonicalCardMarketValidations,
   attachCardMarketsToPayload,
+  deriveCardMarketPicks,
   resolveCardMarketValidations,
   resolveRecommendedValidation,
   needsMarketTotalsForSettlement,
@@ -63,9 +64,26 @@ const settlementRow = (over = {}) => ({
 function settleOnce(row, marketTotalsOverride = null) {
   const raw = rehydrateSettlementRow(row).raw_payload;
   const score = { home: row.score_home, away: row.score_away };
-  const picks = raw.cardMarkets;
+  // As scan 3: stored picks are used as they are, and derived only when the column is empty.
+  const picks =
+    raw.cardMarkets && typeof raw.cardMarkets === "object"
+      ? raw.cardMarkets
+      : deriveCardMarketPicks({ ...raw, recommended: raw.recommended || { pick: row.recommended_pick || "" } });
+  // As scan 3: a first-half block with no half-time goals keeps the row open, however
+  // fully graded it is — the other door into the predicate, and one that never closes
+  // when upstream has no HT score.
+  const htKnown =
+    raw.marketResults?.firstHalfGoals != null && Number.isFinite(Number(raw.marketResults.firstHalfGoals));
+  const missingHt = Boolean(raw.probs?.firstHalf) && !htKnown;
   // Scan 3 skips a finished row with nothing left to grade before it compares anything.
-  if (isSettlementRowComplete({ picks, storedValidations: raw.cardMarketValidations, validation: row.validation })) {
+  if (
+    isSettlementRowComplete({
+      picks,
+      storedValidations: raw.cardMarketValidations,
+      validation: row.validation,
+      missingFirstHalf: missingHt
+    })
+  ) {
     return { validation: row.validation, enriched: null, write: null, skipped: true, needsStats: false };
   }
   const marketTotals = canonicalMarketTotals(raw.marketResults, marketTotalsOverride);
@@ -83,8 +101,11 @@ function settleOnce(row, marketTotalsOverride = null) {
           score,
           marketTotals
         });
+  // scan 3's predicate, verbatim. 16e pins that production still spells it this way.
   const cardChanged =
-    JSON.stringify(raw.cardMarketValidations || null) !== JSON.stringify(enriched.cardMarketValidations || null) ||
+    JSON.stringify(canonicalCardMarketValidations(raw.cardMarketValidations)) !==
+      JSON.stringify(canonicalCardMarketValidations(enriched.cardMarketValidations)) ||
+    JSON.stringify(raw.cardMarkets || null) !== JSON.stringify(enriched.cardMarkets || null) ||
     JSON.stringify(canonicalMarketTotals(raw.marketResults)) !== JSON.stringify(canonicalMarketTotals(enriched.marketResults));
   const validationChanged = String(validation) !== String(row.validation || "");
   const write = cardChanged || validationChanged ? { validation, ...deriveMutableHistoryListColumns(enriched) } : null;
@@ -376,5 +397,173 @@ test("15e. scan 1 uses the canonical comparison, not a byte comparison", () => {
     scan1,
     /JSON\.stringify\(\s*raw\.cardMarketValidations\s*\|\|\s*null\s*\)/,
     "the raw byte comparison must not come back"
+  );
+});
+
+// ------------------------------------------- 16. scan 3's cardChanged, the third C2 instance
+
+/**
+ * A scan-3 row as PostgREST actually returns it: both jsonb columns in Postgres key
+ * order. `settlementRow` above types its bags by hand in MARKET_KEYS order — the one
+ * order that happens to match what JS emits — which is how test 6's "second run writes
+ * nothing" passed while production re-upserted ~150 finished rows on every sync.
+ */
+const asStored = (row) => ({
+  ...row,
+  card_markets: jsonbOrder(row.card_markets),
+  card_market_validations: jsonbOrder(row.card_market_validations)
+});
+
+test("16a. an incomplete finished row read back in jsonb order is NOT rewritten", () => {
+  const row = asStored(settlementRow({ cards_total: null }));
+  assert.deepEqual(Object.keys(row.card_market_validations), ["goals", "shots", "corners", "recommended"], "jsonb order");
+
+  const run = settleOnce(row);
+  assert.notEqual(run.skipped, true, "still a gap, so scan 3 reaches the comparison");
+
+  // THE DEFECT: same four verdicts, and the byte comparison scan 3 used still differs.
+  const stored = rehydrateSettlementRow(row).raw_payload.cardMarketValidations;
+  assert.deepEqual(stored, run.enriched.cardMarketValidations, "same verdicts");
+  assert.notEqual(
+    JSON.stringify(stored || null),
+    JSON.stringify(run.enriched.cardMarketValidations || null),
+    "byte comparison reports a phantom change — this is what re-upserted the row on every run"
+  );
+
+  assert.equal(run.validation, "pending");
+  assert.equal(run.write, null, "nothing changed, so nothing is written");
+});
+
+test("16b. a real change on a jsonb-ordered row IS written", () => {
+  const row = asStored(settlementRow({ cards_total: null }));
+  // The totals arrive (what a /fixtures/statistics fetch hands scan 3).
+  const run = settleOnce(row, { cardsTotal: 5 });
+  assert.ok(run.write, "newly graded verdict must be persisted");
+  assert.equal(run.write.validation, "win");
+  assert.equal(run.write.card_market_validations.recommended, "win");
+  assert.equal(run.write.cards_total, 5);
+  // A verdict that flips without the top-level validation moving is still a change.
+  const graded = asStored(settlementRow({ validation: "win", cards_total: 5, card_market_validations: { recommended: "pending", goals: null, corners: null, shots: null } }));
+  const regraded = settleOnce(graded);
+  assert.ok(regraded.write, "stored pending vs fresh win is a verdict change, whatever the key order");
+  assert.equal(regraded.write.card_market_validations.recommended, "win");
+});
+
+test("16c. write, read back through jsonb, re-run — the round trip is idempotent", () => {
+  const first = settleOnce(asStored(settlementRow({ cards_total: 4 })));
+  assert.equal(first.validation, "loss");
+  assert.ok(first.write, "first run writes");
+  // Postgres stores the write and hands it back reordered on the next sync.
+  const readBack = asStored(applyWrite(settlementRow({ cards_total: 4 }), first.write));
+  const second = settleOnce(readBack);
+  assert.equal(second.validation, "loss", "verdict stable");
+  assert.equal(second.skipped, true, "a fully graded row is closed by the completeness gate, not the predicate");
+  assert.equal(second.write, null, "no second write");
+
+  // The production-shaped case: four picks, and the match settles only PARTIALLY — the
+  // corners total never arrives. The row is written once, stays incomplete, and from then
+  // on reaches the predicate on every sync with a multi-verdict bag in jsonb order.
+  const four = settlementRow({
+    cards_total: 5,
+    corners_total: null,
+    card_markets: {
+      recommended: { pick: "Cards Over 4.5", family: "Cards" },
+      goals: { pick: "Over 2.5", side: "over", line: 2.5, probability: 61 },
+      corners: { pick: "Over 8.5", side: "over", line: 8.5, probability: 58 },
+      shots: { pick: "Over 6.5", side: "over", line: 6.5, probability: 57 }
+    },
+    card_market_validations: { recommended: "pending", goals: "pending", corners: "pending", shots: "pending" }
+  });
+  const graded = settleOnce(asStored(four));
+  assert.deepEqual(
+    graded.write.card_market_validations,
+    { recommended: "win", goals: "loss", corners: "pending", shots: "win" },
+    "0-2, 5 cards, 7 on target: everything grades except corners"
+  );
+
+  const partial = asStored(applyWrite(four, graded.write));
+  for (let runNo = 2; runNo <= 4; runNo += 1) {
+    const run = settleOnce(partial);
+    assert.notEqual(run.skipped, true, `run ${runNo}: corners is still open, so the predicate runs`);
+    assert.equal(run.write, null, `run ${runNo}: same verdicts in jsonb order — nothing is written`);
+  }
+
+  // A stale verdict on a NON-recommended market is still a change. Totals and validation
+  // do not move here, so only the verdict clause can catch it — which is what stops a
+  // comparison that looks at `recommended` alone from passing this suite.
+  const cornersArrived = settleOnce(asStored({ ...applyWrite(four, graded.write), corners_total: 9 }));
+  assert.ok(cornersArrived.write, "pending -> win on corners must be persisted");
+  assert.equal(cornersArrived.write.card_market_validations.corners, "win");
+  assert.equal(cornersArrived.write.validation, "win", "top-level validation untouched");
+});
+
+test("16f. a graded row held open only by missing half-time goals stays quiet", () => {
+  // Validation and every market are settled; the row is incomplete ONLY because a
+  // first-half block exists and upstream never sent the HT score. It can never close,
+  // so it reaches the predicate on every sync — the largest class of the phantom writes.
+  const row = asStored(
+    settlementRow({
+      validation: "win",
+      cards_total: 5,
+      first_half_goals: null,
+      has_first_half_probs: true,
+      card_market_validations: { recommended: "win", goals: null, corners: null, shots: null }
+    })
+  );
+  const run = settleOnce(row);
+  assert.notEqual(run.skipped, true, "missing HT keeps the row open");
+  assert.equal(run.validation, "win");
+  assert.equal(run.write, null, "nothing changed, so nothing is written");
+
+  // When the half-time score does arrive, that IS a change (the totals clause).
+  const htArrived = settleOnce(row, { firstHalfGoals: 0 });
+  assert.ok(htArrived.write, "a real 0 is a real total");
+  assert.equal(htArrived.write.first_half_goals, 0);
+});
+
+test("16d. the cardMarkets clause cannot churn — stored picks pass through by reference", () => {
+  const row = asStored(settlementRow({ cards_total: null }));
+  const raw = rehydrateSettlementRow(row).raw_payload;
+  const run = settleOnce(row);
+  assert.deepEqual(run.enriched.cardMarkets, raw.cardMarkets, "same picks");
+  assert.equal(
+    JSON.stringify(raw.cardMarkets),
+    JSON.stringify(run.enriched.cardMarkets),
+    "and the same bytes: attachCardMarketsToPayload keeps the stored object, it does not rebuild it"
+  );
+  // Rebuilt picks WOULD differ bytewise — which is why the clause is only safe because
+  // the stored object is reused.
+  const rebuilt = { recommended: raw.cardMarkets.recommended, goals: null, corners: null, shots: null };
+  assert.deepEqual(rebuilt, raw.cardMarkets);
+  assert.notEqual(JSON.stringify(rebuilt), JSON.stringify(raw.cardMarkets), "key order differs");
+
+  // The one case the clause exists for: the column is empty, so picks are derived. The
+  // verdicts, totals and validation all match here — only the picks clause can fire.
+  const bare = settleOnce(asStored(settlementRow({ cards_total: null, card_markets: null })));
+  assert.notEqual(bare.skipped, true);
+  assert.ok(bare.write, "derived picks are a real change and are persisted");
+  assert.deepEqual(bare.write.card_markets.recommended, { pick: "Cards Over 4.5", family: "Cards" });
+  assert.equal(bare.write.validation, "pending", "and nothing else moved");
+  // Once persisted and read back, that row is quiet too.
+  const persisted = asStored(applyWrite(settlementRow({ cards_total: null, card_markets: null }), bare.write));
+  assert.equal(settleOnce(persisted).write, null);
+});
+
+test("16e. scan 3 uses the canonical comparison, not a byte comparison", () => {
+  // Pinned against the source for the same reason as 15e: the predicate lives inline in
+  // the route handler, and settleOnce above is only a mirror of it.
+  const src = read("api/history.js");
+  const start = src.indexOf("const enriched = attachCardMarketsToPayload(");
+  assert.ok(start > 0, "scan 3's enriched payload not found");
+  const scan3 = src.slice(start, src.indexOf("const validationChanged =", start));
+  assert.match(scan3, /canonicalCardMarketValidations\(raw\.cardMarketValidations\)/);
+  assert.match(scan3, /canonicalCardMarketValidations\(enriched\.cardMarketValidations\)/);
+  assert.match(scan3, /canonicalMarketTotals\(raw\.marketResults\)/, "the totals clause is still canonical");
+  assert.match(scan3, /JSON\.stringify\(raw\.cardMarkets \|\| null\)/, "derived picks must still be persisted (16d)");
+  // No byte comparison of the verdicts bag is left anywhere in the handler.
+  assert.doesNotMatch(
+    src,
+    /JSON\.stringify\(\s*\w+\.cardMarketValidations\s*(\|\|\s*null\s*)?\)/,
+    "the raw byte comparison must not come back, in any scan"
   );
 });
