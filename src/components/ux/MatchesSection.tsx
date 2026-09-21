@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { CardMarketValidations, PredictionRow } from "../../types";
 import { useLocale } from "../../context/LocaleContext";
 import { predictSurfaceProps, type PredictAction } from "./predictState";
@@ -7,10 +8,27 @@ import Button from "../../design-system/Button";
 import EmptyState from "../../design-system/EmptyState";
 import Skeleton from "../../design-system/Skeleton";
 import MatchList from "./MatchList";
-import MatchListRow from "./MatchListRow";
+import MatchListRow, { type MarketFocus } from "./MatchListRow";
 import type { MatchesSubFilter } from "./appNav";
+import {
+  MARKET_FAMILY,
+  MARKET_FILTERS,
+  isMarketKey,
+  marketOdd,
+  marketProbability,
+  type MarketFilter
+} from "../../utils/marketProbabilityFilter";
 
 type AccessTier = UpgradeTier | "free" | string;
+
+/** Chip label and full market name, per option. "all" reuses the segment's own "Toate". */
+const MARKET_COPY: Record<MarketFilter, { label: string; name: string }> = {
+  all: { label: "dash.filterAll", name: "dash.filterAll" },
+  gg: { label: "dash.marketGg", name: "dash.marketGgName" },
+  o15ft: { label: "dash.marketO15Ft", name: "dash.marketO15FtName" },
+  o25ft: { label: "dash.marketO25Ft", name: "dash.marketO25FtName" },
+  o15fh: { label: "dash.marketO15Fh", name: "dash.marketO15FhName" }
+};
 
 type Props = {
   matches: PredictionRow[];
@@ -25,6 +43,15 @@ type Props = {
   /** Segment state — session-local, owned by the page, never a route. */
   matchesFilter?: MatchesSubFilter;
   onSetFilter?: (filter: MatchesSubFilter) => void;
+  /**
+   * Market ranking — session-local, owned by the page, orthogonal to the
+   * segment above. The control only exists when a setter is supplied, so a
+   * surface that does not own this state never grows a dead control.
+   */
+  marketFilter?: MarketFilter;
+  onSetMarketFilter?: (market: MarketFilter) => void;
+  /** Rows before the market filter ran: > 0 with an empty list means "no such market here". */
+  marketBaseCount?: number;
   /** Free-text filter — session-local, owned by the page. */
   search?: string;
   onSearchChange?: (q: string) => void;
@@ -55,6 +82,9 @@ export default function MatchesSection({
   predictAction,
   matchesFilter = "all",
   onSetFilter,
+  marketFilter = "all",
+  onSetMarketFilter,
+  marketBaseCount = 0,
   search = "",
   onSearchChange,
   onOpenLeagues,
@@ -64,6 +94,37 @@ export default function MatchesSection({
 }: Props) {
   const { t } = useLocale();
   const mode = matchesFilter === "live" ? "live" : "all";
+
+  const marketLabel = t(MARKET_COPY[marketFilter].label);
+  const marketName = t(MARKET_COPY[marketFilter].name);
+  /*
+    What each row shows while a market is selected. Built once per list/market
+    change rather than per row per render, and keyed by fixture id so the row
+    lookup below is a Map hit. Null when no market is selected: the rows then
+    receive no `marketFocus` at all and render exactly as they always have.
+  */
+  const focusByFixtureId = useMemo(() => {
+    if (!isMarketKey(marketFilter)) return null;
+    const focus = new Map<number, MarketFocus>();
+    for (const row of matches) {
+      const probability = marketProbability(row, marketFilter);
+      if (probability === null) continue;
+      focus.set(Number(row.id), {
+        label: marketLabel,
+        name: marketName,
+        familyKey: MARKET_FAMILY[marketFilter],
+        probability,
+        odd: marketOdd(row, marketFilter)
+      });
+    }
+    return focus;
+  }, [matches, marketFilter, marketLabel, marketName]);
+  /*
+    The list is empty BECAUSE of the market only when there were rows to rank.
+    Otherwise the segment's own empty state is the true one (no live games, no
+    favourites, nothing predicted yet) and must keep its message and its action.
+  */
+  const emptiedByMarket = isMarketKey(marketFilter) && marketBaseCount > 0 && !matches.length;
 
   return (
     <section className="space-y-4">
@@ -95,6 +156,35 @@ export default function MatchesSection({
           onChange={(id) => onSetFilter?.(id)}
         />
       </div>
+
+      {onSetMarketFilter && (
+        /*
+          Its own container, not a fifth-to-ninth button inside matches-controls:
+          it answers a different question (rank by which market) from the segment
+          (which rows), and the two combine. It scrolls rather than wraps — a
+          wrapped second line would push the list down by a row as the labels
+          grow — and `max-w-full` keeps the scroller inside the page, so the
+          viewport itself never scrolls sideways. `scrollbar-none` is the repo's
+          cross-engine utility; the Firefox-only arbitrary value is not.
+        */
+        <div className="max-w-full overflow-x-auto scrollbar-none" data-testid="matches-market-filter">
+          <SegmentedControl
+            mode="toggle"
+            aria-label={t("dash.marketFilterLabel")}
+            className="w-max"
+            options={MARKET_FILTERS.map((id) => ({
+              value: id,
+              label: t(MARKET_COPY[id].label),
+              title:
+                id === "all"
+                  ? t("dash.filterTitle", { label: t(MARKET_COPY[id].label) })
+                  : t("dash.marketFilterTitle", { label: t(MARKET_COPY[id].name) })
+            }))}
+            value={marketFilter}
+            onChange={(id) => onSetMarketFilter(id)}
+          />
+        </div>
+      )}
 
       {(onSearchChange || onOpenLeagues || onRefresh) && (
         <div className="flex flex-wrap items-center gap-2" data-testid="matches-scope">
@@ -147,6 +237,20 @@ export default function MatchesSection({
             </div>
           ))}
         </div>
+      ) : emptiedByMarket ? (
+        /*
+          There ARE matches — none of them carries this market. Same EmptyState
+          as every other narrowed view, and the same kind of exit: step out of
+          the filter that emptied the list. Only the market is cleared, so the
+          segment the user chose (Live, Favorites…) is still theirs afterwards.
+          Never Predict: regenerating would produce the same rows without it.
+        */
+        <EmptyState
+          title={t("dash.emptyMarketTitle", { label: marketName })}
+          description={t("dash.emptyMarketDesc")}
+          actionLabel={t("dash.showAll")}
+          onAction={() => onSetMarketFilter?.("all")}
+        />
       ) : !matches.length ? (
         /*
           "picks" empties for a different reason than the rest: the slate is
@@ -197,6 +301,7 @@ export default function MatchesSection({
               watched={isWatched(Number(row.id))}
               onToggleWatch={() => onToggleWatch(Number(row.id))}
               onOpen={() => onOpenMatch(row)}
+              marketFocus={focusByFixtureId?.get(Number(row.id)) ?? null}
             />
           ))}
         </MatchList>

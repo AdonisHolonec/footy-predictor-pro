@@ -3,6 +3,7 @@ import LeaguePanel from "../components/LeaguePanel";
 import PerformanceCounterModal from "../components/PerformanceCounterModal";
 import SuccessRateTracker from "../components/SuccessRateTracker";
 import type { AppNavView, MatchesSubFilter } from "../components/ux/appNav";
+import type { MarketFilter } from "../utils/marketProbabilityFilter";
 import { useWorkspaceRoute } from "./userDashboard/useWorkspaceRoute";
 import TicketsSection from "../components/ux/TicketsSection";
 import CommandPalette from "../components/ux/CommandPalette";
@@ -200,6 +201,10 @@ export default function UserDashboard() {
    * minConfidence stay persistent — Settings calls them "saved filters".)
    */
   const [matchesFilter, setMatchesFilter] = useState<MatchesSubFilter>("all");
+  // Same lifetime as the segment beside it: the session, never storage. The
+  // ranking itself is derived from `preds`, so a new day or league re-ranks
+  // the rows that are actually loaded — nothing stale is kept between them.
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
   const [matchSearch, setMatchSearch] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; requiredTier: UpgradeTier } | null>(null);
@@ -282,6 +287,7 @@ export default function UserDashboard() {
   const {
     pendingAmongDisplayedPreds,
     visiblePreds,
+    marketBaseCount,
     homePreds,
     homeCounts,
     homeLiveCount,
@@ -293,7 +299,8 @@ export default function UserDashboard() {
     prefs,
     matchesFilter,
     matchSearch,
-    showSettledMarketsOnly
+    showSettledMarketsOnly,
+    marketFilter
   });
   const { isWinRatePulsing, animatedWins, animatedLosses, animatedWinRate } = useTrackerAnimations(trackerStats);
   const activePredictDates = useMemo(() => {
@@ -920,6 +927,9 @@ export default function UserDashboard() {
           predictAction={predictAction}
           matchesFilter={matchesFilter}
           onSetFilter={setMatchesFilter}
+          marketFilter={marketFilter}
+          onSetMarketFilter={setMarketFilter}
+          marketBaseCount={marketBaseCount}
           search={matchSearch}
           onSearchChange={setMatchSearch}
           onOpenLeagues={() => setIsLeaguesOpen(true)}
