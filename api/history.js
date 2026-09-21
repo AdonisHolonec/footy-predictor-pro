@@ -1376,8 +1376,17 @@ export async function handleHistorySync(req, res, timing = null) {
               });
 
         const cardChanged =
-          JSON.stringify(raw.cardMarketValidations || null) !==
-            JSON.stringify(enriched.cardMarketValidations || null) ||
+          // C2, third instance: compare the canonical verdicts, not the column's shape.
+          // `raw.cardMarketValidations` is the jsonb COLUMN, which orders keys by length
+          // then bytewise, while settleCardMarkets emits them in MARKET_KEYS order — so a
+          // byte comparison never matched, and every finished row that is not yet complete
+          // was re-upserted on every run (~150 scalar writes per sync in production).
+          // Same fix, same helper, as scan 1.
+          JSON.stringify(canonicalCardMarketValidations(raw.cardMarketValidations)) !==
+            JSON.stringify(canonicalCardMarketValidations(enriched.cardMarketValidations)) ||
+          // Stays a byte comparison on purpose: when the column holds picks, `picks` IS
+          // `raw.cardMarkets` and attachCardMarketsToPayload hands the same object back, so
+          // this can only differ when picks were absent and had to be derived — a real change.
           JSON.stringify(raw.cardMarkets || null) !== JSON.stringify(enriched.cardMarkets || null) ||
           // C2: compare the canonical totals, not the document shape. The rehydrated row
           // carries only observed totals while the enriched one carries every key (nulls
