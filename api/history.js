@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { assertAdmin, getRequester, readBearer } from "../server-utils/authAdmin.js";
+import { USER_TIERS, maskPredictionForTier } from "../server-utils/accessTier.js";
+import { loadEntitlement } from "../server-utils/entitlement.js";
+import { isWarmPredictQuotaExempt } from "../server-utils/userDailyWarmPredictUsage.js";
 import { calendarDateKeyEuropeBucharest } from "../server-utils/fixtureCalendarDateKey.js";
 import { isAuthorizedCronOrInternalRequest } from "../server-utils/cronRequestAuth.js";
 import { getWithCache } from "../server-utils/fetcher.js";
@@ -502,6 +505,47 @@ export function shouldServeFixtureDetail(query) {
 }
 
 /**
+ * The tier mask /api/predict applies, applied to the rows the board is restored from.
+ *
+ * `view=prediction-list` feeds the SAME list a live Predict feeds (both land in
+ * `preds`), but it was served straight from storage, which holds the unmasked
+ * Ultra-tier document — Stage10 persists BEFORE Stage11 masks. So a FREE or
+ * PREMIUM caller was handed on reload what Predict had just refused them: the
+ * first-half block, shots/cards probabilities, exact confidence for PREMIUM,
+ * Kelly and the model internals. Hiding a control in the client does not close
+ * that; the response has to.
+ *
+ * NOTHING HERE IS A NEW RULE. The tier comes from loadEntitlement — "the one
+ * place the server answers what tier is this user" — and the exemption, the
+ * FREE default and the mask itself are exactly Stage11Masking's:
+ *
+ *     quotaExempt (admin / bootstrap email)  -> unmasked
+ *     otherwise                              -> maskPredictionForTier(row, tier || FREE)
+ *
+ * resolved the same way api/fixtures.js resolves it. An unknown tier (no
+ * profile row) is FREE, which is the mask's own default; a FAILED entitlement
+ * read throws, and the caller's existing catch turns that into a 500 rather
+ * than into an unmasked 200. Failing open is the one outcome not allowed here.
+ *
+ * Storage is not touched. maskPredictionForTier deep-clones before it deletes,
+ * so neither the rows passed in nor anything behind them is mutated.
+ */
+export async function maskPredictionListForRequester(user, items, deps = {}) {
+  const entitlementOf = deps.loadEntitlement || loadEntitlement;
+  const quotaExemptOf = deps.isWarmPredictQuotaExempt || isWarmPredictQuotaExempt;
+  const rows = Array.isArray(items) ? items : [];
+
+  const entitlement = await entitlementOf(user.id);
+  const role = String(entitlement?.profile?.role || "").toLowerCase();
+  const quotaExempt =
+    role === "admin" || (await quotaExemptOf(user.id, String(user.email || "").toLowerCase()));
+  if (quotaExempt) return rows;
+
+  const tier = entitlement?.tierInfo?.effectiveTier || USER_TIERS.FREE;
+  return rows.map((row) => maskPredictionForTier(row, tier));
+}
+
+/**
  * The windowed list read, and the routing between its three projections.
  *
  * `deps` is injectable for the same reason handleHistoryDetail's is: which
@@ -565,6 +609,9 @@ export async function handleHistoryRead(req, res, deps = {}) {
     if (!requester.ok) {
       return res.status(requester.status || 401).json({ ok: false, error: requester.error || "Neautorizat." });
     }
+    // Which stage an exception belongs to, so a failed entitlement read is not
+    // reported as a slow query.
+    let failedStage = "dbReadMs";
     try {
       /*
         One span around the whole read: the RPC, the row mapping and the card
@@ -581,15 +628,25 @@ export async function handleHistoryRead(req, res, deps = {}) {
             ? readPredictions(requester.user.id, days, limit)
             : readFull(requester.user.id, days, limit)
       );
+      /*
+        The prediction board only: those rows are piped into `preds` beside
+        what /api/predict returned, so they carry the same entitlement. `stats`
+        is an aggregate over settled outcomes and holds nothing tier-gated.
+        Timed as authorisation work, which is what it is — `authMs` accumulates.
+      */
+      failedStage = "authMs";
+      const visibleItems = predictionListView
+        ? await timeStage(timing, "authMs", () => maskPredictionListForRequester(requester.user, items, deps))
+        : items;
       return res.status(200).json({
         ok: true,
         mine: true,
         days: Math.max(1, Math.min(days || 30, 120)),
         stats,
-        items
+        items: visibleItems
       });
     } catch (error) {
-      recordError(deps.timing, error, "dbReadMs");
+      recordError(deps.timing, error, failedStage);
       return res.status(500).json({ ok: false, error: error?.message || "Citirea istoricului a eșuat." });
     }
   }

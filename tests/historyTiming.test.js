@@ -261,6 +261,11 @@ function readDeps(timing) {
     timing,
     getRequester: async () => ({ ok: true, user: { id: "u1" } }),
     assertSupabaseConfigured: () => ({ ok: true }),
+    // view=prediction-list is tier-masked, so it resolves the caller's tier. ULTRA
+    // keeps these rows as they are; the mask itself is covered in
+    // predictionListTierMask.test.js.
+    loadEntitlement: async () => ({ profile: { role: "user" }, tierInfo: { effectiveTier: "ultra" } }),
+    isWarmPredictQuotaExempt: async () => false,
     readPredictionsForHydration: async () => ({ items: ITEMS, stats: { total: 3 } }),
     readPredictionsHistoryListForUser: async () => ({ items: ITEMS, stats: { total: 3 } }),
     readPredictionsHistoryForUser: async () => ({ items: ITEMS, stats: { total: 3 } })
