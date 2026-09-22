@@ -68,6 +68,13 @@ export const NATIONAL_COMPETITION_CATALOG = Object.freeze({
     competitionType: "WORLD_CUP_QUALIFICATION",
     supported: false,
     evidence: "provider /leagues?team=774&season=2024 (2026-09-22)"
+  }),
+  "960": Object.freeze({
+    name: "Euro Championship - Qualification",
+    competitionType: "EURO_QUALIFICATION",
+    supported: false,
+    evidence:
+      "provider /leagues?id=960 and /leagues?team=774&season=2024 (2026-09-22): type Cup, country World, senior national teams; 103 team-match rows in the adapter lab dataset"
   })
 });
 

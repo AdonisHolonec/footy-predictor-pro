@@ -39,7 +39,7 @@ const { createPipelineContext } = await import("../../server-utils/pipeline/Pipe
 test("league 5 fixtures go through the loop as insufficient rows with no data collection", async () => {
   {
     const context = createPipelineContext({}, {});
-    context.leagueIds = ["5"];
+    context.leagueIds = ["5", "960"];
     context.season = 2026;
     context.effectiveLimit = 15;
     context.allFixtures = [
@@ -54,17 +54,23 @@ test("league 5 fixtures go through the loop as insufficient rows with no data co
         league: { id: 5, name: "UEFA Nations League", type: "Cup", country: "World", season: 2026 },
         teams: { home: { id: 774, name: "Romania" }, away: { id: 1113, name: "Bosnia & Herzegovina" } },
         goals: { home: null, away: null }
+      },
+      {
+        fixture: { id: 1144237, date: "2026-10-10T18:45:00+00:00", status: { short: "NS" } },
+        league: { id: 960, name: "Euro Championship - Qualification", type: "Cup", country: "World", season: 2027 },
+        teams: { home: { id: 774, name: "Romania" }, away: { id: 15, name: "Switzerland" } },
+        goals: { home: null, away: null }
       }
     ];
     await runFixtureStageLoop(context);
     assert.deepEqual(calls, []);
-    assert.equal(context.out.length, 2);
+    assert.equal(context.out.length, 3);
     for (const row of context.out) {
       assert.equal(row.insufficientData, true);
       assert.equal(row.insufficientReason, "UNSUPPORTED_NATIONAL_COMPETITION");
-      assert.equal(row.competition.competitionType, "NATIONS_LEAGUE");
       assert.equal(row.recommended.pick, "");
     }
+    assert.deepEqual(context.out.map((r) => r.competition.competitionType), ["NATIONS_LEAGUE", "NATIONS_LEAGUE", "EURO_QUALIFICATION"]);
     assert.deepEqual(context.contextSnapshots, []);
     assert.equal(context.league.competition.supported, false);
   }
