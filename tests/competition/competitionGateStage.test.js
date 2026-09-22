@@ -94,6 +94,27 @@ test("a Euro qualification fixture (league 960) is blocked before Stage02 with t
   assert.equal(shape(f.row), shape(nl.fixture.row));
 });
 
+test("every remaining verified national competition is blocked before Stage02 with no engine, lambda, probability or recommendation", async () => {
+  const CASES = { 29: "World Cup - Qualification Africa", 30: "World Cup - Qualification Asia", 31: "World Cup - Qualification CONCACAF", 33: "World Cup - Qualification Oceania", 34: "World Cup - Qualification South America", 37: "World Cup - Qualification Intercontinental Play-offs", 6: "Africa Cup of Nations", 36: "Africa Cup of Nations - Qualification", 7: "Asian Cup", 9: "Copa America", 22: "CONCACAF Gold Cup" };
+  for (const [id, name] of Object.entries(CASES)) {
+    const context = contextFor(providerFixture(Number(id), name, 26, "Argentina", 6, "Brazil"), Number(id));
+    await StageCompetitionGate.run(context);
+    const f = context.fixture;
+    assert.equal(f.aborted, true, `aborted ${id}`);
+    assert.equal(f.engineCtx, null, `engineCtx ${id}`);
+    assert.equal(f.lambdaHome, undefined, `lambda ${id}`);
+    assert.equal(f.p, null, `probabilities ${id}`);
+    assert.equal(f.modularScores, null, `factors ${id}`);
+    assert.equal(f.row.insufficientData, true, `insufficient ${id}`);
+    assert.equal(f.row.insufficientReason, UNSUPPORTED_NATIONAL_COMPETITION, `reason ${id}`);
+    assert.equal(f.row.modelMeta.method, "unsupported_national_competition", `method ${id}`);
+    assert.equal(f.row.competition.entityType, "NATIONAL_TEAM", `entity ${id}`);
+    assert.deepEqual(f.row.recommended, { pick: "", confidence: 0 }, `recommendation ${id}`);
+    assert.equal(f.row.valueBet.detected, false, `value ${id}`);
+    assert.equal(context.stageMarks.StageCompetitionGate.status, "unsupported_national_competition", `mark ${id}`);
+  }
+});
+
 test("a club fixture passes through untouched", async () => {
   const fx = providerFixture(39, "Premier League", 33, "Manchester United", 40, "Liverpool");
   fx.league.type = "League";

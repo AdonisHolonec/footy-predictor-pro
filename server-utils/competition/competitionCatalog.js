@@ -75,7 +75,20 @@ export const NATIONAL_COMPETITION_CATALOG = Object.freeze({
     supported: false,
     evidence:
       "provider /leagues?id=960 and /leagues?team=774&season=2024 (2026-09-22): type Cup, country World, senior national teams; 103 team-match rows in the adapter lab dataset"
-  })
+  }),
+  // Verified 2026-09-22 via provider /leagues?id=<id> (type Cup, country World) and /teams?id=<sample team>
+  // returning national: true for a team drawn from that competition's fixtures.
+  "29": Object.freeze({ name: "World Cup - Qualification Africa", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=29; sample team 31 Morocco national=true (2026-09-22)" }),
+  "30": Object.freeze({ name: "World Cup - Qualification Asia", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=30; sample team 1556 Myanmar national=true (2026-09-22)" }),
+  "31": Object.freeze({ name: "World Cup - Qualification CONCACAF", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=31; sample team 8150 Anguilla national=true (2026-09-22)" }),
+  "33": Object.freeze({ name: "World Cup - Qualification Oceania", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=33; sample team 8174 Cook Islands national=true (2026-09-22)" }),
+  "34": Object.freeze({ name: "World Cup - Qualification South America", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=34; sample team 2380 Paraguay national=true (2026-09-22)" }),
+  "37": Object.freeze({ name: "World Cup - Qualification Intercontinental Play-offs", competitionType: "WORLD_CUP_QUALIFICATION", supported: false, evidence: "provider /leagues?id=37; sample team 2381 Bolivia national=true (2026-09-22)" }),
+  "6": Object.freeze({ name: "Africa Cup of Nations", competitionType: "CONTINENTAL_CHAMPIONSHIP", supported: false, evidence: "provider /leagues?id=6; sample team 1501 Ivory Coast national=true (2026-09-22)" }),
+  "36": Object.freeze({ name: "Africa Cup of Nations - Qualification", competitionType: "CONTINENTAL_QUALIFICATION", supported: false, evidence: "provider /leagues?id=36; sample team 1498 Eritrea national=true (2026-09-22)" }),
+  "7": Object.freeze({ name: "Asian Cup", competitionType: "CONTINENTAL_CHAMPIONSHIP", supported: false, evidence: "provider /leagues?id=7; sample team 1569 Qatar national=true (2026-09-22)" }),
+  "9": Object.freeze({ name: "Copa America", competitionType: "CONTINENTAL_CHAMPIONSHIP", supported: false, evidence: "provider /leagues?id=9; sample team 26 Argentina national=true (2026-09-22)" }),
+  "22": Object.freeze({ name: "CONCACAF Gold Cup", competitionType: "CONTINENTAL_CHAMPIONSHIP", supported: false, evidence: "provider /leagues?id=22; sample team 2384 USA national=true (2026-09-22)" })
 });
 
 function envRaw(name) {
