@@ -70,6 +70,30 @@ test("Sweden vs Romania (Nations League, league 5) aborts before data collection
   assert.equal(context.stageMarks.StageCompetitionGate.status, "unsupported_national_competition");
 });
 
+test("a Euro qualification fixture (league 960) is blocked before Stage02 with the same row as league 5", async () => {
+  const fx = providerFixture(960, "Euro Championship - Qualification", 774, "Romania", 15, "Switzerland");
+  const context = contextFor(fx, 960);
+  await StageCompetitionGate.run(context);
+  const f = context.fixture;
+  assert.equal(f.aborted, true);
+  assert.equal(f.engineCtx, null, "no factor inputs assembled");
+  assert.equal(f.modularScores, null, "no PredictionEngine factor executed");
+  assert.equal(f.lambdaHome, undefined);
+  assert.equal(f.p, null, "no probabilities generated");
+  assert.equal(f.row.insufficientData, true);
+  assert.equal(f.row.insufficientReason, UNSUPPORTED_NATIONAL_COMPETITION);
+  assert.equal(f.row.modelMeta.method, "unsupported_national_competition");
+  assert.deepEqual(f.row.competition, { entityType: "NATIONAL_TEAM", competitionType: "EURO_QUALIFICATION", supported: false, reason: UNSUPPORTED_NATIONAL_COMPETITION });
+  assert.deepEqual(f.row.recommended, { pick: "", confidence: 0 }, "no recommendation");
+  assert.equal(f.row.valueBet.detected, false);
+  assert.equal(context.stageMarks.StageCompetitionGate.status, "unsupported_national_competition");
+  // identical shape to the Nations League row apart from identity and competition type
+  const nl = contextFor(providerFixture(5, "UEFA Nations League", 5, "Sweden", 774, "Romania"), 5);
+  await StageCompetitionGate.run(nl);
+  const shape = (row) => Object.keys(row).sort().join(",");
+  assert.equal(shape(f.row), shape(nl.fixture.row));
+});
+
 test("a club fixture passes through untouched", async () => {
   const fx = providerFixture(39, "Premier League", 33, "Manchester United", 40, "Liverpool");
   fx.league.type = "League";

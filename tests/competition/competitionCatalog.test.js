@@ -33,6 +33,25 @@ test("UEFA Nations League (id 5) is an unsupported national competition", () => 
   assert.deepEqual(c.provider, { type: "Cup", country: "World", name: "UEFA Nations League" });
 });
 
+test("the catalog holds exactly the verified ids and no accidental changes", () => {
+  assert.deepEqual(Object.keys(NATIONAL_COMPETITION_CATALOG).sort(), ["1", "10", "32", "4", "5", "960"]);
+  assert.equal(NATIONAL_COMPETITION_CATALOG["5"].competitionType, "NATIONS_LEAGUE");
+  assert.equal(NATIONAL_COMPETITION_CATALOG["960"].competitionType, "EURO_QUALIFICATION");
+  for (const entry of Object.values(NATIONAL_COMPETITION_CATALOG)) assert.equal(entry.supported, false);
+});
+
+test("Euro qualification (id 960) is an unsupported national competition with the same semantics as league 5", () => {
+  const c = classifyCompetition({ leagueId: 960, leagueName: "Euro Championship - Qualification", leagueType: "Cup", country: "World" });
+  assert.equal(c.entityType, "NATIONAL_TEAM");
+  assert.equal(c.competitionType, "EURO_QUALIFICATION");
+  assert.equal(c.supported, false);
+  assert.equal(c.reason, UNSUPPORTED_NATIONAL_COMPETITION);
+  assert.equal(c.source, "catalog");
+  assert.equal(isGatedCompetition(c), true);
+  const nl = classifyCompetition({ leagueId: 5 });
+  assert.deepEqual({ entityType: c.entityType, supported: c.supported, reason: c.reason, source: c.source }, { entityType: nl.entityType, supported: nl.supported, reason: nl.reason, source: nl.source });
+});
+
 test("every catalog entry classifies as an unsupported national competition", () => {
   for (const id of Object.keys(NATIONAL_COMPETITION_CATALOG)) {
     const c = classifyCompetition({ leagueId: id });
@@ -89,15 +108,15 @@ test("PREDICT_NATIONAL_COMPETITION_GATE=0 disables the decision but not the clas
 });
 
 test("extra env league ids gate at runtime; malformed segments are dropped", () => {
-  assert.deepEqual(parseExtraGatedLeagueIds(" 960, ,0,-1,39.7,abc,32,960"), [960, 32, 960]);
-  withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", "960", () => {
-    const c = classifyCompetition({ leagueId: 960 });
+  assert.deepEqual(parseExtraGatedLeagueIds(" 34, ,0,-1,39.7,abc,32,34"), [34, 32, 34]);
+  withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", "34", () => {
+    const c = classifyCompetition({ leagueId: 34 });
     assert.equal(c.entityType, "NATIONAL_TEAM");
     assert.equal(c.supported, false);
     assert.equal(c.source, "env");
     assert.equal(isGatedCompetition(c), true);
   });
   withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", undefined, () => {
-    assert.equal(classifyCompetition({ leagueId: 960 }).supported, true);
+    assert.equal(classifyCompetition({ leagueId: 34 }).supported, true);
   });
 });

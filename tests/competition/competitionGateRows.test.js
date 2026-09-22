@@ -84,9 +84,11 @@ test("Stage10 never persists a gated row (insufficientData rows are filtered bef
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   try {
     const gated = gateHistoryEntry(persistedNationsLeagueEntry);
+    const gatedEuroQ = gateHistoryEntry({ ...persistedNationsLeagueEntry, id: 1144237, leagueId: 960, league: "Euro Championship - Qualification" });
+    assert.equal(gatedEuroQ.insufficientData, true, "a persisted Euro qualification row is served as insufficient");
     const club = buildInsufficientDataRow({ id: 2, leagueId: 39 }, { reason: "x", method: "x" });
     const normal = { id: 3, leagueId: 39, probs: { p1: 50 }, recommended: { pick: "1", confidence: 60 } };
-    const context = { req: {}, res: {}, out: [gated, club, normal], usageCtx: null, tierContext: null };
+    const context = { req: {}, res: {}, out: [gated, gatedEuroQ, club, normal], usageCtx: null, tierContext: null };
     await Stage10Persistence.run(context);
     assert.deepEqual(context.persistable, [normal]);
     assert.equal(context.skipPersist, true);
