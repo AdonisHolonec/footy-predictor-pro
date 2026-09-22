@@ -34,7 +34,10 @@ test("UEFA Nations League (id 5) is an unsupported national competition", () => 
 });
 
 test("the catalog holds exactly the verified ids and no accidental changes", () => {
-  assert.deepEqual(Object.keys(NATIONAL_COMPETITION_CATALOG).sort(), ["1", "10", "32", "4", "5", "960"]);
+  assert.deepEqual(
+    Object.keys(NATIONAL_COMPETITION_CATALOG).map(Number).sort((a, b) => a - b),
+    [1, 4, 5, 6, 7, 9, 10, 22, 29, 30, 31, 32, 33, 34, 36, 37, 960]
+  );
   assert.equal(NATIONAL_COMPETITION_CATALOG["5"].competitionType, "NATIONS_LEAGUE");
   assert.equal(NATIONAL_COMPETITION_CATALOG["960"].competitionType, "EURO_QUALIFICATION");
   for (const entry of Object.values(NATIONAL_COMPETITION_CATALOG)) assert.equal(entry.supported, false);
@@ -50,6 +53,36 @@ test("Euro qualification (id 960) is an unsupported national competition with th
   assert.equal(isGatedCompetition(c), true);
   const nl = classifyCompetition({ leagueId: 5 });
   assert.deepEqual({ entityType: c.entityType, supported: c.supported, reason: c.reason, source: c.source }, { entityType: nl.entityType, supported: nl.supported, reason: nl.reason, source: nl.source });
+});
+
+const REMAINING_VERIFIED = {
+  29: ["World Cup - Qualification Africa", "WORLD_CUP_QUALIFICATION"],
+  30: ["World Cup - Qualification Asia", "WORLD_CUP_QUALIFICATION"],
+  31: ["World Cup - Qualification CONCACAF", "WORLD_CUP_QUALIFICATION"],
+  33: ["World Cup - Qualification Oceania", "WORLD_CUP_QUALIFICATION"],
+  34: ["World Cup - Qualification South America", "WORLD_CUP_QUALIFICATION"],
+  37: ["World Cup - Qualification Intercontinental Play-offs", "WORLD_CUP_QUALIFICATION"],
+  6: ["Africa Cup of Nations", "CONTINENTAL_CHAMPIONSHIP"],
+  36: ["Africa Cup of Nations - Qualification", "CONTINENTAL_QUALIFICATION"],
+  7: ["Asian Cup", "CONTINENTAL_CHAMPIONSHIP"],
+  9: ["Copa America", "CONTINENTAL_CHAMPIONSHIP"],
+  22: ["CONCACAF Gold Cup", "CONTINENTAL_CHAMPIONSHIP"]
+};
+
+test("the remaining verified senior national competitions classify as unsupported national competitions", () => {
+  for (const [id, [name, type]] of Object.entries(REMAINING_VERIFIED)) {
+    const entry = NATIONAL_COMPETITION_CATALOG[id];
+    assert.equal(entry.name, name, `name ${id}`);
+    assert.equal(entry.supported, false, `supported ${id}`);
+    assert.match(entry.evidence, /national=true/, `evidence ${id}`);
+    const c = classifyCompetition({ leagueId: Number(id), leagueType: "Cup", country: "World" });
+    assert.equal(c.entityType, "NATIONAL_TEAM", `entity ${id}`);
+    assert.equal(c.competitionType, type, `type ${id}`);
+    assert.equal(c.supported, false, `supported ${id}`);
+    assert.equal(c.reason, UNSUPPORTED_NATIONAL_COMPETITION, `reason ${id}`);
+    assert.equal(c.source, "catalog", `source ${id}`);
+    assert.equal(isGatedCompetition(c), true, `gated ${id}`);
+  }
 });
 
 test("every catalog entry classifies as an unsupported national competition", () => {
@@ -108,15 +141,15 @@ test("PREDICT_NATIONAL_COMPETITION_GATE=0 disables the decision but not the clas
 });
 
 test("extra env league ids gate at runtime; malformed segments are dropped", () => {
-  assert.deepEqual(parseExtraGatedLeagueIds(" 34, ,0,-1,39.7,abc,32,34"), [34, 32, 34]);
-  withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", "34", () => {
-    const c = classifyCompetition({ leagueId: 34 });
+  assert.deepEqual(parseExtraGatedLeagueIds(" 777001, ,0,-1,39.7,abc,32,777001"), [777001, 32, 777001]);
+  withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", "777001", () => {
+    const c = classifyCompetition({ leagueId: 777001 });
     assert.equal(c.entityType, "NATIONAL_TEAM");
     assert.equal(c.supported, false);
     assert.equal(c.source, "env");
     assert.equal(isGatedCompetition(c), true);
   });
   withEnv("PREDICT_NATIONAL_COMPETITION_EXTRA_LEAGUE_IDS", undefined, () => {
-    assert.equal(classifyCompetition({ leagueId: 34 }).supported, true);
+    assert.equal(classifyCompetition({ leagueId: 777001 }).supported, true);
   });
 });
