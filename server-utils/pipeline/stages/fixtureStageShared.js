@@ -88,8 +88,46 @@ export function initFixtureWorkingState(f) {
   return f;
 }
 
-export function buildFixtureErrorRow(f, league) {
+/**
+ * The one insufficientData row shape every abort path emits (fixture processing
+ * error, no team/standings data, unsupported national competition). Keeping it in
+ * one place means the UI, Stage10 (which skips insufficient rows) and settlement
+ * see identical structure regardless of which gate produced the row.
+ *
+ * @param {object} identity fixture identity fields (id, leagueId, league, logos, teams,
+ *   fixtureTeamIds, kickoff, status, score, referee, venue)
+ * @param {{ reason: string, method: string, reasonCodes?: string[], extra?: object }} opts
+ *   `extra` is spread onto the row for context only some gates carry
+ *   (teamContext, leagueStandings, competition).
+ */
+export function buildInsufficientDataRow(identity, { reason, method, reasonCodes = [method], extra = {} }) {
   return {
+    ...identity,
+    insufficientData: true,
+    insufficientReason: reason,
+    ...extra,
+    probs: {
+      p1: 0, pX: 0, p2: 0, pGG: 0, pO25: 0, pU35: 0, pO15: 0,
+      pDC1X: 0, pDC12: 0, pDCX2: 0, pU15: 0, pNGG: 0, pU25: 0
+    },
+    recommended: { pick: "", confidence: 0 },
+    predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
+    valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: [...reasonCodes] },
+    valueEngine: buildValueEngine([]),
+    confidenceEngine: buildConfidenceEngine({ refereeName: identity.referee || undefined }),
+    modelMeta: {
+      method,
+      dataQuality: 0,
+      modelVersion: MODEL_VERSION,
+      reasonCodes: [...reasonCodes]
+    },
+    modelVersion: MODEL_VERSION,
+    evaluation: { track: "none" }
+  };
+}
+
+export function buildFixtureErrorRow(f, league) {
+  return buildInsufficientDataRow({
     id: f.fixtureId,
     leagueId: Number(league.lId),
     league: f.fx.league?.name || "Unknown",
@@ -106,27 +144,8 @@ export function buildFixtureErrorRow(f, league) {
       away: typeof f.fx.goals?.away === "number" ? f.fx.goals.away : null
     },
     referee: f.refereeName || undefined,
-    venue: f.venue || undefined,
-    insufficientData: true,
-    insufficientReason: "fixture_processing_error",
-    probs: {
-      p1: 0, pX: 0, p2: 0, pGG: 0, pO25: 0, pU35: 0, pO15: 0,
-      pDC1X: 0, pDC12: 0, pDCX2: 0, pU15: 0, pNGG: 0, pU25: 0
-    },
-    recommended: { pick: "", confidence: 0 },
-    predictions: { oneXtwo: "", gg: "", over25: "", correctScore: "" },
-    valueBet: { detected: false, type: "", ev: 0, kelly: 0, stakePlan: "", reasons: ["fixture_processing_error"] },
-    valueEngine: buildValueEngine([]),
-    confidenceEngine: buildConfidenceEngine({ refereeName: f.refereeName || undefined }),
-    modelMeta: {
-      method: "fixture_processing_error",
-      dataQuality: 0,
-      modelVersion: MODEL_VERSION,
-      reasonCodes: ["fixture_processing_error"]
-    },
-    modelVersion: MODEL_VERSION,
-    evaluation: { track: "none" }
-  };
+    venue: f.venue || undefined
+  }, { reason: "fixture_processing_error", method: "fixture_processing_error" });
 }
 
 export { beginFixture };

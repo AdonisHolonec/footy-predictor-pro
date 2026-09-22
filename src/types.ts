@@ -713,6 +713,16 @@ export type PredictionRow = {
   };
   insufficientData?: boolean;
   insufficientReason?: string;
+  /**
+   * Set only on rows the national-competition safety gate refused
+   * (insufficientReason === "UNSUPPORTED_NATIONAL_COMPETITION"). Club rows never carry it.
+   */
+  competition?: {
+    entityType: "NATIONAL_TEAM" | "CLUB";
+    competitionType: string;
+    supported: boolean;
+    reason: string | null;
+  };
   modelVersion?: string;
   evaluation?: {
     recommendedTrack?: string;

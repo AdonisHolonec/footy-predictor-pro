@@ -37,3 +37,12 @@ export function translateDimensionLabel(t: TranslateFn, key: string): string {
   const i18nKey = DIM_KEYS[key];
   return i18nKey ? t(i18nKey) : key;
 }
+
+/**
+ * Human text for an engine `insufficientReason` code. Only codes with a locale entry are
+ * translated; any other code is shown verbatim, as the card always did.
+ */
+export function translateInsufficientReason(t: TranslateFn, reason?: string | null): string | undefined {
+  if (reason === "UNSUPPORTED_NATIONAL_COMPETITION") return t("match.unsupportedNationalCompetition");
+  return reason || undefined;
+}

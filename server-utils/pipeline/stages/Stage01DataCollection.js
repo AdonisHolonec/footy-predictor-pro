@@ -39,6 +39,7 @@ import {
   resolveLeagueSeasonFromFixtures
 } from "../predictHelpers.js";
 import { halt } from "../PipelineContext.js";
+import { gateHistoryEntry, resolveLeagueGate } from "../competitionGate.js";
 
 export const STAGE_ID = "Stage01DataCollection";
 export const STAGE_DESCRIPTION =
@@ -144,8 +145,10 @@ export async function run(context) {
         return halt(context, 500, { ok: false, error: error.message || "Nu am putut citi predictions_history." });
       }
       const dbRows = Array.isArray(data) ? data : [];
+      // Rows persisted before the national-competition gate existed must not resurface
+      // through the DB-only path: a gated competition comes back as the insufficient row.
       const items = dbRows
-        .map((row) => mapDbRowToHistoryEntry(row))
+        .map((row) => gateHistoryEntry(mapDbRowToHistoryEntry(row)))
         .slice(0, effectiveLimit)
         .map((row) => maskPredictionForTier(row, tierContext.effectiveTier));
       const limitHdr = Number.isFinite(dailyLimit) ? dailyLimit : tierDailyLimit(tierContext.effectiveTier);
@@ -215,9 +218,11 @@ export async function run(context) {
       const missing = fixtureIds.filter((id) => !byId.has(id));
       if (missing.length > 0) return false;
 
+      // Same guard as readDbOnlyPredictions: a cache hit cannot bypass the competition gate.
       const items = fixtureIds
         .map((id) => mapDbRowToHistoryEntry(byId.get(id)))
         .filter(Boolean)
+        .map((row) => gateHistoryEntry(row))
         .map((row) => maskPredictionForTier(row, tierContext.effectiveTier));
 
       const limitHdr = Number.isFinite(dailyLimit) ? dailyLimit : tierDailyLimit(tierContext.effectiveTier);
@@ -410,6 +415,9 @@ export async function run(context) {
   const leagueSeasonById = new Map();
   for (const leagueId of leagueIds.map(Number)) {
     if (!Number.isFinite(leagueId) || leagueId <= 0) continue;
+    // Odds are only ever consumed from Stage02 onwards, and StageCompetitionGate aborts every
+    // fixture of a gated league before that, so its odds pages are never fetched.
+    if (resolveLeagueGate(leagueId).gated) continue;
     const leagueFixtures = (context.allFixtures || []).filter((f) => Number(f?.league?.id) === leagueId);
     leagueSeasonById.set(leagueId, resolveLeagueSeasonFromFixtures(leagueFixtures, fallbackSeason));
   }

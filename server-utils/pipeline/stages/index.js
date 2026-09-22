@@ -1,5 +1,6 @@
 export * as Stage00Ingress from "./Stage00Ingress.js";
 export * as Stage01DataCollection from "./Stage01DataCollection.js";
+export * as StageCompetitionGate from "./StageCompetitionGate.js";
 export * as Stage02FeatureCollection from "./Stage02FeatureCollection.js";
 export * as Stage03LambdaGeneration from "./Stage03LambdaGeneration.js";
 export * as Stage04ProbabilityGeneration from "./Stage04ProbabilityGeneration.js";

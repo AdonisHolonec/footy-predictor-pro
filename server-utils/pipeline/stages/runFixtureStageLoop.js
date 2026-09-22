@@ -23,6 +23,8 @@ import {
   buildFixtureErrorRow,
   extractVenueFromFixture
 } from "./fixtureStageShared.js";
+import { resolveLeagueGate } from "../competitionGate.js";
+import * as StageCompetitionGate from "./StageCompetitionGate.js";
 import * as Stage02FeatureCollection from "./Stage02FeatureCollection.js";
 import * as Stage03LambdaGeneration from "./Stage03LambdaGeneration.js";
 import * as Stage04ProbabilityGeneration from "./Stage04ProbabilityGeneration.js";
@@ -33,6 +35,7 @@ import * as Stage08Decision from "./Stage08Decision.js";
 import * as Stage09Explainability from "./Stage09Explainability.js";
 
 export const FIXTURE_STAGES = [
+  StageCompetitionGate,
   Stage02FeatureCollection,
   Stage03LambdaGeneration,
   Stage04ProbabilityGeneration,
@@ -65,13 +68,21 @@ export async function runFixtureStageLoop(context) {
     const leagueProfile = getLeagueProfile(lId);
     // Prefer season stamped on fixtures (UEFA cups / calendar mismatches vs inferSeason(date)).
     const leagueSeason = resolveLeagueSeasonFromFixtures(leagueFixtures, season);
-    // Warm league caches once (Elo + market rolling) before the per-fixture Stage02–09 loop.
-    const [marketRollingMap] = await Promise.all([
-      loadTeamMarketRolling(Number(lId), Number(leagueSeason)).catch(() => new Map()),
-      loadLeagueElo(lId).catch(() => new Map())
-    ]);
-
-    const { standingsRows, standingsMap } = await loadStandingsMap(lId, leagueSeason, 86400);
+    // An unsupported national competition is decided per league before any data collection:
+    // StageCompetitionGate aborts every fixture, so the Elo / rolling / standings warm loads
+    // below would only feed rows that are never built. Skip them and hand the stage empty maps.
+    const leagueGate = resolveLeagueGate(lId);
+    let marketRollingMap = new Map();
+    let standingsRows = [];
+    let standingsMap = new Map();
+    if (!leagueGate.gated) {
+      // Warm league caches once (Elo + market rolling) before the per-fixture Stage02–09 loop.
+      [marketRollingMap] = await Promise.all([
+        loadTeamMarketRolling(Number(lId), Number(leagueSeason)).catch(() => new Map()),
+        loadLeagueElo(lId).catch(() => new Map())
+      ]);
+      ({ standingsRows, standingsMap } = await loadStandingsMap(lId, leagueSeason, 86400));
+    }
     const leagueStandings = buildLeagueStandingsTable(standingsRows);
 
     context.league = {
@@ -79,6 +90,7 @@ export async function runFixtureStageLoop(context) {
       leagueSeason,
       leagueParams,
       leagueProfile,
+      competition: leagueGate.classification,
       marketRollingMap,
       standingsMap,
       leagueStandings,

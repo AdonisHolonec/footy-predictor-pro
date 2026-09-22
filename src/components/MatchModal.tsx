@@ -7,6 +7,7 @@ import IconButton from "../design-system/IconButton";
 import Overlay from "../design-system/Overlay";
 
 import { PredictionRow } from "../types";
+import { translateInsufficientReason } from "../i18n/labels";
 
 import { outcomeTextClass, specialBetLiveAdjustmentBadge } from "../utils/specialBet";
 
@@ -127,7 +128,7 @@ export default function MatchModal({
           panelClassName="w-full max-w-md rounded-[var(--fp-radius)] border border-fp-warning/25 bg-fp-bg-card/90 p-8 text-center shadow-fp-lg backdrop-blur-xl"
         >
           <p className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--fp-text-muted)]">{translateInsufficientReason(tr, match.insufficientReason)}</p>
           <button
             ref={closeBtnRef}
             type="button"
@@ -156,7 +157,7 @@ export default function MatchModal({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p id="match-modal-insufficient-title" className="font-display text-lg font-semibold text-[var(--fp-text)]">{tr("match.insufficientTitle")}</p>
-              <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-[var(--fp-text-muted)]">{match.insufficientReason}</p>
+              <p id="match-modal-insufficient-desc" className="mt-1 text-[11px] text-[var(--fp-text-muted)]">{translateInsufficientReason(tr, match.insufficientReason)}</p>
             </div>
             <IconButton ref={closeBtnRef} shape="round" onClick={onClose} aria-label={tr("match.close")} className="shrink-0 !text-sm">
               ✕
