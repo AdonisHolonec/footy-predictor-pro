@@ -27,6 +27,7 @@ import { checkAnonymousRateLimit } from "../server-utils/anonymousRateLimit.js";
 import { buildHealthBundle, generateDailyReport } from "../server-utils/observability/healthBundle.js";
 import { getDailyReport, listDailyReports } from "../server-utils/observability/metricsStore.js";
 import { logInfo } from "../server-utils/observability/logger.js";
+import { handleLiveCaptureCoverage } from "../server-utils/liveCapture/liveCaptureCoverage.js";
 import { runModelLab } from "../server-utils/modelLab/ModelLab.js";
 import {
   runAutoSelection,
@@ -147,6 +148,7 @@ async function handleModelLab(req, res) {
  * GET /api/backtest?view=health
  * GET /api/backtest?view=health&sub=live
  * GET /api/backtest?view=health&sub=report
+ * GET /api/backtest?view=health&sub=live-capture   Live Predictor Lab coverage ledger (KV, read-only)
  */
 async function handleHealth(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
@@ -154,6 +156,8 @@ async function handleHealth(req, res) {
   }
 
   const sub = String(req.query.sub || req.query.healthView || "dashboard").toLowerCase();
+  // Reached only past the `health` entry in gatedViews below: cron secret or admin JWT.
+  if (sub === "live-capture") return handleLiveCaptureCoverage(req, res);
   const days = Math.max(1, Math.min(Number(req.query.days || 7), 30));
 
   try {

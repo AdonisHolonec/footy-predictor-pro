@@ -47,6 +47,7 @@ import {
 } from "../server-utils/fixtureHalftimeGoals.js";
 import { buildMomentumEngine } from "../server-utils/momentum/MomentumEngine.js";
 import { withObservationScope } from "../server-utils/observability/metricsStore.js";
+import { captureLivePoll, noteLivePollDenied } from "../server-utils/liveCapture/liveCaptureStore.js";
 
 async function requireUserOrCron(req, res) {
   if (isAuthorizedCronOrInternalRequest(req)) return { ok: true, cron: true };
@@ -400,7 +401,28 @@ function extractMomentumTeamStats(statistics) {
   };
 }
 
-/** Momentum only makes sense for matches currently in play — never fetched for NS/FT rows. */
+/**
+ * What the Live Predictor Lab capture layer needs from a getWithCache result: where it
+ * came from and the raw `response`. Capture reads the RAW payload on purpose — the
+ * widget normalisers below turn "" into 0, which is fine for a widget and wrong for a
+ * research dataset. Nothing here is sent to the client.
+ */
+function captureResultOf(req) {
+  const ok = req?.ok === true;
+  return {
+    ok,
+    fromCache: req?.fromCache === true,
+    reason: typeof req?.reason === "string" ? req.reason : null,
+    response: ok ? req.data?.response ?? null : null
+  };
+}
+
+const CAPTURE_RESULT_THREW = Object.freeze({ ok: false, fromCache: false, reason: "exception", response: null });
+
+/**
+ * Momentum only makes sense for matches currently in play — never fetched for NS/FT rows.
+ * Returns the widget's momentum exactly as before, plus the request result for capture.
+ */
 async function fetchMomentumForFixture(fixtureId, homeTeamId = null, awayTeamId = null) {
   try {
     const statsReq = await getWithCache(
@@ -413,6 +435,14 @@ async function fetchMomentumForFixture(fixtureId, homeTeamId = null, awayTeamId 
         shouldCache: (json) => Array.isArray(json?.response) && json.response.length >= 2
       }
     );
+    return { momentum: buildMomentumFromStats(statsReq, homeTeamId, awayTeamId), statsResult: captureResultOf(statsReq) };
+  } catch {
+    return { momentum: null, statsResult: CAPTURE_RESULT_THREW };
+  }
+}
+
+function buildMomentumFromStats(statsReq, homeTeamId, awayTeamId) {
+  try {
     if (!statsReq.ok) return null;
     const resp = statsReq.data?.response;
     if (!Array.isArray(resp) || resp.length < 2) return null;
@@ -501,14 +531,19 @@ function extractLiveEvents(events, homeTeamId, awayTeamId) {
   return out.slice(0, 60);
 }
 
-/** Live events only make sense for matches currently in play — never fetched for NS/FT rows. */
+/**
+ * Live events only make sense for matches currently in play — never fetched for NS/FT rows.
+ * Returns the widget's event list exactly as before, plus the request result for capture.
+ */
 async function fetchLiveEventsForFixture(fixtureId, homeTeamId, awayTeamId) {
   try {
     const evReq = await getWithCache("/fixtures/events", { fixture: fixtureId }, LIVE_EVENTS_CACHE_TTL_SEC);
-    if (!evReq.ok) return [];
-    return extractLiveEvents(evReq.data?.response, homeTeamId, awayTeamId);
+    return {
+      liveEvents: evReq.ok ? extractLiveEvents(evReq.data?.response, homeTeamId, awayTeamId) : [],
+      eventsResult: captureResultOf(evReq)
+    };
   } catch {
-    return [];
+    return { liveEvents: [], eventsResult: CAPTURE_RESULT_THREW };
   }
 }
 
@@ -528,10 +563,38 @@ async function handleLive(req, res) {
   const idsParam = ids.join("-");
   try {
     const r = await getWithCache("/fixtures", { ids: idsParam }, LIVE_SCORES_CACHE_TTL_SEC);
+    /*
+      Live Predictor Lab: the capture clock. Taken the moment the fixture rows are in
+      hand — before the statistics / events fetches and before narration, which can add
+      seconds — so capturedAt says when the source response was obtained, never when
+      processing finished. Nothing below reads it except the capture call.
+    */
+    const captureNowMs = Date.now();
     if (!r.ok) {
+      // Capture never fetches on its own: a refused poll is only remembered as a miss.
+      noteLivePollDenied(r.reason);
       return res.status(502).json({ ok: false, error: typeof r.error === "string" ? r.error : "Eroare upstream la fixtures." });
     }
     const rows = r.data?.response || [];
+    /*
+      Live Predictor Lab (Phase 1, capture only). Identity for a snapshot comes straight
+      from the provider rows and lives in this side map — never on `baseFixtures`, whose
+      leftover fields are spread into the response below. The response stays exactly as
+      it was.
+    */
+    const captureIdentityById = new Map(
+      rows.map((fx) => [
+        fx?.fixture?.id,
+        {
+          kickoffAt: fx?.fixture?.date ?? null,
+          leagueId: fx?.league?.id ?? null,
+          season: fx?.league?.season ?? null,
+          periodFirstStart: fx?.fixture?.periods?.first ?? null,
+          periodSecondStart: fx?.fixture?.periods?.second ?? null
+        }
+      ])
+    );
+    const captureRows = [];
     const baseFixtures = rows.map((fx) => {
       const firstHalfGoals = parseHalftimeGoals(fx);
       const htHomeRaw = fx?.score?.halftime?.home;
@@ -578,13 +641,26 @@ async function handleLive(req, res) {
     // actually in play right now, never for NS/FT rows in the batch.
     const fixtures = await Promise.all(
       baseFixtures.map(async ({ inPlay, homeTeamId, awayTeamId, homeTeamName, awayTeamName, ...f }) => {
+        const captureRow = {
+          ...captureIdentityById.get(f.id),
+          fixtureId: f.id,
+          homeTeamId,
+          awayTeamId,
+          status: f.status,
+          elapsed: f.elapsed,
+          extra: f.extra,
+          score: { home: f.score.home, away: f.score.away }
+        };
         if (!inPlay || !Number.isFinite(Number(f.id))) {
+          // No statistics / events were fetched for this row, and capture will not fetch them.
+          captureRows.push(captureRow);
           return { ...f, momentum: null, liveEvents: [], momentumNarrative: null };
         }
-        const [momentum, liveEvents] = await Promise.all([
+        const [{ momentum, statsResult }, { liveEvents, eventsResult }] = await Promise.all([
           fetchMomentumForFixture(f.id, homeTeamId, awayTeamId),
           fetchLiveEventsForFixture(f.id, homeTeamId, awayTeamId)
         ]);
+        captureRows.push({ ...captureRow, statsResult, eventsResult });
         // Narration needs momentum to describe — skip cleanly when momentum itself is unavailable.
         const momentumNarrative = momentum
           ? await narrateMatchState({
@@ -600,6 +676,14 @@ async function handleLive(req, res) {
         return { ...f, momentum, liveEvents, momentumNarrative };
       })
     );
+
+    /*
+      Record what this poll observed — from the results above, with no provider call of
+      its own. It is awaited (bounded by its own write timeout) because nothing in this
+      runtime keeps an un-awaited promise alive after the response, and it has its own
+      error boundary: whatever happens in there, the response below is unchanged.
+    */
+    await captureLivePoll({ rows: captureRows, scoresFromCache: r.fromCache === true, nowMs: captureNowMs }).catch(() => {});
 
     return res.status(200).json({
       ok: true,
