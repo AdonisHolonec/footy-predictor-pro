@@ -416,6 +416,7 @@ export const en: Dict = {
     filterSubs: "Subs",
     filterVar: "VAR",
     insufficientTitle: "Insufficient data for model",
+    unsupportedNationalCompetition: "National-team competitions are not supported by the model yet. This match is deliberately left without a prediction until a dedicated data adapter exists.",
     openFocus: "Open focus mode",
     h2hContext: "Head-to-head context",
     standingsForm: "Standings & form",

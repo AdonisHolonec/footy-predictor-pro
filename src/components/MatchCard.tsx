@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
-import { translateConfidenceCategory } from "../i18n/labels";
+import { translateConfidenceCategory, translateInsufficientReason } from "../i18n/labels";
 import {
   ConfidenceAura,
   deriveDataQuality,
@@ -121,7 +121,7 @@ export default function MatchCard({
         <div className="font-display mt-1 text-base font-semibold text-[var(--fp-text)]">
           {row.teams?.home} vs {row.teams?.away}
         </div>
-        <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[var(--fp-text-muted)]">{row.insufficientReason || "Modelul nu a putut estima λ-uri."}</p>
+        <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[var(--fp-text-muted)]">{translateInsufficientReason(t, row.insufficientReason) || "Modelul nu a putut estima λ-uri."}</p>
         <p className="mt-3 font-mono text-[10px] text-fp-accent/80">Detalii în fișă analitică →</p>
       </div>
     );

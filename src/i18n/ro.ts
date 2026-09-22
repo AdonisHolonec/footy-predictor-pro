@@ -416,6 +416,7 @@ export const ro: Dict = {
     filterSubs: "Schimbări",
     filterVar: "VAR",
     insufficientTitle: "Date insuficiente pentru model",
+    unsupportedNationalCompetition: "Competițiile echipelor naționale nu sunt încă suportate de model. Meciul este lăsat intenționat fără predicție până există un adaptor de date dedicat.",
     openFocus: "Mod focus",
     h2hContext: "Context H2H",
     standingsForm: "Clasament & formă",

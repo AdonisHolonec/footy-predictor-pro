@@ -1,6 +1,6 @@
 /**
  * Predictor V3 orchestrator — stages never call each other.
- * Request stages: Stage00 → Stage01 → (fixture loop Stage02…09) → Stage10 → Stage11 → Stage12.
+ * Request stages: Stage00 → Stage01 → (fixture loop StageCompetitionGate → Stage02…09) → Stage10 → Stage11 → Stage12.
  *
  * Behavior: same algorithms as legacy api/predict.js (moved, not rewritten).
  */
@@ -18,6 +18,7 @@ import { runFixtureStageLoop } from "./stages/runFixtureStageLoop.js";
 import * as Stage10Persistence from "./stages/Stage10Persistence.js";
 import * as Stage11Masking from "./stages/Stage11Masking.js";
 import * as Stage12Response from "./stages/Stage12Response.js";
+import * as StageCompetitionGate from "./stages/StageCompetitionGate.js";
 import * as Stage02FeatureCollection from "./stages/Stage02FeatureCollection.js";
 import * as Stage03LambdaGeneration from "./stages/Stage03LambdaGeneration.js";
 import * as Stage04ProbabilityGeneration from "./stages/Stage04ProbabilityGeneration.js";
@@ -33,6 +34,7 @@ export const PREDICTOR_V3_VERSION = "predictor-v3.1-perf-elo-batch";
 export const STAGE_ORDER = [
   Stage00Ingress,
   Stage01DataCollection,
+  StageCompetitionGate,
   Stage02FeatureCollection,
   Stage03LambdaGeneration,
   Stage04ProbabilityGeneration,
