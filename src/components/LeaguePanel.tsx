@@ -13,6 +13,8 @@ type LeaguePanelProps = {
   setSelectedLeagueIds: (ids: number[]) => void;
   selectEliteLeagues: () => void;
   clearLeagueSelection: () => void;
+  /** Consumer dashboard only: catalog size and load state for the header hint. */
+  catalogStatus?: { count: number; state: "idle" | "loading" | "ready" | "error" };
 };
 
 export default function LeaguePanel({
@@ -26,7 +28,8 @@ export default function LeaguePanel({
   setSearchLeague,
   setSelectedLeagueIds,
   selectEliteLeagues,
-  clearLeagueSelection
+  clearLeagueSelection,
+  catalogStatus
 }: LeaguePanelProps) {
   const { t } = useLocale();
 
@@ -91,6 +94,15 @@ export default function LeaguePanel({
               {t("leagues.clear")}
             </button>
           </div>
+          {catalogStatus && (
+            <p className="text-[10px] font-medium text-[var(--fp-text-muted)]" role="status">
+              {catalogStatus.state === "loading"
+                ? t("leagues.catalogLoading")
+                : catalogStatus.state === "error"
+                  ? t("leagues.catalogError")
+                  : t("leagues.catalogCount", { count: catalogStatus.count })}
+            </p>
+          )}
           <div className="custom-scrollbar max-h-[50vh] space-y-1 overflow-y-auto pr-0.5 sm:max-h-[60vh]">
             {leaguesSorted.map((lg) => (
               <button

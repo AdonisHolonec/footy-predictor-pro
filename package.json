@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.ci.json",
     "lint": "eslint . --max-warnings 0",
     "validate:pkg": "node scripts/validate-package.mjs",
-    "test": "npm run test:math && npm run test:venue && npm run test:security && npm run test:canary-cohort && npm run test:egress-projection && npm run test:validation && npm run test:run-journal && npm run test:ownership && npm run test:hydration && npm run test:dbspans && npm run test:d9 && npm run test:d10b && npm run test:d10c && npm run test:timegrants && npm run test:entitlement && npm run test:tierstatus && npm run test:referrals && npm run test:referral-rewards && npm run test:referral-admin && npm run test:referral-notifications && npm run test:content-safety && npm run test:d9b && npm run test:fetcher && npm run test:provider-telemetry && npm run test:pipeline && npm run test:decision && npm run test:league-profiles && npm run test:benchmark && npm run test:meta && npm run test:unit && npm run test:e2e-unit && npm run test:golden && npm run test:live-capture && npm run test:competition",
+    "test": "npm run test:math && npm run test:venue && npm run test:security && npm run test:canary-cohort && npm run test:egress-projection && npm run test:validation && npm run test:run-journal && npm run test:ownership && npm run test:hydration && npm run test:dbspans && npm run test:d9 && npm run test:d10b && npm run test:d10c && npm run test:timegrants && npm run test:entitlement && npm run test:tierstatus && npm run test:referrals && npm run test:referral-rewards && npm run test:referral-admin && npm run test:referral-notifications && npm run test:content-safety && npm run test:d9b && npm run test:fetcher && npm run test:provider-telemetry && npm run test:pipeline && npm run test:decision && npm run test:league-profiles && npm run test:benchmark && npm run test:meta && npm run test:unit && npm run test:e2e-unit && npm run test:golden && npm run test:live-capture && npm run test:competition && npm run test:league-catalog",
     "test:venue": "node --test tests/venueNormalization.test.js",
     "test:math": "node --test tests/math.test.js",
     "test:security": "node --test tests/securityP0.test.js tests/apiAuth.fixtures.test.js tests/predictionListTierMask.test.js",
@@ -70,7 +70,8 @@
     "backfill:market-validity": "node --env-file=.env.local scripts/backfill-recommended-market-validity.mjs --apply",
     "validate:sprint1": "node --env-file=.env.local scripts/validateSprint1.js",
     "validate:sprint3": "node --env-file=.env.local scripts/validateSprint3.js",
-    "validate:sprint4": "node --env-file=.env.local scripts/validateSprint4.js"
+    "validate:sprint4": "node --env-file=.env.local scripts/validateSprint4.js",
+    "test:league-catalog": "node --test --experimental-test-module-mocks tests/fixturesLeagueCatalogView.test.js"
   },
   "dependencies": {
     "@supabase/auth-js": "^2.110.7",

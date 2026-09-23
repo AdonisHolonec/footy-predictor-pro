@@ -9,6 +9,7 @@
 //   /api/fixtures?view=day&gdprExport=1
 //   /api/fixtures?view=live&ids=123,456  → live scores
 //   /api/fixtures?view=xg&fixtureId=123  → synthetic xG per fixture
+//   /api/fixtures?view=leagues          → full current league catalog (24h shared cache)
 //
 // Păstrează neschimbate toate comportamentele fostelor fișiere.
 import { assertAdmin, getRequester } from "../server-utils/authAdmin.js";
@@ -814,6 +815,57 @@ async function handleXg(req, res) {
   }
 }
 
+// -------------------- Leagues catalog --------------------
+
+/** Trim a provider /leagues row to what the selector needs. Null when the row has no usable id. */
+function leagueCatalogEntry(row) {
+  const id = Number(row?.league?.id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return {
+    id,
+    name: row?.league?.name || `League ${id}`,
+    country: row?.country?.name || "Unknown",
+    type: row?.league?.type === "Cup" ? "Cup" : "League",
+    logo: row?.league?.logo || undefined
+  };
+}
+
+/**
+ * /api/fixtures?view=leagues — the FULL current league catalog for the consumer selector.
+ *
+ * One upstream call per 24h for everyone: `getWithCache` shares the provider response through
+ * KV, so this view costs nothing per user and nothing per league. Public like the day listing,
+ * with its own anonymous rate limit. Read-only; no tier, no persistence, no prediction logic.
+ */
+async function handleLeagues(req, res) {
+  const okRl = await enforceAnonRateLimit(
+    req,
+    res,
+    "fixtures-leagues",
+    Math.max(10, Math.min(Number(process.env.ANON_RATE_FIXTURES_LEAGUES || 60), 600))
+  );
+  if (!okRl) return;
+  try {
+    const upstream = await getWithCache("/leagues", { current: "true" }, 86400);
+    if (!upstream.ok) {
+      const status = Number(upstream?.status);
+      return res.status(Number.isFinite(status) && status >= 400 ? status : 502).json({ ok: false, error: "Catalogul de ligi nu este disponibil." });
+    }
+    const rows = Array.isArray(upstream.data?.response) ? upstream.data.response : [];
+    const byId = new Map();
+    for (const row of rows) {
+      const entry = leagueCatalogEntry(row);
+      if (entry && !byId.has(entry.id)) byId.set(entry.id, entry);
+    }
+    const leagues = Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name) || a.country.localeCompare(b.country));
+    res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+    return res.status(200).json({ ok: true, count: leagues.length, fromCache: Boolean(upstream.fromCache), leagues });
+  } catch (error) {
+    console.error("🔴 eroare handler leagues:", error?.message || error);
+    return res.status(500).json({ ok: false, error: "Eroare internă de server" });
+  }
+}
+
 // -------------------- Dispatcher --------------------
 
 async function handlerImpl(req, res) {
@@ -821,6 +873,7 @@ async function handlerImpl(req, res) {
   const view = String(req.query.view || "").toLowerCase();
   if (view === "live") return handleLive(req, res);
   if (view === "xg") return handleXg(req, res);
+  if (view === "leagues") return handleLeagues(req, res);
   return handleDay(req, res);
 }
 

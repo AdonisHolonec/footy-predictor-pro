@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ELITE_LEAGUES, ELITE_LEAGUE_META } from "../../constants/appConstants";
+import { ELITE_LEAGUE_META } from "../../constants/appConstants";
 import type { useAuth } from "../../hooks/useAuth";
-import type { DayResponse, League } from "../../types";
+import type { DayResponse, League, LeagueCatalogEntry } from "../../types";
 import { isoToday, normalizeSelectedDates, useLocalStorageState } from "../../utils/appUtils";
+import { sortLeagues } from "../../utils/leagueOrdering";
 
 type AuthUser = ReturnType<typeof useAuth>["user"];
 
 /**
- * Selecția de ligi + lista sortată, mutate verbatim din UserDashboard:
- * încărcarea zilelor (/api/fixtures), hidratarea selecției din profil sau
- * localStorage și salvarea debounced a ligilor favorite.
+ * Selecția de ligi + lista sortată pentru dashboard-ul consumer.
+ *
+ * Lista afișată = TOT catalogul (provider, o singură încărcare / 24h, vezi useLeagueCatalog)
+ * ∪ ligile elite configurate, cu numărul de meciuri din zilele selectate suprapus. Lipsa
+ * meciurilor într-o zi nu scoate liga din listă. Până se încarcă catalogul (sau dacă
+ * încărcarea eșuează) lista cade pe ligile elite — comportamentul dinainte.
+ *
+ * Ordine: favoritele utilizatorului, apoi diviziile domestice global (toate tier 1, apoi toate
+ * tier 2, …), apoi competițiile internaționale de club, apoi restul alfabetic (utils/leagueOrdering).
+ * Persistența selecției este neschimbată: localStorage per user + favorite_leagues în profil.
  */
 export function useLeagueSelection({
   user,
@@ -17,7 +25,8 @@ export function useLeagueSelection({
   date,
   selectedDates,
   updateFavoriteLeagues,
-  setStatus
+  setStatus,
+  catalog = null
 }: {
   user: AuthUser;
   accessToken: string | undefined;
@@ -25,6 +34,8 @@ export function useLeagueSelection({
   selectedDates: string[];
   updateFavoriteLeagues: (leagueIds: number[]) => Promise<unknown>;
   setStatus: (message: string) => void;
+  /** Full catalog once loaded; null keeps the elite-only fallback and disables pruning. */
+  catalog?: LeagueCatalogEntry[] | null;
 }) {
   const [selectedLeagueIds, setSelectedLeagueIds] = useState<number[]>([]);
   const [favoriteLeaguesByUser, setFavoriteLeaguesByUser] = useLocalStorageState<Record<string, number[]>>("footy.user.favoriteLeagueByUser", {});
@@ -38,28 +49,43 @@ export function useLeagueSelection({
     setSelectedLeagueIds(normalized);
   }
 
-  const leaguesSorted = useMemo(() => {
-    const allowedLeagueSet = new Set(ELITE_LEAGUES.map((id) => Number(id)));
+  /** Catalog ∪ elite meta, one entry per id, day match counts overlaid. Unfiltered and unsorted. */
+  const catalogLeagues = useMemo<League[]>(() => {
     const liveById = new Map((day?.leagues ?? []).map((league) => [Number(league.id), league] as const));
-    const leagues = ELITE_LEAGUE_META.map((meta) => {
-      const existing = liveById.get(Number(meta.id));
+    const byId = new Map<number, League>();
+    for (const meta of ELITE_LEAGUE_META) {
+      byId.set(Number(meta.id), { id: Number(meta.id), name: meta.name, country: meta.country, matches: 0 });
+    }
+    for (const entry of catalog ?? []) {
+      const id = Number(entry.id);
+      if (byId.has(id)) continue;
+      byId.set(id, { id, name: entry.name, country: entry.country, matches: 0, logo: entry.logo });
+    }
+    return Array.from(byId.values()).map((league) => {
+      const live = liveById.get(league.id);
+      if (!live) return league;
       return {
-        id: meta.id,
-        name: existing?.name || meta.name,
-        country: existing?.country || meta.country,
-        matches: Number(existing?.matches || 0),
-        logo: existing?.logo
+        ...league,
+        matches: Number(live.matches || 0),
+        logo: league.logo || live.logo,
+        name: live.name || league.name,
+        country: live.country || league.country
       };
-    })
-      .filter((league) => allowedLeagueSet.has(Number(league.id)))
-      .filter((league) => league.name.toLowerCase().includes(searchLeague.toLowerCase()) || league.country.toLowerCase().includes(searchLeague.toLowerCase()));
-    const favoriteSet = new Set((user?.favoriteLeagues || []).map((id) => Number(id)));
-    const favorites = leagues.filter((league) => favoriteSet.has(Number(league.id)));
-    const elite = leagues
-      .filter((league) => ELITE_LEAGUES.includes(Number(league.id)) && !favoriteSet.has(Number(league.id)))
-      .sort((a, b) => b.matches - a.matches);
-    return [...favorites, ...elite];
-  }, [day, searchLeague, user?.favoriteLeagues]);
+    });
+  }, [day, catalog]);
+
+  // Global division ordering (favorites → tier 1 → tier 2 → … → unclassified), see
+  // utils/leagueOrdering. Search only narrows visibility; it never changes the order.
+  const leaguesSorted = useMemo(() => {
+    const q = searchLeague.trim().toLowerCase();
+    const leagues = q
+      ? catalogLeagues.filter((league) => league.name.toLowerCase().includes(q) || league.country.toLowerCase().includes(q))
+      : catalogLeagues;
+    return sortLeagues(leagues, user?.favoriteLeagues || []);
+  }, [catalogLeagues, searchLeague, user?.favoriteLeagues]);
+
+  /** Every id in the catalog, ignoring the search box — what "Toate ligile" selects. */
+  const allCatalogLeagueIds = useMemo(() => catalogLeagues.map((league) => league.id), [catalogLeagues]);
 
   useEffect(() => {
     if (!user) {
@@ -77,6 +103,17 @@ export function useLeagueSelection({
       setSelectedLeagueIds([]);
     }
   }, [user, favoriteLeaguesByUser]);
+
+  // Deterministic prune: only against a SUCCESSFULLY loaded catalog, and only ids that
+  // catalog ∪ elite do not know. A league without matches today is still known → kept.
+  useEffect(() => {
+    if (!catalog) return;
+    const known = new Set(allCatalogLeagueIds);
+    setSelectedLeagueIds((prev) => {
+      const next = prev.filter((id) => known.has(Number(id)));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [catalog, allCatalogLeagueIds]);
 
   useEffect(() => {
     if (!user?.id || !accessToken) return;
@@ -133,6 +170,7 @@ export function useLeagueSelection({
     searchLeague,
     setSearchLeague,
     leaguesSorted,
+    allCatalogLeagueIds,
     fetchDays
   };
 }

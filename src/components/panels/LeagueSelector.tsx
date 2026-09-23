@@ -15,6 +15,7 @@ type LeagueSelectorProps = {
   selectEliteLeagues: () => void;
   clearLeagueSelection: () => void;
   onOpenAuth: () => void;
+  catalogStatus?: { count: number; state: "idle" | "loading" | "ready" | "error" };
 };
 
 export default function LeagueSelector({
@@ -30,7 +31,8 @@ export default function LeagueSelector({
   setSelectedLeagueIds,
   selectEliteLeagues,
   clearLeagueSelection,
-  onOpenAuth
+  onOpenAuth,
+  catalogStatus
 }: LeagueSelectorProps) {
   if (user) {
     return (
@@ -46,6 +48,7 @@ export default function LeagueSelector({
         setSelectedLeagueIds={setSelectedLeagueIds}
         selectEliteLeagues={selectEliteLeagues}
         clearLeagueSelection={clearLeagueSelection}
+        catalogStatus={catalogStatus}
       />
     );
   }

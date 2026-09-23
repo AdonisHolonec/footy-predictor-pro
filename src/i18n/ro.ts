@@ -308,6 +308,9 @@ export const ro: Dict = {
     search: "Caută ligă sau țară…",
     searchLabel: "Caută ligă",
     eliteTitle: "Selectează toate ligile elite",
+    catalogCount: "{count} ligi în catalog",
+    catalogLoading: "Se încarcă catalogul complet…",
+    catalogError: "Catalogul complet nu s-a putut încărca; sunt afișate ligile elite.",
     clearTitle: "Golește selecția"
   },
   match: {
