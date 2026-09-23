@@ -8,11 +8,33 @@ export type UseLeaguesOptions = {
   date: string;
   selectedDates: string[];
   setSelectedDates: (value: string[] | ((prev: string[]) => string[])) => void;
-  user: { id: string; favoriteLeagues?: number[] } | null;
+  /**
+   * `role` decides whether the selection is also persisted remotely. An admin's own
+   * `profiles` row is NOT client-updatable by design (RLS `users_update_own_profile`
+   * requires role = 'user'; migration 008 routes admin mutations through the
+   * service-role API), so for admins the selection stays local-only.
+   */
+  user: { id: string; favoriteLeagues?: number[]; role?: "user" | "admin" } | null;
   updateFavoriteLeagues: (leagueIds: number[]) => Promise<unknown>;
   requireAuth: (message?: string) => boolean;
   setStatus: (message: string | ((prev: string) => string)) => void;
 };
+
+const SAVE_FAVORITES_FALLBACK_MESSAGE = "Nu am putut salva preferintele utilizatorului.";
+
+/**
+ * PostgREST rejections reach us as plain `{ message, code, … }` objects (postgrest-js only
+ * wraps them in its Error class under throwOnError), so `instanceof Error` alone would hide
+ * the real reason. Never hands a raw object to the UI.
+ */
+export function readSaveErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && typeof (error as { message?: unknown }).message === "string") {
+    const message = (error as { message: string }).message.trim();
+    if (message) return message;
+  }
+  return SAVE_FAVORITES_FALLBACK_MESSAGE;
+}
 
 export function useLeagues({
   date,
@@ -121,15 +143,17 @@ export function useLeagues({
   useEffect(() => {
     if (!user) return;
     setFavoriteLeaguesByUser((prev) => ({ ...prev, [user.id]: selectedLeagueIds }));
+    // Admin: local persistence only. The remote PATCH is rejected by RLS by design
+    // (see UseLeaguesOptions.user), so attempting it would only surface an error.
+    if (user.role === "admin") return;
     const saveTimer = setTimeout(() => {
       void updateFavoriteLeagues(selectedLeagueIds).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Nu am putut salva preferintele utilizatorului.";
-        setStatus(message);
+        setStatus(readSaveErrorMessage(error));
       });
     }, 450);
     return () => clearTimeout(saveTimer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced save is keyed to user.id + selection; whole `user` object identity (token refresh) must not re-trigger writes
-  }, [user?.id, selectedLeagueIds, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced save is keyed to user.id/role + selection; whole `user` object identity (token refresh) must not re-trigger writes
+  }, [user?.id, user?.role, selectedLeagueIds, updateFavoriteLeagues, setFavoriteLeaguesByUser]);
 
   const selectedSet = new Set(selectedLeagueIds);
 
