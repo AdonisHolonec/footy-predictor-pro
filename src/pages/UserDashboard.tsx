@@ -76,6 +76,7 @@ import MatchModalErrorBoundary, { MatchDetailUnavailable } from "../components/m
 import { useDashboardHistory } from "./userDashboard/useDashboardHistory";
 import { usePredictionsCache } from "./userDashboard/usePredictionsCache";
 import { useLeagueSelection } from "./userDashboard/useLeagueSelection";
+import { useLeagueCatalog } from "../hooks/useLeagueCatalog";
 import { useDerivedPredictions } from "./userDashboard/useDerivedPredictions";
 import { useTrackerAnimations } from "./userDashboard/useTrackerAnimations";
 import {
@@ -121,12 +122,16 @@ export default function UserDashboard() {
   const { isLeaguesOpen, setIsLeaguesOpen } = useLeaguePanelState({ initialOpen: false });
   const [status, setStatus] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<PredictionRow | null>(null);
+  // Full league catalog: one cached load per session, only once a user is signed in
+  // (the selector is auth-gated). null until loaded → elite-only fallback, no pruning.
+  const { catalog: leagueCatalog, status: leagueCatalogStatus } = useLeagueCatalog(Boolean(user));
   const {
     selectedLeagueIds,
     setSelectedLeagueIdsLimited,
     searchLeague,
     setSearchLeague,
     leaguesSorted,
+    allCatalogLeagueIds,
     fetchDays
   } = useLeagueSelection({
     user,
@@ -134,7 +139,8 @@ export default function UserDashboard() {
     date,
     selectedDates,
     updateFavoriteLeagues,
-    setStatus
+    setStatus,
+    catalog: leagueCatalog
   });
   const [dateSyncBadgeUntil, setDateSyncBadgeUntil] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -1140,7 +1146,8 @@ export default function UserDashboard() {
           setIsLeaguesOpen={setIsLeaguesOpen}
           setSearchLeague={setSearchLeague}
           setSelectedLeagueIds={setSelectedLeagueIdsLimited}
-          selectEliteLeagues={() => setSelectedLeagueIdsLimited(leaguesSorted.map((league) => Number(league.id)))}
+          selectEliteLeagues={() => setSelectedLeagueIdsLimited(ELITE_LEAGUES.map((id) => Number(id)))}
+          catalogStatus={{ count: allCatalogLeagueIds.length, state: leagueCatalogStatus }}
           clearLeagueSelection={() => setSelectedLeagueIdsLimited([])}
         />
       </Overlay>

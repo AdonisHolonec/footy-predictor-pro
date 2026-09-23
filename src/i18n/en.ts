@@ -308,6 +308,9 @@ export const en: Dict = {
     search: "Search league or country…",
     searchLabel: "Search league",
     eliteTitle: "Select all elite leagues",
+    catalogCount: "{count} leagues in catalog",
+    catalogLoading: "Loading the full catalog…",
+    catalogError: "The full catalog could not be loaded; showing elite leagues.",
     clearTitle: "Clear league selection"
   },
   match: {

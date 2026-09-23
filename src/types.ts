@@ -9,6 +9,15 @@ export type League = {
   logo?: string;
 };
 
+/** One row of the full league catalog served by /api/fixtures?view=leagues (provider current leagues, 24h cache). */
+export type LeagueCatalogEntry = {
+  id: number;
+  name: string;
+  country: string;
+  type: "League" | "Cup";
+  logo?: string;
+};
+
 export type Odds = {
   home: number;
   draw: number;
