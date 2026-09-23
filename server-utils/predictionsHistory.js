@@ -17,6 +17,25 @@ import {
   rehydrateHydrationRow
 } from "./hydrationPayloadColumn.js";
 import { deriveTicketCandidatesColumn } from "./ticketCandidateColumn.js";
+import { classifyCompetition, isNationalCompetitionGateEnabled } from "./competition/competitionCatalog.js";
+
+/**
+ * Persist-time provenance for the national-team evaluation: which competition class the
+ * row belongs to and whether the national gate was enabled when it was generated. Lives in
+ * `historyMeta` (already the persist-time meta block) so nothing about the prediction itself
+ * changes; a later analysis can split club vs national rows and gate-on vs test-mode rows
+ * without inferring it from timestamps. Pure and side-effect free.
+ */
+export function describeCompetitionProvenance(leagueId, gateEnabled = isNationalCompetitionGateEnabled()) {
+  const c = classifyCompetition({ leagueId });
+  return {
+    entityType: c.entityType,
+    competitionType: c.competitionType,
+    supported: c.supported,
+    gateEnabled: Boolean(gateEnabled),
+    testMode: c.entityType === "NATIONAL_TEAM" && !gateEnabled
+  };
+}
 import { deriveHistoryListColumns } from "./historyListColumns.js";
 import { classifyRecommendedMarket } from "./recommendedMarketValidity.js";
 
@@ -253,7 +272,12 @@ export function mapPredictionToDbRow(prediction) {
   const payloadWithMeta = attachCardMarketsToPayload(
     {
       ...prediction,
-      historyMeta: { generatedAt, source: "api/predict", schemaVersion: 2 },
+      historyMeta: {
+        generatedAt,
+        source: "api/predict",
+        schemaVersion: 2,
+        competition: describeCompetitionProvenance(prediction.leagueId)
+      },
       modelVersion: modelVer,
       value_bet_validation: valueBetValidation,
       evaluation: prediction.evaluation || null
