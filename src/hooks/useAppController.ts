@@ -101,7 +101,7 @@ export function useAppController() {
     date,
     selectedDates,
     setSelectedDates,
-    user: user ? { id: user.id, favoriteLeagues: user.favoriteLeagues } : null,
+    user: user ? { id: user.id, favoriteLeagues: user.favoriteLeagues, role: user.role } : null,
     updateFavoriteLeagues,
     requireAuth,
     setStatus
