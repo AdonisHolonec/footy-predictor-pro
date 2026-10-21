@@ -1,7 +1,11 @@
 /**
  * Transport trimming for `valueEngine` — what a client is sent, never what is stored.
  *
- * `buildValueEngine` (server-utils/value/ValueEngine.js) returns three arrays built
+ * Since 2026-10-21 `buildValueEngine` no longer emits positiveMarkets/negativeMarkets
+ * at all, so new rows are stored without them. Stored documents are still never
+ * rewritten; this module remains for the rows persisted before that change.
+ *
+ * `buildValueEngine` (server-utils/value/ValueEngine.js) used to return three arrays built
  * from the same `evaluated` set:
  *
  *   markets          every evaluated market

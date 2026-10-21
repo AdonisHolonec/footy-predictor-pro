@@ -1753,8 +1753,12 @@ test("Professional Value Engine covers families and highlights best market", () 
   for (const f of ["1X2", "Double Chance", "BTTS", "Over/Under", "Corners", "Cards"]) {
     assert.ok(families.has(f), `missing family ${f}`);
   }
-  assert.ok(Array.isArray(engine.positiveMarkets));
-  assert.ok(Array.isArray(engine.negativeMarkets));
+  // The +EV / -EV subsets are copies of `markets` entries that nothing reads; only their
+  // counts are emitted, which keeps every stored raw_payload ~26% smaller.
+  assert.equal("positiveMarkets" in engine, false);
+  assert.equal("negativeMarkets" in engine, false);
+  assert.equal(engine.positiveEvCount, engine.markets.filter((m) => m.positiveEV && m.expectedValue > 0).length);
+  assert.equal(engine.negativeEvCount, engine.markets.filter((m) => m.negativeEV).length);
   if (engine.detected) {
     assert.ok(engine.bestMarket);
     assert.equal(engine.bestMarket.negativeEV, false);
