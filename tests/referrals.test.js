@@ -257,7 +257,9 @@ test("[claim] a valid claim returns the attribution", async () => {
       inviter_id: "inviter-1",
       code: "ABCD234567",
       state: "attributed",
-      attributed_at: "2026-08-27T10:00:00.000Z"
+      // Relative, not a calendar date: claimReferral judges expiry against the real clock,
+      // so a fixed date turns this test red once the 30-day window passes.
+      attributed_at: new Date(Date.now() - 60_000).toISOString()
     })
   );
   const out = await claimReferral({ userId: "invitee-1", code: "abcd234567" }, { supabase });

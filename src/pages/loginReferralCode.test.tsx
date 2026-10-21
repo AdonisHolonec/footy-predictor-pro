@@ -71,7 +71,9 @@ vi.mock("../services/referralService", async () => {
 const CODE = "ABCD234567";
 const OTHER = "ZZZZ234567";
 const EMAIL = "new@example.com";
-const NOW = Date.parse("2026-09-09T12:00:00.000Z");
+// Relative, not a calendar date: the pending code is read against the real clock with a
+// 30-day TTL, so a fixed date turns these tests red once that window passes.
+const NOW = Date.now() - 60_000;
 const src = (rel: string) => readFileSync(join(__dirname, "..", rel), "utf8");
 
 function mount(path = "/login?mode=signup") {
