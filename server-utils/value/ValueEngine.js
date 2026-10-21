@@ -376,8 +376,12 @@ export function buildValueEngine(candidates, options = {}) {
       : null,
     highlighted: Boolean(best),
     markets: evaluated,
-    positiveMarkets,
-    negativeMarkets,
+    // positiveMarkets / negativeMarkets are deliberately NOT emitted: they are verbatim
+    // copies of `markets` entries (split on EV sign), nothing reads them, and they were
+    // ~39% of each raw_payload's JSON text (~26% of its compressed, stored size; measured
+    // on 40 production rows 2026-10-21). Only their counts are part of the contract.
+    // Rows persisted before this change still carry them; valueEngineTransport.js
+    // strips those from responses.
     rejectedNegativeCount: rejectedNegative.length,
     positiveEvCount: positiveMarkets.length,
     negativeEvCount: negativeMarkets.length,
